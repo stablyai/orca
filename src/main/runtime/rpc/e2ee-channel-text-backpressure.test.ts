@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { deriveSharedKey, decrypt, decryptBytes, encrypt, generateKeyPair } from './e2ee-crypto'
+import {
+  deriveSharedKey,
+  decrypt,
+  decryptBytes,
+  encrypt,
+  generateKeyPair
+} from '../../../shared/e2ee-crypto'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 
@@ -10,11 +16,7 @@ const trackMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../telemetry/client', () => ({ track: trackMock }))
 
-// Repro for gap (a): the streaming JSON reply path (encryptedReply) had no
-// bufferedAmount gate, so a fast producer over a slow link (legacy
-// terminal.subscribe, which has NO seq/resync) ballooned ws.bufferedAmount
-// without bound. The fix holds replies in order and drains on recovery — never
-// dropping a frame (which would recreate the corruption bug on the legacy path).
+// Legacy terminal.subscribe has no seq/resync: congestion must queue text and binary replies in order, never drop them.
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -66,7 +68,6 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
   return { channel, ws, sharedKey, onError }
 }
 
-/** Fire a streaming reply through the real channel's encryptedReply closure. */
 function emitReply(ctx: ReturnType<typeof setup>, payload: string): void {
   ctx.channel.onMessage((_plaintext, encryptedReply) => {
     encryptedReply(payload)
@@ -85,19 +86,16 @@ describe('E2EE text reply backpressure', () => {
 
   it('holds text replies while over the buffer cap and drains them in order', () => {
     const ctx = setup()
-    const baseline = ctx.ws.sent.length // ready + authenticated control frames
+    const baseline = ctx.ws.sent.length
 
-    // Simulate a congested socket: bufferedAmount pinned over the 8 MiB cap.
     ctx.ws.bufferedAmount = 9 * 1024 * 1024
 
     emitReply(ctx, '{"seq":1}')
     emitReply(ctx, '{"seq":2}')
     emitReply(ctx, '{"seq":3}')
 
-    // Not dropped, not sent yet — parked in order on the queue.
     expect(ctx.ws.sent.length).toBe(baseline)
 
-    // Link drains; the queue flushes every reply, in order, none lost.
     ctx.ws.bufferedAmount = 0
     vi.runOnlyPendingTimers()
 
@@ -145,7 +143,6 @@ describe('E2EE text reply backpressure', () => {
 
     expect(first.onError).not.toHaveBeenCalled()
     expect(second.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
-    // Why: this close kills the whole remote session, so it has to be countable.
     expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', {
       emitter: 'queue'
     })
@@ -169,7 +166,7 @@ describe('E2EE legacy binary reply backpressure', () => {
       : `binary:${Buffer.from(decryptBytes(new Uint8Array(frame), ctx.sharedKey)!).toString()}`
   }
 
-  // Why: legacy terminal.subscribe has no seq-gap check, so a dropped or reordered binary frame corrupts the phone's screen.
+  // Legacy binary terminal frames lack gap detection; loss or reordering corrupts the phone screen.
   it('holds binary replies in one order with text while the outbound budget is full', () => {
     const outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget({ maxBufferedBytes: 1_000 })
     const ctx = setup({ outboundMemoryBudget })

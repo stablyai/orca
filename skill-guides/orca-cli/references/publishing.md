@@ -53,8 +53,13 @@ ORCA skills share --skill <selector> [--skill <selector> ...] --bundle-name <nam
   authority, not intent: publish only the skills the user named and never widen the set.
 - A denied command fails with `agent_skill_sharing_disabled`. Do not retry; ask the user to
   enable the switch in the desktop app if they want this action.
+- On a headless Orca server, skill and artifact sharing fail with `sharing_unavailable_on_host`.
+  Do not retry; the host has no Orca cloud sign-in, so the user must share from the desktop app.
 - Orca stages one agent-published bundle at a time per host. If another publish is active,
   wait for it to finish before retrying `agent_skill_sharing_busy`.
+- Sharing again under a `--bundle-name` the account already published adds a new version to
+  that package. `agent_skill_bundle_name_taken` means the name is already in use; do not
+  retry, ask the user for a different name.
 - Run the command in an Orca terminal on the machine that stores the skills. Forwarded WSL,
   SSH, and paired-runtime invocations fail before discovery so Orca cannot read from the
   wrong filesystem.

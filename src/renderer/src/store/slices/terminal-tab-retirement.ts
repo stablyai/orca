@@ -1,10 +1,14 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import {
+  resolveTerminalHostOwnership,
+  resolveTerminalPtyOwner
+} from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -54,10 +58,17 @@ export function getTerminalPtyOwnershipIdentity(
   if (!remote?.handle) {
     return `pty:${ptyId}`
   }
-  // Why: hydrated legacy runtime IDs omit their owner, but still refer to the
-  // same provider terminal as a scoped ID in the owning worktree.
-  const environmentId =
-    remote.environmentId?.trim() || getRuntimeEnvironmentIdForWorktree(state, worktreeId) || ''
+  const scopedEnvironmentId = remote.environmentId?.trim()
+  if (scopedEnvironmentId) {
+    return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
+  }
+  // Resolve legacy/scoped PTY aliases on the owner used by spawn/close so identity and retirement agree.
+  const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
+  // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
+  if (owner.kind === 'ambiguous') {
+    return `pty:${ptyId}`
+  }
+  const environmentId = owner.kind === 'runtime' ? owner.environmentId : ''
   return JSON.stringify(['runtime', environmentId, remote.handle])
 }
 

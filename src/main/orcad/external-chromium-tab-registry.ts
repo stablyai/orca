@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { RuntimeBrowserCommandHost } from '../runtime/orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import { BrowserError } from '../browser/browser-error'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import type { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
@@ -76,8 +76,7 @@ export class ExternalChromiumTabRegistry {
     this.setActivePage(page)
     host.markHeadlessBrowserSessionTabActive?.(worktreeId, publicPageId, {
       ...(typeof params.targetGroupId === 'string' ? { targetGroupId: params.targetGroupId } : {}),
-      // Why true: an external-Chromium create has no paired-device caller to stay local for, so it
-      // steers every screen exactly as this call did before create learned to stay local.
+      // External creates have no paired-device caller; preserve host-wide focus behavior.
       focusesHost: true
     })
     if (worktreeId) {
@@ -243,7 +242,7 @@ export class ExternalChromiumTabRegistry {
     worktree: unknown
   ): Promise<string | undefined> {
     return typeof worktree === 'string' && worktree
-      ? (await host.resolveWorktreeSelector(worktree)).id
+      ? (await host.resolveBrowserWorkspace(worktree)).id
       : undefined
   }
 }

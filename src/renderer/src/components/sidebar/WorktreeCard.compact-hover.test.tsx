@@ -293,7 +293,8 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('data-hover-open-delay="100"')
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
-    expect(markup).toContain('ENG-123 · Linear')
+    expect(markup).toContain('ENG-123</span>')
+    expect(markup).toContain('· Linear')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
@@ -553,7 +554,7 @@ describe('WorktreeCard compact hover details', () => {
     const surfaceTag = markup.match(/<div[^>]*data-worktree-card-surface="true"[^>]*>/)?.[0]
     expect(surfaceTag).toBeDefined()
     expect(surfaceTag).not.toContain('data-hover-card-trigger=""')
-    expect(markup).not.toContain('data-worktree-lineage-children=""')
+    expect(markup).toContain('data-worktree-lineage-children=""')
     expect(childIndex).toBeGreaterThanOrEqual(0)
   })
 

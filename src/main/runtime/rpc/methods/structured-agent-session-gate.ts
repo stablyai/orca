@@ -1,12 +1,5 @@
-// Who may see `agentSession.*` at all.
-//
-// Shared by every structured method file so one gate governs the whole surface: a client that does
-// not advertise `agent-session.structured.v1` is told the surface does not exist rather than being
-// handed the session journal or mutation surface.
-//
-// This gate does not imply such a client cannot make the host exist: session-tab restore runs for
-// old mobile clients so they receive a fallback row, and that path constructs the host.
-// `agentSession.*` stays refused either way, which is what this gate is for.
+// Require structured.v1 across every agentSession method before exposing journals or mutations.
+// Legacy tab restore may still install the host for fallback rows; that never admits agentSession calls.
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -18,14 +11,11 @@ import { structuredAgentSessionHostRefusal } from '../../structured-agent-sessio
 import {
   createSupportFollowsHostSetting,
   clientReadsStructuredSessionAgent,
-  isStructuredNativeChatEnabled,
+  isStructuredNativeChatDefaultFor,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
 
-/**
- * In-process callers are the same build as the host, so they carry no negotiated
- * capability list; every remote client must say it can read structured sessions.
- */
+/** In-process callers share the host build; remote callers must advertise structured-session support. */
 export function supportsStructuredSessions(ctx: RpcContext): boolean {
   return supportsStructuredAgentSessions(ctx)
 }
@@ -47,13 +37,13 @@ export function requireStructuredAgentAudience(ctx: RpcContext, agent: string): 
   }
 }
 
-/**
- * `agentSession.createSupport` alone also reads the host setting, for a client that leaves the
- * launch mode to the host; it gets the refusal it got before, which it reads as "open a terminal".
- */
+/** Only createSupport consults launch preference for legacy mode pickers, preserving their terminal-fallback refusal. */
 export function requireStructuredCreateSupportAdmission(ctx: RpcContext, agent?: string): void {
   requireStructuredAgentAudience(ctx, agent ?? '')
-  if (createSupportFollowsHostSetting(ctx) && !isStructuredNativeChatEnabled(ctx.runtime)) {
+  if (
+    createSupportFollowsHostSetting(ctx) &&
+    !isStructuredNativeChatDefaultFor(ctx.runtime, agent ?? '')
+  ) {
     throw agentSessionRefusalError('structured_agent_session_unsupported', {
       reason: 'clientCapabilityMissing'
     })
@@ -74,22 +64,13 @@ export function requireStructuredSessionHost(
   return host
 }
 
-/**
- * The gate for methods that stop or retire work the caller already owns: close, cancel,
- * unsubscribe and release. It asks only what no caller can do without (the wire capability and a
- * host), never an admission condition: refusing a close strands a live provider child its own
- * owner can no longer shut down. It is `requireStructuredHost` today; keep it apart so a condition
- * added there for new work never reaches these.
- */
+/** Close/cancel/unsubscribe/release check wire capability and host only; new-work admission conditions must never strand already-owned children. */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
   return requireHostOrRefusal()
 }
 
-/**
- * The host, or why there is none. A process whose journal would not open says so under every
- * getter, close included: nothing here can stop a child it never started.
- */
+/** Return the host or its failure, including journal-open refusal; this process cannot stop children it never started. */
 function requireHostOrRefusal(): StructuredAgentSessionHost {
   const host = getStructuredAgentSessionHost()
   if (host) {
@@ -101,9 +82,7 @@ function requireHostOrRefusal(): StructuredAgentSessionHost {
   )
 }
 
-/** Builds the host for a call that may be the first this process sees. Every session is addressed
- *  by its durable record — a read opens a conversation at rest — so each call that reaches for one
- *  may meet a host nothing has built yet. */
+/** Build lazily before durable-record reads, including chats at rest after restart. */
 export async function ensureStructuredHostInstalled(
   ctx: RpcContext,
   agent?: string
@@ -111,8 +90,7 @@ export async function ensureStructuredHostInstalled(
   if (agent) {
     requireStructuredAgentAudience(ctx, agent)
   }
-  // Gated first: a client that cannot read structured sessions must not be able
-  // to make the host exist, which is an observable side effect of the surface.
+  // Check capability before observable host installation.
   if (!supportsStructuredSessions(ctx)) {
     return
   }
@@ -131,8 +109,7 @@ export async function requireInstalledStructuredHost(
   return sessionId ? requireStructuredSessionHost(ctx, sessionId) : requireStructuredHost(ctx)
 }
 
-/** A paired device's `clientId` is its bearer credential, and this key is stored and shown to other
- *  clients (who answered a prompt), so a paired device is named by its proven device id instead. */
+/** Persist/share proven paired device id, never clientId bearer credentials (for example, who answered a prompt). */
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
     callerKey:

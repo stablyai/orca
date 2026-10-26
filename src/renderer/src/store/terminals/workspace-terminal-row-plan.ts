@@ -19,13 +19,18 @@ export type WorkspaceTerminalRowPlan = {
 
 export function buildWorkspaceTerminalRowPlan(
   session: WorkspaceSessionState,
-  validWorktreeIds: ReadonlySet<string>
+  validWorktreeIds: ReadonlySet<string>,
+  /** Rows whose saved title is live, so restore's agent-title reset skips them. */
+  liveTitleTabIds?: Pick<ReadonlySet<string>, 'has'>
 ): WorkspaceTerminalRowPlan {
   const rowHydrationByWorktree = Object.entries(session.tabsByWorktree)
     .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
     .map(
       ([worktreeId, tabs]) =>
-        [worktreeId, hydrateWorkspaceTerminalRows(session, worktreeId, tabs)] as const
+        [
+          worktreeId,
+          hydrateWorkspaceTerminalRows(session, worktreeId, tabs, liveTitleTabIds)
+        ] as const
     )
   const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
     rowHydrationByWorktree

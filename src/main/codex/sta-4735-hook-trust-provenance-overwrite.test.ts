@@ -4,12 +4,6 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// STA-4735: the hook-trust provenance file is the only record of which
-// config.toml trust entries Orca wrote versus which the user approved inside
-// Codex. An unreadable one was rebuilt from the current config on the same
-// pass, stamping the user's approval as Orca-written — after which promotion
-// skips it forever.
-
 const denials = vi.hoisted(() => {
   const state = {
     paths: new Set<string>(),
@@ -123,15 +117,10 @@ describe('STA-4735 snapshotCodexRuntimeHookTrustProvenance', () => {
 
     snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
-    // Before the fix this rewrote the file from the current config.toml, which
-    // holds no record of what Orca wrote — so a user approval made since the
-    // last pass was permanently reclassified as Orca's own write.
     expect(realFs.readFileSync(provenancePath(), 'utf-8')).toBe(recorded)
   })
 
   it('still records a provenance file that does not exist yet', () => {
-    // Why: writing the first snapshot is this function's whole job. A fix that
-    // refused whenever the read failed would never seed one.
     snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
     expect(realFs.existsSync(provenancePath())).toBe(true)
@@ -139,9 +128,6 @@ describe('STA-4735 snapshotCodexRuntimeHookTrustProvenance', () => {
   })
 
   it('still replaces a provenance file that is present but malformed', () => {
-    // Why: a corrupt record carries no information, and resetting it IS the
-    // intent. Only the unreadable case may be preserved — conflating the two
-    // would wedge a user on a broken file forever.
     realFs.writeFileSync(provenancePath(), '{ not json', 'utf-8')
 
     snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)

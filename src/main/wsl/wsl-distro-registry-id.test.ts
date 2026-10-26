@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseWslDistroRegistrations, readWslDistroRegistryId } from './wsl-distro-registry-id'
+import {
+  parseWslDistroRegistrations,
+  readWslDistroRegistryId,
+  readWslDistroRegistryIdShared,
+  resetWslDistroRegistryIdSharedReadsForTests
+} from './wsl-distro-registry-id'
 
 const LXSS = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'
 const REG_OUTPUT = [
@@ -63,5 +68,20 @@ describe('the distro registration GUID', () => {
         throw new Error('ENOENT')
       })
     ).resolves.toBeNull()
+  })
+})
+
+describe('readWslDistroRegistryIdShared', () => {
+  it('reads the registry once per deploy window, case-insensitively, then again after it', async () => {
+    resetWslDistroRegistryIdSharedReadsForTests()
+    let reads = 0
+    const read = async () => `guid-${++reads}`
+    let clock = 0
+    const now = () => clock
+    expect(await readWslDistroRegistryIdShared('Ubuntu', now, read)).toBe('guid-1')
+    expect(await readWslDistroRegistryIdShared('ubuntu', now, read)).toBe('guid-1')
+    clock = 31_000
+    expect(await readWslDistroRegistryIdShared('Ubuntu', now, read)).toBe('guid-2')
+    expect(reads).toBe(2)
   })
 })

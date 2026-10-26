@@ -1,4 +1,8 @@
 import { vi } from 'vitest'
+import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
@@ -7,18 +11,13 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 
-/** The host every skew installs to drive the surface: enough of the real host's
- *  shape for each handler to run, and a spy per method so "which call reached the
- *  host" is answerable per call rather than per suite. */
+// Use per-method spies so every skew can prove which call reached the host.
 export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
   return {
-    // The restart-resume surface hangs off a host MEMBER rather than the root, but its spies stay
-    // flat here: callers iterate this map asserting every entry is a spy that did not run, and
-    // `installableHost` below is what reassembles the member. Keeping them flat also lets the
-    // manifest name them to prove a call reached the host.
+    // Keep restart-resume spies flat for manifest/delta assertions; installableHost rebuilds the nested member.
     restartResumableList: vi.fn(async () => []),
     restartResumableFailures: vi.fn(async () => []),
     restartResumableDismiss: vi.fn(async () => 0),
@@ -27,9 +26,7 @@ export function structuredHostStub(
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
-    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
-    // supports creating there. A real host always answers; leaving it unstubbed made every
-    // `ensure` refuse for the harness's own reason rather than the location's.
+    // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
     supportsCreate: vi.fn(() => true),
     conversationCommand: vi.fn(async () => ({
       ok: true,
@@ -72,12 +69,15 @@ export function structuredHostStub(
       value: { itemId: 'item-1', epoch: 'rewound-epoch' }
     })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [] })),
     revealSession: vi.fn(async () => ({
       sessionId,
       workspaceId,
       agent: 'codex' as const,
       readable: true
     })),
+    regenerateConversationName: vi.fn(() => true),
+    setUserConversationName: vi.fn(async () => ({ name: 'Release notes', applied: true })),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -88,6 +88,7 @@ export function structuredHostStub(
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    readCurrentRequests: vi.fn(() => ({ json: '[]', nextCursor: null })),
     sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn(() => ({
       sessionId,
@@ -100,8 +101,7 @@ export function structuredHostStub(
       subscriber.emit({ type: 'snapshot', sessions: [] })
       return () => undefined
     }),
-    // No opening emit, unlike the status feed above: a completion is an edge, so this stream
-    // opens empty and a subscriber that was away has missed what passed.
+    // Completions are edges: late subscribers get no opening snapshot.
     subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn(),
     agentDefinitions: vi.fn(() => [CODEX_STRUCTURED_AGENT]),
@@ -109,10 +109,7 @@ export function structuredHostStub(
   }
 }
 
-/** The stub shaped the way the host actually exposes it: flat spies, plus the `restartResume`
- *  member the RPC methods reach through. Install this; assert against the flat map.
- *
- *  The one assertion lives here so no call site needs its own. */
+// Install the nested host shape, but assert against the flat spy map.
 export function installableHost(
   hostCalls: Record<string, ReturnType<typeof vi.fn>>
 ): StructuredAgentSessionHost {
@@ -139,18 +136,14 @@ export function installableHost(
 const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }
 const TURN_ROW = { itemId: 'legacy:codex:s:turn-1', revision: 1, sequence: 1, observedAt: 1 }
 
-/** One completed turn the host journals, and the two ways the current host publishes it.
- *  The old client is derived from the baseline by removing the capability, so the downgrade
- *  stays exercised after a release ships it. */
+// Remove the new capability from baseline clients so turn-item downgrade remains exercised after release.
 export const turnItemSkew = {
-  /** Installs the stub host over a history page that carries the turn row. */
   install(sessionId: string, workspaceId: string): void {
     const host = structuredHostStub(sessionId, workspaceId)
     const items = [{ ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     host.history.mockReturnValue({ ok: true, page: { items } })
     setStructuredAgentSessionHost(installableHost(host))
   },
-  /** Each skew's advertised list and the item it must be published. */
   clients(
     baseline: { capabilities: readonly string[] },
     current: { capabilities: readonly string[] }
@@ -164,4 +157,53 @@ export const turnItemSkew = {
       [[...current.capabilities], { ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     ] as const
   }
+}
+
+// Model an instant Codex handshake for real-host tests that need a ready provider.
+export function readyCodexProviderAdapter(input: {
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  sessionId: string
+  thread: string
+  now: number
+  spawnToken: string
+  host: () => StructuredAgentSessionHost
+}): StructuredAgentSessionAdapter {
+  const { store, now } = input
+  let dispatched = 0
+  return startsWhenPublished(
+    {
+      acquire: async ({ fence }) => ({
+        acquisitionGeneration: `wire-host-${fence}`,
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: now,
+          spawnToken: store.getRecord(input.sessionId)?.lease.reservedSpawnToken ?? input.spawnToken
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(input.thread),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: now
+        }
+      }),
+      dispatch: async () => {
+        dispatched += 1
+        return {
+          state: 'accepted',
+          providerIdentity: {
+            provider: 'codex',
+            threadId: input.thread,
+            turnId: `turn-${dispatched}`,
+            ordinal: dispatched
+          }
+        }
+      },
+      cancelTurn: async () => ({ cancelled: true }),
+      answerPrompt: async () => undefined,
+      setOption: async () => undefined
+    },
+    input.host
+  )
 }

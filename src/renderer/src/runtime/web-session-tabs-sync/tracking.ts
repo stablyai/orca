@@ -10,6 +10,7 @@ import {
   setBoundedSessionTabsReceipt,
   trackedSessionTabsWorktreeIdsByEnvironment,
   nextReceivedSessionTabsFrame,
+  sessionTabsFreshnessKey,
   type SnapshotFreshness,
   type SessionTabsListAllResult,
   type TrackedWebSessionTabsWorktree
@@ -23,6 +24,8 @@ import {
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { replayWebSessionClosesDueForSnapshot } from '../web-session-close-replay'
+import { appPairedTerminalTabCloseIntentStore } from '../paired-terminal-tab-close-intent-store'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -32,9 +35,7 @@ export function isSessionTabsListAllResult(value: unknown): value is SessionTabs
   )
 }
 
-export function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): string {
-  return `${environmentId}:${worktreeId}`
-}
+export { sessionTabsFreshnessKey } from './state'
 
 export function advancesSessionTabsFreshness(
   snapshot: RuntimeMobileSessionTabsResult,
@@ -92,9 +93,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-  // A bootstrap listAll reserves its frame before the request starts. If a
-  // stream frame for this worktree arrived meanwhile, the late list is stale
-  // evidence and must not advance epoch history.
+  // Bootstrap reserves before request; a later received stream makes its eventual response stale and unable to advance epoch history.
   if (source === 'bootstrap' && current && frame < current.receivedFrame) {
     return frame
   }
@@ -105,15 +104,19 @@ export function recordReceivedWebSessionTabsSnapshot(
   const publicationEpoch = snapshot.publicationEpoch
   const isRetraction = 'removed' in snapshot && snapshot.removed === true
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
-  // Retirement is a property of the lineage, not of the exact string: matching exactly here let a
-  // `:headless-merge:` rebuild of a retired generation be noted as current, which then retired the
-  // live one and locked it out of its own worktree.
+  // Fence retired lineages, not strings; merged predecessors otherwise become current and retire the live successor.
   if (isRetiredSessionTabsPublicationEpoch(key, publicationEpoch)) {
     return frame
   }
-  // Neither a retraction nor a "nothing published yet" placeholder takes over publishing this
-  // worktree, so neither may be noted as current: doing so retires the generation that is still
-  // live and fences its next frame out of its own worktree.
+  // Unchanged reconnect frames may be filtered before apply; check held closes at receipt, but only authoritative worktree evidence can settle presence.
+  if (!isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    replayWebSessionClosesDueForSnapshot(
+      environmentId,
+      snapshot,
+      appPairedTerminalTabCloseIntentStore
+    )
+  }
+  // Retraction/unpublished placeholders are no takeover; noting them current retires and locks out the still-live publisher.
   if (
     !isRetraction &&
     hostSnapshotAffirmsWorktreeContents(snapshot) &&
@@ -121,10 +124,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   ) {
     noteSessionTabsPublicationEpoch(key, publicationEpoch)
   }
-  // Stream delivery order is the freshest evidence even when a host's version
-  // counter briefly moves backwards (for example across a visibility resume).
-  // Bootstrap listAll responses retain version/epoch ordering so a late
-  // response cannot replace a stream frame received after the request began.
+  // Stream receipt order wins even if host versions regress; bootstrap lists retain version/epoch ordering and cannot outrank later-received streams.
   if (
     source === 'stream' ||
     !current ||
@@ -165,9 +165,7 @@ export function recordReceivedWebSessionTabsRemoval(
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-  // A retraction is this worktree's newest evidence, not an absence of it. The ledger slot lets the
-  // live publisher's next frame outrank the pre-close one on version; the watermark is what the
-  // slot cannot be, because a later frame overwrites the slot and the boundary has to outlive it.
+  // Retraction is fresh evidence. Record its receipt plus a persistent watermark: later republication overwrites the slot but must not erase the pre-close fence.
   if (!latest || latest.receivedFrame <= receivedFrame) {
     setBoundedSessionTabsReceipt(
       latestReceivedSessionTabsSnapshotByWorktree,

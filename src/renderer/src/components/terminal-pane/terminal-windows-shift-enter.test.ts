@@ -135,9 +135,7 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('csi-u')
   })
 
-  // Why: OMP wraps Pi, so an OMP-labelled title still reaches a Pi reader. Owner-pinning made the
-  // stored pane title read "OMP" for every OMP pane (#16373), so an omp profile without the Pi
-  // encoding sends Esc+CR — which submits instead of inserting a newline (#9703).
+  // OMP wraps Pi despite owner-pinned titles; preserve Pi newline encoding or Esc+CR submits instead (#16373, #9703).
   it('recovers CSI-u from an OMP title, which wraps the same Pi reader', () => {
     const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
     for (const title of ['⠸ OMP', 'OMP ready', 'OMP', 'OMP - action required']) {
@@ -268,8 +266,7 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     }
 
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:launched-droid')).toBe('alt-enter')
-    // Why: after split→close leaves only the sibling, pane count is no longer
-    // ownership evidence; the surviving leaf must keep the legacy fallback.
+    // A surviving sibling cannot inherit launch ownership merely because split count returned to one.
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:surviving-sibling')).toBe(
       'alt-enter'
     )

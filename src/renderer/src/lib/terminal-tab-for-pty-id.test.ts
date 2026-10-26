@@ -100,8 +100,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
   })
 
   it('keeps a sole wake hint over a tab id the PTY outgrew', () => {
-    // Why: a pane dragged to another tab moves tab.ptyId with it, but the id
-    // baked into the PTY env is written once at spawn and never rewritten.
+    // Pane moves change tab.ptyId, but PTY environment tab IDs are immutable after spawn.
     const s = state({
       tabs: {
         wt: [

@@ -25,7 +25,7 @@ import {
   TabSwitch,
   Upload,
   Wait
-} from './browser-schemas'
+} from '../../../../shared/rpc-contract/browser-params'
 import {
   BrowserOpenUrlParams,
   BrowserTabCreateParams

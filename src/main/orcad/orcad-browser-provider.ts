@@ -1,4 +1,4 @@
-import { access, mkdir } from 'node:fs/promises'
+import { access, mkdir, open, realpath } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
@@ -7,12 +7,12 @@ import {
   type RuntimeBrowserCommandsFactory,
   type RuntimeBrowserUnavailableCause
 } from '../runtime/runtime-browser-commands-factory'
-import {
-  ExternalChromiumBrowserProcess,
-  type ExternalChromiumLaunch
-} from './external-chromium-browser-process'
+import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
+import type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
+import { openOrcadBrowserInstallPark } from './orcad-browser-install-park'
+import { errorMessage } from '../../shared/error-message'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -45,7 +45,6 @@ async function cleanupFailedProvider(
   throw startupError
 }
 
-/** Splits the two failures apart: a wrong path and a forgotten chmod +x need different fixes. */
 async function probeExecutable(path: string): Promise<ExecutableProbe> {
   const mode = process.platform === 'win32' ? constants.F_OK : constants.X_OK
   try {
@@ -66,10 +65,6 @@ async function probeExecutable(path: string): Promise<ExecutableProbe> {
 
 async function executableExists(path: string): Promise<boolean> {
   return (await probeExecutable(path)) === 'ok'
-}
-
-function errorDetail(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 export function installedElectronCandidates(
@@ -100,11 +95,27 @@ export function installedElectronCandidates(
   ]
 }
 
-/** Only paths with stable installer ownership qualify; never guess arbitrary AppImage locations. */
-export async function resolveInstalledElectronExecutable(): Promise<string | null> {
-  const candidates = installedElectronCandidates(process.platform, homedir(), process.env)
+async function isScriptShim(path: string): Promise<boolean> {
+  try {
+    const handle = await open(await realpath(path), 'r')
+    try {
+      const head = Buffer.alloc(2)
+      const { bytesRead } = await handle.read(head, 0, 2, 0)
+      return bytesRead === 2 && head[0] === 0x23 && head[1] === 0x21
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    return true
+  }
+}
+
+/** Require installer-owned paths; arbitrary AppImage locations cannot establish ownership. */
+export async function resolveInstalledElectronExecutable(
+  candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
+): Promise<string | null> {
   for (const candidate of candidates) {
-    if (await executableExists(candidate)) {
+    if ((await executableExists(candidate)) && !(await isScriptShim(candidate))) {
       return candidate
     }
   }
@@ -141,15 +152,29 @@ async function startElectronServeProvider(
   } catch (error) {
     return cleanupFailedProvider(processHandle, error)
   }
+  const installPark = openOrcadBrowserInstallPark(executablePath, {
+    pid: () => processHandle.pid(),
+    stop: () => processHandle.stop(),
+    start: async (restartSignal) => {
+      try {
+        await processHandle.start(restartSignal)
+      } catch (error) {
+        await processHandle.stop()
+        throw error
+      }
+    }
+  })
   return {
     kind: 'electron',
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
-    stop: () => processHandle.stop()
+    stop: async () => {
+      await installPark?.close()
+      await processHandle.stop()
+    }
   }
 }
 
-/** Resolve once at startup: Electron first, then the operator-supplied Chromium. */
 export async function resolveOrcadBrowserProvider(
   options: OrcadBrowserProviderOptions
 ): Promise<OrcadBrowserProvider | null> {
@@ -170,8 +195,7 @@ export async function resolveOrcadBrowserProvider(
   if (options.signal?.aborted) {
     return null
   }
-  // Why held rather than reported now: Chromium may still resolve, and if it does not, its
-  // own concrete fault is the more actionable one for an operator who set the env var.
+  // Defer Electron failure: configured Chromium may succeed or provide a more actionable cause.
   let electronFailure: RuntimeBrowserUnavailableCause | null = null
   if (installedElectronExecutable) {
     try {
@@ -185,13 +209,11 @@ export async function resolveOrcadBrowserProvider(
         return null
       }
       console.warn('[orcad] Installed Electron browser provider unavailable:', error)
-      electronFailure = { reason: 'electron_start_failed', detail: errorDetail(error) }
+      electronFailure = { reason: 'electron_start_failed', detail: errorMessage(error) }
     }
   }
 
-  // Why the env var is read before the driver: with it set, a missing driver is a driver
-  // problem, not an unconfigured host. Telling someone to set ORCA_BROWSER_EXECUTABLE when
-  // they already did is the misdirection this ordering exists to prevent.
+  // Read configuration before probing drivers so missing drivers cannot look like missing configuration.
   const chromiumExecutable = environment.ORCA_BROWSER_EXECUTABLE?.trim()
   if (!chromiumExecutable) {
     return declined(electronFailure ?? { reason: 'unconfigured' })
@@ -229,6 +251,6 @@ export async function resolveOrcadBrowserProvider(
       return null
     }
     console.warn('[orcad] External Chromium browser provider unavailable:', error)
-    return declined({ reason: 'chromium_start_failed', detail: errorDetail(error) })
+    return declined({ reason: 'chromium_start_failed', detail: errorMessage(error) })
   }
 }

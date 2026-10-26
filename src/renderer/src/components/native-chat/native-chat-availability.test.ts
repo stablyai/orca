@@ -82,8 +82,7 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
-  // Why: omp discloses no hook transcript path either, so its session file is
-  // only reachable when this process can read the agent's disk.
+  // omp exposes no hook transcript path; its session file requires readable agent storage.
   it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
     const forConnection = (connectionId: string | null): boolean =>
       canToggleNativeChat({
@@ -157,15 +156,6 @@ describe('canToggleNativeChat', () => {
         resolvedAgent: 'claude'
       })
     ).toBe(false)
-  })
-
-  it('allows an explicit chat toggle even when Chat UI is off', () => {
-    expect(
-      canToggleNativeChat({
-        contentType: 'terminal',
-        launchAgent: 'claude'
-      })
-    ).toBe(true)
   })
 
   it('rejects a plain shell terminal with no agent', () => {

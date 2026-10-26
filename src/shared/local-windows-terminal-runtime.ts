@@ -80,8 +80,7 @@ export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
   fallbackHostShell?: string
 }): string | undefined {
   if (args.projectRuntime?.status === 'repair-required') {
-    // Why: repair-required WSL still owns the project runtime; the tab should
-    // advertise the intended runtime instead of falling back to host metadata.
+    // Repair-required WSL still owns the runtime; advertise it rather than host metadata.
     return 'wsl.exe'
   }
 

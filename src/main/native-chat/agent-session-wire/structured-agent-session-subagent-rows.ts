@@ -1,12 +1,6 @@
-// Each subagent's own saved row, written from the host's record of it.
-//
-// The host's child-work records are the one account of a subagent, for every agent: what started
-// it, which run is current and how that run ended. Its journal row is their durable copy, written
-// here each time a record changes, where the subagent was spawned. The saved row is also the
-// dedupe: a record that reads as its row already does writes nothing, and a write that fails is
-// tried again by the next change after its batch settles, so nothing here holds an obligation of
-// its own. What a lost write leaves saying `working` the journal's reopen pass settles as
-// unverifiable.
+// Mirror host subagent records into durable rows, deduplicating against saved content.
+// Failed writes retry on the next change; reopen settles any stale working rows as unverifiable.
+// Use the reporting child’s sink so resumed work belongs to its new execution owner.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -25,44 +19,67 @@ import {
   subagentJournalBody,
   subagentJournalItemIdentity
 } from '../agent-session-journal/journal-subagent-item'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionSinkAdmission,
+  StructuredAgentSessionSinkBarrier
+} from './structured-agent-session-event-sink'
 
 const UNNAMED = 'subagent'
+const LANDED: StructuredAgentSessionSinkBarrier = { ok: true }
+const LANDED_ADMISSION: StructuredAgentSessionSinkAdmission = { accepted: true }
 const THREAD_GROUP = 'thread'
 
-/** A child's view, with the host-only facts its saved row also keeps. */
 export type AgentChildWorkRowView = AgentChildWorkView &
   Pick<AgentChildWorkInput, 'outcomeBasis' | 'residency'>
 
-type Row = { block: NativeChatSubagentBlock; turnScope: AgentJournalTurnScope }
+/** Writes through the reporting child’s sink and fence. */
+export type StructuredAgentSessionChildWorkProducer = Pick<
+  StructuredAgentSessionEventSink,
+  'appendItem' | 'tryAppendItem' | 'written'
+>
+
+type Row = {
+  block: NativeChatSubagentBlock
+  turnScope: AgentJournalTurnScope
+  producer: StructuredAgentSessionChildWorkProducer | undefined
+}
 
 export type StructuredAgentSessionSubagentRowsDeps = {
   journal: (sessionId: string) => AgentSessionJournal | undefined
   fence: (sessionId: string) => number
+  /** First rows join current work; revisions retain their original scope. */
+  currentWork: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => Pick<StructuredAgentSessionCurrentWork, 'turnScope'>
   readChildWork: (sessionId: string) => AgentChildWorkRowView[] | undefined
   onWriteFailed: (sessionId: string, error: unknown) => void
 }
 
 export class StructuredAgentSessionSubagentRows {
-  /** Rows waiting for the session's writer, newest per subagent. */
   private readonly queued = new Map<string, Map<string, Row>>()
-  /** The batch each session's writer has in flight: written, but not yet readable by key. */
+  /** In-flight writes not yet readable by key. */
   private readonly writing = new Map<string, Map<string, Row>>()
+  /** Running rows already written by each child, proving execution ownership. */
+  private readonly claimed = new WeakMap<StructuredAgentSessionChildWorkProducer, Set<string>>()
 
   constructor(private readonly deps: StructuredAgentSessionSubagentRowsDeps) {}
 
-  /** The session's child records changed: queue each subagent whose row says otherwise. */
-  changed(sessionId: string): void {
+  /** Queue changed rows and unchanged running rows the reporting child has not claimed. */
+  changed(sessionId: string, producer?: StructuredAgentSessionChildWorkProducer): void {
     const journal = this.deps.journal(sessionId)
     const children = this.deps.readChildWork(sessionId)
     if (!journal || !children?.some((child) => child.kind === 'agent')) {
       return
     }
     const queued = this.queued.get(sessionId) ?? new Map<string, Row>()
+    const claimed = producer && (this.claimed.get(producer) ?? new Set<string>())
     const providerIds = new Map(children.map((child) => [child.id, child.providerId]))
-    // The strip's rule: a child that finished while work it started runs is still running.
+    // Helpers remain running while work they started still runs.
     const running = new Set(structuredRunningChildWork(children).map((child) => child.id))
-    // A full journal pass, so read once, and only for a first row: a revision keeps the scope
-    // its first write froze.
+    // Read current scope only for first writes; revisions retain immutable scope.
     let live: AgentJournalTurnScope | undefined
     for (const child of children) {
       const id = child.providerId
@@ -73,13 +90,21 @@ export class StructuredAgentSessionSubagentRows {
       const saved = pending?.block ?? journaledSubagent(journal, id)
       const turnScope =
         pending?.turnScope ??
-        (saved ? AGENT_JOURNAL_THREAD_SCOPE : (live ??= journal.liveTurnScope()))
+        (saved
+          ? AGENT_JOURNAL_THREAD_SCOPE
+          : (live ??= this.deps.currentWork(sessionId, journal).turnScope()))
       const parentId =
         child.parentChildWorkId === undefined ? undefined : providerIds.get(child.parentChildWorkId)
       const block = subagentRowBlock(child, id, parentId, saved, turnScope, running.has(child.id))
-      if (!saved || rowText(saved) !== rowText(block)) {
-        queued.set(id, { block, turnScope })
+      // Unchanged running rows still need a write to transfer execution ownership to this child.
+      const moved = running.has(child.id) && claimed !== undefined && !claimed.has(id)
+      if (!saved || moved || rowText(saved) !== rowText(block)) {
+        queued.set(id, { block, turnScope, producer: producer ?? pending?.producer })
+        claimed?.add(id)
       }
+    }
+    if (producer && claimed) {
+      this.claimed.set(producer, claimed)
     }
     if (queued.size > 0) {
       this.queued.set(sessionId, queued)
@@ -94,25 +119,60 @@ export class StructuredAgentSessionSubagentRows {
     try {
       for (let rows = this.take(sessionId); rows; rows = this.take(sessionId)) {
         const journal = this.deps.journal(sessionId)
-        // A closed conversation's unwritten rows are the reopen pass's to settle.
+        // Reopen settles stale work when no writable journal remains.
         if (!journal) {
           return
         }
         this.writing.set(sessionId, rows)
-        // The journal serializes its writes; these land in the order they were queued.
         await Promise.all(
-          [...rows].map(([id, row]) =>
-            journal
-              .appendItem(subagentJournalItemIdentity(id), subagentJournalBody(row.block), {
+          [...rows].map(([id, row]) => {
+            const identity = subagentJournalItemIdentity(id)
+            const body = subagentJournalBody(row.block)
+            if (row.producer) {
+              return this.writeThrough(sessionId, id, row, row.producer)
+            }
+            return journal
+              .appendItem(identity, body, {
                 fence: this.deps.fence(sessionId),
                 turnScope: row.turnScope
               })
               .catch((error: unknown) => this.deps.onWriteFailed(sessionId, error))
-          )
+          })
         )
       }
     } finally {
       this.writing.delete(sessionId)
+    }
+  }
+
+  /** Retry backpressure after drain; any failure releases the execution claim. */
+  private async writeThrough(
+    sessionId: string,
+    id: string,
+    row: Row,
+    producer: StructuredAgentSessionChildWorkProducer
+  ): Promise<void> {
+    const identity = subagentJournalItemIdentity(id)
+    const body = subagentJournalBody(row.block)
+    const options = { turnScope: row.turnScope, executes: true as const }
+    const admission = producer.tryAppendItem
+      ? producer.tryAppendItem(identity, body, options)
+      : (producer.appendItem(identity, body, options), LANDED_ADMISSION)
+    const landed = await (producer.written?.() ?? Promise.resolve(LANDED))
+    if (admission.accepted && landed.ok) {
+      return
+    }
+    this.claimed.get(producer)?.delete(id)
+    if (!landed.ok) {
+      this.deps.onWriteFailed(sessionId, landed.error)
+    } else if (!admission.accepted && admission.reason === 'backpressure') {
+      const queued = this.queued.get(sessionId) ?? new Map<string, Row>()
+      if (!queued.has(id)) {
+        queued.set(id, row)
+      }
+      this.queued.set(sessionId, queued)
+    } else if (!admission.accepted) {
+      this.deps.onWriteFailed(sessionId, new Error(`the sink refused the row: ${admission.reason}`))
     }
   }
 
@@ -123,8 +183,7 @@ export class StructuredAgentSessionSubagentRows {
   }
 }
 
-/** The record as its row says it. A saved row keeps where it was spawned, and what a record of a
- *  later run no longer carries: its name, its tokens, its parent. */
+/** Retain saved name, tokens and parent when a later run lacks them. */
 function subagentRowBlock(
   child: AgentChildWorkRowView,
   id: string,
@@ -137,7 +196,7 @@ function subagentRowBlock(
   const state = running ? (child.state === 'idle' ? 'idle' : 'working') : subagentEnding(child)
   const tokens = child.totalTokens ?? saved?.tokens
   const parent = parentId ?? saved?.parentId
-  // A new run starts its clock when the host first saw it; the first run when the child was.
+  // Later runs start at first observation; the initial run starts at child creation.
   const startedAt =
     saved === null
       ? child.firstObservedAt
@@ -174,7 +233,7 @@ function subagentEnding(child: AgentChildWorkRowView): NativeChatSubagentState {
   }
 }
 
-/** Compared as written, so a row the journal bounded still matches the record it came from. */
+/** Compare bounded persisted content to avoid rewriting forever after journal truncation. */
 function rowText(block: NativeChatSubagentBlock): string {
   return JSON.stringify(subagentJournalBody(block).blocks[1])
 }

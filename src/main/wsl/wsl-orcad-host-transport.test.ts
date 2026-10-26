@@ -1,10 +1,13 @@
+import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { isWslOrcadHostTarget } from '../ssh/orcad-host-transport'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
+import { orcadBashStdioBridgeCommand } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 
 type FakeChild = EventEmitter & {
   stdin: PassThrough
@@ -74,6 +77,22 @@ describe('createWslOrcadHostTransport', () => {
     expect(specs[0]?.program).toMatch(/wsl(\.exe)?$/i)
     expect(specs[0]?.args).toEqual(['-d', 'Ubuntu-24.04', '--exec', 'sh', '-c', 'echo $HOME'])
     expect(specs[0]?.env?.WSL_UTF8).toBe('1')
+    channel.close()
+  })
+
+  it('hands the bash bridge to sh through --exec, so wsl.exe never expands its $ words', async () => {
+    const child = fakeChild()
+    const { transport, specs } = transportWith([child])
+    const bridge = await resolveOrcadStdioBridge(transport, 6768)
+    const channel = await openOrcadStdioBridgeChannel(transport, bridge)
+    expect(specs[0]?.args).toEqual([
+      '-d',
+      'Ubuntu-24.04',
+      '--exec',
+      'sh',
+      '-c',
+      orcadBashStdioBridgeCommand(6768)
+    ])
     channel.close()
   })
 
@@ -177,5 +196,18 @@ describe('createWslOrcadHostTransport', () => {
   // Regression: `nohup … &` dies with its `wsl.exe --exec` on a distro without systemd.
   it('asks orcad launches to start in their own session', () => {
     expect(transportWith([]).transport.orcadLaunchDetach).toBe('setsid')
+  })
+
+  it('tells orcad which registration of the distro it runs in, when the registry knows', async () => {
+    const make = (id: string | null) =>
+      createWslOrcadHostTransport({
+        target: { kind: 'wsl', id: 'env-1', distro: 'Ubuntu-24.04', label: 'My Ubuntu' },
+        commandLoops: false,
+        readDistroRegistryId: async (distro) => (distro === 'Ubuntu-24.04' ? id : null)
+      })
+    await expect(make('1a2b')?.orcadLaunchEnv?.()).resolves.toEqual([
+      [ORCAD_WSL_DISTRO_GUID_ENV, '1a2b']
+    ])
+    await expect(make(null)?.orcadLaunchEnv?.()).resolves.toEqual([])
   })
 })

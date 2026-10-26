@@ -12,6 +12,7 @@ import { useJiraUrlSource } from './use-jira-url-source'
 import { useLinearSourceConnection } from './use-linear-source-connection'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useWorkItemSourceState } from './use-work-item-source-state'
+import { useJiraComposerProject } from './use-jira-composer-project'
 
 export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearchProps) {
   const {
@@ -61,8 +62,11 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     }))
   )
   const selectedRepo = useMemo(
-    () => repos.find((repo) => repo.id === repoId) ?? null,
-    [repoId, repos]
+    () =>
+      props.selectedRepo !== undefined
+        ? props.selectedRepo
+        : (repos.find((repo) => repo.id === repoId) ?? null),
+    [props.selectedRepo, repoId, repos]
   )
   const githubSourceContext = useMemo(() => {
     if (githubSourceContextOverride?.provider === 'github') {
@@ -131,15 +135,16 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     [props.linearSourceContext, selectedRepo]
   )
   const state = useWorkItemSourceState(textOnly, value)
-  const hasLinearSourceOverride = props.linearSourceContext?.provider === 'linear'
+  // Why: Linear's status must come from the host the search runs on, not the focused one (#32924).
+  const hasLinearSearchSource = linearSourceContext !== null
   const linearConnection = useLinearSourceConnection({
-    enabled: hasLinearSourceOverride && !disabled && !textOnly,
-    sourceContext: hasLinearSourceOverride ? linearSourceContext : null
+    enabled: hasLinearSearchSource && !disabled && !textOnly,
+    sourceContext: linearSourceContext
   })
-  const linearStatus = hasLinearSourceOverride
+  const linearStatus = hasLinearSearchSource
     ? (linearConnection.status ?? { connected: false, viewer: null })
     : defaultLinearStatus
-  const linearStatusChecked = hasLinearSourceOverride
+  const linearStatusChecked = hasLinearSearchSource
     ? linearConnection.loaded
     : defaultLinearStatusChecked
   const jiraConnection = useJiraSourceConnection({
@@ -158,6 +163,11 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     connection: jiraConnection
   })
   const jiraSourceConnected = jiraConnectionStatus?.connected === true
+  const jiraProject = useJiraComposerProject(
+    selectedRepo,
+    jiraSourceContext,
+    !disabled && !textOnly && state.mode === 'jira'
+  )
   const showJiraSiteContext =
     state.mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
   const jiraStatusId = React.useId()
@@ -172,8 +182,9 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     expectedPreflightContextKey,
     refreshPreflightStatus,
     linearStatus,
-    // Explicit sources load independently instead of refreshing the focused runtime's store.
-    linearStatusChecked: hasLinearSourceOverride || linearStatusChecked,
+    // A host-scoped source loads independently instead of refreshing the focused runtime's store.
+    linearStatusChecked: hasLinearSearchSource || linearStatusChecked,
+    linearStatusPending: hasLinearSearchSource && !linearConnection.loaded,
     checkLinearConnection,
     jiraSourceConnected
   })
@@ -188,7 +199,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
-    linearWorkspaceIdOverride: hasLinearSourceOverride
+    linearWorkspaceIdOverride: hasLinearSearchSource
       ? (linearStatus.selectedWorkspaceId ?? linearStatus.activeWorkspaceId ?? null)
       : undefined,
     listLinearIssues,
@@ -202,6 +213,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     jiraConnectionStatus,
     jiraSource,
     jiraSourceConnected,
+    ...jiraProject,
     showJiraSiteContext,
     jiraStatusId,
     linearStatusId

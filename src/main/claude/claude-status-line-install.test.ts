@@ -4,8 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodePath from 'node:path'
 
-// Why: production only reaches its win32 branch on Windows, where node:path is path.win32; keep
-// that pairing when a POSIX host stubs the platform.
+// When stubbing Windows, pair its platform with path.win32 basename behavior.
 vi.mock('node:path', async (importOriginal) => {
   const actual = await importOriginal<typeof NodePath>()
   return {
@@ -59,7 +58,6 @@ describe('Claude statusLine by resolved version', () => {
     service.install({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toBeUndefined()
 
-    // Why: Orca's own removal must not read as the user's opt-out on the next capable install.
     service.install({ claudeVersion: '1.0.64' })
     expect(readSettings().statusLine?.command).toContain('claude-statusline')
   })
@@ -124,7 +122,6 @@ describe('Claude statusLine on Windows', () => {
 
   it('keeps the runtime-home form for an unsafe path rather than an encoded PowerShell launcher', () => {
     const spaced = 'C:\\Users\\John Smith\\.orca\\agent-hooks\\claude-statusline.cmd'
-    // Why: the encoded launcher would start a hidden PowerShell on every statusline tick.
     expect(getManagedStatusLineCommand(spaced)).toBe(getManagedCommand(spaced))
   })
 
@@ -133,7 +130,6 @@ describe('Claude statusLine on Windows', () => {
     ['a stale bare path', () => 'C:/Users/someone-else/.orca/agent-hooks/claude-statusline.cmd']
   ])('replaces %s as Orca-owned', (_name, command) => {
     seedStatusLine(command())
-    // Why: the marker from an earlier install must not read as the user's opt-out.
     mkdirSync(join(tmpHome, '.orca', 'agent-hooks'), { recursive: true })
     writeFileSync(join(tmpHome, '.orca', 'agent-hooks', 'claude-statusline.installed'), '')
 

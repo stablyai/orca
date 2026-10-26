@@ -61,8 +61,7 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('classifies a comment-prefixed CREATE TABLE by its own collision codes', async () => {
-    // pg_type_typname_nsp_index is reached only through the CREATE TABLE branch, so a statement
-    // misread as unknown would fail the boot on a benign concurrent create instead of retrying.
+    // CREATE TABLE catalog collision must retry; unknown classification would fail boot on concurrent creates.
     let calls = 0
     const query = vi.fn(async () => {
       calls += 1
@@ -88,8 +87,7 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('treats an already-applied constraint as skipped rather than an error', async () => {
-    // Still the answer for a caller with no pre-check, and for a constraint another director
-    // committed between this boot's pre-check and its ALTER TABLE.
+    // Covers callers without precheck and constraints concurrently committed between precheck and ALTER.
     const query = vi.fn(async () => {
       throw postgresError('42710')
     })
@@ -98,8 +96,7 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('treats an index another director already dropped as skipped rather than an error', async () => {
-    // Every director boots at once on a deploy and all of them send the same DROP INDEX IF EXISTS.
-    // Only one can win; the losers must not fail their boot over a drop that already happened.
+    // Concurrent deploy boots race the same DROP; losing directors must not fail after another succeeds.
     const query = vi.fn(async () => {
       throw postgresError('42704')
     })
@@ -109,7 +106,6 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('still propagates 42704 from a statement that is not a DROP IF EXISTS', async () => {
-    // Keeps the case above narrow: an undefined object anywhere else is a real boot failure.
     const query = vi.fn(async () => {
       throw postgresError('42704')
     })
@@ -119,9 +115,7 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('leaves a deferrable statement unapplied on a lock timeout instead of failing the boot', async () => {
-    // The crash loop this prevents: 28 directors reach the same DROP INDEX at once on a table
-    // under continuous write, all of them time out, and every one restarts to re-queue the same
-    // DDL behind the same writers.
+    // 28 directors retrying the same contended DROP after restart would crash-loop and requeue behind writers.
     const warned: string[] = []
     vi.spyOn(console, 'warn').mockImplementation((line: string) => {
       warned.push(line)
@@ -142,8 +136,6 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('runs the statements after a deferral, rather than abandoning the boot at that point', async () => {
-    // A deferral is not a failure, so nothing behind it may be skipped: the schema still has
-    // tables to create, and a boot that stopped here would come up against a partial schema.
     const sent: string[] = []
     const query = vi.fn(async (statement: string) => {
       sent.push(statement)
@@ -160,8 +152,7 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('still fails the boot on a lock timeout for a statement that is not marked deferrable', async () => {
-    // Keeps the marker meaningful. An unmarked statement retains the old contract: fail once and
-    // loudly, because retrying parks every writer behind the same queue again.
+    // Unmarked DDL must fail once: retries queue writers behind the same relation lock again.
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const query = vi.fn(async () => {
       throw postgresError('55P03')
@@ -172,8 +163,6 @@ describe('applyPostgresSchema classification', () => {
   })
 
   it('defers only on a lock timeout, not on any other error from a deferrable statement', async () => {
-    // A deferrable statement is not a statement whose failures stop mattering. A permission error
-    // is still a boot failure.
     const query = vi.fn(async () => {
       throw postgresError('42501')
     })
@@ -186,7 +175,6 @@ describe('applyPostgresSchema classification', () => {
     const query = vi.fn(async (_statement: string) => undefined)
     const { catalogQuery, asked } = catalogAnswers([])
     const summary = await applyPostgresSchema(['DROP INDEX IF EXISTS i'], query, { catalogQuery })
-    // One parameter, the index name: the statement names no table, and the query references no $2.
     expect(asked).toEqual([[expect.stringContaining("relkind = 'i'"), 'i']])
     expect(query).not.toHaveBeenCalled()
     expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
@@ -242,8 +230,7 @@ describe('applyPostgresSchema lock timeouts', () => {
   })
 
   it('still retries a lock timeout for a caller that opts in', async () => {
-    // A caller with no catalog pre-check learns nothing from a lock timeout about whether the
-    // object exists, so its old bounded retry is the correct behaviour there.
+    // Without catalog precheck, lock timeout does not prove existence; preserve bounded retry.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     let calls = 0
     const query = vi.fn(async () => {
@@ -275,8 +262,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
   })
 
   it('skips an index the catalog reports as invalid rather than rebuilding it', async () => {
-    // A cancelled CREATE INDEX CONCURRENTLY leaves exactly this state, and IF NOT EXISTS skips it
-    // too, so reading indisvalid as a condition would newly take the lock it used to avoid.
+    // IF NOT EXISTS skips invalid cancelled builds too; indisvalid must not trigger new table locks.
     const logged: { event?: string }[] = []
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
       logged.push(JSON.parse(line))
@@ -355,8 +341,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
   })
 
   it('skips a DROP CONSTRAINT IF EXISTS when the constraint is already gone', async () => {
-    // Inverse polarity: an absent constraint is what means there is nothing to drop. Sending it
-    // anyway takes ACCESS EXCLUSIVE to discover the same thing.
+    // Absent DROP target means skip, avoiding ACCESS EXCLUSIVE just to rediscover absence.
     const logged: { event?: string }[] = []
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
       logged.push(JSON.parse(line))
@@ -407,8 +392,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
 
 describe('applyPostgresSchema concurrent creates', () => {
   it('re-asks the catalog on a collision instead of retrying the CREATE INDEX', async () => {
-    // Another director created the index between the pre-check and this statement. Retrying would
-    // take SHARE on the table again for an object that is already there.
+    // After concurrent creation, re-ask catalog instead of re-taking SHARE for an existing index.
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const query = vi.fn(async (_statement: string) => {
       throw postgresError('42P07')
@@ -476,8 +460,7 @@ describe('applyPostgresSchema unparseable statements', () => {
 
 describe('applyPostgresSchema statement text', () => {
   it('sends the original statement, comments included, not the classified form', async () => {
-    // Classification reads a comment-free copy. Rewriting what the server runs would change the
-    // DDL itself, and a comment inside a string literal or a quoted name is part of the statement.
+    // Classify a comment-free copy; server must receive original SQL, including quoted comment-like text.
     const statement = `ALTER TABLE t ADD /* note */ COLUMN c TEXT DEFAULT '-- keep'`
     const query = vi.fn(async (_sql: string) => undefined)
     const { catalogQuery, asked } = catalogAnswers([])

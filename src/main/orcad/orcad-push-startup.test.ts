@@ -32,7 +32,7 @@ const profile = vi.hoisted(() => {
   const value: { settings: Partial<GlobalSettings> } = { settings: {} }
   return value
 })
-// Why: startup reconciles the user-global agent configs; keep it off this machine's real home.
+// Reconciliation writes user-global agent configs; isolate it from the real home.
 vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
@@ -48,6 +48,9 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
 }))
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
   refreshInstalledOpenCodeStatusPlugins: state.refreshOpenCodePlugins
 }))
@@ -56,6 +59,12 @@ vi.mock('./orcad-app-paths', () => ({
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
+// Migration otherwise targets the real credential directory.
+vi.mock('./orcad-plaintext-credential-migration', () => ({
+  orcadCredentialRoot: () => state.root,
+  migratePlaintextCredentials: () => ({ sealed: 0, failed: 0 })
+}))
+vi.mock('./orcad-account-services', () => ({ createOrcadAccountServices: () => null }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
 vi.mock('./orcad-instance-lock', () => ({
   acquireOrcadInstanceLock: () => ({
@@ -69,13 +78,12 @@ vi.mock('./orcad-daemon-supervision', () => ({
   stopOrcadDaemon: async () => {}
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
-// The runtime stub has no automation surface; orcad-automations.test.ts covers that wiring.
 vi.mock('./orcad-automations', () => ({
   startOrcadAutomations: () => {},
   stopOrcadAutomationScheduler: () => {},
   orcadAutomationsKeepHostBusy: () => false
 }))
-// Why: the real updater would fetch rules from GitHub inside a unit test.
+// Prevent network rule downloads in this unit test.
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
@@ -123,6 +131,12 @@ vi.mock('../server/serve-readiness', () => ({
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    readonly sidebarFacts = null
+    readonly agentTransitions = { seedRestoredRows() {} }
+    attachAgentStatusStore() {
+      return () => {}
+    }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'headless-runtime'
     }
@@ -130,8 +144,12 @@ vi.mock('../runtime/orca-runtime', () => ({
     restoreHostAccountLaunchEnv() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async installPendingOrcadMigrationShellHistory() {}
     async stopLegacyWorkerTerminalRecovery() {}
     async closeNotificationDismissals() {}
+    flushPaneGrids() {
+      return null
+    }
     syncWindowGraph() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
@@ -180,10 +198,13 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 }))
 
 beforeEach(() => {
+  // Restore the prior data-root env after startOrcad canonicalizes it.
+  vi.stubEnv('ORCA_USER_DATA_PATH', '')
   state.onSettingsChanged.mockReturnValue(state.removeSettingsListener)
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(state.root, { recursive: true, force: true })
   state.profileStartupErrors.length = 0
   profile.settings = {}
@@ -193,8 +214,10 @@ afterEach(() => {
 it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
   const maintenance = acquireProfileStateMaintenance(state.root)
-  const { startOrcad } = await import('./orcad-entry')
+  const { startOrcad, parseArgs } = await import('./orcad-entry')
+  const commandArguments = await import('./orcad-command-arguments')
   try {
+    expect(parseArgs).toBe(commandArguments.parseArgs)
     await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
     expect(state.browserProvider).not.toHaveBeenCalled()
     expect(state.rpcStarted).toBe(false)
@@ -286,14 +309,12 @@ it('unsubscribes settings when daemon startup fails after hook setup', async () 
   acquireProfileStateMaintenance(state.root).release()
 })
 
-// Why: a freshly managed SSH host starts orcad on connect; without this its agents never report status.
 it('installs agent status hooks on the host when it starts', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-'))
   const { startOrcad } = await import('./orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
   try {
     expect(state.startCodexHooks).toHaveBeenCalledOnce()
-    // orcad launches Codex on the real ~/.codex; it has no Orca-managed account homes.
     expect(state.startCodexHooks.mock.calls[0]![0].resolveLaunchHome()).toBeNull()
     await vi.waitFor(() =>
       expect(state.installManagedAgentHooks).toHaveBeenCalledWith(
@@ -302,7 +323,6 @@ it('installs agent status hooks on the host when it starts', async () => {
       )
     )
     expect(state.refreshOpenCodePlugins).toHaveBeenCalledWith(profile.settings)
-    // Grok/Kiro homes set only in login profiles must be known before their installers run.
     expect(state.adoptLoginShellAgentHomes.mock.invocationCallOrder[0]).toBeLessThan(
       state.installManagedAgentHooks.mock.invocationCallOrder[0]!
     )

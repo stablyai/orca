@@ -14,7 +14,6 @@ const launchHooks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
@@ -40,7 +39,7 @@ vi.mock('./headless-serve-ssh-registration', () => ({
   })
 }))
 vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/runtime-environment-mobile-relay-hosts', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
   createRuntimeEnvironmentMobileRelayHosts: vi.fn()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
@@ -67,7 +66,7 @@ vi.mock('./main-process-pty-startup', () => ({
 vi.mock('./codex-launch-preparation', () => ({ prepareCodexRuntimeHomeForLaunch: vi.fn() }))
 vi.mock('./codex-session-resume-launch', () => ({ prepareCodexSessionResumeForLaunch: vi.fn() }))
 vi.mock('./windows-install-dir-acl-recovery', () => ({
-  // The awaited gap before the first window, where a second-instance launch can land.
+  // Model the awaited repair gap in which a second-instance activation can arrive.
   repairKnownPoisonedInstallDirBeforeWindow: vi.fn(async () => {
     launchHooks.duringInstallDirRepair()
     if (launchHooks.failBeforeWindow) {
@@ -102,6 +101,14 @@ vi.mock('../window/foreground-activation-policy', () => ({
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
+vi.mock('../tray/system-tray', () => ({
+  createSystemTray: vi.fn(),
+  setMacMenuBarIconVisible: vi.fn()
+}))
+vi.mock('../window/attach-main-window-services', () => ({ ensureAutoUpdaterConfigured: vi.fn() }))
+vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
+vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
+vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 
 vi.mock('./main-process-ready-foundation', () => ({
   initializeReadyFoundation: vi.fn(async () => {})
@@ -146,7 +153,7 @@ describe('desktop startup activation', () => {
   let firstLoadListeners: (() => void)[]
   const startupSettled = vi.fn()
 
-  // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
+  // Retain non-idempotent window effects that exposed duplicate startup in production.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
@@ -196,7 +203,6 @@ describe('desktop startup activation', () => {
       whenReady: () => Promise.resolve()
     } as unknown as NonNullable<typeof state.windowsShellPathHydration>
     state.initialProxyApplicationReady = Promise.resolve()
-    // Built the way preflight builds it for a desktop launch.
     state.desktopActivationGate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow: () =>
@@ -302,7 +308,7 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
-    // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
+    // Signal intent must pass the macOS native-quit guard (#15537).
     expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
     expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
       expect.objectContaining({

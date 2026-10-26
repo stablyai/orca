@@ -272,8 +272,8 @@ describe('host editor file ownership', () => {
     expect(patch?.openFiles).toHaveLength(1)
     expect(patch?.unifiedTabsByWorktree?.[WT]).toHaveLength(2)
     expect(patch?.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.entityId)).toEqual([
-      filePath,
-      filePath
+      buildOwnedEditorFileId(filePath, WT, ENV),
+      buildOwnedEditorFileId(filePath, WT, ENV)
     ])
   })
 })

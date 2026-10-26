@@ -2,7 +2,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -149,8 +149,7 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query browser ordering is intentionally deterministic and context-first;
-// lastActiveAt only breaks ties between equally-ranked query matches.
+// Empty-query order is deterministic/context-first; use recency only to break equally ranked query hits.
 function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -214,8 +213,7 @@ export function searchBrowserPages(
   }
   const prepared = preparePaletteTabQuery(query)
   if (!prepared) {
-    // Why not [] on an over-token query: the empty branch also serves the no-query
-    // listing, so the invalid case is filtered out by the token guard below.
+    // Do not treat too many tokens as empty input: that branch lists all entries; reject below instead.
     return query.trim()
       ? []
       : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)

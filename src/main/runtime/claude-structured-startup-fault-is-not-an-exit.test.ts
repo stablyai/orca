@@ -1,7 +1,4 @@
-// A Claude start can fail on Orca's side while the CLI is still running: an init frame naming
-// another session. Orca ends that child itself, so the chat must not say Claude stopped on its own;
-// only an exit Orca saw says that. Against the production runtime, adapter, record store and host,
-// with only the CLI process scripted.
+// Host-detected startup faults must not be attributed as self-exits without observed CLI exit.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -75,7 +72,6 @@ async function released(host: StructuredAgentSessionHost): Promise<void> {
 }
 
 describe('a Claude start that Orca fails while the CLI is still running', () => {
-  // Saved options ride the launch, so no option write runs at startup that could fail it.
   it('starts with a saved option the CLI would not take as a write', async () => {
     claude.behave(SESSION, { optionWritesFail: true })
     const host = await claude.install()
@@ -101,9 +97,8 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
       ok: true
     })
     const held = await send(host, 'hello')
-    await vi.waitFor(() =>
-      expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-    )
+    await vi.waitFor(() => expect(claude.child(SESSION).initializing).toBe(true))
+    expect(await submission(host, held)).toMatchObject({ dispatchState: 'pending' })
     expect(claude.child(SESSION).calls).not.toContain('send')
 
     claude.child(SESSION).answerInit()

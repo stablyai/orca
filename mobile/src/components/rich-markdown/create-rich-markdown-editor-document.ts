@@ -9,21 +9,10 @@ import { startKeyboardInset, stopKeyboardInset } from './keyboard-inset'
 import type { RichMarkdownEditorScope } from './document-scope'
 import type { RichMarkdownEditorDocument, RichMarkdownEditorHost } from './document-host-seams'
 
-/**
- * One rich Markdown editor document, started.
- *
- * The program both hosts run: the WebView loads it as a bundled script that calls this once with
- * no host, and the page imports it and calls it per mount with its own hooks. A call owns
- * everything it touches — the scope below is local to it — so two editors on one page are two
- * editors, and a listener left over from a mount that has gone reads the scope it closed over
- * rather than the live one.
- *
- * The sequence is here rather than derived from a list, because it *is* the document's shape: the
- * surface is read, the listeners that need it are installed, the keyboard measurement starts, and
- * only then is the host told the document is ready.
- */
+// Each mount owns local editor scope so overlapping editors/listeners never read another mount.
+// Start in order: read surface, install listeners, start keyboard measurement, then announce ready.
 export function createRichMarkdownEditorDocument(
-  host: RichMarkdownEditorHost = {}
+  host: RichMarkdownEditorHost
 ): RichMarkdownEditorDocument {
   const scope = createRichMarkdownEditorScope(host)
   startRichMarkdownEditorDocument(scope)
@@ -47,17 +36,7 @@ export function createRichMarkdownEditorDocument(
   }
 }
 
-/**
- * Every module's start, in the order the document runs them.
- *
- * A start that throws has left the ones before it holding the surface's listeners or the
- * viewport's, and there is no handle for anyone to stop with, so the undo runs here. Every stop is
- * a no-op against a start that never ran, which is what makes the whole sequence the right undo
- * for a partial one.
- *
- * Exported because a test that drives one module still needs the surface and the listeners the
- * others put in place, and the order is not a thing to write twice.
- */
+// Undo whole sequence if any start throws; stops safely ignore unstarted modules. Export order so tests reuse real document setup instead of duplicating it.
 export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) {
   try {
     startEditorSurface(scope)
@@ -70,10 +49,7 @@ export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) 
   }
 }
 
-/**
- * The undo, in reverse, so nothing is torn down under something still using it, with the pending
- * timer taken back last — after the listeners that could have scheduled another one are gone.
- */
+// Stop in reverse dependency order; cancel timer last, after listeners that could schedule it.
 export function stopRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) {
   scope.stopped = true
   stopKeyboardInset(scope)

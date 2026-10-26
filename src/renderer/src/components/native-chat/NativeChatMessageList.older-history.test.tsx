@@ -4,8 +4,29 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX } from './use-native-chat-older-history-autoload'
@@ -20,8 +41,7 @@ import {
   stubResizeObserver
 } from './native-chat-windowing-test-harness'
 
-// happy-dom's IntersectionObserver never reports. This one reports the way a
-// browser does: once on observe, then only when the target crosses the edge.
+// Unlike happy-dom, report on observe and whenever the sentinel crosses the prefetch edge.
 type FakeObservation = {
   callback: IntersectionObserverCallback
   observer: IntersectionObserver
@@ -29,7 +49,6 @@ type FakeObservation = {
 }
 const observations = new Set<FakeObservation>()
 const createdObservers: { root: Element | Document | null; rootMargin: string }[] = []
-/** Whether the sentinel sits inside the observer's prefetch range right now. */
 let sentinelInRange = false
 
 class FakeIntersectionObserver implements IntersectionObserver {
@@ -60,7 +79,6 @@ class FakeIntersectionObserver implements IntersectionObserver {
   }
 }
 
-/** One rendering opportunity's worth of intersection reports. */
 function deliverIntersections(): void {
   act(() => {
     for (const observation of Array.from(observations)) {
@@ -107,16 +125,11 @@ const markers = (from: number, to: number): NativeChatMessage[] =>
 /** The scroll root's `pt-10`, and the transcript column's `gap-5`. */
 const TOP_GUTTER_PX = 40
 const COLUMN_GAP_PX = 20
-/** Any chrome mounted in the column before the window is in flow and pushes the
- *  window down by its height and one gap, the way a flex column lays it out. */
+/** In-flow chrome offsets the spacer by its height plus one flex-column gap. */
 const IN_FLOW_CHROME_PX = 32
 
 function flowAboveSpacer(spacer: HTMLElement): number {
-  let above = TOP_GUTTER_PX
-  for (let node = spacer.previousElementSibling; node; node = node.previousElementSibling) {
-    above += IN_FLOW_CHROME_PX + COLUMN_GAP_PX
-  }
-  return above
+  return transcriptWindowTop(spacer, TOP_GUTTER_PX, IN_FLOW_CHROME_PX + COLUMN_GAP_PX)
 }
 
 type LoadEarlier = () => Promise<NativeChatOlderPageResult>
@@ -224,8 +237,7 @@ describe('older history auto-load', () => {
     expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
   })
 
-  // A page of rows the transcript hides leaves the row count unchanged; paging
-  // must continue anyway while the reader is still near the top.
+  // Hidden rows leave visible row count unchanged, but must not stop paging.
   it('keeps paging after each page while the sentinel stays in range', async () => {
     const loadEarlier = lands()
     const base = markers(100, 150)
@@ -254,8 +266,7 @@ describe('older history auto-load', () => {
     expect(loadEarlier).toHaveBeenCalledTimes(3)
   })
 
-  // A page of a subagent's rows lands in its closed section and adds no row the
-  // reader can see; paging must continue the same way.
+  // Rows in a closed subagent section must not stop paging either.
   it("keeps paging after a page that holds only a settled subagent's rows", async () => {
     const loadEarlier = lands()
     const spawn: NativeChatMessage = {
@@ -350,9 +361,7 @@ describe('older history auto-load', () => {
     expect(loadEarlier).toHaveBeenCalledTimes(1)
   })
 
-  // The lane can start and abandon a read (a reconnect snapshot) before loading is
-  // ever rendered; the list cannot tell that from "not reported yet", so it must
-  // not hold its own latch on the outstanding read. The lane dedupes instead.
+  // The lane dedupes reads and may abandon them before publishing loading; a list-owned latch would stall paging.
   it('asks again when the lane never reports the outstanding page as loading', () => {
     const loadEarlier = neverSettles()
     render(paging({ messages: markers(100, 150), loadEarlier }))
@@ -366,8 +375,7 @@ describe('older history auto-load', () => {
     expect(loadEarlier).toHaveBeenCalledTimes(2)
   })
 
-  // A reconnect snapshot or a hide ends the lane's loading while its read is still
-  // outstanding; the next page must not wait on a request the lane dropped.
+  // Reconnect or hide can abandon an unresolved read; the next page must not wait for it.
   it('keeps paging when the lane abandons a page that never settles', async () => {
     const loadEarlier = neverSettles()
     const base = markers(100, 150)
@@ -460,8 +468,7 @@ describe('older history auto-load', () => {
     expect(screen.getByRole('button', { name: 'Load earlier messages' })).toBeInTheDocument()
   })
 
-  // A failure belongs to one paging generation: a reconnect or reset gives the host
-  // another chance without the reader having to click.
+  // Reconnect/reset starts a new paging generation and clears that generation’s failure.
   it('resumes auto-loading, with no click, once the lane resets its paging generation', async () => {
     const loadEarlier = vi
       .fn<LoadEarlier>()
@@ -498,7 +505,6 @@ describe('older history auto-load', () => {
     expect(loadEarlier).toHaveBeenCalledTimes(1)
   })
 
-  /** Where a row's top sits in the scroll document. */
   function rowTop(container: HTMLElement, text: string): number {
     const row = screen.getByText(text).closest<HTMLElement>('[data-index]')
     const spacer = container.querySelector<HTMLElement>('[data-native-chat-window]')
@@ -538,8 +544,7 @@ describe('older history auto-load', () => {
     expect(scroller.scrollTop).toBe(TOP_GUTTER_PX + 90 * ROW_PITCH_PX + 17)
   })
 
-  // The last page takes the older-history row away with it. Anything that row
-  // held in flow above the window would leave with it, and move every row.
+  // Removing in-flow older-history chrome would move every row when the last page lands.
   it('keeps the reader in place when the last page lands and the older-history row leaves', async () => {
     const loadEarlier = lands()
     const { container, rerender, base, scroller } = await readerAtMarker140(loadEarlier)

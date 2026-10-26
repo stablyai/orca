@@ -6,6 +6,7 @@ import {
   sendAgentDraftPasteContent
 } from './agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -42,9 +43,14 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
-  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified,
   inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+}))
+vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({

@@ -641,7 +641,6 @@ describe('prepared worktree creation with real Git', () => {
     git(repoPath, ['commit', '--quiet', '-m', 'local main'])
     const localMainHead = git(repoPath, ['rev-parse', 'HEAD'])
 
-    // A remote-tracking `main` that diverged: different content, an extra file, and one deletion.
     git(repoPath, ['checkout', '--quiet', '-b', 'upstream-main'])
     await writeFile(join(repoPath, 'version.txt'), 'two\n')
     await writeFile(join(repoPath, 'only-upstream.txt'), 'upstream\n')
@@ -672,7 +671,6 @@ describe('prepared worktree creation with real Git', () => {
     )
 
     expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(localMainHead)
-    // A retarget that left stale files behind would be a wrong checkout, not just a slow one.
     expect(git(finalPath, ['status', '--porcelain'])).toBe('')
     expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
       'one\n'

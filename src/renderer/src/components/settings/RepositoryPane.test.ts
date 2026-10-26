@@ -9,12 +9,9 @@ import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { useAppStore } from '../../store'
-import {
-  getRepositoryPaneSearchEntries,
-  matchesRepositoryIdentitySearch,
-  RepositoryPane
-} from './RepositoryPane'
+import { useAppStore } from '@/store/index'
+import { getRepositoryPaneSearchEntries, RepositoryPane } from './RepositoryPane'
+import { matchesRepositoryIdentitySearch } from './repository/identity/repository-identity-search'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
 
@@ -71,9 +68,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  // WorktreeSymlinksSection reads window.api.fs on mount to suggest directory
-  // paths; provide a minimal renderer bridge so mounting the full pane doesn't
-  // throw in the test environment.
+  // Provide the fs bridge needed by mounted WorktreeSymlinksSection path suggestions.
   ;(window as unknown as { api: unknown }).api = {
     fs: { readDir: () => Promise.resolve([]) }
   }

@@ -11,7 +11,8 @@ import EditorViewToggle, {
 import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
-import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
+import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
+import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
@@ -92,7 +93,6 @@ export function EditorPanelHeader({
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
-  // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
@@ -187,8 +187,6 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
-        // Why: the adjacent diff controls use the same tooltip timing, so they
-        // share one provider instead of creating redundant Radix contexts.
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -319,8 +317,14 @@ export function EditorPanelHeader({
           createRequest={createArtifactRequest}
         />
       ) : null}
-      <EditorPanelMarkdownActionsMenu
-        isMarkdown={isMarkdown}
+      <EditorPanelActionsMenu
+        fileLocationActions={
+          activeFile.mode === 'edit' ||
+          activeFile.mode === 'markdown-preview' ||
+          (isSingleDiff && openFileState.canOpen) ? (
+            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
+          ) : undefined
+        }
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}

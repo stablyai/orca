@@ -4,7 +4,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
-  NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
 import {
@@ -15,7 +15,7 @@ import {
 
 const SESSION_ID = 'orca-session-visuals'
 const VISUALS: NativeChatVisualsLaunch = {
-  folder: '/state/native-chat-visuals/abc',
+  folder: '/state/chat-scratch/abc',
   skill: { pluginDir: '/app/native-chat-visuals', skillsRoot: '/app/native-chat-visuals/skills' }
 }
 
@@ -60,7 +60,7 @@ describe('a Claude chat launch with inline visuals', () => {
     expect(prepareVisuals).toHaveBeenCalledWith(SESSION_ID)
     expect(resolved.options.plugins).toEqual([{ type: 'local', path: VISUALS.skill.pluginDir }])
     expect(resolved.options.additionalDirectories).toEqual(['/shared/notes', VISUALS.folder])
-    expect(resolved.env?.[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(VISUALS.folder)
+    expect(resolved.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
   })
 
   it.each([
@@ -91,18 +91,18 @@ describe('a Claude chat launch with inline visuals', () => {
     })
     expect(resolved.options).not.toHaveProperty('plugins')
     expect(resolved.options.additionalDirectories).toEqual([VISUALS.folder])
-    expect(resolved.env?.[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(VISUALS.folder)
+    expect(resolved.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
   })
 
   it('without a prepared folder, grants nothing and drops a folder inherited from another chat', async () => {
     const resolved = await launch({
       prepareVisuals: async () => null,
       supports: async () => true,
-      env: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/state/native-chat-visuals/other-chat' }
+      env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/state/chat-scratch/other-chat' }
     })
     expect(resolved.options).not.toHaveProperty('plugins')
     expect(resolved.options).not.toHaveProperty('additionalDirectories')
-    expect(resolved.env).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(resolved.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 
   it('never asks about the plugin flag on a host that delivers no visuals', async () => {

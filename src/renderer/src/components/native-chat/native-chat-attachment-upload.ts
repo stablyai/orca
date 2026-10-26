@@ -1,20 +1,21 @@
-// Host-aware resolution for composer attachments (STA-1465). The composer's
-// attach surfaces (file drop, file picker, image paste) receive client-local
-// paths. A structured chat on a paired server uploads into that server's
-// attachment store; any other remote chat refuses client files.
+import {
+  lastVerifiedRuntimeStatus,
+  isRuntimeHostContactRevoked
+} from '../../../../shared/runtime-host-status'
+import { useAppStore } from '@/store'
+// Upload structured-chat client paths to their paired host; other remote chats cannot read client-local files.
 
 import { translate } from '@/i18n/i18n'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getConnectionExecutionHostId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getKnownExecutionHostIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -29,8 +30,7 @@ import type { AppState } from '@/store/types'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 
-/** A structured chat on a paired server: files upload into that server's attachment store, which
- *  checks every stored path a message names when it admits the message. */
+/** The paired host validates every stored attachment path when admitting a structured send. */
 export type NativeChatRuntimeSessionAttachmentOwner = {
   kind: 'runtime-session'
   environmentId: string
@@ -39,16 +39,17 @@ export type NativeChatRuntimeSessionAttachmentOwner = {
 }
 
 export type NativeChatAttachmentOwner =
-  | { kind: 'local' }
+  /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
+  | { kind: 'local'; structuredSessionId?: string }
   | NativeChatRuntimeSessionAttachmentOwner
-  /** Refuses client files: a terminal-backed chat on a paired server (its agent may run on that
-   *  server's SSH or WSL host, which the server's store cannot reach), or an `ssh:` host, which
-   *  only its paired server serves. */
-  | { kind: 'remote' }
-  /** Store not hydrated / worktree unknown. Callers must not attach local
-   *  paths in this window — the worktree may turn out to be remote, and the
-   *  agent would silently receive paths it cannot read (see #6648). */
-  | { kind: 'not-ready' }
+  /** Refuse client paths for terminal-backed remote or nested SSH/WSL chats; the paired store may not reach their agent. */
+  | {
+      kind: 'remote'
+      /** Save clipboard images on this paired host only when it directly runs the agent, never for nested SSH. */
+      clipboardImageEnvironmentId?: string
+    }
+  /** Unknown ownership must not admit local paths: hydration may reveal a remote agent that cannot read them. */
+  | { kind: 'not-ready'; notice?: string }
 
 type NativeChatAttachmentOwnerState = Pick<
   AppState,
@@ -64,8 +65,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'worktreesByRepo'
 >
 
-/** Resolve who owns the composer's backing worktree at attach time. Mirrors the
- *  terminal drop resolver's order: runtime owner first, then SSH vs local. */
+/** Resolve at attach time in terminal-drop order: runtime owner before SSH/local routing. */
 export function resolveNativeChatAttachmentOwner(
   state: NativeChatAttachmentOwnerState,
   terminalTabId: string
@@ -84,7 +84,12 @@ export function resolveNativeChatAttachmentHost(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return getKnownExecutionHostIdForWorktree(state, worktreeId)
   }
-  const runtimeId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+  // Why: an upload writes files; with two hosts publishing this id it must not land on either.
+  if (owner.kind === 'ambiguous') {
+    return null
+  }
+  const runtimeId = owner.environmentId
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (!runtimeId && connectionId === undefined) {
     return null
@@ -106,14 +111,21 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   if (hostId === 'local') {
     return { kind: 'local' }
   }
+  const host = parseExecutionHostId(hostId)
+  // Why null only: a non-null connectionId names the server's nested SSH host, which it does not serve.
+  if (host?.kind === 'runtime' && getConnectionIdFromState(state, worktreeId) === null) {
+    return { kind: 'remote', clipboardImageEnvironmentId: host.environmentId }
+  }
   return { kind: 'remote' }
 }
 
-/** The chat behind a structured composer, as the attachment owner needs it. */
 export type NativeChatStructuredAttachmentSession = {
   sessionId: string
   /** Null: the chat runs on this machine. */
   runtimeEnvironmentId: string | null
+  /** The host has not confirmed this chat, so nothing can be uploaded into it. */
+  sessionPending?: boolean
+  sessionPendingNotice?: string
 }
 
 /** A structured chat on a paired server owns its attachments by where it runs, not by worktree. */
@@ -154,8 +166,7 @@ export function nativeChatAttachmentUnreadableNotice(): string {
   )
 }
 
-/** One notice for every file of a drop or pick that did not attach, by name, with the cause they
- *  share when there is one. */
+/** Name every failed attachment and include their common cause when available. */
 export function nativeChatAttachFailedNotice(names: readonly string[], cause = ''): string {
   const files = names.join(', ')
   const reason = cause.trim().replace(/[^.!?。！？]$/u, '$&.')
@@ -180,11 +191,7 @@ export function nativeChatTooManyAttachmentsNotice(): string {
 
 export { nativeChatLocalAttachmentUnsupportedNotice } from './native-chat-composer-target'
 
-/**
- * Ask the chat's server, right before uploading, whether it keeps chat attachments, and which
- * server process will receive the bytes. An older server gets the update notice instead of an
- * upload: a path from this machine would mean nothing to its agent.
- */
+/** Check attachment capability and receiving process before uploading; older hosts need an update, never a client-local path. */
 export async function prepareNativeChatSessionAttachmentUpload(
   owner: NativeChatRuntimeSessionAttachmentOwner
 ): Promise<
@@ -217,13 +224,27 @@ export async function prepareNativeChatSessionAttachmentUpload(
   }
 }
 
-/**
- * Upload client-local files into the chat's store on its paired server. The chips show progress,
- * so nothing else does; the caller reports what did not attach.
- */
+/** Upload to the paired chat store; chips own progress display and callers report failures. */
 export function uploadNativeChatSessionAttachmentPaths(
   paths: string[],
   target: AgentSessionAttachmentUploadTarget
 ): Promise<AgentSessionAttachmentPathUploadResult> {
   return window.api.fs.uploadPathsToAgentSessionAttachments({ ...target, paths })
+}
+
+/** The runtime status slice evicts replaced peers and accepts only current pairing snapshots. */
+export function cachedNativeChatPasteUploadTarget(
+  owner: NativeChatRuntimeSessionAttachmentOwner
+): AgentSessionAttachmentUploadTarget | null {
+  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+  const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+  if (!status?.capabilities?.includes(AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY)) {
+    return null
+  }
+  return {
+    environmentId: owner.environmentId,
+    sessionId: owner.sessionId,
+    expectedEnvironmentPairingRevision: owner.pairingRevision,
+    expectedEnvironmentRuntimeId: status.runtimeId
+  }
 }

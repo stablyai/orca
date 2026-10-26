@@ -1,10 +1,11 @@
 import '../unused-default-rpc-methods.test-fixture'
+import './linear-agent-project-access.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
-import { sanitizeLinearErrorMessage } from '../../../linear/issue-context-errors'
+import { sanitizeLinearErrorMessage } from '../../../linear/issue-context/errors'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -358,7 +359,7 @@ type LinearUnconfirmedBuilder = {
   ): Error & { data?: { cause?: string; nextSteps?: string[] } }
   resolveLinearAgentState(input: string, states: unknown[]): unknown
   linearCreatedIssueMatchesIntent(issue: unknown, intent: unknown): boolean
-  linearSavedIssueMatchesIntent(issue: unknown, intent: unknown): boolean
+  linearSavedIssueMatchesIntent(issue: unknown, intent: unknown): Promise<boolean>
   notifyLinearLinkedIssueUpdated(
     workspaceId: string,
     identifier: string | readonly string[]
@@ -583,7 +584,7 @@ describe('Linear agent write recovery helpers', () => {
     ).toBe(false)
   })
 
-  it('confirms save-issue updates including explicit relationship clears', () => {
+  it('confirms save-issue updates including explicit relationship clears', async () => {
     const runtime = new OrcaRuntimeService()
     const builder = runtime as unknown as LinearUnconfirmedBuilder
     const issue = {
@@ -603,7 +604,7 @@ describe('Linear agent write recovery helpers', () => {
       labelIds: ['label-1']
     }
 
-    expect(
+    await expect(
       builder.linearSavedIssueMatchesIntent(issue, {
         title: 'Updated title',
         description: 'Updated description',
@@ -616,8 +617,10 @@ describe('Linear agent write recovery helpers', () => {
         dueDate: null,
         labelIds: ['label-1']
       })
-    ).toBe(true)
-    expect(builder.linearSavedIssueMatchesIntent(issue, { projectId: 'project-2' })).toBe(false)
+    ).resolves.toBe(true)
+    await expect(
+      builder.linearSavedIssueMatchesIntent(issue, { projectId: 'project-2' })
+    ).resolves.toBe(false)
   })
 
   it('resolves workflow states by UUID or case-insensitive exact name', () => {

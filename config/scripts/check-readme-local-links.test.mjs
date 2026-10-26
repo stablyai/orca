@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
+import { LINT_STEPS } from './run-lint.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -139,8 +141,7 @@ describe('README local link check', () => {
     ])
   })
 
-  // Why: a single-quoted attribute is valid HTML and GitHub renders it, so a parser
-  // that only reads double quotes would pass a README with a broken image.
+  // Single-quoted HTML is valid; double-quote-only parsing would miss this broken image.
   it('reports a missing target in a single-quoted attribute', () => {
     const files = {
       ...validReadmes,
@@ -156,20 +157,25 @@ describe('README local link check', () => {
     ])
   })
 
-  // Docs-only diffs skip preflight, so the detector must check README links.
-  it('runs on every PR through the ungated detector and in the lint script', () => {
+  // Ready docs-only diffs skip preflight, so the detector must check README links.
+  it('checks ready PRs through the detector and in the lint script', () => {
     const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
     const guardJob = workflow.jobs.code_paths
     const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
+    const runsFor = (draft) =>
+      runInNewContext(guardJob.if, {
+        github: { event_name: 'pull_request', event: { pull_request: { draft } } }
+      })
 
-    expect(guardJob.if).toBeUndefined()
+    expect(runsFor(false)).toBe(true)
+    expect(runsFor(true)).toBe(false)
     expect(guardJob.needs).toBeUndefined()
     expect(step.if).toBeUndefined()
     expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')
     expect(scripts['check:readme-local-links']).toBe(
       'node config/scripts/check-readme-local-links.mjs'
     )
-    expect(scripts.lint).toContain('pnpm run check:readme-local-links')
+    expect(LINT_STEPS).toContain('check:readme-local-links')
   })
 })

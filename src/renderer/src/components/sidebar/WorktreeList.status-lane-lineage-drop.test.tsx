@@ -52,16 +52,15 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
-})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+    {
+      getState: () => mockStore.state,
+      subscribe: () => () => {}
+    }
+  )
+}))
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
@@ -212,8 +211,6 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
   }
 }
 
-// Grouped by workspace status: parent + its visible lineage child both live in the
-// "in-progress" lane; an unrelated bystander sits in "todo".
 function setStatusLaneState(): void {
   const repo = makeRepo()
   const parent = makeWorktree({
@@ -330,8 +327,6 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
   return container
 }
 
-// A minimal DataTransfer stand-in: the native-drop commit path only reads the
-// worktree-id payloads and the type list off it.
 function makeWorktreeIdDataTransfer(worktreeIds: readonly string[]): DataTransfer {
   const [firstId] = worktreeIds
   const data: Record<string, string> = {
@@ -405,7 +400,7 @@ describe('WorktreeList status-lane drop carries visible lineage children (#9083)
     const container = await renderWorktreeList()
     const todoHeader = findStatusLaneHeader(container, 'todo')
 
-    // Only the parent id rides on the native drag payload; the wrapper must expand it.
+    // Native drag carries only the parent ID; the wrapper must add its lineage children.
     await dropWorktreesOnStatusLane(todoHeader, ['parent'])
 
     const updates = committedStatusUpdates()

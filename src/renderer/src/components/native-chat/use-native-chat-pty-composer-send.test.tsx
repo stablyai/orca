@@ -31,6 +31,7 @@ function send(
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
       agent,
+      draftScopeKey: 'terminal-test-scope',
       draft,
       imageAttachments: imagePaths.map((path) => ({ path })),
       disabled: false,
@@ -83,7 +84,6 @@ it.each([
   expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]?.onWriteRejected).toBeUndefined()
 })
 
-// The pane brings the latest into view on this, whatever the send was classified as.
 it.each([
   ['chat', 'hello'],
   ['command', '/compact'],
@@ -94,4 +94,12 @@ it.each([
 
 it('reports nothing for a blank draft', () => {
   expect(send('codex', 'chat', '   ').submitted).not.toHaveBeenCalled()
+})
+
+it('rejects reserved unavailable identities while ordinary large terminal text stays inline', () => {
+  send('claude', 'chat', '[Pasted text](orca-paste:00000000-0000-4000-8000-000000000000)')
+  expect(sendNativeChatMessage).not.toHaveBeenCalled()
+  const text = 'x'.repeat(300000)
+  send('codex', 'chat', text)
+  expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.slice(0, 2)).toEqual(['pty', text])
 })

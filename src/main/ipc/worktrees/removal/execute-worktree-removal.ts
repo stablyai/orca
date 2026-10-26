@@ -33,7 +33,7 @@ import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
 import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
-import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-table'
+import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-leftover'
 
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,
@@ -70,8 +70,11 @@ export async function executeWorktreeRemoval(
     ])
   }
   if (
-    retryFailedRemovalUnlessRegistered(args.worktreeId, worktreePath, registeredWorktrees, () =>
-      retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+    await retryFailedRemovalUnlessRegistered(
+      args.worktreeId,
+      worktreePath,
+      registeredWorktrees,
+      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
     )
   ) {
     return { removing: true }
@@ -100,10 +103,7 @@ export async function executeWorktreeRemoval(
     throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
   }
 
-  // Ahead of the archive-hook gate below, and that ordering is right: both arms describe a
-  // registration with no checkout behind it — a row whose path IS a `.git` file, or a tree already
-  // gone from disk. There is nothing to archive, and running the hook would fail on the missing
-  // cwd and block a cleanup that has no user data to lose.
+  // Stale registrations have no checkout to archive; missing cwd must not block metadata cleanup.
   if (
     (await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
     (args.force === true &&
@@ -135,7 +135,7 @@ export async function executeWorktreeRemoval(
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId
@@ -149,8 +149,7 @@ export async function executeWorktreeRemoval(
 
   const archiveScript = hooks?.scripts.archive
 
-  // Precondition, not an advisory (#19334): both branches below stop PTYs and delete the
-  // checkout, so a hook failure has to throw here — before either is reached.
+  // Archive failure must refuse before PTY teardown or checkout deletion (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (archiveScript && !args.skipArchive) {
     await withWorktreeRemoveStageSpan('archive_hook', 'local', async () => {

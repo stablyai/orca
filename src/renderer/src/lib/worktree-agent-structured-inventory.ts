@@ -29,7 +29,10 @@ export async function readWorktreeStructuredActivationInventory(
   ) {
     throw new Error('structured session inventory scope unavailable')
   }
-  if (!snapshot.tabs.some((tab) => tab.type === 'agent-session')) {
+  if (
+    !snapshot.initialSurfaceLaunch &&
+    !snapshot.tabs.some((tab) => tab.type === 'agent-session')
+  ) {
     return false
   }
   const ownerBySessionId = new Map<string, { owner: 'native' }>()

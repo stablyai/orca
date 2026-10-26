@@ -11,10 +11,8 @@ export type MobileOnboardingDestination =
       params: { steps: string; hostId?: string }
     }
 
-/** Loads every outstanding decision in the order the wizard presents them. */
 export async function loadMobileOnboardingSteps(): Promise<MobileOnboardingStep[]> {
-  // Why: the wizard needs the complete plan for accurate progress dots; run the
-  // independent gates together so adding the second decision does not add latency.
+  // Read independent gates together so complete progress dots do not add serial latency.
   const [showSessionView, showNotifications] = await Promise.all([
     shouldPresentSessionViewOptIn(),
     shouldPresentNotificationOptIn()
@@ -26,7 +24,6 @@ export async function loadMobileOnboardingSteps(): Promise<MobileOnboardingStep[
   )
 }
 
-/** Preserves a paired host while routing through outstanding decisions. */
 export function mobileOnboardingDestination(
   steps: readonly MobileOnboardingStep[],
   hostId?: string
@@ -40,7 +37,6 @@ export function mobileOnboardingDestination(
   }
 }
 
-/** Restores the canonical order and ignores duplicate or unknown route values. */
 export function parseMobileOnboardingSteps(raw: string | undefined): MobileOnboardingStep[] {
   if (!raw) {
     return [...MOBILE_ONBOARDING_STEPS]

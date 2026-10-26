@@ -25,8 +25,7 @@ describe('classifyUnenvelopedCredential', () => {
     expect(classifyUnenvelopedCredential(sealed)).toBe('sealed')
   })
 
-  // Why this case: tabs and newlines are legal in a pasted token, so treating every
-  // control byte as ciphertext would warn on nothing and stay silent on real plaintext.
+  // Pasted tokens may contain tabs/newlines; treating all control bytes as ciphertext hides plaintext warnings.
   it('does not mistake tabs or CRLF in a token for ciphertext', () => {
     expect(classifyUnenvelopedCredential(Buffer.from('token\tmore\r\n', 'utf8'))).toBe('plaintext')
   })

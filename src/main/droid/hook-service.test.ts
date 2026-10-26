@@ -83,7 +83,7 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
 
-  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under Droid's shell.
+  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
   it('registers the Windows batch hook command for every event', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {

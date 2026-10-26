@@ -4,17 +4,18 @@ import {
 } from './opencode-transcript-capture-limits'
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   updateTimeline,
   timestampIso
 } from './session-scanner-accumulator'
+import { addDecodedSessionMessage } from './session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
 } from './session-scanner-first-user-prompt'
 import { normalizeTitleText } from './session-scanner-values'
+import { asRecord } from './session-scanner-record-value'
 import {
   extractOpenCode2MessageText,
   decodeOpenCode2Message,
@@ -24,20 +25,13 @@ import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import type { TranscriptMessage, TranscriptMessageSink } from './session-transcript-consumers'
 
-// Why: opencode2 (beta) stores sessions in a channel-scoped SQLite DB with its
-// own schema — `session_v2` rows plus `session_message` rows whose `data`
-// column holds tagged message JSON (user/assistant/system/tool/…), with no
-// `part` table like opencode v1. The v2 schema is explicitly unstable during
-// beta, so every read is column-guarded and any drift fails soft to a null
-// session. Electron-free so the worker entry can import it.
+// V2 stores tagged message JSON in session_message rather than v1 part rows; schemas vary by release.
 
 const OPENCODE2_SESSION_TABLE = 'session_v2'
 const OPENCODE2_MESSAGE_TABLE = 'session_message'
 
 const OPENCODE2_PREVIEW_LIMIT = 5
-// Why: v2 stores the full message JSON inline in one column, so the preview
-// window can stay small; a heavy session's assistant content can still hold
-// large tool blobs.
+// Bound preview probes: a single inline message can contain large tool output.
 const OPENCODE2_PREVIEW_MESSAGE_WINDOW = 100
 
 type SessionRow = {
@@ -116,8 +110,7 @@ function buildSessionQuery(db: SyncDatabase): string {
           LIMIT 1`
 }
 
-// Why: v2 stores the model ref as a text column. Newer builds serialize a
-// Model.Ref JSON ({id, providerID}); older shapes may be a bare id string.
+// Model refs may be a bare ID or JSON containing id/providerID, depending on the writer version.
 function extractModelId(modelText: string | null): string | null {
   if (!modelText) {
     return null
@@ -130,13 +123,7 @@ function extractModelId(modelText: string | null): string | null {
     return trimmed
   }
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-    const parsed = JSON.parse(trimmed) as unknown
-    const record =
-      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-          (parsed as Record<string, unknown>)
-        : null
+    const record = asRecord(JSON.parse(trimmed))
     if (typeof record?.id === 'string' && record.id.trim()) {
       return record.id
     }
@@ -170,8 +157,6 @@ function readFirstUserPromptFromDb(db: SyncDatabase, sessionId: string): string 
          ORDER BY time_created ASC, seq ASC
          LIMIT 1`
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT projects one string data column and better-sqlite3 returns rows synchronously.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
       .all(sessionId) as { data: string }[]
     const text = rows[0] ? extractOpenCode2MessageText(rows[0].data) : null
     return text ? normalizeFullFirstUserPromptText(text) : null
@@ -223,18 +208,7 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
   }
 }
 
-/**
- * Parse a single opencode2 session from the channel-scoped SQLite database
- * into an `AiVaultSession`. Reads session metadata (title, cwd, model, tokens,
- * cost) and up to 5 preview messages from the `session_message` table. The
- * database is opened read-only with `PRAGMA query_only = ON`; any schema drift
- * from the beta builds fails soft to `null`.
- * @param args.dbPath - Absolute path to the opencode2 (opencode-next.db) file.
- * @param args.sessionId - Primary key in the `session_v2` table.
- * @param args.platform - The platform to use for resume command generation.
- * @returns The parsed `AiVaultSession`, or `null` if the session does not exist
- *   or the database lacks the required schema.
- */
+/** Read v2 metadata and previews; absent required session schema returns null, while database errors propagate. */
 export async function parseOpenCode2SqliteSession(args: {
   dbPath: string
   sessionId: string
@@ -248,7 +222,6 @@ export async function parseOpenCode2SqliteSession(args: {
     if (!canReadOpenCode2Sessions(db)) {
       return null
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects the SessionRow columns and the schema guard ran immediately above.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
     const row = db.prepare(buildSessionQuery(db)).get(sessionId) as SessionRow | undefined
     if (!row || row.id !== sessionId) {
@@ -295,26 +268,13 @@ export async function parseOpenCode2SqliteSession(args: {
         : probedRows.slice(0, OPENCODE2_PREVIEW_LIMIT).toReversed()
       for (const previewRow of previewRows) {
         const role = mapPreviewRole(previewRow.type)
-        if (args.messages?.active) {
-          for (const message of decodeOpenCode2Message(
-            previewRow.data,
-            role,
-            timestampIso(previewRow.time_created)
-          )) {
-            args.messages.push(message)
-          }
-        }
-        const text = extractOpenCode2MessageText(previewRow.data)
-        if (!text) {
-          continue
-        }
-        addPreviewMessage(accumulator, {
-          role,
-          publishMessage: false,
-          text,
-          timestamp: previewRow.time_created,
-          seedFirstUserPrompt: false
-        })
+        addDecodedSessionMessage(
+          accumulator,
+          decodeOpenCode2Message(previewRow.data, role, timestampIso(previewRow.time_created), {
+            includeTools: accumulator.messages.active
+          }),
+          { seedFirstUserPrompt: false }
+        )
       }
     }
 

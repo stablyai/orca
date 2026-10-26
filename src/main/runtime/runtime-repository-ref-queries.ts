@@ -7,6 +7,7 @@ import {
   isRepoSearchRefsRequestLimit
 } from '../../shared/repo-search-limits'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../git/repo'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type RuntimeRepositoryRefQueryDependencies = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -30,16 +31,14 @@ export class RuntimeRepositoryRefQueries {
     if (isFolderRepo(repo)) {
       return { refs: [], truncated: false }
     }
-    // Why: an `ssh:` repo is not served here; it reports no refs and never searches this machine.
-    const refDetails = repo.connectionId
+    // Unserved SSH hosts report no refs; never search local files for them.
+    const refDetails = getRepoRoutingConnectionId(repo)
       ? []
       : await searchBaseRefDetails(repo.path, query, probeLimit, includeQualifiedRefs)
     return {
       refs: refDetails.slice(0, effectiveLimit).map((entry) => entry.refName),
       refDetails: refDetails.slice(0, effectiveLimit),
-      // An oversized request is intentionally reported as truncated even when
-      // this repo has fewer refs: the execution cap prevented fulfilling the
-      // requested page size.
+      // Cap-limited requests are truncated even if the repo has fewer refs than requested.
       truncated: limit > effectiveLimit || refDetails.length > effectiveLimit
     }
   }
@@ -51,7 +50,7 @@ export class RuntimeRepositoryRefQueries {
     if (isFolderRepo(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
-    if (repo.connectionId) {
+    if (getRepoRoutingConnectionId(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
     const [defaultBaseRef, remoteCount] = await Promise.all([

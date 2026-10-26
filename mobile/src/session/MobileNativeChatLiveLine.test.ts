@@ -28,6 +28,7 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+vi.mock('../components/LoadingSpinner', () => ({ LoadingSpinner: 'LoadingSpinner' }))
 vi.mock('./MobileNativeChatReasoningRow', () => ({
   MobileNativeChatReasoningBody: 'ReasoningBody'
 }))
@@ -96,10 +97,9 @@ describe('MobileNativeChatLiveLine', () => {
   it('reads "Thinking" beside one spinner while the turn reasons', () => {
     const root = render()
     expect(labels(root)).toEqual(['Thinking'])
-    expect(byType(root, 'ActivityIndicator')).toHaveLength(1)
+    expect(byType(root, 'LoadingSpinner')).toHaveLength(1)
   })
 
-  // The bar owns the clock; the tail line never repeats it.
   it('reads plain "Working…" when the turn is not reasoning, and holds no timer', () => {
     vi.useFakeTimers()
     const root = render({ thinking: false })
@@ -145,7 +145,6 @@ describe('MobileNativeChatLiveLine', () => {
       expect(ancestor.props.accessibilityLiveRegion).toBeUndefined()
       ancestor = ancestor.parent
     }
-    // iOS selects inline, so the body takes no long press.
     expect(body?.props.onLongPress).toBeUndefined()
   })
 

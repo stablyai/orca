@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { globSync } from 'node:fs'
 import {
   copyFile,
   cp,
@@ -51,8 +52,6 @@ const unixLauncherFixtures = [
 
 describe('packaged CLI assets', () => {
   it('ships embedded skill guides with the CLI instead of source Markdown', () => {
-    // Why: `skills get` must work from the packaged CLI without falling back to
-    // authoring-only files that do not exist in installed applications.
     expect(builderConfig.asarUnpack).toContain('out/cli/**')
     expect(builderConfig.files).toContain('!skill-guides{,/**/*}')
   })
@@ -68,7 +67,7 @@ describe('packaged CLI assets', () => {
         args: [
           join(projectDir, 'node_modules', 'typescript', 'bin', 'tsc'),
           '-p',
-          join(projectDir, 'config', 'tsconfig.cli.json'),
+          join(projectDir, 'config', 'tsconfig.build.cli.json'),
           '--outDir',
           join(source, 'out'),
           '--composite',
@@ -82,6 +81,9 @@ describe('packaged CLI assets', () => {
         timeoutMs: 60_000
       })
       expect(compile.code, compile.stdout + compile.stderr).toBe(0)
+      expect(globSync('**/*.{test,spec}.{js,jsx,cjs,mjs}', { cwd: join(source, 'out') })).toEqual(
+        []
+      )
       await mkdir(dirname(archive), { recursive: true })
       await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
       for (const name of ['zod', 'tweetnacl']) {
@@ -299,7 +301,6 @@ printf 'arg=%s\\n' "$@"
     }
   )
 
-  // Observe each launcher's actual child env and argv, including arguments with spaces.
   itRunsUnixShell.each(unixLauncherFixtures)(
     'sanitizes node env and forwards argv verbatim through the $name launcher',
     async (launcherFixture) => {
@@ -349,8 +350,7 @@ node -e 'console.log(JSON.stringify({
 
         expect(payload.argv).toEqual([cliPath, '--help', 'two words'])
         expect(payload.runAsNode).toBe('1')
-        // Why: Electron's node bootstrap must not inherit these, but the CLI
-        // still needs to see what the user set.
+        // Hide node options from Electron's bootstrap but preserve them for the CLI.
         expect(payload.nodeOptions).toBeNull()
         expect(payload.orcaNodeOptions).toBe('--trace-warnings')
         expect(payload.nodeReplExternalModule).toBeNull()

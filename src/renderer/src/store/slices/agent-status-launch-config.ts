@@ -8,9 +8,9 @@ import {
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
-} from './agent-status-contract'
+} from './agent-status/agent-status-contract'
 import { getLeafIdFromPaneKey, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
-import { launchConfigsEqual } from './agent-status-recovery-equivalence'
+import { launchConfigsEqual } from '../../../../shared/agent-resume-record-equivalence'
 
 export function normalizeLaunchConfigRegistrationMetadata(
   paneKey: string,

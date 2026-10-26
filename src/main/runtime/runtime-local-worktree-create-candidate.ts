@@ -5,10 +5,10 @@ import type { getPRForBranch } from '../github/client'
 import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
-  resolveWorktreeCreateDisplayNameRequest,
   sanitizeWorktreeName,
   type getWorktreePathSettings
 } from '../ipc/worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-display-name'
 import { getBranchConflictKind } from '../git/repo'
 import {
   getBranchNameOverrideCandidate,
@@ -190,7 +190,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
       args.workspaceRoot
     )
-    // Why the pending check: Orca still owns this path until its background removal settles.
+    // Orca owns the path until background removal settles.
     if (
       !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
       !(await runtimePathExists(worktreePath))

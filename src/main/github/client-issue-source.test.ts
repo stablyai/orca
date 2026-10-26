@@ -60,8 +60,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
   return {
     ...actual,
-    // Why: these suites drive source resolution through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks.
+    // Bridge hosted source resolution to the existing gh-utils fixtures.
     resolveIssueGitHubApiRepositorySource: (
       repoPath: string,
       preference: unknown,
@@ -138,9 +137,7 @@ function decodedIssueSearchPath(callIndex: number): string {
   return decodeURIComponent(apiPath ?? '')
 }
 
-// Route resolvePrWorkItemSource's per-remote probes: origin delegates to
-// getOwnerRepoMock (so existing tests keep defining origin through it) and
-// upstream returns the given candidate.
+// Share origin fixtures while letting candidate tests opt into upstream.
 function mockUpstreamCandidate(upstream: { owner: string; repo: string } | null): void {
   getOwnerRepoForRemoteMock.mockImplementation(
     async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
@@ -163,17 +160,11 @@ describe('GitHub issue source split', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
-    // Why: default the preference-aware resolver to 'auto' semantics so the
-    // pre-existing test cases (which don't think about preference at all)
-    // still pass. `listWorkItems` now calls `resolveIssueSource` instead of
-    // `getIssueOwnerRepo` directly — we delegate back to the single-call
-    // mock to preserve the one-fetch-per-test invariant each test sets up.
+    // Preserve one source lookup per test while exercising the preference-aware resolver.
     resolveIssueSourceMock.mockImplementation(async () => ({
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    // Why: keep origin on the legacy mock while hosted candidate tests opt in
-    // to upstream behavior explicitly.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -305,7 +296,6 @@ describe('GitHub issue source split', () => {
         'HTTP 503: Service Unavailable'
       )
 
-      // The outage signal reuses the failed request; it must not add retry subprocesses.
       expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     }
   )
@@ -321,7 +311,6 @@ describe('GitHub issue source split', () => {
       'HTTP 503: Service Unavailable'
     )
 
-    // Classification must reuse the issue and PR requests, not retry the outage.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
@@ -392,8 +381,6 @@ describe('GitHub issue source split', () => {
       fellBack: true
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    // beforeEach default: upstream probe resolves null, origin delegates to
-    // getOwnerRepoMock.
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     const result = await listWorkItems('/repo-root', 10, 'is:pr', undefined, 'upstream')
@@ -589,8 +576,7 @@ describe('GitHub issue source split', () => {
 
     await expect(getWorkItem('/repo-root', 42, 'pr')).resolves.toBeNull()
 
-    // The first candidate uses `pr view` and its REST compatibility fallback;
-    // neither failure is a 404, so a same-number PR on origin is never queried.
+    // Only a confirmed 404 permits trying a same-number PR on another repository.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(
       ghExecFileAsyncMock.mock.calls.some(([args]) =>
@@ -601,9 +587,7 @@ describe('GitHub issue source split', () => {
 
   it('raw number lookup tries upstream issue before origin PR', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    // Why: simulate a real gh 404 (the only error type that should fall through).
-    // Non-404 errors re-throw so transient upstream failures don't misroute to an
-    // unrelated origin PR with the same number.
+    // Non-404 upstream failures must not route to an unrelated origin PR with the same number.
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -643,10 +627,7 @@ describe('GitHub issue source split', () => {
   })
 
   it('surfaces a 403 from upstream issues through the listWorkItems envelope', async () => {
-    // Why: parent design doc §3 / acceptance criterion 2 — the IPC envelope
-    // must carry a classified error for the failing side so the renderer can
-    // swap the empty-state for a retryable banner. `sources` must stay
-    // populated so the banner copy can name the repo that failed.
+    // Preserve source metadata with classified failures so the retry banner can name its repository.
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
     ghExecFileAsyncMock
@@ -664,10 +645,6 @@ describe('GitHub issue source split', () => {
   })
 
   it('returns partial results when upstream issues fail but origin PRs succeed', async () => {
-    // Why: parent design doc §2 partial-failure rule — a failing source must
-    // not zero out the succeeding source. The UI renders origin PRs with a
-    // banner above the list, not an empty state. Ensures the IPC shape
-    // carries both the successful items and the error for the failing side.
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
     ghExecFileAsyncMock
@@ -696,8 +673,6 @@ describe('GitHub issue source split', () => {
   })
 
   it('raw number lookup does not fall through on transient upstream errors', async () => {
-    // Why: with issue source split, a non-404 upstream failure must not silently
-    // route to origin's PR #N — that would return an unrelated item.
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 500: server error'))
 
@@ -709,11 +684,6 @@ describe('GitHub issue source split', () => {
   })
 
   describe('per-repo issue-source preference', () => {
-    // Why: 3 preference states × 2 remote-topology states = 6 cases per the
-    // design doc §9. These tests isolate `listWorkItems` against a mocked
-    // `resolveIssueSource` to verify the preference is threaded all the way
-    // to the gh call and that `fellBack` propagates into the envelope.
-
     it("preference='auto' + upstream exists → queries upstream", async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: { owner: 'stablyai', repo: 'orca' },
@@ -734,9 +704,7 @@ describe('GitHub issue source split', () => {
     })
 
     it("preference='auto' + upstream exists → PRs query upstream too", async () => {
-      // Why: fork-contribution PRs live on the upstream repo — the fork's own
-      // PR list is almost always empty. 'auto' must resolve PRs upstream-first
-      // like issues, or the PRs tab renders "No matching GitHub work" on forks.
+      // Fork contribution PRs live upstream; automatic selection must query that namespace.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: { owner: 'stablyai', repo: 'orca' },
         fellBack: false
@@ -802,9 +770,7 @@ describe('GitHub issue source split', () => {
     })
 
     it('surfaces upstreamCandidate in sources regardless of effective preference', async () => {
-      // Why: the renderer selector needs to keep rendering after the user picks
-      // 'origin'. That requires the envelope to carry the raw upstream even
-      // when `sources.issues` has collapsed onto origin.
+      // Preserve raw upstream metadata so the selector can still switch back after choosing origin.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: { owner: 'fork', repo: 'orca' },
         fellBack: false

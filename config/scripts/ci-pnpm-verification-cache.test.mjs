@@ -22,7 +22,7 @@ const evaluate = (expression, context) => runInNewContext(expression, context)
 function resolveRecord({
   container = false,
   os = 'Linux',
-  packageManager = 'pnpm@12.8.1+sha512.test'
+  packageManager = 'pnpm@12.14.0+sha512.test'
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-verification-record-'))
   try {
@@ -43,7 +43,7 @@ function resolveRecord({
           printf '%s\\n' "$*" >> "$TEST_CALLS"
           case "$*" in
             'cache path') printf '%s\\n' "$TEST_CACHE_PATH" ;;
-            '--version') printf '%s\\n' '12.8.1' ;;
+            '--version') printf '%s\\n' '12.14.0' ;;
             *) return 2 ;;
           esac
         }
@@ -93,7 +93,7 @@ describe('pnpm-owned verification record', () => {
         'path=<root>/cache with spaces/pnpm/lockfile-verified.jsonl'
       )
       expect(container.output).toContain(
-        'key=pnpm-verification-v1-Linux-ARM64-12.8.1-policy-digest'
+        'key=pnpm-verification-v1-Linux-ARM64-12.14.0-policy-digest'
       )
       expect(host.calls).toBe('cache path\n--version\n')
       expect(container.calls).toBe('')
@@ -103,7 +103,7 @@ describe('pnpm-owned verification record', () => {
   it.skipIf(process.platform === 'win32').each([
     { container: true, os: 'Windows' },
     { container: true, os: 'macOS' },
-    { container: true, packageManager: 'npm@12.8.1' }
+    { container: true, packageManager: 'npm@12.14.0' }
   ])('rejects an unsupported container identity: %j', (options) => {
     const result = resolveRecord(options)
     expect(result.code).not.toBe(0)

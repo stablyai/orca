@@ -18,6 +18,7 @@ import {
 } from './runtime-file-routing'
 import {
   ensureRuntimeDirectory,
+  ensureRuntimeDropStagingIgnored,
   uploadRuntimeFileWithoutClobber
 } from './runtime-file-upload-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -33,6 +34,8 @@ export async function importExternalPathsToRuntime(
     assertCurrent?: () => void
     /** Local imports only; remote destinations stay root-relative. */
     access?: LocalFileAccess
+    /** Remote `.orca/drops` uploads: name an extensionless image by its bytes. */
+    nameExtensionlessImages?: boolean
   }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = context.target
@@ -77,12 +80,18 @@ export async function importExternalPathsToRuntime(
     assertCurrent: assertImportSessionCurrent
   }
   importSession.assertCurrent()
-  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({ sourcePaths })
+  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({
+    sourcePaths,
+    nameExtensionlessImages: options?.nameExtensionlessImages
+  })
   importSession.assertCurrent()
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
 
   await ensureRuntimeDirectory(context, destinationDir, importSession)
+  await ensureRuntimeDropStagingIgnored(context, destinationDir, importSession)
+  // The ignore step swallows a stale session; re-check before results that never reach the host.
+  importSession.assertCurrent()
 
   for (const source of staged.sources) {
     if (source.status !== 'staged') {
@@ -152,8 +161,7 @@ export async function importExternalPathsToRuntime(
       })
     } catch (error) {
       if (createdDirectoryImportRoot) {
-        // Why: match local directory imports by removing the no-clobber root
-        // Orca created when a nested runtime upload fails halfway through.
+        // Match local directory rollback: remove the no-clobber root after partial nested runtime upload failure.
         await callRuntimeFileImportMutation(
           importSession,
           'files.delete',

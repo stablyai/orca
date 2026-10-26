@@ -1,10 +1,13 @@
 import { translate } from '@/i18n/i18n'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { getOwnerNotSetUpLabel, getOwnerNotSetUpNote } from './owner-not-set-up-copy'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
   kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
   statusLabel: string | null
+  /** A second line under the row, for context the label cannot fit. */
+  detail?: string | null
 }
 
 const CONFIRMED_SIGN_OUT_PATTERNS = [
@@ -21,8 +24,7 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
   if (provider.usageMetadata?.failureKind === 'missing-credentials') {
     return true
   }
-  // Why: credential refresh and network failures can mention auth while live
-  // sessions remain valid; only explicit signed-out copy earns a sign-in CTA.
+  // Auth wording may describe a refresh/network failure; only proven sign-out warrants a sign-in CTA.
   if (provider.usageMetadata?.failureKind) {
     return false
   }
@@ -36,6 +38,14 @@ export function getUsageRosterRowState(
 ): UsageRosterRowState {
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
+  }
+  const placeholder = provider.usageMetadata?.ownerNotSetUp
+  if (placeholder) {
+    return {
+      kind: 'unavailable',
+      statusLabel: getOwnerNotSetUpLabel(placeholder),
+      detail: getOwnerNotSetUpNote(placeholder)
+    }
   }
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {

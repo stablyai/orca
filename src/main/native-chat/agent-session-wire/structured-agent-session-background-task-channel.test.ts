@@ -1,6 +1,3 @@
-// The strip channel always answers a conversation's roster from the host's child records; each
-// subscriber's frames carry it (see structured-agent-session-subscribers.test.ts).
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
@@ -72,10 +69,7 @@ describe('the background-task channel', () => {
     })
   })
 
-  // A task that finished while no pane listened, then an idle sweep that stopped the provider:
-  // a pane resuming must read "none", not silence it would take as "unchanged" (#24227).
-  // An idle parent whose live background child the store had no room for: no row lists it, so
-  // the strip must stay and say so rather than read as nothing running.
+  // Unlisted live work must keep the strip incomplete and stoppable.
   it('keeps the strip, with its Stop, for work the host could not record', () => {
     const { sessions, channel, session } = channelOver(
       () => [],
@@ -102,8 +96,6 @@ describe('the background-task channel', () => {
     expect(channel.read('session-1')).toBeNull()
   })
 
-  // Claude's release path settles the last child after the adapter let go of the session, so no
-  // provider answers for it any more: the strip must still hide.
   it('hides the strip when its last child settles after the provider let go of the session', () => {
     let views: AgentChildWorkView[] = [child]
     let held: Stops = { supportsTaskStop: true, supportsStopAll: true }

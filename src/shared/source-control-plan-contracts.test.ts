@@ -1,0 +1,8 @@
+import './source-control-launch-agent-selection.spec'
+import './omp-source-control-discovery.spec'
+import './source-control-ai-policy-regression.spec'
+import './commit-message-omp.spec'
+import './antigravity-source-control.spec'
+import './conversation-name-action.spec'
+import './source-control-ai-action-variables.spec'
+import './agent-model-probe-spec.spec'

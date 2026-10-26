@@ -6,7 +6,7 @@ import {
   createSessionDeviceSigningKey,
   getOrCreatePendingWebDeviceKey,
   webDeviceSigningKey,
-  type WebDeviceKeySupport,
+  type KeyedWebDeviceKeySupport,
   type WebDeviceSigningKey
 } from './web-device-key'
 import { webDeviceKeyId, type WebDeviceKeyStore } from './web-device-key-store'
@@ -27,8 +27,7 @@ export type WebRuntimeAuthPlan =
   | { kind: 'device-key'; deviceId: string; key: WebDeviceSigningKey }
 
 export type WebRuntimeCredentialSource = {
-  /** Helper sockets pass false so only the primary socket ever registers a key. Synchronous
-   *  when no key store is read, so a token-only socket opens in the same task as before. */
+  /** Only primary sockets allow migration; token-only sources stay synchronous so sockets open in the same task. */
   nextPlan(allowMigration: boolean): WebRuntimeAuthPlan | Promise<WebRuntimeAuthPlan>
   /** The host forked `deviceId` for the plan's key; the token may now be forgotten. */
   migrated(plan: Extract<WebRuntimeAuthPlan, { kind: 'migrate' }>, deviceId: string): Promise<void>
@@ -53,16 +52,13 @@ export type WebRuntimeCredentialEnvironment = {
   hostPublicKeyB64: string
   deviceToken: string
   pairingRevision: number
-  /**
-   * persisted: the pairing lives in localStorage (existing pairings, kept working as-is when
-   * no persistent key is possible). session: memory only, never written to disk.
-   */
+  /** Persisted localStorage pairings retain legacy token fallback when keys are unavailable; session pairings stay memory-only. */
   storage: 'persisted' | 'session'
 }
 
 export function createWebRuntimeCredentialSource(args: {
   environment: WebRuntimeCredentialEnvironment
-  support: WebDeviceKeySupport
+  support: KeyedWebDeviceKeySupport
   store: WebDeviceKeyStore
   subtle: SubtleCrypto | null
   /** Durably replace the stored token with a placeholder once the key is active. */

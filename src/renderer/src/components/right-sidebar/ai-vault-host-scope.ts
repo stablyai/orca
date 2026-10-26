@@ -40,9 +40,7 @@ export function useAiVaultExecutionHostScope(args: {
     useState<ExecutionHostScope>(defaultExecutionHostScope)
 
   useEffect(() => {
-    // Why: preserve an explicit user choice (e.g. "All") across incidental
-    // rerenders, but reset to the new default once that choice no longer
-    // applies to the active worktree's host.
+    // Preserve user choices across rerenders; reset only when the new workspace host makes them invalid.
     const allowedScopes = new Set<ExecutionHostScope>([
       LOCAL_EXECUTION_HOST_ID,
       ALL_EXECUTION_HOSTS_SCOPE,
@@ -120,10 +118,7 @@ export function resolveAiVaultHostScopeDefaults(
     activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
       ? activeExecutionHost.id
       : null
-  // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
-  // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
-  // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
-  // asserting one. A local workspace still resolves to `local` and is unaffected.
+  // Unknown workspace ownership must widen to all hosts, not falsely report empty local history (#13713).
   const workspaceHostUnresolved = activeWorktreeId !== null && activeExecutionHostId === null
   return {
     activeExecutionHostScope,
@@ -173,4 +168,37 @@ export function buildAiVaultHostScopeOptions(args: {
   add({ id: ALL_EXECUTION_HOSTS_SCOPE, label: getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE) })
 
   return options
+}
+
+export function useAiVaultSessionHostRefreshEvents(
+  error: string | null,
+  refresh: (args: { background: boolean; force: boolean }) => Promise<void>
+): void {
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const sshGenerationRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration <= sshGenerationRef.current) {
+      return
+    }
+    sshGenerationRef.current = sshConnectedGeneration
+    if (error !== null) {
+      void refresh({ background: true, force: false })
+    }
+  }, [sshConnectedGeneration, error, refresh])
+
+  // Refocus checks the shared host cache without forcing another transcript scan.
+  useEffect(() => {
+    const onRefocus = (): void => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      void refresh({ background: true, force: false })
+    }
+    const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
+    document.addEventListener('visibilitychange', onRefocus)
+    return () => {
+      unsubscribeWindowFocus?.()
+      document.removeEventListener('visibilitychange', onRefocus)
+    }
+  }, [refresh])
 }

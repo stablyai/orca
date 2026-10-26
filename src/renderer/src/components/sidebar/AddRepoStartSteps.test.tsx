@@ -140,31 +140,26 @@ describe('AddRepoLocalStartStep', () => {
     expect(model.description).toBe('Existing Git repository or folder on this host')
   })
 
-  it.each([
-    ['supported', false, 'Open a project folder from an SSH host this server connects to'],
-    ['unsupported', true, 'Update this server to add projects on its SSH hosts'],
-    ['unknown', true, 'Open a project folder from an SSH host this server connects to']
-  ] as const)(
-    "offers a server's own SSH hosts only when the server supports it (%s)",
-    (serverSshProjects, disabled, description) => {
-      const { secondaryActions } = getAddRepoLocalStartActions({
-        browseHostKind: 'runtime',
-        serverSshProjects,
-        onBrowse: vi.fn(),
-        onOpenCloneStep: vi.fn(),
-        onOpenRemoteStep: vi.fn(),
-        onOpenCreateStep: vi.fn()
-      })
-      const remote = secondaryActions.find((action) => action.kind === 'remote')
+  it("explains instead of offering a project on a paired server's SSH host", () => {
+    const { secondaryActions } = getAddRepoLocalStartActions({
+      browseHostKind: 'runtime',
+      offersServerSshHosts: true,
+      onBrowse: vi.fn(),
+      onOpenCloneStep: vi.fn(),
+      onOpenRemoteStep: vi.fn(),
+      onOpenCreateStep: vi.fn()
+    })
+    const remote = secondaryActions.find((action) => action.kind === 'remote')
 
-      expect(secondaryActions.map((action) => action.kind)).toEqual(['clone', 'remote', 'create'])
-      expect(remote).toMatchObject({
-        title: "Project on this server's SSH host",
-        description,
-        disabled
-      })
-    }
-  )
+    expect(secondaryActions.map((action) => action.kind)).toEqual(['clone', 'remote', 'create'])
+    // Servers refuse repo.addRemote; this action must use their own SSH-host flow.
+    expect(remote).toMatchObject({
+      title: "Project on this server's SSH host",
+      description:
+        'Not available from a server. Add the SSH host on this computer to open its projects.',
+      disabled: true
+    })
+  })
 
   it('focuses Browse folder when the default Add Project step opens', async () => {
     const { container, root } = await renderLocalStartStepDom()
@@ -293,7 +288,6 @@ describe('AddRepoLocalStartStep', () => {
       )
     })
 
-    // ArrowDown from Browse moves focus — and the ⏎ chip — to the first secondary action.
     const firstSecondary = findButton(container, 'Clone from URL')
     expect(document.activeElement).toBe(firstSecondary)
     expect(firstSecondary.textContent).toContain('⏎')

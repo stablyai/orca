@@ -140,7 +140,6 @@ describe('managed stop requests', () => {
     const { request } = running()
     const path = orcadManagedStopRequestPath(request.instance)
     const { lockPath } = request.instance
-    // `/` separators and a `.` segment: the same file, not the same string.
     const respelled = `${dirname(lockPath)}/./${basename(lockPath)}`.replaceAll(sep, '/')
     expect(respelled).not.toBe(lockPath)
     const sent = { ...request, instance: { ...request.instance, lockPath: respelled } }
@@ -311,6 +310,20 @@ describe('managed stops that retire the daemon', () => {
 
     await prepareOrcadManagedStop(request, retire, stopAutomations)
     expect(stopAutomations).toHaveBeenCalledTimes(2)
+  })
+
+  it('records a timed-out retirement without its in-process late verdict', async () => {
+    const { request } = running()
+    const retireRequest = { ...request, retireIdleDaemon: true as const }
+    await prepareOrcadManagedStop(retireRequest, async () => ({
+      retirement: 'unverifiable' as const,
+      liveSessions: null,
+      reason: null,
+      lateRetirement: Promise.resolve(true)
+    }))
+    expect(readOrcadDaemonRetirementRecord(retireRequest)).toMatchObject({
+      retirement: 'unverifiable'
+    })
   })
 
   it('records unverifiable when the retirement attempt itself failed', async () => {

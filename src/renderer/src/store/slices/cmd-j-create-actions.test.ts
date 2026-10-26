@@ -8,6 +8,13 @@ import {
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE
 } from '@/lib/client-creation-action-policy'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
@@ -73,10 +80,7 @@ describe('Cmd+J lifted creation actions', () => {
   })
 
   it('rejects without a local browser fallback when paired-web creation fails', async () => {
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321). Mirrors the
-    // terminal no-fallback contract below.
+    // Failed remote creation must not fall back local and split ownership (#5321), like terminals.
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)

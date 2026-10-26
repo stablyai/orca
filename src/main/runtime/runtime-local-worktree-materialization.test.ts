@@ -22,6 +22,7 @@ vi.mock('../git/worktree-shared-directories', () => ({
 
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 describe('materializeRuntimeLocalWorktree', () => {
   it('records lineage immediately after metadata and before filesystem setup', async () => {
@@ -32,7 +33,10 @@ describe('materializeRuntimeLocalWorktree', () => {
     })
     const store = {
       getProjectHostSetups: () => [],
-      setWorktreeMeta: vi.fn((_id, updates) => ({ ...updates, hostId: 'local' }))
+      setWorktreeMeta: vi.fn((_target: HostWorktreeTarget, updates) => ({
+        ...updates,
+        hostId: 'local'
+      }))
     }
 
     await expect(

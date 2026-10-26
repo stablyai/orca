@@ -64,7 +64,11 @@ export function AiVaultVirtualRow({
   onRevealLog,
   onOpenCwd,
   onRequestDelete,
-  searchHits
+  searchHits,
+  searchHitHostLabels,
+  selected,
+  onSelect,
+  onPickSession
 }: {
   row: AiVaultListRow | undefined
   index: number
@@ -98,6 +102,12 @@ export function AiVaultVirtualRow({
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
+  searchHitHostLabels?: ReadonlyMap<string, string> | null
+  /** Set only where rows are keyboard-selectable. */
+  selected?: boolean
+  onSelect?: () => void
+  /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
+  onPickSession?: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
   if (!row) {
     return null
@@ -107,8 +117,7 @@ export function AiVaultVirtualRow({
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
-  // Why: omit the jump affordance when the session already lives in the
-  // worktree on screen — jumping there is a no-op.
+  // Do not offer Jump for a session already in the on-screen workspace.
   const showJumpToWorktree = !isAiVaultSessionInCurrentWorktree(worktreeInfo)
   const worktreeJumpId =
     showJumpToWorktree && canJumpToAiVaultSessionWorktree(worktreeInfo)
@@ -122,8 +131,7 @@ export function AiVaultVirtualRow({
     canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
       ? resumeState?.worktreeId
       : null
-  // Gate resume on real content: a zero-turn transcript would resume into an
-  // empty conversation, so it is never offered as normally resumable.
+  // Zero-turn transcripts cannot resume meaningful conversation content.
   const resumeGating =
     row.type === 'session'
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
@@ -155,9 +163,7 @@ export function AiVaultVirtualRow({
         }
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
-  // Why: in-Orca View Log additionally withholds synthetic (SQLite/OpenCode)
-  // identities that have no single file to open, while Reveal/CWD stay on the
-  // existing local-path gate.
+  // Synthetic SQLite/OpenCode identities have no single View Log file; Reveal/CWD retain their local-path gate.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
@@ -182,8 +188,10 @@ export function AiVaultVirtualRow({
     <div
       ref={measureElement}
       data-index={index}
+      data-selected={selected ? 'true' : undefined}
       className={cn(
         'left-0 w-full',
+        row.type === 'session' && 'ai-vault-session-row',
         isActiveStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
       style={isActiveStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
@@ -198,6 +206,7 @@ export function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           searchHit={searchHit}
+          sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
@@ -211,7 +220,18 @@ export function AiVaultVirtualRow({
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           resumeActions={visibleResumeActions}
-          onToggleDetails={() => onToggleSessionDetails(row.session.id)}
+          onToggleDetails={() => {
+            onSelect?.()
+            onToggleSessionDetails(row.session.id)
+          }}
+          onPick={
+            onPickSession
+              ? () => {
+                  onSelect?.()
+                  onPickSession(row.session)
+                }
+              : undefined
+          }
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }

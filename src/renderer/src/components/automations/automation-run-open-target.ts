@@ -15,7 +15,8 @@ export type AutomationRunPaneTarget = {
   tabId: string
   paneKey: string
   leafId: string
-  ptyId: string
+  /** Null while a hibernated run pane waits for its tab to wake it. */
+  ptyId: string | null
 }
 
 function getAutomationRunOpenTabId(run: Pick<AutomationRun, 'terminalPaneKey'>): string | null {
@@ -41,16 +42,25 @@ export function resolveAutomationRunOpenTarget({
   livePtyIds: readonly string[]
 }): AutomationRunPaneTarget | null {
   const parsed = parsePaneKey(run.terminalPaneKey ?? '')
-  if (!terminalTabExists || !parsed || !run.terminalPtyId || !currentLayout?.root) {
+  if (!terminalTabExists || !parsed || !currentLayout?.root) {
     return null
   }
   if (!terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)) {
     return null
   }
+  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
+  if (!run.terminalPtyId) {
+    // Why: a slept run pane keeps its key but drops its PTY id; the pane, not a process, is the target.
+    return {
+      tabId: parsed.tabId,
+      paneKey: run.terminalPaneKey!,
+      leafId: parsed.leafId,
+      ptyId: layoutPtyId && livePtyIds.includes(layoutPtyId) ? layoutPtyId : null
+    }
+  }
   if (!livePtyIds.includes(run.terminalPtyId)) {
     return null
   }
-  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
   if (layoutPtyId !== undefined && layoutPtyId !== run.terminalPtyId) {
     return null
   }
@@ -68,11 +78,7 @@ export type AutomationRunTerminalState = {
   ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
 }
 
-/**
- * The run's pane in this client. A run on a paired server names the server's tab, pane and PTY;
- * this client shows that pane as a mirrored tab whose PTY id is the server's terminal handle, so
- * the server's PTY id cannot be compared and the mirrored pane must carry a PTY from that server.
- */
+/** Paired runs name server tab/pane/PTY identities; local mirrors use server terminal handles, so require a PTY from that server instead of comparing its internal PTY ID. */
 export function resolveAutomationRunTerminalTarget(
   run: AutomationRun,
   terminals: AutomationRunTerminalState,
@@ -95,6 +101,7 @@ export function resolveAutomationRunTerminalTarget(
   const mirroredTabId = toWebTerminalSurfaceTabId(tabId)
   const layout = terminals.terminalLayoutsByTabId[mirroredTabId]
   const mirroredPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  // Why a live PTY only: a slept run's pane is asked of the server, which knows if it still exists.
   if (
     !run.terminalPtyId ||
     !terminals.hasTerminalTab(mirroredTabId) ||
@@ -125,10 +132,9 @@ export function buildAutomationRunOpenLayout({
     ...currentLayout,
     activeLeafId: target.leafId,
     expandedLeafId: currentLayout.expandedLeafId === target.leafId ? target.leafId : null,
-    ptyIdsByLeafId: {
-      ...currentLayout.ptyIdsByLeafId,
-      [target.leafId]: target.ptyId
-    }
+    ptyIdsByLeafId: target.ptyId
+      ? { ...currentLayout.ptyIdsByLeafId, [target.leafId]: target.ptyId }
+      : currentLayout.ptyIdsByLeafId
   }
 }
 

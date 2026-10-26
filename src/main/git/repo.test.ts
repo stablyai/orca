@@ -20,7 +20,7 @@ import {
   REPO_SEARCH_REFS_MAX_SCAN_LIMIT
 } from '../../shared/repo-search-limits'
 
-// Why: use real git state (not mocked) because the bug is in the for-each-ref glob shape a mock would miss.
+// Real Git exercises ref globs that mocks cannot validate.
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -28,14 +28,13 @@ function git(cwd: string, args: string[]): string {
 
 function initRepo(dir: string): void {
   git(dir, ['init', '--quiet'])
-  // Why: `--initial-branch=main` needs git >= 2.28; symbolic-ref before the first commit forces `main` on any git version.
+  // symbolic-ref selects main before the first commit on Git < 2.28 too.
   git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   git(dir, ['config', 'user.email', 'test@test.com'])
   git(dir, ['config', 'user.name', 'Test'])
   git(dir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])
 }
 
-/** Create a remote-tracking ref via `update-ref`, avoiding a live remote. */
 function createRemoteRef(mainDir: string, shortName: string, sha: string): void {
   git(mainDir, ['update-ref', `refs/remotes/${shortName}`, sha])
 }
@@ -72,8 +71,6 @@ describe('buildSearchBaseRefsArgv', () => {
     })
     const excludes = argv.filter((arg) => arg.startsWith('--exclude='))
 
-    // One wildcard handles ordinary remotes; slash-containing names need an
-    // exact pattern because `*` does not cross the remote-name slash.
     expect(excludes).toEqual([
       '--exclude=refs/remotes/*/HEAD',
       '--exclude=refs/remotes/foo/bar/HEAD'
@@ -174,7 +171,6 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('local-only')
   })
 
-  // Why: fnmatch `*` doesn't cross `/`, so a single-word query needs `**` to match any segment of a slashed name.
   it('finds a local slashed branch when the query lands in a deep segment', async () => {
     git(tmpDir, ['branch', 'feature/login'])
 
@@ -481,10 +477,9 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(result).toBeNull()
   })
 
-  it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
+  it('allows checking out a remote branch that another remote also carries (#26344)', async () => {
     const sha = getHeadSha(tmpDir)
-    // Why register both: a ref only tracks a branch when a remote actually owns its
-    // prefix, and this case is about a second *tracking* ref, not an orphan.
+    // Configure owners so these are tracking refs rather than orphan prefixes.
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     git(tmpDir, ['remote', 'add', 'upstream', 'https://example.invalid/upstream.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
@@ -492,7 +487,8 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(
       await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
-    ).toBe('remote')
+    ).toBeNull()
+    expect(await getBranchConflictKind(tmpDir, 'feature/something', 'origin/main')).toBe('remote')
   })
 
   it('ignores a ref whose prefix matches no configured remote', async () => {
@@ -510,9 +506,7 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'fork/my-task', sha)
     expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBe('remote')
 
-    // Why not `remote remove`: that prunes the tracking refs too, which would pass
-    // with or without the ownership guard. Dropping only the config leaves the
-    // orphan ref behind, which is the state this guard exists for.
+    // Remove config only: remote remove would also prune the orphan ref this test needs.
     git(tmpDir, ['config', '--remove-section', 'remote.fork'])
 
     expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBeNull()
@@ -618,7 +612,6 @@ describe('searchBaseRefs (widened glob)', () => {
     await expect(searchBaseRefs(tmpDir, '', Number.MAX_VALUE)).resolves.toEqual([])
   })
 
-  // Why: users retype the displayed `<remote>/<branch>` format, so a slashed query must still match.
   it('finds the ref when the query is in display format `<remote>/<branch>`', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
@@ -638,7 +631,6 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(results).toContain('upstream/feature-x')
     expect(results).toContain('upstream/feature-y')
-    // Why: `upstream/feat` pins the remote segment to *upstream*, so origin/feature-x must not leak in.
     expect(results).not.toContain('origin/feature-x')
   })
 
@@ -646,7 +638,6 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: each token is pinned to its own segment (remote vs branch), so `main/upstream` must not match `upstream/main`.
     const results = await searchBaseRefs(tmpDir, 'main/upstream')
 
     expect(results).not.toContain('upstream/main')
@@ -657,7 +648,6 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'upstream/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
 
-    // Why: the HEAD filter runs after the glob match, so display-format queries must still drop the pseudo-ref.
     const results = await searchBaseRefs(tmpDir, 'upstream/HEAD')
 
     expect(results).not.toContain('upstream/HEAD')
@@ -707,7 +697,6 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: empty tokens from stray slashes would degrade to `**` and match nothing, so they're filtered out.
     expect(await searchBaseRefs(tmpDir, 'upstream/')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, '/upstream')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, 'upstream//main')).toContain('upstream/main')
@@ -866,13 +855,11 @@ describe('getBaseRefDefault (regression — unchanged behavior)', async () => {
   })
 
   it('does NOT fall through to upstream/main when origin/* is absent', async () => {
-    // Why: default probe order is origin-only by design; upstream-aware defaulting is deferred.
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
     const result = await getBaseRefDefault(tmpDir)
 
-    // initRepo creates a local `main`, so with no origin/* we expect it — not `upstream/main`.
     expect(result).toBe('main')
     expect(result).not.toBe('upstream/main')
   })

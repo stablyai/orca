@@ -1,20 +1,23 @@
-// This phone's structured sends the host has not drawn yet, kept as the desktop's sender keeps them:
-// one per send, under the id the host records it under. The shared projection draws each until the
-// host's row lands, and the host's own record of it settles it. One whose answer was lost is drawn
-// nowhere: it says so only if its deadline passes before the host shows it.
+// Project each local send until the host records its id; lost replies stay hidden unless their deadline expires first.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSettledSends } from '../../../src/shared/structured-agent-session-send-settlement'
-import { mergeSentImagePreviews } from './mobile-native-chat-draft-reconcile'
+import {
+  structuredAgentSessionReadCoversSend,
+  structuredAgentSessionSettledSends
+} from '../../../src/shared/structured-agent-session-send-settlement'
+import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
 import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 import {
   UNCONFIRMED_SEND_DEADLINE_MS,
   UNCONFIRMED_SEND_MESSAGE
-} from './use-mobile-native-chat-unconfirmed-sends'
+} from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage & { unconfirmed?: true }
 
@@ -23,7 +26,6 @@ const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 
 export type MobileStructuredSends = {
   optimistic: readonly StructuredAgentSessionOptimisticMessage[]
-  /** This phone's photos, by the row id their send is drawn under on every device. */
   imagePreviewsByMessageId: Record<string, string[]>
   accept: (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => void
   hold: (send: StructuredAgentSessionOptimisticMessage) => void
@@ -31,22 +33,22 @@ export type MobileStructuredSends = {
 
 export function useMobileStructuredSends(args: {
   sessionKey: string
+  cursor?: AgentJournalCursor | null
   submissions: readonly AgentJournalSubmission[]
   queuedMessages: MobileQueuedMessageFeed
   onSendError: MobileNativeChatSendErrorReporter
 }): MobileStructuredSends {
-  const { onSendError, queuedMessages, sessionKey, submissions } = args
+  const { cursor, onSendError, queuedMessages, sessionKey, submissions } = args
   const [sendsBySession, setSendsBySession] = useState<
     Record<string, readonly MobileStructuredSend[]>
   >({})
   const [imagePreviewsBySession, setImagePreviewsBySession] = useState<
     Record<string, Record<string, string[]>>
   >({})
-  // Timer handles only, for clearing; whether a send is held lives on its record.
   const deadlinesRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const mountedRef = useRef(false)
 
-  // Bound to the chat a send was made from: a send captures these before its answer comes back.
+  // Capture chat ownership before asynchronous replies can cross a tab switch.
   const keep = useCallback(
     (send: MobileStructuredSend) =>
       setSendsBySession((previous) => ({
@@ -71,7 +73,7 @@ export function useMobileStructuredSends(args: {
     (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => {
       keep(send)
       if (images?.length) {
-        // The host's row has this id too, so the photo shows on it, landed or not sent.
+        // Use the host’s row id so attached photos survive acceptance or failure.
         const messageId = agentJournalSubmissionKey(send.clientMessageId)
         setImagePreviewsBySession((previous) =>
           mergeSentImagePreviews(previous, sessionKey, [{ messageId, images }])
@@ -109,7 +111,14 @@ export function useMobileStructuredSends(args: {
       (queuedMessages ?? []).map((message) => message.messageId)
     )
     const settled = new Set(
-      sends.map((send) => send.clientMessageId).filter((id) => cards.has(id) || recorded.has(id))
+      sends
+        .filter(
+          (send) =>
+            cards.has(send.clientMessageId) ||
+            recorded.has(send.clientMessageId) ||
+            structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)
+        )
+        .map((send) => send.clientMessageId)
     )
     if (settled.size === 0) {
       return
@@ -119,7 +128,7 @@ export function useMobileStructuredSends(args: {
       deadlinesRef.current.delete(id)
     }
     forget(settled)
-  }, [forget, queuedMessages, sends, submissions])
+  }, [cursor, forget, queuedMessages, sends, submissions])
 
   useEffect(() => {
     mountedRef.current = true

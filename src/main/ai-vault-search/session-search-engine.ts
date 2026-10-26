@@ -40,39 +40,23 @@ import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
 
-/**
- * Sessions retrieved before ranking cuts the page.
- *
- * Not a fixed constant (the reviewer's F13): it is the knob that trades page
- * completeness for retrieval cost, and the right value depends on index size.
- * Measurements behind this default, and what changing it costs, are in
- * docs/reference/agent-session-search-query-tuning.md.
- */
+/** Candidate-limit tuning and measurements: docs/reference/agent-session-search-query-tuning.md. */
 export const SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT = 600
 
-/** One ranked list plus what produced it; a page is a slice of `ranked`. */
 type RankedPage = {
   ranked: RankedSession[]
-  /** Null when no text was searched, so there is nothing to snippet from. */
   retrieved: Retrieved | null
-  /**
-   * Retrieval may have missed a session: a cap ended it, not the data. True
-   * whether the candidate limit filled or the operator walk gave up scanning.
-   */
+  /** Retrieval stopped at a candidate or operator-scan limit. */
   incomplete: boolean
 }
 
 export type SessionSearchEngineOptions = {
   sessionCandidateLimit?: number
-  /** Oldest transcript mtime a hit may come from; PR 3 derives it from retention. */
+  /** Oldest eligible transcript mtime, derived from retention. */
   retentionCutoffMs?: number | null
 }
 
-/**
- * Synchronous searches use independent statements to avoid pinning the WAL.
- * Generation checks bracket all content reads; concurrent writes reject the page.
- * The connection's owner handles index rebuilds and engine reconstruction.
- */
+/** Use independent statements to avoid pinning WAL; reject pages whose content generation changes. */
 export class SessionSearchEngine {
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
@@ -82,9 +66,7 @@ export class SessionSearchEngine {
     private readonly options: SessionSearchEngineOptions = {}
   ) {
     this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
-    // Installed here and not on the first search, so the generation triggers are
-    // watching before anything this engine will be asked to page over is
-    // written, and so retrieval below prepares against tables that exist.
+    // Install tables and generation triggers before preparing retrieval or accepting writes.
     ensureSessionSearchQuerySchema(this.db)
     this.retrieval = new SessionSearchRetrieval(this.db)
   }
@@ -100,8 +82,6 @@ export class SessionSearchEngine {
     const incarnation = readIndexIncarnation(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
-    // Not a bare `slice`: cutting between a surrogate pair leaves a lone half
-    // that no tokenizer can match and that a caller cannot echo back.
     const capped = sliceAtCodeUnitLimit(request.query, SESSION_SEARCH_QUERY_MAX_LENGTH)
     const split = splitAiVaultSearchQuery(capped)
     const retrievalScope: RetrievalScope = {
@@ -111,8 +91,7 @@ export class SessionSearchEngine {
       matchesOperators: operatorPredicate(split),
       candidateLimit: this.candidateLimit
     }
-    // Decoded before any retrieval: a cursor the engine will refuse must not
-    // cost a query, and the caller has to hear about it either way.
+    // Reject invalid cursors before paying for retrieval.
     const pageKey = sessionSearchPageKey(request)
     const offset = request.cursor
       ? decodeSessionSearchCursor(request.cursor, generation, pageKey, incarnation)
@@ -146,10 +125,7 @@ export class SessionSearchEngine {
           : null
       },
       truncated: {
-        // Decided by retrieval, which is the only layer that knows whether a cap
-        // ended it. Deriving it from the hits cannot work: an operator walk that
-        // gave up at its scan ceiling returns no hits, and so does a search that
-        // genuinely matched nothing.
+        // Retrieval alone can distinguish an exhausted scan budget from no matching rows.
         candidates: incomplete,
         snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length,
         query: capped.length < request.query.length || plan.truncated
@@ -160,13 +136,7 @@ export class SessionSearchEngine {
     return response
   }
 
-  /**
-   * Operators with no free text still name a scope, so the answer is the newest
-   * sessions inside it. Ranked through the same path as a text query, because
-   * forks must fold here exactly as they do there or the same sessions answer
-   * `repo:x` and `word repo:x` differently. There is no relevance signal
-   * without text, so the order is always newest.
-   */
+  /** Operator-only queries use newest order and the same fork folding as text queries. */
   private operatorOnly(split: AiVaultSearchQuerySplit, scope: RetrievalScope): RankedPage {
     if (!hasAiVaultSearchQueryOperators(split)) {
       return { ranked: [], retrieved: null, incomplete: false }
@@ -181,7 +151,6 @@ export class SessionSearchEngine {
     sort: 'relevance' | 'newest'
   ): RankedPage {
     const retrieved = this.retrieval.run(plan, scope)
-    // `match` already grouped to one best row per session.
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
     return {
       ranked: rankSessionHits(retrieved.sessions, best, sort),
@@ -190,7 +159,7 @@ export class SessionSearchEngine {
     }
   }
 
-  /** Snippets and source presence are paid for by the page, never by the list. */
+  /** Fetch snippets and presence only for the requested page. */
   private hits(
     page: readonly RankedSession[],
     scope: SessionSearchScope,
@@ -231,12 +200,7 @@ export class SessionSearchEngine {
   }
 }
 
-/**
- * The one reading of `repo:` / `path:`: the sessions panel's own predicate, over
- * the columns the index stores. The engine has no project map, so a session's
- * repo label falls back to its folder label, which is what the panel does for
- * every session it cannot resolve a project for.
- */
+/** Reuse panel operator matching; repo labels fall back to folder labels without a project map. */
 function operatorPredicate(split: AiVaultSearchQuerySplit): (session: SessionRow) => boolean {
   if (!hasAiVaultSearchQueryOperators(split)) {
     return () => true

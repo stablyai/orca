@@ -31,6 +31,7 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
   useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 })
 }))
 vi.mock('react-native-gesture-handler', () => {
@@ -62,18 +63,18 @@ function DrawerBody(): null {
   return null
 }
 
-function drawer(visible: boolean): ReactElement {
+function drawer(visible: boolean, onClose: () => void = () => {}): ReactElement {
   return (
-    <RightDrawer visible={visible} onClose={() => {}}>
+    <RightDrawer visible={visible} onClose={onClose}>
       <DrawerBody />
     </RightDrawer>
   )
 }
 
-function render(visible: boolean): ReactTestRenderer {
+function render(visible: boolean, onClose?: () => void): ReactTestRenderer {
   let renderer!: ReactTestRenderer
   act(() => {
-    renderer = create(drawer(visible))
+    renderer = create(drawer(visible, onClose))
   })
   return renderer
 }
@@ -88,16 +89,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/**
- * The drawer claims the device Back key through one seam on both platforms. Here that seam is the
- * hardware key; inside the shell's page it is a claim the shell hands one press over on, which is
- * `use-back-claim.web.ts` and is tested there.
- */
+// Drive native Back seam here; use-back-claim.web.ts tests page’s shell-handed Back claim.
 describe('the right drawer and the phone hardware back button', () => {
-  it('arms it on iOS while the drawer is open', () => {
-    const renderer = render(true)
+  it('consumes an iOS hardware back press and closes the open drawer', () => {
+    const onClose = vi.fn()
+    const renderer = render(true, onClose)
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
+    const handler = native.addEventListener.mock.calls[0]![1]
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => expect(handler()).toBe(true))
+    expect(onClose).toHaveBeenCalledTimes(1)
     act(() => renderer.unmount())
   })
 
@@ -109,8 +111,7 @@ describe('the right drawer and the phone hardware back button', () => {
     act(() => renderer.unmount())
   })
 
-  // Which module answers is the bundler's and not this component's: inside the page
-  // `use-back-claim.web.ts` claims the key from the shell instead of registering here.
+  // Page bundler selects web Back-claim sibling; component itself must not register native key there.
   it('releases it on unmount, so a drawer taken off screen leaves the key alone', () => {
     const renderer = render(true)
     act(() => renderer.unmount())

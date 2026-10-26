@@ -11,14 +11,19 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['reference', 'add'],
     summary: 'Attach reviews or issues to a workspace',
-    usage: 'orca reference add <url>... --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url'],
+    usage:
+      'orca reference add <url-or-jira-key>... --worktree <selector> [--reference-site <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'reference-site'],
     positionalArgs: ['url'],
     variadicPositional: true,
     repeatableFlags: ['url'],
-    notes: ['Full URLs only. Existing links are unchanged; all URLs are validated before writing.'],
+    notes: [
+      'Bare keys resolve Jira issues on the selected execution-host Jira site; use --reference-site to choose one explicitly. Other providers require full URLs.',
+      'Existing links are unchanged; all inputs are validated and Jira keys resolved before writing. Full URLs do not require Jira lookup.'
+    ],
     examples: [
-      'orca reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api'
+      'orca reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api',
+      'orca reference add ENG-123 --reference-site <id> --worktree name:api'
     ]
   },
   {

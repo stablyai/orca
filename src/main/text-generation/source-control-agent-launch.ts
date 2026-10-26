@@ -2,8 +2,9 @@ import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+import { SOURCE_CONTROL_KILL_SITE } from './source-control-local-process'
 import { wslAwareSpawn } from '../git/runner'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -41,7 +42,7 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const spawnEnv = input.env ?? process.env
   if (process.platform === 'win32' && input.wslDistro) {
-    // Apply assignments in the guest after its login shell, not to the Windows launcher.
+    // Apply command assignments after guest login-shell setup, never to the Windows launcher.
     const assignments = Object.entries(input.commandEnv ?? {}).map(
       ([key, value]) => `${key}=${value}`
     )
@@ -77,16 +78,16 @@ function spawnWindowsAgent(
   const resolvedBinary = resolveCliCommand(input.binary, {
     pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
   })
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args)
+  // #28768: let process-host resolve npm shims as node + script so multiline argv survives.
   return spawnProcess({
-    program: spawnCmd,
-    args: spawnArgs,
+    program: resolvedBinary,
+    args: input.args,
     env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
     ...(input.useCwdForNative ? { cwd: input.cwd } : {})
   })
 }
 
-// Under the provider supervisor, an Orca that quits or dies mid-run still stops the agent's group.
+// Supervisor owns the agent group so parent quit/death still stops generation.
 function spawnSupervisedAgent(
   input: SourceControlAgentSpawnInput,
   spawnEnv: NodeJS.ProcessEnv
@@ -107,7 +108,11 @@ function spawnSupervisedAgent(
     env: spec.env,
     cwd: spec.cwd,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
+  })
+  guardSupervisedProviderGroup(child, {
+    site: SOURCE_CONTROL_KILL_SITE,
+    supervised: spec.supervised
   })
   return Object.assign(child, { supervised: spec.supervised })
 }

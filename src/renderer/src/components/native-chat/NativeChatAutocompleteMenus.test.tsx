@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { buildNativeChatPickerItems } from './native-chat-picker-items'
+import { buildNativeChatPickerItems } from '../../../../shared/native-chat-picker-items'
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { ComposerAutocomplete } from './native-chat-composer-state'
 
@@ -179,11 +179,9 @@ describe('NativeChatPickerMenu', () => {
     const goal = screen.getByRole('option', { name: /goal/i })
     expect(goal.textContent).toContain('<objective>')
     expect(goal.textContent).toContain('Set a goal and keep working until it is met')
-    // A command the report left hintless renders its row unchanged.
     expect(screen.getByRole('option', { name: /clear/i }).textContent).toBe(
       '/clearClear conversation history'
     )
-    // A hint long enough to swamp the row is capped before it reaches the DOM.
     expect(screen.getByRole('option', { name: /wordy/i }).textContent).toBe(
       `/wordy<${'a'.repeat(79)}`
     )

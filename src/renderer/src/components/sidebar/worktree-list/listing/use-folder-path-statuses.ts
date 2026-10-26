@@ -6,12 +6,11 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
-import { getFolderPathStatusRouteOptionsForRows } from './host-filtering'
+import { getFolderPathStatusRouteOptionsForRows } from './folder-path-status-routing'
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
-// Keeps the sidebar's folder-path probes fresh for every project group and folder workspace
-// it renders, and hands rows a cache reader that ignores expired negative results.
+// Refresh rendered folder paths and ignore expired negative results while reprobes run.
 export function useFolderWorkspacePathStatusRows(args: {
   allRepoIds: string[]
   repoMap: Map<string, Repo>

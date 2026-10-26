@@ -1,12 +1,5 @@
-/**
- * The one v4 UUID generator that is safe everywhere Orca's code runs.
- *
- * Why: browsers hide `crypto.randomUUID` outside a secure context, so a renderer served
- * over plain HTTP (Remote Web on a LAN/Tailscale address) throws on any direct call — at
- * module scope that white-screens the app before it paints. `getRandomValues` stays
- * available there, and Node/Electron main satisfy the first branch, so this is
- * runtime-agnostic rather than browser-specific.
- */
+/** Use getRandomValues when HTTP LAN/Tailscale browsers hide randomUUID; direct module-scope calls would white-screen Remote Web.
+ * Node/Electron and secure contexts use guarded randomUUID normally. */
 export function createNonSecureContextUuid(): string {
   const cryptoApi = globalThis.crypto
   // oxlint-disable-next-line no-restricted-properties -- the sanctioned escape hatch: the one guarded call every other site routes through.

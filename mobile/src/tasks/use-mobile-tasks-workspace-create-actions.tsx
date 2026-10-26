@@ -1,4 +1,6 @@
-import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
+import { workspaceRouteHref } from '../navigation/workspace-execution-host'
+import { taskRepoServer } from './task-repo-host-routing'
 import { settingsRead } from '../transport/settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
@@ -87,7 +89,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             setRuntimeTaskSettings(latestRuntimeTaskSettings)
           }
         } catch {
-          // Best-effort refresh; the runtime still validates agent availability before spawning.
+          // Detection refresh is best-effort; the runtime validates again before spawning.
         }
         const selectedAgent =
           agentOverride &&
@@ -107,8 +109,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         const setupResolution = await resolveCreateSetupDecision(targetRepo, setupOverride)
         const comment = noteOverride?.trim()
         if (setupResolution.kind === 'prompt') {
-          // Why: desktop does not silently create when a repo policy says setup
-          // requires a per-workspace decision. Mobile must ask before create too.
+          // Honor per-workspace setup policy by asking before create, matching desktop.
           setSetupPrompt({
             item,
             ...(repoIdOverride ? { repoIdOverride } : {}),
@@ -135,9 +136,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             setupResolution.setupTrust.contentHash
           )
         ) {
-          // Why: desktop prompts before running repo-owned orca.yaml hooks. Mobile
-          // stores the same trust hash in persisted UI state so either surface can
-          // approve the script version for future workspace creates.
+          // Persist the desktop’s trust hash so either surface can approve this repo script version.
           setSetupPrompt(null)
           setOrcaYamlTrustPrompt({
             item,
@@ -264,14 +263,16 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)
-        // The shared builder, not a template: it encodes the host id, which this did not, and a
-        // host id carrying `/`, `#` or whitespace reaches the wire as an href the bridge refuses.
+        // Use the shared route builder so special characters in host ids are encoded for bridge validation.
         router.push(
-          hostNewWorktreeSessionRoute(
-            hostId,
-            result.worktree.id,
-            result.worktree.displayName ?? item.title,
-            result.warning
+          workspaceRouteHref(
+            hostNewWorktreeSessionRoute(
+              hostId,
+              result.worktree.id,
+              result.worktree.displayName ?? item.title,
+              result.warning
+            ),
+            taskRepoServer(targetRepo)
           )
         )
       } catch (err) {

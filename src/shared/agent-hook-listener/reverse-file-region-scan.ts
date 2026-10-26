@@ -1,20 +1,6 @@
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
 
-/**
- * Walk a file backwards in chunks, handing each caller a region of whole lines.
- *
- * Why backward: every caller wants the LAST entry that matches, so walking up from
- * EOF returns on the first hit instead of parsing every line of a multi-megabyte
- * transcript on every hook event.
- *
- * Why a chunk list rather than a growing buffer: `carry` holds the partial line that
- * straddles a block boundary, and re-concatenating it per block made one oversized
- * line (a big tool result or pasted prompt) cost O(line²).
- *
- * `visit` receives only whole lines, and the byte offset that region starts at.
- * The scan stops at the first defined result, at the byte budget, or at the file
- * start — whichever comes first. Any error reads as "nothing found".
- */
+/** Scan from EOF for the latest match; chunk lists avoid quadratic copies of oversized lines. visit gets whole lines and absolute byte offsets; stop on a result/budget/BOF, and treat errors as absent. */
 export function scanFileRegionsBackward<T>(
   filePath: string,
   limits: { chunkBytes: number; maxScanBytes: number },
@@ -42,21 +28,18 @@ export function scanFileRegionsBackward<T>(
           }
           filled += read
         }
-        // Why bail on a short read: the file shrank under us, so the bytes above this
-        // block no longer line up with what the earlier ones assumed.
+        // Short reads mean the file shrank; earlier block positions no longer align.
         if (filled < chunkSize) {
           return undefined
         }
         bytesRead += filled
         scanEnd = position
-        // Why search only the new block: carry is always the run before a newline, so
-        // it holds none of its own.
+        // Carry has no newline; search only the new block.
         const firstNewline = buffer.indexOf(0x0a)
         let region: Buffer
         let regionPosition = position
         if (position === 0) {
-          // Only at a true file start is the leading partial line a whole line. A scan
-          // that stops on the byte cap must discard it, as a capped read would.
+          // Only BOF proves a leading partial line is whole; byte-capped scans must discard it.
           region = carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
           carryChunks = []
         } else if (firstNewline === -1) {

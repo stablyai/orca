@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-ownership'
-import { createTestStore, makeTab } from './store-test-helpers'
+import { createTestStore, makeTab, seedStore } from './store-test-helpers'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const PI_COMPATIBLE_CASES = [
   { agent: 'pi' as const, label: 'Pi' },
@@ -63,8 +64,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: mobile Chat UI keys its transcript subscription on providerSession.id, so a
-  // metadata-less end-of-turn `done` used to blank the chat every turn (#10630).
+  // Mobile transcript keys on providerSession.id; metadata-less done must not blank chat (#10630).
   it('keeps the provider session when the turn completes without session metadata', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
@@ -90,9 +90,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: `done` is the resting state, and both OSC 9999 repaints and reconnect snapshot
-  // replays re-deliver a metadata-less `done` onto an already-done row. Retaining only the
-  // first one still blanked the chat the moment a second landed (#10630).
+  // Repeated metadata-less done repaints/reconnects must retain resting session too, beyond the first done (#10630).
   it('keeps the provider session across repeated metadata-less done pings', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
@@ -118,8 +116,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: retention stops at the turn boundary. A metadata-less `working` after `done` starts
-  // fresh work, so the finished session must not ride along into it.
+  // Retention ends at turn boundary; fresh working after done must not inherit finished session.
   it('does not carry a completed session into the next turn', () => {
     const store = createTestStore()
 
@@ -243,6 +240,41 @@ describe('recordAgentProviderSession', () => {
     })
   })
 
+  it('keeps launch flags on the live record of a pane that woke from sleep', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+    } as Partial<AppState>)
+    const paneKey = 'tab-1:leaf-1'
+    const launchConfig = {
+      agentArgs: '--dangerously-skip-permissions --model haiku',
+      agentEnv: { CLAUDE_PROFILE: 'work' }
+    }
+    store.getState().registerAgentLaunchConfig(paneKey, launchConfig, {
+      agentType: 'claude',
+      launchToken: 'wake-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1'
+    })
+    // The woken pane's spawn consumes the sleeping record it resumed.
+    store.getState().clearSleepingAgentSession(paneKey)
+    store
+      .getState()
+      .recordAgentProviderSession(
+        paneKey,
+        'claude',
+        { key: 'session_id', id: 'claude-session-1' },
+        { updatedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null },
+        { launchToken: 'wake-1' }
+      )
+
+    // This record is what the next cold restore resumes from.
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]?.launchConfig).toEqual(
+      launchConfig
+    )
+  })
+
   it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
     const store = createTestStore()
     store.setState({
@@ -277,8 +309,7 @@ describe('recordAgentProviderSession', () => {
       }
     )
 
-    // The pane is not retired here — only its live status becomes a sleeping record. Dropping
-    // these maps would replay history the user already cleared on the next heartbeat.
+    // Live-to-sleeping preserves pane identity; clearing read maps replays dismissed history on heartbeat.
     expect(store.getState().activityClearedAtByPaneKey['tab-1:leaf-1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-1:leaf-1']).toBeGreaterThan(0)
   })
@@ -630,4 +661,174 @@ describe('recordAgentProviderSession', () => {
       expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
     }
   )
+})
+
+describe('Cursor quit checkpoint', () => {
+  it.each(['working', 'done'] as const)(
+    'retains the same %s conversation in a folder workspace',
+    (state) => {
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: { 'folder-1': [makeTab({ id: 'tab-1', worktreeId: 'folder-1' })] }
+      })
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state: 'working', prompt: 'remember the codeword', agentType: 'cursor' },
+          'Cursor',
+          { updatedAt: 10, stateStartedAt: 10 },
+          { tabId: 'tab-1', worktreeId: 'folder-1' },
+          { providerSession: { key: 'conversation_id', id: 'conversation-742' } }
+        )
+      if (state === 'done') {
+        store.getState().setAgentStatus('tab-1:leaf-1', {
+          state,
+          prompt: 'remember the codeword',
+          agentType: 'cursor'
+        })
+      }
+      store.getState().captureAllSleepingAgentSessions('quit')
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+        agent: 'cursor',
+        state,
+        worktreeId: 'folder-1',
+        providerSession: { key: 'conversation_id', id: 'conversation-742' },
+        origin: state === 'done' ? 'live' : 'quit'
+      })
+    }
+  )
+})
+
+describe('quit-time capture for newly resumable agents', () => {
+  it('checkpoints a live Kimi provider session before quit-time capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'finish the task',
+        agentType: 'kimi'
+      },
+      'Kimi',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      {
+        providerSession: {
+          key: 'session_id',
+          id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+        }
+      }
+    )
+
+    // Kimi must be resumable or no sleeping record survives restart (#15155).
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'kimi',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      providerSession: { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
+      origin: 'live'
+    })
+  })
+})
+
+function record(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgentSessionRecord {
+  return {
+    paneKey: 'tab-1:leaf-1',
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'deferred-session' },
+    prompt: '',
+    state: 'done',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'live',
+    restoreOnTabOpenOnly: true,
+    ...overrides
+  }
+}
+
+describe('rememberSleepingAgentSession', () => {
+  it('keeps the resume handle of a pane whose restore was deferred', () => {
+    const store = createTestStore()
+    store.getState().rememberSleepingAgentSession(record())
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toEqual(record())
+  })
+
+  it('never replaces a record the pane already has', () => {
+    const store = createTestStore()
+    const existing = record({ prompt: 'the original task', origin: 'quit' })
+    store.getState().rememberSleepingAgentSession(existing)
+    store.getState().rememberSleepingAgentSession(record())
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(existing)
+  })
+})
+
+const LEAF = '11111111-1111-4111-8111-111111111111'
+const PANE = makePaneKey('tab-1', LEAF)
+
+describe('sleepingAgentSessionsByPaneKey after reminted-hook settlement', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('settles a live working record to done instead of latching at working', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE]: {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'omp',
+          providerSession: { key: 'session_id', id: 'omp-session-1' },
+          prompt: 'finish the reminted pane',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live',
+          terminalTitle: 'OMP ready'
+        }
+      }
+    })
+
+    store.getState().setAgentStatus(
+      PANE,
+      {
+        state: 'working',
+        prompt: 'finish the reminted pane',
+        agentType: 'omp'
+      },
+      'OMP ready',
+      { updatedAt: 2 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
+    )
+    store.getState().setAgentStatus(
+      PANE,
+      {
+        state: 'done',
+        prompt: 'finish the reminted pane',
+        agentType: 'omp'
+      },
+      'OMP ready',
+      { updatedAt: 3 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
+    )
+
+    expect(store.getState().agentStatusByPaneKey[PANE]?.state).toBe('done')
+    const sleeping = store.getState().sleepingAgentSessionsByPaneKey[PANE]
+    expect(sleeping?.state === 'working' && sleeping.prompt === 'finish the reminted pane').toBe(
+      false
+    )
+  })
 })

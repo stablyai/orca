@@ -14,7 +14,6 @@ import {
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
-  canCleanupUnregisteredOrcaLeftoverDirectory,
   canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath,
@@ -23,10 +22,7 @@ import {
 } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
-import {
-  isLocalRuntimeGitRepository,
-  isLocalRuntimeWorktreePathMissing
-} from './runtime-worktree-filesystem'
+import { isLocalRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'
 
 type RemovalGate = { finish: (removed: boolean) => Promise<void> }
 
@@ -63,28 +59,6 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   }
   if (canCleanOrphanedDirectory) {
     assertWorktreeDoesNotContainRegisteredWorktree(target.path, registeredWorktrees)
-    if (!args.force) {
-      throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
-    }
-    await deleteUnregisteredDirectory(args)
-    args.finishRemoval()
-    return {}
-  }
-  const access = getLocalWorktreePathAccess(args.localOptions)
-  const runtimeWorktreePath = toLocalWorktreeRuntimePath(target.path, args.localOptions)
-  if (
-    await canCleanupUnregisteredOrcaLeftoverDirectory({
-      meta: removedMeta,
-      worktreePath: target.path,
-      runtimeWorktreePath,
-      repo,
-      runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, args.localOptions),
-      registeredWorktrees,
-      statPath: access.statPath,
-      home: removalHome,
-      isGitRepository: (path) => isLocalRuntimeGitRepository(path, args.localOptions)
-    })
-  ) {
     if (!args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }

@@ -1,11 +1,7 @@
-/**
- * Which incarnation of a WSL distro, and of orcad inside it, is running. Identity is the guest
- * kernel's boot id plus `/proc/<pid>/stat` start times, which count clock ticks since the VM
- * booted: the guest's wall clock can jump after a host sleep (microsoft/WSL#4179, #10006), and
- * a wall-clock start time would then mistake a live process for a new one, or the reverse.
- */
+/** Use kernel boot ID and /proc start ticks for distro/process identity; wall-clock jumps after host sleep can misidentify live processes (microsoft/WSL#4179/#10006). */
+import type { OrcadProcessIncarnation } from '../orcad/orcad-process-start-time'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 
 export type WslGuestIdentity = {
   /** `<boot_id>:<pid 1 start ticks>`; a distro restart (or a VM restart) changes it. */
@@ -66,6 +62,15 @@ export function parseWslGuestIdentity(output: string): WslGuestIdentity | null {
     distroInstance: `${bootId.toLowerCase()}:${initTicks}`,
     orcad: orcadPid && orcadTicks ? `${orcadPid}:${orcadTicks}` : null
   }
+}
+
+/** The asked-for PID's identity in the form orcad's instance lock records; null when it is gone. */
+export function wslGuestOrcadIncarnation(
+  identity: WslGuestIdentity
+): OrcadProcessIncarnation | null {
+  const linuxStartTicks = identity.orcad?.split(':')[1]
+  const bootId = identity.distroInstance.split(':')[0]
+  return linuxStartTicks && bootId ? { linuxStartTicks, bootId } : null
 }
 
 /** null when the guest could not answer: that is unverifiable, never evidence of an exit. */

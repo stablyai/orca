@@ -1,15 +1,12 @@
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A terminal launch that fails before its spawn is requested — no launch command, runtime
- * unavailable — created nothing, so a named operation settles as failed with its real cause.
- * Once the request has left, a failure proves nothing and the outcome stays unknown.
- */
+/** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -42,6 +39,8 @@ type Launch = {
   target: { kind: string; worktree?: string; create?: Readonly<Record<string, unknown>> }
   sessionOptions?: Readonly<Record<string, unknown>>
   reuseTerminal?: { handle: string }
+  cwd?: string
+  surface?: string
 }
 
 /** The create throws; `afterDispatch` says whether the spawn request had already left. */
@@ -172,12 +171,65 @@ describe('a launch whose terminal fails', () => {
 
     const response = await replay(runtime, CREATE_LAUNCH)
 
-    expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-new',
+      expect.objectContaining({ startupAgent: 'claude' })
+    )
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(2, 'id:wt-new', {
+      surfaceOwner: false
+    })
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'agent_session_operation_unknown' }
     })
+    expect(await replay(runtime, CREATE_LAUNCH)).toMatchObject(response)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
+  it.each(['cwd', 'wsl', 'remote'] as const)(
+    'refuses conclusive %s before effects and replays it',
+    async (reason) => {
+      const runtime = runtimeStub({
+        settings: {},
+        ...(reason === 'cwd' ? {} : { createSupport: { supported: false, reason } })
+      })
+      const subfolderChat = {
+        ...EXISTING_LAUNCH,
+        ...(reason === 'cwd' ? { cwd: 'packages/app' } : {}),
+        surface: 'chat'
+      }
+
+      const response = await replay(runtime, subfolderChat)
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
+          message: expect.stringContaining("Claude can't open as a chat here")
+        }
+      })
+      expect(outcomeOf(OPERATION_ID)).toMatchObject({
+        status: 'failed',
+        code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE
+      })
+      expect(await replay(runtime, subfolderChat)).toMatchObject(response)
+      expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    }
+  )
+
+  it('starts the CLI for an explicit terminal even when chats are the default', async () => {
+    const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
+
+    const response = await replay(runtime, { ...EXISTING_LAUNCH, surface: 'terminal' })
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { outcome: { kind: 'terminal' }, receipt: { reason: 'requested' } }
+    })
+  })
+
   it.each([
     { ...CREATE_LAUNCH, agent: 'opencode', sessionOptions: { model: 'private-proof/model-b' } },
     {

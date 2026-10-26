@@ -13,11 +13,7 @@ import {
   shouldSuppressTerminalImeKeyboardEvent
 } from './xterm-bypass-policy'
 
-/**
- * Shared rig for the iPadOS Hangul suites: a real xterm `Terminal` wired to the
- * same tracker, bypass policy and preedit controller the pane lifecycle
- * installs, so the tests exercise the whole path rather than a mock of it.
- */
+/** Real xterm rig with the pane’s tracker, bypass policy and preedit controller. */
 
 export const IPAD_DESKTOP_MODE_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
@@ -75,8 +71,7 @@ export function openIosTerminal(
     throw new Error('xterm did not create the helper textarea and composition view')
   }
 
-  // Mirrors the lifecycle: the platform decides, so a desktop rig exercises the
-  // real gate rather than a flag the test set.
+  // Use the real platform gate so desktop coverage cannot bypass it through a test flag.
   const isIosWeb = options.isIosWeb ?? isCurrentPlatformIosWeb()
   const tracker = installTerminalImeCompositionTracker(terminal.element)
   const preedit = isIosWeb
@@ -167,10 +162,7 @@ export function dispatchComposition(
   textarea.dispatchEvent(event)
 }
 
-/**
- * One printable keystroke as a browser produces it: the key, then — only if
- * xterm did not consume the keydown — the keypress and the text the IME writes.
- */
+/** Replay keypress/text only after an uncancelled keydown, matching the browser. */
 export async function typePrintable(
   rig: IosHangulRig,
   {
@@ -265,15 +257,7 @@ export function loadIosDeviceTrace(fileName: string): IosDeviceTrace {
 /** A recorded keydown whose field value no longer matches on replay. */
 export type FieldDrift = { index: number; recorded: string; actual: string }
 
-/**
- * Replays a capture verbatim — the recorded events only, with the field set to
- * the value the device held at each one. No keypress: the recorder captured
- * keydown and input, so the browser's keypress is not replayed here and the
- * hand-driven suites keep that coverage.
- *
- * Returns every keydown at which the field had drifted from the recording,
- * which is how the controller having disturbed the IME's own state shows up.
- */
+/** Replay only recorded keydown/input events with captured field values; report field drift. The recorder omitted keypress, which hand-driven suites cover separately. */
 export async function replayIosDeviceTrace(
   rig: IosHangulRig,
   trace: IosDeviceTrace
@@ -294,11 +278,7 @@ export async function replayIosDeviceTrace(
   return drift
 }
 
-/**
- * The same capture as keystrokes, so the shared `typeJamo` path replays it with
- * the keypress a browser fires. `replaces` is read off the recording: a jamo
- * that first attaches to the previous syllable arrives as delete-then-insert.
- */
+/** Replay the capture as browser keystrokes, adding keypress; recorded delete/insert pairs identify jamo attaching to a prior syllable. */
 export type DeviceTraceKeystroke = {
   key: string
   keyCode: number

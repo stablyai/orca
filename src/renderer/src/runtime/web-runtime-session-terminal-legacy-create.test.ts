@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { launchAgentInWebHostTab } from '../lib/launch-agent-web-host-tab'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
@@ -28,7 +30,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -53,7 +54,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -63,10 +63,6 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -88,6 +84,91 @@ describe('createWebRuntimeSessionTerminal', () => {
   afterEach(() => {
     resetTerminalCreateEnvironment()
   })
+
+  it.each([false, true])(
+    'sends the desktop launch settings for an empty-prompt quick launch (host authority: %s)',
+    async (hostAuthority) => {
+      const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: hostAuthority ? ['agent-session.host-authority.v1'] : []
+            }
+          }
+        }
+        if (request.method === 'terminal.createAgentSession') {
+          return {
+            id: 'create',
+            ok: true,
+            result: {
+              terminal: { handle: 'term-1', tabId: 'host-tab-1', paneKey: 'host-tab-1:leaf-1' },
+              disposition: 'created'
+            }
+          }
+        }
+        if (request.method === 'session.tabs.createTerminal') {
+          return { id: 'create', ok: true, result: { tab: { id: 'host-tab-1' } } }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+      const startupPlan = buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: {},
+        agentArgs: '--model "model with spaces"',
+        agentEnv: { AGENT_PROFILE: 'custom' },
+        platform: 'linux',
+        isRemote: true
+      })
+      if (!startupPlan) {
+        throw new Error('Expected a startup plan')
+      }
+
+      const created = await launchAgentInWebHostTab({
+        agent: 'claude',
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        startupPlan,
+        prompt: '',
+        promptDelivery: 'auto-submit',
+        pastePromptAfterReady: null,
+        submitPastedPrompt: false,
+        activate: false
+      })
+      expect(created.outcome).toEqual({ status: 'created' })
+      const createRequests = runtimeCall.mock.calls
+        .map(([request]) => request)
+        .filter(
+          (request) => request.method !== 'status.get' && request.method !== 'session.tabs.list'
+        )
+      expect(createRequests).toHaveLength(1)
+      if (hostAuthority) {
+        expect(createRequests[0]).toMatchObject({
+          method: 'terminal.createAgentSession',
+          params: { agent: 'claude', agentArgs: '--model "model with spaces"' }
+        })
+        expect(createRequests[0].params).not.toHaveProperty('command')
+      } else {
+        expect(createRequests[0]).toMatchObject({
+          method: 'session.tabs.createTerminal',
+          params: {
+            command: startupPlan.launchCommand,
+            env: startupPlan.env,
+            launchConfig: startupPlan.launchConfig,
+            launchAgent: startupPlan.agent
+          }
+        })
+      }
+    }
+  )
 
   it('keeps exact legacy ordering when structured creation cannot express afterTabId', async () => {
     const runtimeCall = vi

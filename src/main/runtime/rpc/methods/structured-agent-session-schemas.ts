@@ -1,11 +1,9 @@
-// Wire validation for `agentSession.*`.
-//
-// Strict objects throughout: zod drops unknown keys, and a silently dropped key
-// is how a newer client's field becomes a different effect on an older host.
+// Use strict wire objects: silently stripping a newer client's key could change its requested effect.
 export {
   AcknowledgeAttentionParams,
   AgentsParams,
   AttachParams,
+  AvailabilityParams,
   CancelParams,
   ConversationCommandParams,
   CreateIntentParams,
@@ -26,6 +24,7 @@ export {
   RestartResumeParams,
   RewindParams,
   SendParams,
+  SleepWorkspaceParams,
   SessionId,
   SetOptionParams,
   SubscribeParams,
@@ -34,6 +33,7 @@ export {
   UnsubscribeParams
 } from '../../../../shared/rpc-contract/structured-agent-session-params'
 export { ContinueInterruptedParams } from '../../../../shared/rpc-contract/structured-agent-session-continue-params'
+export { RenameParams } from '../../../../shared/rpc-contract/structured-agent-session-rename-params'
 export {
   QueuedMessageUpdateParams,
   QueuedMessageEditHoldParams

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createTerminalWriteCoalescer,
   TERMINAL_WRITE_FLUSH_WINDOW_MS,
-  TERMINAL_WRITE_MAX_PENDING_UNITS
+  TERMINAL_WRITE_MAX_PENDING_UNITS,
+  TERMINAL_INTERACTIVE_WRITE_WINDOW_MS,
+  TERMINAL_INTERACTIVE_WRITE_DURATION_MS
 } from './terminal-write-coalescer'
 
 function createDeliverySink() {
@@ -27,8 +29,7 @@ describe('terminal write coalescer', () => {
 
     coalescer.write('a')
 
-    // Why: interactive latency invariant — keystroke echo on an idle terminal
-    // must not wait for any timer.
+    // Idle keystroke echo must never wait for a batching timer.
     expect(sink.delivered).toEqual(['a'])
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -70,7 +71,6 @@ describe('terminal write coalescer', () => {
     coalescer.write('b')
     expect(sink.delivered).toEqual(['a'])
 
-    // The trailing timer covers only the remainder of the window.
     vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - 40 - 1)
     expect(sink.delivered).toEqual(['a'])
     vi.advanceTimersByTime(1)
@@ -82,11 +82,9 @@ describe('terminal write coalescer', () => {
     const sink = createDeliverySink()
     const coalescer = createTerminalWriteCoalescer(sink.deliver)
 
-    // 200 chunks at 5ms cadence ≈ the desktop runtime's flush rate on a busy PTY.
     for (let i = 0; i < 200; i += 1) {
       coalescer.write(`c${i};`)
-      // Why: a regression arming one timer per chunk (instead of per window) would
-      // still flush once per window — bound the live timer count, not just flushes.
+      // Check live timer count too; one timer per chunk could preserve flush counts while wasting work.
       expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
       vi.advanceTimersByTime(5)
     }
@@ -104,8 +102,7 @@ describe('terminal write coalescer', () => {
     const coalescer = createTerminalWriteCoalescer(sink.deliver)
 
     coalescer.write('a')
-    // Why: Date.now() is not monotonic (NTP/timezone correction); an unclamped
-    // timer remainder would span the whole jump and stall the stream for hours.
+    // Wall-clock corrections can jump backward; clamp timer remainders to avoid hours-long stream stalls.
     vi.setSystemTime(100_000 - 60 * 60 * 1000)
     coalescer.write('b')
 
@@ -196,5 +193,82 @@ describe('terminal write coalescer', () => {
     coalescer.clear()
     vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS * 4)
     expect(sink.delivered).toEqual(['a', 'b'])
+  })
+
+  it('shortens an existing output wait when a scroll gesture arrives', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.write('first')
+    vi.advanceTimersByTime(5)
+    coalescer.write('response')
+    vi.advanceTimersByTime(3)
+    coalescer.markInteractive()
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS - 8)
+    expect(sink.delivered).toEqual(['first', 'response'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not postpone output when gestures repeat faster than one frame', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('first')
+    for (let i = 0; i < 8; i += 1) {
+      coalescer.write(`${i}`)
+      coalescer.markInteractive()
+      expect(vi.getTimerCount()).toBe(1)
+      vi.advanceTimersByTime(2)
+    }
+    expect(sink.delivered).toEqual(['first', '01234567'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('returns sustained unattended output to the original batching window', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('gesture')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_DURATION_MS)
+    coalescer.write('idle-leading')
+    coalescer.write('idle-trailing')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['gesture', 'idle-leading'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['gesture', 'idle-leading', 'idle-trailing'])
+  })
+
+  it('clears interactive state and pending output when a document is replaced', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('old')
+    coalescer.write('stale')
+    coalescer.clear()
+    coalescer.write('new')
+    coalescer.write('new-trailing')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['old', 'new'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['old', 'new', 'new-trailing'])
+  })
+
+  it('expires interactive batching on a monotonic clock after a wall-clock rollback', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    vi.setSystemTime(0)
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_DURATION_MS)
+    coalescer.write('first')
+    coalescer.write('second')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['first'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['first', 'second'])
   })
 })

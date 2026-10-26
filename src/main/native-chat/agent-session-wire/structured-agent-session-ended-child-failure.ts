@@ -1,5 +1,3 @@
-// Why a queued message the child never took is rejected, by how that child ended.
-
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { StructuredAgentSessionStartFailureCause } from './structured-agent-session-failure-text'
 import type {
@@ -16,25 +14,23 @@ function providerEndFailure(
   return { failure: ended.failure ?? agentSessionFailureFact('providerExited') }
 }
 
-// Every end cause, so a new one does not compile until it says whether it fails what is queued.
+// Exhaust causes so newly added ends must classify queued-send failure.
 const ENDED_CHILD_FAILURE = {
   'user-stop': () => null,
-  // The user closing this chat closes what was queued before it; see `closeWhatTheUserClosed`.
   'user-close': () => null,
   'context-clear': () => null,
-  // The host stopping the child is Orca's cause, never the provider's: a start that never finished.
-  'host-stop': () => ({ failure: agentSessionFailureFact('hostStopped') }),
+  // Host Stop is Orca’s action, not a provider failure.
+  'host-stop': (ended) => ({ failure: ended.failure ?? agentSessionFailureFact('hostStopped') }),
   exit: providerEndFailure,
-  // The attach records its own fault as the end's failure.
   'attach-failed': providerEndFailure,
-  // Reached only when an eviction's stop landed and a later step failed, leaving the conversation.
+  // Partial eviction failed after child shutdown but left the conversation open.
   evict: providerEndFailure
 } satisfies Record<
   StructuredAgentSessionChildEndCause,
   (ended: StructuredAgentSessionEndedChild) => StructuredAgentSessionStartFailureCause | null
 >
 
-/** Why a queued message the child never took is rejected; null when its end fails nothing. */
+/** Null means this child end fails no queued work. */
 export function structuredAgentSessionEndedChildFailure(
   ended: StructuredAgentSessionEndedChild
 ): StructuredAgentSessionStartFailureCause | null {

@@ -1,10 +1,6 @@
-/**
- * The export's path-rewrite stage over the fields in orcad-migration-path-fields.ts. A source whose
- * paths differ on the destination (a local WSL distro reached through `\\wsl.localhost`) supplies a
- * rewriter; the relay-era SSH host uses the identity, which leaves the payload byte-identical.
- */
-import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration-manifest'
-import { isRecord } from '../../shared/orcad-migration-manifest-fields'
+/** Rewrite differing source/destination paths, such as WSL via \wsl.localhost; SSH identity rewriting must preserve payload bytes. */
+import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -33,7 +29,7 @@ export function rewriteOrcadMigrationPayloadPaths(
   rewriter: OrcadMigrationPathRewriter
 ): OrcadMigrationCatalogPayload {
   const copy = structuredClone(payload)
-  // Why: SSH exports run this on every stage and commit check; the identity changes nothing.
+  // Stage/commit checks repeat identity exports; skip traversal when every path stays unchanged.
   if (rewriter === IDENTITY_ORCAD_MIGRATION_PATH_REWRITER) {
     return copy
   }
@@ -122,7 +118,7 @@ function rewriteValue(
 ): string {
   switch (kind) {
     case 'worktree-id':
-      return rewriteWorktreeId(value, rewriter)
+      return rewriteOrcadMigrationWorktreeId(value, rewriter)
     case 'owner-key':
       return rewriteOwnerKey(value, rewriter)
     case 'pty-session-id':
@@ -137,7 +133,10 @@ function rewriteValue(
   }
 }
 
-function rewriteWorktreeId(value: string, rewriter: OrcadMigrationPathRewriter): string {
+export function rewriteOrcadMigrationWorktreeId(
+  value: string,
+  rewriter: OrcadMigrationPathRewriter
+): string {
   const parsed = splitWorktreeId(value)
   if (!parsed || !parsed.repoId || !parsed.worktreePath) {
     return value
@@ -159,10 +158,10 @@ function rewriteOwnerKey(value: string, rewriter: OrcadMigrationPathRewriter): s
     return value
   }
   if (scope?.type === 'worktree') {
-    const mapped = rewriteWorktreeId(scope.worktreeId, rewriter)
+    const mapped = rewriteOrcadMigrationWorktreeId(scope.worktreeId, rewriter)
     return mapped === scope.worktreeId ? value : `worktree:${mapped}`
   }
-  return rewriteWorktreeId(value, rewriter)
+  return rewriteOrcadMigrationWorktreeId(value, rewriter)
 }
 
 function rewritePtySessionId(value: string, rewriter: OrcadMigrationPathRewriter): string {
@@ -187,7 +186,7 @@ function rewriteEditorFileId(value: string, rewriter: OrcadMigrationPathRewriter
     return value
   }
   const [worktreeId, runtime, filePath] = decoded
-  const mappedWorktreeId = rewriteWorktreeId(worktreeId, rewriter)
+  const mappedWorktreeId = rewriteOrcadMigrationWorktreeId(worktreeId, rewriter)
   const mappedFilePath = rewriter.path(filePath, 'absolute')
   if (mappedWorktreeId === worktreeId && mappedFilePath === filePath) {
     return value

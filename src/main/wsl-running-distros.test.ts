@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
@@ -17,10 +20,19 @@ import {
   listRunningWslHomeDirsAsync
 } from './wsl'
 import { filterPathsToRunningWslDistrosAsync } from './wsl-running-path-filter'
+import { resetWslInteropSpawnDirectoryCache } from './wsl-interop-spawn-directory'
 import {
   observeWslTranscriptRunningState,
   resetWslTranscriptRunningObserverForTests
 } from './native-chat/wsl-transcript-running-observer'
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
 
 async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -56,9 +68,30 @@ describe('running WSL distro discovery', () => {
     })
   })
 
+  it('runs the startup probe from the system root, never the profile (#29845)', async () => {
+    runProcessMock.mockResolvedValue(exited('Ubuntu\n'))
+    const saved = { SystemRoot: process.env.SystemRoot, profile: process.env.ORCA_USER_DATA_PATH }
+    const systemRoot = mkdtempSync(join(tmpdir(), 'orca-wsl-probe-system-root-'))
+    const profile = mkdtempSync(join(tmpdir(), 'orca-wsl-probe-profile-'))
+    process.env.SystemRoot = systemRoot
+    process.env.ORCA_USER_DATA_PATH = profile
+    resetWslInteropSpawnDirectoryCache()
+    try {
+      await withPlatform('win32', () => listRunningWslDistrosAsync({ requireConfirmed: true }))
+      expect(runProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({ args: ['--list', '--running', '--quiet'], cwd: systemRoot })
+      )
+    } finally {
+      restoreEnv('SystemRoot', saved.SystemRoot)
+      restoreEnv('ORCA_USER_DATA_PATH', saved.profile)
+      resetWslInteropSpawnDirectoryCache()
+      rmSync(systemRoot, { recursive: true, force: true })
+      rmSync(profile, { recursive: true, force: true })
+    }
+  })
+
   it('confirms an empty list when no distro runs', async () => {
-    // Captured on WSL 2.7: with nothing running, `--quiet` exits 0 with empty stdout in both
-    // encodings; only the non-quiet form prints the localized message and exits -1.
+    // WSL 2.7 --quiet returns empty stdout with exit 0; non-quiet output is localized and exits -1.
     runProcessMock.mockResolvedValueOnce(exited('Ubuntu\r\n')).mockResolvedValueOnce(exited(''))
 
     await withPlatform('win32', async () => {
@@ -242,8 +275,6 @@ describe('running WSL distro discovery', () => {
     })
   })
 
-  // Consumer-level: what a live transcript watcher sees when wsl.exe stays broken across
-  // a whole polling session, not just a single failed call.
   it('keeps reporting a session running through a sustained wsl.exe outage, without unbounded spawns', async () => {
     let spawnCount = 0
     runProcessMock.mockImplementation(
@@ -255,11 +286,9 @@ describe('running WSL distro discovery', () => {
     )
 
     await withPlatform('win32', async () => {
-      // Seed a real last-known-good answer before the outage starts.
       await expect(listRunningWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
       expect(spawnCount).toBe(1)
 
-      // wsl.exe now fails on every call — a persistent, not transient, break.
       runProcessMock.mockImplementation(
         () =>
           new Promise<ProcessResult>((resolve) => {
@@ -280,16 +309,12 @@ describe('running WSL distro discovery', () => {
         }
       )
 
-      // 30 minutes of the 2s transcript-watcher poll (~900 ticks) against a broken wsl.exe.
       await vi.advanceTimersByTimeAsync(30 * 60_000)
       stop()
 
-      // A live session must never be reported as stopped just because discovery is broken —
-      // that would make every open WSL transcript vanish out from under the user.
       expect(observedStates.length).toBeGreaterThan(0)
       expect(observedStates.every((state) => state === true)).toBe(true)
 
-      // Backoff must keep the real wsl.exe spawn count far below one per 2s poll tick.
       expect(spawnCount).toBeLessThan(15)
     })
   })

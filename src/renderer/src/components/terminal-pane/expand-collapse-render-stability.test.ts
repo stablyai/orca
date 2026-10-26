@@ -9,8 +9,7 @@ import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 type ExpandCollapseHookState = Parameters<typeof useExpandCollapseActions>[0]
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
 
-// Field identities are stable across renders (refs, setState, store actions,
-// useCallback); TerminalPane rebuilds only the wrapping object literal.
+// Match TerminalPane’s stable fields inside a newly allocated dependency wrapper each render.
 function createStableFields(): Omit<ExpandCollapseHookState, 'tabId'> {
   return {
     expandedPaneIdRef: { current: null },

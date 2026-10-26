@@ -15,6 +15,7 @@ export type DaemonServerOptions = {
   protocolVersion?: number
   onIdleShutdown?: () => void
   onRpcShutdown?: () => void
+  onShutdownRequested?: () => void
   initialAdoptionTestConfig?: {
     timeoutMs: number
     clock: {
@@ -30,9 +31,9 @@ export type DaemonServerOptions = {
   log?: DaemonFileLog
   /** Headless hosts enforce; desktop only observes until the client handles deferral. */
   spawnAdmission?: TerminalSpawnAdmissionMode
-  /** Where the daemon remembers whether automatic restores were running when it died. */
+  /** Crash-recovery state for automatic restores. */
   automaticWorkMarkerPath?: string
-  /** Where every daemon on this host shares its terminal count for the host cap. */
+  /** Shared terminal counts for the host-wide cap. */
   hostTerminalLedgerDir?: string
   spawnSubprocess: (opts: {
     sessionId: string

@@ -24,7 +24,17 @@ export function applyClaudeEnvPatch(
   baseEnv: Record<string, string>,
   patch: ClaudeEnvPatch,
   options?: { stripAuthEnv?: boolean; platform?: NodeJS.Platform }
-): Record<string, string> {
+): Record<string, string>
+export function applyClaudeEnvPatch(
+  baseEnv: Record<string, string | undefined>,
+  patch: ClaudeEnvPatch,
+  options?: { stripAuthEnv?: boolean; platform?: NodeJS.Platform }
+): Record<string, string | undefined>
+export function applyClaudeEnvPatch(
+  baseEnv: Record<string, string | undefined>,
+  patch: ClaudeEnvPatch,
+  options?: { stripAuthEnv?: boolean; platform?: NodeJS.Platform }
+): Record<string, string | undefined> {
   if (options?.stripAuthEnv) {
     for (const key of CLAUDE_AUTH_ENV_VARS) {
       delete baseEnv[key]
@@ -61,7 +71,7 @@ export function applyClaudeEnvPatch(
   return baseEnv
 }
 
-/** Whether the selected account is a host-managed one; an id no account explains counts as one. */
+/** Missing account metadata defaults to the host runtime. */
 export function isHostManagedClaudeAccount(
   accounts: readonly ClaudeManagedAccount[] | undefined,
   activeAccountId: string | null | undefined

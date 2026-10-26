@@ -23,8 +23,10 @@ import {
 } from './session-scanner-service-client-state'
 import {
   noteAiVaultServiceScanProgress,
-  sendAiVaultServiceCall
+  sendAiVaultServiceCall,
+  type AiVaultServiceScanListener
 } from './session-scanner-service-request-deadline'
+import { answerAiVaultServiceSessionSearchRoots } from './session-scanner-service-root-answer'
 import { AiVaultServiceRestartPolicy } from './session-scanner-service-restart-policy'
 import {
   isAiVaultServiceChildMessage,
@@ -48,7 +50,11 @@ export class AiVaultScannerServiceClient {
 
   constructor(private readonly options: AiVaultServiceClientOptions) {}
 
-  request<T>(body: AiVaultServiceRequestBody, signal?: AbortSignal): Promise<T> {
+  request<T>(
+    body: AiVaultServiceRequestBody,
+    signal?: AbortSignal,
+    scanListener?: AiVaultServiceScanListener
+  ): Promise<T> {
     if (this.disposed) {
       return Promise.reject(new Error('AI Vault service client was disposed.'))
     }
@@ -66,7 +72,8 @@ export class AiVaultScannerServiceClient {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers choose T as the result value of the operation they send, which is what the child answers with.
         resolve as (value: unknown) => void,
         reject,
-        (aborted) => this.cancel(aborted)
+        (aborted) => this.cancel(aborted),
+        scanListener
       )
       this.queue.push(call)
       this.idleRetirement.clear()
@@ -74,7 +81,6 @@ export class AiVaultScannerServiceClient {
     })
   }
 
-  /** Push a consent or retention change, and while the index is on keep a child. */
   updateSessionSearch(init: AiVaultSessionSearchInit): void {
     if (this.disposed) {
       return
@@ -157,12 +163,7 @@ export class AiVaultScannerServiceClient {
     this.scheduleIdleIfNeeded()
   }
 
-  /**
-   * The index's own restart. A child indexing for the hold has no queued call to
-   * bring it back, so without this a fault stops the indexing until an unrelated
-   * request happens to arrive. The restart delay and circuit bound it, exactly as
-   * they bound a queued call's start.
-   */
+  /** Restart held indexing children even without queued requests, subject to backoff and the circuit. */
   private startSessionSearchChild(): void {
     if (this.disposed || !this.sessionSearch.holdsChild || this.child || this.readyWaiter) {
       return
@@ -218,16 +219,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'sessionSearchRoots') {
-      const child = this.child
-      const resolve = this.options.resolveSessionSearchRoots
-      void Promise.resolve()
-        .then(() => (resolve ? resolve() : (this.options.init().sessionSearch?.roots ?? null)))
-        .catch(() => null)
-        .then((roots) => {
-          if (child && this.child === child && child.connected) {
-            child.send({ type: 'sessionSearchRoots', id: message.id, roots }, () => undefined)
-          }
-        })
+      answerAiVaultServiceSessionSearchRoots(this.child, message.id, this.options, () => this.child)
       return
     }
     if (message.type === 'ready') {
@@ -251,7 +243,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'progress') {
-      noteAiVaultServiceScanProgress(call, message.units, this.onDeadline)
+      noteAiVaultServiceScanProgress(call, message.work)
       return
     }
     this.active.delete(call.lane)
@@ -290,8 +282,7 @@ export class AiVaultScannerServiceClient {
       this.readyWaiter.reject(error)
       this.readyWaiter = null
     }
-    // Recorded before the pending calls are settled so retryStartOrReject can see
-    // whether a respawn is actually coming.
+    // Record the respawn decision before settling calls that may retry.
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()

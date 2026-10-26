@@ -1,4 +1,6 @@
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
+import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
+import { jiraSiteLabel } from './jira-mobile-connection'
 import {
   type PickerOption,
   githubProjectKey,
@@ -36,6 +38,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     items,
     linearDisplayProperties,
     linearFilter,
+    jiraFilter,
+    jiraConnection,
     linearGroupBy,
     linearOrderBy,
     linearTeamPropertyTouched,
@@ -46,7 +50,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     selectedLinearTeamIds,
     selectedLinearWorkspaceId,
     setAppliedGithubProjectSearch,
-    setSelectedRepoIds
+    setSelectedRepoIds,
+    effectiveRepoIds
   } = model
   const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
   const githubPresetPickerOptions = useMemo(
@@ -62,6 +67,12 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ?? 'Open'
   const gitlabFilterLabel =
     GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ?? 'Open'
+  const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
+  const jiraSelectedSite =
+    jiraConnection.selection && jiraConnection.selection !== 'all'
+      ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
+      : null
+  const jiraSiteChipLabel = jiraSelectedSite ? jiraSiteLabel(jiraSelectedSite) : 'All sites'
   const linearFilterLabel =
     LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ?? 'All'
   const linearViewLabel =
@@ -136,8 +147,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
     [linearGroupBy, linearIssuesForView]
   )
-  // Why: FlatList treats data identity as meaningful; unrelated renders should
-  // not rebuild the section/item wrapper array.
+  // Preserve FlatList data identity across unrelated renders.
   const linearListEntries = useMemo<LinearListEntry[]>(
     () =>
       linearIssueSections.flatMap((section) =>
@@ -150,8 +160,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       ),
     [linearGroupBy, linearIssueSections]
   )
-  // Why: every grouping but `none` produces the same sections as the list, so the
-  // board reuses them; `none` still needs its own status split for columns.
+  // Reuse list grouping for board sections except none, which still needs status columns.
   const linearBoardSections = useMemo(
     () =>
       linearGroupBy === 'none'
@@ -224,20 +233,19 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
 
   const toggleRepoSelection = useCallback(
     (repoId: string) => {
-      setSelectedRepoIds((current) => {
-        const next = new Set(current)
-        if (next.has(repoId)) {
-          next.delete(repoId)
-        } else {
-          next.add(repoId)
-        }
-        const normalized =
-          next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
-        persistRepoSelection(normalized, hostedRepos)
-        return normalized
-      })
+      // User edits rewrite selections from listed repos, matching what the picker displays.
+      const next = new Set(effectiveRepoIds)
+      if (next.has(repoId)) {
+        next.delete(repoId)
+      } else {
+        next.add(repoId)
+      }
+      const normalized =
+        next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
+      setSelectedRepoIds(normalized)
+      persistRepoSelection(normalized, hostedRepos)
     },
-    [hostedRepos, persistRepoSelection]
+    [effectiveRepoIds, hostedRepos, persistRepoSelection]
   )
 
   const applyGitHubProjectSearch = useCallback(() => {
@@ -250,6 +258,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetPickerOptions,
     githubPresetLabel,
     gitlabFilterLabel,
+    jiraFilterLabel,
+    jiraSiteChipLabel,
     linearFilterLabel,
     linearViewLabel,
     linearGroupLabel,

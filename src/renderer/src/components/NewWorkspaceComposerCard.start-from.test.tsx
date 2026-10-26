@@ -51,7 +51,7 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
   default: () => <div data-testid="project-combobox" />
 }))
 
-// Why: the picker owns its own test; here it only has to report its value and emit picks.
+// Stub the independently tested picker at its value/pick boundary.
 vi.mock('@/components/repo/CreateFromPicker', () => ({
   CreateFromPicker: ({
     value,
@@ -200,8 +200,7 @@ describe('NewWorkspaceComposerCard start from', () => {
     expect(picks).toEqual([undefined])
   })
 
-  // Why: picking a base clears reuse, so offering one here would silently turn a checkout of
-  // the picked branch into a new branch off something else.
+  // A branch source already picks its base; another base choice clears reuse and changes checkout semantics.
   it('omits the base ref for a branch source, which already is the base', () => {
     container = renderCard({
       smartNameSelection: { kind: 'branch', label: 'feature/export-v2' },

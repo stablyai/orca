@@ -131,31 +131,3 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
-
-export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate(
-      'auto.components.settings.terminal.search.5be2d67678',
-      'Setup Script Location'
-    ),
-    description: translate(
-      'auto.components.settings.terminal.search.2610ee3b56',
-      "Where the repository setup script runs when a new workspace is created: a vertical split (default), a horizontal split, or a background tab titled 'Setup'."
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.terminal.search.4529806908', 'setup'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.6b659fff2a', 'script'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.7a48c7715b', 'workspace'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.de7bc1d5f5', 'split'),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.search.54a9b3725b',
-        'horizontal'
-      ),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.18ce996647', 'vertical'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.f44643328e', 'tab'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.fd6c24313d', 'new'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.b872de3926', 'location'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.c047f398cc', 'launch')
-    ]
-  }
-])

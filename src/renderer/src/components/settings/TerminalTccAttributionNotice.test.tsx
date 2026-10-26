@@ -13,13 +13,9 @@ const openSettingsPage = vi.fn()
 const setSettingsSearchQuery = vi.fn()
 
 vi.mock('../../store', () => ({
-  useAppStore: (
-    selector: (state: {
-      openSettingsTarget: typeof openSettingsTarget
-      openSettingsPage: typeof openSettingsPage
-      setSettingsSearchQuery: typeof setSettingsSearchQuery
-    }) => unknown
-  ) => selector({ openSettingsTarget, openSettingsPage, setSettingsSearchQuery })
+  useAppStore: {
+    getState: () => ({ openSettingsTarget, openSettingsPage, setSettingsSearchQuery })
+  }
 }))
 
 let container: HTMLDivElement

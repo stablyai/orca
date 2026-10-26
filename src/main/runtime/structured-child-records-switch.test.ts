@@ -1,10 +1,4 @@
-// The switch, end to end on a host with no renderer: a Codex session's frames reach the host's
-// canonical store; the status summary every session list reads and the chat strip's channel both
-// carry the running children, and the parent row is folded from the same records.
-//
-// Deliberately NOT a comparison against the provider tracker's task list: that tracker and the
-// record producer read the same child executions, so agreeing with it could not catch a defect in
-// what those executions observe. Every expectation below is written out literally.
+// Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,9 +12,10 @@ import type { AgentChildWorkView } from '../../shared/agent-status-child-work-vi
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
@@ -44,6 +39,7 @@ const THREAD = 'thread-switch'
 const REVIEWER = 'thread-reviewer'
 const ROUTES: Record<string, unknown> = {
   'thread/start': { thread: { id: THREAD } },
+  'turn/start': { turn: { id: 'p2', status: 'inProgress' } },
   'model/list': {
     data: [
       {
@@ -132,7 +128,10 @@ describe('the chat strip and the session list read the same host child records',
       ...scriptedCodexTransport(openConnection),
       statusSink
     })
-    const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+    const attachParams = hostTestAttachParams(null, {
+      providerHandle: undefined,
+      options: { model: 'gpt-test' }
+    })
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
     const attached = await host.attach({ callerKey: 'switch-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
@@ -179,6 +178,17 @@ describe('the chat strip and the session list read the same host child records',
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
     const both = (expected: Row[]) => {
       expect(summaryRows()).toEqual(expected)
+      const sources = collectRuntimeWorktreeAgentSources({
+        hookSnapshots: server.getStatusSnapshot(),
+        readStructuredSummary: host.readStatusSummary,
+        mirroredWorktreeIdByTabId: new Map(),
+        connectedPtyEvidence: {
+          tabIds: new Set(),
+          paneKeys: new Set(),
+          ptyIdByTerminalHandle: new Map()
+        }
+      })
+      expect([...sources.values()].flatMap((source) => rows(source.children))).toEqual(expected)
       expect(stripRows()).toEqual(expected)
     }
 
@@ -223,7 +233,6 @@ describe('the chat strip and the session list read the same host child records',
       }
     ])
 
-    // A command that exits leaves nothing behind.
     await item('item/completed', REVIEWER, 'r1', {
       type: 'commandExecution',
       id: 'cmd-1',
@@ -278,9 +287,7 @@ describe('the chat strip and the session list read the same host child records',
       exitCode: 0
     })
     expect(parentRow()).toMatchObject({ state: 'done' })
-    // Nothing runs: the sidebar and the strip list nothing, and the strip hides. The finished
-    // child's record stays in the store until the user's next turn; the dev server's record went
-    // when its process exited.
+    // Finished child records remain until the user's next turn; exited command records are removed immediately.
     expect(summaries.at(-1)).not.toHaveProperty('children')
     expect(strip.at(-1)).toBeNull()
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
@@ -298,7 +305,6 @@ describe('the chat strip and the session list read the same host child records',
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p-own', status: 'inProgress' } })
     await notify('turn/completed', { threadId: THREAD, turn: { id: 'p-own', status: 'completed' } })
     expect(stored()).toHaveLength(1)
-    // The user's next message, which Codex takes into its next turn.
     const body = hostTestMessage('check it again')
     const clientOperationId = `${Date.now()}-${'2'.padStart(32, '0')}`
     await host.send(
@@ -316,6 +322,13 @@ describe('the chat strip and the session list read the same host child records',
         },
         body
       }
+    )
+    await vi.waitFor(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).submissions.find(
+          (entry) => entry.clientMessageId === clientOperationId
+        )?.handedOverAt
+      ).toBeDefined()
     )
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p2', status: 'inProgress' } })
     await notify('item/started', {

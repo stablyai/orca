@@ -14,9 +14,9 @@ import {
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
-  subscribeToRuntimeTerminalData,
-  toRemoteRuntimePtyId
+  subscribeToRuntimeTerminalData
 } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 describe('remote runtime terminal ids', () => {
@@ -110,7 +110,9 @@ describe('remote runtime terminal data subscriptions', () => {
       ackOutputSourceRanges: 1,
       desktopViewportClaims: 1,
       outputPause: 1,
-      writeUnavailable: 1
+      outputPauseDropNotice: 1,
+      writeUnavailable: 1,
+      endpointLossNotice: 1
     })
 
     callbacks?.onBinary?.(
@@ -576,9 +578,7 @@ describe('remote runtime terminal multiplex ACK gate', () => {
       },
       'recovered state'
     )
-    // Why: an unsolicited recovery snapshot that carries history replaces
-    // terminal state, so it clears screen and scrollback first and must not
-    // replay the subscribe lifecycle.
+    // Unsolicited history recovery replaces screen/scrollback without replaying subscribe lifecycle.
     expect(onSnapshot).toHaveBeenCalledWith(`\x1b[?2026l\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
       pendingEscapeTailAnsi: undefined,
       cols: 120,
@@ -587,8 +587,7 @@ describe('remote runtime terminal multiplex ACK gate', () => {
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
-    // Why: an empty recovery snapshot means the model terminal is blank, so
-    // the client must still clear stale dropped output.
+    // Empty recovery means blank model state; still clear stale dropped output.
     injectSnapshot(
       {
         kind: 'scrollback',

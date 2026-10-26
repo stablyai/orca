@@ -10,10 +10,10 @@ import {
 } from './orcad-source-scope'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { collectSessionOwnerKeys } from './orcad-source-workspace-session-fragments'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
-/** On a copy of the profile only, like every subtraction the delta view runs. */
+/** Mutate a delta-view copy only. */
 export function subtractOrcadMigrationSourceWorkspaceSession(
   state: PersistedState,
   manifest: OrcadMigrationManifest
@@ -24,7 +24,7 @@ export function subtractOrcadMigrationSourceWorkspaceSession(
   subtractOrcadMigrationScopeWorkspaceSession(state, manifest)
 }
 
-/** Every partition's session state for the manifest's catalog, whether or not it could move. */
+/** Include scoped session state that earlier migrations could not carry. */
 export function subtractOrcadMigrationScopeWorkspaceSession(
   state: PersistedState,
   manifest: OrcadMigrationManifest
@@ -71,7 +71,7 @@ function removeOwnedSessionState(
       )
     }
   }
-  // Focus retargeted to the destination names the same ids on the managed host; keep it.
+  // Destination focus names the same IDs and must survive source subtraction.
   const retargetedFocus = isOrcadRuntimeHostFocus(session)
     ? {
         activeRepoId: session.activeRepoId,
@@ -81,7 +81,7 @@ function removeOwnedSessionState(
       }
     : null
   const next = removeWorkspaceSessionOwners(session, ownerKeys) ?? session
-  // Selection-only sessions and canonical workspace keys need the same scoped subtraction.
+  // Selection-only sessions and canonical keys also need scoped subtraction.
   const retired = next === session ? structuredClone(session) : next
   if (retargetedFocus) {
     Object.assign(retired, retargetedFocus)
@@ -114,7 +114,6 @@ function removeOwnedSessionState(
   return retired
 }
 
-/** Focus already on a runtime host names that host's workspace, never the SSH source's. */
 function isOrcadRuntimeHostFocus(session: WorkspaceSessionState): boolean {
   return parseExecutionHostId(session.activeWorkspaceExecutionHostId)?.kind === 'runtime'
 }

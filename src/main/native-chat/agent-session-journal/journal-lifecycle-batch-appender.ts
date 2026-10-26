@@ -1,3 +1,4 @@
+import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -16,6 +17,7 @@ import {
 } from './journal-row-builders'
 import type {
   JournalLifecycleBatchInput,
+  JournalPlannedLifecycleBatchInput,
   JournalResolvedLifecycleBatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
@@ -58,14 +60,30 @@ export class JournalLifecycleBatchAppender {
           ...this.planMutations(input, input.mutations)
         ]
       })
-      .then((rows) => {
-        const last = rows.at(-1)
-        return last ? { epoch: last.epoch, sequence: last.seq } : this.deps.cursor()
-      })
+      .then((rows) => this.cursorAfter(rows))
   }
 
-  /** The rows a resolved settlement writes, planned at its own turn in the queue: its mutations,
-   *  chosen then, in as many consecutive rows as they need, minus any already applied. */
+  /** Resolve rows at the batch's own position in the write queue. */
+  appendPlanned(input: JournalPlannedLifecycleBatchInput): Promise<AgentJournalCursor> {
+    return this.deps
+      .enqueueRows(() => {
+        if (this.wasApplied(input.settlementId)) {
+          return []
+        }
+        const { mutations, dispatches } = input.plan()
+        return [
+          ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
+          ...this.planMutations(input, mutations)
+        ]
+      })
+      .then((rows) => this.cursorAfter(rows))
+  }
+
+  private cursorAfter(rows: readonly JournalRow[]): AgentJournalCursor {
+    const last = rows.at(-1)
+    return last ? { epoch: last.epoch, sequence: last.seq } : this.deps.cursor()
+  }
+
   planResolved(
     input: JournalResolvedLifecycleBatchInput
   ): ((seq: number, ts: number) => JournalRow)[] {
@@ -75,15 +93,24 @@ export class JournalLifecycleBatchAppender {
   }
 
   private planMutations(
-    input: Pick<JournalLifecycleBatchInput, 'settlementId' | 'fence' | 'recovered'>,
-    mutations: readonly JournalLifecycleMutationInput[]
+    input: Pick<JournalLifecycleBatchInput, 'settlementId' | 'fence' | 'recovered' | 'ownerFence'>,
+    stated: readonly JournalLifecycleMutationInput[]
   ): ((seq: number, ts: number) => JournalRow)[] {
     if (this.wasApplied(input.settlementId)) {
       return []
     }
+    const { ownerFence } = input
+    const mutations =
+      ownerFence === undefined
+        ? stated
+        : stated.map((mutation) =>
+            mutation.kind === 'item' && mutation.ownerFence === undefined
+              ? { ...mutation, ownerFence }
+              : mutation
+          )
     const current = this.deps.state()
     const options = { ...input, epoch: current.epoch }
-    // Every row in this transaction must advance past the rows planned before it.
+    // Later writes in this transaction must outrank revisions planned earlier in the same batch.
     const revisions = new Map<string, number>()
     const plannedItems = new Set<string>()
     let namedSettlement = false
@@ -122,10 +149,11 @@ export class JournalLifecycleBatchAppender {
                 ]
           }
           const existing = current.items.get(resolved)
-          // An all-oversized settlement has no batch receipt; its terminal bodies are its receipt.
+          // Oversized-only settlements lack batch receipts; terminal item bodies prove completion.
           return !previouslyPlanned &&
             existing &&
             isDeepStrictEqual(existing.body, only.body) &&
+            (!Object.hasOwn(only, 'echoOf') || current.itemEchoes.has(itemId)) &&
             (only.linkage === undefined ||
               isDeepStrictEqual(
                 agentJournalLinkageFields(existing),
@@ -139,15 +167,18 @@ export class JournalLifecycleBatchAppender {
                   only.body,
                   {
                     ...only.linkage,
+                    ...journalItemEchoFields(only),
                     turnScope: only.turnScope,
                     fence: input.fence,
+                    ownerFence: only.ownerFence,
+                    observedAt: only.observedAt,
                     recovered: input.recovered
                   },
                   revisions
                 )
               ]
         }
-        // One bounded row remembers the generation even when the re-derived plan has fewer items.
+        // Preserve generation evidence even when replanning yields fewer mutations.
         const id = namedSettlement ? chunk.settlementId : input.settlementId
         namedSettlement = true
         return this.wasApplied(id)

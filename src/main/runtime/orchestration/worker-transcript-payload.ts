@@ -3,7 +3,6 @@ import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 import { replaceDispatchCapabilities } from './worker-terminal-redaction'
-export { redactWorkerTerminalLines } from './worker-terminal-redaction'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -11,9 +10,7 @@ const MAX_WORKER_TRANSCRIPT_BLOCKS = 6
 const MAX_WORKER_TRANSCRIPT_BLOCK_CHARS = 1_200
 const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
-// Message ids, turn ids, tool-call names and image urls, not only roster fields.
-// Equal to `MAX_SUBAGENT_FIELD_CHARS` today, kept a separate literal so a
-// roster-motivated change to that cap cannot silently move this one.
+// Bound all metadata independently of roster limits so roster tuning cannot silently widen other fields.
 const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
@@ -54,13 +51,7 @@ export function boundWorkerTranscriptMessages(
   return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
-/**
- * The same per-message bounding, accumulated NEWEST-first.
- *
- * `boundWorkerTranscriptMessages` keeps the head, which is right for a forward page and wrong for
- * an archive: the evidence anyone reads a released worker back for is its final answer, so the
- * tail is what must survive the budget.
- */
+/** Apply message bounds newest-first for archives; forward-page head bounds would lose the worker's final answer. */
 export function boundWorkerTranscriptTail(
   messages: readonly NativeChatMessage[],
   maxBytes: number
@@ -170,9 +161,7 @@ function isLocalFileLocator(value: string): boolean {
   )
 }
 
-/** A roster entry's id is the roster KEY, so it is redacted like other metadata
- *  but bounded with a digest rather than clipped: two ids sharing a 512-char
- *  head must not collapse onto one entry. */
+/** Digest oversized redacted roster keys instead of clipping, which could merge distinct entries. */
 function boundEntryId(value: string, state: TranscriptBoundState): string {
   const redacted = redactSensitiveText(value, state.warnings)
   const bounded = boundSubagentEntryId(redacted)

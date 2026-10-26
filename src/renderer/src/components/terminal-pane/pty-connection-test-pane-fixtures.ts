@@ -21,10 +21,12 @@ export type ConnectCallbacks = {
   onError?: (msg: string) => void
   onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
-  onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
+  onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
+  onPausedOutputDropped?: () => void
 }
 
 export type MockTransport = {
+  retryRecovery?: () => boolean
   attach: ReturnType<typeof vi.fn>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
@@ -39,6 +41,7 @@ export type MockTransport = {
   claimViewport: ReturnType<typeof vi.fn>
   setOutputPaused?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
+  isConnected?: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
@@ -68,6 +71,7 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+  transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
@@ -106,7 +110,7 @@ export type MockPaneTerminal = {
     theme: { foreground: string; background: string }
     vtExtensions: { kittyKeyboard: boolean }
   }
-  write: Mock<(data: string, callback?: () => void) => void>
+  write: Mock<(data: string | Uint8Array, callback?: () => void) => void>
   resize: Mock<(cols: number, rows: number) => void>
   clear: Mock
   scrollToBottom: Mock<() => void>
@@ -136,11 +140,16 @@ export type MockPane = {
   }
 }
 
+const testPanes: MockPane[] = []
+
+export function takeTerminalTestPanes(): MockPane[] {
+  return testPanes.splice(0)
+}
+
 export function createPane(paneId: number): MockPane {
   const leafId = leafIdForPane(paneId)
   const activeBuffer = {
-    // Mutable so a test can put the pane on the alt screen: the replay prologue
-    // only switches buffers when this disagrees with the snapshot.
+    // Keep buffer type mutable to test replay switches when snapshot and live xterm disagree.
     type: 'normal' as 'normal' | 'alternate',
     viewportY: 0,
     baseY: 0,
@@ -167,9 +176,11 @@ export function createPane(paneId: number): MockPane {
       },
       vtExtensions: { kittyKeyboard: true }
     },
-    write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
+    write: vi.fn<(data: string | Uint8Array, callback?: () => void) => void>(function write(
+      ...args
+    ): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -198,7 +209,7 @@ export function createPane(paneId: number): MockPane {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
-  return {
+  const pane: MockPane = {
     id: paneId,
     leafId,
     stablePaneId: leafId,
@@ -209,6 +220,12 @@ export function createPane(paneId: number): MockPane {
       proposeDimensions: vi.fn(() => ({ cols: terminal.cols, rows: terminal.rows }))
     }
   }
+  testPanes.push(pane)
+  return pane
+}
+
+export function terminalWriteText(data: string | Uint8Array): string {
+  return typeof data === 'string' ? data : new TextDecoder().decode(data)
 }
 
 export function captureCallbackTerminalWrites(pane: MockPane): {
@@ -217,12 +234,13 @@ export function captureCallbackTerminalWrites(pane: MockPane): {
 } {
   const writes: string[] = []
   const parseCallbacks: (() => void)[] = []
-  pane.terminal.write = function write(data: string, callback?: () => void): void {
-    writes.push(data)
+  pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+    // Parse barriers are zero-length byte writes; record what xterm would parse.
+    writes.push(terminalWriteText(data))
     if (callback) {
       parseCallbacks.push(callback)
     }
-  } as typeof pane.terminal.write
+  })
   return { writes, parseCallbacks }
 }
 
@@ -237,6 +255,7 @@ export type MockPaneManager = {
   closePane: Mock
   getActivePane: Mock<() => { id: number; leafId?: string } | null>
   getNumericIdForLeaf: Mock<(leafId: string) => number | null>
+  getLeafId: Mock<(paneId: number) => string | null>
   setActivePane: Mock<(paneId: number) => void>
 }
 
@@ -263,6 +282,9 @@ export function createManager(
     ),
     getNumericIdForLeaf: vi.fn((leafId: string) => {
       return panes.find((candidate) => candidate.leafId === leafId)?.id ?? null
+    }),
+    getLeafId: vi.fn((paneId: number) => {
+      return panes.find((candidate) => candidate.id === paneId)?.leafId ?? null
     }),
     setActivePane: vi.fn((paneId: number) => {
       activePaneId = paneId

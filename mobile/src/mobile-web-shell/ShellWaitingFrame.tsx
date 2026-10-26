@@ -2,21 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-/** What the shell calls the wait from the bytes being on disk to the page having a frame. */
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
-/**
- * Eased in, so the cover holds near full opacity through the handover: the page reports its own
- * renderer's paint, and the compositor needs a frame or two more to put that on the app's surface.
- * A linear fade left two frames of bare surface between the two on an emulator.
- */
+// Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
 export const SHELL_PAGE_COVER_FADE_MS = 220
 
-/**
- * The shell's neutral frame: an indicator, a spinner unless the caller has a better one, and what it
- * is waiting on. The indicator slot and the out-of-flow caption keep the label at one height across
- * every waiting screen, whatever each one shows.
- */
+// Keep indicator and caption layout fixed so waiting screens share the same label height.
 export function ShellWaitingFrame({
   label,
   indicator,
@@ -39,12 +30,7 @@ export function ShellWaitingFrame({
   )
 }
 
-/**
- * That same frame, held over a mounted view until the page reports one of its own: a WebView that
- * has not painted draws nothing, so uncovering at `ready` shows the surface behind it and nothing
- * else for the whole of the page's boot. Never interactive even while opaque, so a report that
- * never arrives strands a spinner over a usable page rather than a dead one.
- */
+// Cover the mounted view until first paint, not ready; keep it noninteractive so a missing report cannot block an otherwise usable page.
 export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
@@ -61,8 +47,7 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
       easing: Easing.in(Easing.quad),
       useNativeDriver: true
     })
-    // Unmounted on the callback rather than on a timer, so a fade the platform cut short does not
-    // leave an opaque cover behind; one that never calls back leaves a transparent inert one.
+    // Unmount on animation completion; a platform-shortened fade must not strand an opaque cover, and a missing callback leaves an inert transparent one.
     fade.start(({ finished }) => {
       if (finished) {
         setMounted(false)
@@ -108,7 +93,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     textAlign: 'center'
   },
-  // Out of flow, so a frame with a caption centres at the same height as one without.
+  // Keep captions out of flow so frames with and without them center at the same height.
   caption: {
     position: 'absolute',
     top: '100%',

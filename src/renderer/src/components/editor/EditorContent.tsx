@@ -3,8 +3,6 @@ import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/sl
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
-import { NativeChatVisualTab } from '../native-chat/NativeChatVisualTab'
-import { NativeChatVisualUnavailable } from '../native-chat/NativeChatInlineVisual'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
@@ -110,8 +108,7 @@ export function EditorContent({
     viewStateScopeId === activeFile.id
       ? `${activeFile.filePath}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
-  // Why: the same absolute path can exist in different worktrees, paired
-  // runtimes, or SSH targets; durable PDF zoom must not cross those owners.
+  // Scope durable PDF zoom by owner: identical paths can belong to different worktrees or remote hosts.
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
@@ -141,6 +138,10 @@ export function EditorContent({
     const details = checkRunDetails.details
     return (
       <CheckRunDetailsPanel
+        key={JSON.stringify([activeFile.id, viewStateScopeId, checkRunDetails.contextKey])}
+        tabId={activeFile.id}
+        viewStateScopeId={viewStateScopeId}
+        contextKey={checkRunDetails.contextKey}
         check={checkRunDetails.check}
         details={details}
         loading={checkRunDetails.loading}
@@ -151,15 +152,6 @@ export function EditorContent({
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}
       />
-    )
-  }
-
-  if (activeFile.mode === 'chat-visual') {
-    // Why key: a different visual is a different frame, never a reused one.
-    return activeFile.chatVisual ? (
-      <NativeChatVisualTab key={activeFile.id} visual={activeFile.chatVisual} />
-    ) : (
-      <NativeChatVisualUnavailable />
     )
   }
 
@@ -187,6 +179,7 @@ export function EditorContent({
         key={viewStateScopeId}
         file={activeFile}
         viewStateKey={diffViewStateKey}
+        viewStateScopeId={viewStateScopeId}
       />
     )
   }

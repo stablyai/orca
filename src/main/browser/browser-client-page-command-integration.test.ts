@@ -47,6 +47,7 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     const executor = new BrowserClientPageCommandExecutor({
       orcaProfileId: 'orca-profile-a',
       authorityConnectionIdentity: 'authority-record-a',
+      pairingAuthorityConnectionIdentity: 'pairing-authority-record-a',
       legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
       storageScope: 'a'.repeat(64),
       retainNetworkRoute: vi.fn(async () => ({

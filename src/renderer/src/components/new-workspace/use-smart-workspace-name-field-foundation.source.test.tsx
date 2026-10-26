@@ -2,6 +2,8 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
@@ -41,6 +43,9 @@ vi.mock('./use-jira-source-connection', () => ({
   useJiraSourceConnection: () => ({ status: null, loaded: false })
 }))
 vi.mock('./use-jira-url-source', () => ({ useJiraUrlSource: mocks.readJiraSource }))
+vi.mock('../use-jira-project-inventory', () => ({
+  useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
+}))
 
 const source: TaskSourceContext = {
   kind: 'task-source',
@@ -73,11 +78,43 @@ describe('smart workspace explicit source connection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
     mocks.state.linearStatus = {
       connected: false,
       viewer: null,
       selectedWorkspaceId: 'focused-workspace'
     }
+  })
+
+  it('uses the resolved runtime repository default when a local repository has the same ID', () => {
+    const localRepo: Repo = {
+      id: 'same-id',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '',
+      addedAt: 0,
+      defaultJiraProject: { id: '10', key: 'LOC', name: 'Local', siteId: 'site-a' }
+    }
+    const selectedRepo: Repo = {
+      ...localRepo,
+      path: '/runtime',
+      executionHostId: 'runtime:remote',
+      defaultJiraProject: { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
+    }
+    const fieldProps = {
+      ...props(),
+      repos: [localRepo, selectedRepo],
+      repoId: 'same-id',
+      selectedRepo,
+      jiraSourceContext: normalizeTaskSourceContext({
+        provider: 'jira',
+        projectId: 'repo:same-id',
+        hostId: 'runtime:remote'
+      })
+    }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    expect(result.current.selectedRepo).toBe(selectedRepo)
+    expect(result.current.jiraProject).toEqual(selectedRepo.defaultJiraProject)
   })
 
   it('exposes Linear on a connected saved host while the focused runtime is disconnected', async () => {
@@ -124,7 +161,51 @@ describe('smart workspace explicit source connection', () => {
     expect(result.current.linearStatus.connected).toBe(false)
   })
 
-  it('retains focused runtime status and avoids a new status read without an override', async () => {
+  it("reads Linear on the selected repo's host, not the focused one (#32924)", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const fieldProps = { ...props(), repos: [serverRepo], repoId: serverRepo.id }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    await waitFor(() => expect(result.current.linearStatusChecked).toBe(true))
+    expect(mocks.readStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'linear', hostId: 'runtime:remote' })
+    )
+    expect(result.current.availableModes.some((mode) => mode.id === 'linear')).toBe(false)
+    expect(mocks.state.checkLinearConnection).not.toHaveBeenCalled()
+  })
+
+  it("holds a pasted Linear URL while the repo host's status is still loading", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockReturnValue(new Promise(() => {}))
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const searchProps = {
+      ...props(),
+      repos: [serverRepo],
+      repoId: serverRepo.id,
+      value: 'https://linear.app/acme/issue/ENG-1/title'
+    }
+    const { result } = renderHook(() => useWorkItemSourceSearch(searchProps))
+    await act(async () => {})
+    expect(result.current.linearStatusChecked).toBe(false)
+    expect(result.current.unresolvedLinearUrlIntent).toBe(true)
+  })
+
+  it('retains focused runtime status and avoids a new status read with no selected repo', async () => {
     mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
     const fieldProps = props()
     const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))

@@ -1,18 +1,14 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, statSync, type BigIntStats } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { fileStatSignature } from '../file-stat-signature'
+
+export { fileStatSignature as daemonHostFileStatSignature } from '../file-stat-signature'
 
 // Metadata validation avoids rereading unchanged daemon code on the main thread.
 const cachedHashes = new Map<string, { signature: string; sha256: string }>()
 
-type StatIdentity = Pick<BigIntStats, 'dev' | 'ino' | 'size' | 'mtimeNs' | 'ctimeNs'>
-
-// Bigint stats keep full NTFS file ids and ns timestamps; float ms can collapse distinct values.
-export function daemonHostFileStatSignature(stats: StatIdentity): string {
-  return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(':')
-}
-
 function statSignature(path: string): string {
-  return daemonHostFileStatSignature(statSync(path, { bigint: true }))
+  return fileStatSignature(statSync(path, { bigint: true }))
 }
 
 // Missing files must invalidate the inventory rather than reuse a cached hash.

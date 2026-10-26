@@ -5,7 +5,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import CommentMarkdown from './CommentMarkdown'
 
-afterEach(cleanup)
+const boundaryMocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('./CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
+
+afterEach(() => {
+  cleanup()
+  try {
+    expect(boundaryMocks.mermaid).not.toHaveBeenCalled()
+  } finally {
+    boundaryMocks.mermaid.mockClear()
+  }
+})
 
 describe('CommentMarkdown host-confirmed file cases', () => {
   it.each([

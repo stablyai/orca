@@ -7,12 +7,12 @@ import {
   messageText,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { ACP_REOPEN_FAILED } from './acp-session-reopen-failure'
 import {
+  GROK,
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -31,7 +31,6 @@ const hello: AgentJournalMessageItem = {
   blocks: [{ type: 'text', text: 'hello' }]
 }
 
-/** Grok's own capabilities: it loads and resumes sessions; Orca reopens with `session/load`. */
 const RESUMES = { agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} } } }
 const resume = {
   launch: {
@@ -44,8 +43,7 @@ const resume = {
   }
 }
 
-/** Everything Grok may send while it reattaches: its saved exchange marked as replay, a task the
- *  dead process left running ended by the restart, and its context usage. */
+/** Replay history, end the prior process's stale task, and report context usage. */
 function sendsWhileAttaching(agent: AcpScriptedAgent, reply: string): void {
   agent.notify('session/update', {
     sessionId: PROVIDER_SESSION,
@@ -64,6 +62,16 @@ function sendsWhileAttaching(agent: AcpScriptedAgent, reply: string): void {
     sessionId: PROVIDER_SESSION,
     update: { sessionUpdate: 'usage_update', used: 4_000, size: 200_000 }
   })
+}
+
+/** Grok saved the exchange only once the chat sent it: the first open has nothing to replay. */
+function onReopen(): (replay: () => void) => void {
+  let loads = 0
+  return (replay) => {
+    if (loads++ > 0) {
+      replay()
+    }
+  }
 }
 
 /** Orca's send of `hello` as `m1` and Grok's reply, ended or cut off. */
@@ -90,7 +98,6 @@ const notRestoredRows = async (rig: AcpAdapterRig) =>
       readAgentSessionFailureFact(row.body.failure)?.kind === 'sessionNotRestored'
   )
 
-/** What Grok might send while it resumes with no replay mark: an old reply and its turn's end. */
 function sendsUnmarkedWhileAttaching(agent: AcpScriptedAgent): void {
   agent.notify('session/update', replyChunk('prompt:old', 'stale text'))
   agent.notify('x.ai/session_notification', {
@@ -122,7 +129,6 @@ describe('the reattach window', () => {
       ...resumesUnmarked,
       script: (agent: AcpScriptedAgent) =>
         agent.on('session/load', (frame) => {
-          // An old reply with no end and no replay mark.
           agent.notify('session/update', replyChunk('prompt:old', 'stale text'))
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
@@ -149,7 +155,6 @@ describe('the context meter across a reopen', () => {
       ...resume,
       initialize: RESUMES,
       script: (agent) =>
-        // A load that replays no usage; its answer carries only the models.
         agent.on('session/load', (frame) =>
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS, models })
         )
@@ -178,14 +183,52 @@ describe('the context meter across a reopen', () => {
   })
 })
 
+it("starts in the chat's own permission mode, asks when none is named, and fails an unconfirmed one", async () => {
+  const values = { ask: 'default', 'accept-edits': 'auto_edit' }
+  const modes = [
+    {
+      id: 'approval_mode',
+      name: 'Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue: 'auto_edit',
+      options: [
+        { value: 'default', name: 'Default' },
+        { value: 'auto_edit', name: 'Auto edit' }
+      ]
+    }
+  ]
+  const configOptions = [...GROK_CONFIG_OPTIONS, ...modes]
+  const open = () =>
+    openAcpAdapterRig({
+      spec: { ...GROK, permissionModeConfig: { values } },
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
+        )
+        agent.on('session/set_config_option', (frame) => agent.reply(frame, { configOptions }))
+      }
+    })
+  const [chosen, unnamed] = [await open(), await open()]
+  await chosen.acquire({ permissionMode: 'accept-edits' })
+  await unnamed.acquire()
+  expect(unnamed.openFailure()).toEqual(new Error('Permission mode could not be confirmed'))
+  const sent = [chosen, unnamed].map((rig) => rig.sent('session/set_config_option')[0]?.params)
+  expect(sent).toMatchObject([
+    { configId: 'approval_mode', value: 'auto_edit' },
+    { configId: 'approval_mode', value: 'default' }
+  ])
+})
+
 describe('reattaching a Grok chat the journal holds', () => {
   it('loads with session/load though Grok also resumes, and writes nothing it replays', async () => {
+    const reopen = onReopen()
     const rig = await openAcpAdapterRig({
       ...resume,
       initialize: RESUMES,
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          sendsWhileAttaching(agent, 'hi')
+          reopen(() => sendsWhileAttaching(agent, 'hi'))
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
     })
@@ -197,7 +240,6 @@ describe('reattaching a Grok chat the journal holds', () => {
     await rig.settle()
     expect(rig.sent('session/load')).toHaveLength(1)
     expect(rig.sent('session/resume')).toHaveLength(0)
-    // No second user bubble, no stale task row, and no turn opened by the load's own traffic.
     expect((await rig.rig.rows()).map((row) => row.itemId)).toEqual(before)
     expect(await texts(rig)).toEqual(['hello', 'hi'])
     await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 2 })).resolves.toEqual({
@@ -207,11 +249,12 @@ describe('reattaching a Grok chat the journal holds', () => {
   })
 
   it('loads an agent that only loads, writing none of what it replays', async () => {
+    const reopen = onReopen()
     const rig = await openAcpAdapterRig({
       ...resume,
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          sendsWhileAttaching(agent, 'hi')
+          reopen(() => sendsWhileAttaching(agent, 'hi'))
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
     })
@@ -227,11 +270,12 @@ describe('reattaching a Grok chat the journal holds', () => {
   })
 
   it('leaves a reply cut off mid-turn as it was cut, never completed from what Grok saved', async () => {
+    const reopen = onReopen()
     const rig = await openAcpAdapterRig({
       ...resume,
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          sendsWhileAttaching(agent, 'complete saved reply')
+          reopen(() => sendsWhileAttaching(agent, 'complete saved reply'))
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
     })
@@ -247,13 +291,14 @@ describe('reattaching a Grok chat the journal holds', () => {
     ])
   })
 
-  it('writes nothing of the reattach into a sink the host binds only after the start', async () => {
+  it('writes no replay rows when the host binds the sink between acquire and open', async () => {
+    const reopen = onReopen()
     const rig = await openAcpAdapterRig({
       ...resume,
       initialize: RESUMES,
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          sendsWhileAttaching(agent, 'hi')
+          reopen(() => sendsWhileAttaching(agent, 'hi'))
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
     })
@@ -261,25 +306,37 @@ describe('reattaching a Grok chat the journal holds', () => {
     await exchange(rig, 'hi', true)
     await rig.adapter.closeSession(SESSION)
     const before = await rig.rig.rows()
-    // The host's order: a fresh sink per start, bound to the journal once the start succeeded.
+    // The host binds after acquiring the child, before opening its provider session.
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging(SESSION))
-    await rig.adapter.acquire({
-      identity: {
+    try {
+      const acquired = await rig.adapter.acquire({
+        identity: {
+          sessionId: SESSION,
+          workspaceId: 'workspace-1',
+          hostId: 'local',
+          agent: 'grok',
+          providerHandle: null
+        },
+        fence: 2,
+        spawnToken: 'spawn-2',
+        events: deferred.sink
+      })
+      deferred.bind({ journal: rig.rig.journal, fence: 2, publish: () => {} })
+      await rig.adapter.open({
         sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'grok',
-        providerHandle: null
-      },
-      fence: 2,
-      spawnToken: 'spawn-2',
-      events: deferred.sink
-    })
-    deferred.bind({ journal: rig.rig.journal, fence: 2, publish: () => {} })
-    expect(await deferred.drained()).toMatchObject({ ok: true })
-    expect((await rig.rig.rows()).map((row) => row.itemId)).toEqual(before.map((row) => row.itemId))
-    await rig.adapter.closeSession(SESSION)
-    deferred.close()
+        fence: 2,
+        acquisitionGeneration: acquired.acquisitionGeneration,
+        signal: new AbortController().signal
+      })
+      expect(rig.sent('session/load')).toHaveLength(1)
+      expect(await deferred.drained()).toMatchObject({ ok: true })
+      expect((await rig.rig.rows()).map((row) => row.itemId)).toEqual(
+        before.map((row) => row.itemId)
+      )
+    } finally {
+      deferred.close()
+      await rig.adapter.closeSession(SESSION)
+    }
   })
 
   it('starts a new session in place of a created one that session/load reports missing', async () => {
@@ -296,16 +353,14 @@ describe('reattaching a Grok chat the journal holds', () => {
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
     })
-    const acquired = await rig.acquire()
-    expect(acquired.link).toMatchObject({
+    await rig.acquire()
+    expect(rig.started().link).toMatchObject({
       origin: 'created',
       handle: { nativeId: PROVIDER_SESSION },
       supersedesKey: 'acp:grok:never-saved'
     })
-    // The failed load left the translator taking prompts.
     await exchange(rig, 'hi', true)
     expect(await texts(rig)).toEqual(['hello', 'hi'])
-    // Nothing was forgotten: the agent never saved that session.
     expect(await notRestoredRows(rig)).toEqual([])
   })
 
@@ -328,13 +383,13 @@ describe('reattaching a Grok chat the journal holds', () => {
         initialize: RESUMES,
         script: (agent) => agent.on('session/load', (frame) => agent.fail(frame, code, message))
       })
-      const acquired = await rig.acquire()
-      expect(acquired.link).toMatchObject({
+      await rig.acquire()
+      expect(rig.started().link).toMatchObject({
         origin: 'created',
         handle: { nativeId: PROVIDER_SESSION },
         replaces: { key: 'acp-key-saved-1', reason: 'restore-failed', replacedAt: 5_000 }
       })
-      expect(acquired.link.supersedesKey).toBeUndefined()
+      expect(rig.started().link?.supersedesKey).toBeUndefined()
       expect(rig.sent('session/new')).toHaveLength(1)
       const rows = await notRestoredRows(rig)
       expect(rows).toHaveLength(1)
@@ -359,9 +414,8 @@ describe('reattaching a Grok chat the journal holds', () => {
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32000, 'Authentication required'))
     })
-    const failure = await rig.acquire().catch((error: unknown) => error)
-    expect(failure).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(failure).toMatchObject({ reason: 'notSignedIn' })
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
     expect(rig.sent('session/new')).toEqual([])
   })
 
@@ -381,16 +435,14 @@ describe('reattaching a Grok chat the journal holds', () => {
       deps: { logger },
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          start.abort()
+          void rig.adapter.closeSession(SESSION)
           agent.fail(frame, -32603, 'session file is corrupt')
         })
     })
-    expect(
-      await rig.acquire({ signal: start.signal }).catch((error: unknown) => error)
-    ).toBeInstanceOf(Error)
+    await rig.acquire({ signal: start.signal })
+    expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
     expect(rig.sent('session/new')).toEqual([])
     expect(await notRestoredRows(rig)).toEqual([])
-    // Nothing was replaced, so nothing says it was.
     expect(logger.warn).not.toHaveBeenCalledWith(ACP_REOPEN_FAILED, expect.anything())
   })
 

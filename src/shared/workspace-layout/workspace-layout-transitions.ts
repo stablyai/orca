@@ -1,7 +1,4 @@
-// Runtime-internal transitions (design 2.3): facts the runtime sees about processes, hosts and
-// owners, applied through the same module as commands. No client sends these. Transitions whose
-// producer arrives later (orphan adoption, legacy worker recovery, client-hosted pages, agent
-// launch verdicts, sleep capture, partition moves) ship with that producer's PR.
+// Apply runtime-only process, host and owner facts through the command model; clients cannot send these transitions.
 
 import { isSameTerminal } from './terminal-owner-invariants'
 import { omitStoredFields } from './stored-record-fields'
@@ -14,7 +11,6 @@ import {
 } from './workspace-layout-command-steps'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
-import { renameEditorFiles, type EditorFileRename } from './workspace-layout-editor-rekey'
 import { applyProcessExit, type ProcessExitFacts } from './workspace-layout-process-exit'
 import { withWorkspace, type ExitedSurface } from './workspace-layout-removal'
 import { removeWorkspaces, renameWorkspace } from './workspace-layout-owner-transitions'
@@ -31,7 +27,6 @@ export type LayoutTransition =
   | { type: 'sshLeaseTerminated'; ptyIds: string[] }
   | { type: 'ownerRemoved'; workspaces: string[] }
   | { type: 'identityRenamed'; from: string; to: string }
-  | { type: 'editorFilesRenamed'; workspace: string; renames: EditorFileRename[] }
 
 function boundElsewhere(
   model: WorkspaceLayoutModel,
@@ -93,8 +88,6 @@ function applyTransition(
       return sshLeaseTerminated(model, transition.ptyIds)
     case 'ownerRemoved':
       return applied(removeWorkspaces(model, transition.workspaces))
-    case 'editorFilesRenamed':
-      return renameEditorFiles(model, transition.workspace, transition.renames)
     case 'identityRenamed': {
       const renamedModel = renameWorkspace(model, transition.from, transition.to)
       return renamedModel ? applied(renamedModel) : refuse('workspace_exists')

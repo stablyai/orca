@@ -19,10 +19,7 @@ describe('getExternalFileChangeRelativePath', () => {
   })
 
   it('treats isDirectory=undefined as a file so delete events still notify', () => {
-    // Why: delete events from the watcher arrive with isDirectory=undefined
-    // because the path no longer exists on disk (design §4.4). Gating on
-    // `isDirectory !== true` ensures the editor is still notified so stale
-    // tab contents get invalidated.
+    // Deleted paths cannot report isDirectory; undefined must still invalidate editor contents.
     expect(
       getExternalFileChangeRelativePath('/repo', '/repo/config/settings.json', undefined)
     ).toBe('config/settings.json')
@@ -57,9 +54,6 @@ describe('getExternalFileChangeRelativePath', () => {
   })
 
   it('rejects sibling worktrees whose path merely shares a prefix', () => {
-    // Why: string-prefix checks without a trailing separator would match
-    // `/repo-other/...` as if it were inside `/repo`, leaking events across
-    // worktrees.
     expect(getExternalFileChangeRelativePath('/repo', '/repo-other/file.ts', false)).toBeNull()
   })
 
@@ -156,13 +150,14 @@ describe('getFileExplorerWatchRuntimeEnvironmentId', () => {
     }
   }
 
-  it('uses the active runtime for legacy unowned active worktrees', () => {
+  // Runtime rows are stamped as they land, so focus is never ownership evidence for an unowned row.
+  it('never routes an unowned worktree through the focused runtime', () => {
     expect(
       getFileExplorerWatchRuntimeEnvironmentId(
         makeState({ activeRuntimeEnvironmentId: 'focused-runtime' }),
         'wt-1'
       )
-    ).toBe('focused-runtime')
+    ).toBeNull()
   })
 
   it('uses the explicit runtime owner when another host is focused', () => {

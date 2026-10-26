@@ -33,12 +33,12 @@ import {
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
-/**
- * A retired master does not fail loudly: the `process` getter answers with the spawn file, which
- * equals the recorded shell and would otherwise read as a real "nothing is running here". Ask the
- * descriptor before the name, because an unreadable PTY is not evidence that its children exited.
- */
-export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChildProcessVerdict> {
+/** Retired masters still report the spawn name; inspect the descriptor first so unreadability cannot prove idle. */
+export async function inspectLocalPtyChildProcesses(
+  id: string,
+  fresh = true,
+  ignoreDetached = false
+): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return 'no-children'
@@ -47,10 +47,16 @@ export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChil
     return 'unverifiable'
   }
   try {
+    if (process.platform === 'win32') {
+      const verdict = await inspectSpawnFileWindowsChildProcesses(
+        proc,
+        ptyShellPath.get(id) ?? '',
+        fresh,
+        ignoreDetached
+      )
+      return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
+    }
     if (ptyProcessNameIsSpawnFile(proc)) {
-      if (process.platform === 'win32') {
-        return inspectSpawnFileWindowsChildProcesses(proc)
-      }
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       return ptyProcesses.get(id) === proc
         ? inspectSpawnFileChildProcessesFromRows(
@@ -76,11 +82,7 @@ export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
   return (await inspectLocalPtyChildProcesses(id)) !== 'no-children'
 }
 
-/**
- * POSIX twin of the Windows job-membership short-circuit below: a pane that already holds a
- * recognized agent re-proves it from the cheap `ps` tier when the subtree fingerprint is
- * unchanged. Panes with no anchor never get here, so start discovery is untouched.
- */
+/** Reprove an anchored POSIX agent from an unchanged cheap-tier fingerprint; unanchored panes still need discovery. */
 async function revalidateCachedPosixAgent(
   proc: { pid: number },
   cachedEntry: {
@@ -118,10 +120,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
   const cachedAgent = cachedEntry?.name ?? null
   let paneMembershipUnavailable = false
   let cachedAgentAliveInJob = false
-  // Why: job membership preserves a live cached agent without the whole-table
-  // scan (incomplete under Windows load). Job, not console: this asks "is
-  // anything besides the shell alive?", which needs no console attachment and
-  // so needs no forked helper (#10857).
+  // Job membership revalidates cached Windows agents without a fragile whole-table scan or console helper (#10857).
   if (
     process.platform === 'win32' &&
     canRevalidateCachedAgentWithoutScan(cachedAgent, fallbackProcess)
@@ -142,14 +141,10 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         return cachedAgent
       }
       if (verdict === 'exited') {
-        // The shell stands alone in a complete, inescapable job list: no
-        // successor is possible, so the identity retires before the scan.
+        // Complete, inescapable job membership proves only the shell remains; retire identity before scanning.
         ptyLastRecognizedForeground.delete(id)
       } else if (verdict === 'anchor-exited' && cachedEntry) {
-        // The recognized process died but another member remains -- a
-        // leftover, or a restarted successor. Keep the name as unanchored,
-        // age-bounded evidence and let this cycle's scan decide: deleting
-        // here made a degraded scan read a mid-restart agent as an exit.
+        // Other members may include a restarted successor; retain age-bounded unanchored identity across a degraded scan.
         ptyLastRecognizedForeground.set(id, { ...cachedEntry, pid: null })
       }
       cachedAgentAliveInJob = verdict === 'recheck'
@@ -186,11 +181,9 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     const resolvedAgent = resolution.processName
       ? recognizeAgentProcessFromCommandLine(resolution.processName)
       : null
-    // A recycled anchor pid keeps job membership truthful but the identity
-    // dead; the scan proving the pid now runs a non-agent settles it.
+    // A scan proving anchor PID reuse overrides otherwise valid job membership.
     const anchorContradicted = resolution.anchorPidForeign === true
-    // Why: incomplete snapshot + unavailable job read isn't exit proof; and an
-    // anchor pid still alive in the job outranks a snapshot that lost its row.
+    // An unavailable job read cannot prove exit; a live job anchor outranks a snapshot missing its row.
     const stableResolution =
       (paneMembershipUnavailable || cachedAgentAliveInJob) &&
       !anchorContradicted &&
@@ -214,8 +207,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         steady
       })
     } else if (stable.lastRecognizedAgent && cachedAgentAliveInJob && !anchorContradicted) {
-      // The anchor pid in the job is proof of life; restamp so the
-      // short-circuit resumes instead of scanning on every call.
+      // Refresh confirmed anchor liveness so the cheap path resumes after this scan.
       const entry = ptyLastRecognizedForeground.get(id)
       if (entry) {
         ptyLastRecognizedForeground.set(id, { ...entry, at: Date.now() })
@@ -233,8 +225,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
   }
 }
 
-/** The fingerprint of the TTL-shared capture the recognition just read; null on Windows or
- *  when the pane is unfenced, which simply means the next read pays for the full scan. */
+/** Null for Windows/unfenced panes, requiring a full scan next time. */
 async function readPosixSteadyState(
   shellPid: number,
   fallbackProcess: string | null

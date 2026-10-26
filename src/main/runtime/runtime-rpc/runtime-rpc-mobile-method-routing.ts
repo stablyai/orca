@@ -1,11 +1,14 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 
-// Why: a relaying Mac sends `execution-host` calls to the host named by the call's target (itself when
-// local) and keeps `paired-desktop` calls. A route is what allowlists a phone method.
+// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  'ui.getJiraQuickFilters',
+  'ui.setJiraQuickFilters',
+  'ui.getJiraSavedFilters',
+  'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
   'agentTeams.prepareLaunch',
@@ -130,6 +133,7 @@ export const EXECUTION_HOST_METHODS = [
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
+  'preflight.refreshAgents',
   'hostedReview.create',
   'hostedReview.createStacked',
   'hostedReview.forBranch',
@@ -140,7 +144,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
+  // Mobile reports takeover out of band, matching desktop renderer signaling.
   'orchestration.workerTerminalUserInput',
   'projectGroup.list',
   'repo.baseRefDefault',
@@ -151,6 +155,12 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
+  'ssh.connect',
+  'ssh.getState',
+  'ssh.listRemovedTargetLabels',
+  'ssh.listTargetSummaries',
+  'ssh.listTargets',
   // A targeted status is the server's own, so a server workspace gates on what that server supports.
   'status.get',
   'session.tabs.activate',

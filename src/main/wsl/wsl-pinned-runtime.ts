@@ -2,16 +2,18 @@ import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
-import { parseGlibcVersion, parseOrcadLinuxLibc } from '../ssh/orcad-deployment-target'
+import { probeLinuxLibc } from '../node-runtime/linux-libc-probe'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
   posixNodeRuntimeExecutable,
-  probeRemoteNodeRuntimeCommand,
-  REMOTE_NODE_RUNTIME_READY
-} from '../ssh/orcad-remote-node-runtime'
+  probeRemoteNodeRuntimeCommand
+} from '../managed-server/install/orcad-remote-node-runtime'
+import {
+  REMOTE_NODE_RUNTIME_READY,
+  assertRemoteNodeRuntimePromoted
+} from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { assertRemoteNodeRuntimePromoted } from '../ssh/orcad-remote-node-runtime-report'
 import { isGlibcBelow, PINNED_NODE_GLIBC_FLOOR } from '../ssh/pinned-runtime-host-target'
 import type { WslSpec } from './wsl-runner'
 
@@ -20,10 +22,7 @@ const DOWNLOAD_TIMEOUT_MS = 180_000
 /** Runs one command in the distro and returns its trimmed stdout; throws on failure. */
 export type WslRuntimeCommand = (spec: WslSpec, timeoutMs?: number) => Promise<string>
 
-/**
- * Orca's pinned Node in the distro's guest store (the one OpenCode's WSL reader uses), installed
- * from the host's archive cache on first use. Never substitutes a user-installed runtime.
- */
+/** Use the shared guest-store pinned Node, installed from host archive cache on first use; never substitute user runtimes. */
 export async function ensureWslPinnedRuntime(
   run: WslRuntimeCommand,
   cacheRoot: string,
@@ -33,15 +32,8 @@ export async function ensureWslPinnedRuntime(
   if (arch !== 'x86_64' && arch !== 'aarch64' && arch !== 'arm64') {
     throw new Error(`Unsupported WSL architecture: ${arch}`)
   }
-  const libcProbe = await run({
-    script:
-      'getconf GNU_LIBC_VERSION 2>/dev/null || ldd --version 2>&1 || ' +
-      'for loader in /lib/ld-musl-*.so.1; do [ ! -e "$loader" ] || { echo musl; break; }; done',
-    loginPath: 'none'
-  })
-  const libc = parseOrcadLinuxLibc(libcProbe)
-  const glibc = libc === 'glibc' ? parseGlibcVersion(libcProbe) : null
-  // Why before any download: the pinned Node cannot load on an older glibc, as SSH hosts refuse.
+  const { libc, glibc } = await probeLinuxLibc((script) => run({ script, loginPath: 'none' }))
+  // Reject unsupported glibc before downloading a pinned Node that cannot load.
   if (glibc && isGlibcBelow(glibc, PINNED_NODE_GLIBC_FLOOR)) {
     throw new Error(
       `This WSL distro's glibc ${glibc.major}.${glibc.minor} is older than ` +
@@ -66,7 +58,7 @@ export async function ensureWslPinnedRuntime(
   const key = `${cacheRoot}:${target}`
   let download = downloads.get(key)
   if (!download) {
-    // Why its own deadline: a joining caller's abort must not cancel another caller's download.
+    // Use an independent download deadline so one joining caller cannot abort everyone's download.
     download = materializeNodeRuntimeArchive(target, cacheRoot, {
       signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
     }).finally(() => downloads.delete(key))

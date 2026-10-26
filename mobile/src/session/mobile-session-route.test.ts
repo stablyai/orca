@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mobileSessionRouteTarget } from './mobile-session-route'
 import {
-  hostStackHostRoute,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
@@ -51,14 +50,18 @@ describe('mobile session route', () => {
       mobileSessionRouteTarget({
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       })
     ).toEqual({
       name: '[hostId]/session/[worktreeId]',
       params: {
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       }
     })
   })
@@ -80,7 +83,7 @@ describe('mobile session route', () => {
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
 
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     harness.setState(mountedHostState('host/one'))

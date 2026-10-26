@@ -3,6 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { getWorkspaceSessionTabActivityIds } from '../../shared/workspace-session-tab-activity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
@@ -16,7 +17,8 @@ import {
   mergeWorktreeSummaryStatus,
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 export type RuntimeWorkingTerminalEvidence = {
   paneKey: string | null
@@ -33,6 +35,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   session: WorkspaceSessionState | null | undefined
   getPaneKey: (leaf: RuntimeLeafRecord) => string
+  paneOf: PtyPaneOf
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
   getSummary: RuntimeWorktreePsSummaryLookup
 }): Map<string, RuntimeWorkingTerminalEvidence[]> {
@@ -64,7 +67,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (
       args.freshPtyLiveness !== null &&
       freshOwner?.connected &&
-      !runtimeWorktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
+      !worktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
     ) {
       continue
     }
@@ -113,15 +116,17 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (args.freshPtyLiveness !== null) {
       owner = { worktreeId: pty.worktreeId, title: owner?.title ?? displayTitle ?? '' }
     }
-    if (!owner && persistedTabId && pty.tabId === persistedTabId) {
+    const recorded = args.paneOf(pty)
+    if (!owner && persistedTabId && recorded.tabId === persistedTabId) {
       owner = { worktreeId: pty.worktreeId, title: displayTitle ?? '' }
     }
-    const pane = parsePaneKey(pty.paneKey ?? '')
+    const pane = parsePaneKey(recorded.paneKey ?? '')
     const hasExplicitOwner =
-      pty.tabId !== null && pane?.tabId === pty.tabId && pane.leafId.length > 0
-    const savedOwner = pty.tabId ? savedTabOwnerById.get(pty.tabId) : undefined
+      recorded.tabId !== null && pane?.tabId === recorded.tabId && pane.leafId.length > 0
+    const savedOwner = recorded.tabId ? savedTabOwnerById.get(recorded.tabId) : undefined
     const hasSavedLayout =
-      pty.tabId !== null && Object.hasOwn(args.session?.terminalLayoutsByTabId ?? {}, pty.tabId)
+      recorded.tabId !== null &&
+      Object.hasOwn(args.session?.terminalLayoutsByTabId ?? {}, recorded.tabId)
     if (!owner && hasExplicitOwner && !hasSavedLayout) {
       owner = {
         worktreeId: savedOwner?.worktreeId ?? pty.worktreeId,
@@ -144,9 +149,9 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
     if (ptyStatus === 'working') {
       addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
-        paneKey: pty.paneKey,
+        paneKey: recorded.paneKey,
         ptyId: pty.ptyId,
-        tabId: pty.tabId ?? persistedTabId ?? null
+        tabId: recorded.tabId ?? persistedTabId ?? null
       })
     }
     mergeWorktreeSummaryStatus(summary, ptyStatus)
@@ -179,6 +184,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   repoById: ReadonlyMap<string, Repo>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
+  paneOf: PtyPaneOf
   /** Non-minting: a listing must not issue handles, only recognise the ones already bound. */
   getTerminalHandlesForPty: (ptyId: string) => readonly string[]
   getSummary: RuntimeWorktreePsSummaryLookup
@@ -212,10 +218,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
         summary.hasHostSidebarActivity = true
       }
     }
-    for (const [worktreeId, tabs] of Object.entries(session.browserTabsByWorktree ?? {})) {
-      if (tabs.length === 0) {
-        continue
-      }
+    for (const worktreeId of getWorkspaceSessionTabActivityIds(session)) {
       const summary = args.getSummary(worktreeId)
       if (summary) {
         summary.hasHostSidebarActivity = true
@@ -242,11 +245,12 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     if (!pty.connected) {
       continue
     }
-    if (pty.tabId) {
-      connectedPtyEvidence.tabIds.add(pty.tabId)
+    const { tabId, paneKey } = args.paneOf(pty)
+    if (tabId) {
+      connectedPtyEvidence.tabIds.add(tabId)
     }
-    if (pty.paneKey) {
-      connectedPtyEvidence.paneKeys.add(pty.paneKey)
+    if (paneKey) {
+      connectedPtyEvidence.paneKeys.add(paneKey)
     }
     for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
       connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)

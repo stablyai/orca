@@ -18,6 +18,7 @@ export function mockBrowserManager(
   worktrees = new Map<string, string>(),
   overrides: Partial<BrowserManager> = {}
 ): BrowserManager {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Bridge tests supply only the BrowserManager methods they exercise.
   return {
     getWebContentsIdByTabId: () => tabs,
     getTabIdForWebContentsId: (webContentsId: number) => {
@@ -30,9 +31,15 @@ export function mockBrowserManager(
     },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    getSessionProfileIdForTab: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
+    beginAgentCommand: () => ({
+      run: (execute: () => Promise<unknown>) => execute(),
+      end: () => {}
+    }),
+    showAgentPointer: async () => {},
     ...overrides
   } as unknown as BrowserManager
 }
@@ -60,6 +67,10 @@ export type MockWebContents = {
   isCrashed: () => boolean
   invalidate: Mock<() => void>
   focus: Mock<() => void>
+  // Offscreen by default; use 'webview' for guest-direct key input.
+  getType: Mock<() => string>
+  sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
+  setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>
   debugger: MockWebContentsDebugger
 }
 
@@ -83,6 +94,9 @@ export function mockWebContents(
     isCrashed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
+    getType: vi.fn(() => 'window'),
+    sendInputEvent: vi.fn(),
+    setIgnoreMenuShortcuts: vi.fn(),
     debugger: {
       isAttached: vi.fn(() => true),
       attach: vi.fn(),
@@ -94,13 +108,11 @@ export function mockWebContents(
   }
 }
 
-// Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
-// inside a try/catch. Override the private method to inject our mock.
+// Dynamic require('electron') bypasses the module mock; override the protected lookup.
 export function overrideBridgeWebContentsLookup(
   bridgePrototype: AgentBrowserBridge,
   webContentsFromIdMock: Mock
 ): void {
-  // Why defineProperty: getWebContents is protected, so a typed assignment is not expressible.
   Object.defineProperty(bridgePrototype, 'getWebContents', {
     configurable: true,
     enumerable: true,
@@ -112,7 +124,7 @@ export function overrideBridgeWebContentsLookup(
   })
 }
 
-// Why: runAgentBrowserRaw listens for the child's exit/close, so execFile fakes must be emitters.
+// Raw-process execution subscribes to the child's exit event.
 export function createFakeAgentBrowserChild<T extends object>(fields: T): EventEmitter & T {
   return Object.assign(new EventEmitter(), fields)
 }

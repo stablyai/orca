@@ -17,6 +17,8 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
+    prependOnceListener: vi.fn(),
+    off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
   BrowserWindow: {
@@ -74,10 +76,12 @@ describe('browserManager', () => {
   it('validates popup URLs before opening externally', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -85,12 +89,17 @@ describe('browserManager', () => {
 
     browserManager.attachGuestPolicies(guest as never)
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
-      url: string
-    }) => { action: 'deny' }
+    const handler: (details: { url: string; postBody?: Electron.PostBody }) => { action: 'deny' } =
+      guestSetWindowOpenHandlerMock.mock.calls[0][0]
 
     expect(handler({ url: 'localhost:3000' })).toEqual({ action: 'deny' })
     expect(handler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
+    expect(
+      handler({
+        url: 'https://example.com/post',
+        postBody: { contentType: 'application/x-www-form-urlencoded', data: [] }
+      })
+    ).toEqual({ action: 'deny' })
 
     expect(shellOpenExternalMock).toHaveBeenCalledTimes(1)
     expect(shellOpenExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
@@ -101,10 +110,12 @@ describe('browserManager', () => {
     const guest = {
       id: 103,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -124,6 +135,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about popup routing.
+    rendererSendMock.mockClear()
 
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
@@ -163,8 +176,7 @@ describe('browserManager', () => {
         webviewTag: false
       }
     })
-    // Why: the custom createWindow is what swaps the chrome-less native child
-    // for Orca's origin-bar window without losing the popup contents.
+    // Custom createWindow preserves popup contents while adding an origin bar.
     expect(typeof response.createWindow).toBe('function')
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
@@ -172,18 +184,17 @@ describe('browserManager', () => {
   })
 
   it('keeps opener-dependent window.open popups in-app for every disposition', () => {
-    // Regression guard for the reverted #8332: gating the allow on
-    // disposition === 'new-window' silently broke featureless window.open()
-    // OAuth flows, whose returned handle must stay live. A named target that
-    // keeps its opener and a blank URL each mark such a flow, so both keep a
-    // real child window no matter which disposition Chromium reports.
+    // OAuth window handles must stay live regardless of the reported disposition.
     const guest = {
       id: 140,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -196,23 +207,35 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+    const handler: (details: {
       url: string
       frameName: string
       features: string
       disposition: string
-    }) => { action: 'allow' | 'deny' }
+      postBody?: Electron.PostBody
+    }) => { action: 'allow' | 'deny' } = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const openerDependentOpens = [
       { url: 'https://sso.example.com/auth', frameName: 'ssoWindow', features: '' },
       { url: 'https://sso.example.com/auth', frameName: 'ssoWindow', features: 'noopener=0' },
-      { url: 'about:blank', frameName: '', features: '' }
+      {
+        url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=test-client&redirect_uri=https%3A%2F%2Fapi.deel.com%2Flogin%2Fgoogle&response_type=token',
+        frameName: '',
+        features: ''
+      },
+      { url: 'about:blank', frameName: '', features: '' },
+      { url: 'about:blank#state', frameName: '', features: '' },
+      {
+        url: 'https://sso.example.com/form',
+        frameName: '',
+        features: '',
+        postBody: { contentType: 'application/x-www-form-urlencoded', data: [] }
+      }
     ]
     for (const disposition of ['foreground-tab', 'background-tab', 'new-window']) {
       for (const open of openerDependentOpens) {
         expect(handler({ ...open, disposition })).toMatchObject({ action: 'allow' })
       }
     }
-    // Chromium reports size/position features as a popup, with or without an opener.
     for (const features of ['width=500,height=600', 'noopener,width=500,height=600']) {
       expect(
         handler({
@@ -232,10 +255,12 @@ describe('browserManager', () => {
     const guest = {
       id: 142,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -307,10 +332,12 @@ describe('browserManager', () => {
     const guest = {
       id: 143,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -337,7 +364,7 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => { action: 'allow' | 'deny' }
-    // Chromium reports these as tabs: noopener and noreferrer are not window features.
+    // Chromium does not treat noopener/noreferrer as window size or position features.
     const openerlessOpens = [
       { frameName: '', features: 'noopener,noreferrer' },
       { frameName: '', features: 'noopener' },
@@ -365,10 +392,12 @@ describe('browserManager', () => {
     const guest = {
       id: 144,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -415,14 +444,14 @@ describe('browserManager', () => {
     }
     expect(routedTabCount()).toBe(clicks)
 
-    // One click cannot be replayed: a loop after it draws on the budget.
+    // Each observed input bypasses the budget once.
     inputEventHandler({}, { type: 'mouseUp' })
     for (let index = 0; index < MAX_PAGE_INITIATED_TABS_PER_WINDOW * 2; index++) {
       open(clicks + index)
     }
     expect(routedTabCount()).toBe(clicks + 1 + MAX_PAGE_INITIATED_TABS_PER_WINDOW)
 
-    // A click spent on a popup window cannot fund a later scripted tab.
+    // Spending activation on a popup cannot fund a later tab.
     vi.advanceTimersByTime(PAGE_INITIATED_TAB_WINDOW_MS)
     inputEventHandler({}, { type: 'mouseUp' })
     expect(
@@ -450,6 +479,7 @@ describe('browserManager', () => {
     const guest = {
       id: 150,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -480,16 +510,17 @@ describe('browserManager', () => {
       disposition: string
     }) => {
       action: 'allow' | 'deny'
-      createWindow?: (options: Record<string, never>) => unknown
+      createWindow?: (options: Record<string, unknown>) => unknown
     }
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
 
-    // A named child popup keeps a real child window; each one used to start with a fresh budget.
+    // Named child popups must share the root opener budget.
     const openNamedChild = (index: number): WindowOpenHandler => {
       const childSetWindowOpenHandlerMock = vi.fn()
       const child = {
         id: 1500 + index,
         isDestroyed: vi.fn(() => false),
+        isCurrentlyAudible: vi.fn(() => false),
         getType: vi.fn(() => 'webview'),
         setBackgroundThrottling: vi.fn(),
         setWindowOpenHandler: childSetWindowOpenHandlerMock,
@@ -511,7 +542,8 @@ describe('browserManager', () => {
         disposition: 'new-window'
       })
       expect(result).toMatchObject({ action: 'allow' })
-      result.createWindow?.({})
+      result.createWindow?.({ webContents: child })
+      openPopupWithOriginBarMock.mock.calls.at(-1)?.[2](child)
       return childSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
     }
 
@@ -545,8 +577,10 @@ describe('browserManager', () => {
     const rendererSendMock = vi.fn()
     const guestOnceMock = vi.fn()
     const guest = {
+      session: { marker: 'synthetic-opener-session' },
       id: 150,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -573,6 +607,7 @@ describe('browserManager', () => {
     })
 
     const popupContents = {
+      session: guest.session,
       id: 151,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'window'),
@@ -590,43 +625,45 @@ describe('browserManager', () => {
       onClosed: popupOnClosedMock
     })
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
-      url: string
-    }) => {
+    const handler: (details: { url: string }) => {
       action: string
       createWindow: (options: Record<string, unknown>) => unknown
-    }
+    } = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
     const preCreatedContents = { id: 152 }
-    const options = { webContents: preCreatedContents, width: 500, height: 600 }
+    const options = {
+      webContents: preCreatedContents,
+      width: 500,
+      height: 600,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+    }
     const returned = response.createWindow(options)
+    openPopupWithOriginBarMock.mock.calls.at(-1)?.[2](popupContents)
 
     expect(openPopupWithOriginBarMock).toHaveBeenCalledWith(
-      options,
-      'https://sso.example.com/auth?code=SECRET'
+      {
+        ...options,
+        webPreferences: { ...options.webPreferences, session: guest.session }
+      },
+      'https://sso.example.com/auth?code=SECRET',
+      expect.any(Function)
     )
     expect(returned).toBe(popupContents)
-    // did-create-window does not fire for createWindow-created children, so
-    // the popup must get guest policies (nav guards, recursive popup handling)
-    // attached directly here.
+    // Custom-created children skip did-create-window, so attach their guest policies directly.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
     expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
     expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
-    // The renderer notice carries only the sanitized origin, never the URL.
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
       origin: 'https://sso.example.com',
       action: 'opened-in-orca'
     })
 
-    // Opener-lifecycle parity: destroying the owning guest closes the popup.
     const destroyedCall = guestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
     expect(destroyedCall).toBeDefined()
     ;(destroyedCall as [string, () => void])[1]()
     expect(popupCloseMock).toHaveBeenCalledTimes(1)
 
-    // Popup windows opened by the popup itself keep the owner context, so the
-    // recursive handler still routes to the owning browser tab.
     const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
       url: string
     }) => { action: string }
@@ -645,10 +682,12 @@ describe('browserManager', () => {
     const guest = {
       id: 106,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -693,10 +732,12 @@ describe('browserManager', () => {
     const guest = {
       id: 105,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -717,10 +758,12 @@ describe('browserManager', () => {
     const guest = {
       id: 104,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock,
       getURL: vi.fn(() => 'https://example.com'),

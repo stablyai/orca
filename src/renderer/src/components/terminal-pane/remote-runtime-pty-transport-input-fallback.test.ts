@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
@@ -7,6 +7,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -48,7 +60,10 @@ describe('createRemoteRuntimePtyTransport', () => {
         return defaultRuntimeCall?.(args)
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const onWriteUnavailable = vi.fn()
+      let undeliveredWhenNotified: boolean | undefined
+      const onWriteUnavailable = vi.fn(() => {
+        undeliveredWhenNotified = transport.hasUndeliveredInput?.()
+      })
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -60,10 +75,12 @@ describe('createRemoteRuntimePtyTransport', () => {
         callbacks: { onWriteUnavailable }
       })
       await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
-      expect(transport.sendInput('x', 'driving')).toBe(true)
+      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
       await vi.advanceTimersByTimeAsync(8)
 
       await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledOnce())
+      // Why: refused one-shot input never enters the journal; the remount must still warn of it.
+      expect(undeliveredWhenNotified).toBe(true)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()

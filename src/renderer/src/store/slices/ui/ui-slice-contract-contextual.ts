@@ -24,7 +24,7 @@ export type UISliceContextual = {
     hostId: ExecutionHostId,
     setupId?: string
   ) => void
-  /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
+  /** One-shot nested Settings accordion deep link; Appearance clears it on consumption. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
     section: NonNullable<UISliceContextual['appearanceAccordionDeepLink']>
@@ -40,6 +40,7 @@ export type UISliceContextual = {
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
+    | 'confirm-sleep-twin'
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'
@@ -52,6 +53,8 @@ export type UISliceContextual = {
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
+    | 'agent-session-history'
+    | 'node-dist-mirror'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -125,4 +128,6 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  claudeDiffPanelNoticeSeen: boolean
+  markClaudeDiffPanelNoticeSeen: () => void
 }

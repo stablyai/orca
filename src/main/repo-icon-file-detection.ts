@@ -2,12 +2,12 @@ import { readFile, stat } from 'node:fs/promises'
 import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
 import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
+import { detectImageFileSignature } from './image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
-// Why: conventional locations only — keep the list short so add-repo stays
-// snappy. Support bounded raster images only.
+// Keep add-repo probes limited to conventional paths.
 const REPO_ICON_FILE_STEMS = [
   'favicon',
   'public/favicon',
@@ -20,9 +20,8 @@ const REPO_ICON_FILE_STEMS = [
   'static/favicon',
   'logo',
   'public/logo',
-  // Why: CLI tools and branded assets often use public/icon.* (issue #7902).
   'public/icon',
-  // Why: Tauri's default bundle icon path (issue #7902).
+  // Tauri bundle icon.
   'src-tauri/icons/icon',
   'app-icon',
   'icon'
@@ -45,50 +44,17 @@ const REPO_ICON_SOURCE_FILE_CANDIDATES = [
   'src/index.html'
 ]
 
-// Why: repo icon detection runs while adding repos; declared-icon probing should
-// not read large app entrypoints just to find a small favicon href.
+// Avoid reading large entrypoints just to find a favicon href.
 const MAX_REPO_ICON_SOURCE_BYTES = 256 * 1024
 
 type DetectedImageFormat = {
   mimeType: 'image/png' | 'image/webp'
 }
 
-function isPngBuffer(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  )
-}
-
-function isWebpBuffer(buffer: Buffer): boolean {
-  // Why: RIFF container with WEBP fourcc — enough to reject non-images without
-  // a full decoder; the sidebar only needs a valid data URL for <img>.
-  return (
-    buffer.length >= 12 &&
-    buffer[0] === 0x52 &&
-    buffer[1] === 0x49 &&
-    buffer[2] === 0x46 &&
-    buffer[3] === 0x46 &&
-    buffer[8] === 0x57 &&
-    buffer[9] === 0x45 &&
-    buffer[10] === 0x42 &&
-    buffer[11] === 0x50
-  )
-}
-
 function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
-  if (isPngBuffer(buffer)) {
-    return { mimeType: 'image/png' }
-  }
-  if (isWebpBuffer(buffer)) {
-    return { mimeType: 'image/webp' }
+  const signature = detectImageFileSignature(buffer)
+  if (signature?.mimeType === 'image/png' || signature?.mimeType === 'image/webp') {
+    return { mimeType: signature.mimeType }
   }
   return null
 }
@@ -126,8 +92,7 @@ async function readLocalImageIcon(
 async function detectConventionalImageIcon(
   readIcon: (relativePath: string) => Promise<RepoIcon | null>
 ): Promise<RepoIcon | null> {
-  // Why: bounded batches keep the expanded candidate list from probing serially (slow on
-  // WSL/network mounts) without flooding the filesystem.
+  // Probe slow WSL/network mounts concurrently without flooding the filesystem.
   for (
     let offset = 0;
     offset < REPO_ICON_FILE_CANDIDATES.length;
@@ -177,21 +142,16 @@ async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> 
             return icon
           }
         } catch {
-          // Try the next href resolution.
+          // Missing or unreadable icon; try the next href.
         }
       }
     } catch {
-      // Try the next source file.
+      // Missing or unreadable source; try the next file.
     }
   }
   return null
 }
 
-/**
- * Takes the resolved host route rather than a `connectionId`, because the incumbent shape spelled
- * "this is local", "this host is unreachable" and "this is a runtime host" all as a falsy id — and
- * only the first of those may read this machine's filesystem.
- */
 export function detectRepoFileIcon(
   repoPath: string,
   route: ExecutionHostFilesystemRoute
@@ -201,7 +161,7 @@ export function detectRepoFileIcon(
       return detectLocalImageIcon(repoPath)
     case 'ssh':
     case 'runtime':
-      // These files live on another host; a same-named local path would answer for another repo.
+      // Remote paths must never resolve to this machine's files.
       return Promise.resolve(null)
   }
 }

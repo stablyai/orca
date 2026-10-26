@@ -6,19 +6,10 @@ import {
 } from '../../shared/gitlab-pipeline-checks'
 import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 
-// ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
-// Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
-// single `status` field that combines lifecycle + outcome. We split it
-// into PRCheckDetail's status + conclusion shape so the renderer can
-// share a row with the GitHub side.
+// Split GitLab's combined job lifecycle/outcome into the common check-row shape.
 
 export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
 export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
-
-// ── MR state mapping ────────────────────────────────────────────────
-// Why: glab returns the API state directly. Apply the draft flag (or a
-// `Draft:` title prefix, which is GitLab's title-based draft convention)
-// so the UI sees a single discriminator.
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
@@ -31,18 +22,12 @@ export function mapMRState(state: string, isDraft?: boolean, title?: string): MR
   if (s === 'locked') {
     return 'locked'
   }
-  // Why: GitLab supports drafts via either a boolean field (newer API) or
-  // a `Draft:` / `WIP:` title prefix (legacy). Either signal counts.
+  // Accept modern draft flags and legacy Draft:/WIP: title prefixes.
   if (isDraft || (title && /^(draft|wip):\s*/i.test(title))) {
     return 'draft'
   }
   return 'opened'
 }
-
-// ── Issue mapping ────────────────────────────────────────────────────
-// glab issue view returns: { iid, title, state, web_url, labels: [{name}] | string[] }
-// `state` is already lowercase 'opened' | 'closed' so the mapping is
-// mostly a normalization shim.
 
 export function mapGitLabIssueInfo(data: {
   iid?: number
@@ -56,8 +41,7 @@ export function mapGitLabIssueInfo(data: {
   description?: string | null
   author?: { username?: string | null; avatar_url?: string | null } | null
 }): GitLabIssueInfo {
-  // Why: glab CLI flips between exposing `iid` and `number` depending on
-  // command + --output flag combination. Accept both.
+  // glab commands vary between iid and number field names.
   const number = data.iid ?? data.number ?? 0
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   return {
@@ -67,17 +51,12 @@ export function mapGitLabIssueInfo(data: {
     url: data.web_url ?? data.url ?? '',
     labels,
     ...(data.updated_at ? { updatedAt: data.updated_at } : {}),
-    // Why: same description / author optional plumbing as mapMRInfo —
-    // list payloads strip these so callers can tell "absent" from "blank".
+    // Preserve absent list metadata separately from known blank detail fields.
     ...(typeof data.description === 'string' ? { description: data.description } : {}),
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
 }
-
-// ── MR info mapping ──────────────────────────────────────────────────
-// Why: parallel to mapPRState's role for GitHub. glab returns iid +
-// web_url + state + draft + sha + has_conflicts.
 
 type GitLabMRRaw = {
   iid?: number
@@ -113,10 +92,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
     headSha: data.sha,
     baseRefName: data.target_branch,
-    // Why: detail-endpoint payloads include `description`; list endpoints
-    // strip it. Pass through what's present rather than coercing missing
-    // values to '' so downstream UIs can distinguish "no body authored"
-    // from "this came from a list and the body is unknown".
+    // Preserve unknown list bodies as absent, distinct from known empty descriptions.
     ...(typeof data.description === 'string' ? { description: data.description } : {}),
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
@@ -127,27 +103,20 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.has_conflicts === true) {
     return 'CONFLICTING'
   }
-  // Why: detailed_merge_status is GitLab's richest signal. Treat
-  // 'mergeable' as the only positive value — every other state
-  // (checking, ci_must_pass, draft_status, etc.) is an unknown from the
-  // user's POV because it may flip without warning.
+  // Only positive mergeable is stable enough to enable merging; pending prerequisites remain unknown.
   if (data.detailed_merge_status === 'mergeable') {
     return 'MERGEABLE'
   }
   if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
     return 'CONFLICTING'
   }
-  // Why: `detailed_merge_status` only exists from GitLab 15.6. Without this fallback an older
-  // instance reports UNKNOWN forever, and the merge UI (which now gates on MERGEABLE) would
-  // permanently show "Checking" with no merge button. Only the positive legacy value is trusted;
-  // `cannot_be_merged` stays UNKNOWN because `has_conflicts` above already owns the conflict case.
+  // GitLab <15.6 supplies only legacy merge_status; trust its positive value while conflicts use has_conflicts.
   if (data.detailed_merge_status === undefined && data.merge_status === 'can_be_merged') {
     return 'MERGEABLE'
   }
   return 'UNKNOWN'
 }
 
-/** Project GitLab detailed_merge_status onto a short reason the merge UI can label. */
 function deriveMergeStateStatus(
   data: GitLabMRRaw,
   mergeable: MRInfo['mergeable']
@@ -165,11 +134,6 @@ function deriveMergeStateStatus(
   return status
 }
 
-// ── Pipeline rollup (parallel to GitHub deriveCheckStatus) ──────────
-// Why: GitLab returns a single pipeline `status` for the head commit; we
-// can also receive an array of jobs and roll them up the same way the
-// GitHub side does. Accept either shape.
-
 export function derivePipelineStatus(
   rollup: { status?: string }[] | { status?: string } | string | null | undefined
 ): CheckStatus {
@@ -182,9 +146,7 @@ export function derivePipelineStatus(
   if (!Array.isArray(rollup)) {
     return classifyPipelineString(rollup.status ?? '')
   }
-  // Why: a job array is just a check list, so route it through the shared classifier instead of
-  // re-deriving the rules here — a local copy drifted (manual-only read green, an unrecognized
-  // status demoted a passing pipeline to neutral).
+  // Share rollup rules so pipeline cards cannot diverge from Checks rows.
   const { state } = summarizeProviderChecks(
     rollup.map((job) => {
       const s = job.status?.toLowerCase() ?? ''
@@ -194,14 +156,9 @@ export function derivePipelineStatus(
       }
     })
   )
-  // Why: CheckStatus has no 'none'; an empty job list carries the same "nothing to report" meaning.
+  // The public status type uses neutral for no check results.
   return state === 'none' ? 'neutral' : state
 }
-
-// ── Raw → GitLabWorkItem mapping ────────────────────────────────────
-// Why: list endpoints return MR / issue records; the picker consumes a
-// unified GitLabWorkItem. Mirrors the GitHub side where MainWorkItem is
-// produced from PR / issue REST + GraphQL responses.
 
 type GitLabMRRawForWorkItem = {
   id?: number
@@ -216,10 +173,7 @@ type GitLabMRRawForWorkItem = {
   target_branch?: string
   author?: { username?: string | null } | null
   labels?: ({ name: string } | string)[]
-  /** Why: source_project_id !== target_project_id signals a fork MR.
-   *  GitLab list endpoints include both — the picker uses this flag the
-   *  same way GitHub's isCrossRepository disables fork-MR start points
-   *  when the workspace flow can't safely resolve the head. */
+  /** Different source/target projects identify fork MRs whose start points may need special routing. */
   source_project_id?: number
   target_project_id?: number
   has_conflicts?: boolean
@@ -234,8 +188,7 @@ export function mapMRToWorkItem(
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
   return {
-    // Why: id needs to be unique across providers in the picker. Prefix
-    // 'gitlab-mr-' so a GitHub PR #5 and a GitLab MR !5 don't collide.
+    // Provider prefix prevents equal GitHub PR and GitLab MR numbers from colliding.
     id: `gitlab-mr-${data.id ?? `${repoId}-${number}`}`,
     type: 'mr',
     number,
@@ -278,8 +231,6 @@ export function mapIssueToWorkItem(
 ): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
-  // Issues only ever resolve to 'opened' or 'closed' (issue state space is
-  // narrower than MRs); coerce defensively without inventing values.
   const state = data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed'
   return {
     id: `gitlab-issue-${data.id ?? `${repoId}-${number}`}`,
@@ -304,18 +255,11 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'failed' || s === 'action_required') {
     return 'failure'
   }
-  // Why: GitLab only reports pipeline-level `manual` when the pipeline is *blocked* on a human
-  // trigger (a manual job with allow_failure: false), so it is outstanding rather than broken or
-  // done. Red overstated it; neutral would drop the cue entirely and paint the worktree card's MR
-  // icon green (worktree-review-helpers.tsx defaults `open` to emerald), which is worse — with
-  // "Pipelines must succeed" on, GitLab rejects this merge.
+  // Pipeline manual means a required human trigger; report pending because merge can still be blocked.
   if (s === 'manual') {
     return 'pending'
   }
-  // Why: `skipped` and `canceled` pipelines stay neutral (the fall-through below) even though the
-  // job rollup calls the same jobs passing/failing. GitLab's own MR widget paints both grey, and
-  // `allow_merge_on_skipped_pipeline` defaults to false, so a skipped pipeline still blocks merge —
-  // flipping either tone is a product decision that belongs in its own change, not this one.
+  // Preserve neutral skipped/canceled pipeline tones, independently of job-rollup classification.
   if (
     s === 'created' ||
     s === 'pending' ||

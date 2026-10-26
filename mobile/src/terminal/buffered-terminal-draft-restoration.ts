@@ -74,7 +74,6 @@ export function remapBufferedTerminalDraft(
   return next
 }
 
-/** Restore a rejected send without overwriting text composed while its RPC was in flight. */
 export function restoreRejectedBufferedTerminalDraft(
   currentDrafts: Record<string, string>,
   originHandle: string,

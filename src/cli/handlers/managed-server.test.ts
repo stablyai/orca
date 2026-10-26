@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/orcad-managed-runtime'
 import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { RuntimeClientError } from '../runtime-client'
-import { MANAGED_SERVER_ACTION_TIMEOUT_MS, MANAGED_SERVER_HANDLERS } from './managed-server'
+import { MANAGED_SERVER_HANDLERS } from './managed-server'
 
 function envelope(result: unknown) {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -76,7 +76,7 @@ describe('managed server CLI verbs', () => {
     expect(confirmed).toHaveBeenCalledWith(
       'managedServer.stop',
       { selector: 'build-box' },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+      { timeoutMs: 1_200_000 }
     )
     expect(log).toHaveBeenCalledWith('Stopped build-box and unlinked it from this machine.')
   })
@@ -97,11 +97,11 @@ describe('managed server CLI verbs', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const confirmed = client(forgotten)
     await run('environment forget', confirmed, [['yes', true]])
-    // Never managedServer.stop: an older desktop would drop a flag and decommission instead.
+    // Older desktops ignore flags; using stop for forget would decommission the server.
     expect(confirmed).toHaveBeenCalledWith(
       'managedServer.forget',
       { selector: 'build-box' },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+      { timeoutMs: 1_200_000 }
     )
     expect(log).toHaveBeenCalledWith(expect.stringContaining('may still be running there'))
   })
@@ -112,7 +112,7 @@ describe('managed server CLI verbs', () => {
       verdict: 'live',
       code: 'orcad_stop_active_environment',
       reason:
-        'This server is the default host for new projects. Choose another one in Advanced before stopping it.'
+        'This server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     }
     await expect(run('environment stop', client(refusal), [['yes', true]])).rejects.toMatchObject({
       code: 'managed_server_refused',
@@ -134,7 +134,7 @@ describe('managed server CLI verbs', () => {
     expect(call).toHaveBeenCalledWith(
       'managedServer.update',
       { selector: 'build-box', force: false },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+      { timeoutMs: 1_200_000 }
     )
 
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
@@ -147,7 +147,7 @@ describe('managed server CLI verbs', () => {
     expect(forced).toHaveBeenCalledWith(
       'managedServer.update',
       { selector: 'build-box', force: true },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+      { timeoutMs: 1_200_000 }
     )
   })
 
@@ -161,55 +161,19 @@ describe('managed server CLI verbs', () => {
 
   it('prints a readable status', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    await run(
-      'environment status',
-      client({
-        activeVersion: '1.0.0',
-        previousVersion: '0.9.0',
-        rollbackAvailable: true,
-        recovery: null,
-        terminals: { liveSessions: null },
-        migration: null,
-        deferredUpdate: null
-      }),
-      []
-    )
-    expect(log.mock.calls[0]?.[0]).toBe(
-      'Active version: 1.0.0\nPrevious version: 0.9.0 (rollback available)\nLive terminals: unverifiable'
-    )
-  })
-
-  it('gives mutating actions a budget past the desktop’s own deadlines, and status the default', async () => {
-    const stopped = {
-      outcome: 'unlinked',
-      verdict: 'exited',
-      environmentId: 'env-1',
-      sshTargetId: 'ssh-1',
-      stoppedVersion: '1.0.0',
-      retirement: null
-    }
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const stop = client(stopped)
-    await run('environment stop', stop, [['yes', true]])
-    expect(stop).toHaveBeenCalledWith(
-      'managedServer.stop',
-      { selector: 'build-box' },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
-    )
-    const status = client({
+    const call = client({
       activeVersion: '1.0.0',
-      previousVersion: null,
-      rollbackAvailable: false,
+      previousVersion: '0.9.0',
+      rollbackAvailable: true,
       recovery: null,
-      terminals: { liveSessions: 0 },
+      terminals: { liveSessions: null },
       migration: null,
       deferredUpdate: null
     })
-    await run('environment status', status, [])
-    expect(status).toHaveBeenCalledWith(
-      'managedServer.status',
-      { selector: 'build-box' },
-      undefined
+    await run('environment status', call, [])
+    expect(call).toHaveBeenCalledWith('managedServer.status', { selector: 'build-box' }, undefined)
+    expect(log.mock.calls[0]?.[0]).toBe(
+      'Active version: 1.0.0\nPrevious version: 0.9.0 (rollback available)\nLive terminals: unverifiable'
     )
   })
 
@@ -229,7 +193,6 @@ describe('managed server CLI verbs', () => {
     })
   })
 
-  // BUG-21: an update restarts the server, so the call's connection closes before it answers.
   it('reports what a restarting update left behind instead of failing on the closed connection', async () => {
     vi.useFakeTimers()
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -309,7 +272,7 @@ describe('managed server CLI verbs', () => {
     expect(confirmed).toHaveBeenCalledWith(
       'managedServer.recover',
       { selector: 'build-box', acceptChangedState: true },
-      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+      { timeoutMs: 1_200_000 }
     )
   })
 })

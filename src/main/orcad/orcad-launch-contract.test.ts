@@ -1,12 +1,8 @@
-/**
- * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
- * code means. Both are part of the supervisor ops contract.
- */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { parseArgs } from './orcad-entry'
+import { parseArgs } from './orcad-command-arguments'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import { ORCAD_EXIT_FAILED, resolveOrcadExitCode } from './orcad-exit-code'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
@@ -51,6 +47,13 @@ describe('parseArgs', () => {
     }
   })
 
+  it('accepts the browser client directory orca serve hands it', () => {
+    expect(parseArgs(['--web-client-root', '/app/out/web'])).toEqual({
+      webClientRoot: '/app/out/web'
+    })
+    expect(() => parseArgs(['--web-client-root'])).toThrow('--web-client-root expects a value')
+  })
+
   it('accepts --bind and leaves it unset when absent', () => {
     expect(parseArgs(['--bind', '0.0.0.0'])).toEqual({ bind: '0.0.0.0' })
     expect(parseArgs([])).toEqual({})
@@ -93,8 +96,6 @@ describe('parseArgs', () => {
 
 describe('resolveOrcadExitCode', () => {
   it('separates a configuration fault from a generic failure', () => {
-    // A supervisor must be able to stop restarting on faults that restarting cannot fix:
-    // a data root owned by someone else, held by another instance, or a bad bind address.
     expect(
       resolveOrcadExitCode(new OrcadInstanceLockError('orcad_instance_lock_held', 'held'))
     ).toBe(ORCAD_EXIT_CONFIGURATION)
@@ -181,7 +182,6 @@ describe('orcad lifecycle cleanup', () => {
 
       await handle.stop()
 
-      // A chat whose agent dies with this stop reads as a restart, not a crash.
       expect(endSeenByCleanup).toBe('quit')
     } finally {
       await rm(directory, { recursive: true, force: true })

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -15,7 +15,6 @@ import { normalizeSearchFileMatchCount } from '../../../../shared/search-match-c
 import type { SearchFileResult, SearchMatch } from '../../../../shared/code-search-types'
 import { translate } from '@/i18n/i18n'
 
-// ─── Toggle Button ────────────────────────────────────────
 export function ToggleButton({
   active,
   onClick,
@@ -30,28 +29,33 @@ export function ToggleButton({
   ariaExpanded?: boolean
 }): React.JSX.Element {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      className={cn(
-        'h-auto w-auto rounded-sm p-0.5 flex-shrink-0',
-        active
-          ? 'bg-accent text-accent-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-      )}
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      aria-expanded={ariaExpanded}
-    >
-      {children}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'h-auto w-auto rounded-sm p-0.5 flex-shrink-0',
+            active
+              ? 'bg-accent text-accent-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+          )}
+          onClick={onClick}
+          aria-label={title}
+          aria-pressed={active}
+          aria-expanded={ariaExpanded}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {title}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
-// ─── File Result ──────────────────────────────────────────
 export function FileResultRow({
   fileResult,
   onToggleCollapse,
@@ -64,12 +68,10 @@ export function FileResultRow({
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
-  const FileIcon = getFileTypeIcon(fileResult.relativePath)
   const matchCount = normalizeSearchFileMatchCount(fileResult)
 
   return (
     <div className="pt-1.5">
-      {/* File header with context menu */}
       <TooltipProvider delayDuration={400}>
         <Tooltip>
           <ContextMenu>
@@ -79,15 +81,18 @@ export function FileResultRow({
                   type="button"
                   variant="ghost"
                   className="h-auto w-full justify-start gap-1 rounded-none px-2 py-0.5 text-left group"
+                  aria-expanded={!collapsed}
                   onClick={onToggleCollapse}
                 >
                   <ChevronRight
                     className={cn(
                       'size-3 flex-shrink-0 text-muted-foreground transition-transform',
-                      !collapsed && 'rotate-90'
+                      !collapsed && 'rotate-90',
+                      'motion-reduce:transition-none'
                     )}
                   />
-                  {React.createElement(FileIcon, {
+                  {React.createElement(FileTypeIcon, {
+                    filePath: fileResult.relativePath,
                     className: 'size-3.5 flex-shrink-0 text-muted-foreground'
                   })}
                   <div className="min-w-0 flex-1 text-xs">
@@ -116,9 +121,7 @@ export function FileResultRow({
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
-          {/* Why: the row label intentionally truncates long parent paths to
-             keep the result list compact, so the tooltip preserves the full
-             relative path for copy/verification without widening the row. */}
+          {/* Preserve the full path in a tooltip because the row label truncates. */}
           <TooltipContent side="top" sideOffset={6}>
             {fileResult.relativePath}
           </TooltipContent>
@@ -128,7 +131,6 @@ export function FileResultRow({
   )
 }
 
-// ─── Match Item ───────────────────────────────────────────
 export function MatchResultRow({
   match,
   relativePath,
@@ -138,17 +140,13 @@ export function MatchResultRow({
   relativePath: string
   onClick: () => void
 }): React.JSX.Element {
-  // Highlight the matched text within the line
   const parts = useMemo(() => {
     const content = match.lineContent
-    const col = (match.displayColumn ?? match.column) - 1 // convert to 0-indexed
+    const col = (match.displayColumn ?? match.column) - 1
     const len = match.displayMatchLength ?? match.matchLength
 
     if (col >= 0 && col + len <= content.length) {
-      // Why: left-truncate the pre-match text so the highlight stays visible at
-      // narrow sidebar widths. Without this, a long `before` pushes the match
-      // off the right edge even with overflow ellipsis. Mirrors VS Code's
-      // search view (see searchTreeModel/match.ts#preview → lcut).
+      // Keep nearby context so long prefixes do not push the match out of view.
       const BEFORE_MAX = 26
       const rawBefore = content.slice(0, col).trimStart()
       const before =
@@ -162,7 +160,6 @@ export function MatchResultRow({
       }
     }
 
-    // Fallback
     return { before: content, match: '', after: '' }
   }, [
     match.lineContent,
@@ -180,22 +177,20 @@ export function MatchResultRow({
           variant="ghost"
           className="min-h-[18px] h-auto w-full justify-start gap-1 rounded-none py-px pr-2 pl-7 text-left"
           onMouseDown={(event) => {
-            // Why: clicking a result should move focus into the opened editor.
-            // If the sidebar button takes focus first, the browser can restore
-            // it after the click and make the initial reveal feel flaky.
+            // Prevent sidebar focus so the browser cannot restore it after the editor opens.
             if (event.button === 0) {
               event.preventDefault()
             }
           }}
           onClick={onClick}
         >
-          <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums mt-px">
+          <span className="text-3xs text-muted-foreground flex-shrink-0 tabular-nums mt-px">
             {match.line}
           </span>
-          <span className="text-xs flex min-w-0 items-baseline whitespace-pre">
-            <span className="text-muted-foreground flex-shrink-0">{parts.before}</span>
+          <span className="text-xs flex min-w-0 flex-1 items-baseline overflow-hidden whitespace-pre">
+            <span className="text-muted-foreground min-w-0 truncate">{parts.before}</span>
             {parts.match && (
-              <span className="bg-amber-500/30 text-foreground rounded-sm flex-shrink-0">
+              <span className="bg-annotation-highlight/30 text-foreground rounded-sm max-w-full flex-shrink-0 truncate">
                 {parts.match}
               </span>
             )}

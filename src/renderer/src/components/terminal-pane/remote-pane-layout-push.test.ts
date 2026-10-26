@@ -1,10 +1,4 @@
-/**
- * Perf regression: layout persists fire on pane-title churn, and every one of
- * them used to push a remote-runtime IPC round trip regardless of whether the
- * host-visible layout had moved. Counting invocations at the mocked IPC boundary
- * pins the before/after: 100 persists with an unchanged layout cost 100 pushes
- * before the dedupe and 1 after.
- */
+/** Repeated title-driven persists with unchanged host-visible layout must dedupe to one remote push; count at the IPC boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
@@ -14,6 +8,8 @@ vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
 }))
 
 const { createRemotePaneLayoutPusher } = await import('./remote-pane-layout-push')
+const { notePendingPaneTitleRename } = await import('@/runtime/pending-pane-title-renames')
+const { toRemoteRuntimePtyId } = await import('../../../../shared/remote-runtime-pty-id')
 
 const PERSISTS = 100
 
@@ -68,27 +64,6 @@ describe('createRemotePaneLayoutPusher', () => {
       chatLeafId: null,
       titlesByLeafId: layout.titlesByLeafId
     })
-  })
-
-  it('adds only the intent field to a gesture push', () => {
-    const layout = makeLayout()
-    createRemotePaneLayoutPusher().push({ worktreeId: 'wt-1', tabId: 'tab-1', layout })
-    createRemotePaneLayoutPusher().push({
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      layout,
-      intent: 'gesture'
-    })
-    const [[unmarked], [marked]] = updateWebRuntimePaneLayout.mock.calls
-    expect(unmarked).not.toHaveProperty('intent')
-    expect(marked).toEqual({ ...unmarked, intent: 'gesture' })
-  })
-
-  it('dedupes a gesture push of an unchanged layout like any other push', () => {
-    const pusher = createRemotePaneLayoutPusher()
-    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout() })
-    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout(), intent: 'gesture' })
-    expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(1)
   })
 
   it('omits titlesByLeafId when the layout carries no titles', () => {
@@ -213,5 +188,49 @@ describe('createRemotePaneLayoutPusher', () => {
       layout: makeLayout()
     })
     expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(2)
+  })
+
+  it('names a renamed pane in its push, and again in the retry after that push fails', async () => {
+    const remote = { 'leaf-a': toRemoteRuntimePtyId('pty-a', 'env-1') }
+    notePendingPaneTitleRename({
+      leafId: 'leaf-a',
+      title: 'renamed',
+      layout: makeLayout({ ptyIdsByLeafId: remote })
+    })
+    const pusher = createRemotePaneLayoutPusher()
+    const renamed = makeLayout({ titlesByLeafId: { 'leaf-a': 'renamed' } })
+
+    updateWebRuntimePaneLayout.mockResolvedValueOnce(false)
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: renamed })
+    await Promise.resolve()
+    await Promise.resolve()
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: renamed })
+    await Promise.resolve()
+    await Promise.resolve()
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout() })
+
+    const sent = updateWebRuntimePaneLayout.mock.calls.map(([args]) => args)
+    expect(sent[0]).toMatchObject({ renamedLeafIds: ['leaf-a'] })
+    expect(sent[1]).toMatchObject({ renamedLeafIds: ['leaf-a'] })
+    expect(sent[2]).not.toHaveProperty('renamedLeafIds')
+  })
+
+  it('sends a rename back to the title the last push carried', () => {
+    const remote = { 'leaf-b': toRemoteRuntimePtyId('pty-b', 'env-1') }
+    const pusher = createRemotePaneLayoutPusher()
+    const layout = makeLayout()
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout })
+    // The host renamed leaf-b meanwhile; the user names it back to what the last push held.
+    notePendingPaneTitleRename({
+      leafId: 'leaf-b',
+      title: null,
+      layout: makeLayout({ ptyIdsByLeafId: remote, titlesByLeafId: { 'leaf-b': 'host' } })
+    })
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout })
+
+    expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(2)
+    expect(updateWebRuntimePaneLayout.mock.calls[1]?.[0]).toMatchObject({
+      renamedLeafIds: ['leaf-b']
+    })
   })
 })

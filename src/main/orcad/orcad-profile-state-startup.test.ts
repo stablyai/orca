@@ -57,6 +57,7 @@ describe('orcad profile-state startup', () => {
     expect(initSshHostKeyStoreFileMock).toHaveBeenCalledWith('/tmp/profile/orca-data.json')
 
     expect(createProfileStateStoreForStartupMock).toHaveBeenCalledWith({
+      userDataPath: '/tmp/user-data',
       dataFile: '/tmp/profile/orca-data.json',
       databaseFile: '/tmp/profile/profile-state.db',
       profileId: 'profile-1',

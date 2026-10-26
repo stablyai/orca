@@ -499,11 +499,7 @@ describe('terminal multiplex RPC', () => {
   })
 
   it('never sends the rejection opcode to an un-negotiated legacy binary stream', async () => {
-    // The mobile client is exactly this subscriber: it declares
-    // terminalBinaryStream and nothing else, and its vendored opcode enum knows
-    // nothing past 12, so an unsolicited 17 is an unknown opcode on that wire.
-    // A capable desktop subscriber shares the runtime and is driven second, so
-    // its frame proves the rejection had already been processed for both.
+    // Legacy mobile knows opcodes only through 12 and must not receive 17. Drive capable desktop second to prove rejection was already processed for both.
     const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
     const runtime = stubRuntime({

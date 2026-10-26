@@ -169,8 +169,7 @@ describe('filterAiVaultSessions', () => {
   })
 
   it('keeps zero-count sessions whose previews prove real turns when hiding empties', () => {
-    // Grok-style: the turn count only comes from metadata that may be absent,
-    // but the preview messages prove the conversation exists and is resumable.
+    // Grok may omit turn-count metadata even when previews prove real resumable conversation.
     const previewOnly: AiVaultSession = {
       ...baseSession,
       id: 'claude:preview-only',
@@ -278,7 +277,8 @@ describe('filterAiVaultSessions', () => {
         [
           {
             ...baseSession,
-            cwd: '/home/ada/repo/app'
+            cwd: '/home/ada/repo/app',
+            filePath: '//wsl$/Ubuntu/home/ada/.claude/projects/session-1.jsonl'
           }
         ],
         {

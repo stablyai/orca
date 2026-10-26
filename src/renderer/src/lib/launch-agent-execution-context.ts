@@ -2,12 +2,12 @@ import { toast } from 'sonner'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
+  refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
   resolveWorktreeExecutionHostPlatform
 } from '@/lib/execution-host-facts'
 import type { useAppStore } from '@/store'
 
-/** Where a new-tab agent launch runs, and the quoting rules that follow from it. */
 export type AgentLaunchExecutionContext = {
   /** `undefined` means rival host rows disagree, which is not evidence of a remote. */
   worktreeSshConnectionId: string | null | undefined
@@ -37,15 +37,13 @@ export function resolveAgentLaunchExecutionContext(
     toast.error(fact.reason)
     return null
   }
-  // Why: a caller's platform only refines a local launch (e.g. WSL); a remote host's own OS wins.
-  const resolvedLaunchPlatform =
-    fact.hostKind === 'local' && args.launchPlatform ? args.launchPlatform : fact.platform
+  const launchHost = refineLocalLaunchPlatform(fact, args.launchPlatform)
   return {
     worktreeSshConnectionId,
-    resolvedLaunchPlatform,
+    resolvedLaunchPlatform: launchHost.platform,
     isRemote,
     queuedShell: resolveExecutionHostAgentStartupShell(
-      { ...fact, platform: resolvedLaunchPlatform },
+      launchHost,
       store.settings?.terminalWindowsShell
     )
   }

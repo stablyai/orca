@@ -48,7 +48,7 @@ export function NewerDaemonHoldBanner({
           variant="outline"
           size="xs"
           disabled={reopening}
-          onClick={() => void reopenHeldTerminals()}
+          onClick={() => void reopenHeldTerminals(paneKey)}
         >
           {reopening ? <LoadingSpinner className="size-3" /> : null}
           {reopening

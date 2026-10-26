@@ -14,9 +14,7 @@ const CAPABILITIES: AgentSessionCapabilities = {
   approvalEnforcement: 'orca'
 }
 
-// A local chat names no paired runtime.
 vi.mock('@/store', () => ({ useAppStore: () => null }))
-// The host's agent list says Grok takes images; one list, as the store keeps it.
 const LISTED = [{ agent: 'grok', capabilities: CAPABILITIES }]
 vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgentsForRuntime: () => LISTED,
@@ -37,12 +35,12 @@ function composerAcceptsImages(reported: boolean | undefined): boolean | undefin
       controller,
       sendThroughLaunch: () => false,
       starting: false,
+      transportEnabled: true,
       worktreeId: undefined,
       optionPickerRequest: null,
       setOptionPickerRequest: () => {},
       onError: () => {},
-      onSubmitted: () => {},
-      queuedMessages: { queueHold: undefined, queueResume: undefined }
+      onSubmitted: () => {}
     })
   )
   return result.current.acceptsImages
@@ -52,7 +50,6 @@ describe('the structured composer image gate', () => {
   it("follows the session's options answer over the host's agent list", () => {
     expect(composerAcceptsImages(false)).toBe(false)
     expect(composerAcceptsImages(true)).toBe(true)
-    // No answer yet, or an older host: the agent list decides.
     expect(composerAcceptsImages(undefined)).toBe(true)
   })
 })

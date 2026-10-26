@@ -1,5 +1,4 @@
-// Compatibility facade for the split runtime test harness.
-// Keep this path stable while setup.spec.ts owns Vitest mock registration.
+// Preserve the split-harness import path; setup.spec.ts owns mock registration.
 import * as setup from './orca-runtime-test-mocks/setup.spec'
 import * as importedValues from './orca-runtime-test-mocks/imported-values.spec'
 
@@ -22,14 +21,12 @@ export const FOLDER_WORKSPACE_INSTANCE_SEPARATOR =
 export const HEADLESS_RUNTIME_WINDOW_ID = importedValues.exportedHEADLESS_RUNTIME_WINDOW_ID
 export const HeadlessEmulator = importedValues.exportedHeadlessEmulator
 export const MAX_OSC_TITLE_CHARS = importedValues.exportedMAX_OSC_TITLE_CHARS
-export const MAX_QUICK_COMMANDS = importedValues.exportedMAX_QUICK_COMMANDS
 export const OrcaRuntimeService = importedValues.exportedOrcaRuntimeService
 export const OrchestrationDb = importedValues.exportedOrchestrationDb
 export const REVIEW_HEAD_FETCH_TIMEOUT_MS = importedValues.exportedREVIEW_HEAD_FETCH_TIMEOUT_MS
 export const RUNTIME_GRAPH_RELOAD_TIMEOUT_MS =
   importedValues.exportedRUNTIME_GRAPH_RELOAD_TIMEOUT_MS
 export const RecentPtyOutputBuffer = importedValues.exportedRecentPtyOutputBuffer
-export const RpcDispatcher = importedValues.exportedRpcDispatcher
 export const RuntimeBrowserCommands = importedValues.exportedRuntimeBrowserCommands
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
@@ -38,7 +35,6 @@ export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_CHUNK_MAX_BYTES
 export const TERMINAL_INPUT_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_MAX_BYTES
 export const TERMINAL_INPUT_TOO_LARGE_ERROR = importedValues.exportedTERMINAL_INPUT_TOO_LARGE_ERROR
-export const TERMINAL_METHODS = importedValues.exportedTERMINAL_METHODS
 export const TUI_AGENT_CONFIG = importedValues.exportedTUI_AGENT_CONFIG
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS =
   importedValues.exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS
@@ -144,8 +140,7 @@ export const ORIGIN_REMOTE_URL = setup.ORIGIN_REMOTE_URL
 export const ORIGIN_HEAD_COMPONENT = setup.ORIGIN_HEAD_COMPONENT
 export const ORIGINAL_PLATFORM = setup.ORIGINAL_PLATFORM
 export const ORIGINAL_PLATFORM_DESCRIPTOR = setup.ORIGINAL_PLATFORM_DESCRIPTOR
-// Re-export mock bindings directly so TypeScript does not have to name Vitest's
-// private inferred spy implementation types in this compatibility facade.
+// Direct re-exports avoid naming Vitest private inferred spy types.
 export {
   removeWorktreeLinkedPathsMock,
   findExistingWorktreeSymlinkPathsMock,
@@ -158,11 +153,8 @@ export const acknowledgeAgentPromptSubmit = setup.acknowledgeAgentPromptSubmit
 export { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 export {
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock
 } from './orca-runtime-test-mocks/setup.spec'
 export const MOCK_GIT_WORKTREES = setup.MOCK_GIT_WORKTREES
@@ -222,6 +214,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -244,7 +237,7 @@ export {
   deleteWorktreeHistoryDirMock
 } from './orca-runtime-test-mocks/setup.spec'
 
-// Preserve the instance-side types for fragments that use these constructors in annotations.
+// Fragments use constructor exports as instance types too.
 export type OrcaRuntimeService = InstanceType<typeof importedValues.exportedOrcaRuntimeService>
 export type EventEmitter = InstanceType<typeof importedValues.exportedEventEmitter>
 export type OrchestrationDb = InstanceType<typeof importedValues.exportedOrchestrationDb>

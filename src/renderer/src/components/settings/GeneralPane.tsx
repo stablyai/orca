@@ -46,12 +46,7 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { getGeneralPaneSearchEntries }
 
-/**
- * The Project Runtime section is Windows-only. Gate on the platform directly:
- * an empty search query makes matchesSettingsSearch return true even for an
- * empty entries array, which would otherwise render an orphaned header (the
- * inner control self-hides) on non-Windows hosts.
- */
+/** Gate Windows directly: empty search matches empty entries and would leave an orphan header after the inner control self-hides. */
 export function shouldShowProjectRuntimeSection(
   wslSupportedPlatform: boolean | undefined,
   searchQuery: string,
@@ -107,7 +102,7 @@ export function GeneralPane({
   const defaultsSupportedRuntimeEnvironmentId = useAppStore(
     (s) => s.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
   )
-  // Why: the store mirrors the default scope host's visibility defaults until Settings picks a host.
+  // Until Settings chooses a host, the store mirrors visibility defaults from the default scope host.
   const activeRuntimeTarget = defaultScopeHost(settings)
   const defaultsSupported =
     activeRuntimeTarget.kind === 'local' ||
@@ -276,10 +271,7 @@ export function GeneralPane({
     matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (
       <GeneralUpdateSettingsSection key="updates" />
     ) : null
-    // Note: the Support section is rendered outside this array so it can own
-    // its own loading placeholder and its own collapsing Separator. Without
-    // that separation, a dangling divider would remain above the collapsed
-    // section.
+    // Render Support separately so its placeholder/divider can collapse without leaving a dangling separator.
   ]
 
   return (

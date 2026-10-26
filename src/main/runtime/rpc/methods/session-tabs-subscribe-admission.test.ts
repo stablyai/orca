@@ -268,9 +268,9 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     const listing = deferred<RuntimeMobileSessionTabsResult>()
     host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
 
-    // Old phones send no request id, so the host sweeps every stream for the worktree.
+    // Non-id selectors still await resolution; newer streams must survive that delay.
     const unsubscribing = host.dispatch(
-      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'id:wt-1' })
+      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'name:workspace' })
     )
     await settle()
     await host.dispatch(request('sub-2', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), second)

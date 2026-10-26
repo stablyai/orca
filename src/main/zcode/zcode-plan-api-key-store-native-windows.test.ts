@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import type * as Store from './zcode-plan-api-key-store'
 
@@ -25,7 +26,18 @@ const state = vi.hoisted((): NativeCase => ({
   nativeOutcomes: [],
   directories: []
 }))
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
+beforeEach(() =>
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('unavailable')
+    },
+    decryptString: () => {
+      throw new Error('unavailable')
+    },
+    describeProtectionGap: () => 'unavailable'
+  })
+)
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof os>()),
   homedir: () => state.home
@@ -42,7 +54,6 @@ vi.mock('node:fs', async (original) => {
     }
   }
 })
-// The real born-restricted create, with faults injected around it.
 vi.mock('../../shared/secure-path-windows-acl', async (original) => {
   const real = await original<typeof WindowsAcl>()
   const files = await vi.importActual<typeof fs>('node:fs')

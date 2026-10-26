@@ -1,5 +1,8 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime-pty-id'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -79,7 +82,7 @@ export function createTerminalPtyBindingActions(
           const { pendingActivationSpawn: _unused, restoredFromSession: _restored, ...rest } = tab
           void _unused
           void _restored
-          // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
+          // Keep legacy single-pane tab.ptyId fallback stable; later split spawns must not redirect remount/close to another PTY.
           const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
           const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null
           const nextPendingActivationSpawn = consumePendingActivationSpawn(
@@ -119,14 +122,13 @@ export function createTerminalPtyBindingActions(
         const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
           ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
           : s.unverifiedPtyLossTabIds
-        // Why: a redeployed relay renumbers from pty-1, so a recorded disownership must not outlive
-        // the id it described once a live PTY answers to that id again.
+        // Redeployed relays reuse IDs; rebinding must retire stale disownership for the old incarnation.
         const nextDisownedPtyIds = omitDisownedPtyIds(
           s.disownedPtyIds,
           replacementPtyId ? [ptyId, replacementPtyId] : [ptyId]
         )
         const hasReplacementPendingRestart = replacementPtyId
-          ? replacementPtyId in s.pendingCodexPaneRestartIds
+          ? replacementPtyId in s.pendingPaneAccountRestarts
           : false
         const hasReplacementRestartNotice = replacementPtyId
           ? replacementPtyId in s.codexRestartNoticeByPtyId
@@ -134,9 +136,9 @@ export function createTerminalPtyBindingActions(
         const hasReplacementMigrationUnsupported = replacementPtyId
           ? replacementPtyId in s.migrationUnsupportedByPtyId
           : false
-        const nextPendingCodexPaneRestartIds = hasReplacementPendingRestart
-          ? { ...s.pendingCodexPaneRestartIds }
-          : s.pendingCodexPaneRestartIds
+        const nextPendingPaneAccountRestarts = hasReplacementPendingRestart
+          ? { ...s.pendingPaneAccountRestarts }
+          : s.pendingPaneAccountRestarts
         const nextCodexRestartNoticeByPtyId = hasReplacementRestartNotice
           ? { ...s.codexRestartNoticeByPtyId }
           : s.codexRestartNoticeByPtyId
@@ -145,8 +147,8 @@ export function createTerminalPtyBindingActions(
           : s.migrationUnsupportedByPtyId
         if (replacementPtyId) {
           if (hasReplacementPendingRestart) {
-            nextPendingCodexPaneRestartIds[ptyId] = true
-            delete nextPendingCodexPaneRestartIds[replacementPtyId]
+            nextPendingPaneAccountRestarts[ptyId] = nextPendingPaneAccountRestarts[replacementPtyId]
+            delete nextPendingPaneAccountRestarts[replacementPtyId]
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
@@ -181,7 +183,7 @@ export function createTerminalPtyBindingActions(
             ? { disownedPtyIds: nextDisownedPtyIds }
             : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId

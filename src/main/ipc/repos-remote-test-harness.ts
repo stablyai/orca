@@ -7,13 +7,13 @@ import type * as RepoModule from '../git/repo'
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type ReposIpcSpy = Mock<(...args: never[]) => unknown>
 
-/** Spy for git invocations whose recorded calls suites destructure positionally. */
 export type ReposGitArgvSpy = Mock<(argv: string[], cwd?: string, options?: unknown) => unknown>
 
 export type ReposIpcMocks = {
   handleMock: ReposIpcSpy
   mockStore: Record<
     | 'getRepos'
+    | 'getAllWorktreeMeta'
     | 'addRepo'
     | 'removeProjectForHost'
     | 'getRepo'
@@ -29,7 +29,7 @@ export type ReposIpcMocks = {
     | 'getSshTargets',
     ReposIpcSpy
   > & {
-    updateRepo: Mock<(repoId: string, updates: Record<string, unknown>) => unknown>
+    updateRepo: Mock<(target: { id: string }, updates: Record<string, unknown>) => unknown>
   }
   gitSpawnMock: ReposIpcSpy
   gitSpawnAfterWindowsEnvironmentReadyMock: ReposIpcSpy
@@ -44,6 +44,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
     handleMock: vi.fn(),
     mockStore: {
       getRepos: vi.fn().mockReturnValue([]),
+      getAllWorktreeMeta: vi.fn().mockReturnValue({}),
       addRepo: vi.fn(),
       removeProjectForHost: vi.fn(),
       getRepo: vi.fn(),
@@ -78,13 +79,12 @@ export function electronModuleMock(mocks: ReposIpcMocks): Record<string, unknown
   }
 }
 
-// Why: use real pure helpers; stub only what spawns git or touches the filesystem.
+// Preserve pure Git helpers; mock process and filesystem boundaries.
 export function gitRepoModuleMock(actual: typeof RepoModule): Record<string, unknown> {
   const isGitRepo = vi.fn().mockReturnValue(true)
   const getGitRepoRoot = vi.fn((path: string) => path)
   return {
     ...actual,
-    // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo,
     isGitRepoAsync: isGitRepo,
     getGitRepoRoot,
@@ -101,7 +101,7 @@ export function gitRepoModuleMock(actual: typeof RepoModule): Record<string, unk
   }
 }
 
-// Why: keep the real env builders so the clone regression test (#7652) asserts real markers, not a mock echoing itself.
+// Keep real environment builders so clone tests verify actual credential-prompt guards.
 export function gitRunnerModuleMock(
   mocks: ReposIpcMocks,
   actual: typeof GitRunner
@@ -136,7 +136,6 @@ export type RepoHandlerHarness = {
   captureHandlers: (handleMock: ReposIpcSpy) => void
 }
 
-/** Captures every `ipcMain.handle` registration so tests can invoke handlers directly. */
 export function createRepoHandlerHarness(): RepoHandlerHarness {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockWindow = {
@@ -153,7 +152,6 @@ export function createRepoHandlerHarness(): RepoHandlerHarness {
   return { handlers, mockWindow, captureHandlers }
 }
 
-/** Shared reset for the nested project-group scan/import handler suites. */
 export function resetProjectGroupMocks(
   mocks: ReposIpcMocks,
   gitRepo: {
@@ -181,7 +179,6 @@ export function resetProjectGroupMocks(
   mocks.prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 }
 
-/** Shared reset for the local `repos:add` / `repos:clone` handler suites. */
 export function resetLocalRepoMocks(mocks: ReposIpcMocks): void {
   mocks.mockStore.getRepos.mockReset().mockReturnValue([])
   mocks.mockStore.addRepo.mockReset()

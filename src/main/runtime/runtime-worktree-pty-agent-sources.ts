@@ -6,20 +6,42 @@ import {
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
   tabIds: ReadonlySet<string>
   paneKeys: ReadonlySet<string>
-  /** The connected PTY behind each issued terminal handle. A status row names a pane and the
-   *  handle it was observed under, never a process, so this is where it rejoins its terminal —
-   *  and it is the only rescue left for a row whose pane binding was cleared under it. */
+  /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
+}
+
+/** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
+function publishedStructuredChildren(
+  entry: AgentStatusIpcPayload,
+  read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
+) {
+  const prefix = structuredAgentSessionTabId('')
+  const tabId = entry.tabId
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId?.startsWith(prefix)) {
+    return undefined
+  }
+  const sessionId = tabId.slice(prefix.length)
+  if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
+    return undefined
+  }
+  const summary = read(sessionId)
+  return summary?.workspaceId === entry.worktreeId ? (summary?.children ?? []) : undefined
 }
 
 /** Admit hook-server rows using their execution-host evidence. */
 export function collectRuntimeWorktreePtyAgentSources(args: {
   hookSnapshots: readonly AgentStatusIpcPayload[]
+  readStructuredSummary?: (sessionId: string) => AgentSessionStatusSummary | undefined
   mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
   connectedPtyEvidence: ConnectedPtyEvidence
 }): RuntimeWorktreeAgentSource[] {
@@ -32,6 +54,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
+    const children = publishedStructuredChildren(entry, args.readStructuredSummary)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
       ptyId: entry.terminalHandle
@@ -53,7 +76,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
-      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
+      ...(children !== undefined ? { children } : {}),
+      ...(entry.subagents !== undefined ? { subagents: entry.subagents } : {}),
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+      ...(entry.programStatus ? { programStatus: entry.programStatus } : {})
     })
   }
   const sources: RuntimeWorktreeAgentSource[] = []
@@ -63,8 +89,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
-    // Why a structured row skips the connected-process gate: it has no PTY, and the host that
-    // holds the session drops the row itself on close, so its presence is the liveness evidence.
+    // Structured rows have no PTY; their host removes them on close, so roster membership proves liveness.
     if (
       source.structuredHost === undefined &&
       tabId !== undefined &&

@@ -1,9 +1,6 @@
-/**
- * A server-hosted browser tab for a folder workspace (#21353). Only the client-hosted branch used
- * the folder-aware resolver, so `id:folder:…` failed with selector_not_found on the server path.
- */
+// #21353: server-hosted tabs must resolve folder selectors too.
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 
 vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
@@ -40,7 +37,7 @@ function createHost(overrides: Record<string, unknown>): RuntimeBrowserCommandHo
 
 describe('browser.tabCreate on a folder workspace', () => {
   it('creates a server-hosted page for the folder workspace', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const createTab = vi.fn(async () => ({ browserPageId: 'page-folder' }))
     const host = createHost({
       getOffscreenBrowserBackend: vi.fn(() => ({ createTab }))

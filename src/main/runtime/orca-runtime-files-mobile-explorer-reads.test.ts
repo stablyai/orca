@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type * as FileSystem from 'node:fs/promises'
@@ -20,7 +21,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -124,6 +125,18 @@ describe('RuntimeFileCommands', () => {
       relativePath: 'docs/readme.md',
       kind: 'markdown',
       opened: true
+    })
+  })
+
+  it('passes file positioning to the renderer with the resolved owner', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/a.ts')
+    statMock.mockResolvedValue({ isDirectory: () => false })
+    await commands.openMobileFile('id:wt-1', 'a.ts', 'caller', { line: 12, column: 5 })
+    expect(openFile).toHaveBeenCalledWith('wt-1', '/repo/a.ts', 'a.ts', null, 'caller', {
+      line: 12,
+      column: 5
     })
   })
 
@@ -290,7 +303,7 @@ describe('RuntimeFileCommands', () => {
       { name: 'linked-docs', isDirectory: false, isSymlink: true },
       { name: 'README.md', isDirectory: false, isSymlink: false }
     ])
-    expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
+    expect(statMock).not.toHaveBeenCalledWith(join('/repo', 'linked-docs'))
   })
   it.each([
     { setting: true, override: undefined, expected: true },
@@ -310,7 +323,7 @@ describe('RuntimeFileCommands', () => {
       ).resolves.toEqual([{ name: 'linked-docs', isDirectory: expected, isSymlink: true }])
       expect(store.getSettings).toHaveBeenCalledTimes(override === undefined ? 1 : 0)
       if (expected) {
-        expect(statMock).toHaveBeenCalledWith('/repo/linked-docs')
+        expect(statMock).toHaveBeenCalledWith(join('/repo', 'linked-docs'))
       } else {
         expect(statMock).not.toHaveBeenCalled()
       }

@@ -1,17 +1,4 @@
-/**
- * One-paste typing-latency self-diagnostic:
- *
- *   window.__orcaTypingDiagnostic.start()   // then type normally for ~20s
- *   window.__orcaTypingDiagnostic.report()  // logs + returns a JSON-safe object
- *   window.__orcaTypingDiagnostic.stop()
- *
- * Why: keystroke-echo lag reproduces on one user's machine only, so the
- * measurement has to run THERE. The census answers what a user cannot: agent-row
- * scale, store listener count, suspect settings, and which agent/screen mode the
- * focused pane is in.
- *
- * Nothing attaches to the keystroke path until start(); stop() detaches all of it.
- */
+/** Run window.__orcaTypingDiagnostic.start(), type ~20s, report(), then stop() on the affected machine. Census links echo lag to rows/listeners/settings/focused agent; input instrumentation exists only between start/stop. */
 import {
   countMountedAgentRows,
   readFocusedPaneCensus,

@@ -70,6 +70,7 @@ function buildMockStoreState(): Record<string, unknown> {
   return {
     agentActivityDisplayMode: mockAgentActivityDisplayMode,
     acknowledgedAgentsByPaneKey: {},
+    retainedAgentsByPaneKey: {},
     cacheTimerByKey: {},
     dropAgentStatus: vi.fn(),
     dismissRetainedAgent: vi.fn(),
@@ -135,7 +136,7 @@ vi.mock('../terminal-pane/stale-agent-row', () => ({
   dismissStaleAgentRowByKey: staleAgentRowMocks.dismissStaleAgentRowByKey
 }))
 
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: structuredActivationMocks.activateStructuredAgentSessionTab
 }))
 
@@ -273,8 +274,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: activation must use the post-reveal store snapshot, matching tab
-    // hydration that arrives while a background worker is being opened.
+    // Model tab hydration during reveal; activation must read the post-reveal store.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
     })
@@ -311,9 +311,7 @@ describe('WorktreeCardAgents activation', () => {
     const actualActivation = await vi.importActual<typeof ActivateTabAndFocusPaneModule>(
       '@/lib/activate-tab-and-focus-pane'
     )
-    // Why: keep the component import mocked for call assertions, but delegate
-    // this repro to the real helper so it fails if the terminal-surface fix
-    // regresses.
+    // Delegate to the real activation helper while retaining the mock’s call assertions.
     activationMocks.activateTabAndFocusPane.mockImplementation(
       actualActivation.activateTabAndFocusPane
     )
@@ -373,8 +371,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: activation may create/select a different terminal before the
-    // automation worker hydrates; the row must only pane-focus its exact tab.
+    // Reveal may activate a fallback before worker hydration; focus only the worker’s exact tab.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: fallbackTabId }] }
       mockSetActiveTab(fallbackTabId)
@@ -483,8 +480,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: compact rows share the same activation contract as full rows, so
-    // this keeps the test pinned to reveal-time tab hydration.
+    // Compact rows must also use tabs hydrated during reveal.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
     })

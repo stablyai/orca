@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/settings-search'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
 export type SettingsNavInstallStatus =
@@ -75,8 +76,22 @@ export type SettingsNavigationTarget = {
   pane: SettingsNavTarget
   repoId: string | null
   hostId?: ExecutionHostId
+  /** Host to select in the page-level Host picker; the project-host `hostId` does not move it. */
+  hostScope?: RuntimeClientTarget
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
+}
+
+function isRuntimeClientTarget(value: unknown): value is RuntimeClientTarget {
+  if (typeof value !== 'object' || value === null || !('kind' in value)) {
+    return false
+  }
+  return (
+    value.kind === 'local' ||
+    (value.kind === 'environment' &&
+      'environmentId' in value &&
+      typeof value.environmentId === 'string')
+  )
 }
 
 export function isSettingsNavigationTarget(value: unknown): value is SettingsNavigationTarget {
@@ -90,6 +105,7 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
     (typeof target.repoId === 'string' || target.repoId === null) &&
     (target.hostId === undefined ||
       (typeof target.hostId === 'string' && parseExecutionHostId(target.hostId) !== null)) &&
+    (target.hostScope === undefined || isRuntimeClientTarget(target.hostScope)) &&
     (target.sectionId === undefined || typeof target.sectionId === 'string') &&
     (target.intent === undefined ||
       (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))

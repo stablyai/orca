@@ -8,14 +8,7 @@ import {
   hostViewSettingsSchema
 } from './host-screen-reply-schema'
 
-// What the host screen reads to label its rows and to mirror the desktop's workspace view store.
-// Every read here is decorative: a refusal leaves the screen on what it already has and the next
-// refresh retries, so all of them skip rather than throw.
-//
-// A skip's reader runs only on a reply the policy already admitted, so an unreadable one throws
-// rather than skipping. Both readers that project a list are inside the metadata refresh's own
-// try/catch, which already treats a failed refresh as "retry on the next one"; the four writes read
-// no reply body at all. host-screen-reply-schema.ts says which members each screen actually reads.
+// Decorative reads skip refusals and retry on refresh; malformed accepted replies throw into the refresh/settings catches. Writes read no body.
 
 export const hostRepoCatalogRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -27,7 +20,7 @@ export const hostRepoCatalogRead = bindDeferredRpcOperation(
   })
 )
 
-/** Row labels for a catalog that spans hosts. Absent on a host that predates the method. */
+// Older hosts may lack the cross-host catalog method.
 export const hostSshTargetSummariesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ssh.host-target-summaries-or-skip',
@@ -48,12 +41,7 @@ export const hostPlatformRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The desktop's shared workspace view settings, a third family on ui.get.
- *
- * It keeps the Tasks screen's property-read throw on a null result — the screen's own try/catch is
- * what that throw has always landed in — where the New Workspace drawer's reader degrades instead.
- */
+// Keep null ui.get results throwing into the host screen’s catch; New Workspace deliberately uses a different, degrading reader.
 export const hostViewSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ui.host-view-settings-or-skip',
@@ -64,7 +52,7 @@ export const hostViewSettingsRead = bindDeferredRpcOperation(
   })
 )
 
-/** Patching the same store. Best-effort: the local state already moved, and no reply is read. */
+// Best-effort: local state already moved and no reply body is read.
 export const hostViewSettingsWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ui.set-host-view-settings-or-skip',
@@ -75,13 +63,17 @@ export const hostViewSettingsWrite = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The host list's three row mutations.
- *
- * All three skip on refusal, which is not the policy `worktree.set-review-link` uses on the same
- * method in source-control: a review link throws so the composer can report it, where a pin write
- * is optimistic and its `.catch` already swallowed everything. Two policies, both named.
- */
+export const hostCardLayoutWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.update-card-layout-or-skip',
+    method: 'settings.update',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('card-layout-written', hostScreenUnreadReplySchema)
+  })
+)
+
+// Optimistic row writes skip refusals; source-control’s review-link write uses the same method but throws so the composer can report failure.
 export const worktreePinWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.set-pinned-or-skip',
@@ -92,7 +84,6 @@ export const worktreePinWrite = bindDeferredRpcOperation(
   })
 )
 
-/** Sleeping a row. Fire and forget: the row shows slept at once, and nothing reads the reply. */
 export const worktreeSleep = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.sleep-or-skip',
@@ -103,7 +94,7 @@ export const worktreeSleep = bindDeferredRpcOperation(
   })
 )
 
-/** Deleting a row. Only acceptance is read: a refusal is what puts the row back. */
+// Deletion reads acceptance only; refusal restores the row.
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.remove-or-skip',
@@ -114,14 +105,7 @@ export const worktreeRemove = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Telling the host which workspace the phone opened. Best-effort; navigation does not wait.
- *
- * Two readers. The host list sends it and never looks, and the session route's startup effect reads
- * the skip verdict for one thing only: an accepted reply saying the host is headless is what raises
- * the "open Orca on the host" toast. A refusal and a dropped reply both mean "no advice", which is
- * what the skip already says.
- */
+// Navigation never waits for activation. The host list ignores its reply; session startup inspects accepted headless replies for advice and treats refusal as no advice.
 export const worktreeActivate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.activate-or-skip',

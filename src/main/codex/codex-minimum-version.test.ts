@@ -1,22 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { codexCliInstallation } from '../../shared/codex-cli-installation'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { readWholeAgentSessionFailureFact } from '../../shared/agent-session-failure'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import { readCodexCliInstallation } from '../preflight/codex-cli-installation'
+import type { AgentCliVersionReader } from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   failedAcquisitionRefusal,
   failedAcquisitionSettlement
 } from '../native-chat/agent-session-wire/structured-agent-session-failed-create-refusal'
 import { structuredAgentSessionStartFailure } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import {
-  CodexCliInstallationError,
-  requireSupportedCodexCli,
-  withSupportedCodexCli
-} from './codex-cli-installation-error'
+import { requireSupportedCodexCli, withSupportedCodexCli } from './codex-cli-installation-error'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
@@ -25,10 +21,10 @@ import { resolveProviderChildEnv } from '../provider-process/provider-process-la
 import { identityFor } from './codex-structured-session-adapter-fixture'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 
-vi.mock('../preflight/codex-cli-installation', () => ({ readCodexCliInstallation: vi.fn() }))
+const readVersion = vi.fn<AgentCliVersionReader>()
 beforeEach(() => {
-  vi.mocked(readCodexCliInstallation).mockReset()
-  vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.136.0'))
+  readVersion.mockReset()
+  readVersion.mockResolvedValue({ version: '0.136.0' })
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -45,11 +41,12 @@ describe('Codex structured launch version admission', () => {
   it.each(['0.100.0', '0.135.0'])(
     'refuses %s with concise repair copy and both version facts',
     async (version) => {
-      vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, version))
-      const caught = await requireSupportedCodexCli({ program: '/execution-host/codex' }).catch(
-        (error: unknown) => error
-      )
-      expect(caught).toBeInstanceOf(CodexCliInstallationError)
+      readVersion.mockResolvedValue({ version })
+      const caught = await requireSupportedCodexCli(
+        { program: '/execution-host/codex' },
+        readVersion
+      ).catch((error: unknown) => error)
+      expect(caught).toBeInstanceOf(AgentCliInstallationError)
       const wording = { record: record(), newSession: true }
       const result = failedAcquisitionRefusal(caught, wording)
       expect(result?.refusal.message).toBe(
@@ -71,14 +68,16 @@ describe('Codex structured launch version admission', () => {
   )
 
   it('leaves a missing Codex to the existing spawn refusal', async () => {
-    vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(false, null))
-    await expect(requireSupportedCodexCli({ program: 'codex' })).resolves.toBeUndefined()
+    readVersion.mockResolvedValue({ version: null, started: false })
+    await expect(
+      requireSupportedCodexCli({ program: 'codex' }, readVersion)
+    ).resolves.toBeUndefined()
   })
 
   it('reports Windows ENOENT through the existing not-found failure with one explanation', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(false, null))
-    await requireSupportedCodexCli({ program: 'codex.exe' })
+    readVersion.mockResolvedValue({ version: null, started: false })
+    await requireSupportedCodexCli({ program: 'codex.exe' }, readVersion)
     const child = createFakePipedChild()
     Object.assign(child, { pid: undefined })
     const opening = openCodexAppServerConnection(
@@ -102,9 +101,11 @@ describe('Codex structured launch version admission', () => {
   })
 
   it('allows an unknown version with a log line', async () => {
-    vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, null))
+    readVersion.mockResolvedValue({ version: null })
     const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await expect(requireSupportedCodexCli({ program: '/host/codex' })).resolves.toBeUndefined()
+    await expect(
+      requireSupportedCodexCli({ program: '/host/codex' }, readVersion)
+    ).resolves.toBeUndefined()
     expect(log).toHaveBeenCalledWith(expect.stringContaining('allowing structured chat'))
     log.mockRestore()
   })
@@ -130,27 +131,27 @@ describe('Codex structured launch version admission', () => {
           resolveCommand: () => '/host/bin/codex',
           resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => '/folder',
-          resolveRollout: async () => null
-        })
+          resolveWorkspacePath: async () => '/folder'
+        }),
+        readVersion
       )
-      vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.135.0'))
+      readVersion.mockResolvedValue({ version: '0.135.0' })
       await expect(
         resolve({ identity: identityFor(value.sessionId), spawnToken: TEST_SPAWN_TOKEN })
       ).rejects.toThrow('0.135.0')
-      const probe = vi.mocked(readCodexCliInstallation).mock.calls.at(-1)?.[0]
+      const probe = readVersion.mock.calls.at(-1)?.[0]
       expect(probe?.program).toBe('/host/bin/codex')
       expect(probe?.cwd).toBe('/folder')
       expect(probe?.env?.PATH).toContain('/host/bin')
       expect(probe?.env?.HOME).toBe('/host/home')
       expect(probe?.env?.CODEX_HOME).toBe('/account')
-      vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.136.0'))
+      readVersion.mockResolvedValue({ version: '0.136.0' })
       const launch = await resolve({
         identity: identityFor(value.sessionId),
         spawnToken: TEST_SPAWN_TOKEN
       })
       expect(launch).toMatchObject({ command: '/host/bin/codex', args: ['app-server'] })
-      expect(vi.mocked(readCodexCliInstallation).mock.calls.at(-1)?.[0]).toEqual({
+      expect(readVersion.mock.calls.at(-1)?.[0]).toEqual({
         program: launch.command,
         cwd: launch.cwd,
         env: resolveProviderChildEnv(launch, process.env)
@@ -173,18 +174,18 @@ describe('Codex structured launch version admission', () => {
           }
         ]
       }
-      vi.mocked(readCodexCliInstallation).mockImplementation(async (input) =>
-        codexCliInstallation(true, input.cwd === '/workspace' ? '0.136.0' : '0.135.0')
-      )
+      readVersion.mockImplementation(async (input) => ({
+        version: input.cwd === '/workspace' ? '0.136.0' : '0.135.0'
+      }))
       const resolve = withSupportedCodexCli(
         createCodexStructuredLaunchResolver({
           store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
           resolveCommand: () => '/host/project-aware-codex',
           resolveEnvironment: async () => ({ PATH: '/host/bin' }),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => '/workspace',
-          resolveRollout: async () => null
-        })
+          resolveWorkspacePath: async () => '/workspace'
+        }),
+        readVersion
       )
       expect(
         (await resolve({ identity: identityFor(value.sessionId), spawnToken: TEST_SPAWN_TOKEN }))
@@ -196,7 +197,6 @@ describe('Codex structured launch version admission', () => {
   it.each(['posix', 'powershell', 'cmd'] as const)(
     'leaves terminal Codex launch unchanged in %s',
     (shell) => {
-      vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.135.0'))
       expect(
         resolveAgentLaunchCommand({
           agent: 'codex',
@@ -209,7 +209,6 @@ describe('Codex structured launch version admission', () => {
         ok: true,
         command: shell === 'cmd' ? 'codex "--model" "chosen"' : "codex '--model' 'chosen'"
       })
-      expect(readCodexCliInstallation).not.toHaveBeenCalled()
     }
   )
 })

@@ -8,15 +8,11 @@ import {
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
 export type ClaudeCodeProcessSpawn = {
-  /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
+  /** SDK spawn hook; Orca retains process ownership. */
   spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
-  /** The retained child, so Orca keeps its own tree-kill and exit-proof ladder. Null until the SDK spawns. */
   readonly child: PipedChildProcess | null
   readonly managed: ManagedProviderProcess | null
-  /**
-   * Ownership proof: the durable lease adjudicates on this pid plus start time plus the spawn
-   * token. On POSIX it is the provider supervisor's, which outlives Claude by construction.
-   */
+  /** Supervisor pid on POSIX; lease ownership also requires start time and spawn token. */
   readonly pid: number | undefined
   /** The spawn spec's verdict, so the close ladder never re-decides it. False until the SDK spawns. */
   readonly supervised: boolean
@@ -32,20 +28,11 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
   return next
 }
 
-/**
- * Orca supplies the Claude Code child rather than letting the SDK spawn it.
- *
- * Two independent reasons: the SDK's `SpawnedProcess` has no pid, and Orca's
- * spawner is the only path that encodes `.cmd` arguments safely on Windows.
- *
- * On POSIX Claude runs under the provider supervisor, so an Orca that dies stops
- * it instead of leaving it to finish its turn, tools and edits included, with
- * nobody watching. Windows has no supervisor and spawns Claude directly.
- */
+// Orca owns the child for PID-based exit proof and Windows .cmd quoting.
+// POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
-  platform: NodeJS.Platform = process.platform,
-  onOutput?: () => void
+  platform: NodeJS.Platform = process.platform
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -63,8 +50,7 @@ export function createClaudeCodeProcessSpawn(
           inheritedEnv: definedEnv(options.env),
           site: 'claude-stream-json-teardown',
           policy: (supervised) => claudeChildClosePolicy(supervised, platform),
-          acceptClose: claudeChildCloseProven,
-          ...(onOutput ? { onOutput } : {})
+          acceptClose: claudeChildCloseProven
         }
       )
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.

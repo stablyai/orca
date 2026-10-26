@@ -75,6 +75,7 @@ function store(
 ): AgentLaunchRouteStore {
   const state = {
     settings: { ...SETTINGS, ...overrides.settings },
+    localDetectedAgentIdsByContext: { host: [] },
     runtimeStatusByEnvironmentId: new Map([['env-1', pairedStatus(overrides.runtimeId ?? 'rt-1')]]),
     worktreesByRepo: {},
     folderWorkspaces: []
@@ -93,7 +94,7 @@ beforeEach(() => {
 })
 
 describe('structured launch of a host-registered agent', () => {
-  it('opens a chat for an agent the local host listed', async () => {
+  it('opens an unchosen chat with empty native installation inventory', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
 
     expect(routeFor(store(), 'grok')).toBe('structured-native-chat')
@@ -104,7 +105,6 @@ describe('structured launch of a host-registered agent', () => {
     mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue(STRUCTURED)
 
     expect(routeFor(store(), 'grok')).not.toBe('structured-native-chat')
-    // The agents every build ships stay offered there.
     expect(routeFor(store(), 'claude')).toBe('structured-native-chat')
   })
 
@@ -141,7 +141,6 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
   const LISTS_OPENCODE = {
     agents: [...LISTS_GROK.agents, { agent: 'opencode', capabilities: {} }]
   }
-  // The rig's settings: a private binary named twice, which must not decide the surface.
   const withOverrides = (): AgentLaunchRouteStore =>
     store({
       settings: {
@@ -169,14 +168,12 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     await loadHostStructuredAgents('local', REGISTERED, null)
     mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
 
-    // What run 5 saw: the terminal-backed "OpenCode" chat, and no version check on the host.
     expect(routeFor(withOverrides(), 'opencode')).toBe('terminal-tui')
     expect(warn).toHaveBeenCalledWith(
       '[agent-launch-route] opencode opens terminal-tui: agent-without-structured-session ' +
         '(host local, host agents not learned, host capabilities known)'
     )
     await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
-    // The next launch reads the list the re-ask learned.
     await vi.waitFor(() =>
       expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
     )

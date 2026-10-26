@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: { invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(null, ...args) }
 }))
-vi.mock('./ssh', () => ({
+vi.mock('./ssh/ssh', () => ({
   requestActiveSshSessionSearch: sshSearch,
   getActiveSshAiVaultHostInfos: sshHostInfos
 }))

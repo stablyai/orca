@@ -76,8 +76,7 @@ describe('a launch that adopts a conversation is its own identity', () => {
   })
 
   it('does not hand a resume the blank launch already pending for the same worktree', async () => {
-    // A joining caller is handed the EXISTING intent and contributes only its prompt, so joining
-    // here would silently drop the adoption and open a blank chat instead.
+    // Joiners inherit existing intent and add prompt only; joining a blank launch would discard conversation adoption.
     const worktreeId = 'wt-resume-vs-blank'
     const blank = startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
     const resume = startStructuredAgentLaunch(worktreeId, 'codex', {
@@ -91,10 +90,16 @@ describe('a launch that adopts a conversation is its own identity', () => {
     // A resumed conversation may keep its own model, so its picker names no listed default.
     expect(getStructuredAgentSessionLaunchResumes(resume.sessionId)).toBe(true)
     expect(getStructuredAgentSessionLaunchResumes(blank.sessionId)).toBe(false)
-    expect(createParams()).toEqual([
-      expect.not.objectContaining({ resumeFrom: expect.anything() }),
-      expect.objectContaining({ resumeFrom: { providerSessionId: 'thread-1' } })
-    ])
+    const requests = createParams()
+    expect(requests).toHaveLength(2)
+    const blankRequest = requests.find((params) => params.envelope.sessionId === blank.sessionId)
+    expect(blankRequest?.envelope.sessionId).toBe(blank.sessionId)
+    expect(blankRequest?.resumeFrom).toBeUndefined()
+    expect(
+      requests.find((params) => params.envelope.sessionId === resume.sessionId)?.resumeFrom
+    ).toEqual({
+      providerSessionId: 'thread-1'
+    })
   })
 
   it('does not hand a blank launch the resume already pending for the same worktree', async () => {

@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/repo-types'
+import { pruneGitWorktrees } from '../../../git/worktree-prune-guard'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -9,7 +10,6 @@ import {
   listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../../../git/worktree'
-import { gitExecFileAsync } from '../../../git/runner'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
@@ -22,7 +22,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../filesystem-auth'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
@@ -77,15 +77,13 @@ export async function removeRegisteredLocalWorktree(
     assertNestedWorktreeRemovalApproval([refreshedRegisteredWorktree], [args.expectedCheckout])
   }
   try {
-    // Why: an archive hook can race another Git client that locks the row; recheck before linked-path/watcher/terminal teardown.
+    // Archive hooks can race external Git locks; recheck before destructive teardown.
     assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
   }
 
-  // Why: `orca.yaml` shared directories are symlinked in too, and a
-  // directory-only ignore rule leaves those links untracked, so removal must
-  // tolerate and unlink them exactly like the per-user shared paths.
+  // Repo shared-directory symlinks need the same ignore/unlink policy as user-configured shared paths.
   const linkedPaths = getWorktreeSharedLinkPaths(repo)
   const ignoredLinkedPaths = args.force
     ? []
@@ -105,7 +103,7 @@ export async function removeRegisteredLocalWorktree(
     if (!isOrphanCompatiblePreflightError(error)) {
       throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
     }
-    // Why: Git can still classify this as an orphan after preflight; keep strict PTY teardown before any recursive fallback deletion.
+    // Git may discover orphaning after preflight; recursive fallback still requires strict PTY teardown.
   }
 
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'local', async () =>
@@ -113,15 +111,13 @@ export async function removeRegisteredLocalWorktree(
   )
   let accepted = false
   try {
-    // Why: hold the watcher/terminal gate through Git and any recursive fallback so no late spawn recreates a native handle.
-    // Linked-path deletion is destructive too, so PTYs must release every handle before Windows or WSL filesystem cleanup starts.
+    // Fence watcher/spawn installs through linked-path cleanup, Git removal and recursive fallback; PTYs must release handles first.
     await withWorktreeRemoveStageSpan('pty_sweep', 'local', async () => {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
     })
 
-    // Why: preflight only ignored these paths, not mutated them; keep watcher installs fenced through Git removal.
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
     }
@@ -132,6 +128,14 @@ export async function removeRegisteredLocalWorktree(
     }
   }
 
+  const cleanupPushTarget = () =>
+    cleanupUnusedWorktreePushTargetRemote(
+      repo.path,
+      args.worktreeId,
+      removedPushTarget,
+      context.store,
+      localWorktreeGitOptions
+    )
   const finish = (checkoutDeleteSignal?: AbortSignal): Promise<RemoveWorktreeResult> =>
     finishLocalWorktreeRemoval({
       context,
@@ -146,15 +150,15 @@ export async function removeRegisteredLocalWorktree(
       deleteBranch,
       refreshedRegisteredWorktree,
       removalGate,
-      checkoutDeleteSignal
+      checkoutDeleteSignal,
+      cleanupPushTarget
     })
   if (!removesInBackground(canonicalWorktreePath, localWorktreeGitOptions)) {
     const result = await finish()
     runtime.publishWorktreeRemovalChange(repoId)
     return result
   }
-  // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
-  // request that asked for it goes away; other views read the host's `removing` marker meanwhile.
+  // After acceptance, deletion must survive request cancellation; other views observe the host's removing marker.
   void startBackgroundWorktreeRemoval({
     removal: {
       worktreeId: args.worktreeId,
@@ -173,7 +177,8 @@ export async function removeRegisteredLocalWorktree(
       })
       return result
     },
-    publish: () => runtime.publishWorktreeRemovalChange(repoId)
+    publish: () => runtime.publishWorktreeRemovalChange(repoId),
+    cleanupPushTargetRemote: cleanupPushTarget
   })
   return { removing: true }
 }
@@ -191,7 +196,8 @@ async function finishLocalWorktreeRemoval({
   deleteBranch,
   refreshedRegisteredWorktree,
   removalGate,
-  checkoutDeleteSignal
+  checkoutDeleteSignal,
+  cleanupPushTarget
 }: {
   context: WorktreeIpcContext
   args: RemoveWorktreeArgs
@@ -206,6 +212,7 @@ async function finishLocalWorktreeRemoval({
   refreshedRegisteredWorktree: GitWorktreeInfo
   removalGate: { finish: (removed: boolean) => Promise<void> }
   checkoutDeleteSignal?: AbortSignal
+  cleanupPushTarget: () => Promise<void>
 }): Promise<RemoveWorktreeResult> {
   const { store, runtime } = context
   let removalResult: RemoveWorktreeResult | undefined
@@ -214,7 +221,7 @@ async function finishLocalWorktreeRemoval({
     try {
       const removeOptions = {
         ...(!deleteBranch ? { deleteBranch } : {}),
-        // Why: reuse the authoritative worktree list already computed here instead of rescanning siblings on the hot delete path.
+        // Reuse the authoritative listing instead of rescanning siblings during deletion.
         knownRemovedWorktree: refreshedRegisteredWorktree,
         ...(hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}),
         checkoutDeleteSignal
@@ -226,7 +233,7 @@ async function finishLocalWorktreeRemoval({
         refreshedRegisteredWorktree.head
       )
     } catch (error) {
-      // Why: Git for Windows can deregister a clean worktree before its recursive filesystem deletion fails transiently.
+      // Git for Windows may deregister before recursive filesystem deletion fails.
       const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
         error,
         force: args.force ?? false,
@@ -241,7 +248,6 @@ async function finishLocalWorktreeRemoval({
         removalResult = recoveredRemovalResult
         removalCompleted = true
       } else if (isOrphanedWorktreeError(error)) {
-        // If git no longer tracks this worktree, clean up the directory and metadata
         console.warn(
           `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
         )
@@ -251,21 +257,12 @@ async function finishLocalWorktreeRemoval({
           localWorktreeGitOptions,
           (path) => runtime.closeFileWatchersForRemoval(path)
         )
-        // Why: remove failed so git still tracks it (.git/worktrees/<name>); prune or the stale entry keeps its branch locked.
-        await gitExecFileAsync(['worktree', 'prune'], {
-          cwd: repo.path,
-          ...localWorktreeGitOptions
-        }).catch(() => {})
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          args.worktreeId,
-          removedPushTarget,
-          store,
-          localWorktreeGitOptions
-        )
+        // Failed removal may retain registration and branch locks; prune stale tracking.
+        await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
+        await cleanupPushTarget()
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         removeWorktreeMetadataAndTransientState(
-          store,
+          { store, runtime },
           args.worktreeId,
           removalHostId,
           args.snapshotPruneBatchId
@@ -285,19 +282,13 @@ async function finishLocalWorktreeRemoval({
         )
       }
     }
-    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    // Successful unlisting overtakes any scan begun before removal.
     runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {
     await removalGate.finish(removalCompleted)
   }
-  await cleanupUnusedWorktreePushTargetRemote(
-    repo.path,
-    args.worktreeId,
-    removedPushTarget,
-    store,
-    localWorktreeGitOptions
-  )
+  await cleanupPushTarget()
   rememberPreservedBranchCleanupTarget(
     args.worktreeId,
     removalHostId,
@@ -308,7 +299,7 @@ async function finishLocalWorktreeRemoval({
   runtime.clearOptimisticReconcileToken(args.worktreeId)
   await withWorktreeRemoveStageSpan('metadata_purge', 'local', async () => {
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

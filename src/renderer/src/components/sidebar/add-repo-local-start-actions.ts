@@ -8,8 +8,8 @@ export type AddRepoLocalStartActionHandlers = {
   onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
   browseHostKind?: 'local' | 'runtime'
-  /** A paired server's own SSH hosts; `unsupported` when it predates managing them. */
-  serverSshProjects?: 'supported' | 'unsupported' | 'unknown'
+  /** A paired server is selected, whose own SSH hosts the dialog explains instead of offering. */
+  offersServerSshHosts?: boolean
 }
 
 export type AddRepoLocalStartAction = {
@@ -27,7 +27,7 @@ export function getAddRepoLocalStartActions({
   onOpenRemoteStep,
   onOpenCreateStep,
   browseHostKind = 'local',
-  serverSshProjects
+  offersServerSshHosts = false
 }: AddRepoLocalStartActionHandlers): {
   primaryAction: AddRepoLocalStartAction
   secondaryActions: AddRepoLocalStartAction[]
@@ -52,7 +52,8 @@ export function getAddRepoLocalStartActions({
     onClick: onBrowse
   }
 
-  const remote = serverSshProjects
+  // Server-owned SSH projects need their own managed servers; explain that route instead of enabling unsupported adds.
+  const remote = offersServerSshHosts
     ? {
         kind: 'remote' as const,
         icon: Monitor,
@@ -60,18 +61,11 @@ export function getAddRepoLocalStartActions({
           'auto.components.sidebar.add.repo.local.start.actions.serverSshTitle',
           "Project on this server's SSH host"
         ),
-        description:
-          serverSshProjects === 'unsupported'
-            ? translate(
-                'auto.components.sidebar.add.repo.local.start.actions.serverSshUpdate',
-                'Update this server to add projects on its SSH hosts'
-              )
-            : translate(
-                'auto.components.sidebar.add.repo.local.start.actions.serverSshDescription',
-                'Open a project folder from an SSH host this server connects to'
-              ),
-        // Why: an old server has no way to do this, and this client must not do it locally.
-        disabled: serverSshProjects !== 'supported',
+        description: translate(
+          'auto.components.sidebar.add.repo.local.start.actions.serverSshAddOnThisComputer',
+          'Not available from a server. Add the SSH host on this computer to open its projects.'
+        ),
+        disabled: true,
         onClick: onOpenRemoteStep
       }
     : null

@@ -9,7 +9,7 @@ export type BrowserRoutePartitionStorageDependencies = {
     remove(partitions: readonly string[]): number
   }
   partitionDataRoot: string
-  /** True while a partition still has prepared pages; its storage is never touched. */
+  /** True while any owner retains the partition. */
   isPartitionLive(partition: string): boolean
   clearPartitionStorage(partition: string): Promise<void>
   removePartitionDirectory(directory: string): Promise<void>
@@ -17,18 +17,13 @@ export type BrowserRoutePartitionStorageDependencies = {
 
 export type BrowserRoutePartitionStorageRelease = {
   clearedPartitions: string[]
-  /** Partitions skipped because they still had prepared pages; the caller may retry them later. */
+  /** Skipped live partitions can be retried after teardown. */
   livePartitions: string[]
   removedBindings: number
   failures: unknown[]
 }
 
-/**
- * Destroys the persisted storage of specific route partitions.
- *
- * Only explicit lifecycle events call this -- environment removal or pairing
- * revocation. Transient transport loss must never reach it.
- */
+// Transient transport loss must not trigger storage destruction.
 export async function releaseBrowserRoutePartitionStorage(
   dependencies: BrowserRoutePartitionStorageDependencies,
   partitions: readonly string[]
@@ -42,7 +37,7 @@ export async function releaseBrowserRoutePartitionStorage(
       continue
     }
     try {
-      // Why: clear through Chromium first so a warm session cannot rewrite the directory.
+      // Clear through Chromium first so a warm session cannot rewrite the directory.
       await dependencies.clearPartitionStorage(partition)
       await dependencies.removePartitionDirectory(partitionDirectory(dependencies, partition))
       clearedPartitions.push(partition)
@@ -59,14 +54,7 @@ export async function releaseBrowserRoutePartitionStorage(
   }
 }
 
-/**
- * Collects route partitions no live environment record can reach any more.
- *
- * Conservative by construction: a partition is an orphan only when its owning
- * environment record is gone, or when it predates storage scopes and therefore
- * carries a partition name the current identity scheme can never re-derive. A
- * merely disconnected host keeps its record, and so keeps its storage.
- */
+// Disconnected owners retain their storage scopes; only missing or legacy scopes are collectible.
 export function findOrphanedBrowserRoutePartitions(
   dependencies: Pick<BrowserRoutePartitionStorageDependencies, 'bindings' | 'isPartitionLive'>,
   liveStorageScopes: ReadonlySet<string>

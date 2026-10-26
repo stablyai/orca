@@ -16,12 +16,6 @@ export function throwIfWorkspaceSpaceScanAborted(signal: AbortSignal | undefined
   }
 }
 
-export function isWorkspaceSpaceAbortError(error: unknown): boolean {
-  return Boolean(
-    error && typeof error === 'object' && (error as { name?: unknown }).name === 'AbortError'
-  )
-}
-
 export function classifyWorkspaceSpaceError(error: unknown): {
   status: Exclude<WorkspaceSpaceScanStatus, 'ok'>
   message: string

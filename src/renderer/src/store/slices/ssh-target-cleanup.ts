@@ -2,7 +2,9 @@ import type { AppState } from '../types'
 import type { SshTarget, SshTargetSummary } from '../../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
-import { resolveDirectSshTargetScope } from '../../lib/direct-ssh-target-scope'
+import { resolveDirectSshTargetWorktreeIds } from '../../lib/direct-ssh-target-scope'
+import { unbindTerminalTabPtys } from './tabs/worktree-layout-lifecycle'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,
@@ -14,13 +16,7 @@ export function sshTargetLabelsEqual(
   return targets.every((target) => labels.get(target.id) === target.label)
 }
 
-/**
- * Registration generations by target ID, dropping any the sanitizer rejects.
- *
- * An absent generation is left absent rather than defaulted: only a generation
- * makes a target fenceable, and a guessed one would fence an automation against
- * a registration that never existed.
- */
+/** Keep only sanitized registration generations; never guess absent values, which would fence against a nonexistent registration. */
 export function collectSshTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
   const generations = new Map<string, number>()
   for (const target of targets) {
@@ -43,16 +39,15 @@ export function sshTargetGenerationsEqual(
 }
 
 function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<string> {
-  const targetWorktreeIds = resolveDirectSshTargetScope({
+  const targetWorktreeIds = resolveDirectSshTargetWorktreeIds({
     targetId,
-    catalogRevision: 0,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-  }).gitWorktreeIds
+  })
   const tabIds = new Set<string>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
     for (const worktree of worktrees) {
       if (!targetWorktreeIds.has(worktree.id)) {
         continue
@@ -69,11 +64,7 @@ function isSshTargetSessionId(sessionId: string, targetId: string): boolean {
   return parseAppSshPtyId(sessionId)?.connectionId === targetId
 }
 
-// Why: a per-tab session map entry belongs to the removed target if the tab is
-// one of the target's, or the session id is an SSH pty id scoped to it. Shared
-// by the deferred-session and pending-reconnect cleanups so both drop the same
-// dead entries (an uncleared entry would keep a dead tab alive in the orphan
-// sweep, which now reads these maps as liveness — #9911).
+// Match removed target by tab ownership or SSH PTY ID; reconnect maps count as liveness and must not pin dead tabs (#9911).
 function isRemovedSshTargetTabSession(
   tabId: string,
   sessionId: string,
@@ -131,23 +122,20 @@ function clearSshTargetTabPtyState(
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'lastKnownRelayPtyIdByTabId'
-  | 'pendingCodexPaneRestartIds'
+  | 'pendingPaneAccountRestarts'
   | 'codexRestartNoticeByPtyId'
 > & { changed: boolean } {
-  let nextTabsByWorktree = state.tabsByWorktree
-  const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
+  const unboundTabIds = new Set<string>()
   const nextLastKnownRelayPtyIdByTabId = {
     ...state.lastKnownRelayPtyIdByTabId
   }
-  const nextPendingCodexPaneRestartIds = {
-    ...state.pendingCodexPaneRestartIds
+  const nextPendingPaneAccountRestarts = {
+    ...state.pendingPaneAccountRestarts
   }
   const nextCodexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
-  let changed = false
 
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    let nextTabs = tabs
-    for (const [index, tab] of tabs.entries()) {
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    for (const tab of tabs) {
       const lastKnownPtyId = state.lastKnownRelayPtyIdByTabId[tab.id]
       const ptyIds = [
         ...new Set([
@@ -164,34 +152,20 @@ function clearSshTargetTabPtyState(
       if (!tab.ptyId && ptyIds.length === 0 && nextLastKnownRelayPtyIdByTabId[tab.id] == null) {
         continue
       }
-      changed = true
-      if (nextTabs === tabs) {
-        nextTabs = [...tabs]
-      }
-      const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
-      void _pendingActivationSpawn
-      nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
-      nextPtyIdsByTabId[tab.id] = []
+      unboundTabIds.add(tab.id)
       delete nextLastKnownRelayPtyIdByTabId[tab.id]
       for (const ptyId of ptyIds) {
-        delete nextPendingCodexPaneRestartIds[ptyId]
+        delete nextPendingPaneAccountRestarts[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
       }
-    }
-    if (nextTabs !== tabs) {
-      if (nextTabsByWorktree === state.tabsByWorktree) {
-        nextTabsByWorktree = { ...nextTabsByWorktree }
-      }
-      nextTabsByWorktree[worktreeId] = nextTabs
     }
   }
 
   return {
-    changed,
-    tabsByWorktree: nextTabsByWorktree,
-    ptyIdsByTabId: nextPtyIdsByTabId,
+    changed: unboundTabIds.size > 0,
+    ...unbindTerminalTabPtys(state, unboundTabIds),
     lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-    pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+    pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
     codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
   }
 }
@@ -216,9 +190,7 @@ export function buildRemovedSshTargetCleanupPatch(
     'deferredSshSessionIdsByTabId',
     omitRemovedSshTargetTabSessions(state.deferredSshSessionIdsByTabId, targetId, targetTabIds)
   )
-  // Why: pending-reconnect holds each tab's pre-restart session until reconnect
-  // drains it; if the target is removed first the entry is dead but the orphan
-  // sweep now reads it as liveness, so clear it here too (#9911).
+  // Reconnect maps count as orphan-sweep liveness; removed targets must not leave dead tabs pinned (#9911).
   assign(
     'pendingReconnectPtyIdByTabId',
     omitRemovedSshTargetTabSessions(state.pendingReconnectPtyIdByTabId, targetId, targetTabIds)
@@ -236,11 +208,14 @@ export function buildRemovedSshTargetCleanupPatch(
     omitKey(state.transientClearedAgentStatusConnectionIds, targetId)
   )
   assign('portForwardsByConnection', omitKey(state.portForwardsByConnection, targetId))
+  assign(
+    'unrestoredPortForwardsByConnection',
+    omitKey(state.unrestoredPortForwardsByConnection, targetId)
+  )
   assign('detectedPortsByConnection', omitKey(state.detectedPortsByConnection, targetId))
   assign('sshConnectionStates', withoutMapKey(state.sshConnectionStates, targetId))
   assign('sshTargetLabels', withoutMapKey(state.sshTargetLabels, targetId))
-  // Why: a lingering generation would keep a deleted registration fenceable, and
-  // the id is reissued fresh on re-add, so the old value can never become right.
+  // Deleted registration generations cannot become valid again; re-add issues a fresh ID.
   assign('sshTargetGenerations', withoutMapKey(state.sshTargetGenerations, targetId))
   return Object.keys(patch).length > 0 ? patch : null
 }

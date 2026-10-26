@@ -1,10 +1,9 @@
-// Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
-// keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 
 type StoreRepo = {
   id: string
@@ -57,7 +56,6 @@ const store = {
   ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: vi.fn(),
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
@@ -112,7 +110,7 @@ async function launchOnLinux(): Promise<void> {
 }
 
 function queuedCommand(): string {
-  return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartups()[0]?.command
 }
 
 describe('launchAgentInNewTab execution host resolution', () => {
@@ -134,8 +132,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
   })
 
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {
-    // `store.repos.find` is host-blind, so a worktree that names its own host could be shaped by
-    // an `ssh:openclaw` row it has nothing to do with (#11163).
+    // Host-blind repos.find could shape this worktree using another SSH host’s same-ID repo (#11163).
     store.repos = [
       { id: 'repo-1', connectionId: 'openclaw', path: '/srv/openclaw' },
       { id: 'repo-1', connectionId: null, executionHostId: 'local', path: '/repo' }

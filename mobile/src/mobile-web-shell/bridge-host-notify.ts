@@ -16,23 +16,11 @@ import { pageMayWriteStorageKey } from './page-storage-keys'
 
 type NotifyMessage = Extract<BridgeClientMessage, { type: 'notify' }>
 
-/**
- * Where every one-way page frame is spent, split out of `bridge-host.ts` because that file sits at
- * its line cap and this is the half of it that grows: each new notify is a branch here and a row in
- * `bridge-notify-grants.ts`.
- *
- * Nothing is owed back on any of them (ruling 34). The client's own work runs inside these calls,
- * so a throw from one would otherwise escape into the native event handler that delivered the
- * frame; it is caught once per session and reported, because a page nudging a broken listener
- * nudges it again on every foreground.
- */
+// One-way frames owe no reply (ruling 34); catch downstream throws before they escape native dispatch and report once per session.
 export function createBridgeNotifyForwarder(args: {
   options: BridgeHostOptions
-  /** This session's whole capability: the protocol's own grant plus what its route declared. */
   granted: readonly string[]
-  /** Whether this host has answered a `ready`, which is the only thing that issues grants. */
   initSent: () => boolean
-  /** The screen this host is serving, which decides which storage keys the page may write. */
   route: () => BridgeInitRoute | null
   onBackClaim: (claimed: boolean) => void
 }): (message: NotifyMessage) => void {
@@ -42,19 +30,15 @@ export function createBridgeNotifyForwarder(args: {
 
   function act(message: NotifyMessage): void {
     if (message.name === BRIDGE_FAULT_GRANT) {
-      // Not the client's: a page that threw is this session's problem, and the desktop on the
-      // other end of the client has nothing to do with it.
       options.onPageFault(message.error)
       return
     }
     if (message.name === BRIDGE_PAGE_PAINTED) {
-      // Local, like `navigate`: nothing about the page's own frame reaches the desktop.
       options.onPagePainted()
       return
     }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
-      // Local, and the one notify that changes what a device key does. Carried up rather than
-      // acted on here: the key belongs to the screen, and this host serves one document of it.
+      // Forward Back claims to the screen that owns the native key; this host serves only its document.
       args.onBackClaim(message.claimed)
       return
     }
@@ -67,15 +51,11 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === 'navigate') {
-      // Not routed to the client: this one never leaves the phone. The page asked for a screen
-      // it does not render, and the caller pushes it over the still-mounted view.
       options.onNavigate(message.href)
       return
     }
     if (message.name === BRIDGE_NAVIGATE_BACK_NOTIFY) {
-      // Local too, and the one notify with no argument: the shell pops what it pushed. A pop the
-      // shell did not make is reported rather than answered, because the page is told nothing
-      // either way and a Back button that does nothing is what would otherwise go unnoticed.
+      // Report native Back refusal locally; no reply can tell the page its button did nothing.
       const outcome = options.onNavigateBack()
       if (outcome !== 'popped') {
         options.onDiagnostic?.({ kind: 'navigate-back-refused', why: outcome })
@@ -83,11 +63,7 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
-      // Local as well: this one leaves the app entirely rather than reaching the desktop. Read
-      // rather than forwarded, because what the envelope accepted is the string and what it
-      // accepted it for is the parser's URL — a page posting an unnormalized one would otherwise
-      // hand the device handler something the check never looked at. Null cannot arrive here:
-      // the envelope refines on the same rule, and the branch is what says so.
+      // Pass the same normalized URL the envelope checked to the device handler; raw spelling could otherwise differ from the parsed target. Both use the same rule, so null is unreachable.
       const target = readBridgeExternalLinkUrl(message.url)
       if (target !== null) {
         options.onExternalLink(target)
@@ -95,12 +71,8 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === 'storage') {
-      // Also local, and held to this host's own keys. The envelope allowlists the shape before
-      // this runs, which lets `orca:pins:<any host>` through: a page opened for one host must
-      // not rewrite another's pinned list, and the keys it was handed are the ones it may write.
-      // Three refusals in one, decided where the keys are (ruling 33.6): the oversize half has
-      // to be enforced here because a page served from an older desktop bundle does not read
-      // `storageOversize` and would write the key whole over what the device holds.
+      // Check this session’s handed-over keys, not just the envelope’s key shape; valid orca:pins keys may name another host.
+      // Enforce storageOversize here too: older pages ignore it and could overwrite retained device state (ruling 33.6).
       const held = options.readStorage()
       if (
         !pageMayWriteStorageKey(
@@ -118,15 +90,12 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === BRIDGE_HAPTICS_NOTIFY) {
-      // Local, and the only notify the shell answers with hardware. Nothing crosses back, which
-      // is the whole reason this is a notify: a reply would spend an in-flight slot per row tap.
+      // Haptics are one-way so each row tap avoids spending a request slot.
       options.onHaptic(message.kind)
       return
     }
     if (message.name === BRIDGE_ROUTE_PARAM_CLEAR) {
-      // Local, and the one frame that writes to the shell's own route (ruling 34). Carried up
-      // rather than acted on here: the param lives on the native route the switch holds, and
-      // whether this still names it is that holder's comparison to make.
+      // The native route holder compares before clearing a consumed param; this host only forwards key/value (ruling 34).
       options.onRouteParamClear(message.param, message.value)
       return
     }

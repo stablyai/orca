@@ -12,13 +12,15 @@ export async function reclaimWorktreeSpace({
   acquireLock = lock,
   commonDirectory,
   testsStopped = false,
+  generatedMinAgeDays = 30,
+  excludeWorktree,
   releaseCacheMinAgeDays = 30
 } = {}) {
-  if (apply && !automatic && !testsStopped) {
-    throw new Error('Stop cross-version tests, then pass --tests-stopped with --apply')
-  }
   if (!Number.isFinite(releaseCacheMinAgeDays) || releaseCacheMinAgeDays < 0) {
     throw new Error('--release-cache-min-age-days requires a non-negative number')
+  }
+  if (!Number.isFinite(generatedMinAgeDays) || generatedMinAgeDays < 0) {
+    throw new Error('--generated-min-age-days requires a non-negative number')
   }
   if (!commonDirectory) {
     const result = await runProcess({
@@ -45,8 +47,14 @@ export async function reclaimWorktreeSpace({
   let cleanupFailed = false
   let cleanupError
   try {
-    const scripts = ['reclaim-electron-dists.mjs', 'reclaim-dev-electron-bundles.mjs']
-    if (!automatic) {
+    const scripts = [
+      'reclaim-electron-dists.mjs',
+      'reclaim-dev-electron-bundles.mjs',
+      'reclaim-vite-caches.mjs',
+      'reclaim-worktree-generated-files.mjs',
+      'reclaim-dev-worktree-profiles.mjs'
+    ]
+    if (!automatic && testsStopped) {
       scripts.unshift('reclaim-release-test-caches.mjs')
     }
     for (const script of scripts) {
@@ -54,12 +62,18 @@ export async function reclaimWorktreeSpace({
       if (apply) {
         args.push('--apply')
       }
+      if (excludeWorktree && script !== 'reclaim-release-test-caches.mjs') {
+        args.push('--exclude-worktree', excludeWorktree)
+      }
       if (script === 'reclaim-release-test-caches.mjs') {
         args.unshift('--import', import.meta.resolve('tsx'))
         args.push('--min-age-days', String(releaseCacheMinAgeDays))
         if (testsStopped) {
           args.push('--tests-stopped')
         }
+      }
+      if (script === 'reclaim-worktree-generated-files.mjs') {
+        args.push('--generated-min-age-days', String(generatedMinAgeDays))
       }
       const result = await execute({
         program: process.execPath,
@@ -94,44 +108,10 @@ export async function reclaimWorktreeSpace({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
-  if (process.argv.includes('--help')) {
-    console.log(
-      'Usage: pnpm run reclaim:worktree-space [--repo DIRECTORY] [--release-cache-min-age-days 30] [--apply --tests-stopped]'
-    )
-    console.log(
-      'Previews historical test cache cleanup, Electron sharing, and idle dev bundle removal.'
-    )
-    process.exit(0)
-  }
-  const repoIndex = process.argv.indexOf('--repo')
-  const ageIndex = process.argv.indexOf('--release-cache-min-age-days')
-  for (let index = 2; index < process.argv.length; index += 1) {
-    const argument = process.argv[index]
-    if (argument === '--repo' || argument === '--release-cache-min-age-days') {
-      index += 1
-    } else if (argument !== '--apply' && argument !== '--tests-stopped') {
-      throw new Error(`Unknown argument: ${argument}`)
-    }
-  }
-  if (
-    repoIndex !== -1 &&
-    (!process.argv[repoIndex + 1] || process.argv[repoIndex + 1].startsWith('--'))
-  ) {
-    throw new Error('--repo requires a directory')
-  }
-  if (
-    ageIndex !== -1 &&
-    (!process.argv[ageIndex + 1] || process.argv[ageIndex + 1].startsWith('--'))
-  ) {
-    throw new Error('--release-cache-min-age-days requires a number')
-  }
-  await reclaimWorktreeSpace({
-    repoRoot: repoIndex !== -1 ? resolve(process.argv[repoIndex + 1]) : process.cwd(),
-    apply: process.argv.includes('--apply'),
-    testsStopped: process.argv.includes('--tests-stopped'),
-    releaseCacheMinAgeDays: ageIndex === -1 ? 30 : Number(process.argv[ageIndex + 1])
-  }).catch((error) => {
-    console.error(error.message)
-    process.exitCode = 1
-  })
+  import('./reclaim-worktree-command.mjs')
+    .then(({ runReclaimCommand }) => runReclaimCommand(process.argv.slice(2)))
+    .catch((error) => {
+      console.error(error.message)
+      process.exitCode = 1
+    })
 }

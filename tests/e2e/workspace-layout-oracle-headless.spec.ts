@@ -1,18 +1,6 @@
-/**
- * Layout oracle scenarios on a headless `orca serve` (orcad and Electron serve), driven only through
- * runtime RPC from paired clients and the local CLI. After every step the runtime's live layout
- * (its `layout.subscribe` stream) is checked against the model rules, what each client is told,
- * the expected panes per tab and, across restarts, the layout from before; its saved profile
- * against the disk-format rules and the round trip. #12723 needs SSH and is not covered.
- *
- * `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats;
- * `ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron` picks the hosts (both by default).
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test \
- *     tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// Drive orcad/Electron serve with paired clients and CLI; after each step compare live layout rules, client views and expected panes, plus restart/disk round trips.
+// #12723 needs SSH and is not covered. ORCA_LAYOUT_ORACLE_RECORD=1 records without failing; ORCA_LAYOUT_ORACLE_REPEAT=<n> repeats; ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron chooses hosts (both default).
+// Run ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -25,6 +13,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../src/shared/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
+import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session-terminal-tab-close'
 import {
   addRepoWorktree,
   cliClient,
@@ -154,16 +143,14 @@ async function groupsOf(run: Run): Promise<GroupView[]> {
   }))
 }
 
-/**
- * Moves a tab through the phone/CLI path, then checks the groups' tab orders and selection: the
- * moved tab is selected where it lands; any other group keeps its selection while that tab stays,
- * else falls back to its first tab.
- */
+// Move through phone/CLI: select the moved tab in its destination; other groups keep surviving selection or advance as desktop does.
+// shown carries client A’s tabs, most recent last.
 async function moveTab(
   run: Run,
   step: string,
   move: Record<string, unknown> & { tabId: string },
-  expectedOrders: string[][]
+  expectedOrders: string[][],
+  shown: string[] = []
 ): Promise<GroupView[]> {
   const before = await groupsOf(run)
   await attempt(run, step, () =>
@@ -188,12 +175,20 @@ async function moveTab(
       : [`groups ${orders}, expected ${JSON.stringify(expectedOrders)}`]
   )
   const selection = after.flatMap((group) => {
-    const kept = before.find((candidate) => candidate.id === group.id)?.activeTabId
+    const was = before.find((candidate) => candidate.id === group.id)
+    const kept = was?.activeTabId
     const expected = group.tabOrder.includes(move.tabId)
       ? move.tabId
       : kept && group.tabOrder.includes(kept)
         ? kept
-        : (group.tabOrder[0] ?? null)
+        : kept && was
+          ? pickNextActiveTabAfterClose(
+              { tabOrder: was.tabOrder, recentTabIds: shown },
+              new Set([kept]),
+              group.tabOrder,
+              new Set(group.tabOrder)
+            )
+          : (group.tabOrder[0] ?? null)
     return group.activeTabId === expected
       ? []
       : [`group ${group.id} selects ${group.activeTabId}, expected ${expected}`]
@@ -360,13 +355,15 @@ const SCENARIOS: Scenario[] = [
         run,
         'split third tab right',
         { kind: 'split', tabId: third, targetGroupId: source!.id, splitDirection: 'right' },
-        [[first, second], [third]]
+        [[first, second], [third]],
+        [first, second, third]
       )
       await moveTab(
         run,
         'move second tab into the new group',
         { kind: 'move-to-group', tabId: second, targetGroupId: target!.id, index: 0 },
-        [[first], [second, third]]
+        [[first], [second, third]],
+        [first, second, third]
       )
       await run.check('move to group', [1, 1, 1])
       await moveTab(

@@ -34,6 +34,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       acknowledgeOutput: true,
       acknowledgeOutputSourceRanges: false,
       supportsOutputPause: false,
+      supportsPausedOutputDropNotice: false,
+      pausedOutputGapExpected: false,
       supportsInputAck: false,
       inputLedgerId: null,
       outputPaused: false,
@@ -56,6 +58,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       resyncPendingSend: false,
       resyncTimer: null,
       resyncAttempts: 0,
+      resyncUnansweredTimeouts: 0,
       capacityRejected: false,
       watchdog: createRemoteTerminalStreamWatchdog((stall) => {
         if (e2eDisableRemoteTerminalStallRecovery) {
@@ -105,9 +108,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           TerminalStreamOpcode.ClaimViewport,
           encodeTerminalStreamJson({ cols, rows })
         )
-        // Why: older runtimes ignore the claim opcode but still understand
-        // Resize. Claim first keeps new-runtime ownership precise and leaves a
-        // backwards-compatible resize immediately behind it.
+        // Claim then Resize: new hosts get precise ownership; older hosts ignore Claim but retain compatible resize.
         const resized = this.sendFrame(
           streamId,
           TerminalStreamOpcode.Resize,
@@ -116,6 +117,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
         return claimed && resized
       },
       setOutputPaused: (paused) => this.setOutputPaused(state, paused),
+      reportsPausedOutputDrops: () =>
+        this.isRegisteredStream(state) && state.supportsPausedOutputDropNotice,
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       serializeBufferOutcome: (opts) => this.requestSnapshotOutcome(state, opts),
       close: () => {
@@ -146,8 +149,11 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutput: 1,
             ackOutputSourceRanges: 1,
             outputPause: 1,
+            outputPauseDropNotice: 1,
             writeUnavailable: 1,
-            ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {}),
+            ...(args.client.type === 'desktop'
+              ? { desktopViewportClaims: 1, endpointLossNotice: 1 }
+              : {}),
             ...(args.inputSessionId ? { inputAck: 1 } : {})
           },
           ...(args.inputSessionId ? { inputSessionId: args.inputSessionId } : {})

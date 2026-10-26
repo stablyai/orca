@@ -49,7 +49,6 @@ describe('terminateProviderProcessTree', () => {
         terminateWindowsTree: async () => false
       })
     ).resolves.toBe('unverifiable')
-    // The held child is still killed through its handle.
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -183,18 +182,35 @@ describe('terminateProviderProcessTree', () => {
     ['live', 'live'],
     ['unverifiable', 'unverifiable']
   ] as const)(
-    'reports a %s descendant snapshot as-is and leaves the stopped root resumable',
+    'reports a %s descendant snapshot after killing anchored child groups and the held root',
     async (observed, verdict) => {
       const target = child()
+      const signalProcessGroup = vi.fn()
+      const signalProcess = vi.fn()
       await expect(
         terminateProviderProcessTree(target, {
           site: 'codex-app-server-teardown',
           platform: 'darwin',
-          captureDescendants: async () => ({ rootPgid: 1234, descendants: [], capturedAtMs: 1 }),
-          terminateDescendants: async () => observed
+          captureDescendants: async () => ({
+            rootPgid: 1234,
+            descendants: [
+              { pid: 2000, ppid: 1234, pgid: 2000, startedAt: 'now' },
+              { pid: 3000, ppid: 2000, pgid: 2000, startedAt: 'now' }
+            ],
+            capturedAtMs: 1
+          }),
+          terminateDescendants: async () => observed,
+          signalProcessGroup,
+          signalProcess
         })
       ).resolves.toBe(verdict)
-      expect(target.kill).toHaveBeenLastCalledWith('SIGCONT')
+      expect(signalProcessGroup).toHaveBeenCalledWith(2000, 'SIGKILL')
+      expect(signalProcess).toHaveBeenCalledWith(2000, 'SIGKILL')
+      expect(signalProcess).not.toHaveBeenCalledWith(3000, 'SIGKILL')
+      expect(target.kill).toHaveBeenLastCalledWith('SIGKILL')
+      expect(signalProcess.mock.invocationCallOrder[0]).toBeLessThan(
+        target.kill.mock.invocationCallOrder.at(-1)!
+      )
     }
   )
 

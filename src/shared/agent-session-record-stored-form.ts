@@ -1,7 +1,4 @@
-/**
- * An agent-session record between its stored row and memory. The stored row keeps what older
- * builds read: Claude and Codex handles in their typed form and lease values only they wrote.
- */
+/** Decode stored Claude/Codex typed handles and legacy leases without changing what older builds can read. */
 
 import {
   leaseCarriesLegacyHandoffValues,
@@ -14,8 +11,7 @@ import {
 } from './agent-session-provider-handle'
 import type { AgentSessionRecord } from './agent-session-record'
 
-/** The in-memory record, plus whether decode changed anything the store must write back. A
- *  handle's stored form is not such a change: every build writes it the same way. */
+/** Report decode changes needing writeback; handle encoding alone is unchanged across builds and needs none. */
 export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionRecord): {
   record: AgentSessionRecord
   normalized: boolean
@@ -26,9 +22,17 @@ export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionR
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
   }
+  const { sleptAt, ...rest } = record
+  const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
   return {
-    record: { ...record, providerHandleChain, lease: normalizeLegacyHandoffLease(record.lease) },
-    normalized: leaseCarriesLegacyHandoffValues(record.lease)
+    record: {
+      ...rest,
+      ...(validSleep ? { sleptAt } : {}),
+      providerHandleChain,
+      lease: normalizeLegacyHandoffLease(record.lease)
+    },
+    normalized:
+      leaseCarriesLegacyHandoffValues(record.lease) || (sleptAt !== undefined && !validSleep)
   }
 }
 

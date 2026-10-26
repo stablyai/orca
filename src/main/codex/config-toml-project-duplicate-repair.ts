@@ -9,7 +9,6 @@ import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
 import { escapeTomlBasicString } from './config-toml-syntax'
 
 type TomlTable = {
-  /** Line index of the header; the body runs to the next table's header. */
   headerLine: number
   endLine: number
   header: string
@@ -20,14 +19,7 @@ type TomlTable = {
 const ORCA_TRUST_LINE = 'trust_level = "trusted"'
 const loggedRefusals = new Set<string>()
 
-/**
- * Removes the duplicates older Orca builds wrote beside Codex-spelled trust
- * tables (#22592): an Orca-shaped `[projects."<p>"]`, `[hooks.state."<k>"]` or
- * empty `[hooks.state]` that repeats a table the user (or Codex) wrote in
- * another spelling, and the bare `trust_level` line Orca inserted under a
- * quoted `"trust_level"`. The user's table always wins; anything else leaves
- * the content untouched.
- */
+/** Repair known Orca trust duplicates while preserving user tables; refuse ambiguous repairs. */
 export function repairOrcaDuplicateTrustTables(content: string): string {
   const lines = content.split('\n')
   const groups = new Map<string, TomlTable[]>()
@@ -41,7 +33,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
   for (const group of groups.values()) {
     const userTables = group.filter((table) => !isOrcaWrittenTable(lines, table))
     const survivor = group.length === 1 ? group[0] : userTables[0]
-    // Why: an identical spelling or two user tables cannot come from #22592, so only a person can merge them.
+    // Identical spellings or multiple user tables are outside this repair's provenance.
     if (
       !survivor ||
       (group.length > 1 &&
@@ -72,7 +64,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
   }
   const kept = lines.filter((_, index) => !removedLines.has(index)).join('\n')
   const repaired = content.endsWith('\n') && !kept.endsWith('\n') ? `${kept}\n` : kept
-  // Why: a partial repair would still fail Codex's parse, so only write a file it can load.
+  // Reject partial repairs that leave duplicate tables or project trust keys.
   const remainingDuplicate = findDuplicateTable(repaired)
   return remainingDuplicate === null
     ? repaired
@@ -121,7 +113,7 @@ function getTrustTableKind(table: TomlTable): TrustTableKind | null {
   return segments.length === 2 ? 'hook-state-parent' : segments.length === 3 ? 'hook-state' : null
 }
 
-// Why: only the exact bytes Orca's writers emit are safe to delete without asking.
+// Only exact Orca-written shapes can be removed automatically.
 function isOrcaWrittenTable(lines: string[], table: TomlTable): boolean {
   const header = stripCr(lines[table.headerLine])
   const body = lines
@@ -151,7 +143,7 @@ function isOrcaWrittenTable(lines: string[], table: TomlTable): boolean {
   }
 }
 
-// Why: older Orca inserted its bare line directly under the header when it missed a quoted key.
+// Older Orca inserted a bare line under the header when it missed a quoted key.
 function findOrcaInsertedTrustLine(lines: string[], table: TomlTable): number | 'unsafe' | null {
   const body = lines.slice(table.headerLine + 1, table.endLine).join('\n')
   const entries = findProjectTrustLevelEntries(body)

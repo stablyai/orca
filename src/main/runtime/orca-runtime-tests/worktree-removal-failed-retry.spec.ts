@@ -1,8 +1,6 @@
-// A runtime Delete (paired desktop, web, mobile, CLI) on the leftover of a delete that failed after
-// Git dropped the registration: the leftover is listed with its error and Delete runs the recorded
-// removal again, instead of the leftover vanishing from every listing.
+// List failed-delete leftovers with their error; refuse retry until the leftover is gone.
 import { existsSync } from 'node:fs'
-import { realpath } from 'node:fs/promises'
+import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   join,
@@ -74,24 +72,50 @@ describe('runtime Delete on a failed delete’s leftover', () => {
     })
   })
 
-  it('runs the recorded removal again, answering a client that cannot wait on acceptance', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('refuses while the folder Git no longer tracks is there, keeping the row', async () => {
     const runtime = createWorktreeRemovalRuntime()
+    // The user replaced the leftover with an ordinary folder of their own.
+    await rm(leftover, { recursive: true, force: true })
+    await mkdir(leftover)
+    await writeFile(join(leftover, 'notes.txt'), 'mine')
 
-    await expect(
-      runtime.removeManagedWorktree(`id:${leftoverId}`, { waitForBackgroundRemoval: false })
-    ).resolves.toEqual({ removing: true })
+    for (const force of [false, true]) {
+      await expect(
+        runtime.removeManagedWorktree(`id:${leftoverId}`, {
+          force,
+          waitForBackgroundRemoval: false
+        })
+      ).rejects.toThrow(
+        `${leftover} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
+      )
+    }
     await _settlePendingWorktreeRemovalsForTests()
 
-    // Git has no registration left for it, so Orca deletes the leftover itself.
+    expect(await readFile(join(leftover, 'notes.txt'), 'utf8')).toBe('mine')
     expect(removeWorktree).not.toHaveBeenCalled()
-    expect(existsSync(leftover)).toBe(false)
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
+    const detected = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    expect(detected.worktrees.find((row) => row.id === leftoverId)).toMatchObject({
+      removalError: FAILURE
+    })
+    expect(await readWorktreeRemovalRecords(directory)).toMatchObject([
+      { worktreeId: leftoverId, failure: { message: FAILURE } }
+    ])
+  })
+
+  it('ends the row once the user removed the folder', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    await rm(leftover, { recursive: true, force: true })
+
+    const detected = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(detected.worktrees.find((row) => row.id === leftoverId)).toBeUndefined()
+    await vi.waitFor(async () => expect(await readWorktreeRemovalRecords(directory)).toEqual([]))
+    expect(removeWorktree).not.toHaveBeenCalled()
   })
 
   it('takes the normal delete once Git registers a checkout at the path again', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A new checkout at the same path: the recorded choices were for the leftover, not for it.
+    // A new checkout at the same path must not inherit stale removal choices.
     vi.mocked(listWorktreesStrict).mockResolvedValue([
       {
         path: leftover,
@@ -128,19 +152,8 @@ describe('runtime Delete on a failed delete’s leftover', () => {
     ).resolves.toEqual({})
 
     expect(otherClientsRetry).toHaveBeenCalledTimes(1)
-    // Only the joined retry ran: the leftover is still there because its stub deleted nothing.
     expect(existsSync(join(leftover, 'node_modules'))).toBe(true)
     expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('replies to a waiting client once the retry finishes', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtime = createWorktreeRemovalRuntime()
-
-    await expect(
-      runtime.removeManagedWorktree(`id:${leftoverId}`, { waitForBackgroundRemoval: true })
-    ).resolves.toEqual({})
-    expect(existsSync(leftover)).toBe(false)
   })
 })
 
@@ -184,7 +197,6 @@ describe('runtime listing straight after a delete fails partway', () => {
       (await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).worktrees.find(
         (row) => row.id === leftoverId
       )
-    // Caches Git's registration for the 30 s scan TTL.
     expect(await listLeftover()).not.toHaveProperty('removalError')
     vi.mocked(removeWorktree).mockImplementation(async () => {
       // Git drops the registration, then fails on a file it cannot delete.

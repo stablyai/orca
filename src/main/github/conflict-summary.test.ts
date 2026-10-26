@@ -1,33 +1,61 @@
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why these tests exist: the conflict-summary derivation used to re-run a
-// network `git fetch` plus a four-subprocess chain on every PR refresh tick
-// (measured ~490 full derivations in 2.1h on one machine). They pin the
-// regression contract by counting subprocess spawns: unchanged inputs must
-// cost zero subprocesses, and the base fetch must run at most once per
-// throttle window.
+// Count subprocesses: unchanged OIDs reuse summaries and base fetches share a throttle window.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+const scratchFolderPrefixes = vi.hoisted((): string[] => [])
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+// Why: off Windows a WSL objects path is relative, so a real scratch dir would land in the cwd.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    mkdtemp: async (prefix: string) => {
+      scratchFolderPrefixes.push(prefix)
+      if (!isAbsolute(prefix)) {
+        throw new Error('no object store in this test')
+      }
+      return actual.mkdtemp(prefix)
+    }
+  }
+})
 
+import { findGitSubcommandIndex } from '../../shared/git-command-classification'
+import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git-capability-cache'
+import { getLocalGitCapabilityCache } from '../git/git-capability-state'
 import { CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS } from './conflict-summary-cache'
 import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './conflict-summary'
 
 type GitResult = { stdout: string }
 type GitHandler = (argv: string[]) => Promise<GitResult>
 
+const COMMON_DIR_COMMAND = 'rev-parse --git-common-dir'
+
 const defaultHandlers: Record<string, GitHandler> = {
   fetch: async () => ({ stdout: '' }),
   'rev-parse': async () => ({ stdout: 'base-tip-1\n' }),
   'merge-base': async () => ({ stdout: 'merge-base-1\n' }),
   'rev-list': async () => ({ stdout: '3\n' }),
-  'merge-tree': async () => ({ stdout: 'tree-oid\u0000src/conflict.ts\u0000' })
+  'merge-tree': async () => ({ stdout: 'tree-oid\u0000src/conflict.ts\u0000' }),
+  [COMMON_DIR_COMMAND]: async () => ({ stdout: '.git\n' })
+}
+
+function commandKey(argv: string[]): string {
+  const subcommand = argv[findGitSubcommandIndex(argv)]
+  return subcommand === 'rev-parse' && argv.includes('--git-common-dir')
+    ? COMMON_DIR_COMMAND
+    : subcommand
 }
 
 function mockGitDispatch(overrides: Record<string, GitHandler> = {}): void {
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
-    const handler = overrides[argv[0]] ?? defaultHandlers[argv[0]]
+    const key = commandKey(argv)
+    const handler = overrides[key] ?? defaultHandlers[key]
     if (!handler) {
       return Promise.reject(new Error(`unexpected git command: ${argv.join(' ')}`))
     }
@@ -40,7 +68,7 @@ function spawnCount(command?: string): number {
   if (!command) {
     return calls.length
   }
-  return calls.filter(([argv]) => Array.isArray(argv) && argv[0] === command).length
+  return calls.filter(([argv]) => Array.isArray(argv) && commandKey(argv) === command).length
 }
 
 const expectedSummary = {
@@ -65,6 +93,7 @@ describe('getPRConflictSummary caching', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_750_000_000_000)
     gitExecFileAsyncMock.mockReset()
+    scratchFolderPrefixes.length = 0
     __resetPRConflictSummaryCachesForTests()
   })
 
@@ -78,13 +107,13 @@ describe('getPRConflictSummary caching', () => {
     const first = await deriveSummary()
     expect(first).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
-    expect(spawnCount()).toBe(5)
 
+    const initialSpawns = spawnCount()
     const second = await deriveSummary()
     const third = await deriveSummary()
     expect(second).toEqual(expectedSummary)
     expect(third).toEqual(expectedSummary)
-    expect(spawnCount()).toBe(5)
+    expect(spawnCount()).toBe(initialSpawns)
   })
 
   it('re-derives when headRefOid changes without re-fetching inside the throttle window', async () => {
@@ -111,7 +140,6 @@ describe('getPRConflictSummary caching', () => {
     expect(afterExpiry).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(2)
     expect(spawnCount('rev-parse')).toBe(2)
-    // Why: same (headRefOid, latestBaseOid) pair — the summary cache still hits.
     expect(spawnCount('merge-base')).toBe(1)
     expect(spawnCount('rev-list')).toBe(1)
     expect(spawnCount('merge-tree')).toBe(1)
@@ -146,12 +174,12 @@ describe('getPRConflictSummary caching', () => {
 
     const firstCall = deriveSummary()
     const secondCall = deriveSummary()
+    await vi.waitFor(() => expect(spawnCount('fetch')).toBe(1))
     releaseFetch?.({ stdout: '' })
     const [first, second] = await Promise.all([firstCall, secondCall])
 
     expect(first).toEqual(expectedSummary)
     expect(second).toEqual(expectedSummary)
-    expect(spawnCount()).toBe(5)
   })
 
   it('dedupes overlapping derivations after resolving the same live base tip', async () => {
@@ -177,6 +205,7 @@ describe('getPRConflictSummary caching', () => {
       'head-oid-1',
       {}
     )
+    await vi.waitFor(() => expect(spawnCount('fetch')).toBe(1))
     releaseFetch?.({ stdout: '' })
     const [backgroundSummary, manualSummary] = await Promise.all([backgroundRefresh, manualRefresh])
 
@@ -200,6 +229,7 @@ describe('getPRConflictSummary caching', () => {
 
     const prA = deriveSummary('head-oid-a')
     const prB = deriveSummary('head-oid-b')
+    await vi.waitFor(() => expect(spawnCount('fetch')).toBe(1))
     releaseFetch?.({ stdout: '' })
     const [summaryA, summaryB] = await Promise.all([prA, prB])
 
@@ -230,6 +260,7 @@ describe('getPRConflictSummary caching', () => {
 
     const prA = getPRConflictSummary('/repo-root', 'main', 'aaaa1111-base', 'head-oid-a', {})
     const prB = getPRConflictSummary('/repo-root', 'main', 'bbbb2222-base', 'head-oid-b', {})
+    await vi.waitFor(() => expect(spawnCount('fetch')).toBe(1))
     releaseFetch?.({ stdout: '' })
     const [summaryA, summaryB] = await Promise.all([prA, prB])
 
@@ -259,12 +290,20 @@ describe('getPRConflictSummary caching', () => {
     expect(summary).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
 
-    // Why: a failed fetch attempt must also be throttled — offline machines
-    // were the worst case, paying the 10s fetch timeout on every tick.
+    // Failed fetches need the same throttle or offline polling repeatedly pays the timeout.
     const repeat = await deriveSummary()
     expect(repeat).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
-    expect(spawnCount()).toBe(5)
+  })
+
+  it('stops waiting on a hung base fetch after 10 s and uses the local tracking ref', async () => {
+    mockGitDispatch({ fetch: () => new Promise<GitResult>(() => {}) })
+
+    const summary = deriveSummary()
+    await vi.waitFor(() => expect(spawnCount('fetch')).toBe(1))
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(summary).resolves.toEqual(expectedSummary)
   })
 
   it("falls back to GitHub's baseRefOid when fetch and remote-tracking refs are unavailable", async () => {
@@ -292,21 +331,21 @@ describe('getPRConflictSummary caching', () => {
     expect(spawnCount('fetch')).toBe(2)
     expect(
       gitExecFileAsyncMock.mock.calls.filter(
-        ([argv, options]) =>
-          argv[0] === 'fetch' && (options as { wslDistro?: string })?.wslDistro === 'Ubuntu'
+        ([argv, options]) => commandKey(argv) === 'fetch' && options?.wslDistro === 'Ubuntu'
       )
     ).toHaveLength(1)
   })
 
   it('preserves background admission across the complete WSL derivation chain', async () => {
     mockGitDispatch()
+    // Known support adds the quarantine's common-dir read to the chain.
+    getLocalGitCapabilityCache({ wslDistro: 'Ubuntu' }).rememberSupported('merge-tree-write-tree')
 
     await getPRConflictSummary('/repo-root', 'main', 'github-base-oid', 'head-oid-1', {
       wslDistro: 'Ubuntu',
       admissionTier: 'background'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(5)
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toEqual(
         expect.objectContaining({
@@ -321,8 +360,7 @@ describe('getPRConflictSummary caching', () => {
   it('keeps identities distinct when paths or ref names contain a joiner character', async () => {
     mockGitDispatch()
 
-    // Why: these two calls alias under naive pipe-joined keys — the segment
-    // boundary shifts between repoPath and baseRefName.
+    // Pipe joining would alias these distinct repo/ref segment boundaries.
     await getPRConflictSummary('/repo|x', 'main', 'github-base-oid', 'head-oid-1', {})
     await getPRConflictSummary('/repo', 'x|main', 'github-base-oid', 'head-oid-1', {})
 
@@ -338,11 +376,9 @@ describe('getPRConflictSummary caching', () => {
     await expect(deriveSummary()).resolves.toBeUndefined()
     const failureSpawns = spawnCount()
 
-    // Within the window the failure is negative-cached: zero subprocesses.
     await expect(deriveSummary()).resolves.toBeUndefined()
     expect(spawnCount()).toBe(failureSpawns)
 
-    // After expiry the derivation retries (a fetch may have brought objects in).
     vi.setSystemTime(1_750_000_000_000 + CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS + 1_000)
     mockGitDispatch()
     await expect(deriveSummary()).resolves.toEqual(expectedSummary)
@@ -364,5 +400,61 @@ describe('getPRConflictSummary caching', () => {
 
     expect(spawnCount('merge-base')).toBe(2)
     expect(spawnCount('merge-tree')).toBe(1)
+  })
+
+  it('makes no scratch folder for a Git that rejects merge-tree --write-tree, retries included', async () => {
+    // Git 2.25's exact rejection of both argument shapes.
+    const rejected = Object.assign(new Error('Command failed: git merge-tree --write-tree'), {
+      code: 129,
+      stdout: '',
+      stderr: 'usage: git merge-tree <base-tree> <branch1> <branch2>\n'
+    })
+    mockGitDispatch({ 'merge-tree': () => Promise.reject(rejected) })
+
+    await expect(deriveSummary('head-oid-1')).resolves.toBeUndefined()
+    vi.setSystemTime(1_750_000_000_000 + GIT_CAPABILITY_RETRY_INTERVAL_MS + 1_000)
+    await expect(deriveSummary('head-oid-2')).resolves.toBeUndefined()
+
+    expect(spawnCount('merge-tree')).toBe(2)
+    expect(scratchFolderPrefixes).toEqual([])
+    expect(gitExecFileAsyncMock.mock.calls.filter(([, options]) => options?.env)).toEqual([])
+  })
+
+  it('runs the legacy merge-tree fallback against the scratch object store too', async () => {
+    const commonDir = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-conflict-summary-'))),
+      '.git'
+    )
+    mkdirSync(join(commonDir, 'objects'), { recursive: true })
+    try {
+      mockGitDispatch({
+        [COMMON_DIR_COMMAND]: async () => ({ stdout: `${commonDir}\n` }),
+        'merge-tree': async (argv) => {
+          if (argv.includes('--merge-base')) {
+            throw Object.assign(new Error("error: unknown option `merge-base'"), { stderr: '' })
+          }
+          return { stdout: 'tree-oid\u0000src/conflict.ts\u0000' }
+        }
+      })
+
+      await expect(deriveSummary('head-oid-1')).resolves.toEqual(expectedSummary)
+      await expect(deriveSummary('head-oid-2')).resolves.toEqual(expectedSummary)
+
+      const legacy = gitExecFileAsyncMock.mock.calls.filter(
+        ([argv]) => argv[0] === 'merge-tree' && !argv.includes('--merge-base')
+      )
+      expect(legacy).toHaveLength(2)
+      expect(legacy[0]?.[1]?.env).toBeUndefined()
+      expect(legacy[1]?.[1]?.env).toMatchObject({
+        GIT_OBJECT_DIRECTORY: expect.stringContaining(
+          join(commonDir, 'objects', 'tmp_objdir-orca-merge-tree-')
+        ),
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: join(commonDir, 'objects')
+      })
+      expect(spawnCount('merge-tree')).toBe(3)
+      expect(readdirSync(join(commonDir, 'objects'))).toEqual([])
+    } finally {
+      rmSync(join(commonDir, '..'), { recursive: true, force: true })
+    }
   })
 })

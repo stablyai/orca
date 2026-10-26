@@ -1,6 +1,3 @@
-// A send's queue step around its immediate path: the queue decision before it. Its
-// accepted turn lifts a paused queue (`queued-message-pause.ts`), not anything here.
-
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
@@ -14,15 +11,14 @@ export async function runQueueableStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     userSend?: true
     personsMessage?: true
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
-  // The queue decision runs first: a capable send while the session owes work (a
-  // /compact included — it is a queued message like any other) becomes a draft;
-  // only a `blocked` hold, which never queues, falls through to the refusal.
+  // Decide queueing first; blocked sends fall through to immediate refusal.
   const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, params)
   if (queued) {
     return queued

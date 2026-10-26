@@ -66,7 +66,10 @@ describe('reusing a prepared Windows relay addon', () => {
 
   it('refuses missing, truncated and wrong-architecture binaries', () => {
     const options = prepared()
-    for (const bytes of [Buffer.from('spawnOutsideJob'), peImage({ arch: 'arm64' })]) {
+    for (const bytes of [
+      Buffer.from('spawnOutsideJob'),
+      Buffer.concat([peImage({ arch: 'arm64' }), Buffer.from('spawnOutsideJob')])
+    ]) {
       writeFileSync(options.addonPath, bytes)
       expect(canReusePreparedAddon(options)).toBe(false)
     }
@@ -142,4 +145,23 @@ it.each(['x64', 'arm64'])('passes the optional reuse flag safely to the %s build
       ...(enabled === 'true' ? ['--reuse-prepared-runtime'] : [])
     ])
   }
+})
+
+it('reuses the Windows E2E process-tree addon between standalone and template builds', () => {
+  const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
+  const job = workflow.jobs['orcad-serve-mode-switch-windows']
+  const build = job.steps.find(
+    (step) => step.name === 'Build the e2e app, CLI, orcad slot and template'
+  )
+  const commands = build.run.trim().split('\n')
+  const standalone = commands.indexOf('pnpm build:orcad')
+  const processTree = commands.indexOf(
+    'node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime'
+  )
+  const template = commands.indexOf(
+    'node config/scripts/build-orcad-template.mjs --targets win32-x64'
+  )
+  expect(standalone).toBeGreaterThanOrEqual(0)
+  expect(processTree).toBeGreaterThan(standalone)
+  expect(template).toBeGreaterThan(processTree)
 })

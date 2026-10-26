@@ -1,9 +1,11 @@
 import { defineMethod } from '../core'
-import { linearError } from '../../../linear/issue-context-errors'
+import { linearError } from '../../../linear/issue-context/errors'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import {
   AgentIssueContext,
   AgentSearchIssues,
+  LinearCommentDelete,
+  LinearCommentEdit,
   LinearCurrentContext,
   LinearIssueAddComment,
   LinearIssueAttachLink,
@@ -119,6 +121,18 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     params: LinearIssueAddComment,
     handler: async (params, { runtime }) =>
       runtime.linearIssueAddComment({ ...params, writeId: parseLinearWriteId(params.writeId) })
+  }),
+  defineMethod({
+    name: 'linear.commentEdit',
+    permission: 'workspace',
+    params: LinearCommentEdit,
+    handler: async (params, { runtime, signal }) => runtime.linearCommentEdit(params, signal)
+  }),
+  defineMethod({
+    name: 'linear.commentDelete',
+    permission: 'workspace',
+    params: LinearCommentDelete,
+    handler: async (params, { runtime, signal }) => runtime.linearCommentDelete(params, signal)
   }),
   defineMethod({
     name: 'linear.issueAttachLink',

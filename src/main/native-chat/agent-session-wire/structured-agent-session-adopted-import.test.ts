@@ -1,7 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Source validation must finish before a new session claims the provider conversation.
 
-import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -25,8 +24,20 @@ import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
 } from './structured-agent-session-adapter-router-test-support'
-import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
-import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
+import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
+import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
+
+vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
+  const query = await import('../transcript-opencode-sqlite-query')
+  return {
+    ...(await importOriginal<object>()),
+    readOpenCodeTranscriptPageViaWorker: async (
+      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+    ) => query.readOpenCodeTranscriptPage(args),
+    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+  }
+})
 
 const NOW = 1_800_000_000_000
 const SESSION = 'codex_adopting_session'
@@ -44,7 +55,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** A minimal Codex rollout the legacy transcript decoder can read back. */
 async function writeCodexRollout(path: string, text: string): Promise<void> {
   const lines = [
     JSON.stringify({
@@ -106,9 +116,13 @@ function attachParams(
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi
       .fn<StructuredAgentSessionAdapter['acquire']>()
       .mockImplementation(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
         link: {
           linkId: 'resumed-link',
@@ -118,7 +132,7 @@ function adapter(): StructuredAgentSessionAdapter {
           observedAt: NOW
         }
       })),
-    // Proven released, so the failure rethrows its own cause rather than an unproven-exit wrapper.
+    // Proven release preserves the original failure instead of wrapping unproven exit.
     releaseAcquisition: vi.fn(async () => true),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
@@ -148,7 +162,6 @@ async function attach(
       probe: { outcome: 'reservation-unused' }
     },
     callerKey: 'client-1',
-    optionRevision: () => 0,
     params,
     now: () => NOW,
     onAttached
@@ -165,55 +178,96 @@ describe('adopting a provider conversation on create', () => {
     const result = await attach(transcriptPath, sessionAdapter)
 
     expect(result).toMatchObject({ ok: true })
-    // The adapter was asked to resume, not to start: the seeded chain is what tells it which
-    // conversation this session owns.
+    // The seeded chain must resume the adopted conversation.
     const page = (result as { value: { page: { items: unknown[] } } }).value.page
     expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
   })
 
-  it("seeds an ACP agent's chain with the session it adopts and imports that CLI's history", async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-adopt-acp-'))
-    const transcriptPath = join(root, 'chat_history.jsonl')
-    await writeFile(
-      transcriptPath,
-      `${JSON.stringify({ type: 'user', content: [{ type: 'text', text: 'ORCA-GROK-ADOPT' }] })}\n`
-    )
-    const grok = acpLaunchSpecFor('grok')
-    if (!grok) {
-      throw new Error('this build registers no Grok chats')
-    }
-    const handle = { transport: 'acp', agent: 'grok', nativeId: THREAD }
-    const sessionAdapter = adapter()
-    vi.mocked(sessionAdapter.acquire).mockImplementation(async ({ fence, spawnToken }) => ({
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-      link: {
-        linkId: 'resumed-link',
-        handle,
-        origin: 'resumed',
-        mintedAtFence: fence,
-        observedAt: NOW
+  it.each([
+    {
+      agent: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/home/dev/.grok' },
+      record: async (dir: string, text: string) => {
+        const path = join(dir, 'chat_history.jsonl')
+        await writeFile(
+          path,
+          `${JSON.stringify({ type: 'user', content: [{ type: 'text', text }] })}\n`
+        )
+        return path
       }
-    }))
+    },
+    {
+      agent: 'opencode',
+      accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      record: async (dir: string, text: string) => {
+        const path = join(dir, 'opencode.db')
+        writeOpenCodeSqliteDatabase(path, [
+          { id: THREAD, turns: [{ role: 'user', parts: [text] }] }
+        ])
+        return path
+      }
+    },
+    {
+      agent: 'pi',
+      accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/dev/.pi/agent' },
+      record: async (dir: string, text: string) => {
+        const path = join(dir, `2026-10-12T00-00-00-000Z_${THREAD}.jsonl`)
+        const records = [
+          { type: 'session', version: 3, id: THREAD, cwd: '/workspace' },
+          { type: 'message', id: 'rec-1', parentId: null, message: { role: 'user', content: text } }
+        ]
+        await writeFile(path, `${records.map((line) => JSON.stringify(line)).join('\n')}\n`)
+        return path
+      }
+    }
+  ] as const)(
+    "seeds a $agent chat's chain with the session it adopts and imports that CLI's history",
+    async ({ agent, accountHome, record }) => {
+      root = await mkdtemp(join(tmpdir(), `orca-adopt-${agent}-`))
+      const transcriptPath = await record(root, `ORCA-${agent}-ADOPT`)
+      const definition = structuredAgentRuntimeRegistration(agent)?.definition
+      if (!definition) {
+        throw new Error(`this build registers no ${agent} chats`)
+      }
+      // Pi handles name session files; other providers use conversation IDs.
+      const handle = {
+        transport: definition.handleTransport,
+        agent,
+        nativeId: agent === 'pi' ? transcriptPath : THREAD
+      }
+      const sessionAdapter = adapter()
+      vi.mocked(sessionAdapter.acquire).mockImplementation(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: `generation-${fence}`,
+        process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
+        link: {
+          linkId: 'resumed-link',
+          handle,
+          origin: 'resumed',
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
+      }))
 
-    const result = await attach(
-      transcriptPath,
-      sessionAdapter,
-      () => {},
-      attachParams(transcriptPath, {
-        provider: 'grok',
-        agent: 'grok',
-        accountHome: { variable: 'GROK_HOME', path: '/home/dev/.grok' },
-        adopt: { providerHandle: handle, transcriptPath }
-      }),
-      structuredAgentsDeclaringNothing([acpStructuredAgentDefinition(grok)])
-    )
+      const result = await attach(
+        transcriptPath,
+        sessionAdapter,
+        () => {},
+        attachParams(transcriptPath, {
+          provider: agent,
+          agent,
+          accountHome,
+          adopt: { providerHandle: handle, transcriptPath }
+        }),
+        structuredAgentsDeclaringNothing([definition])
+      )
 
-    expect(result.ok && JSON.stringify(result.value.page.items)).toContain('ORCA-GROK-ADOPT')
-    expect(store?.getRecord(SESSION)?.providerHandleChain[0]).toMatchObject({
-      origin: 'adopted',
-      handle
-    })
-  })
+      expect(result.ok && JSON.stringify(result.value.page.items)).toContain(`ORCA-${agent}-ADOPT`)
+      expect(store?.getRecord(SESSION)?.providerHandleChain[0]).toMatchObject({
+        origin: 'adopted',
+        handle
+      })
+    }
+  )
 
   it('replays create without replacing journal-only messages or rereading the source', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-replay-'))
@@ -249,7 +303,7 @@ describe('adopting a provider conversation on create', () => {
       const transcriptPath = join(root, 'rollout.jsonl')
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
-        await truncate(transcriptPath, 16 * 1024 * 1024 + 1)
+        await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -270,7 +324,7 @@ describe('adopting a provider conversation on create', () => {
       expect(store?.getRecord(SESSION)).toBeNull()
       expect(store?.listOperationRows()).toEqual([])
       if (kind === 'oversized') {
-        expect(JSON.stringify(result)).toContain('import bound')
+        expect(JSON.stringify(result)).toContain('byte limit')
       }
     }
   )
@@ -328,7 +382,6 @@ describe('adopting a provider conversation on create', () => {
         body
       }
     )
-    // The failed attach kept the conversation's own journal open, so the send is recorded.
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     await host.flushAllStreamedEvents()
   })

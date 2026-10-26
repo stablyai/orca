@@ -18,6 +18,8 @@ type TerminalOverlaySlotProps = {
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
+  /** Visible on the unfocused side of a split. */
+  dimmed?: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -35,6 +37,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isWorktreeActive,
   isVisible,
   isActive,
+  dimmed = false,
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
@@ -56,9 +59,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       worktreeId={worktreeId}
       cwd={startupCwd ?? worktreePath}
       isActive={isActive || activityTerminalPortal?.active === true}
-      // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
-      // TerminalPane mounted here preserves alt-screen TUI state while this
-      // flag still lets hidden tabs throttle rendering.
+      // Retain TerminalPane outside reparented group subtrees to preserve TUI state; visibility still throttles hidden rendering.
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
@@ -71,9 +72,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           useAppStore.getState().markUnverifiedPtyLoss(terminalTabId)
           return
         }
-        // Why: a parked multi-leaf tab has no PaneManager to promote split
-        // siblings, so closing the tab here would kill them; the reveal
-        // remount handles dead PTYs per leaf instead.
+        // Parked multi-leaf tabs have no PaneManager; defer dead-leaf handling until reveal rather than close live siblings.
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }
@@ -84,9 +83,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         })
       }}
       onCloseTab={() => {
-        // Why: route through closeTerminalTab (not the raw store closeTab) so a
-        // pinned tab hits the confirmation guard. The overlay's direct
-        // store.closeTab was the path that closed pinned terminals silently.
+        // Use the guarded close path so pinned terminals still require confirmation.
         closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
       }}
     />
@@ -106,6 +103,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible}
       measureWhileHidden={shouldMeasureHiddenStartup}
       fitTerminal
+      dimmed={dimmed}
       data-terminal-overlay-tab-id={terminalTabId}
       onFocusOwningGroup={onFocusOwningGroup}
     >

@@ -22,7 +22,7 @@ export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock
             const status = response.status ?? (response.ok ? 200 : 503)
             if (options.redirect === 'manual' && status >= 300 && status < 400) {
               request.emit('redirect', status, options.method ?? 'GET', 'https://redirect.test', {})
-              // Why: Electron cancels an unfollowed manual redirect and then emits 'error'.
+              // Electron emits an error after cancelling an unfollowed manual redirect.
               request.emit('error', new Error('Redirect was cancelled'))
             } else {
               request.emit('response', { statusCode: status })

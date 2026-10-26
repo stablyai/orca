@@ -1,19 +1,21 @@
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WslOrcadHostTarget } from '../wsl/wsl-orcad-host-target'
-import type { RemoteInstallTransport } from './remote-install-transport'
-import type { OrcadLaunchDetach } from './orcad-remote-launch'
+import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
+import type { OrcadLaunchDetach } from '../managed-server/install/orcad-remote-launch'
 
-/** The host an orcad transport reaches; only `id` and `label` mean the same for every kind. */
+/** Only id/label have the same meaning across host kinds. */
 export type OrcadHostTarget = SshTarget | WslOrcadHostTarget
 
 export function isWslOrcadHostTarget(target: OrcadHostTarget): target is WslOrcadHostTarget {
   return 'kind' in target && target.kind === 'wsl'
 }
 
-/** The host connection orcad deploy, activation, serving and lifecycle code runs over. */
 export type OrcadHostTransport = RemoteInstallTransport & {
-  /** Keys per-host state (remote context, wake dedupe) to the target it reaches. */
   getTarget(): OrcadHostTarget
-  /** How a launch leaves the exec's session; absent (SSH) means `nohup`. */
+  /** Absent on SSH, which detaches with nohup. */
   readonly orcadLaunchDetach?: OrcadLaunchDetach
+  /** Pass client-only host facts at launch; SSH adds none. */
+  readonly orcadLaunchEnv?: () => Promise<readonly OrcadLaunchEnvEntry[]>
 }
+
+export type OrcadLaunchEnvEntry = readonly [name: string, value: string]

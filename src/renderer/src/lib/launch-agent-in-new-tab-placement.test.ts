@@ -1,12 +1,11 @@
-// Caller-owned placement coverage for launchAgentInNewTab, split from
-// launch-agent-in-new-tab.test.ts to keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 const mockSetActiveTabType = vi.fn()
 const mockSeedNativeChatAppliedSessionOptions = vi.fn()
 
@@ -42,7 +41,6 @@ const store = {
   tabBarOrderByWorktree: {},
   createTab: mockCreateTab,
   queueTabInitialCwd: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: vi.fn()
 }
@@ -67,7 +65,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -86,14 +84,12 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 describe('launchAgentInNewTab terminal tab activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // The local runtime has answered (without structured support), so no launch waits on it.
     setLocalRuntimeCapabilitiesForTests([])
     store.settings = placementSettings()
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
-  // Why: the store scopes activation to the launch's own workspace, so the floating panel launches
-  // like every other caller and cannot move the main window's selection.
+  // Store activation is scoped to the launch workspace, so floating launches cannot move main-window selection.
   it.each(['wt-1', FLOATING_TERMINAL_WORKTREE_ID])(
     'selects the new tab within %s only',
     async (worktreeId) => {
@@ -130,7 +126,8 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       {
         launchAgent: 'codex',
-        quickCommandLabel: undefined
+        quickCommandLabel: undefined,
+        pendingStartup: expect.anything()
       }
     )
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
@@ -138,6 +135,6 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       FLOATING_TERMINAL_WORKTREE_ID
     )
     // Chat UI model preferences belong to structured chats, not a terminal fallback.
-    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]).not.toHaveProperty('sessionOptions')
+    expect(queuedStartups()[0]).not.toHaveProperty('sessionOptions')
   })
 })

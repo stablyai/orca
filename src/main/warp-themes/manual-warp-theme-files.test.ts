@@ -13,9 +13,9 @@ describe('manual theme ordering', () => {
     )
     const expected = [...paths].sort(
       (a, b) =>
-        // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+        // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
         path.basename(a).localeCompare(path.basename(b), undefined, { sensitivity: 'base' }) ||
-        // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+        // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
         a.localeCompare(b, undefined, { sensitivity: 'base' })
     )
     const NativeCollator = Intl.Collator

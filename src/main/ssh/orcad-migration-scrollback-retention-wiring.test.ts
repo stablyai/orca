@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 
 const journal = vi.hoisted(() => {
   const state: {

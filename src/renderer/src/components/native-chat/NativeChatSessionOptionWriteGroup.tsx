@@ -1,8 +1,6 @@
 import { cn } from '@/lib/utils'
 
-/** Controls that write to the session. While another write is in flight they take nothing and say
- *  so, without `disabled`: that would drop keyboard focus from the control just used. The dimming
- *  waits out a local write, so only a slow one is seen waiting (STYLEGUIDE, in-flight feedback). */
+/** Reject writes while busy without disabling the focused control; delay dimming so quick writes do not flash. */
 export function NativeChatSessionOptionWriteGroup(props: {
   busy: boolean
   className?: string

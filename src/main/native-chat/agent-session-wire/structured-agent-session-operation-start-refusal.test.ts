@@ -1,10 +1,10 @@
-// What an operation that needs the agent is told when it cannot have one: a typed refusal in
-// words a person can read, never Orca's own error text.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { ensureStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import { startStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
+import { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -18,42 +18,52 @@ describe('an operation whose agent start throws', () => {
     const context = {
       deps: { logger: log.logger },
       sessions: new Map(),
+      publishStatus: vi.fn(),
+      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
+      tasks: { trackAttach: (start: Promise<unknown>) => start },
+      runtimeState: {
+        acquireAborts: new StructuredAgentSessionAcquireAborts(),
+        startFlights: new StructuredAgentSessionStartFlights(),
+        startupAttempts: new StructuredAgentSessionStartupAttempts({ expire: () => {} })
+      },
       reconcileLeases: () => Promise.reject(cause)
     }
 
-    const refused = await ensureStructuredAgentSessionAgentForOperation(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the start throws at `reconcileLeases`, before any other member is read.
+    const refused = await startStructuredAgentSessionAgentForOperation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the start throws at `reconcileLeases`, before any member past its registration is read.
       context as unknown as StructuredAgentSessionAttachContext,
       SESSION
     )
 
     expect(refused).toEqual({
       ok: false,
+      failure: { kind: 'hostFault' },
       refusal: {
         code: 'agent_session_owner_restart_failed',
         message: "The agent couldn't restart."
       }
     })
     expect(log.entries.map((entry) => entry.fields)).toEqual([
-      { scope: 'operation-agent-start', sessionId: SESSION, error: cause }
+      { scope: 'agent-start', sessionId: SESSION, error: cause }
     ])
   })
 })
 
 describe('an option picked while the chat is at rest', () => {
   it('refuses a key the provider would not accept as a rejected option', async () => {
-    const persistOptions = vi.fn(async () => {})
+    const reviseSessionOptions = vi.fn()
     const refused = await recordStructuredAgentSessionOptionIntent(
       {
         store: {
           getRecord: () =>
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the intent reads only the record's provider and options.
             ({ provider: 'codex', options: {} }) as unknown as AgentSessionRecord,
-          replaceSessionOptions: vi.fn()
+          replaceSessionOptions: vi.fn(),
+          reviseSessionOptions
         },
         agents: claudeAndCodexAgents()
       },
-      { sessionId: SESSION, fence: 1, persistOptions, publish: () => {}, now: () => 0 },
+      { sessionId: SESSION, fence: 1, publish: () => {}, now: () => 0 },
       { key: 'notAnOption', value: 'x' }
     )
 
@@ -64,6 +74,6 @@ describe('an option picked while the chat is at rest', () => {
         details: { reason: 'optionRejected' }
       }
     })
-    expect(persistOptions).not.toHaveBeenCalled()
+    expect(reviseSessionOptions).not.toHaveBeenCalled()
   })
 })

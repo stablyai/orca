@@ -2,13 +2,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 
-const { retryAllRemoteRuntimePtyRecoveriesNowMock } = vi.hoisted(() => ({
-  retryAllRemoteRuntimePtyRecoveriesNowMock: vi.fn()
+const { retryAllRemoteRuntimePtyRecoveriesNowMock, reviveForEnvironmentMock } = vi.hoisted(() => ({
+  retryAllRemoteRuntimePtyRecoveriesNowMock: vi.fn(),
+  reviveForEnvironmentMock: vi.fn()
 }))
 
 vi.mock('@/components/terminal-pane/remote-runtime-pty-recovery-state', () => ({
-  retryAllRemoteRuntimePtyRecoveriesNow: retryAllRemoteRuntimePtyRecoveriesNowMock
+  retryAllRemoteRuntimePtyRecoveriesNow: retryAllRemoteRuntimePtyRecoveriesNowMock,
+  reviveRemoteRuntimePtyRecoveriesForEnvironment: reviveForEnvironmentMock
 }))
+
+type DiagnosticsEvent = { environmentId: string; diagnostics: { state: string } }
 
 import { useRemoteRuntimeRecoveryTriggers } from './use-remote-runtime-recovery-triggers'
 
@@ -20,6 +24,14 @@ describe('useRemoteRuntimeRecoveryTriggers', () => {
     return unsubscribeSystemResumed
   })
   const retryConnectionsNow = vi.fn(() => Promise.resolve())
+  let diagnosticsCallback: ((event: DiagnosticsEvent) => void) | null = null
+  const unsubscribeDiagnostics = vi.fn()
+  const onSharedControlDiagnostics = vi.fn((callback: (event: DiagnosticsEvent) => void) => {
+    diagnosticsCallback = callback
+    return unsubscribeDiagnostics
+  })
+  const emitState = (environmentId: string, state: string): void =>
+    diagnosticsCallback?.({ environmentId, diagnostics: { state } })
 
   beforeEach(() => {
     systemResumedCallback = null
@@ -27,9 +39,12 @@ describe('useRemoteRuntimeRecoveryTriggers', () => {
     onSystemResumed.mockClear()
     retryConnectionsNow.mockClear()
     retryAllRemoteRuntimePtyRecoveriesNowMock.mockClear()
+    reviveForEnvironmentMock.mockClear()
+    diagnosticsCallback = null
+    unsubscribeDiagnostics.mockClear()
     ;(window as unknown as { api: unknown }).api = {
       ui: { onSystemResumed },
-      runtimeEnvironments: { retryConnectionsNow }
+      runtimeEnvironments: { retryConnectionsNow, onSharedControlDiagnostics }
     }
   })
 
@@ -59,5 +74,23 @@ describe('useRemoteRuntimeRecoveryTriggers', () => {
     expect(retryConnectionsNow).not.toHaveBeenCalled()
     expect(retryAllRemoteRuntimePtyRecoveriesNowMock).not.toHaveBeenCalled()
     expect(unsubscribeSystemResumed).toHaveBeenCalledTimes(1)
+  })
+
+  // #9092/#25783: a returning Tailscale or VPN route fires no `online`, so the control socket is the signal.
+  it("revives an environment's panes when its control connection becomes ready again", () => {
+    const { unmount } = renderHook(() => useRemoteRuntimeRecoveryTriggers())
+
+    emitState('env-1', 'ready')
+    emitState('env-1', 'ready')
+    expect(reviveForEnvironmentMock.mock.calls).toEqual([['env-1']])
+
+    emitState('env-1', 'reconnecting')
+    emitState('env-2', 'connecting')
+    expect(reviveForEnvironmentMock).toHaveBeenCalledTimes(1)
+
+    emitState('env-1', 'ready')
+    expect(reviveForEnvironmentMock.mock.calls).toEqual([['env-1'], ['env-1']])
+    unmount()
+    expect(unsubscribeDiagnostics).toHaveBeenCalledTimes(1)
   })
 })

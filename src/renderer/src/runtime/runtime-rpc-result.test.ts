@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hasRuntimeRpcErrorCode, RuntimeRpcCallError } from './runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 describe('hasRuntimeRpcErrorCode', () => {
   it('matches structured runtime failures through wrapped causes', () => {

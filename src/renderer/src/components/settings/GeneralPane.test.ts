@@ -9,6 +9,12 @@ import {
 } from './GeneralPane'
 import { matchesSettingsSearch } from './settings-search'
 
+vi.mock('@/store', () => ({
+  useAppStore: () => {
+    throw new Error('Pure settings helpers must not access the app store')
+  }
+}))
+
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   default: () => {
     throw new Error('This suite must not render a terminal pane')
@@ -103,8 +109,7 @@ describe('GeneralPane project runtime section visibility', () => {
   const entries = getGeneralPaneSearchEntries()
 
   it('hides the section on non-Windows hosts even with an empty search query', () => {
-    // Regression: matchesSettingsSearch returns true for an empty query, so the
-    // platform gate is what keeps the orphaned header off macOS/Linux.
+    // Empty searches match empty entries; the platform gate must suppress orphaned non-Windows headers.
     expect(shouldShowProjectRuntimeSection(false, '', [])).toBe(false)
     expect(shouldShowProjectRuntimeSection(undefined, '', [])).toBe(false)
   })

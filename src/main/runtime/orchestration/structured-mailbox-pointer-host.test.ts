@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -68,12 +68,12 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('reads the gate facts from the FULL timeline, never a bounded tail', async () => {
-    // The defect this pins: a running turn is announced by ONE lifecycle item, and settlement
-    // tombstones it rather than rewriting it. A long tool-calling turn pushes that item arbitrarily
-    // far from the tail, so any page-sized read reports a busy worker as idle — and `@idle` then
-    // wakes it mid-turn.
+    // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
     const items = [runningTurn(), ...transcript(500)]
-    hostRef.current = { journalSnapshot: () => ({ items, submissions: [] }) }
+    hostRef.current = {
+      journalSnapshot: () => ({ items, submissions: [] }),
+      currentWork: () => null
+    }
     expect(await readStructuredSessionGateFacts('s1')).toEqual({
       turnRunning: true,
       awaitingHuman: false
@@ -84,7 +84,8 @@ describe('structured mailbox pointer host', () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = {
       deps: { store: { getRecord: () => null } },
-      journalSnapshot: () => ({ items: [], submissions })
+      journalSnapshot: () => ({ items: [], submissions }),
+      currentWork: () => null
     }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
       submissions
@@ -112,10 +113,16 @@ describe('structured mailbox pointer host', () => {
           getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
         }
       },
-      journalSnapshot: () => ({ items, submissions: [pointerSubmission('earlier', 2, 6), current] })
+      journalSnapshot: () => ({
+        items,
+        submissions: [pointerSubmission('earlier', 2, 6), current]
+      }),
+      currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({ submissions: [current] })
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
@@ -130,15 +137,18 @@ describe('structured mailbox pointer host', () => {
       journalSnapshot: () => ({
         items: [],
         submissions: [pointerSubmission('earlier', 2, 2), current]
-      })
+      }),
+      currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({ submissions: [current] })
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
   it('answers null rather than nothing recorded when the session cannot be read', async () => {
-    // Null retains the pointer; an empty answer would send into a session this runtime cannot see.
+    // Unreadable sessions retain pointers; treating them as empty would authorize an unseen send.
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
       journalSnapshot: () => {
@@ -163,8 +173,7 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
+    // Only accepted consumes mail; pending and unknown must both retain the pointer.
     ['pending', 'unknown'],
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
@@ -184,19 +193,15 @@ describe('structured mailbox pointer host', () => {
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
     ).resolves.toEqual({ kind: 'sent', state: expected })
-    // Per-dispatch caller key: names the dispatch the nudge is for.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
   })
 
-  it('asks a busy chat to queue the pointer as a card, with who it is from', async () => {
+  it('sends the pointer as a plain send for every agent, with who it is from', async () => {
     const send = vi.fn(
       async (_caller: unknown, _payload: { delivery?: string; body?: unknown }) => ({
         ok: true,
-        value: {
-          clientMessageId: 'op1',
-          queued: { messageId: 'op1', position: 0, state: 'waiting' }
-        }
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
       })
     )
     hostRef.current = { send }
@@ -206,13 +211,12 @@ describe('structured mailbox pointer host', () => {
         dispatchId: 'd1',
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE }
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        holdWhileWorking: false
       })
-    ).resolves.toEqual({ kind: 'queued' })
-    expect(send.mock.calls[0]![1]).toMatchObject({
-      delivery: 'queue-if-active',
-      body: { from: NOTICE_SOURCE }
-    })
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
+    expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })
+    expect(send.mock.calls[0]![1]!.delivery).toBeUndefined()
   })
 
   it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {
@@ -237,10 +241,7 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {
-    // Direct mail is addressed to the worker's own handle, so there may be no dispatch at all.
-    // The ledger is keyed on (callerKey, operationId): a key derived from the session keeps that
-    // nudge's own retry lane, and leaves the dispatch key byte-identical so nudges already in
-    // flight under it still replay rather than being re-minted as a second turn.
+    // Direct mail has no Dispatch; a session-scoped key preserves its retry lane without changing existing Dispatch ledger keys.
     const send = vi.fn(async (_caller: { callerKey: string }) => ({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }

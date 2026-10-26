@@ -17,10 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import {
-  formatActiveFilterLabel,
-  OptionsFilterCountBadge
-} from '@/components/sidebar/options-filter-count-badge'
+import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
+import { formatActiveFilterLabel } from '../../../../shared/workspace-view/workspace-row-filters'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
@@ -101,21 +99,18 @@ export function ActivityThreadOptionsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
-          <span className="inline-flex shrink-0">
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="relative text-muted-foreground"
-                aria-label={optionsLabel}
-              >
-                <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-                <OptionsFilterCountBadge count={activeFilterCount} />
-              </Button>
-            </DropdownMenuTrigger>
-          </span>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="relative text-muted-foreground"
+              aria-label={optionsLabel}
+            >
+              <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
+              <OptionsFilterCountBadge count={activeFilterCount} />
+            </Button>
+          </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {activeFilterCount > 0

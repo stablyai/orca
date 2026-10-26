@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -92,6 +93,7 @@ import {
   type WorktreeCreateTimingRecorder
 } from '../worktree-create-timing'
 import type { SparsePreset } from '../../shared/worktree/create-types'
+import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 
 const worktreePath = resolve('/worktrees', 'app')
 
@@ -119,7 +121,7 @@ function createWorktree(
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: ''
     }),
-    setWorktreeMeta: (_id: string, updates: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: (_target: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       writtenMeta.push(updates)
       return updates
     },
@@ -140,8 +142,7 @@ function createWorktree(
     createdWithAgent: undefined,
     resolveRemoteTrackingBase: mocks.remoteBase,
     hasRemoteTrackingRef: mocks.hasRemoteRef,
-    // Why: a vi.fn marks the promise it returns as handled; a fresh promise keeps
-    // an unawaited fetch rejection visible to the unhandled-rejection checks.
+    // vi.fn marks returned promises handled; a fresh promise exposes unawaited fetch rejection.
     refreshRemoteTrackingBase: async (...refreshArgs) => await mocks.refresh(...refreshArgs),
     fetchRemote: async (...fetchArgs) => await mocks.fetch(...fetchArgs),
     onWorktreeMetadataPersisted: () => undefined,
@@ -182,6 +183,81 @@ beforeEach(() => {
   mocks.copyPaths.mockResolvedValue([])
   mocks.effectiveHooks.mockReturnValue(null)
   readSparsePresets.mockReturnValue([WEB_PRESET])
+})
+
+describe('runtime create listing hold', () => {
+  const rows = [{ path: worktreePath }]
+
+  it('holds the checkout during Git creation and releases it once metadata is saved', async () => {
+    mocks.consume.mockImplementation(async () => {
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
+      return { status: 'hit', result: {}, rearm: mocks.rearm }
+    })
+    mocks.resolveShared.mockImplementation(async () => {
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+      return []
+    })
+    await createWorktree()
+    expect(mocks.resolveShared).toHaveBeenCalledOnce()
+  })
+
+  it('releases the checkout when Git creation fails', async () => {
+    mocks.consume.mockRejectedValue(new Error('checkout failed'))
+    await expect(createWorktree()).rejects.toThrow('checkout failed')
+    expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+  })
+})
+
+describe('runtime nested-workspaces layout', () => {
+  const addedPath = (): string => String(mocks.add.mock.calls[0]?.[1])
+
+  it('honors the client choice over the host default', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    await createWorktree({ nestWorkspaces: true })
+    expect(addedPath()).toBe(resolve('/worktrees', 'repo', 'app'))
+  })
+
+  it('falls back to the host setting when the client sends none', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    await createWorktree({})
+    expect(addedPath()).toBe(worktreePath)
+  })
+})
+
+describe('runtime keep-local-main-up-to-date choice', () => {
+  const addRefreshArg = (): unknown => mocks.add.mock.calls[0]?.[4]
+  const addOptions = (): AddWorktreeOptions | undefined => mocks.add.mock.calls[0]?.[6]
+
+  beforeEach(() => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    mocks.remoteBase.mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+  })
+
+  it('refreshes local main when the client turned it on, over the host default', async () => {
+    await createWorktree({ refreshLocalBaseRefOnWorktreeCreate: true })
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ refreshLocalBaseRef: true })
+    )
+    expect(addRefreshArg()).toBe(true)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBeUndefined()
+  })
+
+  it('suppresses the suggestion the client already dismissed', async () => {
+    await createWorktree({ localBaseRefSuggestionDismissed: true })
+    expect(addRefreshArg()).toBe(false)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBeUndefined()
+  })
+
+  it('keeps the host setting and suggestion when the client sends neither', async () => {
+    await createWorktree({})
+    expect(addRefreshArg()).toBe(false)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBe(true)
+  })
 })
 
 describe('runtime prepared-worktree replenishment', () => {

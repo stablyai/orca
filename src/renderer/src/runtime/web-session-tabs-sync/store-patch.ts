@@ -1,8 +1,18 @@
+import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { pickParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import {
+  pickHostTurnEnd,
+  pickParsedAgentStatusPayload,
+  type TurnEndDisposition
+} from '../../../../shared/agent-status-types'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status-field-normalization'
+import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status-routing'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
@@ -34,6 +44,8 @@ export function applyWebSessionTabsStorePatch(
     seedOnly?: true
     payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
       stateStartedAt: number
+      turnEndedAt?: number
+      turnEndDisposition?: TurnEndDisposition
       localStateStartedAt?: number
     }
   }[] = []
@@ -77,7 +89,11 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
-          if (!notificationStatus) {
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (
+            !notificationStatus ||
+            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+          ) {
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
@@ -126,19 +142,34 @@ export function applyWebSessionTabsStorePatch(
               }
             }
           }
-          if (!allowCompletionNotification && notificationStatus.state !== 'working') {
+          // Why: a hydrated `done` unlike this renderer's prior row ended while the host was unreachable.
+          const notifyCompletion =
+            allowCompletionNotification ||
+            (!clientOwnedNotification &&
+              !isSeenHostReplay(
+                {
+                  isReplay: true,
+                  stateStartedAt: notificationStatus.stateStartedAt,
+                  turnCompletedAt,
+                  turnEndedAt: notificationStatus.turnEndedAt
+                },
+                notificationStatus.state,
+                state.agentStatusByPaneKey[notificationStatus.paneKey]
+              ))
+          if (!notifyCompletion && notificationStatus.state !== 'working') {
             continue
           }
           acceptedNotificationStatuses.push({
             paneKey: notificationStatus.paneKey,
             worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
-            ...(!allowCompletionNotification ? { seedOnly: true as const } : {}),
+            ...(!notifyCompletion ? { seedOnly: true as const } : {}),
             payload: {
               ...pickParsedAgentStatusPayload({
                 ...notificationStatus,
                 ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
               }),
               stateStartedAt: notificationStatus.stateStartedAt,
+              ...pickHostTurnEnd(notificationStatus),
               ...(clientOwnedNotification ? { localStateStartedAt } : {})
             }
           })
@@ -158,6 +189,14 @@ export function applyWebSessionTabsStorePatch(
     console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
   }
 
+  for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
+    if (decision.apply && source) {
+      markStructuredAgentSessionLaunchesPublished(
+        toRuntimeExecutionHostId(environmentId),
+        publishedStructuredSessions([source])
+      )
+    }
+  }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
   try {
     if (mirroredAgentStatusChanged) {

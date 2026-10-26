@@ -1,15 +1,25 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { ClaudeAgentViewIndicator } from '@/components/ClaudeAgentViewIndicator'
+import {
+  AgentStateDot,
+  agentStateLabel,
+  agentStateProgressLabel,
+  type AgentDotState
+} from '@/components/AgentStateDot'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
-import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
+import { agentRowToolInput, showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
-import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
+import { agentNoUpdateLabel, formatCompactDuration } from '../../../../shared/agent-row-decay-state'
 import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
@@ -17,7 +27,7 @@ import {
 } from '../../../../shared/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
 import {
@@ -48,8 +58,7 @@ function stateDotTooltipLabel(
   if (dotState === 'interrupted') {
     return agentVerdictStatusLine(agent.entry) ?? agentStateLabel(dotState)
   }
-  // Why: report the observation, not a verdict on the agent — the elapsed gap is what
-  // lets the user apply context Orca has no way to know (a long build, a slow download).
+  // Report the observed silence; only the user knows whether a long build or download explains it.
   return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
@@ -99,6 +108,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const view = useClaudeAgentRowView(agent)
+  const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -111,10 +122,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewClaudeAgentFromRow(agent)
     },
-    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
+    [onActivate, agent]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -149,13 +160,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
-  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
-  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
-  // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
+  // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
+  const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
+  // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
+  const toolInput = showsTool
+    ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''
+    : ''
   // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
   const lastAssistantMessage = agent.childRow
     ? agentChildRowMessageLine(agent.childRow)
@@ -171,15 +184,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
-  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
-  // failure does so even while subagents still run.
-  const dotState: AgentDotState = agentRowDisplayDotState(agent)
-  const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
-  // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
-  // row's own timestamp slot rather than hiding in a hover tooltip.
+  // Surface failed main-agent outcomes even while subagents continue running.
+  const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  const dotTooltipLabel = agentStateProgressLabel(
+    dotState,
+    presentation.progress,
+    stateDotTooltipLabel(agent, dotState, now)
+  )
+  // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
-
-  // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
   const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
   const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
@@ -210,7 +223,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      data-focused-agent-pane={highlighted ? 'true' : undefined}
+      data-current={view?.current ? 'true' : undefined}
+      aria-current={view?.current ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
@@ -251,17 +266,22 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               className="inline-flex shrink-0 items-center justify-center"
               aria-label={dotTooltipLabel}
             >
-              <AgentStateDot state={dotState} size={stateDotSize} title={null} />
+              <AgentStateDot
+                state={dotState}
+                size={stateDotSize}
+                title={null}
+                progress={presentation.progress}
+              />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
             {dotTooltipLabel}
           </TooltipContent>
         </Tooltip>
-        {/* Why: subagent rows skip the icon — agentType holds a child name, not an iconable agent, so it would render the unknown "?" glyph. */}
+        {/* Why: subagent rows skip the icon — agentType holds a child's name, which AgentTypeIcon would draw as a misleading letter; nesting conveys identity. */}
         {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>
-            <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
+            <AgentTypeIcon agentType={agent.agentType} size={14} />
           </span>
         )}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
@@ -272,15 +292,23 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
             // Why: the selected-row fill washes out muted text — keep it readable.
-            isFocusedPane && !isUnvisited && 'text-foreground/90'
+            highlighted && !isUnvisited && 'text-foreground/90'
           )}
           title={displayLabel}
         >
           {displayLabel}
         </span>
+        <ClaudeAgentViewIndicator view={view} showChild={!childAgentsExpanded} />
         {model && (
           <span
-            className="max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground/70"
+            className={cn(
+              'max-w-24',
+              // Why: only shrink when the in-flow Send button would otherwise overflow the row.
+              sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
+                ? 'min-w-0'
+                : 'shrink-0',
+              'truncate font-mono text-[10px] text-muted-foreground/70'
+            )}
             title={model}
           >
             {model}
@@ -316,7 +344,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
-        statusLabel={stoppingLabel}
+        statusLabel={
+          stoppingLabel ??
+          (presentation.attention ? programStatusAttentionLine(presentation.attention) : null) ??
+          // A blocked row (auth) shows no tool line, so the program's block stands in for it.
+          (agent.state === 'blocked' && agent.entry.programStatus?.state === 'blocked'
+            ? programStatusAttentionLine({
+                ...(agent.entry.programStatus.kind ? { kind: agent.entry.programStatus.kind } : {}),
+                ...(presentation.message ? { message: presentation.message } : {})
+              })
+            : null)
+        }
       />
       <DashboardAgentRowMessage
         expanded={expanded}

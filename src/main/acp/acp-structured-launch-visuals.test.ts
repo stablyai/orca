@@ -1,13 +1,14 @@
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 
 const SKILL = { pluginDir: '/app/plugin', skillsRoot: '/app/plugin/skills' }
-const FOLDER = '/state/native-chat-visuals/0123'
+const FOLDER = '/state/chat-scratch/0123'
 const identity = {
   sessionId: 'session-alpha-1',
   workspaceId: 'workspace-1',
@@ -44,7 +45,7 @@ function resolve(
   const spec = { ...acpLaunchSpecFor(agent)!, ...options.spec }
   const probeVersion = vi.fn<
     NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
-  >(async (_input, supports) => supports(options.version ?? '1.0.46'))
+  >(async () => ({ version: options.version ?? '1.0.46' }))
   const prepareVisuals = vi.fn(async () =>
     options.visuals === false ? null : { folder: FOLDER, skill: SKILL }
   )
@@ -69,20 +70,20 @@ describe('ACP launch visuals', () => {
   it("gives Grok the plugin folder and the chat's visuals folder", async () => {
     const launch = await resolve('grok').launch
     expect(launch.args).toEqual(['agent', '--plugin-dir', SKILL.pluginDir, 'stdio'])
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
-    expect(launch.envToDelete).not.toContain(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
+    expect(launch.envToDelete).not.toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 
   it('starts a Grok too old for --plugin-dir without visuals, never naming an inherited folder', async () => {
     const { launch, logger } = resolve('grok', {
       version: '1.0.10',
-      inheritedEnv: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/another/chat' }
+      inheritedEnv: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/another/chat' }
     })
     const resolved = await launch
     expect(resolved.args).toEqual(['agent', 'stdio'])
     expect(
-      resolveProviderChildEnv(resolved, { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/another/chat' })[
-        NATIVE_CHAT_VISUALS_DIR_ENV
+      resolveProviderChildEnv(resolved, { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/another/chat' })[
+        NATIVE_CHAT_SCRATCH_DIR_ENV
       ]
     ).toBeUndefined()
     expect(logger.warn).toHaveBeenCalledWith(
@@ -107,11 +108,10 @@ describe('ACP launch visuals', () => {
       autoupdate: false,
       skills: { paths: [SKILL.skillsRoot] }
     })
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
   })
 
-  // OMP's settings layers (global, profile, project, overlays) replace lists, so any config of
-  // Orca's would hide the user's own skill folders; a plugin folder adds beside them.
+  // OMP config layers replace skill lists; a plugin directory preserves the user's configured folders.
   it("gives OMP the plugin folder, leaving the user's config files as they set them", async () => {
     const launch = await resolve('omp', {
       version: '17.0.5',
@@ -119,7 +119,7 @@ describe('ACP launch visuals', () => {
     }).launch
     expect(launch.args).toEqual(['acp', '--plugin-dir', SKILL.pluginDir])
     expect(launch.env.PI_CONFIG_FILES).toBe('/user/overlay.yml')
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
   })
 
   it('still starts the chat when the skill cannot be prepared', async () => {
@@ -133,7 +133,7 @@ describe('ACP launch visuals', () => {
     })
     const resolved = await launch
     expect(resolved.args).toEqual(['acp'])
-    expect(resolved.envToDelete).toContain(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(resolved.envToDelete).toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('could not be prepared'),
       expect.anything()
@@ -141,6 +141,10 @@ describe('ACP launch visuals', () => {
   })
 
   it('still refuses a release the agent does not run structured chats on', async () => {
-    await expect(resolve('omp', { version: '16.0.0' }).launch).rejects.toThrow()
+    const launch = resolve('omp', { version: '16.0.0' }).launch
+    await expect(launch).rejects.toBeInstanceOf(AgentCliInstallationError)
+    await expect(launch).rejects.toMatchObject({
+      installation: { agent: 'omp', installedVersion: '16.0.0', minimumVersion: '17.0.5' }
+    })
   })
 })

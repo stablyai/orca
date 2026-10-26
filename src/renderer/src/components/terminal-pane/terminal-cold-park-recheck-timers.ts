@@ -1,15 +1,4 @@
-/**
- * Pending cold-park recheck timers, keyed by tab and reconciled by deadline.
- *
- * Why reconcile instead of clear-and-re-arm: the cold-park effect must re-run on
- * every tab-model write, because watcher coverage is re-derived from store and
- * registry state the park key cannot encode (terminal-cold-park-verdict-loop
- * pins what breaks when it stops). But every recheck deadline is absolute —
- * hiddenSince plus a fixed policy window, a cool-down, or a pin expiry — so a
- * re-run that recomputes the same deadline was cancelling a timer only to re-arm
- * it for the same instant. A background title flood paid two timer syscalls per
- * hidden tab per write for no scheduling change.
- */
+// Reconcile absolute deadlines instead of rearming: title writes must still recheck watcher coverage, but unchanged deadlines need no timer syscalls.
 
 export type TerminalTabColdParkRecheckTimer = { timerId: number; deadlineMs: number }
 export type TerminalTabColdParkRecheckTimers = Map<string, TerminalTabColdParkRecheckTimer>

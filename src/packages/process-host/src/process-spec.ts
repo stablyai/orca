@@ -9,18 +9,12 @@ export type ChildProcessHandle = ChildProcess
 
 export type SpawnedProcess = ChildProcess
 
-/** Centralizes host execution settings so argument encoding and tree ownership stay consistent. */
 export type ProcessSpec = {
-  /**
-   * Program to run. On Windows this should already be an absolute path —
-   * spawning by bare name depends on the child's PATH, which under Group Policy
-   * or a stripped Electron environment can resolve to nothing.
-   */
+  /** Prefer an absolute Windows path; stripped Electron PATHs may not resolve bare names. */
   program: string
   args?: readonly string[]
   cwd?: string
   env?: NodeJS.ProcessEnv
-  /** Kill the process (and, on Windows, its console) after this long. */
   timeoutMs?: number | null
   /** Written to stdin then closed. Omit to leave stdin empty and closed. */
   input?: string
@@ -28,15 +22,15 @@ export type ProcessSpec = {
   maxOutputBytes?: number
   /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */
   captureStdoutAsBytes?: boolean
-  /** Stop a parser command as soon as captured output exceeds its cap. */
+  /** Capture stderr as bytes without decoding; stderr stays empty in this mode. */
+  captureStderrAsBytes?: boolean
   killOnOutputLimit?: boolean
-  /** Kills the process when aborted; the result still reports the exit. */
+  /** Aborting still resolves with the process exit result. */
   signal?: AbortSignal
   /** Keep the child in its own POSIX process group for tree termination. */
   detached?: boolean
   /** Preserve a caller-owned Windows command line such as a cmd.exe invocation. */
   windowsVerbatimArguments?: boolean
-  /** Streaming callers may suppress child output for auxiliary processes. */
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
@@ -44,6 +38,8 @@ export type ProcessSpec = {
   terminationBarrier?: boolean | ProcessTerminationBarrier
   /** Called once when the child exits or tree termination is verified. */
   onChildTerminated?: () => void
+  /** Every raw stderr chunk as it arrives, including any past the capture cap. */
+  onStderr?: (chunk: Buffer | string) => void
 }
 
 export type PipedChildProcess = ChildProcessWithoutNullStreams
@@ -66,9 +62,8 @@ export type ProcessResult = {
   stdout: string
   stdoutBytes?: Buffer
   stderr: string
-  /** True when the process was killed by `timeoutMs` rather than exiting. */
+  stderrBytes?: Buffer
   timedOut: boolean
-  /** True when stdout or stderr exceeded `maxOutputBytes` and was clipped. */
   outputTruncated?: boolean
 }
 

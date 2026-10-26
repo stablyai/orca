@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mintStructuredWorkerHandle,
@@ -66,8 +67,7 @@ describe('a send addressed to an agent session', () => {
   }
 
   it('stores mail to a live session that coordinates nothing at its own address, and points it', async () => {
-    // The refusal this replaces: "Terminal session:<id> has no live pane or durable Run/Dispatch
-    // mailbox." An agent's id is its public address, coordinator or not.
+    // Public session ids remain routable even without live panes or durable Run/Dispatch mailboxes.
     const deliver = vi.spyOn(h.runtime, 'deliverPendingMessagesForHandle')
     const sent = await send(ADDRESS_X)
     expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: ADDRESS_X } } })
@@ -213,8 +213,7 @@ describe('a live structured worker addressed by its session id', () => {
   }
 
   it('lands in its Dispatch mailbox, which its flagless check reads', async () => {
-    // The defect this pins: the mail was stored at `orca_session_id:<id>`, pointed at the worker, and its
-    // `check` — which reads the worker's handle and Dispatch mailboxes — returned nothing.
+    // Mail formerly landed at the session address while worker check read handle/Dispatch mailboxes and found nothing.
     const run = h.db.createRun({
       objective: 'pty coordinator',
       coordinatorHandle: 'term_coord',
@@ -285,8 +284,7 @@ describe('mail sent to a session address reaches the mailbox that session reads'
   })
 
   it('reaches a chat with no Run after a restart, once the send has started the session host', async () => {
-    // After an app restart the agent-session host starts lazily; routing reads the session record
-    // synchronously, so the send must start the host before it resolves the recipient.
+    // After restart, start the lazy session host before synchronous recipient-record lookup.
     const store = hostRef.current
     hostRef.current = null
     vi.mocked(h.runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {

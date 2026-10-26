@@ -55,7 +55,6 @@ describe('local regular-file reads', () => {
       await expect(readLocalFileBounded(handle, 1024 * 1024, stats.size)).resolves.toEqual(
         Buffer.from('hello')
       )
-      // One read sized past the reported length, then a 1-byte probe confirming EOF.
       expect(read.mock.calls.map((call) => call.at(2))).toEqual([6, 1])
     } finally {
       await handle.close()
@@ -74,7 +73,6 @@ describe('local regular-file reads', () => {
     }
   })
 
-  // Why: device files are POSIX-only.
   describe.skipIf(process.platform === 'win32')('non-regular files', () => {
     it.each(['/dev/zero', '/dev/urandom'])(
       'refuses %s before reading any of it',

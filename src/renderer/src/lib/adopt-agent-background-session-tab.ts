@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AgentType } from '../../../shared/agent-status-types'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -52,7 +53,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
   }
 }
 
-/** Publishes a hidden run tab already bound to its live PTY (#2989). */
 export async function adoptAgentBackgroundSessionTab(args: {
   store: Store
   worktreeId: string
@@ -98,7 +98,8 @@ export async function adoptAgentBackgroundSessionTab(args: {
     id: reservedTabId,
     initialPtyId: ptyId,
     activate: false,
-    recordInteraction: false
+    recordInteraction: false,
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { initialLeafId: parsePaneKey(args.paneKey)?.leafId } : {})
   })
   const paneKey = args.paneKey
   store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)

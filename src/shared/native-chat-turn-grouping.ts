@@ -1,6 +1,4 @@
-// Which turn each transcript row belongs to, where each turn draws its bar, and the order the rows
-// draw in. Shared because desktop and mobile both group rows and place bars from these keys, and a
-// row grouped differently on each surface is the same bug twice.
+// Share desktop/mobile turn ownership, bar placement and row order.
 
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
@@ -13,13 +11,8 @@ export type NativeChatOpensTurn = (message: NativeChatTurnRow) => boolean
 
 export const nativeChatUserRowOpensTurn: NativeChatOpensTurn = (message) => message.role === 'user'
 
-/**
- * Resolve each row's turn key. The host's attribution (`turnKeysByItemId`) wins, so rows after a
- * mid-turn send stay with the turn that produced them. Rows it cannot name keep positional
- * grouping — an unmapped user row keys itself, anything else inherits the previous row's key —
- * which with no attribution is exactly preceding-user-message grouping. `opensTurn` narrows which
- * unmapped rows key themselves, for a sequence that interleaves rows no conversation turn starts at.
- */
+/** Host turn attribution wins over mid-turn send position. Unmapped rows use preceding-user grouping;
+ * opensTurn restricts which unmapped rows can anchor turns in interleaved streams. */
 export function nativeChatRowTurnKeys(
   messages: readonly NativeChatTurnRow[],
   turnKeysByItemId?: ReadonlyMap<string, string> | null,
@@ -39,15 +32,8 @@ export function nativeChatRowTurnKeys(
   })
 }
 
-/**
- * Turn ownership for a host that states no turn scope, read from journal order: every item between
- * a root turn record and the next belongs to that record's turn (the record is appended when the
- * turn opens, and an opener's user item is written ahead of dispatch). `recordKeys` maps each root
- * record to its anchor, or null when it names no opener. A user item that opened any turn keys
- * itself; one the provider folded into a running turn (a steer) takes that turn's key, but only
- * once the turn produces more rows after it, so a fresh tail send is not pulled into the turn it
- * is merely waiting behind. Items before the first record stay absent.
- */
+/** Legacy unscoped hosts assign rows between root records to that turn’s mapped opener. Openers key themselves;
+ * steers inherit only after later turn content proves continuation, so fresh tail sends keep waiting. Rows before the first record remain unmapped. */
 export function nativeChatJournalOrderTurnKeys(
   items: readonly AgentJournalRenderItem[],
   recordKeys: ReadonlyMap<string, string | null>
@@ -85,8 +71,7 @@ export function nativeChatJournalOrderTurnKeys(
   return keys
 }
 
-/** Where each turn draws its bar: its first row, and above that row when the turn has no user
- *  bubble of its own (one the provider opened, or whose opener is outside the loaded window). */
+/** Place each turn bar at its first row; use an above-row bar when the provider opened it or its user opener is unloaded. */
 export function nativeChatTurnBarRows(
   messages: readonly { id: string }[],
   turnKeys: readonly (string | undefined)[]
@@ -100,12 +85,8 @@ export function nativeChatTurnBarRows(
   return bars
 }
 
-/**
- * Row indexes in the order the transcript draws them, or null when that is journal order. A
- * message is written when it is sent, but a provider that queues it behind the running turn opens
- * its turn only after that turn ends: the rows the earlier turn wrote meanwhile are still that
- * turn's. So a message that opened a turn draws after them, just before its own turn's rows.
- */
+/** Return draw indexes or null for journal order. Provider-queued sends are written mid-turn but open only after earlier work ends;
+ * draw each opener after that prior work and just before its own turn’s rows. */
 export function nativeChatTurnDrawOrder(
   messages: readonly NativeChatTurnRow[],
   turnKeys: readonly (string | undefined)[],

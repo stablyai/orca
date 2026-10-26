@@ -14,7 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
-import { useHostProtocolGates } from './HostProtocolGate'
+import { useHostProtocolGates } from './host-protocol-gates-context'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
@@ -33,7 +33,6 @@ type Props = {
   onRetry: () => void
   // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
   refetch: () => void
-  // Threaded to sections for github.* fetches + mutations.
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -64,10 +63,8 @@ export function MobilePRSidebar({
 }: Props) {
   const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
-  // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
-  // Prefer the stable PRInfo.prRepo reference — cloning owner/repo each render
-  // reallocates and thrash-updates the mutation/comment/title hooks.
+  // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
   const actions = useMobilePrActions({
     client,
@@ -104,8 +101,7 @@ export function MobilePRSidebar({
     hostStatusPending: statusPending,
     hostStatusReadable: statusReadable
   })
-  // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
-  // instead of staying a stale one-shot snapshot for the whole session.
+  // Key overrides on PR payload so every refetch refreshes them instead of keeping session-long snapshot.
   const botAuthorOverrides = usePRBotAuthorOverrides(
     client,
     connState,
@@ -117,8 +113,7 @@ export function MobilePRSidebar({
       style={{ flex: 1 }}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
       keyboardShouldPersistTaps="handled"
-      // Why: root-comment / reply composers sit at the bottom of this scroll
-      // area; without keyboard insets the focused field stays under the keyboard.
+      // Inset scroll for keyboard or bottom root/reply composers remain covered.
       automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
     >
@@ -205,8 +200,7 @@ function PrSidebarContent({
     )
   }
   if (branch === 'blocked' || actions.blocked) {
-    // Permanent failure (R9): explanatory, no retry-encouragement styling. A
-    // mutation-time block (actions.blocked) routes here even from a ready state.
+    // Permanent R9 block has no retry styling; mutation-time blocked actions reach this state too.
     const message =
       actions.blocked ??
       (state.kind === 'blocked'
@@ -219,8 +213,7 @@ function PrSidebarContent({
     )
   }
   if (branch === 'none') {
-    // GitHub repo, but the current branch has no open PR — offer to create one
-    // (desktop parity) rather than showing a dead-end message.
+    // Offer create for GitHub branch without PR, matching desktop rather than dead-end message.
     return (
       <PrSidebarCreateEmptyState
         client={client}
@@ -276,8 +269,7 @@ function PrSidebarSections({
   botAuthorOverrides: ReadonlySet<string>
 }) {
   const pr = data.pr
-  // Bind the triage launchers to this PR's data; the prompt builders are pure so
-  // building lazily inside launch() keeps a stale capture from leaking in.
+  // Build pure triage prompts lazily at launch so each uses current PR data.
   const checksTriage = {
     fixChecks: () =>
       void triage.launch('fix-checks', () =>
@@ -305,8 +297,7 @@ function PrSidebarSections({
     availability: triage.availability,
     ...triage.noticeFor('resolve-conflicts')
   }
-  // One card for identity + actions so the ready PR isn't a stack of thin
-  // duplicate blocks (badge row, title, branches, then another action band).
+  // Combine ready PR identity/actions in one card to avoid duplicate badge/title/branch/action bands.
   return (
     <>
       <View style={styles.section}>

@@ -10,7 +10,7 @@ import {
   backgroundTaskStateWord
 } from '@/components/native-chat/background-task-roster'
 import { translate } from '@/i18n/i18n'
-import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../shared/agent-row-decay-state'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 
 export type AgentChildRowText = {
@@ -25,7 +25,7 @@ export function agentChildRowNoUpdateLabel(row: AgentChildRowModel, now: number)
   return agentNoUpdateLabel({ updatedAt: row.recencyAt }, now)
 }
 
-/** The words for a row's detail, reusing the phrasing a CLI agent row uses for the same fact. */
+/** Reuse CLI row phrasing for the same child-work facts. */
 export function agentChildRowDetailText(row: AgentChildRowModel, now: number): string {
   const detail = row.detail
   if (!detail) {

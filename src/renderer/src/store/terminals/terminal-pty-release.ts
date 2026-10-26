@@ -66,25 +66,21 @@ export function createTerminalPtyReleaseActions(
           // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
           delete nextPtyIdsByTabId[tabId]
         }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
-          delete nextPendingCodexPaneRestartIds[ptyId]
+          delete nextPendingPaneAccountRestarts[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
-            delete nextPendingCodexPaneRestartIds[currentPtyId]
+            delete nextPendingPaneAccountRestarts[currentPtyId]
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
         const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
         if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
-          // Why: the relay slot holds ONE id per tab (the last pane to bind). If
-          // that pane exits, promote a surviving pane instead of clearing — else the
-          // survivor is left visible only in the layout leaf map, and a later
-          // relay-drop bulk-clear lets the orphan sweep delete the still-live tab
-          // (the orphan predicate reads this map but not layout leaves) (#9911).
+          // If last-bound relay slot exits, promote a survivor or later bulk relay clearing makes orphan sweep delete the still-live split tab (#9911).
           const survivingPtyId = remainingPtyIds.at(-1)
           if (survivingPtyId) {
             nextLastKnownRelay[tabId] = survivingPtyId
@@ -98,7 +94,7 @@ export function createTerminalPtyReleaseActions(
             : {}),
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })

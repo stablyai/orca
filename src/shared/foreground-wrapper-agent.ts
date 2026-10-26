@@ -25,10 +25,7 @@ export function shouldInspectOuterWrapperForegroundName(processName: string | nu
   return recognized !== null && shouldInspectOuterWrapperForegroundProcess(recognized)
 }
 
-/**
- * Collapse a foreground read onto its outermost same-title-group ancestor.
- * Why: OMP embeds Pi, while depth alone cannot distinguish wrappers from sibling jobs.
- */
+/** Collapse to the outermost same-title-group ancestor: OMP embeds Pi, so depth alone cannot distinguish wrappers from siblings. */
 export function resolveOuterWrapperForegroundProcess(
   winner: RecognizedAgentProcess,
   winnerCandidate: ForegroundAgentCandidate,
@@ -37,12 +34,7 @@ export function resolveOuterWrapperForegroundProcess(
   return resolveOuterWrapperForegroundIdentity(winner, winnerCandidate, descendants).processName
 }
 
-/**
- * Same collapse, keeping the pid of the process the name belongs to.
- * Why: a liveness anchor must follow the REPORTED process — anchoring the
- * outer wrapper's name to the embedded leaf's pid reads the leaf's exit as
- * the wrapper's.
- */
+/** Keep the reported ancestor’s pid with its name so an embedded leaf’s exit does not look like wrapper termination. */
 export function resolveOuterWrapperForegroundIdentity(
   winner: RecognizedAgentProcess,
   winnerCandidate: ForegroundAgentCandidate,

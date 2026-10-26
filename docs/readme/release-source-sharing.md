@@ -44,17 +44,18 @@ Folder contexts without a Git repository cannot provide a historical release che
 
 ## Cleaning up older historical caches
 
-Preview cleanup across this repository's registered local worktrees and shared source cache:
+First stop cross-version tests in all this repository's worktrees, then preview historical-cache
+cleanup across the registered local worktrees and shared source cache:
 
 ```sh
-pnpm run reclaim:worktree-space
+pnpm reclaim-space --tests-stopped
 ```
 
 The default selects stamped release checkouts older than 30 days, including previous extraction
-formats. To apply the preview, first stop cross-version tests in all this repository's worktrees:
+formats. Answer `Y` after the preview to apply it, or run the same selection directly:
 
 ```sh
-pnpm run reclaim:worktree-space --apply --tests-stopped
+pnpm reclaim-space --apply --tests-stopped
 ```
 
 Use `--release-cache-min-age-days 7` for a shorter retention window, or `--release-cache-min-age-days 0` to select all

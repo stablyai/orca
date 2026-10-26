@@ -5,6 +5,7 @@ import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../../native-chat/transcript-tail-reader'
+import { TAIL_CHUNK_BYTES } from '../../native-chat/transcript-tail-boundary'
 import { transcriptFallbackId } from '../../native-chat/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
@@ -158,14 +159,15 @@ async function scanForwardPage(args: {
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
   let nextOffset = args.startOffset
-  const stream = args.handle.createReadStream({
-    start: args.startOffset,
-    end: args.scanEnd - 1,
-    autoClose: false
-  })
   let absoluteOffset = args.startOffset
-  for await (const rawChunk of stream) {
-    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
+  // Positional reads keep the shared handle open for the boundary checks after an early return.
+  while (absoluteOffset < args.scanEnd) {
+    const buffer = Buffer.allocUnsafe(Math.min(TAIL_CHUNK_BYTES, args.scanEnd - absoluteOffset))
+    const { bytesRead } = await args.handle.read(buffer, 0, buffer.length, absoluteOffset)
+    if (bytesRead === 0) {
+      break
+    }
+    const chunk = buffer.subarray(0, bytesRead)
     let segmentStart = 0
     let newline = chunk.indexOf(0x0a)
     while (newline >= 0) {

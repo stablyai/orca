@@ -22,7 +22,7 @@ function harness(
     ...options.created
   }
   const runtime = {
-    getClientSettings: () => CHAT_DEFAULT_ON,
+    requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({
       supported: true
     })),
@@ -54,7 +54,6 @@ const BASE: RuntimeManagedWorktreeCreateArgs = {
   lineage: { noParent: true }
 }
 
-/** Every non-agent field a startup create can carry, so an entry that drops one fails exactly. */
 const FULL: RuntimeManagedWorktreeCreateArgs = {
   ...BASE,
   navigation: 'caller',
@@ -83,7 +82,7 @@ const FULL: RuntimeManagedWorktreeCreateArgs = {
 }
 
 describe('createWorktreeWithStartupAgent', () => {
-  it('starts a terminal agent with the prompt folded by the create, whatever the chat default', async () => {
+  it('forwards the startup agent and prompt to the create with the chat default on', async () => {
     const { runtime, created, create } = harness()
     const prompt = 'x'.repeat(3000)
     const args = {
@@ -96,14 +95,12 @@ describe('createWorktreeWithStartupAgent', () => {
     const result = await create(args)
 
     expect(result).toBe(created)
-    // Exactly the request: no field dropped, and nothing `worktree.create` never sent — no typed-line
-    // measuring (`onStartupPromptCarry`), no waiting on setup before the reply.
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(args)
     expect(runtime.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
   })
 
-  it('hands a post-start agent its prompt through the create, which sends it once the agent is up', async () => {
+  it('forwards a post-start agent and prompt to the create', async () => {
     const { runtime, create } = harness()
     const args = { ...FULL, startupAgent: 'aider' as const, startupPrompt: 'fix the bug' }
 
@@ -112,7 +109,7 @@ describe('createWorktreeWithStartupAgent', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(args)
   })
 
-  it('treats a blank prompt as none, which the create launches bare either way', async () => {
+  it('omits a blank startup prompt from the create request', async () => {
     for (const startupPrompt of ['', '  \n']) {
       const { runtime, create } = harness()
 
@@ -122,7 +119,7 @@ describe('createWorktreeWithStartupAgent', () => {
     }
   })
 
-  it('starts a linked draft through `startupDraft`, unsent, with the agent the draft resolves', async () => {
+  it('forwards a linked draft through `startupDraft` with its resolved agent', async () => {
     const { runtime, create } = harness({ draftAgent: 'codex' })
     const { createdWithAgent: _requested, ...request } = FULL
     const draft = 'https://github.com/o/r/issues/1'
@@ -133,8 +130,6 @@ describe('createWorktreeWithStartupAgent', () => {
       { id: 'repo-1', connectionId: null, executionHostId: null },
       undefined
     )
-    // The resolved agent steers only the draft: it is not recorded as the agent the caller asked
-    // for, and a `startupAgent` would override the draft and start the agent with no URL in it.
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith({
       ...request,
       startupDraft: draft,

@@ -1,6 +1,3 @@
-// Which turn a Stop is allowed to interrupt, for turns the provider opened on its
-// own as well as turns Orca's own send echo opened.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -32,7 +29,6 @@ function journalSink(): {
   }
 }
 
-/** The turn row a client would read, which is the id its Stop carries. */
 function runningTurnId(bodies: Map<string, AgentJournalItemBody>): string | null {
   for (const body of bodies.values()) {
     const turn = readAgentJournalTurn(body)
@@ -75,7 +71,6 @@ function completeTurn(connection: FakeConnection, uuid: string): void {
   })
 }
 
-/** The provider resuming on its own — a background task reporting in wakes the agent. */
 function providerOutput(connection: FakeConnection, uuid: string): void {
   connection.handlers.onMessage?.({
     type: 'assistant',
@@ -86,7 +81,6 @@ function providerOutput(connection: FakeConnection, uuid: string): void {
   })
 }
 
-/** A session whose in-memory turn is `turnId`, standing in for the adapter's own read. */
 function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor> {
   const session = sessionFor()
   session.dispatchSequence = 1
@@ -101,12 +95,14 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
       whenWritten: () => undefined
     },
     currentTurnId: turnId,
+    currentTurnScope: () => ({ kind: 'thread' }),
     commandTurnId: null,
     beginCommand: vi.fn(),
     forgetCommand: vi.fn(),
     commandInterruptRequested: vi.fn(),
     flush: vi.fn(),
     contextActivity: 0,
+    finalOutputAdmitted: true,
     markContextActivity: vi.fn(),
     subscribeContextUsageRequests: () => () => {},
     recordContextReport: () => {},
@@ -118,7 +114,7 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
   return session
 }
 
-/** Reads a Stop's outcome without moving the clock, so a Stop held on bookkeeping reads as waiting. */
+/** Leave timers unadvanced to expose Stop delays from pending bookkeeping. */
 async function outcomeAtOnce(stop: () => Promise<{ cancelled: boolean }>): Promise<unknown> {
   vi.useFakeTimers()
   try {
@@ -157,7 +153,6 @@ describe('Claude turn ownership', () => {
     expect(runningTurnId(bodies)).toBeNull()
 
     providerOutput(connection, 'provider-turn')
-    // The client cancels with the journal row's id, which is the provider frame's.
     expect(runningTurnId(bodies)).toBe('provider-turn')
 
     await expect(
@@ -198,11 +193,12 @@ describe('Claude turn ownership', () => {
     })
     expect(runningTurnId(bodies)).toBe('echo-turn')
     const sendFirst = connection.send
-    connection.send = async (message) => {
+    connection.send = async (message, beforeDispatch) => {
       if (connection.sent.length > 0) {
+        await beforeDispatch?.()
         throw new Error('input pump stopped')
       }
-      await sendFirst(message)
+      await sendFirst(message, beforeDispatch)
     }
 
     await expect(
@@ -315,8 +311,6 @@ describe('Claude turn ownership', () => {
     expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)
   })
 
-  // The sink drains asynchronously, so the adapter's own turn can already name a row no client
-  // has been shown. The published journal is what a Stop is derived from, so it is what judges it.
   it('admits a Stop for the published turn while the adapter already holds an undrained one', async () => {
     const session = sessionHoldingTurn('turn-undrained')
     const interrupt = vi.fn().mockResolvedValue(undefined)
@@ -333,9 +327,6 @@ describe('Claude turn ownership', () => {
     expect(interrupt).toHaveBeenCalledOnce()
   })
 
-  // The journal drains through a serialized async queue, so a live turn routinely has no published
-  // row yet. Refusing there would gate a user's Stop on bookkeeping, so the in-memory turn covers
-  // the lag — the journal is authoritative only while it has an answer.
   it('admits a Stop for the live turn while the journal has not drained its row', async () => {
     const session = sessionHoldingTurn('turn-live')
     const interrupt = vi.fn().mockResolvedValue(undefined)

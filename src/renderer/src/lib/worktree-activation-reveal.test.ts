@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorktree } from './worktree-activation'
-import { registerWorktreeActivationReset } from './worktree-activation-test-harness'
+import { registerWorktreeActivationReset } from './worktree-activation.test-fixture'
 import { useAppStore } from '@/store'
 
 registerWorktreeActivationReset()
@@ -64,9 +64,7 @@ describe('activateAndRevealWorktree', () => {
       setTabCustomTitle: vi.fn(),
       setTabColor: vi.fn(),
       markDefaultTerminalTabsApplied: vi.fn(),
-      queueTabStartupCommand: vi.fn(),
       queueTabInitialCwd,
-      queueTabSetupSplit: vi.fn(),
       queueTabIssueCommandSplit: vi.fn(),
       revealWorktreeInSidebar
     } as never)
@@ -134,12 +132,9 @@ describe('activateAndRevealWorktree', () => {
       setTabCustomTitle: vi.fn(),
       setTabColor: vi.fn(),
       markDefaultTerminalTabsApplied: vi.fn(),
-      queueTabStartupCommand: vi.fn(),
       queueTabInitialCwd: vi.fn(),
-      queueTabSetupSplit: vi.fn(),
       queueTabIssueCommandSplit: vi.fn(),
       revealWorktreeInSidebar: vi.fn()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies only the activation slice used by the test.
     } as never)
 
     const result = activateAndRevealWorktree('wt-1')

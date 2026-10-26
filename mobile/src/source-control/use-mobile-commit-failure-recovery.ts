@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { useHostProtocolGates } from '../components/HostProtocolGate'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-triage-launch'
 import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import {
@@ -16,7 +16,6 @@ type Params = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  /** Named in the confirmation; the screen's workspace label, else its branch. */
   workspaceLabel: string | null
   failure: MobileCommitFailureRecovery | null
 }
@@ -31,18 +30,15 @@ export function useMobileCommitFailureRecovery({
   const hostStatus = useHostProtocolGates()
   const { hostCapabilities } = hostStatus
   const [launching, setLaunching] = useState(false)
-  // `launching` commits on the next render; each tap is a new operation, so a second one in that gap
-  // would start a second agent.
+  // Guard synchronously: launching state commits next render, leaving a gap for duplicate taps.
   const inFlightRef = useRef(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
-  // The agent started without its prompt; kept so the user can paste it in themselves. Keyed by the
-  // failure it was built for, so a new failure never shows the previous one's prompt.
+  // Retain prompts for manual paste after launch failure; key by failed commit so a new failure cannot inherit them.
   const [undelivered, setUndelivered] = useState<{
     failure: MobileCommitFailureRecovery
     prompt: string
   } | null>(null)
   const undeliveredPrompt = undelivered?.failure === failure ? undelivered.prompt : null
-  // The host's note on a launch that went ahead, keyed the same way.
   const [warning, setWarning] = useState<{
     failure: MobileCommitFailureRecovery
     text: string

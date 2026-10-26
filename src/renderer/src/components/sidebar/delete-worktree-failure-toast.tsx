@@ -5,8 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../shared/worktree/nested-removal'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   isLockedWorktreeRemovalError,
+  SUBMODULE_DIRTY_REMOVAL_DETAIL,
   type WorktreeForceDeleteReason,
   type WorktreeRemovalTarget
 } from '../../../../shared/worktree/removal'
@@ -24,13 +27,20 @@ type DeleteWorktreeFailureToastOptions = {
   onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
   worktreeId: string
+  executionHostId?: ExecutionHostId | null
   worktreeName: string
   nestedRemovalTarget?: WorktreeRemovalTarget
   onNestedDeleted?: () => void
 }
 
-function deleteWorktreeFailureToastId(worktreeId: string): string {
-  return `delete-worktree-failure:${worktreeId}`
+// Qualify toast IDs by host because worktree IDs may repeat across machines.
+function deleteWorktreeFailureToastId(target: WorktreeRemovalTarget): string {
+  return `delete-worktree-failure:${composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)}`
+}
+
+/** A workspace deleted from another surface must not keep a toast offering to delete it. */
+export function dismissDeleteWorktreeFailureToast(target: WorktreeRemovalTarget): void {
+  toast.dismiss(deleteWorktreeFailureToastId(target))
 }
 
 function DeleteWorktreeFailureToastBody({
@@ -120,6 +130,7 @@ export function showDeleteWorktreeFailureToast({
   onAlwaysForceDelete,
   onDeleteAnyway,
   worktreeId,
+  executionHostId,
   worktreeName,
   nestedRemovalTarget,
   onNestedDeleted
@@ -131,14 +142,16 @@ export function showDeleteWorktreeFailureToast({
     lockReason ?? null
   )
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
-  const id = deleteWorktreeFailureToastId(worktreeId)
+  const id = deleteWorktreeFailureToastId({
+    id: worktreeId,
+    executionHostId: executionHostId ?? null
+  })
   const nestedTarget =
     isNestedWorktreeRemovalError(error) && window.api?.worktrees.previewNestedRemoval
       ? nestedRemovalTarget
       : undefined
 
-  // Why: Sonner's native action/cancel slots share the title row and squeeze
-  // multi-line delete errors. Custom content gives the copy its own line.
+  // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.
   showToast(toastCopy.title, {
     id,
     description: (
@@ -146,7 +159,12 @@ export function showDeleteWorktreeFailureToast({
         description={toastCopy.description}
         canForceDelete={canForceDelete}
         canWaiveArchiveHook={canWaiveArchiveHook === true}
-        showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
+        showViewChanges={
+          !(
+            isLockedWorktreeRemovalError(error) ||
+            (forceDeleteReason === 'submodules' && !error.includes(SUBMODULE_DIRTY_REMOVAL_DETAIL))
+          ) || hasKnownChanges === true
+        }
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
         onAlwaysForceDelete={onAlwaysForceDelete}

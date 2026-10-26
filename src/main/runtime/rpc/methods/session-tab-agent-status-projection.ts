@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type {
@@ -23,8 +24,7 @@ function clientCanRenderStructuredAgentSessionTab(
   tab: RuntimeMobileSessionAgentTab,
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): boolean {
-  // Every shipped client reads only Claude and Codex as chats; any other agent's tab would list
-  // with an empty pane, so it waits for a client that says it renders the host's agents.
+  // Legacy clients render only Claude/Codex chats; require explicit support for other agents to avoid empty panes.
   return clientRendersStructuredAgent(clientCapabilities, tab.agent)
 }
 
@@ -54,17 +54,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   const structuredVisible = supportsStructuredAgentSessions({ clientKind, clientCapabilities })
   let projected: TPayload
   if (clientKind === 'mobile') {
-    // Why: deleting the row left the user hunting for a chat the desktop says exists; the row
-    // survives with a title naming the fix. Nothing is removed, so no group/layout repair applies.
+    // Keep an actionable fallback row so the chat is discoverable; retaining it needs no layout repair.
     projected = projectUnsupportedAgentSessionTabTitles(payload, {
       clientKind,
       clientCapabilities
     })
   } else {
     projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
-    // Why: a paired client renders only the agents it says it does (mobile's
-    // resolveMobileNativeChat returns null for every other agent), so an ungated row would
-    // list and select into a pane that shows neither chat nor terminal.
+    // Gate chat rows by client rendering support or selection opens neither chat nor terminal.
     if (structuredVisible && clientKind !== undefined) {
       projected = projectAgentSessionTabsOut(
         projected,
@@ -72,7 +69,13 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
       )
     }
   }
-  // Why: only paired runtimes have legacy `done` completion side effects; mobile must keep its row without changing the exact v2 auth shape.
+  if (
+    clientKind !== undefined &&
+    !clientCapabilities?.includes(AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY)
+  ) {
+    projected = projectRestoredAgentStatusAsLegacyDone(projected)
+  }
+  // Legacy done completion applies only to paired runtimes; mobile retains rows without changing v2 authentication.
   if (
     clientKind !== 'runtime' ||
     clientCapabilities?.includes(AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY)
@@ -90,6 +93,23 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
     return legacyTab
   })
   return changed ? ({ ...projected, tabs } as TPayload) : projected
+}
+
+/** What hosts published for a restored turn before clients could read it as unverifiable. */
+function projectRestoredAgentStatusAsLegacyDone<TPayload extends SessionTabsPayload>(
+  payload: TPayload
+): TPayload {
+  let changed = false
+  const tabs = payload.tabs.map((tab) => {
+    if (tab.type !== 'terminal' || tab.agentStatus?.restoredUnconfirmed !== true) {
+      return tab
+    }
+    changed = true
+    const { restoredUnconfirmed: _restored, ...legacyStatus } = tab.agentStatus
+    return { ...tab, agentStatus: { ...legacyStatus, state: 'done' as const, prompt: '' } }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only terminal tabs' agentStatus changed; every other TPayload field is spread through unchanged.
+  return changed ? ({ ...payload, tabs } as TPayload) : payload
 }
 
 function projectUnsupportedAgentSessionTabTitles<TPayload extends SessionTabsPayload>(

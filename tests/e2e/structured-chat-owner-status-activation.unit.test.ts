@@ -1,8 +1,5 @@
-// A chat whose agent is not running still owns its conversation. Released desktop clients gate
-// worktree activation on the host's owner answer, so a chat at rest that answered anything but
-// `native` blocked the gate, which then skips adopting and resuming the worktree's paneless agents.
-// This drives the real host's answer through the desktop's activation gate for the two ways a chat
-// comes to rest.
+// Resting chats still own their conversation: native owner answers must pass released desktop activation gates and resume paneless agents.
+// Drive the real host answer through that gate for both ways a chat stops running.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -27,6 +24,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-ty
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { startsWhenPublished } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { NO_STRUCTURED_AGENTS } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const WORKTREE = 'repo-1::/workspace/repo'
@@ -42,24 +40,36 @@ function openHost(): void {
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire: async ({ fence, spawnToken }) => ({
-        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-        link: {
-          linkId: `link-${fence}`,
-          handle: codexProviderHandle(THREAD),
-          origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      }),
-      closeSession,
-      releaseAcquisition: async () => true,
-      dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
-      cancelTurn: async () => ({ cancelled: false }),
-      answerPrompt: async () => undefined,
-      setOption: async () => undefined
-    },
+    // A ready provider proves its start as soon as it is published.
+    adapter: startsWhenPublished(
+      {
+        acquire: async ({ fence, spawnToken }) => ({
+          acquisitionGeneration: `generation-${fence}`,
+          process: {
+            hostId: 'local',
+            pid: 4242,
+            processStartTimeMs: 1_700_000_000_000,
+            spawnToken
+          },
+          link: {
+            linkId: `link-${fence}`,
+            handle: codexProviderHandle(THREAD),
+            origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+            mintedAtFence: fence,
+            observedAt: NOW
+          }
+        }),
+        closeSession,
+        releaseAcquisition: async () => true,
+        dispatch: async () => {
+          throw new Error('dispatch is not exercised by this test')
+        },
+        cancelTurn: async () => ({ cancelled: false }),
+        answerPrompt: async () => undefined,
+        setOption: async () => undefined
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -97,7 +107,10 @@ function serveDesktopRuntime(): void {
       try {
         return { ok: true, result: host.handoffStatus(params.sessionId ?? '') }
       } catch (error) {
-        return { ok: false, error: { code: String(error), message: String(error) } }
+        return {
+          ok: false,
+          error: { code: String(error), message: String(error) }
+        }
       }
     }
     throw new Error(`Unexpected runtime method: ${method}`)
@@ -138,7 +151,7 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after the idle sweep stopped its agent and closed the conversation', async () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
 
     expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
     expect(await activate()).toBe('structured')

@@ -7,9 +7,25 @@ import type {
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
-import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import { translate } from '@/i18n/i18n'
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 
-/** What the composer of a structured chat sends, picks and runs through, from the chat's controller. */
+function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
+  const label = structuredAgentLabel(agent)
+  return starting
+    ? translate(
+        'components.native-chat.composer.sessionAttachmentsStarting',
+        '{{agent}} chat is still opening. Wait for it to open, then attach the files again.',
+        { agent: label }
+      )
+    : translate(
+        'components.native-chat.composer.sessionAttachmentsFailed',
+        '{{agent}} chat could not open. Use Retry in the chat, then attach the files again.',
+        { agent: label }
+      )
+}
+
 export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
@@ -19,17 +35,20 @@ export function useNativeChatStructuredComposerTransport(args: {
     withImages: boolean,
     send: () => boolean | 'queued'
   ) => boolean | 'queued'
-  /** The chat is starting: it takes no send yet. */
   starting: boolean
+  transportEnabled: boolean
   worktreeId: string | undefined
   optionPickerRequest: NativeChatOptionPickerRequest | null
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
   onError: NativeChatStructuredComposerTransport['onError']
   onSubmitted: () => void
-  queuedMessages: Pick<StructuredAgentSessionQueuedMessagesController, 'queueHold' | 'queueResume'>
+  /** Host reason for refusing turns and holding Send. */
+  sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
-  const { setOptionPickerRequest, onError, onSubmitted, queuedMessages } = args
+  const { setOptionPickerRequest, onError, onSubmitted } = args
+  const { transportEnabled } = args
+  const sendBlockedReason = args.sendBlockedReason ?? null
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,
@@ -37,11 +56,16 @@ export function useNativeChatStructuredComposerTransport(args: {
   )
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
-    const setThreadGoalObjective = threadGoal
-      ? (objective: string) => threadGoal.change({ kind: 'set', objective })
+    const setThreadGoalObjective = threadGoal?.hostChanges
+      ? (objective: string) =>
+          sendBlockedReason === null
+            ? threadGoal.change({ kind: 'set', objective })
+            : Promise.resolve(false)
       : null
     return {
-      send: (text, attachments) =>
+      capturePresentation: controller.capturePresentation,
+      send: (text, attachments, ...request) =>
+        sendBlockedReason === null &&
         sendThroughLaunch(text, attachments.length > 0, () =>
           controller.send(
             text,
@@ -49,7 +73,8 @@ export function useNativeChatStructuredComposerTransport(args: {
               path,
               previewUri: path,
               ...(connectionId ? { connectionId } : {})
-            }))
+            })),
+            ...request
           )
         ),
       dispatchCommand: (text: string) =>
@@ -67,11 +92,13 @@ export function useNativeChatStructuredComposerTransport(args: {
         }),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       sendOut: controller.sendOut || starting,
+      ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
+      refreshCommands: controller.refreshCommands,
       acceptsImages,
       contextUsage: controller.contextUsage,
       worktreeId,
@@ -81,8 +108,12 @@ export function useNativeChatStructuredComposerTransport(args: {
       sessionId: props.sessionId,
       runtimeEnvironmentId:
         props.target.kind === 'local' ? null : (props.target.environmentId ?? null),
-      queueHold: queuedMessages.queueHold,
-      queueResume: queuedMessages.queueResume
+      ...(!transportEnabled
+        ? {
+            sessionPending: true,
+            sessionPendingNotice: nativeChatSessionAttachmentNotReadyNotice(props.agent, starting)
+          }
+        : {})
     }
   }, [
     acceptsImages,
@@ -94,9 +125,10 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     props.sessionId,
     props.target,
-    queuedMessages,
+    sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
-    starting
+    starting,
+    transportEnabled
   ])
 }

@@ -43,16 +43,13 @@ export {
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
   MAX_CODEX_ITEM_STREAM_STATES
 } from './codex-structured-item-stream-bounds'
-/** Delta-only item ids are provider input; retain only a deterministic recent window. */
-
 export function createCodexStructuredItemStreams(
   deps: CodexItemStreamDeps
 ): CodexStructuredItemStreams {
-  const states = new CodexItemStreamRetention(deps.maxMetadataBytes)
+  const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
-  // Which thread and turn produced each stream, resolved to its attribution per append
-  // so a parent learned after the first checkpoint still reaches the row.
+  // Resolve attribution on each append so later-discovered parents reach existing rows.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
   const attributionOf = (key: string): AgentJournalRowAttribution => {
     const producer = producers.get(key)
@@ -60,9 +57,7 @@ export function createCodexStructuredItemStreams(
       ? deps.attributionFor(producer.threadId, producer.turnId)
       : { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   }
-  // Patch updates are authoritative item snapshots. Keep the latest rejected
-  // snapshot until the journal admits it; unlike streamed deltas, there is no
-  // coalescer timer to retry these events for us.
+  // Retain rejected patch snapshots for retry; they have no coalescer timer.
   const pendingPatches = new Map<string, CodexPendingItemPatch>()
   let retainedPatchBytes = 0
 
@@ -87,8 +82,7 @@ export function createCodexStructuredItemStreams(
       }
       const pending = coalescer.snapshot(oldest)
       if (pending && pending.text.length > 0 && !persist(oldest, pending.text, true)) {
-        // Keep the state (and its buffered text) until the sink recovers. A
-        // bounded map is preferable to silently losing streamed output.
+        // Keep buffered output until its final checkpoint is accepted.
         break
       }
       forgetState(oldest)
@@ -114,7 +108,6 @@ export function createCodexStructuredItemStreams(
     if (!translated.body) {
       return true
     }
-    // A stream only ever carries an item that has not completed yet.
     const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
     return appendCodexItemAndPublish(deps.sink, state.identity, body, {
       ...attributionOf(key),
@@ -158,7 +151,7 @@ export function createCodexStructuredItemStreams(
     itemId: string,
     type: string,
     params: unknown
-  ): CodexItemStreamState | null => {
+  ): CodexItemStreamState => {
     const key = codexStructuredItemKey(threadId, itemId)
     const existing = states.get(key)
     if (existing) {
@@ -167,9 +160,7 @@ export function createCodexStructuredItemStreams(
     const item = { type, id: itemId }
     const turnId = deps.turnIdFor(threadId, params)
     const state = { item, identity: deps.identityFor(threadId, turnId, item) }
-    if (!states.retain(key, state)) {
-      return null
-    }
+    states.retain(key, state)
     producers.set(key, { threadId, turnId })
     trimStates()
     return state
@@ -214,19 +205,11 @@ export function createCodexStructuredItemStreams(
     get persistentCount() {
       return states.persistentSize
     },
-    canTrack: (threadId, item, identity) =>
-      states.canRetain(
-        codexStructuredItemKey(threadId, item.id),
-        codexItemStreamState(item, identity)
-      ),
     track: (threadId, turnId, item, identity, startedAt) => {
       const key = codexStructuredItemKey(threadId, item.id)
-      if (!states.retain(key, codexItemStreamState(item, identity, startedAt))) {
-        return false
-      }
+      states.retain(key, codexItemStreamState(item, identity, startedAt))
       producers.set(key, { threadId, turnId })
       trimStates()
-      return true
     },
     handle: (threadId, method, params) => {
       const paramsRecord = readCodexItemStreamRecord(params)
@@ -243,9 +226,6 @@ export function createCodexStructuredItemStreams(
         const key = codexStructuredItemKey(threadId, itemId)
         const streamFlushed = coalescer.flush(key)
         const state = ensureState(threadId, itemId, 'fileChange', params)
-        if (!state) {
-          return { handled: true, admission: { accepted: false, reason: 'failed' } }
-        }
         state.item = { ...state.item, changes: paramsRecord.changes }
         const translated = codexJournalItem(state.item)
         if (translated.body) {
@@ -285,9 +265,6 @@ export function createCodexStructuredItemStreams(
         return { handled: true, admission: { accepted: true } }
       }
       const state = ensureState(threadId, itemId, type ?? 'reasoning', params)
-      if (!state) {
-        return { handled: true, admission: { accepted: false, reason: 'failed' } }
-      }
       const delta = method === REASONING_PART_METHOD ? '\n' : paramsRecord.delta
       if (typeof delta === 'string') {
         const key = codexStructuredItemKey(threadId, state.item.id)

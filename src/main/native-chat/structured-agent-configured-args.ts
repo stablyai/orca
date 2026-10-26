@@ -1,13 +1,15 @@
-import type { AgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchArgs,
+  type AgentLaunchProfileSettings
+} from '../../shared/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
-/** Use the same grouping rules as terminal launches before the provider filters its owned flags. */
+/** Match terminal argument grouping before filtering provider-owned flags. */
 export function structuredAgentConfiguredArgs(
-  agent: AgentSessionHandleProvider,
-  settings: Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>,
+  agent: string,
+  settings: AgentLaunchProfileSettings & Partial<Pick<GlobalSettings, 'terminalWindowsShell'>>,
   platform: NodeJS.Platform = process.platform
 ): string[] {
   const shell =
@@ -16,10 +18,7 @@ export function structuredAgentConfiguredArgs(
       isRemote: false,
       terminalWindowsShell: settings.terminalWindowsShell
     }) ?? 'posix'
-  const parsed = tokenizeStartupCommand(
-    resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    shell
-  )
+  const parsed = tokenizeStartupCommand(resolveTuiAgentLaunchArgs(agent, settings), shell)
   if (!parsed.ok) {
     throw new Error(`${agent} Arguments are invalid: ${parsed.error}`)
   }

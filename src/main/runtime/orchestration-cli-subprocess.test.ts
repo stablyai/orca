@@ -1,35 +1,21 @@
-// Why: subprocess-level test for the CLI keepalive behavior described in
-// design doc §3.4. Spawns the real compiled CLI with no TTY, points it at a
-// real in-process runtime via ORCA_USER_DATA_PATH, and asserts:
-//   - the first keepalive line appears on stderr well under Claude Code's
-//     ~2 min Bash-tool silence budget (we verify with a shortened interval;
-//     production uses 15 s via the same code path)
-//   - ≥3 keepalives arrive during the wait window
-//   - stderr is line-flushed (we observe each keepalive as a separate chunk
-//     before the process exits — not in one burst at the end)
-//   - stdout stays a single clean JSON payload (no keepalives leak to stdout)
-//   - a `jq "select(._keepalive|not)"` filter on the merged stream would
-//     yield exactly the final result
-//
-// This test is skipped if the CLI hasn't been built yet (out/cli/index.js
-// missing) so `pnpm test` works on a fresh checkout without requiring a prior
-// `pnpm run build:cli`. The verification gate explicitly builds the CLI
-// before running this file.
+// Exercise compiled CLI keepalives over pipes; skip until built (the verification gate builds it).
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-// Why: Vitest runs tests with `process.cwd()` pinned to the repo root, so
-// join against it to locate the compiled CLI regardless of where this test
-// file itself lives.
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 
 const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
+
+function loadRuntimeModules() {
+  return Promise.all([
+    import('./orca-runtime'),
+    import('./orchestration/db'),
+    import('./runtime-rpc')
+  ])
+}
 
 async function runBuiltCli(
   userDataPath: string,
@@ -67,6 +53,8 @@ async function runBuiltCli(
 
 describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
   it('emits newline-flushed JSON keepalives to stderr while waiting', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-sub-'))
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
@@ -83,11 +71,7 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     await server.start()
 
     try {
-      // Why: use the ORCA_KEEPALIVE_INTERVAL_MS escape hatch to shrink the
-      // test to ~1 s wall time. Production callers never set this; the
-      // production default (15 s) is exercised by §3.4's own unit tests
-      // and by the fact that this same code path runs with the real
-      // constant when the env var is absent.
+      // Shorten the keepalive interval to keep the subprocess test near one second.
       const keepaliveMs = 200
       const waitTimeoutMs = 1200
 
@@ -109,8 +93,6 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
             ORCA_TERMINAL_HANDLE: 'term_nobody',
             ORCA_KEEPALIVE_INTERVAL_MS: String(keepaliveMs)
           },
-          // Why: explicit pipe for all three fds so we can watch stderr
-          // in real time; no TTY attached (Bash-tool parity).
           stdio: ['ignore', 'pipe', 'pipe']
         }
       )
@@ -144,45 +126,28 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
         })
         .filter((p): p is Record<string, unknown> => p !== null && p._keepalive === true)
 
-      // ≥3 keepalives in a 1.2s window with a 200ms interval
       expect(keepaliveLines.length).toBeGreaterThanOrEqual(3)
       expect(keepaliveLines[0]).toMatchObject({ _keepalive: true, _heartbeat: true })
       expect(keepaliveLines[0]).toHaveProperty('elapsedMs')
       expect(keepaliveLines[0]).toHaveProperty('deadlineMs', waitTimeoutMs)
 
-      // Why: under full-suite load the child process startup may take longer
-      // than one keepalive interval. The invariant that matters is that at
-      // least one keepalive is observed before the terminal stdout payload.
+      // Under load, startup can exceed one interval; require a keepalive before terminal stdout.
       const firstKeepaliveChunk = stderrChunks.find((c) => c.data.includes('_keepalive'))
       expect(firstKeepaliveChunk).toBeDefined()
       expect(firstKeepaliveChunk!.at).toBeLessThan(stdoutChunks[0]?.at ?? Number.POSITIVE_INFINITY)
 
-      // Why: line-flushing proof — the *first* keepalive chunk must arrive
-      // strictly before the exit chunk; i.e. we got at least two separate
-      // stderr data events (keepalive + final). A single-chunk delivery
-      // would indicate stderr was buffered until exit.
+      // Separate stderr events before exit prove line flushing rather than exit-time buffering.
       const lastStderrAt = stderrChunks.at(-1)?.at ?? 0
       const firstStderrAt = stderrChunks.at(0)?.at ?? 0
       expect(lastStderrAt).toBeGreaterThan(firstStderrAt)
 
-      // Stdout: exactly one JSON payload, the terminal result. No keepalives
-      // leak, and the content parses as valid JSON.
       const stdoutTrimmed = stdout.trim()
       const stdoutPayload = JSON.parse(stdoutTrimmed) as Record<string, unknown>
       expect(stdoutPayload).not.toHaveProperty('_keepalive')
       expect(stdoutTrimmed).not.toContain('_keepalive')
-      // Why: result should be an RPC success envelope with the expected
-      // shape. `count: 0` and `messages: []` because the wait timed out
-      // with no message for term_nobody.
       expect(stdoutPayload).toMatchObject({ ok: true })
 
-      // Why: the keepalives-on-stderr design is meant to pair with shell
-      // filters like `2>&1 | jq "select(._keepalive|not)"`. jq is
-      // line-oriented by default, but also accepts pretty-printed JSON
-      // across multiple lines. What matters here is that every
-      // keepalive line on stderr is a standalone JSON object (so jq can
-      // match it) and doesn't span multiple lines — assert that each
-      // keepalive is a single-line JSON with no embedded newlines.
+      // Each stderr keepalive must be one JSON line for merged-stream jq filtering.
       for (const line of stderr.split('\n')) {
         if (line.trim().length === 0) {
           continue
@@ -203,6 +168,8 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
 
 describeIfBuilt('orca orchestration reset subprocess', () => {
   it('validates reset scopes against an isolated runtime through the built CLI', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-reset-'))
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
@@ -280,8 +247,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
 
-      // Why: task resets intentionally remove Runs, so recreate the caller's
-      // normal binding before exercising task creation again.
+      // Reset removes Runs; recreate the caller binding before creating another task.
       db.createRun({
         objective: 'CLI reset subprocess fixture after reset',
         coordinatorHandle: 'term_cli',
@@ -329,6 +295,8 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
 
 describeIfBuilt('orca orchestration task readiness subprocess', () => {
   it('creates a late dependent as ready through the built CLI and runtime', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-task-readiness-'))
     const dbPath = join(userDataPath, 'orchestration.db')
     const runtime = new OrcaRuntimeService()

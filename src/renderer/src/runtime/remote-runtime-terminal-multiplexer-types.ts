@@ -1,3 +1,4 @@
+import type { TerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
 import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
 import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
 import type { TerminalInputAckKind } from '../../../shared/terminal-stream-protocol'
@@ -12,9 +13,16 @@ export type TerminalMultiplexEvent =
   | { type: 'ready' }
   | {
       type: 'subscribed'
+      terminal?: string
+      launchResult?: unknown
       streamId: number
       streamGeneration?: string
-      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1; inputAck?: 1 }
+      capabilities?: {
+        ackOutputSourceRanges?: 1
+        outputPause?: 1
+        outputPauseDropNotice?: 1
+        inputAck?: 1
+      }
       inputLedgerId?: string
     }
   | { type: 'end'; streamId: number; verdict?: TerminalStreamEndVerdict }
@@ -52,7 +60,11 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
     }
   ) => void
   onSubscribed?: () => void
+  /** The host installed the stream and named its capabilities; its initial snapshot is still on the way. */
+  onSubscribeAcknowledged?: (result?: TerminalAttachmentLaunchResult) => void
   onOutputPauseCapability?: () => void
+  /** The host discarded output while this stream was paused (negotiated streams only). */
+  onPausedOutputDropped?: () => void
   onEnd?: (verdict: TerminalStreamEndVerdict) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
@@ -66,7 +78,14 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onWriteUnavailable?: () => void
   /** Cumulative host ack of sequenced input through `appliedSeq` (negotiated streams only). */
   onInputAck?: (appliedSeq: number, kind: TerminalInputAckKind) => void
-  onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
+  onTransportClose?: (event: RemoteTerminalTransportCloseEvent) => void
+}
+
+export type RemoteTerminalTransportCloseEvent = {
+  recoverable: boolean
+  retryWithBackoff?: boolean
+  /** This stream stopped answering while the shared connection may be healthy. */
+  stalled?: true
 }
 
 export type RemoteRuntimeSnapshotImage = {
@@ -146,13 +165,15 @@ export type RemoteRuntimeMultiplexedTerminal = {
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean
-  serializeBuffer: (opts?: {
-    scrollbackRows?: number
-  }) => Promise<RemoteRuntimeSnapshotImage | null>
+  // Why: only then does a pause with no drop notice prove nothing was lost.
+  reportsPausedOutputDrops?: () => boolean
+  serializeBuffer: (
+    opts?: RemoteRuntimeSnapshotRequestOptions
+  ) => Promise<RemoteRuntimeSnapshotImage | null>
   // Why: same request as serializeBuffer, but keeps the host's reason for an absent buffer instead of collapsing it to null.
-  serializeBufferOutcome: (opts?: {
-    scrollbackRows?: number
-  }) => Promise<RemoteRuntimeSnapshotOutcome>
+  serializeBufferOutcome: (
+    opts?: RemoteRuntimeSnapshotRequestOptions
+  ) => Promise<RemoteRuntimeSnapshotOutcome>
   close: () => void
 }
 
@@ -164,6 +185,9 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   acknowledgeOutput: boolean
   acknowledgeOutputSourceRanges: boolean
   supportsOutputPause: boolean
+  supportsPausedOutputDropNotice: boolean
+  // Why: the host announced the seq jump the pane's own restore covers, so it must not also trigger a resync.
+  pausedOutputGapExpected: boolean
   supportsInputAck: boolean
   inputLedgerId: string | null
   outputPaused: boolean
@@ -179,10 +203,7 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
-  // Why: Output frames carry a UTF-16 offset high-water `seq`; a jump past the
-  // expected next offset means the server dropped frames under backpressure.
-  // Track it so a gap triggers a self-healing snapshot resync instead of
-  // silently rendering corrupt/missing output (frame-drop resync).
+  // Output seq is the UTF-16 high-water; offset gaps expose backpressure drops and trigger snapshot recovery instead of corrupt paint.
   expectedSeq: number | undefined
   // Why: compare command probes when initial/live frames supplied no high-water.
   commandProbeBaselineSeq: number | undefined
@@ -191,6 +212,8 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   resyncPendingSend: boolean
   resyncTimer: ReturnType<typeof setTimeout> | null
   resyncAttempts: number
+  /** Consecutive resync timeouts with no recovery frame at all. */
+  resyncUnansweredTimeouts: number
   capacityRejected: boolean
   watchdog: RemoteTerminalStreamWatchdog
 }
@@ -208,14 +231,19 @@ export type RemoteRuntimeSnapshotInfo = {
   unavailable?: TerminalSnapshotUnavailableReason
   /** History rows above the screen; absent from hosts that predate the field. */
   scrollbackRows?: number
-  // Why: a mid-escape tail the emulator could not serialize; the transport
-  // must write it AFTER the replay reset so the next live chunk completes it
-  // instead of rendering literally (#7329).
+  // Replay reset precedes the unserializable mid-escape tail so live output completes it instead of printing it literally (#7329).
   pendingEscapeTailAnsi?: string
+}
+
+export type RemoteRuntimeSnapshotRequestOptions = {
+  scrollbackRows?: number
+  /** Client-only: the pane repaints from this image, so live output resumes after its seq. */
+  repaintsPane?: boolean
 }
 
 export type RemoteRuntimeSnapshotRequest = {
   requestId: number
+  repaintsPane?: boolean
   resolve: (outcome: RemoteRuntimeSnapshotOutcome) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>

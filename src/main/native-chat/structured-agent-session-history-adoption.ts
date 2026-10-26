@@ -1,30 +1,33 @@
-// Adopting an Agent Session History row into a brand-new structured chat.
-//
-// Kept out of the runtime class files because those are `@ts-nocheck`: this decides which
-// credential directory a provider child will launch against and which file gets imported into a
-// journal, and a call site written there would compile however wrong it was. The runtime hands over
-// the facts it owns — the account homes it recognises, the records it holds — and this decides.
+// Resolve credential homes and transcripts from host-owned facts, never client-supplied paths.
 
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionProviderHandle,
+  AgentSessionProviderHandleLink,
   StructuredAgentId
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionAccountHomesEqual,
+  type AgentSessionAccountHome
+} from '../../shared/agent-session-account-home'
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
-  /** Any agent's chat may hold the conversation, though only one with an importer adopts. */
+  workspaceId: string
+  /** Any chat may own the conversation; only agents with importers can adopt it. */
   provider: StructuredAgentId
   providerSessionId: string
   lease: AgentSessionLease
+  role: 'head' | 'earlier'
 }
 
 export type StructuredAgentSessionAdoption = {
-  /** The account home the transcript was actually found under — never a client-supplied path. */
-  accountHomePath: string
+  /** The home where lookup actually found the transcript. */
+  accountHome: AgentSessionAccountHome
   transcriptPath: string
 }
 
@@ -33,10 +36,11 @@ export type CommittedStructuredAgentSessionAdoptionReplay = {
   providerHandle: AgentSessionProviderHandle
 }
 
-/** Exact committed-operation identity; attach still validates its fingerprint. */
+/** Attach still validates the committed operation’s fingerprint. */
 export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   agent: StructuredAgentId
   providerSessionId: string
+  rowSessionId: (link: AgentSessionProviderHandleLink) => string
   selfSessionId: string
   callerKey: string
   operationId: string
@@ -62,22 +66,14 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   ) {
     return null
   }
-  if (adopted.handle.nativeId !== input.providerSessionId) {
+  if (input.rowSessionId(adopted) !== input.providerSessionId) {
     return null
   }
   return { record, providerHandle: adopted.handle }
 }
 
-/**
- * A conversation has exactly one writer. Codex takes no lock of its own: a second app-server holding
- * the same thread never errors, it loads history once and then diverges, and the rollout ends up
- * recording a conversation that never happened. So the refusal is the correctness guard, and it has
- * to be able to tell "someone else owns this" from "this very operation owns it".
- *
- * @param selfSessionId the structured session this create is reserving. A retry of a committed
- * create re-runs every pre-commit check, and by then the record it created is itself in the
- * ownership index — without this exemption the replay refuses instead of replaying.
- */
+/** Codex does not lock threads: concurrent writers silently diverge, so host ownership must reject them.
+ * Exempt selfSessionId so committed-create retries can replay their own newly indexed record. */
 export function findConflictingStructuredAdoption(input: {
   agent: StructuredAgentId
   providerSessionId: string
@@ -88,14 +84,14 @@ export function findConflictingStructuredAdoption(input: {
     input.ownership.find(
       (owner) =>
         owner.sessionId !== input.selfSessionId &&
-        owner.provider === input.agent &&
+        owner.role === 'head' &&
+        chatAgentsShareConversations(owner.provider, input.agent) &&
         owner.providerSessionId === input.providerSessionId
     ) ?? null
   )
 }
 
-/** Mirrors the legacy PTY resume's refusal vocabulary: a conversation with an admitted writer is a
- *  conflict, one without is an unknown owner. Neither ever admits a second writer. */
+/** Match PTY refusal vocabulary: admitted writers conflict; other owners remain unknown. Neither allows writing. */
 export function structuredAdoptionConflictError(
   ownership: StructuredAgentSessionAdoptionOwnership
 ): Error {
@@ -103,52 +99,44 @@ export function structuredAdoptionConflictError(
     agentSessionLeaseAdmitsWriter(ownership.lease)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
-    { reason: 'conversationHeldElsewhere' }
+    {
+      reason: 'conversationHeldElsewhere',
+      owner: { sessionId: ownership.sessionId, workspaceId: ownership.workspaceId }
+    }
   )
 }
 
-/**
- * Resolve which recognised account home holds this conversation, by finding its transcript.
- *
- * The client names only the conversation. Everything else is derived here: `agentSession.create` is
- * reachable by paired mobile clients, so a client-supplied account home would choose the credential
- * directory the provider child launches against, and a client-supplied transcript path would choose
- * which file this host reads into a journal.
- *
- * Candidates are tried in order and the FIRST hit wins, so the caller must order them by preference
- * (selected account before the system default).
- */
+/** Try recognized homes in preference order; clients name only conversations.
+ * Client-supplied homes/paths would select launch credentials and arbitrary journal import files. */
 export async function resolveStructuredAgentSessionAdoption(input: {
   providerSessionId: string
-  candidateAccountHomes: readonly string[]
+  candidateAccountHomes: readonly AgentSessionAccountHome[]
   resolveTranscript: (args: {
     providerSessionId: string
-    accountHomePath: string
+    accountHome: AgentSessionAccountHome
     launchEnv: NodeJS.ProcessEnv
     workspaceCwd: string
   }) => Promise<string | null>
   launchEnv: NodeJS.ProcessEnv
   workspaceCwd: string
 }): Promise<StructuredAgentSessionAdoption> {
-  const seen = new Set<string>()
-  for (const accountHomePath of input.candidateAccountHomes) {
-    const trimmed = accountHomePath.trim()
-    if (!trimmed || seen.has(trimmed)) {
+  const seen: AgentSessionAccountHome[] = []
+  for (const accountHome of input.candidateAccountHomes) {
+    if (seen.some((home) => agentSessionAccountHomesEqual(home, accountHome))) {
       continue
     }
-    seen.add(trimmed)
+    seen.push(accountHome)
     const transcriptPath = await input.resolveTranscript({
       providerSessionId: input.providerSessionId,
-      accountHomePath: trimmed,
+      accountHome,
       launchEnv: input.launchEnv,
       workspaceCwd: input.workspaceCwd
     })
     if (transcriptPath) {
-      return { accountHomePath: trimmed, transcriptPath }
+      return { accountHome, transcriptPath }
     }
   }
-  // Refuse rather than fall back to the default home. Resuming under a home that does not hold the
-  // conversation is how a "resume" silently becomes a blank chat wearing the old chat's name.
+  // Wrong-home fallback silently turns resume into a blank chat under the old name.
   throw agentSessionRefusalError('agent_session_identity_required', {
     reason: 'transcriptNotFound'
   })

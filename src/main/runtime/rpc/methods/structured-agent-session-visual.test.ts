@@ -1,12 +1,21 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import '../unused-default-rpc-methods.test-fixture'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { nativeChatVisualsFolderFor } from '../../../native-chat/native-chat-visuals-folder'
-import { ALL_RPC_METHODS } from '.'
+import { nativeChatScratchFolderFor } from '../../../native-chat/native-chat-scratch-folder'
+import { nativeChatVisualRevision } from '../../../native-chat/native-chat-visual-file-read'
+import { Store } from '../../../persistence/loading-store/store'
+import {
+  closeTestStores,
+  createSqliteTestStore
+} from '../../../persistence/persistence-test-harness'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { RpcDispatcher } from '../dispatcher'
+import { FILE_METHODS } from './files'
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-agent-session-visual'
 import {
   call as callStructured,
@@ -42,20 +51,17 @@ beforeEach(async () => {
 
 afterEach(async () => {
   clearStructuredHostStub()
-  await rm(stateDirectory, { recursive: true, force: true })
+  await closeTestStores()
+  await rm(stateDirectory, { recursive: true, force: true, maxRetries: 3 })
 })
 
 async function writeVisual(name: string, html: string): Promise<void> {
-  const folder = nativeChatVisualsFolderFor(stateDirectory, SESSION)
+  const folder = nativeChatScratchFolderFor(stateDirectory, SESSION)
   await mkdir(folder, { recursive: true })
   await writeFile(join(folder, name), html)
 }
 
 describe('agentSession.readVisual', () => {
-  it('is registered on the runtime manifest', () => {
-    expect(ALL_RPC_METHODS.map((method) => method.name)).toContain('agentSession.readVisual')
-  })
-
   it("reads a file from the chat's own folder under the host's state directory", async () => {
     await writeVisual('chart.html', '<p>chart</p>')
     const reply = await call(
@@ -91,6 +97,46 @@ describe('agentSession.readVisual', () => {
     expect(typeof againResult === 'object' && againResult !== null && 'html' in againResult).toBe(
       false
     )
+  })
+
+  it('serves the folder a visual names as a file root, and nothing outside it', async () => {
+    await writeVisual('chart.html', 'a')
+    const folder = nativeChatScratchFolderFor(stateDirectory, SESSION)
+    // Same suffix but inside the authorized root, so only the selector's exact match refuses it.
+    const foreign = nativeChatScratchFolderFor(join(folder, 'nested'), SESSION)
+    await Promise.all([mkdir(foreign, { recursive: true }), mkdir(join(stateDirectory, 'out'))])
+    await writeFile(join(foreign, 'x.html'), 'x')
+    await writeFile(join(stateDirectory, 'out', 'x.html'), 'x')
+    await symlink(join(stateDirectory, 'out'), join(folder, 'out'), 'junction')
+    const path = join(folder, 'chart.html')
+    const visual = { sessionId: SESSION, file: 'chart.html' }
+    const readVisual = (params: { knownRevision?: string }) =>
+      call('agentSession.readVisual', { ...visual, ...params }, STRUCTURED_CLIENT)
+    expect(await readVisual({})).toMatchObject({ result: { html: 'a', path } })
+    const knownRevision = nativeChatVisualRevision(Buffer.from('a'))
+    expect(await readVisual({ knownRevision })).toMatchObject({ result: { unchanged: true, path } })
+    const dataFile = join(stateDirectory, 'db', 'data.json')
+    const runtime = new OrcaRuntimeService(createSqliteTestStore(Store, { dataFile }))
+    const files = (method: string, worktree: string, relativePath: string, extra = {}) =>
+      new RpcDispatcher({ runtime, methods: FILE_METHODS }).dispatch({
+        id: 'r',
+        authToken: 't',
+        method,
+        params: { worktree, relativePath, ...extra }
+      })
+    const root = `path:${folder}`
+    const write = { content: 'b', expectedExecutionHostId: 'local' }
+    expect(await files('files.write', root, 'chart.html', write)).toMatchObject({ ok: true })
+    const read = await files('files.read', root, 'chart.html')
+    expect(read).toMatchObject({ result: { content: 'b' } })
+    const preview = { entryRelativePath: 'chart.html', implicitRootRelativePath: null }
+    const docPreview = { ...preview, authorizedRootRelativePaths: [] }
+    const previewed = await files('files.readDocPreview', root, 'chart.html', docPreview)
+    expect(previewed).toMatchObject({ result: { content: 'b' } })
+    const refusal = { error: { message: 'chat_scratch_not_openable' } }
+    expect(await files('files.open', root, 'chart.html')).toMatchObject(refusal)
+    expect(await files('files.read', `path:${foreign}`, 'x.html')).toMatchObject({ ok: false })
+    expect(await files('files.read', root, 'out/x.html')).toMatchObject({ ok: false })
   })
 
   it('reports a session this host has no record of', async () => {

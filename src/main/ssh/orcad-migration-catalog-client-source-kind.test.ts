@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import { ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN } from '../../shared/orcad-migration-source-kind'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import {
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
@@ -56,7 +54,7 @@ function sshManifest(): OrcadMigrationManifest {
   return { ...unsigned, manifestSha256: computeOrcadMigrationManifestSha256(unsigned) }
 }
 
-/** A WSL source, or any other `kind` as a newer or confused peer could put on the wire. */
+/** Include unknown wire kinds from newer or malformed peers. */
 function manifestOfKind(kind: string): OrcadMigrationManifest {
   const source: OrcadMigrationManifest['source'] = {
     kind: 'local-wsl',
@@ -80,7 +78,6 @@ const pairingCode = encodePairingOffer({
 beforeEach(() => {
   vi.clearAllMocks()
   sendRequest.mockResolvedValue({ ok: false, error: { code: 'x', message: 'sent' } })
-  // What an older destination advertises.
   status.capabilities = [ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY]
 })
 

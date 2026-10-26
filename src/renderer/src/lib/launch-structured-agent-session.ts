@@ -1,3 +1,4 @@
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   createStructuredAgentSessionId,
@@ -37,24 +38,22 @@ export {
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
-  /** The host that owns the chat, fixed when the launch begins and persisted with it: worktree ids
-   *  repeat across hosts, so it is never re-derived. */
+  /** Fix/persist execution host when launch begins; same workspace IDs on other hosts must never alter ownership. */
   executionHostId: ExecutionHostId
-  /** The runtime serving `executionHostId`. */
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: () => void
-  /** The saved selection create seeds, read when the intent is built. */
+  beforeCreate?: () => boolean
+  surfaceAddress?: StructuredLaunchSurfaceAddress
   seedOptions?: Readonly<Record<string, string>>
 }
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 
-/** What create will seed: this machine's saved selection for its own chats; for a paired server's,
- *  the server's own, which it reports when it admits the chat (absent from an older server). */
+/** Seed local saved selection for local chats; paired hosts report their own admitted seed, absent on older servers. */
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
@@ -79,20 +78,29 @@ function structuredAgentSessionOwnerTarget(
   return { executionHostId, target }
 }
 
-/** `executionHostId` is the host the launch was routed to; absent, the catalog must name exactly
- *  one, or the launch is refused rather than sent to whichever host a fallback picks. */
+/** Use routed executionHostId or require exactly one catalog owner; never choose a launch host by fallback. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: TuiAgent,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
-  hostSeedOptions?: LaunchSeed
+  hostSeedOptions?: LaunchSeed,
+  activate = true
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
   const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
+  if (activate) {
+    recordWebSessionFocusIntent(
+      structuredAgentSessionFocusOwner(owner.target),
+      worktreeId,
+      `agent-session:${sessionId}`,
+      undefined,
+      resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
+    )
+  }
   return buildStructuredAgentSessionLaunchIntent(
     worktreeId,
     owner,
@@ -112,13 +120,6 @@ function buildStructuredAgentSessionLaunchIntent(
   hostSeedOptions: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
-  recordWebSessionFocusIntent(
-    structuredAgentSessionFocusOwner(owner.target),
-    worktreeId,
-    `agent-session:${sessionId}`,
-    undefined,
-    resolveWebSessionVisibleTabId(state, worktreeId)
-  )
   return {
     sessionId,
     worktreeId,
@@ -150,7 +151,6 @@ export function retryStructuredAgentSessionLaunchIntent(
   )
 }
 
-/** Rebuild a reload-surviving intent with the caller's current worktree selector. */
 export function restoreStructuredAgentSessionLaunchIntent(args: {
   worktreeId: string
   executionHostId: ExecutionHostId
@@ -160,7 +160,6 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
-  /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
   options?: Readonly<Record<string, string>>
@@ -168,13 +167,6 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
-  recordWebSessionFocusIntent(
-    structuredAgentSessionFocusOwner(target),
-    args.worktreeId,
-    `agent-session:${args.sessionId}`,
-    undefined,
-    resolveWebSessionVisibleTabId(state, args.worktreeId)
-  )
   return {
     sessionId: args.sessionId,
     worktreeId: args.worktreeId,

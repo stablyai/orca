@@ -9,16 +9,14 @@ const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.me
   './windows-pe-machine.cjs'
 )
 
-/**
- * A Windows slot's ACL addon. Required, not optional: orcad's data-root privacy check fails
- * closed without it, so a slot missing it would never start on Windows.
- */
+// ACL addon is required: missing it makes orcad’s data-root privacy check fail closed before Windows startup.
 export function stageOrcadWindowsSecurity(
   root,
   outputDir,
   target,
   host = { platform: process.platform },
-  compile = compileOrcadWindowsSecurity
+  compile = compileOrcadWindowsSecurity,
+  options = {}
 ) {
   if (!target.startsWith('win32-')) {
     return
@@ -32,7 +30,7 @@ export function stageOrcadWindowsSecurity(
           `node config/scripts/build-windows-security-addon.mjs --arch=${arch}`
       )
     }
-    compile(root, arch)
+    compile(root, arch, options)
   }
   const machine = readPeMachine(source)
   if (machine !== PE_MACHINE[arch]) {
@@ -41,10 +39,20 @@ export function stageOrcadWindowsSecurity(
   copyFileSync(source, join(outputDir, ORCAD_WINDOWS_SECURITY_FILENAME))
 }
 
-function compileOrcadWindowsSecurity(root, arch) {
-  const result = runProcessSync({
+function compileOrcadWindowsSecurity(
+  root,
+  arch,
+  { enabled = false, runtimePath, run = runProcessSync } = {}
+) {
+  const result = run({
     program: process.execPath,
-    args: [join(root, 'config/scripts/build-windows-security-addon.mjs'), `--arch=${arch}`],
+    args: [
+      join(root, 'config/scripts/build-windows-security-addon.mjs'),
+      `--arch=${arch}`,
+      ...(enabled && runtimePath
+        ? ['--reuse-prepared-runtime', `--node-runtime=${runtimePath}`]
+        : [])
+    ],
     cwd: root,
     stdio: 'inherit',
     timeoutMs: null

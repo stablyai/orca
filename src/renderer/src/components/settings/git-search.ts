@@ -18,6 +18,23 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.jiraIssueKeyCasingTitle',
+      'Jira Key Casing'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.jiraIssueKeyCasingDescription',
+      'Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.jira', 'jira'),
+      ...translateSearchKeyword('auto.components.settings.git.search.issueKey', 'issue key'),
+      ...translateSearchKeyword('auto.components.settings.git.search.f83c8937c4', 'branch naming'),
+      ...translateSearchKeyword('auto.components.settings.git.search.uppercase', 'uppercase'),
+      ...translateSearchKeyword('auto.components.settings.git.search.lowercase', 'lowercase')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.f8bda25f29',
       'Keep Local Main Up to Date'
     ),
@@ -50,7 +67,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.git.search.sourceControlGroupOrderDescription',
-      'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+      'Choose whether Staged Changes or Changes appear first in Source Control.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.git.search.groupOrder', 'group order'),

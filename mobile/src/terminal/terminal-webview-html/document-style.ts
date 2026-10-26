@@ -1,15 +1,6 @@
 import { colors } from '../../theme/mobile-theme'
 
-/**
- * The rules that style the document itself, which only the WebView's document may carry.
- *
- * Inside the WebView this is the terminal's own page and these say so. On the page the document
- * is a guest in a React Native Web application, and the same three selectors would set that
- * application's background, its overflow and every element's box model — and keep doing it after
- * the terminal is gone. So the page never injects them; `document-style-scoping.ts` is what
- * separates them from the rules below, and it recognises them by their selectors rather than by
- * this split, so a fourth one added here is still caught there.
- */
+// Only native WebViews own document roots; injecting these rules on the page would restyle the app beyond terminal unmount.
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     background: ${colors.terminalBg};
@@ -18,19 +9,19 @@ export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-si
     height: 100%;
   }`
 
-/**
- * The terminal's own elements, beside xterm's sheet.
- *
- * Split out of the document shell because the page needs exactly this and must not reach the
- * engine string the shell also splices in. The rules are addressed at the ids and classes
- * `document-markup.ts` declares, which is the other half of the same pair; the page holds every
- * one of them under its host element rather than letting them loose in the application.
- */
+// Keep element rules separate from native script strings so pages can inject only host-scoped styles.
 export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     overflow: hidden;
     position: relative;
     width: 100%;
     height: 100%;
+  }
+  #terminal-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--terminal-bottom-row-backdrop, none);
   }
   #terminal-surface {
     transform-origin: top left;
@@ -148,11 +139,5 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
   #sel-menu button:active { background: #414868; }
   #sel-menu button + button { border-left: 1px solid #414868; }`
 
-/**
- * Both halves, in the order the WebView's `<head>` carries them.
- *
- * The root rules come first: the element rules the page scopes to its host are the second half, and
- * a page's copy is that half alone.
- */
 export const TERMINAL_DOCUMENT_STYLE = `${TERMINAL_DOCUMENT_ROOT_STYLE}
 ${TERMINAL_DOCUMENT_ELEMENT_STYLE}`

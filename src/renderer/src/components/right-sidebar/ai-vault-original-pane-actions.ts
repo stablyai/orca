@@ -6,7 +6,7 @@ import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -24,7 +24,8 @@ export function useAiVaultOriginalPaneActions(): {
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
-  jumpToOriginalPane: (session: AiVaultSession) => void
+  /** Settles false when the pane is gone and nothing was switched. */
+  jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
   jumpToWorktree: (worktreeId: string) => void
 } {
   const originalPaneLookupState = useAppStore(
@@ -52,8 +53,7 @@ export function useAiVaultOriginalPaneActions(): {
     },
     [originalPaneLookupState.unifiedTabsByWorktree]
   )
-  // Why: loading, filtered, or collapsed views may render no session rows.
-  // Build once on the first actual lookup, then share it across visible rows.
+  // Build on first lookup because loading, filtered, or collapsed views may render no rows.
   const getOriginalPaneIndex = useMemo(
     () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
     [originalPaneLookupState]
@@ -72,10 +72,9 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToOriginalPane = useCallback(
-    (session: AiVaultSession): void => {
+    async (session: AiVaultSession): Promise<boolean> => {
       if (session.structuredSession && isStructuredSessionOpen(session)) {
-        void activateAiVaultStructuredSession(session)
-        return
+        return activateAiVaultStructuredSession(session)
       }
       const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
       if (!target) {
@@ -85,11 +84,11 @@ export function useAiVaultOriginalPaneActions(): {
             'Original pane is no longer available.'
           )
         )
-        return
+        return false
       }
 
       if (!revealSessionWorkspace(target.worktreeId)) {
-        return
+        return false
       }
       const state = useAppStore.getState()
       state.setActiveTabType('terminal', target.worktreeId)
@@ -97,6 +96,7 @@ export function useAiVaultOriginalPaneActions(): {
         flashFocusedPane: true,
         scrollToBottomIfOutputSinceLastView: true
       })
+      return true
     },
     [isStructuredSessionOpen]
   )

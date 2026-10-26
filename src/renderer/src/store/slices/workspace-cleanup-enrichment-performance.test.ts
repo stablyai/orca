@@ -96,15 +96,16 @@ describe('workspace cleanup enrichment performance', () => {
     const alphaTab = { id: 'tab-alpha', title: 'shell' }
     const betaTab = { id: 'tab-beta', title: 'shell' }
     const alphaWorking = {
-      paneKey: 'tab-alpha:leaf-alpha',
+      paneKey: 'tab-alpha:11111111-1111-4111-8111-111111111111',
       state: 'working',
+      connectionId: null,
       prompt: '',
       updatedAt: NOW,
       stateStartedAt: NOW,
       stateHistory: []
     }
     const betaDone = {
-      paneKey: 'tab-beta:leaf-beta',
+      paneKey: 'tab-beta:22222222-2222-4222-8222-222222222222',
       state: 'done',
       prompt: '',
       updatedAt: NOW,
@@ -262,7 +263,7 @@ describe('workspace cleanup enrichment performance', () => {
     pending.resolve({ scannedAt: NOW, candidates, errors: [] })
     const finalScan = await scanPromise
 
-    expect(counts).toEqual({ openFiles: 1, retainedAgents: 1, agentStatuses: 1 })
+    expect(counts).toEqual({ openFiles: 1, retainedAgents: 0, agentStatuses: 0 })
     expect(finalScan.candidates).toEqual(progressCandidates)
   })
 

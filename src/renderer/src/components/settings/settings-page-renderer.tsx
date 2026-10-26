@@ -1,4 +1,5 @@
 import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { SettingsContentScrollElementProvider } from './settings-content-scroll-element'
 import { SettingsSidebar } from './SettingsSidebar'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -88,7 +89,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
         repoSections={view.repoNavSections}
         hasRepos={model.repos.length > 0}
         searchInputRef={interactions.searchInputRef}
-        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+        // Deep-linked panes/modals own focus; plain entry focuses search.
         searchAutoFocus={model.settingsNavigationTarget == null}
         onBack={interactions.closeSettingsPageWithPromptGuard}
         onSelectSection={actions.scrollToSection}
@@ -127,44 +128,46 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {translate('auto.components.settings.Settings.add3b97ee6', '"')}
               </div>
             ) : (
-              <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                {renderAgentsSettingsSection(context)}
-                {renderAccountsSettingsSection(context)}
-                {renderOrchestrationSettingsSection(context)}
-                {renderLinearSettingsSection(context)}
-                {renderDesktopCapabilitySettingsSections(context)}
-                {renderOrcaAccountSettingsSection(context)}
-                {renderSetupGuideSettingsSection(context)}
-                {renderGeneralSettingsSection(context)}
-                {renderIntegrationsSettingsSection(context)}
-                {renderMobileSettingsSection(context)}
-                {renderAutomationsSettingsSection(context)}
-                {renderArtifactsSettingsSection(context)}
-                {renderShareSkillsSettingsSection(context)}
-                {renderSessionHistorySettingsSection(context)}
-                {renderGitSettingsSection(context)}
-                {renderTasksSettingsSection(context)}
-                {renderTerminalSettingsSection(context)}
-                {renderQuickCommandsSettingsSection(context)}
-                {renderBrowserSettingsSection(context)}
-                {renderMobileEmulatorSettingsSection(context)}
-                {renderFloatingWorkspaceSettingsSection(context)}
-                {renderAppearanceSettingsSection(context)}
-                {renderChatSettingsSection(context)}
-                {renderInputSettingsSection(context)}
-                {renderNotificationsSettingsSection(context)}
-                {renderShortcutsSettingsSection(context)}
-                {renderStatsSettingsSection(context)}
-                {renderServersSettingsSection(context)}
-                {renderSshSettingsSection(context)}
-                {renderDeveloperPermissionsSettingsSection(context)}
-                {renderPrivacySettingsSection(context)}
-                {renderAdvancedSettingsSection(context)}
-                {renderDevSettingsSection(context)}
-                {renderExperimentalSettingsSection(context)}
-                {renderPluginsSettingsSection(context)}
-                {renderProjectSettingsSections(context)}
-              </ActiveSettingsSectionProvider>
+              <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
+                <ActiveSettingsSectionProvider value={model.activeSectionId}>
+                  {renderAgentsSettingsSection(context)}
+                  {renderAccountsSettingsSection(context)}
+                  {renderOrchestrationSettingsSection(context)}
+                  {renderLinearSettingsSection(context)}
+                  {renderDesktopCapabilitySettingsSections(context)}
+                  {renderOrcaAccountSettingsSection(context)}
+                  {renderSetupGuideSettingsSection(context)}
+                  {renderGeneralSettingsSection(context)}
+                  {renderIntegrationsSettingsSection(context)}
+                  {renderMobileSettingsSection(context)}
+                  {renderAutomationsSettingsSection(context)}
+                  {renderArtifactsSettingsSection(context)}
+                  {renderShareSkillsSettingsSection(context)}
+                  {renderSessionHistorySettingsSection(context)}
+                  {renderGitSettingsSection(context)}
+                  {renderTasksSettingsSection(context)}
+                  {renderTerminalSettingsSection(context)}
+                  {renderQuickCommandsSettingsSection(context)}
+                  {renderBrowserSettingsSection(context)}
+                  {renderMobileEmulatorSettingsSection(context)}
+                  {renderFloatingWorkspaceSettingsSection(context)}
+                  {renderAppearanceSettingsSection(context)}
+                  {renderChatSettingsSection(context)}
+                  {renderInputSettingsSection(context)}
+                  {renderNotificationsSettingsSection(context)}
+                  {renderShortcutsSettingsSection(context)}
+                  {renderStatsSettingsSection(context)}
+                  {renderServersSettingsSection(context)}
+                  {renderSshSettingsSection(context)}
+                  {renderDeveloperPermissionsSettingsSection(context)}
+                  {renderPrivacySettingsSection(context)}
+                  {renderAdvancedSettingsSection(context)}
+                  {renderDevSettingsSection(context)}
+                  {renderExperimentalSettingsSection(context)}
+                  {renderPluginsSettingsSection(context)}
+                  {renderProjectSettingsSections(context)}
+                </ActiveSettingsSectionProvider>
+              </SettingsContentScrollElementProvider>
             )}
           </div>
         </div>

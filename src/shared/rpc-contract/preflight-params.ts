@@ -14,5 +14,6 @@ export const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
 
 /** Why optional: a client that predates it sends nothing and keeps the host-default probe. */
 export const PreflightAgentDetection = z.object({
-  worktreeId: z.string().min(1).optional()
+  worktreeId: z.string().min(1).optional(),
+  repoId: z.string().min(1).optional()
 })

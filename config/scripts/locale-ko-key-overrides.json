@@ -977,17 +977,8 @@
   "auto.components.editor.rich.markdown.slash.commands.f82c78a2ee": {
     "ko": "토글 텍스트"
   },
-  "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca": {
-    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설정"
-  },
-  "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.bff5341ac3": {
-    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
-  },
   "auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938": {
     "ko": "작업 중…"
-  },
-  "auto.components.feature.tips.CliSkillSetupTerminal.1953e90447": {
-    "ko": "Enter를 눌러 agents 용 Orca CLI 오케스트레이션 스킬을 설치하세요."
   },
   "auto.components.feature.tips.CmdJPaletteFeatureTipVisual.379d776971": {
     "ko": "입력 중"
@@ -3734,9 +3725,6 @@
   "auto.components.settings.terminal.clipboard.search.5ffcd13c90": {
     "ko": "tmux"
   },
-  "auto.components.settings.terminal.clipboard.search.603818e8d8": {
-    "ko": "터미널 선택 영역이 만들어지는 즉시 자동으로 클립보드에 복사합니다."
-  },
   "auto.components.settings.terminal.clipboard.search.e87c6d776d": {
     "ko": "자동"
   },
@@ -5078,9 +5066,6 @@
   "auto.components.settings.OrchestrationPane.52e0634e2c": {
     "ko": "핸드오프, 작업 트리 핸드오버, 순차 또는 병렬 하위 에이전트 작업에 오케스트레이션을 사용하도록 조율 에이전트에게 요청하세요."
   },
-  "auto.components.settings.OrchestrationPane.832f1f3ee6": {
-    "ko": "사용 중인 터미널에서 직접 설치하시겠어요?"
-  },
   "auto.components.settings.OrchestrationPane.9bedd2a6e5": {
     "ko": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다."
   },
@@ -5245,9 +5230,6 @@
   },
   "auto.components.settings.TerminalPane.a9d47451d1": {
     "ko": "\"새 탭\"은 현재 포커스를 가져가지 않고 \"Setup\"이라는 제목의 백그라운드 탭에서 설정 명령을 엽니다."
-  },
-  "auto.components.settings.TerminalPane.4729c645fc": {
-    "ko": "터미널에서 선택한 내용을 클립보드에 자동으로 복사합니다."
   },
   "auto.components.settings.TerminalPane.9129b7e805": {
     "ko": "터미널 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다."
@@ -5885,9 +5867,6 @@
   "auto.components.settings.AgentRuntimeSetting.label": {
     "ko": "에이전트 런타임"
   },
-  "auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown": {
-    "ko": "WSL 셸 명령의 PATH를 확인할 수 없습니다"
-  },
   "auto.components.settings.OrchestrationPane.ae79504732": {
     "ko": "사용 방법"
   },
@@ -5896,9 +5875,6 @@
   },
   "auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_one": {
     "ko": "감지된 에이전트 1개에 스킬이 설치되어 있습니다."
-  },
-  "auto.components.settings.OrchestrationSkillPromptDialog.b99f375eb2": {
-    "ko": "에이전트용 오케스트레이션 스킬을 설치하려면 터미널에서 이 명령을 실행하세요."
   },
   "auto.components.settings.orchestration.search.f5d39af41e": {
     "ko": "하위 에이전트"
@@ -6270,7 +6246,7 @@
     "ko": "이 호스트의 orca CLI가 Orca를 제어하도록 허용"
   },
   "auto.components.settings.SshTargetForm.allowRemoteCliControlHelp": {
-    "ko": "꺼져 있으면 이 호스트에서 실행한 orca 명령은 이 호스트의 터미널에만 적용됩니다. 켜면 다른 호스트와 이 컴퓨터의 오케스트레이션, 파일 및 연동 기능에도 접근할 수 있습니다."
+    "ko": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다."
   },
   "auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5": {
     "ko": "localhost, 127.0.0.1, *.internal"
@@ -6526,5 +6502,11 @@
   },
   "auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural": {
     "ko": "워크스페이스 {{count}}개 연결됨"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.sleepWithDescendants": {
+    "ko": "하위 항목도 패널 닫기 ({{value0}})"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.sleepWithDescendantsDescription": {
+    "ko": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다."
   }
 }

@@ -1,21 +1,25 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
 import type { RpcClient } from '../transport/rpc-client'
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import { sendMobileNativeChatMessageWithOutcome } from './native-chat/mobile-native-chat-send'
 
-/** Sends the Escape that dismisses an ask/question card. Its own module for the
- *  same reason stop/permission/answer are: the controller owns composition, not
- *  the per-action write semantics. */
 export function useMobileNativeChatCancelAsk(args: {
   client: RpcClient | null
   enabled: boolean
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
+  agentRef: MutableRefObject<string | null>
   /** Cancels unsent answer groups before issuing Escape. */
   cancelPending: () => void
   onSendError: (message: string) => void
 }): () => Promise<boolean> {
-  const { client, enabled, handleRef, deviceTokenRef, cancelPending, onSendError } = args
+  const { client, enabled, handleRef, deviceTokenRef, agentRef, cancelPending, onSendError } = args
   return useCallback(async (): Promise<boolean> => {
+    if (nativeChatAskRequiresTerminal(agentRef.current)) {
+      cancelPending()
+      onSendError('Answer this question in terminal view')
+      return false
+    }
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
       onSendError('Cancel not sent (disconnected)')
@@ -35,12 +39,11 @@ export function useMobileNativeChatCancelAsk(args: {
         : {})
     })
     if (outcome === 'unknown') {
-      // Why: the Escape may have landed (ack lost / path cutover) — a definite
-      // "not sent" would invite a second Escape into a changed prompt state.
+      // Lost-ack/cutover Escape may have changed the prompt; never invite another with a definite not-sent verdict.
       onSendError('Cancel unconfirmed — check chat before retrying')
     } else if (outcome === 'rejected') {
       onSendError('Cancel not sent')
     }
     return outcome === 'accepted'
-  }, [cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])
+  }, [agentRef, cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])
 }

@@ -10,6 +10,7 @@ import { promptGuardShellEnv } from './git/runner'
 import { dropIncoherentCondaActivationEnv } from './pty/conda-activation-env'
 import { toLinuxPath } from './wsl'
 import { runWslProcess } from './wsl/wsl-runner'
+import { windowsFsPath } from './wsl/wsl-unc-drive-fs-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
@@ -21,18 +22,11 @@ import {
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 
-const HOOK_TIMEOUT = 120_000 // 2 minutes
+const HOOK_TIMEOUT = 120_000
 
 type HookProcessOutcome = { success: boolean; output: string; exitCode?: number }
 
-/**
- * Turn a finished process into a hook verdict.
- *
- * Why `timedOut` decides before `code` (#19334): a hook that traps SIGTERM and exits 0 reports a
- * zero exit for a run we cut off mid-archive. The exit code of something we stopped is not
- * evidence it finished, so a timeout withholds the code and the removal gate reads that as
- * `unverifiable` rather than as a pass.
- */
+/** Timed-out hooks cannot prove completion, even if their SIGTERM handler exits 0 (#19334). */
 function classifyHookProcessResult(
   result: { code: number | null; stdout: string; stderr: string; timedOut: boolean },
   context: { hookName: string; cwd: string; timeoutMs: number }
@@ -44,8 +38,7 @@ function classifyHookProcessResult(
     return { success: false, output: `${streams}\n${message}`.trim() }
   }
   if (result.code !== 0) {
-    // `null` means signalled: there is no exit code, and saying "exit code null" reads as a
-    // reporting glitch rather than the `unverifiable` verdict the gate is about to give it.
+    // A signaled exit has no code for the removal gate to verify.
     const message =
       result.code === null
         ? 'Command was terminated without reporting an exit code.'
@@ -63,12 +56,7 @@ function classifyHookProcessResult(
 
 const SIGTERM_GRACE_MS = 2_000
 
-/**
- * `exec` capped output at 1 MiB and killed the hook on overflow; `spawn` has no cap at all, and a
- * hook flooding stdout for the full deadline can take the main process's heap with it. Truncation
- * is reported in the output rather than as a failure — a chatty hook that exits 0 did succeed, and
- * failing it for being chatty is the `exec` behaviour this is replacing.
- */
+/** Bound retained output without failing chatty hooks that otherwise succeed. */
 const HOOK_OUTPUT_LIMIT_BYTES = 10 * 1024 * 1024
 
 function readSink(sink: ReturnType<typeof createOutputSink>): string {
@@ -77,7 +65,6 @@ function readSink(sink: ReturnType<typeof createOutputSink>): string {
     : sink.text()
 }
 
-/** A spawn failure: the process never started, so no exit was ever observed. */
 function hookProcessError(
   error: Error,
   stdout: string,
@@ -93,7 +80,6 @@ function hookProcessError(
   }
 }
 
-/** A hook that never started reported no exit, so the code stays withheld. */
 function hookSpawnFailure(
   error: unknown,
   context: { hookName: string; cwd: string }
@@ -113,11 +99,13 @@ function getHookShell(): string | undefined {
 
 export { parseOrcaYaml }
 
-/**
- * Load hooks from orca.yaml in the given repo root.
- */
+// A UNC drive-mount repo's file opens only through its drive path.
+function orcaYamlPath(repoPath: string): string {
+  return windowsFsPath(join(repoPath, 'orca.yaml'))
+}
+
 export function loadHooks(repoPath: string): OrcaHooks | null {
-  const yamlPath = join(repoPath, 'orca.yaml')
+  const yamlPath = orcaYamlPath(repoPath)
   if (!existsSync(yamlPath)) {
     return null
   }
@@ -130,14 +118,11 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
   }
 }
 
-/**
- * Check whether an orca.yaml exists for a repo.
- */
 export function hasHooksFile(repoPath: string): boolean {
-  return existsSync(join(repoPath, 'orca.yaml'))
+  return existsSync(orcaYamlPath(repoPath))
 }
 
-// Why: detect unrecognised keys so the UI can suggest an update instead of showing a "could not be parsed" error.
+// Unknown keys suggest a newer config format; let the UI offer an update.
 const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'scripts',
   'setupAgentStartupPolicy',
@@ -147,12 +132,11 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'worktree'
 ])
 
-/** True when `orca.yaml` has a top-level key this version of Orca does not handle. */
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
-    const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
+    const content = readFileSync(orcaYamlPath(repoPath), 'utf-8')
     for (const line of iterateLfScriptLines(content)) {
-      // Why: match bare `key:` at end-of-line too, since a mapping with a block value on the next line is valid YAML.
+      // A bare key: is valid YAML when its block value follows on the next line.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
       if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
         return true
@@ -197,19 +181,14 @@ export function getSetupCommandSource(
   return null
 }
 
-/**
- * Run a named hook script in the given working directory.
- */
 export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  /** Deadline override. Production uses HOOK_TIMEOUT; tests use it to exercise the timeout path. */
   timeoutMs: number = HOOK_TIMEOUT
-  // Why (#19334): an absent exitCode means no exit was ever observed. The archive-hook removal
-  // gate reads that as `unverifiable` rather than folding it into a zero.
+  // Failed hooks without an observed exit are unverifiable to the removal gate (#19334).
 ): Promise<{ success: boolean; output: string; exitCode?: number }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
@@ -222,15 +201,13 @@ export function runHook(
   const wslInfo = getHookWslContext(cwd, runtimeTarget)
 
   if (wslInfo) {
-    // Why: hook scripts run inside WSL, so translate the ORCA_* Windows UNC paths to Linux paths.
+    // WSL hooks need Linux paths for ORCA_* values, including Windows UNC paths.
     const envVars = getSetupEnvVars(repo, cwd)
     const wslEnv: Record<string, string> = {}
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
-    // Why: same unattended-git guard as the non-WSL branch below (issue
-    // #7652) — only the guard flags and any indexed git-config protocol are
-    // meant to reach the guest; askpass stays host-side, same as before.
+    // Forward unattended Git flags and indexed config to WSL; keep host askpass out of the guest.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const guestEnv: Record<string, string> = { ...wslEnv }
     for (const [key, value] of Object.entries(guardedEnv)) {
@@ -248,9 +225,7 @@ export function runHook(
       distro: wslInfo.distro ?? undefined,
       loginPath: 'preferred',
       script,
-      // Why pinned: these are user-authored orca.yaml scripts and the native
-      // path runs /bin/bash. Defaulting to sh would fail bash-only hooks on WSL
-      // only -- a downgrade the user never asked for.
+      // Match native Bash hook semantics; sh would reject Bash-only scripts inside WSL.
       shell: 'bash',
       cwd: wslInfo.linuxPath,
       env: guestEnv,
@@ -264,11 +239,7 @@ export function runHook(
   dropIncoherentCondaActivationEnv(shellHookEnv)
 
   return new Promise<HookProcessOutcome>((resolve) => {
-    // Why we own the deadline (#19334): Node's `exec({ timeout })` SIGTERMs the child and then
-    // reports whatever it chose to do, so a hook that traps SIGTERM and exits 0 came back as a
-    // PASS — a hook cut off mid-archive, indistinguishable from one that finished. Settle on the
-    // deadline instead, and settle AT it, so a hook that traps and keeps running cannot hold a
-    // removal open.
+    // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
     let settled = false
     let deadline: NodeJS.Timeout | undefined
     const settle = (result: HookProcessOutcome): void => {
@@ -281,32 +252,23 @@ export function runHook(
       }
       resolve(result)
     }
-    // Why `spawn` and not `exec` (#19334 follow-up): `detached` is a spawn-only option — `exec`
-    // accepts and ignores it, so the shell never became a group leader and the group signal below
-    // had nothing to reach. Passing `shell` as a string keeps Node's own platform invocation, which
-    // is what `exec` was being kept for: `cmd.exe /d /s /c` on Windows rather than a bare `-c`.
+    // exec ignores detached; spawn creates the process group needed for tree termination.
     const child = spawn(script, {
       cwd,
       shell: getHookShell(),
-      // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
+      // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
       env: promptGuardShellEnv(shellHookEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
-      // Pinned, not left to Node's default, for the same reason `runProcess` pins it: a `cmd.exe`
-      // hook otherwise flashes a console window and takes focus. Pre-existing — `exec` did not set
-      // it either — but AGENTS.md asks for it pinned on every Windows spawn.
+      // Hide Windows hook consoles to prevent flashes and focus theft.
       windowsHide: true,
-      // Make the shell a group leader so its children can be reached. Not on Windows, which has no
-      // process groups in this sense and where `detached` means a new console instead.
+      // POSIX groups let signals reach descendants; Windows detached would create a new console.
       ...(process.platform === 'win32' ? {} : { detached: true })
     })
     const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
     child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
-    // Why listeners that do nothing: an unhandled `error` on a stream is an uncaught exception, and
-    // in the Electron main process that is the whole app. `exec` never covered this either — its
-    // only `error` listener is on the child — so this is a pre-existing gap, closed the way
-    // `runProcess` closes it. Losing output is not worth a crash; the exit code still gets through.
+    // Unhandled stream errors crash main; retain exit reporting even when output fails.
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
       stream?.on('error', () => {})
     }
@@ -316,7 +278,6 @@ export function runHook(
     child.on('close', (code, signal) => {
       settle(
         classifyHookProcessResult(
-          // A signalled exit reports no code, which stays `unverifiable` rather than becoming a 0.
           {
             code: signal ? null : code,
             stdout: readSink(stdout),
@@ -327,21 +288,16 @@ export function runHook(
         )
       )
     })
-    // Why guarded: a spawn failure can settle before the deadline is armed, and arming one on a
-    // finished run would later signal a pid that is gone — and may by then belong to something else.
+    // Arming after settlement could later signal a reused PID.
     if (!settled) {
       deadline = setTimeout(() => {
         settle(
           classifyHookProcessResult(
-            // Keep what the hook printed: it is the only clue to why the removal gate says
-            // `unverifiable`.
             { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
             { hookName, cwd, timeoutMs }
           )
         )
-        // Orca's own tree terminator: POSIX process groups, `taskkill /t /f` on Windows (where a
-        // bare `child.kill` reaches only the shell and leaves its descendants running), and the
-        // recycled-pid guard that hazard needs. SIGTERM first so a well-behaved hook can clean up.
+        // Terminate descendants too, with a SIGTERM grace period for cooperative hooks to clean up.
         void signalProcessTree(child, 'SIGTERM')
         setTimeout(() => {
           void forceTerminateProcessTree(child)

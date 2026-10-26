@@ -3,8 +3,7 @@ import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 /** `$0` of the holder's shell; the token that identifies our holder in a process command line. */
 export const WSL_DISTRO_HOLDER_MARKER = 'orca-wsl-distro-holder'
 
-// Why a loop of short sleeps: busybox `sleep` (Alpine) rejects `infinity`, and one huge
-// duration depends on how each `sleep` implementation parses it.
+// Use bounded sleeps: BusyBox rejects infinity and huge durations vary across implementations.
 const HOLDER_SCRIPT = 'while :; do sleep 3600; done'
 
 /** `wsl.exe` argv for a holder: only a Windows-side WSL client keeps a distro from idling out. */

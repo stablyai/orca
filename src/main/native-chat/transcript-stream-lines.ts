@@ -1,8 +1,8 @@
 import type { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
-import { NodeReadableTextTooLargeError } from '../../shared/node-readable-text'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { inTranscriptFileOrder } from './transcript-file-order'
 
 type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
@@ -12,24 +12,18 @@ export async function decodeTranscriptStream(
   start: number,
   decode: TranscriptDecoder,
   includeTrailingLine: boolean,
-  maxSourceBytes = Infinity
+  maxRecordBytes = Infinity
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
   let consumedBytes = 0
-  let sourceBytes = 0
+  let latest = Number.NEGATIVE_INFINITY
   const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
     if (terminated || includeTrailingLine) {
       decodeLine(line, consumedBytes)
       consumedBytes += byteLength
     }
-  })
+  }, maxRecordBytes)
   for await (const chunk of stream) {
-    if (maxSourceBytes !== Infinity) {
-      sourceBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk, 'utf8')
-      if (sourceBytes > maxSourceBytes) {
-        throw new NodeReadableTextTooLargeError(sourceBytes, maxSourceBytes)
-      }
-    }
     framer.write(chunk)
   }
   framer.end()
@@ -43,7 +37,9 @@ export async function decodeTranscriptStream(
     }
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
     if (message) {
-      messages.push(message)
+      const ordered = inTranscriptFileOrder(message, latest)
+      latest = ordered.latest
+      messages.push(ordered.message)
     }
   }
 }

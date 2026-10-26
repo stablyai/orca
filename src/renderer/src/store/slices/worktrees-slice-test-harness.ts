@@ -29,6 +29,7 @@ import {
   TEST_SSH_AUTHORITY
 } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -70,7 +71,6 @@ export const mockApi = {
     create: stubMock(),
     adoptProvisionedRoot: stubMock(),
     prefetchCreateBase: stubMock().mockResolvedValue(undefined),
-    list: worktreeListMock,
     listDetected: listDetectedMock,
     listKnownForExecutionHost: listKnownForExecutionHostMock,
     forgetRemovedForExecutionHost: forgetRemovedForExecutionHostMock,
@@ -134,6 +134,7 @@ export function createTestStore() {
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
+        ...createWorkspaceAttentionSlice(...a),
         trustedOrcaHooks: {},
         sshConnectionStates: new Map([
           [
@@ -156,6 +157,7 @@ export function createTestStore() {
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+        deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
         ptyIdsByTabId: {},
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},
@@ -219,8 +221,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
   return store
 }
 
-// Why: both the metadata fallback and removeWorktree write this module-level memory, so a leaked entry from an
-// earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
+// Reset removal memory per case: both metadata fallback and removeWorktree write it, so leaked entries silently suppress rows.
 export function resetWorktreeSliceModuleMemory() {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
   mockApi.worktrees.create.mockReset()

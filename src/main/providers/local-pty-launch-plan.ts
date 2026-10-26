@@ -2,6 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
+import { resolveUnixPaneShellPath } from '../daemon/shell-ready'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import {
   getDefaultCwd,
@@ -51,8 +52,7 @@ export type LocalPtyLaunchPlan = {
   getFallbackShellReadyConfig:
     | ((shell: string) => ReturnType<typeof getShellLaunchConfig>)
     | undefined
-  // Why hoisted: a fallback shell must undo the primary's launch env, and
-  // re-deriving the key names would re-run wrapper generation.
+  // Fallback must undo primary launch env without regenerating wrapper keys.
   primaryPreLaunchEnv: Record<string, string | undefined>
   isWslShell: boolean
   launchWslDistro: string | null
@@ -106,7 +106,7 @@ function createWindowsLocalPtyLaunchPlan(
   getOptions: () => LocalPtyProviderOptions
 ): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
   const { args, cwd, defaultCwd, worktreeWslContext } = seed
-  // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
+  // A per-tab override wins over the default shell setting.
   const requestedShellFamily =
     args.shellOverride ||
     getOptions().getWindowsShell?.() ||
@@ -118,7 +118,7 @@ function createWindowsLocalPtyLaunchPlan(
   }
   const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
   const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
-  // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
+  // Normalize family names and paths so PowerShell resolution can fall back to inbox powershell.exe.
   const powerShellImplementation = getOptions().getWindowsPowerShellImplementation?.()
   const resolvedShellFamily: WindowsPowerShellShellFamily =
     normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
@@ -147,7 +147,7 @@ function createWindowsLocalPtyLaunchPlan(
           }) ?? shellFamily)
         : shellFamily
     }
-    // Why: bare `pwsh.exe` resolves to the Store App Execution Alias stub whose spawn fails (code 5); use an absolute exe + cmd.exe fallback.
+    // Bare pwsh.exe may resolve to a failing Store alias; use absolute executable/fallback attempts.
     const windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd,
@@ -197,7 +197,7 @@ export function createLocalPtyLaunchPlan(
 
   const defaultCwd = getDefaultCwd()
   const cwd = args.cwd || defaultCwd
-  // Why: gate on the effective cwd, not raw args.cwd — an omitted cwd becomes a safe default and must not be rejected as root-like.
+  // Validate effective cwd: omitted cwd resolves to a safe default.
   if (args.command && startupAgentRecognition) {
     assertSafeAgentStartupCwd(cwd, args.command)
   }
@@ -234,16 +234,14 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath =
-    args.shellOverride ||
-    getOptions().getDefaultShell?.()?.trim() ||
-    args.env?.SHELL ||
-    process.env.SHELL ||
-    '/bin/zsh'
+  const shellPath = resolveUnixPaneShellPath(
+    args.env ?? {},
+    args.shellOverride,
+    getOptions().getDefaultShell?.()
+  )
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
-    // Why: shellOverride here is already resolved from the setting, so it cannot
-    // distinguish a one-off shell pick; the spawn path only sends args for the profile.
+    // shellOverride already includes settings resolution; only spawn-supplied args identify the profile launch.
     shellArgs:
       !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
         ? args.terminalShellArgs

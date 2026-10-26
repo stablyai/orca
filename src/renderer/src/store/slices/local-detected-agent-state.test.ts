@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { readNativeDetectedAgents } from './local-detected-agent-store-state'
 import { createDetectedAgentsSlice } from './detected-agents'
 
 const detectAgents = vi.fn()
@@ -31,11 +32,23 @@ function createTestStore(repos: Repo[]) {
   )
   store.setState({
     repos,
-    projects: [],
+    projects: repos.map((repo) => ({
+      id: repo.id,
+      displayName: repo.displayName,
+      badgeColor: repo.badgeColor,
+      sourceRepoIds: [repo.id],
+      createdAt: 0,
+      updatedAt: 0,
+      localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' }
+    })),
+    settings: {
+      ...getDefaultSettings('/tmp'),
+      localWindowsRuntimeDefault: { kind: 'windows-host' }
+    },
     worktreesByRepo: {},
     activeRepoId: repos[0]?.id ?? null,
     activeWorktreeId: null
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -81,6 +94,46 @@ describe('local detected agent context lifecycle', () => {
     unsubscribe()
   })
 
+  it('keeps native provider inventory across WSL selection and refresh', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    const projects = store.getState().projects
+    detectAgents.mockResolvedValueOnce(['grok']).mockResolvedValueOnce([])
+    await store.getState().ensureNativeDetectedAgents()
+    expect(detectAgents).toHaveBeenNthCalledWith(1, undefined)
+    await store.getState().ensureDetectedAgents()
+    await store.getState().refreshDetectedAgents()
+    expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    const inventory = store.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(inventory).toEqual({ ids: ['grok'], state: 'successful' })
+    store.setState({ projects: [] })
+    refreshAgents.mockRejectedValueOnce(new Error('native refresh failed'))
+    await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['grok'])
+    expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
+    expect(store.getState().detectedAgentIds).toEqual(['grok'])
+    expect(store.getState().isRefreshingAgents).toBe(false)
+    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+    await expect(store.getState().ensureNativeDetectedAgents()).resolves.toEqual(['grok'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+
+    let finish: (result: { agents: string[] }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    store.setState({ projects })
+    const wslRefresh = store.getState().refreshDetectedAgents()
+    expect(store.getState().detectedAgentIds).toBeNull()
+    finish({ agents: ['codex'] })
+    await wslRefresh
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
+    store.setState({ projects: [] })
+    await store.getState().refreshDetectedAgents()
+    expect(readNativeDetectedAgents(store.getState())).toEqual(['codex'])
+  })
+
   it('evicts removed project contexts without retaining settled loading entries', async () => {
     const repo1 = makeRepo('repo-1')
     const repo2 = makeRepo('repo-2')
@@ -91,8 +144,8 @@ describe('local detected agent context lifecycle', () => {
     await store.getState().ensureDetectedAgents()
 
     expect(Object.keys(store.getState().localDetectedAgentIdsByContext)).toEqual([
-      'repo-1:windows-host',
-      'repo-2:windows-host'
+      'repo-1:wsl:Ubuntu',
+      'repo-2:wsl:Ubuntu'
     ])
     expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
     expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
@@ -101,7 +154,7 @@ describe('local detected agent context lifecycle', () => {
     store.getState().clearLocalDetectedAgentContextsForProjects(['repo-1'])
 
     expect(store.getState().localDetectedAgentIdsByContext).toEqual({
-      'repo-2:windows-host': ['claude']
+      'repo-2:wsl:Ubuntu': ['claude']
     })
 
     store.setState({ repos: [repo1, repo2], activeRepoId: 'repo-1' })

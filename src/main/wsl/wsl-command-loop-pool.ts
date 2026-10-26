@@ -1,6 +1,6 @@
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
-import { createSshOperationAbortError } from '../ssh/ssh-connection-utils'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
+import { createSshOperationAbortError } from '../ssh/connection/ssh-exec-options'
 import { startWslCommandLoop, wslCommandLoopMarker, type WslCommandLoop } from './wsl-command-loop'
 
 export type WslCommandLoopPool = {

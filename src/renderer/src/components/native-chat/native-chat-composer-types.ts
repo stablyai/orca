@@ -1,6 +1,7 @@
-import type { NativeChatQueueResume } from './native-chat-composer-primary-action'
+import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
+import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
-import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -32,29 +33,26 @@ export type NativeChatOptionPickerRequest = {
   consume: () => void
 }
 
-/** A queue the host holds, with cards waiting. */
-export type NativeChatQueueHold = {
-  /** Every card shown, held or not. */
-  count: number
-  /** Delete every card; false when one could not be (already reported). */
-  clear: () => Promise<boolean>
-}
-
 export type NativeChatStructuredComposerTransport = {
+  capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (
     text: string,
-    attachments: readonly NativeChatComposerImageAttachment[]
+    attachments: readonly NativeChatComposerImageAttachment[],
+    request?: StructuredAgentSessionSendRequest
   ) => boolean | 'queued'
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
+  /** Send is held for this reason, which the disabled button says. */
+  sendBlockedReason?: string
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null
-  /** The `/` surface the running session reports. Absent keeps the curated
-   *  per-agent catalog, which is what an older host leaves the client with. */
+  /** Use host-reported slash commands, falling back to curated catalogs for older hosts. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Request command refresh; updated choices arrive through sessionCommands. */
+  refreshCommands?: () => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -70,11 +68,9 @@ export type NativeChatStructuredComposerTransport = {
   sessionId: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
-  /** Present while the queue is held: a message sent now first asks whether to clear its cards. */
-  queueHold?: NativeChatQueueHold
-  /** Present while the host holds the queue and no turn runs: an empty composer's primary
-   *  action becomes Resume, which releases it. */
-  queueResume?: NativeChatQueueResume
+  /** The host has not confirmed this chat: session uploads wait for publication. */
+  sessionPending?: boolean
+  sessionPendingNotice?: string
 }
 
 export type NativeChatOptimisticSendOutcome = {
@@ -89,20 +85,20 @@ export type NativeChatComposerProps = {
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
-  /** Owner of the unsent draft; defaults to `paneKey`. A structured chat's is its conversation,
-   *  shared by every composer showing it. */
+  /** Unsent-draft owner; defaults to paneKey, while structured chats share conversation scope. */
   draftScopeKey?: string
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** Disable unavailable input and show this reason as its placeholder. */
+  unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
-  /** The chat reads Stopping: the placeholder says a message runs after the stop, queued as a
-   *  card where the host holds sends as cards (`queue`), else sent and held by the host (`send`). */
+  /** While Stopping, queue a card or send for the host to hold until settlement. */
   afterStop?: NativeChatAfterStopSend
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
@@ -114,8 +110,7 @@ export type NativeChatComposerProps = {
   onOptimisticSendCanceled?: (pendingId: string) => void
   /** A prompt card owns the input region; the composer stays mounted but hidden. */
   inputOwnedByCard?: boolean
-  /** Record a dispatched slash command that does not create a chat turn; `output`
-   *  carries the host's answer when the agent never saw the command. */
+  /** Record non-turn commands; output holds the host’s response when the agent never saw it. */
   onSlashCommand?: (command: string, output?: string) => void
   /** The host's own answer to a command the agent must not see, or null to send it. */
   answerCommandLocally?: NativeChatLocalCommandAnswer
@@ -129,8 +124,7 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now.
-   *  False = nothing queued, and the chord falls through to a plain send. */
+  /** Empty-composer Cmd/Ctrl+Enter steers the newest queued draft; false falls through to ordinary send. */
   steerQueued?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
@@ -138,8 +132,7 @@ export type NativeChatComposerProps = {
   recallSource?: NativeChatRecallSource
 }
 
-/** Launch context prefilled into the TUI input as an unsent draft, plus the two
- *  facts that decide its fate in this pane's composer. */
+/** The unsent TUI launch prefill and this pane’s adoption/cleanup authority. */
 export type NativeChatLaunchSeed = {
   launchDraft: NativeChatLaunchDraft | null
   /** True once the transcript shows the TUI-side draft was submitted or cleared. */
@@ -153,8 +146,7 @@ export type NativeChatComposerHandle = {
   insertTypedText: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
-  /** Adds text after the draft, a blank line apart, and leaves the caret at its end. Text the
-   *  draft already ends with is not added again. */
+  /** Append deduplicated text after a blank line and place the caret at its end. */
   appendText: (text: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {

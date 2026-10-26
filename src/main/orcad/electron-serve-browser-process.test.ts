@@ -4,27 +4,53 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type * as RunProcessModule from '@orca/process-host'
-import type { RuntimeBrowserCommandHost } from '../runtime/orca-runtime-browser'
+import type * as FsPromisesModule from 'node:fs/promises'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
 
-const { spawnProcessMock } = vi.hoisted(() => ({
-  spawnProcessMock: vi.fn<(spec: ProcessSpec) => ReturnType<typeof RunProcessModule.spawnProcess>>()
+const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
+  spawnProcessMock:
+    vi.fn<(spec: ProcessSpec) => ReturnType<typeof RunProcessModule.spawnProcess>>(),
+  lockedRemovalPaths: new Set<string>()
 }))
 
-// Why wrap rather than fake: the provider must still go through the real spawn
-// path (argv/env handling, a real pid to signal); only the program is swapped
-// for a stub that speaks the sidecar's serve protocol.
+// Simulate Windows helpers briefly retaining a stopped sidecar’s profile.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromisesModule>()
+  const rm: typeof actual.rm = async (path, options) => {
+    if (lockedRemovalPaths.has(String(path))) {
+      throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${String(path)}'`), {
+        code: 'EBUSY'
+      })
+    }
+    return actual.rm(path, options)
+  }
+  return { ...actual, rm, default: { ...actual, rm } }
+})
+
+// Swap only the executable; retain real spawning, argv/env handling and a signalable PID.
 vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcessModule>()),
   spawnProcess: spawnProcessMock
 }))
 
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
+import { startOrcadBrowserProvider } from './orcad-browser-startup'
+import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
+import {
+  createRuntimeBrowserCommands,
+  setRuntimeBrowserCommandsFactory
+} from '../runtime/runtime-browser-commands-factory'
+
+vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
 
-/** Every key the provider must strip so the sidecar cannot inherit orcad's own browser config. */
 const AGENT_BROWSER_ENVIRONMENT_KEYS = [
   'AGENT_BROWSER_ARGS',
   'AGENT_BROWSER_AUTO_CONNECT',
@@ -43,12 +69,9 @@ type SidecarRequest = { method: string; params: Record<string, unknown>; authTok
 
 const host: RuntimeBrowserCommandHost = {
   getAgentBrowserBridge: () => null,
-  // Why an id distinct from the selector: it proves the registry fences on the
-  // resolved worktree id, not on whatever string the caller passed.
+  // Distinct IDs prove registry fencing uses resolved workspaces, not caller selectors.
   resolveWorktreeSelector: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserWorkspace: async (selector) => ({ id: `id-${selector}` }),
-  // Unused by the sidecar command paths under test; the daemon's real host is
-  // OrcaRuntimeService, which owns the client-hosted registries.
   resolveBrowserNetworkExecutionHost: () => {
     throw new Error('No browser network execution host')
   },
@@ -127,11 +150,19 @@ afterEach(async () => {
   for (const processHandle of started) {
     await processHandle.stop()
   }
+  setRuntimeBrowserCommandsFactory(null)
   vi.unstubAllEnvs()
   await rm(harnessRoot, { recursive: true, force: true })
 })
 
 describe('ElectronServeBrowserProcess start-up', () => {
+  it('opens an owner IPC channel for automatic browser cleanup after parent loss', async () => {
+    await startProvider()
+    expect(spawnSpec().stdio).toEqual(['pipe', 'pipe', 'pipe', 'ipc'])
+    expect(spawnSpec().serialization).toBe('json')
+    expect(spawnSpec().env?.[BROWSER_SIDECAR_OWNER_ENV]).toBe('1')
+  })
+
   it('does not launch when startup is already cancelled', async () => {
     const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
     started.push(processHandle)
@@ -188,7 +219,13 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(spec.program).toBe(INSTALLED_EXECUTABLE)
     const args = [...(spec.args ?? [])]
     expect(args).toEqual(
-      expect.arrayContaining(['--serve', '--serve-port', '--serve-json', '--serve-no-pairing'])
+      expect.arrayContaining([
+        '--serve',
+        '--serve-port',
+        '--serve-json',
+        '--serve-no-pairing',
+        ...headlessServeOzonePlatformSwitches(process.platform)
+      ])
     )
     const port = Number(args[args.indexOf('--serve-port') + 1])
     expect(Number.isInteger(port) && port > 0 && port < 65_536).toBe(true)
@@ -208,6 +245,12 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(spec.env?.XDG_STATE_HOME).toBe(join(isolatedHome, 'state'))
     expect(args).toEqual(expect.arrayContaining(['--password-store=basic', '--use-mock-keychain']))
     expect(processHandle.isAvailable()).toBe(true)
+  })
+
+  it('marks the launch as the orcad sidecar so the installed app hands user opens on', async () => {
+    await startProvider()
+
+    expect(spawnSpec().env?.ORCA_ORCAD_SIDECAR).toBe('1')
   })
 
   it('keeps polling until the sidecar advertises browser.headless.v1', async () => {
@@ -247,6 +290,31 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(processHandle.isAvailable()).toBe(false)
     expect(existsSync(userDataPath)).toBe(false)
     expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
+  it('still stops cleanly when the sidecar profile stays locked after the process exits', async () => {
+    const processHandle = await startProvider()
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(
+      await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8')
+    ) as { pid: number }
+    lockedRemovalPaths.add(userDataPath)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await expect(processHandle.stop()).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(
+        '[orcad] Electron browser sidecar data was not removed:',
+        expect.objectContaining({ code: 'EBUSY' })
+      )
+      expect(() => process.kill(metadata.pid, 0)).toThrow()
+    } finally {
+      lockedRemovalPaths.delete(userDataPath)
+      warn.mockRestore()
+      await rm(userDataPath, { recursive: true, force: true })
+    }
   })
 })
 
@@ -290,7 +358,6 @@ describe('ElectronServeBrowserProcess command routing', () => {
       expect(request.authToken).toBe('fake-sidecar-auth-token')
       expect(request.params).not.toHaveProperty('worktree')
     }
-    // The active page is targeted implicitly once the worktree resolves.
     expect(requests[1].params.page).toBe(created.browserPageId)
   })
 
@@ -378,9 +445,27 @@ describe('ElectronServeBrowserProcess command routing', () => {
     })
   })
 
-  // Why this matters: the runtime advertises browser.tabCreate.known-id.v1
-  // unconditionally, so a web client will send a provisional id for a page that does
-  // not exist yet. Requiring it first made every such create throw.
+  it('scopes a folder workspace through the browser-workspace resolver', async () => {
+    const folderHost: RuntimeBrowserCommandHost = {
+      ...host,
+      resolveWorktreeSelector: async () => {
+        throw new Error('selector_not_found')
+      },
+      resolveBrowserWorkspace: async () => ({ id: 'folder:docs' })
+    }
+    const commands = (await startProvider()).createCommands(folderHost)
+
+    const created = z
+      .object({ browserPageId: z.string() })
+      .parse(await commands.browserTabCreate({ worktree: 'id:folder:docs' }))
+    await commands.browserGoto({ worktree: 'id:folder:docs', url: 'https://example.test/' })
+
+    const request = (await browserRequests()).at(-1)
+    expect(request?.method).toBe('browser.goto')
+    expect(request?.params.page).toBe(created.browserPageId)
+  })
+
+  // Known-ID creation accepts provisional IDs advertised by the runtime before a page exists.
   it('creates a tab under a caller-chosen page id', async () => {
     const commands = (await startProvider()).createCommands(host)
 
@@ -388,4 +473,34 @@ describe('ElectronServeBrowserProcess command routing', () => {
       commands.browserTabCreate({ worktree: 'wt-a', page: 'provisional-page-1' })
     ).resolves.toEqual({ browserPageId: 'provisional-page-1' })
   })
+})
+
+it('forwards tab commands through startup to the Electron sidecar', async () => {
+  const browser = await startProvider()
+  vi.mocked(resolveOrcadBrowserProvider).mockResolvedValueOnce({
+    kind: 'electron',
+    factory: (commandHost) => browser.createCommands(commandHost),
+    isAvailable: () => browser.isAvailable(),
+    stop: () => browser.stop()
+  })
+  const startup = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+  await startup.ready
+  try {
+    const commands = createRuntimeBrowserCommands({
+      ...host,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    })
+    await commands.browserTabCreate({ worktree: 'wt-a' })
+    await commands.browserTabList({ worktree: 'wt-a' })
+    expect((await browserRequests()).map((request) => request.method)).toEqual([
+      'browser.tabCreate',
+      'browser.tabList'
+    ])
+    const providerCommands = browser.createCommands(host)
+    expect('browserTabList' in providerCommands).toBe(true)
+    expect('then' in providerCommands).toBe(false)
+    expect(Symbol.iterator in providerCommands).toBe(false)
+  } finally {
+    await startup.stop()
+  }
 })

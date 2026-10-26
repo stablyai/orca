@@ -1,12 +1,12 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { readIssueCommand, writeIssueCommand } from '../../issue-command-file'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
@@ -26,9 +26,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           source: 'none' as const
         }
       }
-      const connectionId = getStoredRepoSshConnectionId(repo)
+      const connectionId = getRepoDialableSshTargetId(repo)
       if (connectionId) {
-        // Why: this process serves no SSH filesystem.
         return {
           status: 'error',
           localContent: null,
@@ -49,7 +48,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       if (!repo || isFolderRepo(repo)) {
         return
       }
-      if (getStoredRepoSshConnectionId(repo)) {
+      assertWslMoveRepoWritable(store, repo)
+      if (getRepoDialableSshTargetId(repo)) {
         throw new Error('Remote filesystem unavailable. Reconnect the SSH target before retrying.')
       }
       await writeIssueCommand(repo.path, args.content, () =>

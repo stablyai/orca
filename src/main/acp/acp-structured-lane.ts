@@ -1,13 +1,13 @@
-// One ACP child's path into the journal: the translator turns its traffic into grammar events, and
-// the shared assembler writes them. Events apply strictly in order; one the sink refuses under
-// backpressure holds every later one until the sink drains, so nothing is reordered or dropped.
+// Preserve event order across journal backpressure; hold later events until the sink accepts.
 
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler'
 import type { AcpTimelineEvent } from './acp-timeline-event'
+import { acpPromptTurnId } from './acp-prompt-turns'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -25,26 +25,23 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AcpTextDrop } from './acp-turn-messages'
 
-/** How long a held event waits for the sink to say it drained before trying again on its own. */
 const BACKPRESSURE_RETRY_MS = 250
 
-/** Subagent evidence holds its place among the events: it reaches the host only after the journal
- *  wrote what came before it. */
+// Publish child-work evidence only after preceding journal events commit.
 type SubagentWork = { type: 'subagent.work'; evidence: AgentChildWorkEvidence[] }
 
 export type AcpStructuredLaneDeps = {
   sink: ProviderTimelineSink
   sessionId: string
   agent: string
-  /** The agent's name as a person reads it, for the rows that name it. */
   agentName: string
   generation: string
   providerSessionId: string
   dialect: AcpDialect
   logger: StructuredAgentSessionLogger
-  /** A send of Orca's reached the agent: the turn it opened has its first provider event. */
+  /** First provider event confirms receipt of an Orca send. */
   onInputAccepted: (clientMessageId: string) => void
-  /** The sink refused for good; nothing more this child says can be journaled. */
+  /** Permanent sink refusal prevents further journaling. */
   onFailed: (reason: string) => void
   onChildWorkEvidence?: (evidence: AgentChildWorkEvidence[]) => void
   onChildWorkFailure?: (error: unknown) => void
@@ -85,11 +82,27 @@ export class AcpStructuredLane {
     })
   }
 
+  hasPendingDiagnostic(clientMessageId: string): boolean {
+    const turn = acpPromptTurnId(clientMessageId)
+    return (
+      !this.failed &&
+      !this.disposed &&
+      !this.ended &&
+      this.backlog.some(
+        (event) =>
+          event.type === 'item.update' &&
+          event.body.kind === 'status' &&
+          !event.producer &&
+          event.join?.thread === this.deps.providerSessionId &&
+          event.join.turn === turn
+      )
+    )
+  }
+
   get openTurnId(): string | null {
     return this.assembler.openTurnId
   }
 
-  /** The host already opened this command's turn; the agent's frames and end join that turn. */
   beginCommand(command: StructuredAgentSessionCommandRun): void {
     if (this.failed || this.disposed || this.backlog.length > 0) {
       throw new Error('ACP timeline has not drained for this command')
@@ -113,7 +126,7 @@ export class AcpStructuredLane {
     this.drain()
   }
 
-  /** Resolves once `turnId` is no longer the open turn, or nothing more can be written. */
+  /** Resolves when the turn leaves or further writes become impossible. */
   whenTurnLeaves(turnId: string): Promise<void> {
     return new Promise((resolve) => {
       const check = (): void => {
@@ -127,13 +140,11 @@ export class AcpStructuredLane {
     })
   }
 
-  /** The sink drained: whatever it held back goes now. */
   retry(): void {
     this.drain()
   }
 
-  /** Whether the journal row `itemId` is the row of request `requestKey`, which the assembler
-   *  writes under this acquisition's generation (any incarnation a reused key adds). */
+  /** Matches this acquisition's request row, including reused-key incarnations. */
   isRequestRow(itemId: string, requestKey: string): boolean {
     const identity = parseAgentJournalItemKey(itemId)
     if (identity?.provider !== 'legacy' || identity.sessionId !== this.deps.sessionId) {
@@ -203,7 +214,7 @@ export class AcpStructuredLane {
         return
       }
       this.backlog.shift()
-      // A subagent the provider reports after its session ended is no live child of it.
+      // Ignore live-child evidence after session end.
       this.ended ||= event.type === 'session.ended' && dropped === undefined
       if (event.type === 'input.accepted') {
         this.deps.onInputAccepted(event.clientMessageId)
@@ -232,7 +243,6 @@ export class AcpStructuredLane {
     this.deps.onFailed(reason)
   }
 
-  /** False when the sink held it back; it stays first in the backlog. */
   private queueSubagentWork(evidence: AgentChildWorkEvidence[]): boolean {
     if (this.ended) {
       return true
@@ -249,7 +259,6 @@ export class AcpStructuredLane {
     return admission.accepted
   }
 
-  /** A subagent's stop is offered only once the agent proved it honours one. */
   private publishSubagentWork(evidence: AgentChildWorkEvidence[]): void {
     const stoppable = this.deps.childStops?.().subagents === true
     this.publishEvidence(
@@ -304,10 +313,11 @@ export class AcpStructuredLane {
 
 export function acpLaneChildWorkDelivery(
   deps: AcpStructuredSessionAdapterDeps,
-  sessionId: string
+  sessionId: string,
+  producer?: StructuredAgentSessionChildWorkProducer
 ): Pick<AcpStructuredLaneDeps, 'onChildWorkEvidence' | 'onChildWorkFailure'> {
   return {
-    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence),
+    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence, producer),
     onChildWorkFailure: (error) =>
       deps.logger?.error('publishing ACP child work failed', {
         scope: 'acp-child-work',

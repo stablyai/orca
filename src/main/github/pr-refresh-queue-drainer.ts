@@ -21,9 +21,13 @@ import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 
+export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
+
 export class PRRefreshQueueDrainer {
   private draining = false
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Why: queued work can outlive its project; re-check on every removal path before Git runs.
+  private registrationCheck: PRRefreshRegistrationCheck | null = null
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -32,6 +36,10 @@ export class PRRefreshQueueDrainer {
     private readonly retry: PRRefreshRetryState,
     private readonly events: PRRefreshEventPublisher
   ) {}
+
+  setRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+    this.registrationCheck = check
+  }
 
   schedule(delay = 0): void {
     if (this.timer) {
@@ -170,7 +178,10 @@ export class PRRefreshQueueDrainer {
           this.events.broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason })
           continue
         }
-        if (next.reason === 'visible' && !this.visibility.has(next.key)) {
+        if (
+          !(this.registrationCheck?.(next.candidate) ?? true) ||
+          (next.reason === 'visible' && !this.visibility.has(next.key))
+        ) {
           this.events.broadcast({
             aliases,
             reason: next.reason,

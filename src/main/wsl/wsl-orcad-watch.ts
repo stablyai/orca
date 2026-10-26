@@ -1,16 +1,11 @@
-/**
- * The liveness watch: one bridge into orcad's port, held open and never written to. orcad's HTTP
- * server keeps a connection that never sent a request, so the bridge ends only when orcad closes
- * it (exit 0, measured ~69 ms after killing orcad) or its distro stops (exit 1, ~40 ms after
- * `wsl --terminate`). Opening it doubles as the port probe: READY or REFUSED.
- */
+/** Hold an unwritten bridge as liveness watch/port probe: orcad closes it on socket loss or distro stop. Measured exits arrive ~69ms/~40ms respectively; exit codes still require independent liveness evidence. */
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
 import {
   OrcadStdioBridgeDecoder,
   type OrcadStdioBridgeSignal
-} from '../ssh/orcad-stdio-bridge-stream'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
 export type WslOrcadWatch = {
   /** `ready` holds a live channel; anything else holds nothing. */

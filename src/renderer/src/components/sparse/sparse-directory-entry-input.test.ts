@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  addSparseDirectoryEntries,
-  parseSparseDirectoryEntryInput
-} from './sparse-directory-entry-input'
+import { parseSparseDirectoryEntryInput } from './sparse-directory-entry-input'
 
 describe('parseSparseDirectoryEntryInput', () => {
   it('normalizes a single typed path', () => {
@@ -24,14 +21,5 @@ describe('parseSparseDirectoryEntryInput', () => {
     expect(parseSparseDirectoryEntryInput('C:\\repo').error).toBeTruthy()
     expect(parseSparseDirectoryEntryInput('apps/../secrets').error).toBeTruthy()
     expect(parseSparseDirectoryEntryInput('.').error).toBeTruthy()
-  })
-})
-
-describe('addSparseDirectoryEntries', () => {
-  it('appends only new entries and preserves order', () => {
-    expect(addSparseDirectoryEntries(['apps/web'], ['apps/web', 'packages/ui'])).toEqual([
-      'apps/web',
-      'packages/ui'
-    ])
   })
 })

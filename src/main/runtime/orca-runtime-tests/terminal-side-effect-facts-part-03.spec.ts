@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import '../orca-runtime-test-mocks.spec'
 
 describe('terminal side-effect fact channel', () => {
   it('arms the stale-title timer for a seeded working title', async () => {
@@ -39,7 +39,7 @@ describe('terminal side-effect fact channel', () => {
           rawTitle: 'Codex',
           staleWorkingTitleClear: true
         },
-        { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        { kind: 'agent-idle', title: 'Codex', status: 'idle', staleWorkingTitleClear: true }
       ])
     } finally {
       vi.useRealTimers()
@@ -50,7 +50,6 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    // Generic status words without the Command Code banner must not arm.
     runtime.onPtyData('pty-1', '❯ Fix the spinner\r\nThinking...', 100)
     expect(batches.flatMap((batch) => batch.facts)).toEqual([])
 
@@ -86,7 +85,7 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    // Mirrors the renderer detector's startupCommand fast-arm: no banner needed when main saw the launch command at spawn.
+    // A known spawn command arms detection without a banner, matching the renderer.
     runtime.noteTerminalSpawnCommand('pty-1', 'command-code --trust')
     runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n✻ Thinking...', 100)
 
@@ -102,7 +101,7 @@ describe('terminal side-effect fact channel', () => {
       data: 'renderer scrollback\n',
       cols: 80,
       rows: 24,
-      // Renderer xterm never saw the synthetic hook frame (no longer rides pty:data), so its serializer reports the pre-agent title.
+      // The renderer retains its old title because synthetic hook frames bypass pty:data.
       lastTitle: 'stale shell title'
     })
     runtime.setPtyController({
@@ -116,13 +115,86 @@ describe('terminal side-effect fact channel', () => {
     syncSinglePty(runtime)
 
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude working\x07')
-    // First live chunk kicks off renderer hydration; awaiting the snapshot below settles the seed write chain.
+    // The snapshot await settles hydration after the first live chunk.
     runtime.onPtyData('pty-1', 'plain output\n', 100)
     await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
 
     const leaves = (runtime as unknown as { leaves: Map<string, { lastOscTitle: string | null }> })
       .leaves
-    // The seed must not stomp the leaf record (worktree ps status source) back to the renderer's stale title.
     expect([...leaves.values()][0]?.lastOscTitle).toBe('⠋ Claude working')
+  })
+})
+
+describe('terminal output runtime re-entry', () => {
+  it('writes provenance into the current runtime output map', () => {
+    const runtime = new OrcaRuntimeService()
+    const replacement = new Map(runtime['recentPtyOutputById'])
+    runtime['recentPtyOutputById'] = replacement
+    runtime['recordRecentPtyOutputForPathProvenance']('pty-provenance', 'wrote artifact.txt\n')
+    expect(replacement.get('pty-provenance')?.read()).toBe('wrote artifact.txt\n')
+  })
+
+  it('uses a later title handler replacement with the runtime receiver', () => {
+    const runtime = new OrcaRuntimeService()
+    const ptyId = 'pty-reentry'
+    runtime['getOrCreatePtyTitleTrackerEntry'](ptyId)
+    const original = runtime['applyTrackedPtyTitle']
+    const receivers: OrcaRuntimeService[] = []
+    const titles: string[] = []
+    runtime['applyTrackedPtyTitle'] = function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<typeof original>
+    ): boolean {
+      receivers.push(this)
+      titles.push(args[1])
+      return false
+    }
+    try {
+      runtime.ingestSyntheticTitleFrame(ptyId, '\x1b]0;Codex working\x07')
+      expect(receivers).toEqual([runtime])
+      expect(titles).toEqual(['Codex working'])
+    } finally {
+      runtime['applyTrackedPtyTitle'] = original
+      runtime.onPtyExit(ptyId, 0)
+    }
+  })
+
+  it('calls the current injected listener with the runtime receiver', () => {
+    const receivers: OrcaRuntimeService[] = []
+    const calls: string[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      onTerminalSideEffects: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+        calls.push('initial')
+      }
+    })
+    runtime['setTerminalSideEffectConsumerAvailable'](true)
+    runtime['emitTerminalSideEffectBatch']('pty-reentry', [{ kind: 'bell' }])
+    Object.defineProperty(runtime, 'onTerminalSideEffects', {
+      value: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+        calls.push('replacement')
+      }
+    })
+    runtime['emitTerminalSideEffectBatch']('pty-reentry', [{ kind: 'bell' }])
+    expect(receivers).toEqual([runtime, runtime])
+    expect(calls).toEqual(['initial', 'replacement'])
+  })
+
+  it('keeps optional reconciliation lazy after its callback is removed', () => {
+    const receivers: OrcaRuntimeService[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      reconcileAgentStatusForEndedProcess: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+      }
+    })
+    const collectPaneKeys = vi.fn(() => new Set<string>())
+    runtime['collectAgentStatusPaneKeysForPty'] = collectPaneKeys
+    runtime['resetTrackedTerminalStateForProviderGeneration']('pty-reentry')
+    expect(receivers).toEqual([runtime])
+    expect(collectPaneKeys).toHaveBeenCalledOnce()
+    Object.defineProperty(runtime, 'reconcileAgentStatusForEndedProcessFn', { value: null })
+    runtime['resetTrackedTerminalStateForProviderGeneration']('pty-reentry')
+    expect(collectPaneKeys).toHaveBeenCalledOnce()
   })
 })

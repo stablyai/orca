@@ -1,7 +1,4 @@
-// Renderer half of the one-paste freeze report: a bounded ring of the
-// delivery-affecting transitions (gate marks, visibility trust changes,
-// watchdog heals, restore markers) so a field report carries the history
-// that led to the frozen state, not just a point-in-time counter snapshot.
+// Keep bounded delivery/visibility/restore history so freeze reports explain the transitions preceding the snapshot.
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   type PtyDeliveryBreadcrumb,
@@ -27,16 +24,7 @@ export function recordTerminalFreezeBreadcrumb(
   rendererDeliveryBreadcrumbs.record(kind, detail)
 }
 
-// Why: lib-layer WebGL code (pane-webgl-renderer, the atlas registry) can't
-// import this components-layer ring directly, so it records through a shared
-// sink. Point that sink at the same ring here so context-loss and atlas-reset
-// crumbs land in the one-paste report alongside delivery/visibility history.
-//
-// Also mirror into the crash-report ring: this ring is DevTools-only (readable
-// solely via window.n()), so a renderer that dies takes the WebGL history with
-// it. Windows crash F0BKR84AHEH had three GPU-process deaths in the 65s before
-// its renderer OOM and zero WebGL evidence in the bundle — absence of
-// instrumentation, not absence of the event.
+// Lib WebGL code reports through a shared sink to avoid a components-layer import; mirror into crash breadcrumbs because renderer death loses the DevTools ring.
 setTerminalWebglDiagnosticRecorder((kind, detail) => {
   rendererDeliveryBreadcrumbs.record(kind, detail)
   if (kind === ATLAS_FONT_PROBE_MISMATCH) {
@@ -47,8 +35,7 @@ setTerminalWebglDiagnosticRecorder((kind, detail) => {
     }
     lastAtlasCrashMirrorAt = now
   }
-  // `kind` last: it is the coalescing discriminator, so a detail field of the
-  // same name must not be able to shadow it.
+  // Write kind last so details cannot override the coalescing discriminator.
   recordRendererCrashBreadcrumb(TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB, {
     ...detail,
     ...(kind === ATLAS_FONT_PROBE_MISMATCH && suppressedAtlasCrashMirrors > 0
@@ -61,15 +48,10 @@ setTerminalWebglDiagnosticRecorder((kind, detail) => {
   }
 })
 
-// Why: the sentinel is a field-diagnostic that must be armable on production
-// builds; starting it from this diagnostics bootstrap keeps arming independent
-// of any specific pane mounting first. No-op unless its localStorage flag is set.
+// Bootstrap the opt-in production sentinel independently of pane mounting; disabled unless localStorage enables it.
 maybeStartTerminalRenderDesyncSentinel()
 
-// Sink for the patched @xterm/addon-webgl atlas font probe: the atlas cannot
-// import Orca code, so it reports failed ctx.font assignments (the stuck-
-// rasterizer arm of the bold-collapse family) through this global. Crumbs are
-// coalesced upstream, so a rasterization storm cannot flood the report.
+// The patched WebGL atlas reports failed ctx.font assignments through this global; upstream coalescing bounds rasterization storms.
 type AtlasFontProbeMismatch = { desired?: string; actual?: string }
 ;(globalThis as { __orcaAtlasFontProbe?: (mismatch: AtlasFontProbeMismatch) => void })[
   '__orcaAtlasFontProbe'

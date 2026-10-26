@@ -11,7 +11,7 @@ const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../ipc/local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectInstallDirs
 }))
 vi.mock('../ipc/preflight-command-exec', () => ({
@@ -30,7 +30,6 @@ describe('detectAgentCommandsOnHost install-dir fallback', () => {
     guestMounts.value = []
   })
 
-  // Regression: Windows must keep searching the process PATH, not the persisted-registry merge.
   it('searches the process PATH everywhere except a WSL host orcad', async () => {
     await detectAgentCommandsOnHost(['codex'])
     expect(detectInstallDirs).toHaveBeenCalledWith(['codex'], undefined)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'

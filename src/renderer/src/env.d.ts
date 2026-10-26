@@ -6,6 +6,7 @@ import type { languages } from 'monaco-editor'
 import type { MonacoE2EProbe } from './components/editor/monaco-e2e-probe'
 import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-pane/terminal-parking-e2e-overrides'
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/terminal-pty-pre-spawn-e2e-barrier'
+import type { LocalLayoutStreamE2EEnd } from './runtime/local-layout-stream-e2e-end'
 
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
@@ -17,8 +18,7 @@ declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
   export const language: languages.IMonarchLanguage
 }
 
-// Monaco ships these contributions without public type declarations. We only
-// touch the paste-override surface, so declare the minimal shape we use.
+// Monaco contributions lack public types; declare only Orca’s paste-override surface.
 declare module 'monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js' {
   type PasteImplementation = () => boolean | Promise<unknown>
   export const PasteAction:
@@ -49,8 +49,13 @@ declare module 'monaco-editor/esm/vs/base/common/uri.js' {
   export class URI {
     static file(path: string): URI
     static parse(value: string): URI
+    static from(components: { scheme: string; authority?: string; path?: string }): URI
     readonly scheme: string
+    readonly authority: string
+    readonly path: string
+    readonly fragment: string
     readonly fsPath: string
+    with(change: { path?: string; fragment?: string }): URI
     toString(skipEncoding?: boolean): string
   }
 }
@@ -137,6 +142,9 @@ declare global {
     __monacoEditorE2E?: MonacoE2EProbe
     __e2ePtyAppliedSizeReadDelayMs?: number
     __terminalPtyPreSpawnE2EBarrier?: TerminalPtyPreSpawnE2EBarrier
+    __endLocalLayoutStreamE2E?: LocalLayoutStreamE2EEnd
+    /** E2E builds only: whether a paired server's layout frames, not the mirror, draw the workspace. */
+    __isFrameDrawnServerWorkspaceE2E?: (environmentId: string, worktreeId: string) => boolean
   }
 }
 

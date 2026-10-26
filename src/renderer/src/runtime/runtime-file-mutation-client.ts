@@ -13,6 +13,28 @@ import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
+import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import {
+  FILE_WRITE_OK,
+  parseFileWriteResult,
+  type FileWriteDiskPrecondition,
+  type FileWriteResult
+} from '../../../shared/file-write-disk-precondition'
+import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
+
+/** Refuses a save the host's frame cap would reject by dropping the whole connection. */
+function assertRemoteWriteFitsOneRequest(content: string): void {
+  // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
+  if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    return
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
+  if (bytes > REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    throw new Error(
+      `File is too large to save to a remote Orca server (${Math.ceil(bytes / 1024)} KB; the limit is ${REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES / 1024} KB).`
+    )
+  }
+}
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
@@ -32,34 +54,56 @@ export async function readRuntimeDirectory(
   )
 }
 
+/** With `diskPrecondition`, a write whose target no longer matches the baseline is refused, not written. */
 export async function writeRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
   content: string,
-  access?: LocalFileAccess
-): Promise<void> {
+  access?: LocalFileAccess,
+  diskPrecondition?: FileWriteDiskPrecondition,
+  /** Runs at the last moment before the bytes are sent; throwing aborts the write. */
+  beforeSend?: () => void
+): Promise<FileWriteResult> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.writeFile(
-      withSshMutationExpectation(context, {
-        filePath,
-        content,
-        connectionId: context.connectionId,
-        ...localAccess(context.connectionId, access)
-      })
+    beforeSend?.()
+    return parseFileWriteResult(
+      await window.api.fs.writeFile(
+        withSshMutationExpectation(context, {
+          filePath,
+          content,
+          connectionId: context.connectionId,
+          ...localAccess(context.connectionId, access),
+          ...(diskPrecondition ? { diskPrecondition } : {})
+        })
+      )
     )
-    return
   }
-  await callRuntimeFileMutation(
-    remoteArgs.target,
-    'files.write',
-    withSshMutationExpectation(context, {
-      worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath,
-      content
-    }),
-    15_000
+  assertRemoteWriteFitsOneRequest(content)
+  const params = withSshMutationExpectation(context, {
+    worktree: remoteArgs.worktreeSelector,
+    relativePath: remoteArgs.relativePath,
+    content
+  })
+  if (!diskPrecondition) {
+    await callRuntimeFileMutation(
+      remoteArgs.target,
+      'files.write',
+      params,
+      15_000,
+      undefined,
+      beforeSend
+    )
+    return FILE_WRITE_OK
+  }
+  return writeRemoteFileIfUnchanged(
+    { ...context, target: remoteArgs.target },
+    filePath,
+    content,
+    params,
+    diskPrecondition,
+    beforeSend
   )
 }
 

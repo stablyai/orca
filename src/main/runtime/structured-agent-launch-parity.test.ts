@@ -1,6 +1,4 @@
-// Parity oracle for native-chat launches: the exact child every agent spawns, read at the spawn
-// boundary, with production's own dependency wiring. A refactor of the launch path must leave the
-// snapshot file unchanged.
+// Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -131,7 +129,10 @@ import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   ORCA_AGENT_SESSION_CALLER_ENV_KEYS
 } from '../ipc/pty/host-env/spawn-env-keys'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
@@ -150,8 +151,19 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from './structured-worker-identity'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-const AGENTS = ['claude', 'codex', 'grok', 'opencode', 'omp', 'pi'] as const
+// A new agent goes last: its cases then shift only the configured ones' session ids.
+const AGENTS = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity',
+  'opencode2'
+] as const
 type Agent = (typeof AGENTS)[number]
 
 /** What each fake binary prints for `--version`: a release every launch gate accepts. */
@@ -161,8 +173,12 @@ const VERSIONS: Record<Agent, string> = {
   grok: '1.0.50',
   opencode: '2.0.20',
   omp: '17.1.0',
-  pi: '1.1.0'
+  pi: '1.1.0',
+  antigravity: '1.3.0',
+  opencode2: '2.0.20'
 }
+/** An agent whose binary is not named after it. */
+const BINARIES: Partial<Record<Agent, string>> = { antigravity: 'agy_acp_server.par' }
 
 type LaunchCase = {
   agent: Agent
@@ -234,7 +250,7 @@ async function installFakeBinaries(bin: string): Promise<void> {
   await mkdir(join(root, 'custom-bin'), { recursive: true })
   for (const agent of AGENTS) {
     await writeExecutable(
-      join(bin, agent),
+      join(bin, BINARIES[agent] ?? agent),
       `if [ "$1" = "--version" ]; then echo "${VERSIONS[agent]}"; exit 0; fi\nexit 1`
     )
     // What a Command setting names instead of the agent's own binary.
@@ -244,6 +260,8 @@ async function installFakeBinaries(bin: string): Promise<void> {
     )
   }
   await writeExecutable(join(bin, 'node'), 'exit 0')
+  // The Antigravity server runs only beside its harness.
+  await writeExecutable(join(bin, 'localharness_external'), 'exit 0')
 }
 
 /** The settings every default case runs with. */
@@ -271,7 +289,9 @@ function configuredSettings(): Partial<GlobalSettings> {
       grok: '',
       opencode: '',
       omp: '',
-      pi: ''
+      pi: '',
+      antigravity: '',
+      opencode2: ''
     },
     agentDefaultEnv: Object.fromEntries(
       AGENTS.map((agent) => [
@@ -308,7 +328,8 @@ function inheritedEnvironment(): Record<string, string> {
     [ORCA_SCRUB_SAFE_LAUNCH_ENV]: 'parent-scrub-safe-launch',
     ORCA_TERMINAL_HANDLE: 'term_parent',
     ORCA_AGENT_SESSION_SPAWN_TOKEN: 'parent-spawn-token',
-    [NATIVE_CHAT_VISUALS_DIR_ENV]: '/parent/visuals',
+    [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/parent/scratch',
+    [LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]: '/parent/visuals',
     ORCA_CLI_COMMAND: '/parent/orca',
     ORCA_CLI_BIN_DIR: '/parent/bin',
     ORCA_USER_DATA_PATH: '/parent/user-data',
@@ -336,11 +357,14 @@ function accountHomeFor(agent: Agent): AgentSessionAccountHome {
     case 'grok':
       return { variable: 'GROK_HOME', path: directory('grok') }
     case 'opencode':
+    case 'opencode2':
       return { kind: 'opencode', locator: { kind: 'unmanaged' } }
     case 'omp':
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('omp') }
     case 'pi':
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('pi') }
+    case 'antigravity':
+      return { variable: 'GEMINI_HOME', path: directory('antigravity') }
   }
 }
 
@@ -362,7 +386,9 @@ async function resumedHandleFor(
     }
     case 'grok':
     case 'opencode':
+    case 'opencode2':
     case 'omp':
+    case 'antigravity':
       return { transport: 'acp', agent, nativeId: `acp-session-${sessionId}` }
   }
 }
@@ -414,7 +440,6 @@ async function recordFor(
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'parity-key',
       claimStatus: 'released',
       unreconciled: false,
@@ -488,6 +513,7 @@ function normalized(value: string): string {
     .join('<node>')
     .split(process.cwd())
     .join('<repo>')
+    .replace(/(acp-temp[\\/]\w+[\\/]run-)\w+/, '$1<random>')
 }
 
 /** Keys whose value is the installed SDK's own, which a dependency bump changes. */
@@ -555,10 +581,11 @@ beforeAll(async () => {
   process.env = inheritedEnvironment()
   installAppEnvironment()
   settings = defaultSettings()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host wiring reads only the store's getSettings method.
-  const runtime = new OrcaRuntimeService({
-    getSettings: () => settings
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => settings
+    })
+  )
   await runtime.ensureStructuredAgentSessionHost()
   const production = capture.productionDeps.at(-1)
   if (!production) {
@@ -570,8 +597,7 @@ beforeAll(async () => {
     logger: { warn: () => {}, error: () => {} },
     resolveWorkspacePath: async (workspaceId) =>
       join(root, workspaceId === FLOATING_TERMINAL_WORKTREE_ID ? 'floating' : 'worktree'),
-    // The login shell's variables, read once per host like production's snapshot: its own PATH,
-    // one variable the configured cases name and one they do not.
+    // Model the host-captured shell PATH plus one inherited and one excluded named variable.
     resolveEnvironment: async () => ({
       PATH: `${join(root, 'bin')}:/opt/login-shell/bin:/usr/bin:/bin`,
       HOME: join(root, 'home'),
@@ -589,8 +615,7 @@ beforeAll(async () => {
   }
 })
 
-// Again after the shared setup's own per-test environment, so this app's CLI paths are the run's;
-// and each case inherits the same environment whatever ran before it.
+// Reinstall app CLI paths after shared setup so every launch case inherits the same environment.
 beforeEach(() => {
   installAppEnvironment()
   process.env = inheritedEnvironment()
@@ -638,7 +663,7 @@ describe.skipIf(process.platform === 'win32')('native-chat launch parity', () =>
         },
         fence: 1,
         spawnToken: SPAWN_TOKEN,
-        // Claude and Codex chats run their own mode, which the host hands the start.
+        // Chats run their own mode, which the host hands the start.
         ...(launch.configured && agentChatPermissionModes(launch.agent)
           ? { permissionMode: 'full-access' as const }
           : {}),
@@ -655,8 +680,12 @@ describe.skipIf(process.platform === 'win32')('native-chat launch parity', () =>
         expect(capture.spawns, String(outcome)).toHaveLength(1)
         expect(capture.launches).toHaveLength(1)
         const [spawn] = capture.spawns
+        const child = childOf(spawn!)
+        if (launch.agent === 'antigravity') {
+          expect(child.args).toEqual(process.platform === 'linux' ? ['--uid='] : [])
+        }
         expect({
-          child: childOf(spawn!),
+          child: launch.agent === 'antigravity' ? { ...child, args: [] } : child,
           launchPosture: postureOf(capture.launches[0]),
           pinnedLaunchDirectories: pins.map(({ directory }) => normalized(directory))
         }).toMatchSnapshot()

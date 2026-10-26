@@ -35,7 +35,6 @@ const userHook = (event: string) => ({
   hooks: [{ type: 'command' as const, command: `echo user-${event}` }]
 })
 
-// Why: the user owns every event, managed or not, plus the keys an invalid file would discard.
 function userOwnedSettings(): HooksConfig {
   const events = [...Object.keys(CLAUDE_HOOK_EVENT_FIRST_VERSIONS), 'Notification']
   return {
@@ -110,7 +109,6 @@ describe('Claude managed hook events by resolved version', () => {
       const current = install(userOwnedSettings(), '2.1.261')
       expect(JSON.stringify(install(current, version))).toBe(JSON.stringify(current))
 
-      // Why: even an entry from an older hook command stays byte-identical; only a known version may rewrite it.
       const staleHook = {
         type: 'command' as const,
         command: '/old/.orca/agent-hooks/claude-hook.sh'
@@ -150,7 +148,14 @@ describe('Claude managed hook events by resolved version', () => {
 
     const downgraded = install(current, '2.1.32')
 
-    for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
+    for (const event of [
+      'StopFailure',
+      'PostCompact',
+      'TeammateIdle',
+      'SessionEnd',
+      'Elicitation',
+      'ElicitationResult'
+    ]) {
       expect(downgraded.hooks?.[event], event).toBeUndefined()
     }
   })
@@ -168,7 +173,6 @@ describe('Claude managed hook events by resolved version', () => {
     (version) => {
       const fresh = install(userOwnedSettings(), version)
       expectUserSettingsKept(fresh)
-      // Why: a downgrade from the newest set is the path that removes Orca entries.
       expectUserSettingsKept(install(install(userOwnedSettings(), '2.1.261'), version))
     }
   )

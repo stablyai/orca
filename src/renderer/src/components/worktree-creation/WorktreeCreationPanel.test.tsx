@@ -136,9 +136,7 @@ describe('WorktreeCreationPanel', () => {
     expect(container.querySelector('pre')?.textContent).toBe(
       'creating sandbox\nstarting orca serve\n'
     )
-    // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')
-    // A visible Cancel control, not just the tiny tab X, since the hint says Cancel stops provisioning.
     const cancel = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Cancel'
     )
@@ -156,14 +154,38 @@ describe('WorktreeCreationPanel', () => {
 
     const container = await renderPanel(false)
 
-    // The short status, the actionable log, and Retry/Dismiss are all present.
     expect(container.textContent).toContain('Couldn’t create worktree')
     expect(container.textContent).toContain('Recipe exited with code 1.')
     const log = container.querySelector('pre')
     expect(log?.textContent).toBe('pulling image…\nERROR: no space left on device\n')
-    // Failure reuses the same centered provisioning layout (h-72 log) so nothing shifts.
     expect(log?.className).toContain('h-72')
     expect(container.textContent).toContain('Retry')
+  })
+
+  it("shows git's checkout meter as a labelled bar while the checkout runs", async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+
+    const container = await renderPanel(false)
+
+    const bar = container.querySelector('[role="progressbar"]')
+    expect(bar?.getAttribute('aria-valuenow')).toBe('42')
+    const label = document.getElementById(bar?.getAttribute('aria-labelledby') ?? '')
+    expect(label?.textContent).toBe('Checking out files… 42%')
+  })
+
+  it('shows no bar when git printed no checkout meter, or after the create failed', async () => {
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
+
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'git worktree add failed',
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
   })
 
   it('omits the recipe output panel for a non-VM creation failure', async () => {

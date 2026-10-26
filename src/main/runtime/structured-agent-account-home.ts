@@ -8,10 +8,7 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-// The one resolver for "which account home would a structured launch pin right
-// now". The create path fills `record.accountHome` with it, and the model
-// catalog's record-less reads key their fingerprint with it — a second copy of
-// this selection is how a picker ends up showing another account's models.
+// Share account-home resolution between create pins and recordless catalog fingerprints or pickers show another account's models.
 
 export type StructuredClaudeAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
@@ -42,12 +39,7 @@ export function resolveStructuredClaudeAccountHomePath(
 
 export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
-  /**
-   * The home a host launch would pin: launch preparation on the create path,
-   * the read-only sibling for record-less reads (a read must not sync homes or
-   * clear selections). Null falls back to env/system default. Both share the
-   * null → system-home mapping below, so the two paths cannot drift.
-   */
+  /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
     | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
@@ -68,9 +60,13 @@ export async function resolveStructuredCodexAccountHomePath(
 
 export function resolveStructuredCodexAccountKind(
   home: string,
-  settings: Pick<
-    GlobalSettings,
-    'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<
+      GlobalSettings,
+      | 'codexManagedAccounts'
+      | 'activeCodexManagedAccountId'
+      | 'activeCodexManagedAccountIdsByRuntime'
+    >
   >
 ): AgentSessionAccountKind | undefined {
   const same = (other: string): boolean =>
@@ -91,8 +87,7 @@ export function resolveStructuredCodexAccountKind(
   return undefined
 }
 
-/** An agent whose config directory is one environment variable with a default under the user's
- *  home: the launch's own value, then this runtime's, then the default. */
+/** Resolve env-configured account home from launch env, runtime env, then user-home default. */
 export function resolveStructuredEnvAccountHomePath(input: {
   launchEnv: NodeJS.ProcessEnv
   variable: string

@@ -69,6 +69,51 @@ export function normalizeNativeChatTaskList(
   return { tasks, ...(explanation ? { explanation } : {}) }
 }
 
+/** Shared task copy for desktop translations and direct mobile rendering. */
+export const NATIVE_CHAT_TASK_LIST_COPY = {
+  title: 'Tasks',
+  completed: 'Completed',
+  inProgress: 'In progress',
+  pending: 'Pending',
+  empty: 'No tasks',
+  progress: '{{completed}} of {{total}} tasks completed',
+  added: 'Added {{task}}',
+  removed: 'Removed {{task}}',
+  started: 'Started {{task}}',
+  finished: 'Completed {{task}}',
+  reset: 'Marked pending: {{task}}',
+  updated: 'Updated {{task}}',
+  unchanged: 'Tasks unchanged',
+  showAll: 'Full task list'
+} as const
+
+export type NativeChatTaskChangeCopyKey =
+  | 'added'
+  | 'removed'
+  | 'started'
+  | 'finished'
+  | 'reset'
+  | 'updated'
+
+/** Which sentence a change reads as, and the task it names. */
+export function nativeChatTaskChangeWords(change: NativeChatTaskChange): {
+  key: NativeChatTaskChangeCopyKey
+  task: string
+} {
+  switch (change.kind) {
+    case 'added':
+    case 'removed':
+    case 'started':
+      return { key: change.kind, task: change.task.content }
+    case 'completed':
+      return { key: 'finished', task: change.task.content }
+    case 'pending':
+      return { key: 'reset', task: change.task.content }
+    case 'updated':
+      return { key: 'updated', task: nativeChatTaskLabel(change.task) }
+  }
+}
+
 export function nativeChatTaskLabel(task: NativeChatTask): string {
   return task.status === 'in_progress' && task.activeForm ? task.activeForm : task.content
 }

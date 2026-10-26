@@ -1,5 +1,8 @@
 import { sha256 } from './sha256'
-import type { StructuredAgentSessionFirstMessage } from './structured-agent-session-create'
+import type {
+  StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionResumeSource
+} from './structured-agent-session-create'
 import type { StructuredAgentId } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
@@ -44,7 +47,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
   agent: StructuredAgentId
-  resumeFrom?: { providerSessionId: string }
+  resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   options?: Readonly<Record<string, string>>
@@ -55,11 +58,9 @@ export function structuredAgentSessionCreateFingerprint(input: {
     fields: {
       worktree: input.worktree,
       agent: input.agent,
-      // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
-      // Adopting a conversation is a different intent and must not replay as a blank create.
+      // Dropping undefined preserves blank-create digests; resume intent must not replay as blank create.
       resumeFrom: input.resumeFrom,
-      // The host digests the same field; a retry naming another tab still replays with the
-      // recorded one, since the host owns the id.
+      // Include tabId in the host digest; retries replay its recorded host-owned ID.
       tabId: input.tabId,
       firstMessage: input.firstMessage,
       options: input.options

@@ -63,8 +63,7 @@ describe('nativeChatAskDismissKey', () => {
 
 describe('extractPendingAsk', () => {
   it('recognizes an unregistered tool whose input matches the canonical questions shape', () => {
-    // The live path (parseAskFromStatus) accepts this shape from any tool name;
-    // transcript replay must not silently drop the same pending question.
+    // Match live status’s arbitrary-tool canonical-shape fallback during transcript replay.
     const pending = extractPendingAsk([message('m1', [call('CustomAskTool', QUESTIONS_INPUT)])])
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
@@ -81,7 +80,7 @@ describe('extractPendingAsk', () => {
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
-  it("clears the ask when its own result arrives, keeping the newest ask's identity", () => {
+  it('keeps the newest ask when an older call receives its result', () => {
     const first = { questions: [{ question: 'First?', options: [] }] }
     const pending = extractPendingAsk([
       message('m1', [
@@ -95,8 +94,7 @@ describe('extractPendingAsk', () => {
   })
 
   it('does not strand an answered ask behind a tool call orphaned by an interrupt', () => {
-    // ESC on a running tool: Claude writes its interrupt record instead of a
-    // tool result, so that call's FIFO slot never resolves (#11761).
+    // Claude interrupts omit tool results, leaving orphan FIFO slots (#11761).
     const pending = extractPendingAsk([
       message('m1', [call('Bash', { command: 'sleep 999' })]),
       interrupted('m2'),
@@ -124,8 +122,7 @@ describe('extractPendingAsk', () => {
   })
 
   it('drops an ask the user typed past instead of answering', () => {
-    // Real transcripts hold asks that never get a result because the user
-    // escaped the selector and sent a new prompt — the question is over.
+    // Escaping a selector and sending a prompt can leave the ask without a result.
     const pending = extractPendingAsk([
       message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
       userTurn('m2', 'never mind, do this instead'),
@@ -135,8 +132,7 @@ describe('extractPendingAsk', () => {
   })
 
   it('does not strand an answered ask behind an orphan left by a plain-text interrupt', () => {
-    // Claude also writes the interrupt as a bare user turn (no
-    // `interruptedMessageId`), which decodes as a user message, not a status row.
+    // Claude can record interrupts as bare user turns without interruptedMessageId/status rows.
     const pending = extractPendingAsk([
       message('m1', [call('Bash', { command: 'sleep 999' })]),
       userTurn('m2', '[Request interrupted by user]'),
@@ -168,6 +164,17 @@ describe('extractPendingAsk', () => {
 })
 
 describe('parseAskFromStatus', () => {
+  it('preserves OMP checkbox questions from live status and transcript history', () => {
+    const input = {
+      questions: [
+        { id: 'q1', question: 'Pick', multi: true, options: [{ label: 'A' }, { label: 'B' }] }
+      ]
+    }
+    const prompt = parseAskFromStatus(JSON.stringify(input), 'ask')
+    expect(prompt?.questions[0]?.multiSelect).toBe(true)
+    expect(extractPendingAsk([message('m1', [call('ask', input)])])).toEqual(prompt)
+  })
+
   it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
     const input = {
       id: 'question',
@@ -221,5 +228,37 @@ describe('resolveNativeChatAsk', () => {
     expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
       liveAsk
     )
+  })
+})
+
+describe('async questions', () => {
+  const asyncCall = (callId: string, title: string): NativeChatBlock => ({
+    type: 'tool-call',
+    name: 'request_user_input_async',
+    callId,
+    input: JSON.stringify({ questions: [{ title }] })
+  })
+  const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+    ...message(id, [{ type: 'text', text: 'hi' }]),
+    role: 'user',
+    ...flags
+  })
+  const titles = (messages: NativeChatMessage[]): string[] | undefined =>
+    extractPendingAsk(messages)?.questions.map((question) => question.question)
+
+  it('keeps every unanswered async question, once per call', () => {
+    const first = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([first, first, message('b', [asyncCall('call-b', 'B?'), result()])])).toEqual([
+      'A?',
+      'B?'
+    ])
+  })
+
+  it('stays open until a user message reaches the agent', () => {
+    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
+      ['A?']
+    )
+    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
   })
 })

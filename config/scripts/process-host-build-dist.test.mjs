@@ -54,6 +54,7 @@ function fixture(onTestFinished, distSeed) {
     JSON.stringify({
       compilerOptions: {
         target: 'ES2022',
+        lib: ['ES2022'],
         module: 'Node16',
         moduleResolution: 'Node16',
         rootDir: 'src',
@@ -82,6 +83,26 @@ function runBuild(packageDir, { script = buildScript, cwd = realPackageDir } = {
 
 // Emits replacement output, then takes over or deletes the build lock as a competing build would.
 function installLockStealingCompiler(packageDir, { recreateLock }) {
+  const compromised = join(packageDir, 'lock-compromised')
+  const script = join(packageDir, 'observe-lock-loss.mjs')
+  writeFileSync(
+    script,
+    `import { writeFileSync } from 'node:fs'
+import lockfile from ${JSON.stringify(pathToFileURL(packageRequire.resolve('proper-lockfile')).href)}
+const lock = lockfile.lock
+lockfile.lock = (file, options) => lock(file, {
+  ...options,
+  update: 1000,
+  onCompromised(error) {
+    options.onCompromised(error)
+    writeFileSync(${JSON.stringify(compromised)}, '')
+  }
+})
+const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(buildScript).href)})
+try { await buildPackageDist(process.argv[2]) }
+catch (error) { console.error(error.message); process.exitCode = 1 }
+`
+  )
   const compilerDir = join(packageDir, 'node_modules', 'typescript')
   rmSync(compilerDir, { recursive: true })
   mkdirSync(join(compilerDir, 'bin'), { recursive: true })
@@ -91,7 +112,7 @@ function installLockStealingCompiler(packageDir, { recreateLock }) {
   )
   writeFileSync(
     join(compilerDir, 'bin', 'tsc'),
-    `const { mkdirSync, rmSync, utimesSync, writeFileSync } = require('node:fs')
+    `const { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const outDir = process.argv[process.argv.indexOf('--outDir') + 1]
 mkdirSync(outDir, { recursive: true })
@@ -99,10 +120,14 @@ writeFileSync(join(outDir, 'entry.js'), 'module.exports = "from a build that los
 writeFileSync(join(outDir, 'added.js'), '')
 rmSync('.dist-build.lock', { recursive: true, force: true })
 ${recreateLock ? "mkdirSync('.dist-build.lock')\nconst foreignMtime = new Date(Date.now() + 60_000)\nutimesSync('.dist-build.lock', foreignMtime, foreignMtime)" : ''}
-// Hold compilation past proper-lockfile's 15-second refresh so compromise is observed.
-setTimeout(() => {}, 17_000)
+// Wait for the real lock monitor's verdict before compilation completes.
+const wait = setInterval(() => {
+  if (existsSync(${JSON.stringify(compromised)})) clearInterval(wait)
+}, 10)
+setTimeout(() => process.exit(2), 20_000).unref()
 `
   )
+  return script
 }
 
 async function build(packageDir, expectResult = expect) {
@@ -139,8 +164,7 @@ afterAll(() => releaseSeed?.())
 
 describe('process-host dist build', () => {
   it('leaves an up-to-date dist untouched on repeated builds', async () => {
-    const packageDir = fixture()
-    await build(packageDir)
+    const packageDir = fixture(undefined, seededDist)
     const before = distSnapshot(packageDir)
 
     const repeated = await build(packageDir)
@@ -281,14 +305,43 @@ while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
 
   it('serializes builds so a later source snapshot is the one published', async () => {
     const packageDir = fixture(undefined, seededDist)
-    // Hold the build lock while the source changes, as an in-flight earlier build would.
+    const attempted = join(packageDir, 'lock-contended')
+    const script = join(packageDir, 'observe-lock-attempt.mjs')
+    writeFileSync(
+      script,
+      `import fs from 'node:fs'
+import lockfile from ${JSON.stringify(pathToFileURL(packageRequire.resolve('proper-lockfile')).href)}
+const lock = lockfile.lock
+lockfile.lock = (file, options) => lock(file, {
+  ...options,
+  fs: {
+    ...fs,
+    mkdir(path, callback) {
+      fs.mkdir(path, (error) => {
+        if (path === options.lockfilePath && error?.code === 'EEXIST') {
+          fs.writeFileSync(${JSON.stringify(attempted)}, '')
+        }
+        callback(error)
+      })
+    }
+  }
+})
+const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(buildScript).href)})
+await buildPackageDist(process.argv[2])
+`
+    )
     mkdirSync(join(packageDir, '.dist-build.lock'))
-    const waiting = runBuild(packageDir)
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
-    writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const value = 9\n')
-    rmSync(join(packageDir, '.dist-build.lock'), { recursive: true })
+    const waiting = runBuild(packageDir, { script })
+    let result
+    try {
+      await expect.poll(() => existsSync(attempted), { timeout: 15_000 }).toBe(true)
+      writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const value = 9\n')
+    } finally {
+      rmSync(join(packageDir, '.dist-build.lock'), { recursive: true, force: true })
+      result = await waiting
+    }
 
-    expect(await waiting).toMatchObject({ code: 0, stderr: '' })
+    expect(result).toMatchObject({ code: 0, stderr: '' })
     expect(readFileSync(join(packageDir, 'dist', 'internal.js'), 'utf8')).toContain('value = 9')
   })
 
@@ -302,9 +355,9 @@ while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
       const packageDir = fixture(onTestFinished, seededDist)
       const before = distSnapshot(packageDir)
       const entry = readFileSync(join(packageDir, 'dist', 'entry.js'), 'utf8')
-      installLockStealingCompiler(packageDir, { recreateLock })
+      const script = installLockStealingCompiler(packageDir, { recreateLock })
 
-      const result = await runBuild(packageDir)
+      const result = await runBuild(packageDir, { script })
 
       expectResult(result.code).toBe(1)
       expectResult(result.stderr).toContain('build lock was compromised')

@@ -562,8 +562,7 @@ describe('xterm IME composition de-duplication', () => {
     startComposition(textarea, '한')
     await nextEventLoop()
 
-    // Why: IBus clears at compositionend, then restores the same commit after
-    // xterm's keypress path has already emitted it.
+    // IBus restores the commit after keypress already emitted it; the later insertText must dedup.
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
     const compositionHelper = (
@@ -727,6 +726,22 @@ describe('xterm IME composition de-duplication', () => {
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한')
+    terminal.dispose()
+  })
+
+  // vim: commit a word, then leave insert mode at once; the accepted commit must precede the ESC.
+  it('sends an accepted commit before a plain Escape that lands before finalization', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    startComposition(textarea, '日本語')
+    await nextEventLoop()
+
+    textarea.dispatchEvent(
+      new CompositionEvent('compositionend', { data: '日本語', bubbles: true })
+    )
+    dispatchKeydown(textarea, 'Escape', 'Escape', 27)
+    await nextEventLoop()
+
+    expect(emitted).toEqual(['日本語', '\x1b'])
     terminal.dispose()
   })
 

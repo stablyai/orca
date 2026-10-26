@@ -1,10 +1,43 @@
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 
-/** Resolves once the session's background startup read has landed, faulted, or been ended. */
+const opened = new WeakMap<
+  ClaudeStructuredSessionAdapter,
+  Map<string, Promise<StructuredAgentSessionProviderOpenResult>>
+>()
+
+/** Direct adapter fixtures explicitly join the host-owned open after acquire. */
+export function claudeOpened(
+  adapter: ClaudeStructuredSessionAdapter,
+  sessionId: string
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  let sessions = opened.get(adapter)
+  if (!sessions) {
+    sessions = new Map()
+    opened.set(adapter, sessions)
+  }
+  const session = adapter['sessions'].get(sessionId)
+  if (!session) {
+    return Promise.reject(new Error(`no Claude session for ${sessionId}`))
+  }
+  const key = `${sessionId}:${session.acquisitionGeneration}`
+  const previous = sessions.get(key)
+  if (previous) {
+    return previous
+  }
+  const current = adapter.open({
+    sessionId,
+    fence: session.fence,
+    acquisitionGeneration: session.acquisitionGeneration,
+    signal: new AbortController().signal
+  })
+  sessions.set(key, current)
+  return current
+}
+
 export async function claudeStartupSettled(
   adapter: ClaudeStructuredSessionAdapter,
   sessionId: string
 ): Promise<void> {
-  // Element access reaches the adapter's private map, which no production caller needs.
-  await adapter['sessions'].get(sessionId)?.startup.settled
+  await claudeOpened(adapter, sessionId)
 }

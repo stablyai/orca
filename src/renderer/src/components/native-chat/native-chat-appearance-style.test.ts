@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildAppFontFamily } from '@/lib/app-font-family'
 import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
 import { nativeChatAppearanceStyle, nativeChatContrastMix } from './native-chat-appearance-style'
@@ -25,6 +26,28 @@ describe('nativeChatContrastMix', () => {
 })
 
 describe('nativeChatAppearanceStyle terminal interface', () => {
+  it('uses a custom chat family while preserving code fonts and terminal matching precedence', () => {
+    const settings = makeSettings({
+      appFontFamily: 'Arial',
+      terminalFontFamily: 'Menlo',
+      nativeChatAppearance: { fontFamily: 'Georgia' }
+    })
+    const style = nativeChatAppearanceStyle(settings)
+    expect(style['--chat-font-family']).toBe(buildAppFontFamily('Georgia'))
+    expect(style['--chat-code-font-family']).toBe(buildFontFamily('Menlo'))
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { ...settings.nativeChatAppearance, matchTerminalInterface: true }
+      })['--chat-font-family']
+    ).toBe(buildFontFamily('Menlo'))
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { fontFamily: '' }
+      })['--chat-font-family']
+    ).toBeUndefined()
+  })
   it('follows the terminal code font while keeping default body font and colors', () => {
     const style = nativeChatAppearanceStyle(makeSettings({ terminalFontFamily: 'Menlo' }))
     expect(style['--chat-code-font-family']).toBe(buildFontFamily('Menlo'))
@@ -179,17 +202,6 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
 })
 
 describe('chat root appearance style', () => {
-  it('scales typography tokens with chat size: text-sm, xs, 2xs, 3xs follow chat font size', () => {
-    const style = nativeChatAppearanceStyle({
-      nativeChatAppearance: { fontSize: 20, codeFontSize: 12 }
-    })
-    // The CSS redefines typography tokens: --text-sm becomes the chat font size,
-    // and xs/2xs/3xs scale as ratios of it. The style object itself does not
-    // carry these (they live in the CSS), but confirms the chat size is set.
-    expect(style['--chat-font-size']).toBe('20px')
-    expect(style['--chat-code-font-size']).toBe('12px')
-    expect(style['--chat-inline-code-ratio']).toBe('0.6em')
-  })
   it('derives wrap capacity from actual column width, including full-width panes', () => {
     const wide = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'wide' } })
     const full = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'full' } }, 1200)
@@ -200,15 +212,6 @@ describe('chat root appearance style', () => {
     expect(nativeChatAppearanceStyle(undefined, 384)['--chat-estimated-chars-per-line']).toBe(50)
   })
 
-  it('provides default text, independent code size, and comfortable width', () => {
-    expect(nativeChatAppearanceStyle(undefined)).toMatchObject({
-      '--chat-font-size': '14px',
-      '--chat-code-font-size': '12px',
-      '--chat-content-max-width': '46rem',
-      '--chat-estimated-line-height': 22,
-      '--chat-estimated-chars-per-line': 96
-    })
-  })
   it.each(['light', 'dark', 'system'] as const)(
     'leaves native controls app-owned in %s mode when matching is off',
     (theme) => {

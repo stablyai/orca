@@ -24,7 +24,13 @@ export type AgentBackgroundSessionTestState = {
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string | null }
   }[]
-  repos: { id: string; connectionId: string | null; path: string; projectGroupId?: string | null }[]
+  repos: {
+    id: string
+    connectionId: string | null
+    path: string
+    projectGroupId?: string | null
+    executionHostId?: `runtime:${string}`
+  }[]
   folderWorkspaces: {
     id: string
     projectGroupId: string
@@ -163,6 +169,8 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
     activeRuntimeEnvironmentId: 'env-1',
     terminalMainSideEffectAuthority: undefined
   }
+  // The client stamps a server's rows on arrival; focus alone never names the owner.
+  state.repos = state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
 }
 
 /** The tab id reserved before the spawn; the run tab adopts it once the PTY is live. */
@@ -198,7 +206,8 @@ export function stubAgentBackgroundSessionWindow(mocks: {
       runtime: { call: vi.fn() },
       runtimeEnvironments: {
         call: mocks.runtimeEnvironmentCall,
-        subscribe: mocks.runtimeEnvironmentSubscribe
+        subscribe: mocks.runtimeEnvironmentSubscribe,
+        cancelSubscription: vi.fn(async () => undefined)
       }
     }
   })
@@ -231,7 +240,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
       (args.runtimeCall as unknown as (value: unknown) => unknown)(request)
   )
   resetAgentBackgroundSessionTestState(args.state)
-  // Why: production reserves the tab id before the spawn; honoring options.id mirrors createTab's adoption contract.
+  // Honor the pre-reserved tab id to mirror createTab adoption.
   args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
     const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }
     args.state.tabsByWorktree['wt-1'].push(tab)

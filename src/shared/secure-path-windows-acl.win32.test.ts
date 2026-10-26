@@ -30,13 +30,7 @@ import {
 } from './windows-secure-dacl'
 import { removeTreeSync } from './windows-transient-lock-removal'
 
-/**
- * The half of the proof a fake addon cannot give: every verdict here is read back off a real
- * NTFS volume, including a relocated data root under C:\ that inherits Authenticated Users:Modify
- * — the case that makes these files worth restricting at all.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Real NTFS read-back covers what fake addons cannot: relocated C:\ roots inheriting broad Modify access. Windows only. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 describeOnWindows('Windows secure paths against a real filesystem', () => {
@@ -71,8 +65,7 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
   })
 
   afterAll(() => {
-    // This suite plants hostile DACLs on purpose; should a repair regress, an inherit-only grant
-    // would leave the tree undeletable, so hand every entry back to this user first.
+    // Hostile DACL fixtures may become undeletable if repair regresses; restore this user’s access before cleanup.
     for (const tree of [root, relocatedRoot]) {
       unlockTree(tree)
       removeTreeSync(tree)
@@ -146,7 +139,6 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
   })
 
-  // No migration: what the icacls hardening left on disk is accepted exactly as it is.
   it('never rewrites a path the icacls-era hardening already locked', () => {
     const file = join(root, 'icacls-era.json')
     writeFileSync(file, '{}')
@@ -198,7 +190,6 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     expect(reports).toContainEqual(expect.objectContaining({ stage: 'apply' }))
   })
 
-  // The reporter is a caller-installed hook; one that throws must not take hardening down with it.
   it('keeps hardening alive when the installed reporter throws', () => {
     setSecurePathHardeningReporter(() => {
       throw new Error('caller bug')
@@ -239,8 +230,7 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     expect(daclOf(target)?.protected).toBe(true)
   })
 
-  // A relock walks every descendant (~2 s on a 29k-entry userData), so it must never hold up a
-  // write, must run once, and must not run again once the directory verifies.
+  // Directory relock must stay off the write path and run once; allow its 60s wait plus 4,000 creates beyond the default timeout.
   it('relocks a large relocated directory off the write path, exactly once', async () => {
     const dir = join(relocatedRoot, 'large')
     mkdirSync(dir)
@@ -278,7 +268,7 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(nextLaunch.asyncCount + nextLaunch.count).toBe(0)
     expect(readFileSync(join(dir, 'third.json'), 'utf-8')).toBe('{}')
-  })
+  }, 90_000)
 
   /** Installs the real addon behind a proxy that counts DACL rewrites. */
   function countingAddon(): { count: number; asyncCount: number } {

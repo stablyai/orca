@@ -11,6 +11,9 @@ export type AutomaticAgentResumeClaim = {
   providerSession: AgentProviderSessionMetadata
 }
 
+/** Agents whose panes restart in place onto a newly selected account. */
+export type AccountRestartAgent = 'codex' | 'claude'
+
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
@@ -29,4 +32,6 @@ export type HydrateWorkspaceSessionOptions = {
   contestedHostWorkspaceSessions?: HostSessionSlices
   /** Partition each restored session key was read from; omitted leaves the store's copy. */
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
+  /** Runtime partitions the cold read loaded; omitted leaves the store's copy. */
+  hydratedRuntimeSessionHostIds?: ExecutionHostId[]
 } & WorkspaceSessionHydrationOptions

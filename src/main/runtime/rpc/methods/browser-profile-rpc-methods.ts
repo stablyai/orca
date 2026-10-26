@@ -1,12 +1,12 @@
 import { defineMethod } from '../core'
+import { ProfileCreate } from '../../../../shared/rpc-contract/browser-identity-params'
 import {
-  ProfileCreate,
   ProfileDelete,
   ProfileImportFromBrowser,
   TabProfileClone,
   TabSetProfile,
   TabShow
-} from './browser-schemas'
+} from '../../../../shared/rpc-contract/browser-params'
 
 export const BROWSER_PROFILE_METHODS = [
   defineMethod({

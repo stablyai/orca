@@ -22,7 +22,6 @@ const closeBrowserTab = vi.fn()
 const closeUnifiedTab = vi.fn()
 const recordClientHostedBrowserCloseIntents = vi.fn()
 
-/** One active browser workspace, optionally held under a handle the host has not published yet. */
 function activeBrowserWorkspace(handle: {
   environmentId?: string
   staged?: true
@@ -51,10 +50,7 @@ function activeBrowserWorkspace(handle: {
   }
 }
 
-/**
- * The host's own browser tab, mirrored here with no page of its own. The worktree row names the
- * runtime, which is the only thing that makes such a mirror closable at all.
- */
+/** Pageless host mirror ownership comes from its runtime-owned workspace row, not a local page. */
 function pagelessHostMirror(): Record<string, unknown> {
   return {
     ...activeBrowserWorkspace({}),
@@ -72,9 +68,7 @@ function requireListener(ref: { current: CloseActiveTabListener | null }): Close
   return ref.current
 }
 
-// Why: the menu's Close Tab used to answer ownership with "is this worktree's runtime connected",
-// which is a different question from "does the host hold this workspace's pages" — and it fired an
-// inert session.tabs.close at everything else.
+// Runtime connectivity alone does not prove host page ownership; inert host closes leave other tabs standing.
 describe('useIpcEvents Close Tab on the active browser tab', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -117,8 +111,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
   })
 
-  // Why: a staged page names a runtime that has not minted it yet, so the host close is inert and
-  // the in-flight create's snapshot puts the tab back.
+  // Staged pages lack host identity yet; inert remote close lets the in-flight snapshot recreate them.
   it('unwinds a staged workspace as a cleanup close instead of closing it on the host', async () => {
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
     await useIpcEventsForCloseRouting({
@@ -132,9 +125,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', { reason: 'cleanup' })
   })
 
-  // Why: a pageless mirror is the only shape whose visible tab this renderer must remove itself —
-  // the host has no page here to retract it through tab sync. The tab to remove is the unified
-  // tab's own id, not the workspace id it points at.
+  // Pageless mirrors need local removal by unified tab ID; host sync has no local page to retract.
   it('removes the mirror tab itself when the host holds no page for it', async () => {
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
     await useIpcEventsForCloseRouting({
@@ -154,8 +145,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Why: with the owning runtime gone there is nobody to close on, and an X that only fans a dead
-  // host close leaves the tab standing.
+  // With owner runtime gone, dead host-close requests cannot remove the visible tab.
   it('tears a host-owned workspace down here when its runtime is disconnected', async () => {
     isWebRuntimeSessionActive.mockReturnValue(false)
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
@@ -185,9 +175,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
   })
 
-  // Why: in split layouts the activeTabType mirror can say 'terminal' while a browser guest holds
-  // focus (guest focus never reaches the group's focus-capture); the guest-forwarded source id must
-  // close the guest's own workspace anyway.
+  // Guest focus can leave the group’s active-type mirror stale; forwarded source IDs must still close the guest’s workspace.
   it('closes the source workspace when the active-tab mirror points at a terminal', async () => {
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
     await useIpcEventsForCloseRouting({
@@ -197,7 +185,6 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
         activeTabType: 'terminal',
         activeBrowserTabId: null,
         browserPagesByWorkspace: {
-          // Ownership comes from the canonical maps, not denormalized page fields.
           'workspace-1': [{ id: 'page-1', workspaceId: 'stale-workspace', worktreeId: 'stale-wt' }]
         }
       })
@@ -209,10 +196,9 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(destroyWorkspaceWebviews).toHaveBeenCalled()
   })
 
-  // Why: an open-but-empty floating panel is the ambient close fallback only; a guest-forwarded
-  // source id names a main-workspace target and must not be swallowed by the panel toggle.
+  // Empty floating-panel fallback must not swallow explicit guest source IDs targeting the main workspace.
   it('closes the source workspace even while an empty floating panel is visible', async () => {
-    vi.stubGlobal('document', { querySelector: () => ({}) })
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { querySelector: () => ({}) }))
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
     await useIpcEventsForCloseRouting({
       closeActiveTabListenerRef: listenerRef,

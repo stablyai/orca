@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import { SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE } from '../../shared/project-host-setup-target'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { Repo } from '../../shared/repo-types'
@@ -26,7 +27,7 @@ function makeController(): {
   const store = {
     getProjects: () => projectHostSetupProjectionFromRepos([repo]).projects,
     getProjectHostSetups: () => [],
-    updateRepo: (_id: string, updates: Record<string, unknown>) => ({ ...repo, ...updates })
+    updateRepo: (_target: unknown, updates: Record<string, unknown>) => ({ ...repo, ...updates })
   }
   const addRepo = vi.fn().mockResolvedValue(repo)
   const cloneRepo = vi.fn().mockResolvedValue(repo)
@@ -60,11 +61,11 @@ describe('RuntimeProjectHostSetupController host routing', () => {
     })
 
     await expect(setup).rejects.toThrow(SshHostNotServedError)
-    await expect(setup).rejects.toThrow(`SSH connection "${TARGET_ID}" not found or not connected`)
+    await expect(setup).rejects.toThrow(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
     expect(addRepo).not.toHaveBeenCalled()
   })
 
-  it('names the decoded connection id of a percent-encoded SSH target', async () => {
+  it('preserves the decoded connection id when refusing a percent-encoded SSH target', async () => {
     const { controller, addRepo, projectId } = makeController()
 
     await expect(
@@ -74,15 +75,19 @@ describe('RuntimeProjectHostSetupController host routing', () => {
         path: REPO_PATH,
         kind: 'folder'
       })
-    ).rejects.toThrow('SSH connection "my host" not found or not connected')
+    ).rejects.toMatchObject({
+      code: 'ssh_host_not_served',
+      connectionId: 'my host',
+      message: SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
+    })
     expect(addRepo).not.toHaveBeenCalled()
   })
 
-  it('keeps repo.addRemote failing with the not-connected text', () => {
+  it('refuses repo.addRemote by saying where the project can be added instead', () => {
     const { controller, addRepo } = makeController()
 
     expect(() => controller.addSshRepo({ connectionId: TARGET_ID })).toThrow(
-      `SSH connection "${TARGET_ID}" not found or not connected`
+      SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
     )
     expect(addRepo).not.toHaveBeenCalled()
   })

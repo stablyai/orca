@@ -1,5 +1,12 @@
+import {
+  isPtyFencedTerminationOutcome,
+  type PtyFencedTerminationRequest,
+  type PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
@@ -12,8 +19,91 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
+import type { DaemonAsyncIoHealth, DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import { observeDaemonAsyncIoHealth } from './daemon-async-io-telemetry-event'
+import { sameEndpointIdentity } from './daemon-endpoint-incarnation'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  constructor(opts: DaemonPtyAdapterOptions) {
+    super(opts)
+    // Registered after the base listener, which marks the sessions awaiting recovery first.
+    this.client.onDisconnected(() => this.recoverAfterEndpointLoss())
+  }
+
+  supportsFencedTermination(_id: string): boolean {
+    return this.protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION
+  }
+
+  async killFenced(request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> {
+    if (!this.supportsFencedTermination(request.id)) {
+      return { outcome: 'refused', reason: 'unsupported' }
+    }
+    // Capture the checked identity before waiting on connection or lifecycle locks.
+    const { id, expectedIncarnationId, requireNoAgentOwner, requireUnattached } = request
+    try {
+      return await this.withHistorySpawnLock(id, async () => {
+        const incarnationBeforeKill = this.sessionIncarnations.get(id)
+        await this.ensureConnected()
+        const result = await this.client.request<unknown>('kill', {
+          sessionId: id,
+          immediate: true,
+          expectedIncarnationId,
+          requireNoAgentOwner,
+          requireUnattached
+        })
+        if (!isPtyFencedTerminationOutcome(result)) {
+          return { outcome: 'refused', reason: 'unverifiable' }
+        }
+        const currentIncarnationId = this.sessionIncarnations.get(id)
+        if (
+          (result.outcome === 'ended' || result.outcome === 'already_exited') &&
+          (incarnationBeforeKill === undefined ||
+            incarnationBeforeKill === expectedIncarnationId) &&
+          (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
+        ) {
+          // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
+          await this.completeShutdownWithHistoryLock(id, {})
+        }
+        return result
+      })
+    } catch {
+      return { outcome: 'refused', reason: 'unverifiable' }
+    }
+  }
+
+  async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
+    if (!this.client.isConnected()) {
+      return { state: 'unverifiable' }
+    }
+    const identity = this.client.getDaemonIdentity()
+    try {
+      const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
+      if (
+        health &&
+        typeof health === 'object' &&
+        'state' in health &&
+        (health.state === 'healthy' || health.state === 'stalled') &&
+        'pendingMs' in health &&
+        typeof health.pendingMs === 'number' &&
+        Number.isFinite(health.pendingMs) &&
+        health.pendingMs >= 0
+      ) {
+        const result: DaemonAsyncIoHealth = { state: health.state, pendingMs: health.pendingMs }
+        // A reply that crossed a reconnect cannot be attributed to either incarnation.
+        const current = this.client.getDaemonIdentity()
+        if (identity && current && sameEndpointIdentity(identity, current)) {
+          observeDaemonAsyncIoHealth(identity, this.protocolVersion, result)
+        }
+        return result
+      }
+    } catch (error) {
+      if (isUnknownRequestTypeError(error)) {
+        return { state: 'unsupported' }
+      }
+    }
+    return { state: 'unverifiable' }
+  }
+
   async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
     if (!this.client.isConnected()) {
       return 'unknown'
@@ -96,6 +186,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           kind: 'transientFact',
           fact: event.payload
         })
+      } else if (event.event === 'inputClosed') {
+        // Kept per incarnation: the report can land before its own spawn reply.
+        this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
         const pendingOperations = new Set([
@@ -115,10 +208,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           )
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
-        // Keep a raced exit available to the in-flight spawn even when the
-        // adapter still remembers the predecessor's generation. Only the
-        // generation currently published by this adapter may clear state or
-        // notify listeners.
+        // Retain raced exits for pending spawns; only this adapter's published incarnation may clear state or notify.
         if (
           currentIncarnationId !== undefined &&
           event.payload.incarnationId !== currentIncarnationId
@@ -153,7 +243,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     try {
       return await this.client.request<T>(type, undefined)
     } catch (error) {
-      // Why not "no gate": a daemon from before these requests may still hold a recorded pause.
+      // Unsupported requests cannot prove a recorded pause is absent.
       if (isUnknownRequestTypeError(error)) {
         return AUTOMATIC_WORK_RESUME_UNSUPPORTED
       }

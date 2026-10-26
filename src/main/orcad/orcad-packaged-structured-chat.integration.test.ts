@@ -35,7 +35,7 @@ import {
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
-import { shellEscape } from '../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {
   hostServerTarget,
@@ -201,7 +201,10 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
         'utf8'
       )
     )
-    writeFileSync(fakeCli, `#!/bin/sh\nexec ${shellEscape(runtime)} ${shellEscape(script)} "$@"\n`)
+    writeFileSync(
+      fakeCli,
+      `#!/bin/sh\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
+    )
     chmodSync(fakeCli, 0o700)
     const sessionId = randomUUID()
     const scenarioPath = join(root, 'scenario.json')
@@ -346,7 +349,6 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
       expect(report.userMessages[0]?.message.content).toEqual([
         { type: 'text', text: 'Hello packaged server' }
       ])
-      // Follow-up #26464: assert ORCA_CLI_COMMAND executes the packaged host CLI.
     } finally {
       subscription?.close()
       await killChildAndWait(server.child)

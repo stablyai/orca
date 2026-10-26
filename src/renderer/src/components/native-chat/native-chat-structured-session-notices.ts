@@ -1,3 +1,4 @@
+import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-refusal-notice'
@@ -14,7 +15,6 @@ import type {
   NativeChatComposerNoticeContent
 } from './native-chat-composer-notice'
 
-/** A chat whose start failed or went unconfirmed, as a notice with Retry. */
 function nativeChatLaunchNotice({
   lifecycle,
   failure = null,
@@ -24,10 +24,9 @@ function nativeChatLaunchNotice({
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
-  /** Names the agent in a start failure's words. */
   agentLabel?: string
   onRetry: () => void
-  /** Offered instead of Retry until it signs in, when the start failed for want of a sign-in. */
+  /** Replace Retry with sign-in until authentication succeeds. */
   claudeSignIn?: NativeChatClaudeSignIn | null
 }): NativeChatComposerNotice | null {
   if (lifecycle !== 'failed' && lifecycle !== 'visibility-unknown') {
@@ -45,7 +44,7 @@ function nativeChatLaunchNotice({
         )
   const cause =
     lifecycle === 'failed' && failure
-      ? (failure.authStartupMessage ??
+      ? (failure.causeText ??
         agentSessionWriteNoticeText(
           agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
         ))
@@ -53,7 +52,9 @@ function nativeChatLaunchNotice({
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
+  const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
   return {
+    content: signInContent,
     key: 'launch',
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
@@ -64,21 +65,23 @@ function nativeChatLaunchNotice({
             onClick: claudeSignIn.signIn,
             disabled: claudeSignIn.signingIn
           }
-        : {
-            label: translate('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
-            onClick: onRetry
-          }
+        : signInContent
+          ? undefined
+          : {
+              label: translate('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
+              onClick: onRetry
+            }
   }
 }
 
-/** A structured chat's own notices, for the card above its composer. */
 export function structuredSessionNotices({
   launch,
   agentLabel,
   sessionError,
   composerError,
   claudeSignIn = null,
-  availability = null
+  availability = null,
+  hostPermission = null
 }: {
   launch: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
@@ -89,17 +92,19 @@ export function structuredSessionNotices({
   sessionError: string | null
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   claudeSignIn?: NativeChatClaudeSignIn | null
-  /** Why the host says no chat can start here, from `useNativeChatAvailabilityNotice`. */
   availability?: NativeChatComposerNotice | null
+  hostPermission?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
+  // A host held for its permission mode already says why nothing starts; Retry returns with it.
   const launchNotice = nativeChatLaunchNotice({
-    lifecycle: launch.lifecycle,
+    lifecycle: hostPermission ? null : launch.lifecycle,
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,
     claudeSignIn
   })
   return [
+    ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
     ...(launchNotice && !sessionError ? [launchNotice] : []),
     ...(sessionError

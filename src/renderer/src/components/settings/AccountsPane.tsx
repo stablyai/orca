@@ -1,4 +1,3 @@
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
@@ -15,8 +14,8 @@ import {
   getProviderAccountsOwnerKey,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
+import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
-  getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
@@ -62,7 +61,6 @@ import {
   createClaudeAccountActionRunner,
   createCodexAccountActionRunner
 } from './accounts-pane-account-actions'
-import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import { renderAccountsLocationSection } from './accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './accounts-pane-codex-section'
@@ -70,7 +68,8 @@ import {
   renderGeminiAccountsSection,
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
-import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { MiniMaxAccountsSection } from './MiniMaxAccountsSection'
+import { useUsageHostSettings } from './use-usage-host-settings'
 import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
@@ -97,15 +96,6 @@ export function AccountsPane({
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId' | 'apiKey'>>(
     new Set()
   )
-  const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
-  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
-  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
-  const [miniMaxApiKeyProtection, setMiniMaxApiKeyProtection] =
-    useState<SecretAtRestProtection | null>(null)
-  const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
-  const [miniMaxCookieProtection, setMiniMaxCookieProtection] =
-    useState<SecretAtRestProtection | null>(null)
-  const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
@@ -114,21 +104,18 @@ export function AccountsPane({
     wslCapabilitiesLoading,
     wslHostDistro
   )
-  // Why: a server owns its provider accounts (see #7973); every list/select/remove
-  // below goes to the host chosen in the page, never to the focused one.
+  // Route all account actions to the Settings-selected owner, independent of focused host (#7973).
   const accountOwner = hostScope.target
   const isRemoteAccountScope = accountOwner.kind === 'environment'
   const scopeEnvironmentId = runtimeTargetEnvironmentId(hostScope.target)
-  // Why: a select/remove can outlive a host change; its result
-  // belongs to the owner it was sent to, not the one now shown.
+  // Late select/remove results belong to their original owner, not the newly shown host.
   const accountOwnerKey = getProviderAccountsOwnerKey(accountOwner)
   const currentAccountOwnerKeyRef = useRef(accountOwnerKey)
   useEffect(() => {
     currentAccountOwnerKeyRef.current = accountOwnerKey
   }, [accountOwnerKey])
   const isCurrentAccountOwner = (): boolean => currentAccountOwnerKeyRef.current === accountOwnerKey
-  // Why: keep the real name separate from the prose fallback below; the scope
-  // label must not interpolate the fallback.
+  // Keep real names separate so scope labels cannot interpolate prose fallbacks.
   const remoteServerName = isRemoteAccountScope
     ? (runtimeEnvironments.find((environment) => environment.id === scopeEnvironmentId)?.name ??
       null)
@@ -144,10 +131,7 @@ export function AccountsPane({
     ? accountRuntime.label
     : getRuntimeSentenceLabel(accountRuntime)
   const localAccountRuntimeSentenceLabel = getRuntimeSentenceLabel(localAccountRuntime)
-  // Why: users read the remote-scoped list as their desktop accounts being
-  // deleted (#8186); say they are intact and link the default-runtime control.
-  // The web client has no desktop-owned accounts and cannot select Local
-  // desktop, so promising a switch back would be a dead end there.
+  // Reassure desktop users that remote scope did not delete local accounts (#8186); web clients cannot switch back to local accounts.
   const remoteAccountScopeNotice =
     isRemoteAccountScope && !isWebClientLocation() ? (
       <ProviderHostScopeControl
@@ -167,8 +151,7 @@ export function AccountsPane({
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
-  // Why: capture the account's runtime slot when the dialog opens; the roster
-  // can change underneath an open dialog and lose the slot to diff for restarts.
+  // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const accountVisibilityOptions = {
@@ -182,8 +165,7 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  // Why: System default lights only when no account row is active; while a remote
-  // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.
+  // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
   const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
   const systemCodexActive = !(
     ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
@@ -195,13 +177,10 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
-  // Why: the system default's real identity is host-scoped (it reflects the
-  // runtime's own ~/.codex), so only surface it in the host view. Per-distro
-  // WSL falls back to the generic label.
+  // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
-  // Why: remote snapshots own their system-default identity, but the desktop's
-  // rate-limit poll must not be misattributed to a remote account owner.
+  // Desktop rate-limit polls cannot describe remote-owned auth warnings.
   const activeCodexAuthWarning = codexAccountsLoaded
     ? getCodexAccountAuthWarning({
         limits: isRemoteAccountScope ? null : codexRateLimits,
@@ -212,26 +191,17 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
-  // Why: the mirror keeps serving the last synced settings when ~/.codex is
-  // unusable, so without this the user only sees their edits being ignored.
+  // An unusable ~/.codex leaves the mirror serving stale settings; surface why edits are ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
   useEffect(() => {
-    // Why: the status resolves the host's own ~/.codex and shared runtime home.
-    // A WSL or remote scope mirrors different homes entirely, so showing it there
-    // would name a config file that has nothing to do with the selected runtime.
+    // Sync status describes local host homes; WSL/remote scopes mirror unrelated homes.
     if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
       setCodexConfigSync(null)
       return
     }
-    // Why: a temporarily locked managed home clears on its own, but this effect
-    // only reruns on scope/runtime/selection changes — none of which a lock
-    // release triggers. Without a retry the warning would stick until remount.
-    // Serialized (timeout, not interval) so a slow response can never be
-    // overwritten by an older one.
+    // Retry transient managed-home locks serially; lock release changes no effect dependency and overlapping polls could apply stale results.
     return watchCodexConfigSyncStatus(setCodexConfigSync)
-    // Why: the status resolves whichever home the ACTIVE selection mirrors into
-    // (per-account, shared, or none for the real-home lane), so switching
-    // accounts must refetch or the banner describes the previous account.
+    // Selection changes choose a different mirrored home; refetch rather than describe the previous account.
   }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
@@ -246,46 +216,23 @@ export function AccountsPane({
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
-  const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
-    try {
-      const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.cookieConfigured)
-      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
-      setMiniMaxCookieProtection(status.cookieProtection)
-      setMiniMaxApiKeyProtection(status.apiKeyProtection)
-    } catch (error) {
-      console.error('Failed to load MiniMax credential status:', error)
-    }
-  }
-  const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
-    createMiniMaxCredentialActions({
-      miniMaxCookieDraft,
-      setMiniMaxCookieDraft,
-      miniMaxApiKeyDraft,
-      setMiniMaxApiKeyDraft,
-      setMiniMaxApiKeyConfigured,
-      setMiniMaxApiKeyProtection,
-      setMiniMaxConfigured,
-      setMiniMaxCookieProtection,
-      setMiniMaxCredentialBusy,
-      recordFeatureInteraction
-    })
-
-  useEffect(() => {
-    void refreshMiniMaxCredentialStatus()
-  }, [])
+  // Usage credentials belong beside the selected host’s poller.
+  const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
+  const usageHostSettings = useUsageHostSettings(
+    accountOwner,
+    remoteServerLabel,
+    settings,
+    updateSettings
+  )
 
   useEffect(() => {
     const owner: RuntimeClientTarget = scopeEnvironmentId
       ? { kind: 'environment', environmentId: scopeEnvironmentId }
       : { kind: 'local' }
-    // Why: remote snapshots stream usage refreshes after the synchronous ready
-    // message, so the watcher stays open for the pane's lifetime; the local
-    // path resolves once and the close() is a no-op.
+    // Keep remote watchers open for streamed usage after the initial snapshot; local watchers resolve once.
     const watcher = watchProviderAccounts(owner, {
       onSnapshot: (snapshot) => {
-        // Why: a failed provider's half is a substituted empty roster, not
-        // authoritative data; keep prior state and leave the loaded gate shut.
+        // Failed-provider rosters are substituted empty data; retain prior state and keep the loaded gate shut.
         if (!snapshot.failedProviders?.includes('codex')) {
           setCodexAccounts(snapshot.codex)
           setCodexAccountsLoaded(true)
@@ -323,7 +270,7 @@ export function AccountsPane({
     recordFeatureInteraction
   })
   const runClaudeAccountAction = createClaudeAccountActionRunner({
-    settings,
+    accountOwner,
     isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
@@ -373,21 +320,7 @@ export function AccountsPane({
     codexRateLimitTarget,
     setRemoveCodexTarget,
     runCodexAccountAction,
-    recordOpenCodeSettingEdit,
-    miniMaxRateLimits,
-    miniMaxApiKeyDraft,
-    setMiniMaxApiKeyDraft,
-    miniMaxApiKeyConfigured,
-    miniMaxApiKeyProtection,
-    saveMiniMaxApiKey,
-    clearMiniMaxApiKey,
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    miniMaxConfigured,
-    miniMaxCookieProtection,
-    miniMaxCredentialBusy,
-    saveMiniMaxCookie,
-    clearMiniMaxCookie
+    recordOpenCodeSettingEdit
   }
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
@@ -422,9 +355,15 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries())
-      ? renderMiniMaxAccountsSection(model)
-      : null,
+    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
+      <MiniMaxAccountsSection
+        key={`minimax:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+        miniMaxRateLimits={isRemoteAccountScope ? null : miniMaxRateLimits}
+        recordFeatureInteraction={recordFeatureInteraction}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
@@ -432,7 +371,11 @@ export function AccountsPane({
       <CursorAccountsSection key="cursor" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
-      <ZcodePlanAccountsSection key="zcode" />
+      <ZcodePlanAccountsSection
+        key={`zcode:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+      />
     ) : null
   ]
 

@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The row's state clock, as the host dates it. A subagent's rows move the summary's `updatedAt`
-// but never its `statusStartedAt`, so a settled parent must keep its completion stamp and stay
-// read while its child works on; an older host that publishes no clock keeps the old dating.
+// Child updatedAt changes must not reset the parent’s host-dated completion/read stamp; older hosts retain legacy dating.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -38,8 +36,6 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null,
   getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
@@ -178,7 +174,6 @@ describe("the structured row's state clock", () => {
     })
     expect(unread()).toBe(1)
 
-    // Answered: the parent is idle again, still dated by its own last turn.
     acknowledge(28_000)
     emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt: 28_500 }) })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })

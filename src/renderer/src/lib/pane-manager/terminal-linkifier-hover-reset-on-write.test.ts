@@ -3,9 +3,7 @@ import type { Terminal } from '@xterm/xterm'
 import * as hoverReset from './terminal-linkifier-hover-reset'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 
-// Spy on the reset primitive while keeping its real field-clearing behavior, so
-// tests can COUNT invocations — the throttle/coalesce properties are otherwise
-// invisible (the reset writes idempotent cache state).
+// Spy while retaining real cache clearing: idempotent state alone cannot prove throttle/coalescing call counts.
 vi.mock('./terminal-linkifier-hover-reset', async (importOriginal) => {
   const actual = await importOriginal<typeof hoverReset>()
   return {
@@ -63,7 +61,6 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     installTerminalLinkifierHoverResetOnWrite(fake.terminal)
 
     fake.emitWriteParsed()
-    // Not reset synchronously — throttled so streaming does not re-query per chunk.
     expect(resetSpy).not.toHaveBeenCalled()
     expect(fake.linkifier._lastBufferCell).toBeDefined()
 
@@ -77,8 +74,7 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     const fake = createFakeTerminal()
     installTerminalLinkifierHoverResetOnWrite(fake.terminal)
 
-    // 20 chunks inside one window must schedule only one reset — not 20. This
-    // fails if the leading-edge throttle guard is removed.
+    // Twenty chunks must share one timer; removing the leading throttle guard must fail.
     for (let i = 0; i < 20; i += 1) {
       fake.emitWriteParsed()
       vi.advanceTimersByTime(5)
@@ -91,9 +87,7 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     const fake = createFakeTerminal()
     installTerminalLinkifierHoverResetOnWrite(fake.terminal)
 
-    // A chunk every 50ms for 500ms. The throttle fires ~every 150ms; a debounce
-    // (clearTimeout + reschedule per chunk) would never fire while the stream
-    // continues — that regression is what this guards against.
+    // Continuous 50ms chunks must reset every ~150ms; debounce would postpone forever until streaming stops.
     for (let i = 0; i < 10; i += 1) {
       fake.emitWriteParsed()
       vi.advanceTimersByTime(50)
@@ -108,7 +102,6 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     fake.linkifier._currentLink = { link: 'https://example.com' }
     fake.emitWriteParsed()
     vi.advanceTimersByTime(150)
-    // Hovering: the cache is left intact so the underline/tooltip do not flicker.
     expect(resetSpy).not.toHaveBeenCalled()
     expect(fake.linkifier._lastBufferCell).toBeDefined()
 
@@ -123,19 +116,36 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     const fake = createFakeTerminal()
     installTerminalLinkifierHoverResetOnWrite(fake.terminal)
 
-    // Last chunk of a burst lands while a link is hovered, then output stops.
     fake.linkifier._currentLink = { link: 'https://example.com' }
     fake.emitWriteParsed()
     // Many windows pass with NO further writes — the pending reset must survive.
     vi.advanceTimersByTime(600)
     expect(resetSpy).not.toHaveBeenCalled()
 
-    // Once the pointer leaves the link, the retry finally resets — without any
-    // new output re-arming it.
+    // Hover-end retry must run without new output to rearm it.
     fake.linkifier._currentLink = undefined
     vi.advanceTimersByTime(150)
     expect(resetSpy).toHaveBeenCalledTimes(1)
     expect(fake.linkifier._lastBufferCell).toBeUndefined()
+  })
+
+  it('refreshes a changed wrapped link while leaving an unchanged hovered link intact', () => {
+    const fake = createFakeTerminal()
+    const isBufferValid = vi.fn(() => true)
+    fake.linkifier._currentLink = { link: { isBufferValid } }
+    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
+    fake.emitWriteParsed()
+    vi.advanceTimersByTime(150)
+    expect(fake.linkifier._currentLink).toBeDefined()
+    expect(resetSpy).not.toHaveBeenCalled()
+
+    isBufferValid.mockReturnValue(false)
+    vi.advanceTimersByTime(150)
+    expect(fake.linkifier._currentLink).toBeUndefined()
+    expect(fake.linkifier._lastBufferCell).toBeUndefined()
+    expect(resetSpy).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(600)
+    expect(isBufferValid).toHaveBeenCalledTimes(2)
   })
 
   it('cancels the pending reset and detaches the listener on dispose', () => {
@@ -147,7 +157,6 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     expect(fake.listenerDisposed()).toBe(true)
 
     vi.advanceTimersByTime(500)
-    // Disposed before the timer fired: no reset, cache untouched.
     expect(resetSpy).not.toHaveBeenCalled()
     expect(fake.linkifier._lastBufferCell).toEqual({ x: 3, y: 4 })
   })

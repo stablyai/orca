@@ -1,5 +1,4 @@
-// The queued-message part of the agent-session wire: the published draft cards,
-// the queue's pause beside them, and the draft mutations' answers.
+// Publish queued cards, queue pause and draft mutation results together.
 
 import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
@@ -9,20 +8,14 @@ export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
 
 export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
 
-/** The whole queue is paused and sends nothing on its own: 'stopped' — the user interrupted
- *  ("Queue paused because you interrupted"). Resume (`agentSession.queuedMessagesResume`), or any
- *  turn starting, lifts it; Send-now on one card sends that card and leaves the rest paused until
- *  its turn starts. A /clear or a reopen also holds cards until the chat's next turn, but nothing
- *  runs then, so neither is published. A client treats an unknown reason as a plain pause, so a
- *  newer host can add one. */
+/** stopped pauses all automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
 export type AgentSessionQueuePause = { reason: 'stopped' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {
   /** Null when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null
-  /** The card the queue sends next once nothing runs, null while anything holds the queue.
-   *  Absent from an older host, read as null. */
+  /** Next automatically sent card once unblocked; null while held, and when absent on older hosts. */
   nextQueuedMessageId?: string | null
 }
 
@@ -31,8 +24,7 @@ export type AgentSessionQueuedMessagesResumeResult = {
   resumed: boolean
 }
 
-/** One draft the host holds for this conversation, published whole-list on the
- *  subscribe stream and on history pages. Text-only v1. */
+/** Publish whole card lists on history/subscribe; image cards require the reader's agent-session.queued-image-cards.v1 capability. */
 export type AgentSessionQueuedMessage = {
   messageId: string
   position: number
@@ -40,36 +32,27 @@ export type AgentSessionQueuedMessage = {
   state: 'waiting' | 'returned'
   /** This one card is held, whatever the queue's pause: its conversion failed. */
   paused?: true
-  /** Why it is held, as a marker the client localizes: 'send_failed' ("couldn't send"); only an
-   *  explicit Send releases it. A client must treat an unknown marker as a plain hold, so a newer
-   *  host can add one. The queue-level pause is `queuePause`, published beside the list. */
+  /** send_failed needs explicit Send; unknown markers remain held. queuePause is separate and published with the list. */
   pausedReason?: AgentSessionQueuedMessagePausedReason
-  /** A returned card's refusal: the `reason` and `rejection` pair its submission settled with.
-   *  Only a failure returns a card; a draft a Stop or restart took back waits again. Clients classify it from `returnedRejection` (falling back to `returnedReason` when a host
-   *  wrote no fact) exactly as they classify a rejected submission's `rejection`, e.g.
-   *  `classifyDispatchRejection({ reason: returnedReason, rejection: returnedRejection })`. */
+  /** Only failed submissions return cards with reason/rejection; Stop/restart withdrawals wait again. Classify returnedRejection with returnedReason as the legacy fallback, exactly as submission rejection. */
   returnedReason?: string | null
   returnedRejection?: UnreadAgentSessionFailureFact
 }
 
-/** No body: the card leaving the published list IS the outcome, so a lost
- *  answer needs no re-ask and no text ever rides the wire back. */
+/** Removal from the published list is the outcome; no reply body/text or re-ask after a lost answer. */
 export type AgentSessionQueuedMessageDeleteResult =
   | { deleted: true; messageId: string }
   /** `dispatched` means it already became a submission; `missing` covers a
    *  pruned tombstone. Replays answer from tombstone receipts. */
   | { deleted: false; messageId: string; disposition: 'dispatched' | 'withdrawn' | 'missing' }
 
-/** `agentSession.queuedMessageUpdate` (`agent-session.queued-message-edit.v1`). `unchanged`: the
- *  card already reads as asked, which is also how a resent Save whose answer was lost succeeds.
- *  `changed`: someone else's edit landed first; nothing was overwritten. */
+/** queuedMessageUpdate: unchanged also acknowledges a lost-reply Save retry; changed means a competing edit won without being overwritten. */
 export type AgentSessionQueuedMessageUpdateResult =
   | { status: 'updated' | 'unchanged'; messageId: string; fingerprint: string }
   | { status: 'changed' | 'not-editable'; messageId: string }
   | { status: 'gone'; messageId: string; disposition: 'dispatched' | 'withdrawn' | 'missing' }
 
-/** `agentSession.queuedMessageEditHold`: one editor's lease, keyed by the authenticated caller and
- *  `editId`. It expires on its own; renewing extends it, and release frees only this editor's. */
+/** Edit lease keyed by authenticated caller/editId; renewal extends expiry, release frees only that editor's hold. */
 export type AgentSessionQueuedMessageEditHoldParams = {
   sessionId: string
   messageId: string

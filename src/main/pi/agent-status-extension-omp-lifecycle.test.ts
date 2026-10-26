@@ -96,7 +96,7 @@ describe('OMP agent_end contract', () => {
   it.each(OMP_RUNTIME_CASES)(
     'settles a completed %s turn without waiting for ctx.isIdle',
     async (_name, args) => {
-      // Why: absent payload and absent flag are both terminal for a version that cannot send one.
+      // Older versions cannot send willContinue; missing payload/flag must still settle.
       for (const event of [{ willContinue: false }, {}, undefined]) {
         const harness = createAgentStatusExtensionHarness(args)
         const context = { isIdle: vi.fn(() => false) }

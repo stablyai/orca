@@ -105,40 +105,7 @@
       "status": "ready",
       "transcriptLoading": false
     },
-    "a5609c6d15fc": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": "Unknown method",
-      "hasMore": false,
-      "loadingEarlier": false,
-      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
-      "status": "error",
-      "transcriptLoading": false
-    },
-    "b96b63e4aaf3": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": "outer refused",
-      "hasMore": false,
-      "loadingEarlier": false,
-      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
-      "status": "error",
-      "transcriptLoading": false
-    },
-    "d53372f95573": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": "",
-      "hasMore": false,
-      "loadingEarlier": false,
-      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
-      "status": "error",
-      "transcriptLoading": false
-    },
-    "d83fbb18104a": {
+    "911b3f485409": {
       "name": "nativeChat.readSession#1",
       "ordinal": 2,
       "args": [
@@ -159,7 +126,8 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
           }
         }
       ],
@@ -203,7 +171,45 @@
         }
       }
     },
-    "dadae0a56731": {
+    "a5609c6d15fc": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": "Unknown method",
+      "hasMore": false,
+      "loadingEarlier": false,
+      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
+      "status": "error",
+      "transcriptLoading": false
+    },
+    "b96b63e4aaf3": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": "outer refused",
+      "hasMore": false,
+      "loadingEarlier": false,
+      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
+      "status": "error",
+      "transcriptLoading": false
+    },
+    "d53372f95573": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": "",
+      "hasMore": false,
+      "loadingEarlier": false,
+      "messageIds": ["m-1", "m-2", "m-3", "m-4"],
+      "status": "error",
+      "transcriptLoading": false
+    },
+    "e4483b4ab66e": {
+      "name": "nativeChat.unsubscribe#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
+    },
+    "e88c218171fa": {
       "name": "nativeChat.readSession#1",
       "ordinal": 2,
       "args": [
@@ -224,7 +230,8 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
           }
         }
       ],
@@ -232,11 +239,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "e4483b4ab66e": {
-      "name": "nativeChat.unsubscribe#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -290,7 +292,7 @@
       {
         "id": "native-chat-page-earlier.prelude:paging",
         "observation": {
-          "sender": ["dadae0a56731"],
+          "sender": ["e88c218171fa"],
           "payloads": ["456781b97acc", "08ef53d83e8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -303,7 +305,7 @@
       {
         "id": "native-chat-page-earlier.prelude:paged",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -316,7 +318,7 @@
       {
         "id": "native-chat-page-earlier.prelude:re-subscribed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -330,7 +332,7 @@
       {
         "id": "native-chat-page-earlier.normal:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -344,7 +346,7 @@
       {
         "id": "native-chat-page-earlier.normal:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -365,7 +367,7 @@
       {
         "id": "native-chat-page-earlier.result-absent:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -379,7 +381,7 @@
       {
         "id": "native-chat-page-earlier.result-absent:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -400,7 +402,7 @@
       {
         "id": "native-chat-page-earlier.result-null:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -414,7 +416,7 @@
       {
         "id": "native-chat-page-earlier.result-null:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -435,7 +437,7 @@
       {
         "id": "native-chat-page-earlier.inner-ok-missing:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -449,7 +451,7 @@
       {
         "id": "native-chat-page-earlier.inner-ok-missing:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -470,7 +472,7 @@
       {
         "id": "native-chat-page-earlier.inner-false-string-error:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -484,7 +486,7 @@
       {
         "id": "native-chat-page-earlier.inner-false-string-error:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -505,7 +507,7 @@
       {
         "id": "native-chat-page-earlier.inner-false-object-error:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -519,7 +521,7 @@
       {
         "id": "native-chat-page-earlier.inner-false-object-error:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": [
             "456781b97acc",
             "08ef53d83e8c",
@@ -540,7 +542,7 @@
       {
         "id": "native-chat-page-earlier.outer-refused:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -554,7 +556,7 @@
       {
         "id": "native-chat-page-earlier.outer-refused:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -569,7 +571,7 @@
       {
         "id": "native-chat-page-earlier.outer-refused-no-message:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -583,7 +585,7 @@
       {
         "id": "native-chat-page-earlier.outer-refused-no-message:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -598,7 +600,7 @@
       {
         "id": "native-chat-page-earlier.method-not-found:replayed",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -612,7 +614,7 @@
       {
         "id": "native-chat-page-earlier.method-not-found:unmounted",
         "observation": {
-          "sender": ["d83fbb18104a"],
+          "sender": ["911b3f485409"],
           "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",

@@ -2,12 +2,12 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import {
   getAgentRowGeneratedTitleText,
   orchestrationLabelsMatchLiveDispatch
-} from '@/lib/agent-row-primary-text'
+} from '../../../../shared/agent-row-primary-text'
 import {
   mergeCurrentOrchestrationContext,
   orchestrationMapsEqual

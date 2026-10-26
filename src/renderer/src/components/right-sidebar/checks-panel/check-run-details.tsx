@@ -9,14 +9,15 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import { CheckJobLogTail } from '../check-job-log-tail'
 import { translate } from '@/i18n/i18n'
+import { checkJobIdentities } from '@/components/editor/check-details-reading-cache'
+import { resolveStepOutcome } from '@/components/editor/check-job-step-status'
 import {
   type CheckDetailsLoadState,
   type CheckDetailsStickySurface,
   formatCheckTimestamp,
   getCheckConclusion,
   getCheckDetailsStickySurfaceClass,
-  getCheckStatusLabel,
-  isFailureState
+  getCheckStatusLabel
 } from './check-details-model'
 
 function ViewFullCheckDetailsButton({
@@ -27,13 +28,7 @@ function ViewFullCheckDetailsButton({
   label: string
 }): React.JSX.Element {
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="xs"
-      className="h-6 min-w-[7.25rem] shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-      onClick={onClick}
-    >
+    <Button type="button" variant="outline" size="xs" className="shrink-0" onClick={onClick}>
       <PanelRight className="size-3" />
       {label}
     </Button>
@@ -55,7 +50,7 @@ export function CheckRunDetails({
   checkDetailsContextKey: string
   worktreeId: string | null
   detailsStickySurface?: CheckDetailsStickySurface
-  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  /** Read the asynchronously filled ref on demand; a render-time value can be stale. */
   getGitLabProjectRef?: () => GitLabProjectRef | null
   githubRepository?: GitHubRepositoryIdentity | null
   onRetry: () => void
@@ -69,26 +64,16 @@ export function CheckRunDetails({
     status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
     conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
   }
-  const failedJobs =
-    details?.jobs.filter((job) => {
-      const state = job.conclusion ?? job.status
-      return isFailureState(state)
-    }) ?? []
-  const jobs = failedJobs.length > 0 ? failedJobs : (details?.jobs ?? [])
+  const entries = checkJobIdentities(details?.jobs ?? [])
+  const failedEntries = entries.filter(({ job }) => resolveStepOutcome(job) === 'failure')
+  const jobs = failedEntries.length > 0 ? failedEntries : entries
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0
   const hasJobs = jobs.length > 0
-  const hasLogTail = jobs.some((job) => Boolean(job.logTail))
-
-  // Why: wait until inline details finish loading before switching to the logs label
-  // so the sticky button does not resize mid-fetch.
-  const fullDetailsLabel =
-    !state?.loading && hasLogTail
-      ? translate('auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7', 'View full logs')
-      : translate(
-          'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-          'View full details'
-        )
+  const fullDetailsLabel = translate(
+    'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+    'View full details'
+  )
 
   const openFullDetailsTab = (): void => {
     if (!worktreeId) {
@@ -112,15 +97,14 @@ export function CheckRunDetails({
   return (
     <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
       {worktreeId && (
-        // Why: inline check details can be long; pinning the affordance keeps it
-        // visible while scrolling through annotations and job output.
+        // Keep the action reachable while scrolling long annotations and output.
         <div
           className={cn(
             'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3 backdrop-blur-sm',
             getCheckDetailsStickySurfaceClass(detailsStickySurface)
           )}
         >
-          <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+          <span className="min-w-0 flex-1 truncate text-2xs font-medium text-foreground">
             {check.name}
           </span>
           <ViewFullCheckDetailsButton label={fullDetailsLabel} onClick={handleOpenFullDetails} />
@@ -128,7 +112,7 @@ export function CheckRunDetails({
       )}
       {state?.loading && !state.error ? (
         <div role="status" aria-live="polite" className="flex min-w-0 flex-col gap-2 py-1.5">
-          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
             {translate(
               'auto.components.right.sidebar.checks.panel.content.1f2b980522',
@@ -138,7 +122,7 @@ export function CheckRunDetails({
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-2.5 py-1.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-muted-foreground">
             <span>
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.a54ae21c6f',
@@ -186,7 +170,7 @@ export function CheckRunDetails({
 
           {state?.error && (
             <div role="alert" className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 break-words text-[12px] text-destructive">
+              <span className="min-w-0 flex-1 break-words text-xs text-destructive">
                 {state.error}
               </span>
               <Button
@@ -209,145 +193,149 @@ export function CheckRunDetails({
             </div>
           )}
 
-          {hasOutput && (
-            <div className="min-w-0">
-              {details?.title && (
-                <div className="mb-1 text-[12px] font-medium text-foreground">{details.title}</div>
-              )}
-              {details?.summary && (
-                <CommentMarkdown
-                  content={details.summary}
-                  variant="document"
-                  className="min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                />
-              )}
-              {details?.text && (
-                <CommentMarkdown
-                  content={details.text}
-                  variant="document"
-                  className="mt-2 min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                />
-              )}
-            </div>
-          )}
-
-          {hasAnnotations && (
-            <div className="min-w-0 border-t border-border/60 pt-2">
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.f2fe8a4e8f',
-                  'Annotations'
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                {details!.annotations.map((annotation, index) => (
-                  <div key={`${annotation.path ?? 'annotation'}-${index}`} className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                        {annotation.path ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.cdbfda4dec',
-                            'Annotation'
-                          )}
-                        {annotation.startLine ? `:${annotation.startLine}` : ''}
-                      </span>
-                      {annotation.annotationLevel && (
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {annotation.annotationLevel}
-                        </span>
+          {(resolveStepOutcome(details ?? check) === 'failure'
+            ? ['jobs', 'output', 'annotations']
+            : ['output', 'annotations', 'jobs']
+          ).map((section) => {
+            if (section === 'jobs') {
+              return hasJobs ? (
+                <div key="jobs" className="min-w-0 border-t border-border/60 pt-2">
+                  <div className="mb-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {failedEntries.length > 0
+                      ? translate(
+                          'auto.components.right.sidebar.checks.panel.content.066fedd446',
+                          'Failed jobs'
+                        )
+                      : translate(
+                          'auto.components.right.sidebar.checks.panel.content.49731703ea',
+                          'Jobs'
+                        )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {jobs.map(({ job, identity }) => (
+                      <div key={identity} className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                            {job.name}
+                          </span>
+                          <span className="shrink-0 text-2xs text-muted-foreground">
+                            {job.conclusion ??
+                              job.status ??
+                              translate(
+                                'auto.components.right.sidebar.checks.panel.content.ee07b33924',
+                                'unknown'
+                              )}
+                          </span>
+                        </div>
+                        {job.steps.length > 0 && (
+                          <div className="mt-1 grid gap-0.5 pl-2">
+                            {job.steps
+                              .filter((step) => resolveStepOutcome(step) === 'failure')
+                              .map((step) => (
+                                <div
+                                  key={step.name}
+                                  className="flex min-w-0 items-center gap-2 text-2xs text-muted-foreground"
+                                >
+                                  <span className="min-w-0 flex-1 truncate">{step.name}</span>
+                                  <span className="shrink-0">{step.conclusion ?? step.status}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                        <CheckJobLogTail job={job} surface="sidebar" jobIdentity={identity} />
+                      </div>
+                    ))}
+                  </div>
+                  {(details?.jobs.length ?? 0) >= 100 && (
+                    <div className="mt-1.5 text-3xs text-muted-foreground">
+                      {translate(
+                        'auto.components.right.sidebar.checks.panel.content.a2fb3f4408',
+                        'Showing first 100 jobs'
                       )}
                     </div>
-                    {annotation.title && (
-                      <div className="mt-0.5 text-[12px] font-medium text-foreground">
-                        {annotation.title}
-                      </div>
-                    )}
-                    <div className="mt-0.5 break-words text-[12px] text-foreground">
-                      {annotation.message}
-                    </div>
-                    {annotation.rawDetails && (
-                      <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
-                        {annotation.rawDetails}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {details!.annotations.length >= 20 && (
-                <div className="mt-1.5 text-[10px] text-muted-foreground">
-                  {translate(
-                    'auto.components.right.sidebar.checks.panel.content.df137989b3',
-                    'Showing first 20 annotations'
                   )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {hasJobs && (
-            <div className="min-w-0 border-t border-border/60 pt-2">
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {failedJobs.length > 0
-                  ? translate(
-                      'auto.components.right.sidebar.checks.panel.content.066fedd446',
-                      'Failed jobs'
-                    )
-                  : translate(
-                      'auto.components.right.sidebar.checks.panel.content.49731703ea',
-                      'Jobs'
+              ) : null
+            }
+            if (section === 'annotations') {
+              return hasAnnotations ? (
+                <div key="annotations" className="min-w-0 border-t border-border/60 pt-2">
+                  <div className="mb-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {translate(
+                      'auto.components.right.sidebar.checks.panel.content.f2fe8a4e8f',
+                      'Annotations'
                     )}
-              </div>
-              <div className="flex flex-col gap-2">
-                {jobs.map((job, index) => (
-                  <div key={`${job.name}-${index}`} className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
-                        {job.name}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {job.conclusion ??
-                          job.status ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.ee07b33924',
-                            'unknown'
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {details!.annotations.map((annotation, index) => (
+                      <div key={`${annotation.path ?? 'annotation'}-${index}`} className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
+                            {annotation.path ??
+                              translate(
+                                'auto.components.right.sidebar.checks.panel.content.cdbfda4dec',
+                                'Annotation'
+                              )}
+                            {annotation.startLine ? `:${annotation.startLine}` : ''}
+                          </span>
+                          {annotation.annotationLevel && (
+                            <span className="shrink-0 text-2xs text-muted-foreground">
+                              {annotation.annotationLevel}
+                            </span>
                           )}
-                      </span>
-                    </div>
-                    {job.steps.length > 0 && (
-                      <div className="mt-1 grid gap-0.5 pl-2">
-                        {job.steps
-                          .filter((step) => {
-                            const state = step.conclusion ?? step.status
-                            return isFailureState(state)
-                          })
-                          .map((step) => (
-                            <div
-                              key={step.name}
-                              className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground"
-                            >
-                              <span className="min-w-0 flex-1 truncate">{step.name}</span>
-                              <span className="shrink-0">{step.conclusion ?? step.status}</span>
-                            </div>
-                          ))}
+                        </div>
+                        {annotation.title && (
+                          <div className="mt-0.5 text-xs font-medium text-foreground">
+                            {annotation.title}
+                          </div>
+                        )}
+                        <div className="mt-0.5 break-words text-xs text-foreground">
+                          {annotation.message}
+                        </div>
+                        {annotation.rawDetails && (
+                          <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-2xs text-muted-foreground">
+                            {annotation.rawDetails}
+                          </pre>
+                        )}
                       </div>
-                    )}
-                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
+                    ))}
                   </div>
-                ))}
-              </div>
-              {(details?.jobs.length ?? 0) >= 100 && (
-                <div className="mt-1.5 text-[10px] text-muted-foreground">
-                  {translate(
-                    'auto.components.right.sidebar.checks.panel.content.a2fb3f4408',
-                    'Showing first 100 jobs'
+                  {details!.annotations.length >= 20 && (
+                    <div className="mt-1.5 text-3xs text-muted-foreground">
+                      {translate(
+                        'auto.components.right.sidebar.checks.panel.content.df137989b3',
+                        'Showing first 20 annotations'
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+              ) : null
+            }
+            return hasOutput ? (
+              <div key="output" className="min-w-0">
+                {details?.title && (
+                  <div className="mb-1 text-xs font-medium text-foreground">{details.title}</div>
+                )}
+                {details?.summary && (
+                  <CommentMarkdown
+                    content={details.summary}
+                    variant="document"
+                    className="min-w-0 max-w-full overflow-hidden break-words text-xs leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+                {details?.text && (
+                  <CommentMarkdown
+                    content={details.text}
+                    variant="document"
+                    className="mt-2 min-w-0 max-w-full overflow-hidden break-words text-xs leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+              </div>
+            ) : null
+          })}
 
           {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
-            <div className="text-[12px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {getCheckConclusion(detailsStatusCheck) === 'action_required'
                 ? translate(
                     'auto.components.right.sidebar.checks.panel.content.actionRequiredHint',

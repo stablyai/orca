@@ -34,6 +34,7 @@ export function SourceControlPanelDialogs({
     refreshBranchCompare,
     resolveConflictsComposerOpen,
     resolveConflictsPrompt,
+    resolveConflictsRecoveryContext,
     resolvedPendingDiffCommentsClear,
     saveLaunchActionDefault,
     setBaseRefDialogOpen,
@@ -83,6 +84,7 @@ export function SourceControlPanelDialogs({
       }}
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
+      recoveryContext={resolveConflictsRecoveryContext}
       onResolveConflictsComposerOpenChange={setResolveConflictsComposerOpen}
       resolveConflictsPrompt={resolveConflictsPrompt}
       worktreeId={activeWorktreeId}

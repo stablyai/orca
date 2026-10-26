@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { WINDOWS_BOUNDARY_TESTS } from './pr-package-test-paths.mjs'
 
 const read = (path) => parse(readFileSync(path, 'utf8'))
 const workflow = (name) => read(`.github/workflows/${name}.yml`)
@@ -11,9 +13,6 @@ describe('CI dependency download caches', () => {
   it('scopes desktop stores to the root lockfile and lets mixed installs opt in', () => {
     expect(action.inputs['cache-dependency-path'].default).toBe('pnpm-lock.yaml')
     for (const step of action.runs.steps.filter((step) => step.uses === 'actions/setup-node@v6')) {
-      expect(step.with.cache).toBe(
-        "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"
-      )
       expect(step.with['cache-dependency-path']).toBe('${{ inputs.cache-dependency-path }}')
       expect(step.with['package-manager-cache']).toBe(false)
     }
@@ -50,12 +49,6 @@ describe('CI dependency download caches', () => {
     const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
     const restore = action.runs.steps.find(
       (step) => step.name === 'Restore pnpm download store without saving'
-    )
-    expect(restore.if).toBe(
-      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
-    )
-    expect(resolve.if).toBe(
-      `${restore.if} || (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only == 'true')`
     )
     expect(restore.uses).toBe('actions/cache/restore@v5')
     expect(restore.with.path).toBe('${{ steps.pnpm-store.outputs.path }}')
@@ -276,7 +269,7 @@ describe('CI dependency download caches', () => {
     }
   )
 
-  it('opts Windows server consumers out while preserving the main warmer store writer', () => {
+  it('opts Windows preparation out of download stores while retaining native caches', () => {
     const installer = './.github/actions/install-node-dependencies'
     const persistence = workflow('node-server-tests').jobs.persistence.steps.find(
       (step) => step.uses === installer
@@ -289,14 +282,171 @@ describe('CI dependency download caches', () => {
     ).jobs
     const warmer = platformJobs['warm-windows'].steps.find((step) => step.uses === installer)
     expect(action.inputs['cache-pnpm-store'].default).toBe('true')
-    expect(persistence.with['cache-pnpm-store']).toBe("${{ runner.os != 'Windows' }}")
+    expect(persistence.with['cache-pnpm-store']).toBe(
+      "${{ !inputs.build_template && runner.os != 'Windows' }}"
+    )
     expect(ssh.with['cache-pnpm-store']).toBe('false')
-    expect(warmer.with['cache-pnpm-store']).toBeUndefined()
-    expect(warmer.with['cache-pnpm-store-lookup-only']).toBe('true')
+    expect(warmer.with['cache-pnpm-store']).toBe('false')
+    expect(warmer.with['native-runtime']).toBe('node')
     expect(persistence.with['cache-pnpm-store-lookup-only']).toBe('true')
-    for (const job of [workflow('ci-cache-warmup').jobs.warm, platformJobs['warm-linux-arm']]) {
+    for (const job of [workflow('ci-cache-warmup').jobs.warm, platformJobs['warm-linux-runtime']]) {
       const install = job.steps.find((step) => step.uses?.includes('install-node-dependencies'))
       expect(install.with['cache-pnpm-store-lookup-only']).toBe('true')
+    }
+  })
+
+  it('keeps PR warmer validation within the workflow family that runs it', () => {
+    const shared = workflow('ci-cache-warmup')
+    const platforms = workflow('ci-cache-warmup-platforms')
+    expect(shared.on.pull_request.paths).toEqual([
+      '.github/workflows/ci-cache-warmup.yml',
+      '.github/actions/prepare-headless-compiler/**',
+      'config/scripts/headless-detector-compiler-cache.mjs',
+      '.github/actions/prepare-wayland-clipboard/**'
+    ])
+    expect(platforms.on.pull_request.paths).toEqual([
+      '.github/workflows/ci-cache-warmup-platforms.yml',
+      '.github/workflows/ci-cache-warmup-platform-jobs.yml'
+    ])
+    expect(platforms.concurrency).toEqual({
+      group: 'ci-cache-warmup-platforms-${{ github.event.pull_request.number || github.ref }}',
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}"
+    })
+    expect(shared.jobs['warm-platforms'].uses).toBe(platforms.jobs['warm-platforms'].uses)
+    expect(shared.on.schedule).toEqual([{ cron: '41 */6 * * *' }])
+    expect(shared.on).toHaveProperty('workflow_dispatch')
+    for (const producer of [shared, platforms]) {
+      expect(producer.on.push.branches).toEqual(['main'])
+      expect(producer.on.push.paths).toEqual(
+        expect.arrayContaining([
+          '.github/workflows/ci-cache-warmup.yml',
+          '.github/workflows/ci-cache-warmup-platforms.yml',
+          '.github/workflows/ci-cache-warmup-platform-jobs.yml',
+          '.github/actions/install-node-dependencies/**',
+          '.github/actions/prepare-native-runtime/**',
+          'native/windows-security/**',
+          'pnpm-lock.yaml'
+        ])
+      )
+    }
+  })
+
+  it.each([
+    ['pull_request', false, true, false, false],
+    ['pull_request', true, false, false, false],
+    ['push', false, true, true, false],
+    ['schedule', false, true, true, true],
+    ['workflow_dispatch', false, true, true, true]
+  ])(
+    'retains eligible cache producers and Windows validation on %s (draft %s)',
+    (event, draft, admitted, armRuns, sharedPlatforms) => {
+      const shared = workflow('ci-cache-warmup')
+      const platformWorkflow = workflow('ci-cache-warmup-platforms')
+      const platforms = read(platformWorkflow.jobs['warm-platforms'].uses)
+      const contextFor = (isDraft) => ({
+        github: {
+          event_name: event,
+          event: event === 'pull_request' ? { pull_request: { draft: isDraft } } : {}
+        }
+      })
+      const context = contextFor(draft)
+      expect(runInNewContext(platforms.jobs['warm-linux-runtime'].if, context)).toBe(armRuns)
+      expect(runInNewContext(shared.jobs['warm-platforms'].if, context)).toBe(sharedPlatforms)
+      for (const guard of [shared.jobs.warm.if, platformWorkflow.jobs['warm-platforms'].if]) {
+        expect(runInNewContext(guard, context)).toBe(admitted)
+        expect(runInNewContext(guard, contextFor(!draft))).toBe(event !== 'pull_request' || draft)
+      }
+      expect(platforms.jobs['warm-windows'].if).toBeUndefined()
+      expect(platforms.jobs['warm-windows'].strategy.matrix.os).toEqual([
+        'windows-2022',
+        'windows-11-arm',
+        'windows-2025'
+      ])
+    }
+  )
+
+  it.each([
+    ['windows-2022', 'X64', true],
+    ['windows-11-arm', 'ARM64', false],
+    ['windows-2025', 'X64', false]
+  ])('warms native addons without unused CLI builds on %s', (os, arch, cli) => {
+    const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
+    const warm = platforms.jobs['warm-windows']
+    const context = { runner: { arch }, matrix: { os } }
+    for (const name of ['Cache Windows CLI launcher', 'Build the Windows native executables']) {
+      const step = warm.steps.find((step) => step.name === name)
+      expect(step, name).toBeDefined()
+      expect(runInNewContext(step.if, context)).toBe(cli)
+    }
+    const consumer = workflow('wsl-orcad-e2e').jobs.wsl2
+    const installer = './.github/actions/install-node-dependencies'
+    expect(consumer['runs-on']).toBe('windows-2025')
+    expect(warm.steps.find((step) => step.uses === installer).with['native-runtime']).toBe(
+      consumer.steps.find((step) => step.uses === installer).with['native-runtime']
+    )
+  })
+
+  it('validates the omitted Linux warmer preparation in the real PR consumers', () => {
+    const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
+    const warm = platforms.jobs['warm-linux-runtime']
+    const pr = workflow('pr')
+    const units = workflow('unit-tests').jobs.test
+    const installer = './.github/actions/install-node-dependencies'
+    const warmInstall = warm.steps.find((step) => step.uses === installer)
+    const unitInstall = units.steps.find((step) => step.uses === installer)
+    expect(warm['runs-on']).toBe('${{ matrix.runner }}')
+    expect(warm.strategy.matrix.runner).toEqual([
+      'blacksmith-4vcpu-ubuntu-2404-arm',
+      pr.jobs.test.with.runner
+    ])
+    expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
+    expect(pr.jobs.test.with.runner).toBe('blacksmith-8vcpu-ubuntu-2404')
+    expect(units['runs-on']).toBe('${{ inputs.runner }}')
+    expect(JSON.parse(pr.jobs.test.with.node_versions)).toEqual(['24'])
+    expect(warmInstall.if).toBeUndefined()
+    expect(unitInstall.if).toBeUndefined()
+    expect(warmInstall.with['native-runtime']).toBe('node')
+    expect(unitInstall.with['native-runtime']).toBe(warmInstall.with['native-runtime'])
+    expect(warmInstall.with['node-version']).toBe('24')
+    expect(unitInstall.with['node-version']).toBe('${{ matrix.node }}')
+    expect(unitInstall.with['cache-electron-package']).toBe(
+      warmInstall.with['cache-electron-package']
+    )
+    const preflightInstalls = pr.jobs.preflight.steps.filter((step) => step.uses === installer)
+    expect(preflightInstalls.map((step) => step.if)).toEqual([
+      "needs.code_paths.outputs.mobile_dependencies != 'true'",
+      "needs.code_paths.outputs.mobile_dependencies == 'true'"
+    ])
+    for (const step of preflightInstalls) {
+      expect(step.with['native-runtime']).toBe('node')
+      expect(step.with['node-version']).toBe('24')
+    }
+    const populate = 'node config/scripts/install-electron-package-binary.mjs'
+    const unitPopulate = units.steps.find((step) => step.run === populate)
+    expect(unitPopulate.if).toBeUndefined()
+    expect(warm.steps.map((step) => step.uses ?? step.run)).toEqual([
+      'actions/checkout@v6',
+      installer,
+      populate,
+      'node config/scripts/ensure-native-runtime.mjs --check-only'
+    ])
+    const native = read('.github/actions/prepare-native-runtime/action.yml')
+    const identity = native.runs.steps.find((step) => step.id === 'native-cache-scope')
+    const inputs = [...identity.env.NATIVE_SOURCE_HASH.matchAll(/'([^']+)'/g)].map(
+      (match) => match[1]
+    )
+    for (const path of [
+      ...inputs,
+      '.github/actions/install-node-dependencies/action.yml',
+      ...workflow('ci-cache-warmup-platforms').on.pull_request.paths,
+      '.github/workflows/ci-cache-warmup.yml'
+    ]) {
+      expect(classifyPrJobs([path], { allowMobileCiTools: true }), path).toMatchObject({
+        static_analysis: true,
+        typecheck: true,
+        test: true,
+        mobile_ci_tools: false
+      })
     }
   })
 
@@ -328,7 +478,7 @@ describe('CI dependency download caches', () => {
     }
   })
 
-  it('seeds the existing Linux PR tool cache from successful main x64 release builds', () => {
+  it('shares Linux PR downloads with main x64 release builds across runner pools', () => {
     const packaging = workflow('pr').jobs.package
     const consumer = packaging.steps.find(
       (step) => step.name === 'Cache electron-builder downloads'
@@ -340,7 +490,7 @@ describe('CI dependency download caches', () => {
     )
     const linux = release.strategy.matrix.include.find((entry) => entry.platform === 'linux-x64')
 
-    expect(packaging['runs-on']).toBe(linux.os)
+    expect([linux.os, 'blacksmith-4vcpu-ubuntu-2404']).toContain(packaging['runs-on'])
     expect(writer.if).toBe("matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'")
     expect(writer.uses).toBe('actions/cache@v5')
     expect(writer.with.path).toBe(consumer.with.path)
@@ -391,8 +541,7 @@ describe('release install targets', () => {
     }
   )
 
-  // A transient `read ECONNRESET` fetching this Node version's headers for
-  // native/windows-registry's node-gyp rebuild failed a blocking golden gate and the cut.
+  // Transient Node-header ECONNRESET once failed windows-registry rebuild and blocked the release cut.
   it('retries every release-cut install so one transient download cannot fail a cut', () => {
     const installs = installSteps('release-cut')
     expect(installs.length).toBeGreaterThan(0)
@@ -423,9 +572,14 @@ describe('release install targets', () => {
   it('keeps installed Windows addon checks in the Windows CI lane', () => {
     const steps = Object.values(workflow('pr').jobs).flatMap((job) => job.steps ?? [])
     const test = steps.find((step) => step.name === 'Test Windows-specific boundaries')
-    expect(test.run).toContain('config/scripts/windows-process-tree-gyp-path.test.mjs')
-    expect(test.run).toContain('config/scripts/windows-process-tree-gyp-rebuild.test.mjs')
-    expect(test.run).toContain('config/scripts/package-electron-runtime-contract.test.mjs')
-    expect(test.run).toContain('config/scripts/electron-builder-runtime-resources.test.mjs')
+    expect(test.run).toContain('config/scripts/pr-package-test-paths.mjs')
+    expect(WINDOWS_BOUNDARY_TESTS).toEqual(
+      expect.arrayContaining([
+        'config/scripts/windows-process-tree-gyp-path.test.mjs',
+        'config/scripts/windows-process-tree-gyp-rebuild.test.mjs',
+        'config/scripts/package-electron-runtime-contract.test.mjs',
+        'config/scripts/electron-builder-runtime-resources.test.mjs'
+      ])
+    )
   })
 })

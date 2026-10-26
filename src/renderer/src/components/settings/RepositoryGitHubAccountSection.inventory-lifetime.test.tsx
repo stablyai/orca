@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { GhAccountBindingInventory } from '../../../../shared/github/auth-types'
-import type * as RepositoryGitHubAccountModule from './repository-github-account'
+import type * as RepositoryGitHubAccountModule from './repository/identity/repository-github-account'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 
 const { listAccountsMock, validateBindingMock, storeState } = vi.hoisted(() => {
@@ -19,7 +19,7 @@ const { listAccountsMock, validateBindingMock, storeState } = vi.hoisted(() => {
   return { listAccountsMock: vi.fn(), validateBindingMock: vi.fn(), storeState }
 })
 
-vi.mock('../../store', () => {
+vi.mock('@/store/index', () => {
   const useAppStore = (selector: (state: typeof storeState) => unknown) => selector(storeState)
   useAppStore.getState = () => storeState
   return { useAppStore }
@@ -27,7 +27,7 @@ vi.mock('../../store', () => {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('./repository-github-account', async (importOriginal) => ({
+vi.mock('./repository/identity/repository-github-account', async (importOriginal) => ({
   ...(await importOriginal<typeof RepositoryGitHubAccountModule>()),
   listRepositoryGhBindableAccounts: listAccountsMock,
   validateRepositoryGhAccountBinding: validateBindingMock

@@ -100,6 +100,31 @@ describe('new agent launch routing', () => {
     ).toBe('structured-native-chat')
   })
 
+  it("follows each agent's chat provider switch", () => {
+    const grokHost = {
+      agent: 'grok' as const,
+      hostCapabilities: [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+      ],
+      hostStructuredAgents: ['grok']
+    }
+    expect(route({ agent: 'claude' })).toBe('structured-native-chat')
+    expect(route(grokHost)).toBe('structured-native-chat')
+    expect(
+      route({ ...grokHost, settings: { ...settings, nativeChatProviders: { grok: false } } })
+    ).toBe('terminal-tui')
+    expect(route({ settings: { ...settings, nativeChatProviders: { codex: false } } })).toBe(
+      'terminal-tui'
+    )
+    expect(
+      route({
+        ...grokHost,
+        settings: { ...settings, nativeChatProviders: { grok: true } }
+      })
+    ).toBe('structured-native-chat')
+  })
+
   it.each(['git-worktree', 'folder', 'floating'] as const)(
     'allows a supported local %s workspace',
     (workspaceKind) => expect(route({ workspaceKind })).toBe('structured-native-chat')
@@ -139,7 +164,6 @@ describe('new agent launch routing', () => {
     // A client that never told the server it reads structured sessions keeps the host terminal.
     expect(route({ ...server, clientCapabilities: [] })).toBe('terminal-tui')
     expect(route({ ...server, clientCapabilities: undefined })).toBe('terminal-tui')
-    // The server has not answered yet, or answered without structured sessions.
     expect(route({ ...server, hostCapabilities: null })).toBe('terminal-tui')
     expect(route({ ...server, hostCapabilities: [] })).toBe('terminal-tui')
   })

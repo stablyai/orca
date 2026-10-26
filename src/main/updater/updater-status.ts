@@ -32,8 +32,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     if (this.autoUpdater) {
       this.autoUpdater.allowDowngrade = false
       this.autoUpdater.disableDifferentialDownload = false
-      // Why: a pinned jump forces allowPrerelease on; leaving it set would opt
-      // every later background check into the RC channel behind the user's back.
+      // Pinned jumps enable prereleases; restore the routine channel or future checks silently opt into RC.
       this.autoUpdater.allowPrerelease = this.includePrereleaseActive
     }
   }
@@ -79,7 +78,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
   }
 
   protected decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
-    // Why: only actionable/error states carry the nudge marker so the renderer knows a dismiss should ack the campaign; cycle-boundary states never need it.
+    // Attach campaign IDs only to actionable/error states whose dismissal acknowledges them.
     if (!this.activeUpdateNudgeId) {
       return status
     }
@@ -111,7 +110,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     if (this.awaitingNudgeCheckOutcome) {
       if (status.state === 'available') {
         if (shouldPreserveNudgeForPublishingWindow) {
-          // Why: a last-good available update is only a temporary fallback; dismissing it must not consume the newest-release nudge campaign.
+          // Dismissing a temporary last-good update must not consume the newest-release campaign.
           this.deferPendingUpdateNudgeUntilRetry()
         } else {
           this.awaitingNudgeCheckOutcome = false
@@ -122,10 +121,10 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
         status.state === 'error'
       ) {
         if (shouldPreserveNudgeForPublishingWindow) {
-          // Why: last-good checks can say "not available" while the campaign's newest release is still publishing.
+          // Last-good not-available may precede the newest campaign release finishing publication.
           this.deferPendingUpdateNudgeUntilRetry()
         } else {
-          // Why: on no-update, mark the campaign dismissed so a nudge covering already-up-to-date users doesn't re-fire every 30-min poll.
+          // A no-update result consumes the campaign so up-to-date users are not nudged every poll.
           if (this.activeUpdateNudgeId) {
             this._setDismissedUpdateNudgeId?.(this.activeUpdateNudgeId)
           }
@@ -153,7 +152,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       this.clearPublishingWindowLastGoodCheck()
     }
 
-    // Why: reset the in-flight guard once status moves past the window where duplicate download() calls are possible.
+    // Release the duplicate guard after the download-start transition.
     if (
       decoratedStatus.state === 'downloading' ||
       decoratedStatus.state === 'error' ||
@@ -162,7 +161,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       this.downloadInFlight = false
     }
     if (shouldLaunchPendingUserInitiatedCheck) {
-      // Why: a forced status must still land before the queued check restarts the cycle.
+      // Deliver forced status before a queued check starts the next cycle.
       if (options?.force) {
         this.currentStatus = decoratedStatus
         this.mainWindowRef?.webContents.send('updater:status', decoratedStatus)

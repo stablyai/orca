@@ -8,7 +8,7 @@ import {
 } from './palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -82,9 +82,7 @@ export type SimulatorPaletteSearchResult = {
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-// Why search-only: the row icon already says "emulator"; a fixed secondary label
-// crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
-// typing "mobile" / "simulator" still finds emulator tabs.
+// Keep type aliases searchable but undisplayed; the icon already identifies emulator rows without redundant secondary text.
 export const SIMULATOR_TYPE_SEARCH_ALIASES = [
   'mobile emulator tab',
   'mobile emulator',
@@ -137,8 +135,7 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query simulator ordering stays deterministic and context-first;
-// lastActiveAt only breaks ties between equally-ranked query matches.
+// Empty queries use deterministic context order; lastActiveAt only breaks equal-ranked match ties.
 function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -241,8 +238,7 @@ export function buildSearchableSimulatorTabs({
         worktree,
         repoName,
         worktreeSortIndex,
-        // Why: simulator tabs are unified tabs; terminal activeTabId does not
-        // identify the visible emulator tab after split-group activation.
+        // Use unified tab selection; terminal activeTabId cannot identify split-group emulator activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
         isCurrentWorktree: isPaletteCurrentWorktree(
           worktree,
@@ -296,8 +292,7 @@ export function searchSimulatorTabs(
       repoRanges: match.repoRanges,
       worktreeRanges: match.worktreeRanges,
       branchRanges: match.branchRanges,
-      // Ranges are into the alias string, not the row: the icon explains the hit,
-      // so nothing on the row is highlighted from them.
+      // Alias ranges index search-only text; the icon explains the match, so never highlight them on the row.
       typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
       typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
         text: SIMULATOR_TYPE_SEARCH_ALIASES[typeAlias.index] ?? '',

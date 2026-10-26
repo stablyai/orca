@@ -5,9 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CsvViewer from './CsvViewer'
 import { useCsvTableEditor } from './useCsvTableEditor'
 import { parseCsvTextDocument } from './csv-text-document'
-import { flushPendingEditorChange, hasPendingEditorChange } from '../editor-pending-flush'
+import { flushPendingEditorBuffer, hasPendingEditorBufferChange } from '../editor-pending-flush'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({
@@ -103,7 +104,7 @@ describe('editable CSV table', () => {
   it('flushes the active input into the draft for global Save and hot exit', () => {
     const { changes } = setup()
     edit('B', 'pending')
-    act(() => flushPendingEditorChange('csv-edit-test'))
+    act(() => flushPendingEditorBuffer(NO_SHARING, 'csv-edit-test'))
     expect(changes).toHaveBeenCalledWith('\ufeffname,value\r\npending,2\r\nA,1')
   })
 
@@ -162,7 +163,7 @@ describe('editable CSV table', () => {
     fireEvent.keyDown(edit('B', 'saved base'), { key: 'Enter' })
     const source = screen.getByTestId('source').textContent
     const input = edit('A', 'new pending cell')
-    expect(hasPendingEditorChange('csv-edit-test')).toBe(true)
+    expect(hasPendingEditorBufferChange(NO_SHARING, 'csv-edit-test')).toBe(true)
     act(() =>
       window.dispatchEvent(
         new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, {
@@ -171,7 +172,7 @@ describe('editable CSV table', () => {
       )
     )
     fireEvent.keyDown(input, { key: 'Escape' })
-    expect(hasPendingEditorChange('csv-edit-test')).toBe(false)
+    expect(hasPendingEditorBufferChange(NO_SHARING, 'csv-edit-test')).toBe(false)
     expect(screen.getByTestId('dirty').textContent).toBe('false')
     expect(screen.getByTestId('source').textContent).toBe(source)
   })
@@ -357,8 +358,8 @@ describe('editable CSV table', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Edit row/ }), {
       target: { value: 'pending first pane' }
     })
-    expect(hasPendingEditorChange('same-file')).toBe(true)
-    act(() => flushPendingEditorChange('same-file'))
+    expect(hasPendingEditorBufferChange(NO_SHARING, 'same-file')).toBe(true)
+    act(() => flushPendingEditorBuffer(NO_SHARING, 'same-file'))
     expect(first).toHaveBeenCalledWith('header\npending first pane')
     expect(second).not.toHaveBeenCalled()
   })

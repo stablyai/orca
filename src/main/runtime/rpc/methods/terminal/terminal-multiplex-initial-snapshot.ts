@@ -1,4 +1,5 @@
 import {
+  isTerminalSnapshotForcedUnavailable,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
@@ -20,7 +21,8 @@ export type MultiplexPublishedInitialState = {
 export async function publishMultiplexInitialSnapshot(
   state: TerminalMultiplexConnection,
   request: MultiplexSubscribeRequest,
-  stream: TerminalMultiplexStream
+  stream: TerminalMultiplexStream,
+  incarnationId = state.runtime.getPtyExecutionHostMetadata(stream.ptyId).incarnationId
 ): Promise<MultiplexPublishedInitialState | null> {
   const { runtime, emit } = state
   const { ptyId } = stream
@@ -54,7 +56,23 @@ export async function publishMultiplexInitialSnapshot(
   const layoutSeq = runtime.getLayout(ptyId)?.seq
   // Why: layout versions and output offsets are different sequence domains.
   const snapshotOutputSeq = serialized?.seq
+  // Snapshot awaits may outlive the handle binding or the physical shell.
+  if (
+    runtime.resolveLiveLeafForHandle(request.terminal)?.ptyId !== ptyId ||
+    runtime.getPtyExecutionHostMetadata(ptyId).incarnationId !== incarnationId
+  ) {
+    throw new Error('terminal_handle_stale')
+  }
+  let launchResult: ReturnType<typeof runtime.getTerminalLaunchResult>
+  try {
+    launchResult = runtime.getTerminalLaunchResult(ptyId)
+  } catch (error) {
+    console.warn('Terminal launch result unavailable', error)
+  }
   emit({
+    ...(incarnationId && launchResult
+      ? { launchResult: { ...launchResult, ptyId, incarnationId } }
+      : {}),
     type: 'subscribed',
     streamId: request.streamId,
     terminal: request.terminal,
@@ -65,13 +83,14 @@ export async function publishMultiplexInitialSnapshot(
     ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
       capabilities: {
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
         ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
       }
     }),
     ...(stream.inputSessionId !== null
       ? { inputLedgerId: getTerminalInputSequenceLedger(runtime).id }
       : {}),
-    // Why: retained-tail truncation loses history, not the authoritative latest-screen fallback.
+    // Truncated retained history does not invalidate the authoritative latest-screen fallback.
     truncated: initialOutputOverflowed
   })
   sendSnapshotFrames((opcode, payload) => state.sendFrame(request.streamId, opcode, payload), {
@@ -90,9 +109,14 @@ export async function publishMultiplexInitialSnapshot(
     terminalOwner: serialized?.terminalOwner,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-    data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
+    // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
+    data:
+      serialized?.data ??
+      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+        ? `${read.tail.join('\r\n')}\r\n`
+        : '')
   })
-  // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
+  // Seed resize re-stream columns from the initial snapshot the client already rewrapped.
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)

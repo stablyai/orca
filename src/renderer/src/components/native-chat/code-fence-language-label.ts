@@ -4,10 +4,7 @@ import {
   isKnownCodeBlockLanguage
 } from '@/components/editor/rich-markdown-code-block-languages'
 
-/**
- * A fence tag's name: the code block picker's label, else the highlighting
- * catalogue's name for it or its alias (```vue, ```ts), else the tag itself.
- */
+/** Prefer picker labels, then highlighting names/aliases, then the original fence tag. */
 export function getCodeFenceLanguageLabel(tag: string): string {
   const key = tag.trim().toLowerCase()
   if (isKnownCodeBlockLanguage(key)) {

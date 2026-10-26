@@ -122,6 +122,15 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
   })
 
+  it('never claims a tab it found already shown as one to take back', () => {
+    store.getState().createTab(WT, undefined, undefined, {
+      id: TAB_ID,
+      initialLeafId: LEAF_ID,
+      agentLaunchPane: { leafId: LEAF_ID }
+    })
+    expect(publishAgentLaunchTab(request())).toMatchObject({ tabId: TAB_ID, created: false })
+  })
+
   it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
     const generation = () =>
       store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.generation ?? 0
@@ -170,8 +179,7 @@ describe('placement', () => {
     expect(launchTab()?.groupId).toBe(splitGroupId)
   })
 
-  // Activating a workspace with a live tab prunes its empty groups; a CLI's focused launch activates
-  // it, and the split it asked for must still be there to receive the tab.
+  // Activation prunes empty groups; preserve the CLI launch’s requested split until its tab arrives.
   it.each(
     (['none', 'focus-window', 'focus-in-workspace', 'reveal-owner'] as const).flatMap((viewer) => [
       { viewer, focused: 'split' as const },

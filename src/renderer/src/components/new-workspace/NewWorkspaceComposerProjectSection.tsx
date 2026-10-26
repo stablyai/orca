@@ -27,6 +27,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedRepoConnectInProgress'
   | 'onConnectSelectedRepo'
   | 'selectedProjectHostSetupId'
+  | 'selectedRepoExecutionHostId'
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
@@ -64,6 +65,7 @@ export function NewWorkspaceComposerProjectSection({
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
   selectedProjectHostSetupId,
+  selectedRepoExecutionHostId,
   handleProjectHostSetupChange,
   ephemeralVmRecipes,
   selectedEphemeralVmRecipeId = null,
@@ -150,6 +152,7 @@ export function NewWorkspaceComposerProjectSection({
           <RunTargetCombobox
             hostOptions={projectHostSetupOptions ?? []}
             hostValue={selectedProjectHostSetupId ?? null}
+            hostExecutionHostId={selectedRepoExecutionHostId}
             onHostChange={handleProjectHostSetupChange}
             recipes={ephemeralVmRecipes}
             recipeValue={selectedEphemeralVmRecipeId}

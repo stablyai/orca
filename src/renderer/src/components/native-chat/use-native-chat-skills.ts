@@ -3,7 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import {
+  getNativeChatAgentProfile,
+  readsSkillSource
+} from '../../../../shared/native-chat-agent-profiles'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {
@@ -20,10 +23,7 @@ export {
 
 // The host scan budget honored by runtime targets that respect timeoutMs.
 const DISCOVERY_TIMEOUT_MS = 10_000
-// Renderer wall-clock backstop for the local branch (which ignores timeoutMs).
-// It must exceed the host's summed worst case — a WSL scan runs a metadata read
-// (5s) then the tree walk (10s) in sequence — so the host's own precise timeout
-// wins and a WSL cold boot does not surface a healthy scan as a spurious timeout.
+// Exceed WSL’s sequential metadata (5s) and walk (10s) budgets so host timeouts win over the local backstop.
 const DISCOVERY_BACKSTOP_TIMEOUT_MS = 18_000
 
 export type NativeChatSkillDiscovery = {
@@ -75,13 +75,11 @@ export function isNativeChatSkillForAgent(
       (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
     )
   }
-  // Why: canonical-path dedup keeps one row per file, but a symlinked skill can
-  // be reachable through several roots; any shared or agent-owned root grants
-  // visibility regardless of which root the scanner happened to list first.
+  // Canonical dedup may hide alternate symlink roots; any shared/agent root grants visibility regardless of scan order.
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
   return rootPaths.some((rootPath) => {
     const source = result.sources.find((entry) => entry.path === rootPath)
-    return source?.owner === null || source?.owner === profile.skillSourceOwner
+    return source !== undefined && readsSkillSource(profile, source)
   })
 }
 
@@ -102,16 +100,14 @@ export function useNativeChatSkills(
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
-  // Why: retry intent belongs to the next request, not to every later render —
-  // keying off the generation counter would keep forcing after a pane switch.
+  // Consume retry intent once; a generation-wide force flag would leak across pane switches.
   const forceNextDiscovery = useRef(false)
   const profile = getNativeChatAgentProfile(agent)
 
   useEffect(() => {
     let cancelled = false
     if (!profile || !enabled || !context) {
-      // Why: there is no pane to retry into, so a pending retry intent must not
-      // survive to force an unrelated pane's first scan.
+      // Without a current pane, discard retry intent before it can force another pane’s scan.
       forceNextDiscovery.current = false
       setState(IDLE_STATE)
       return
@@ -144,9 +140,7 @@ export function useNativeChatSkills(
       return
     }
     setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
-    // Why: Retry is an explicit "I changed something, look again", so it has to
-    // reach the host's disk rather than its shared scans. The first attempt for a
-    // pane rides those scans like every other passive reader.
+    // Explicit Retry bypasses shared host scans; passive discovery reuses them.
     const forced = forceNextDiscovery.current
     forceNextDiscovery.current = false
     const request = getOrStartDiscovery(context, forced)
@@ -243,8 +237,7 @@ function getOrStartDiscovery(
   if (existing && !refresh) {
     return existing
   }
-  // Why: the local runtime.call branch ignores timeoutMs, so the renderer must
-  // enforce the design's scan timeout itself or a stalled local scan loads forever.
+  // Local runtime.call ignores timeoutMs; enforce a renderer deadline so stalled scans cannot load forever.
   const request = withDiscoveryTimeout(
     callRuntimeRpc<SkillDiscoveryResult>(
       context.runtimeTarget,

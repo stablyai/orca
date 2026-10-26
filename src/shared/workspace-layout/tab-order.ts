@@ -15,6 +15,53 @@ export function dedupeTabOrder(tabIds: string[]): string[] {
   return deduped
 }
 
+/** A projected reorder changes current placement without replacing omitted canonical members. */
+export function reorderProjectedTabOrder(
+  order: string[],
+  requestedOrder: readonly string[],
+  movingTabId: string
+): string[] {
+  const currentIds = new Set(order)
+  const requested = requestedOrder.filter((id) => currentIds.has(id))
+  const positions = new Map(requested.map((id, index) => [id, index]))
+  const visible = order.filter((id) => positions.has(id))
+  if (visible.every((id, index) => id === requested[index])) {
+    return order
+  }
+  const candidates = visible.flatMap((id) => {
+    const position = positions.get(id)
+    return id === movingTabId || position === undefined ? [] : [{ id, position }]
+  })
+  const lengths = candidates.map(() => 1)
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      if (candidates[j].position > candidates[i].position) {
+        lengths[i] = Math.max(lengths[i], 1 + lengths[j])
+      }
+    }
+  }
+  let remaining = Math.max(0, ...lengths)
+  let previousPosition = -1
+  const anchors = new Set<string>()
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i]
+    if (candidate.position > previousPosition && lengths[i] === remaining) {
+      anchors.add(candidate.id)
+      previousPosition = candidate.position
+      remaining--
+    }
+  }
+  const result = order.filter((id) => !positions.has(id) || anchors.has(id))
+  let successor: string | undefined
+  for (const id of requested.toReversed()) {
+    if (!anchors.has(id)) {
+      result.splice(successor === undefined ? result.length : result.indexOf(successor), 0, id)
+    }
+    successor = id
+  }
+  return result
+}
+
 export function partitionPinnedTabOrder(
   tabOrder: string[],
   tabs: readonly PinnedTab[],
@@ -35,10 +82,7 @@ export function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] 
   })
 }
 
-/**
- * Insert `tabId` after `anchorTabId` when both share a pin partition; otherwise at the end of the
- * new tab's partition. Siblings keep their relative order.
- */
+/** Insert after an anchor only within the same pin partition; otherwise append within the new tab’s partition, preserving sibling order. */
 export function insertTabIdIntoOrder(
   tabOrder: readonly string[],
   tabs: readonly PinnedTab[],
@@ -65,8 +109,7 @@ export function isReplaceablePreviewContentType(contentType: Tab['contentType'])
     contentType === 'editor' ||
     contentType === 'diff' ||
     contentType === 'conflict-review' ||
-    contentType === 'check-details' ||
-    contentType === 'chat-visual'
+    contentType === 'check-details'
   )
 }
 
@@ -78,4 +121,41 @@ export function canReplacePreviewContentType(
     return isReplaceablePreviewContentType(existingContentType)
   }
   return existingContentType === incomingContentType
+}
+
+export type TabOrderMove = { tabId: string; index: number }
+
+/** Anchor against the window’s drawn order (null means first), so main-only tabs cannot shift the move (L193). */
+export function tabOrderAnchor(order: readonly string[], index: number): string | null | undefined {
+  return index <= 0 ? null : order[index - 1]
+}
+
+const sameOrder = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((id, index) => id === b[index])
+
+/** Emit one move for a single-tab change, otherwise moves per misplaced slot; refuse different membership with no moves. */
+export function tabOrderMoves(from: readonly string[], to: readonly string[]): TabOrderMove[] {
+  const held = new Set(from)
+  if (held.size !== from.length || !sameOrder([...held].sort(), [...to].sort())) {
+    return []
+  }
+  if (sameOrder(from, to)) {
+    return []
+  }
+  for (const [index, tabId] of to.entries()) {
+    const others = (order: readonly string[]) => order.filter((id) => id !== tabId)
+    if (sameOrder(others(from), others(to))) {
+      return [{ tabId, index }]
+    }
+  }
+  const current = [...from]
+  const moves: TabOrderMove[] = []
+  for (const [index, tabId] of to.entries()) {
+    if (current[index] !== tabId) {
+      current.splice(current.indexOf(tabId), 1)
+      current.splice(index, 0, tabId)
+      moves.push({ tabId, index })
+    }
+  }
+  return moves
 }

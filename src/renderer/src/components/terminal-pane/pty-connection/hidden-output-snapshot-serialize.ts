@@ -3,6 +3,7 @@ import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-termi
 import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS } from './hidden-output-restore-limits'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
 
 import type { PtyBufferSnapshot } from '../pty-transport-types'
@@ -51,11 +52,15 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
       session.hiddenOutputRestoreLegacyPtyId === ptyId ||
       typeof session.transport.serializeBufferOutcome !== 'function'
     ) {
-      const snapshot = await session.transport.serializeBuffer(opts)
+      const snapshot = await session.transport.serializeBuffer({ ...opts, repaintsPane: true })
       return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unknown-legacy-host' }
     }
     try {
-      const outcome = await session.transport.serializeBufferOutcome(opts)
+      // Why repaintsPane: every caller paints this image, so live output resumes after its seq.
+      const outcome = await session.transport.serializeBufferOutcome({
+        ...opts,
+        repaintsPane: true
+      })
       if (outcome.availability.kind === 'snapshot') {
         // A success frame with no image is still the host's own answer to a request it received.
         return outcome.snapshot
@@ -78,13 +83,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     }
   }
 
-  // Why: hidden/parked panes used to mark hidden only at the first
-  // session.dataCallback sync, leaving a spawn-time window where neither side
-  // answered queries (the spawn-time DA1 loss). Declaring hidden on the
-  // spawn IPC lets main mark the PTY before its first byte — including
-  // codex spawns: the model responder answers their startup probes from
-  // byte zero now that the 10s renderer query window is gone.
-  // Remote-runtime PTYs are never gate-markable (no local main transit).
+  // Declare hidden before spawn bytes so main answers startup queries from byte zero; remote-runtime streams never transit this gate.
   session.shouldDeclareHiddenAtSpawn = function (): boolean {
     return (
       session.hiddenDeliveryGateActive &&
@@ -94,11 +93,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     )
   }
 
-  // ── Hidden-delivery gate sync (Phase 4) ─────────────────────────────
-  // Why: marks this pane's PTY hidden in main while no visible view needs
-  // its bytes; main then drops delivery after model ingestion and reveal
-  // restores from the snapshot. The marked id is tracked locally so PTY
-  // changes (reattach/restart) can never leave a stale id gated.
+  // Track hidden claims per PTY so reattach/restart cannot leave old IDs gated; reveal restores bytes main withheld after ingestion.
   session.hiddenDeliverySyncedPtyId = null
   session.releaseHiddenDeliveryClaim = null
   session.modelRestoreSubscribedPtyId = null
@@ -108,10 +103,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     return Date.now() < session.hiddenOutputRestoreFloodSuppressedUntil
   }
 
-  // True when a drop/gap signal on a visible pane is attributable to this
-  // pane's OWN restore backpressure (a restore is replaying right now, or
-  // one was just cut off for outrunning the stream). Such signals must not
-  // re-arm restores — that is the rc.7.perf feedback loop.
+  // Own-restore backpressure markers must defer to quiet repaint rather than re-arm the rc.7.perf fetch loop.
   session.isForegroundRestoreBackpressureContext = function (): boolean {
     return (
       shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) &&
@@ -146,6 +138,11 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     if (!repainted) {
       session.cancelHiddenOutputRestoreFloodRepaintPark = cancelPark
     }
+  }
+
+  session.extendHiddenOutputRestoreFloodSuppression = function (): void {
+    session.hiddenOutputRestoreFloodSuppressedUntil =
+      Date.now() + HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS
   }
 
   session.resetHiddenOutputRestoreFloodSuppression = function (): void {

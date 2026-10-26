@@ -1,6 +1,9 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
-import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
+import type {
+  CreateWorktreeCallOptions,
+  CreatedWorktreeResult
+} from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -11,7 +14,6 @@ import type {
 } from '../../../../shared/worktree/base-ref-drift-types'
 import type {
   CreateSparseCheckoutRequest,
-  CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   SetupDecision
 } from '../../../../shared/worktree/create-types'
@@ -106,20 +108,9 @@ export type WorktreeSlice = {
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
-  /**
-   * In-flight / failed background worktree creations, keyed by a renderer
-   * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
-   * worktree row only exists once `git worktree add` succeeds, so faking one
-   * here would ripple through git-status, the tab model, persistence, and PTY
-   * spawning. Session-only; never persisted.
-   */
+  /** Session-only pending creates stay outside real worktree rows until git succeeds; fake rows would reach status, tabs, persistence and PTY spawn. */
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
-  /**
-   * The pending creation currently filling the workspace content area (the
-   * "Creating worktree…" panel). Distinct from `activeWorktreeId`, which stays
-   * strictly real, so navigating to/away from a pending creation never routes a
-   * fake id through `setActiveWorktree` or nav-history.
-   */
+  /** Pending content surface, separate from real activeWorktreeId so navigation/history never receives a fake ID. */
   activePendingCreationId: string | null
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
@@ -127,45 +118,18 @@ export type WorktreeSlice = {
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
-  /**
-   * Monotonically increasing counter that signals when the sidebar sort order
-   * should be recomputed.  Only bumped by events that represent meaningful
-   * external changes (worktree add/remove, terminal activity, backend refresh)
-   * — NOT by selection-triggered side-effects like clearing `isUnread`.
-   */
+  /** External work/activity/refresh epoch for sidebar sorting; selection side effects such as clearing unread must not advance it. */
   sortEpoch: number
   /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
   settledSortEpoch: number
-  /**
-   * Worktree IDs that have been activated at least once during this app
-   * session. The first activation of a worktree is special: its
-   * TerminalPane mounts for the first time, tabs reattach or fresh-spawn
-   * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
-   * are all side-effects of the click — not real activity. On first
-   * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. Split-layout tabs may carry a numeric count so
-   * every click-driven pane remount is suppressed. After the first activation
-   * we do NOT re-tag, so subsequent events on the worktree (codex restart,
-   * new pane spawn, agent output) count normally. Session-only; never persisted.
-   */
+  /** Bumped by sortOrder-only changes, which skip sortEpoch so live Smart can't loop on its own saves. */
+  sortOrderEpoch: number
+  /** Session-only first-activation set; tag click-driven PTY reattach/spawn to suppress activity bumps (counts cover split remounts). Later real work must count normally. */
   everActivatedWorktreeIds: Set<string>
-  /**
-   * Persisted focus-recency timestamp per worktree, used as the primary
-   * ordering signal for Cmd+J's empty-query Worktrees section. Stamped by
-   * `markWorktreeVisited` from user-initiated activations
-   * (activateAndRevealWorktree), NOT from background activity events or raw
-   * `setActiveWorktree` calls. See docs/cmd-j-empty-query-ordering.md.
-   */
+  /** Persisted user-visit recency for empty-query Cmd+J; mark only through user activation, never background/raw setActiveWorktree (cmd-j-empty-query-ordering.md). */
   /** New host-qualified rows use `${host}|${worktreeId}`; legacy bare ids remain readable. */
   lastVisitedAtByWorktreeId: Record<string, number>
-  /**
-   * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
-   * `true` only after the first launch where every repo's `worktrees.list` IPC
-   * call succeeded AND at least one repo returned a non-empty result — at that
-   * moment the renderer has enough signal to treat the union of fetched ids as
-   * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix
-   * sessions (design §4.4). Session-only; never persisted.
-   */
+  /** One-shot authoritative purge after every repo detection succeeds and the union is nonempty; retire stale persisted tab keys only then (design §4.4). Session-only. */
   hasHydratedWorktreePurge: boolean
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
@@ -193,9 +157,7 @@ export type WorktreeSlice = {
     baseBranch?: string,
     setupDecision?: SetupDecision,
     sparseCheckout?: CreateSparseCheckoutRequest,
-    /** Telemetry-only: which renderer surface initiated this create. Optional
-     *  so existing callers default to `unknown`; specify when the surface
-     *  matters for the activation funnel. */
+    /** Optional activation-funnel source; existing callers default to unknown. */
     telemetrySource?: WorkspaceCreateTelemetrySource,
     displayName?: string,
     linkedIssue?: number,
@@ -209,8 +171,7 @@ export type WorktreeSlice = {
     linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch,
     pendingFirstAgentMessageRename?: boolean,
-    /** When set, correlates the backend's `createWorktree:progress` events to a
-     *  renderer pending creation. Synchronous callers omit it. */
+    /** Correlates backend progress to pending creation; synchronous callers omit. */
     creationId?: string,
     linkedLinearIssueWorkspaceId?: string | null,
     linkedLinearIssueOrganizationUrlKey?: string | null,
@@ -219,7 +180,7 @@ export type WorktreeSlice = {
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
     options?: CreateWorktreeCallOptions
-  ) => Promise<CreateWorktreeResult>
+  ) => Promise<CreatedWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */
@@ -233,10 +194,11 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
+      worktreeId?: string
     }
   ) => void
-  /** Drop a pending entry, clearing the active surface if it pointed at this
-   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */
   removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
@@ -272,48 +234,27 @@ export type WorktreeSlice = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (updatesByWorktreeId: readonly WorktreeMetaBatchUpdate[]) => Promise<void>
-  /**
-   * Pin/unpin worktrees, then reveal the first changed one. The reveal keeps
-   * the shortcut action visible even though pinned worktrees also remain in
-   * their normal sidebar groups.
-   */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
-  markWorktreeUnread: (worktreeId: string) => void
+  /** Pin/unpin then reveal the first changed target so the shortcut remains visible alongside normal sidebar groups. */
+  /** Each target names its copy; a host-less id two hosts publish is skipped, not guessed. */
+  setWorktreesPinnedAndReveal: (
+    targets: readonly Pick<Worktree, 'id' | 'hostId'>[],
+    isPinned: boolean
+  ) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
-    context?: WorkspaceReferenceTerminalContext
+    context?: WorkspaceReferenceObservationContext
   ) => void
-  /** Clear the worktree's unread dot. Called on user interaction with any
-   *  terminal pane inside the worktree (keystroke, click) — matches
-   *  ghostty's "show until interact" model. Persists isUnread=false. */
-  clearWorktreeUnread: (worktreeId: string) => void
   bumpWorktreeActivity: (worktreeId: string) => void
-  /**
-   * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if
-   * the supplied (or current) timestamp is not strictly greater than the
-   * stored value. Called from user-initiated activations only. See
-   * docs/cmd-j-empty-query-ordering.md.
-   */
+  /** User-activation-only recency stamp; ignore non-increasing timestamps (cmd-j-empty-query-ordering.md). */
   markWorktreeVisited: (
     worktreeId: string,
     visitedAt?: number,
     executionHostId?: ExecutionHostId
   ) => void
-  /**
-   * Drop `lastVisitedAtByWorktreeId` entries whose worktree IDs no longer
-   * exist. Must be called AFTER worktree hydration completes — repos load
-   * async, so pruning on raw rehydrate would nuke timestamps for worktrees
-   * whose repo hasn't yet hydrated.
-   */
+  /** Prune visits only after hydration; early pruning would erase entries for asynchronously loading repos. */
   pruneLastVisitedTimestamps: () => void
-  /**
-   * One-shot migration fixup: if the active worktree has no stored
-   * focus-recency timestamp after session hydration, seed it with the
-   * current time. Different semantics from `markWorktreeVisited` — this
-   * only fills in a missing entry on first load, it does not record a
-   * fresh visit.
-   */
+  /** One-shot migration seed for missing active recency after hydration; never records a fresh visit over an existing timestamp. */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (
     worktreeId: string | null,
@@ -324,18 +265,7 @@ export type WorktreeSlice = {
       createdTabIds?: readonly string[]
     }
   ) => boolean
-  /**
-   * Health-driven remount of one terminal tab: bumps the tab's generation so
-   * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
-   * a fresh xterm that reattaches and replays. Used by terminal-pane-recovery
-   * when a pane's write pipeline is certified dead or its input is
-   * undeliverable while the PTY is alive.
-   *
-   * The generation bump and the tab's recovery ledger are written together, so
-   * the budget cannot outlive — or be released independently of — the row it
-   * belongs to. Omitting the request marks an external lifecycle remount: it
-   * skips admission and writes no ledger.
-   */
+  /** Recovery remount detaches live PTY then reattaches/replays in fresh xterm. Update generation and row-owned admission ledger atomically; omitted request means external lifecycle remount without admission/ledger. */
   remountTerminalTabForRecovery: (
     tabId: string,
     request?: TerminalRecoveryRemountRequest
@@ -354,31 +284,17 @@ export type WorktreeSlice = {
     worktreeId: string,
     executionHostId?: ExecutionHostId
   ) => Worktree | DetectedWorktree | undefined
-  /**
-   * Wipes every terminal- and worktree-scoped map entry for each given id.
-   * Called by the `worktrees:changed` listener on server-side deletions and
-   * one-shot at hydration time. See design §4.4.
-   */
+  /** Purge worktree/terminal maps on server deletion and once at hydration (design §4.4). */
   purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
-  /**
-   * Retires every client-store row (repos, project host setups, worktree +
-   * detected-worktree rows, and their tab/PTY/browser/editor cascade) owned by a
-   * runtime host whose environment id was just removed from the saved list.
-   * Scoped to the removal diff so a serving instance's locally-persisted
-   * runtime-stamped repos — whose env id was never saved here — are never torn
-   * down. No-op when the removed set is empty or nothing matched (#8881).
-   */
+  /** Retire removed-runtime catalog/worktree/tab/PTY/browser/editor state only from saved-list removal diff. Serving-local runtime stamps never saved here must survive; empty/unmatched diff is inert (#8881). */
   purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
-  /**
-   * Re-key every worktree-scoped map + pointer from `oldWorktreeId` to
-   * `newWorktreeId` after a folder rename changed the worktree's path-derived id.
-   * The inverse of purge: move state instead of dropping it, so the live worktree
-   * keeps its tabs, terminals, and selections. No-op when the ids match.
-   */
+  /** Move worktree-scoped maps/pointers on path-derived ID rename, preserving live tabs/selection; equal IDs are inert. */
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
+  /** `ownerHostId` names the copy git answered for; null patches only an id no twin shares. */
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void

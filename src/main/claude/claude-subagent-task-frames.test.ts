@@ -83,7 +83,6 @@ describe('readClaudeSubagentTaskFrame', () => {
       expect(
         readClaudeSubagentTaskFrame(system('task_started', { task_id: 'task-bare' }))
       ).toMatchObject({ announcesSubagent: false, excluded: true })
-      // A type this build does not recognise is not an agent on subagent_type's word.
       expect(
         readClaudeSubagentTaskFrame(
           system('task_started', {

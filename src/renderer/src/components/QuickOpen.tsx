@@ -2,7 +2,7 @@ import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import {
   CommandDialog,
   CommandInput,
@@ -44,7 +44,7 @@ export default function QuickOpen(): React.JSX.Element | null {
       setLingering(true)
       return
     }
-    // Why: keep scan cancellation and the dialog exit animation mounted before releasing remote file state.
+    // Retain scan cancellation/exit animation before releasing remote file state.
     const timer = window.setTimeout(() => setLingering(false), QUICK_OPEN_CLOSE_LINGER_MS)
     return () => window.clearTimeout(timer)
   }, [visible])
@@ -76,14 +76,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     recentPaths: history
   })
 
-  // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
-  // the dialog (Esc / click-away) would otherwise leave the active panel
-  // unfocused. This returns focus to the surface that was active on open.
+  // Restore the opening surface because Radix trigger restoration is suppressed.
   const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
 
-  // Why: reset input only on open. Keeping this out of the file-load effect
-  // prevents unrelated store updates (which can produce a new excludePaths
-  // array reference) from wiping a query the user is currently typing.
+  // Reset only on open; file-load/exclusion identity changes must not erase a typed query.
   const [previousVisible, setPreviousVisible] = useState(visible)
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
@@ -226,7 +222,6 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : (
           filtered.map((item) => {
             const { directory, filename } = splitTrailingSegment(item.path)
-            const FileIcon = getFileTypeIcon(item.path)
 
             return (
               <CommandItem
@@ -239,14 +234,14 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
                 // Why: CommandDialog's descendant rule otherwise adds 24px of vertical padding.
                 className="min-w-0 !p-0"
               >
-                {/* Why: the trigger is this inner element, not the CommandItem.
-                    cmdk sets its own onPointerMove after spreading props, which
-                    drops the one Radix needs to open the tooltip. */}
+                {/* Use an inner tooltip trigger: cmdk overwrites CommandItem’s onPointerMove after spreading props. */}
                 <FilePathCursorTooltip path={item.path}>
                   <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
-                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                    {/* shrink-0 + max-w-full: the directory gives up all of its
-                        width before the filename loses a character. */}
+                    <FileTypeIcon
+                      filePath={item.path}
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    {/* Let the directory shrink before the filename. */}
                     <span className="min-w-0 max-w-full shrink-0 truncate text-foreground">
                       {filename}
                     </span>
@@ -278,7 +273,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
           <span>{translate('auto.components.QuickOpen.1dbd3f59ff', 'Move')}</span>
         </div>
       </div>
-      {/* Accessibility: announce result count changes */}
+      {/* Announce result count changes to assistive technology. */}
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
           ? translate('auto.components.QuickOpen.b227d88520', '{{value0}} files found', {

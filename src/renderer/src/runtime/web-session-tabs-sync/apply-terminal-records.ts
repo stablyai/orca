@@ -1,10 +1,9 @@
-import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
+import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import type { prepareWebSessionTabsSnapshotGroups } from './apply-preparation-groups'
 import { sameStringArray, writableWebSessionTabsRecord } from './state-equality-core'
 
 type TerminalRecordContext = ReturnType<typeof prepareWebSessionTabsSnapshotGroups>
 
-/** Reconcile PTY ownership, layouts, unread markers, and provisional startup records. */
 export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
   const {
     state,
@@ -70,8 +69,7 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     nextTerminalLayoutsByTabId[tab.id] = layout
   }
 
-  // Why removal only: the local-only home follows a retired tab out, but a host frame never
-  // rewrites a live tab's entry — that immunity is the point of keeping it outside the layout.
+  // Local-only home retires with tabs but host frames never rewrite live entries; keeping it outside layout preserves this ownership.
   let nextLocalOnlyScrollbackByTabId = state.localOnlyScrollbackByTabId
   for (const removedId of removedTerminalResourceIds) {
     if (!nextLocalOnlyScrollbackByTabId?.[removedId]) {

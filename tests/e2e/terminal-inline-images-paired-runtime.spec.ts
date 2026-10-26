@@ -6,11 +6,17 @@ import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   assertInlineImagePixels,
+  assertKittyPlaceholderPixels,
   enableInlineImages,
   inlineImageProducer,
   readInlineImageState
 } from './helpers/terminal-inline-image-proof'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
+import {
+  assertKittyFileImagePixels,
+  blockLocalKittyFileReads,
+  kittyFileImageProducer
+} from './helpers/terminal-kitty-file-image-proof'
 import {
   createHostCliTerminal,
   createRetentionFixtureDirectory,
@@ -48,7 +54,8 @@ async function expectProtocolPixels(
   client: PairedElectronClient,
   tabId: string,
   marker: string,
-  screenshotPath: string
+  screenshotPath: string,
+  terminalHandle: string
 ) {
   await expect
     .poll(
@@ -62,12 +69,23 @@ async function expectProtocolPixels(
     )
     .toContain(`LIVE:${marker}:`)
   await assertInlineImagePixels(client.page, screenshotPath)
+  await assertKittyPlaceholderPixels(client.page, `${screenshotPath}.placeholders.png`)
   await expect
     .poll(() => readInlineImageState(client.page))
-    .toMatchObject({ images: 3, pending: 0, decoderBytes: 0 })
+    .toMatchObject({ images: 4, pending: 0, decoderBytes: 0 })
+  await callRuntime(client, 'terminal.send', {
+    terminal: terminalHandle,
+    text: `FILES_${marker}`,
+    enter: true
+  })
+  await assertKittyFileImagePixels(
+    client.page,
+    `${screenshotPath}.file.png`,
+    marker.endsWith('AFTER') ? 'magenta' : 'cyan'
+  )
 }
 
-test('paired runtime paints inline images and resumes the same PTY after host restart', async ({
+test('@headful paired runtime paints inline images and resumes the same PTY after host restart', async ({
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -97,14 +115,17 @@ test('paired runtime paints inline images and resumes the same PTY after host re
       .not.toBe('')
     client = await launchPairedElectronClient(host.offer, testInfo, 'paired-inline-images')
     const viewer = client
+    await blockLocalKittyFileReads(viewer.app)
     writeFileSync(
       fixturePath,
       [
-        "import { appendFileSync } from 'node:fs'",
+        "import { appendFileSync, writeFileSync } from 'node:fs'",
         'const record = line => appendFileSync(process.argv[2], line + "\\n")',
         'record(`READY:${process.pid}`)',
         'process.stdout.write(`READY:${process.pid}\\r\\n`)',
-        `function emitImages() { ${inlineImageProducer()} }`,
+        `function emitImages() { ${inlineImageProducer(true)} }`,
+        `function emitFileBefore() { ${kittyFileImageProducer(JSON.stringify(`${fixturePath}.png`), 'cyan')} }`,
+        `function emitFileAfter() { ${kittyFileImageProducer(JSON.stringify(`${fixturePath}.png`), 'magenta')} }`,
         'let pending = ""',
         'process.stdin.setEncoding("utf8")',
         'process.stdin.on("data", data => {',
@@ -113,6 +134,7 @@ test('paired runtime paints inline images and resumes the same PTY after host re
         'pending = lines.pop() ?? ""',
         'for (const line of lines) {',
         'if (line.startsWith("PING_")) { process.stdout.write(`PONG:${line}\\r\\n`); continue }',
+        'if (line.startsWith("FILES_")) { line.endsWith("AFTER") ? emitFileAfter() : emitFileBefore(); continue }',
         'if (!line.startsWith("IMAGES_")) continue',
         'record(`LIVE:${line}:${process.pid}`)',
         'emitImages()',
@@ -170,7 +192,8 @@ test('paired runtime paints inline images and resumes the same PTY after host re
       viewer,
       tabId,
       'IMAGES_BEFORE',
-      testInfo.outputPath('paired-images-before-restart.png')
+      testInfo.outputPath('paired-images-before-restart.png'),
+      terminal.handle
     )
     const readyLines = readSink(sinkPath)
       .split(/\r?\n/)
@@ -266,7 +289,8 @@ test('paired runtime paints inline images and resumes the same PTY after host re
       viewer,
       tabId,
       'IMAGES_AFTER',
-      testInfo.outputPath('paired-images-after-restart.png')
+      testInfo.outputPath('paired-images-after-restart.png'),
+      liveHandle
     )
     expect(readSink(sinkPath)).toContain(`LIVE:IMAGES_AFTER:${terminal.pid}`)
     expect(
@@ -275,6 +299,30 @@ test('paired runtime paints inline images and resumes the same PTY after host re
         .filter((line) => line.startsWith('READY:'))
     ).toEqual(readyLines)
     expect(await viewer.getDirectSshAttemptTargetIds()).toEqual([])
+  } catch (error) {
+    if (client) {
+      const state = await client.page.evaluate(() => ({
+        activeTabId: window.__store?.getState().activeTabId,
+        activeWorktreeId: window.__store?.getState().activeWorktreeId,
+        panes: Array.from(window.__paneManagers?.entries() ?? []).map(([tabId, manager]) => {
+          const pane = manager.getActivePane()
+          return {
+            tabId,
+            ptyId: pane?.container.dataset.ptyId,
+            connected: pane?.container.isConnected,
+            tail: pane?.serializeAddon.serialize().slice(-400)
+          }
+        }),
+        renderedTabs: Array.from(document.querySelectorAll('[data-testid="sortable-tab"]')).map(
+          (tab) => tab.getAttribute('data-tab-id')
+        )
+      }))
+      await testInfo.attach('paired-terminal-failure-state', {
+        body: JSON.stringify(state, null, 2),
+        contentType: 'application/json'
+      })
+    }
+    throw error
   } finally {
     if (client && liveHandle) {
       await callRuntime(client, 'terminal.closeTab', { terminal: liveHandle }).catch(

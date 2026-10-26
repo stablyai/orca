@@ -93,6 +93,24 @@ describe('HistoryReader', () => {
       expect(info!.rehydrateSequences).toBe('')
     })
 
+    it('marks a folder only meta.json recorded as the spawn folder', async () => {
+      writeSessionWithCheckpoint(dir, 'with-cwd', makeMeta(), makeCheckpoint())
+      writeSessionWithCheckpoint(dir, 'no-cwd', makeMeta(), makeCheckpoint({ cwd: null }))
+      writeSessionWithScrollback(dir, 'legacy', makeMeta(), 'old format data\r\n')
+
+      const withCwd = await reader.detectColdRestoreState('with-cwd')
+      expect(withCwd.status === 'restored' && withCwd.cwdFromSpawn).toBeFalsy()
+      const noCwd = await reader.detectColdRestoreState('no-cwd')
+      expect(noCwd).toMatchObject({
+        status: 'restored',
+        cwdFromSpawn: true,
+        restoreInfo: { cwd: '/home/user/project' }
+      })
+      await expect(reader.detectColdRestoreState('legacy')).resolves.toMatchObject({
+        cwdFromSpawn: true
+      })
+    })
+
     it('restores pre-limit 800-column checkpoint history', async () => {
       writeSessionWithCheckpoint(
         dir,

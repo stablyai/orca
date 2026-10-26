@@ -6,32 +6,37 @@ import {
   isSlashCommandDraft,
   applySlashSuggestion,
   slashCommandDispatchText,
+  type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
 import {
   buildNativeChatPickerItems,
   LEADING_SLASH_TRIGGER,
   MID_PROMPT_SLASH_TRIGGER,
+  matchSkillSigil,
   type NativeChatPickerItem,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 export type { SlashCommandSuggestion }
 export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
 export {
+  classifyNativeChatSend,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-slash-commands'
+export {
   applyPickerSuggestion,
   buildNativeChatPickerItems,
-  classifyNativeChatSend,
   type NativeChatPickerItem,
-  type NativeChatSendClassification,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 type PickerAutocomplete = {
   query: string
   items: NativeChatPickerItem[]
   triggerKey: string
-  prefix: '/'
+  /** `$` lists only the skills of an agent whose skills carry that sigil. */
+  prefix: '/' | '$'
   /** Only a draft-leading `/command` reaches the agent as a command. */
   dispatchable: boolean
   grouped: boolean
@@ -56,7 +61,11 @@ export function isSkillPickerTriggered(
   if (!profile) {
     return false
   }
-  return LEADING_SLASH_TRIGGER.test(before) || MID_PROMPT_SLASH_TRIGGER.test(before)
+  return (
+    LEADING_SLASH_TRIGGER.test(before) ||
+    MID_PROMPT_SLASH_TRIGGER.test(before) ||
+    (profile.skillPrefix === '$' && matchSkillSigil(before) !== null)
+  )
 }
 
 export function deriveComposerAutocomplete(
@@ -67,19 +76,20 @@ export function deriveComposerAutocomplete(
   profile: NativeChatAgentProfile | null = null,
   discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
   dismissedTriggerKey: string | null = null,
-  sessionSkillNames?: readonly string[]
+  sessionSkills?: readonly NativeChatSessionSkill[]
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
   const leadingMatch = before.match(LEADING_SLASH_TRIGGER)
   if (leadingMatch) {
     return deriveSlashAutocomplete(
+      '/',
       leadingMatch[1],
       0,
       agentCommands,
       profile,
       discovery,
       dismissedTriggerKey,
-      sessionSkillNames
+      sessionSkills
     )
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
@@ -89,71 +99,80 @@ export function deriveComposerAutocomplete(
       ? { mode: 'none' }
       : { mode: 'mention', query: mentionMatch[1], triggerKey }
   }
-  // Why: `/` is the whole composer grammar, so a mid-prompt token opens the same
-  // menu a leading one does — it just cannot dispatch.
-  const midPromptMatch = profile ? before.match(MID_PROMPT_SLASH_TRIGGER) : null
-  if (!midPromptMatch) {
+  // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
+  const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
+  const query = sigilQuery ?? (profile ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1] : undefined)
+  if (query === undefined) {
     return { mode: 'none' }
   }
-  const query = midPromptMatch[1]
+  const isSigil = sigilQuery !== null
   return deriveSlashAutocomplete(
+    isSigil ? '$' : '/',
     query,
     before.length - query.length - 1,
-    agentCommands,
+    isSigil ? [] : agentCommands,
     profile,
     discovery,
     dismissedTriggerKey,
-    sessionSkillNames
+    sessionSkills
   )
 }
 
 function deriveSlashAutocomplete(
+  prefix: '/' | '$',
   query: string,
   triggerPosition: number,
   agentCommands: readonly SlashCommandSuggestion[],
   profile: NativeChatAgentProfile | null,
   discovery: NativeChatSkillDiscoverySnapshot,
   dismissedTriggerKey: string | null,
-  sessionSkillNames: readonly string[] | undefined
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
 ): ComposerAutocomplete {
-  const triggerKey = `/:${triggerPosition}`
+  const triggerKey = `${prefix}:${triggerPosition}`
   if (dismissedTriggerKey === triggerKey) {
     return { mode: 'none' }
   }
-  // Every agent with a known grammar offers skills here; only the token a pick
-  // inserts differs. The caller owns catalog policy (e.g. Grok ships skills-only
-  // until a verified catalog lands), so this derivation must not re-gate per agent.
+  // Known agent grammar enables skills; the caller owns catalog policy, while this layer formats tokens.
   const skillsEnabled = profile !== null
+  const namePrefix = profile?.skillNamePrefix
+  // Scanned names take the agent's prefix so they match the names its session reports.
+  const scannedSkills = !skillsEnabled
+    ? []
+    : namePrefix
+      ? discovery.skills.map((skill) => ({ ...skill, name: `${namePrefix}${skill.name}` }))
+      : discovery.skills
   const items = buildNativeChatPickerItems(
     agentCommands,
-    skillsEnabled ? discovery.skills : [],
+    scannedSkills,
     query,
     profile?.skillPrefix ?? '/',
-    skillsEnabled ? sessionSkillNames : []
+    skillsEnabled ? sessionSkills : [],
+    undefined,
+    prefix
   )
   return {
     mode: 'slash',
     query,
     triggerKey,
-    prefix: '/',
-    dispatchable: triggerPosition === 0,
-    grouped: skillsEnabled,
+    prefix,
+    dispatchable: prefix === '/' && triggerPosition === 0,
+    grouped: skillsEnabled && prefix === '/',
     commandsEnabled: agentCommands.length > 0,
     skillsEnabled,
     items,
-    skillStatus: skillsEnabled
-      ? discovery.status === 'idle'
-        ? 'loading'
-        : discovery.status
-      : 'ready',
-    ...(skillsEnabled && discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
+    skillStatus:
+      skillsEnabled && sessionSkills === undefined
+        ? discovery.status === 'idle'
+          ? 'loading'
+          : discovery.status
+        : 'ready',
+    ...(skillsEnabled && sessionSkills === undefined && discovery.errorKind
+      ? { skillErrorKind: discovery.errorKind }
+      : {})
   }
 }
 
-/** True when one edit both removed and inserted text across the dismissed
- *  trigger token — a wholesale replacement (e.g. select-all + paste), which is
- *  a new trigger occurrence even though a trigger character lands back on the
- *  same draft position. Typing or deleting inside the token is not. */
+/** Replacing across an entire dismissed token starts a new occurrence; typing/deleting within it does not. */
 export function editReplacesTriggerToken(
   previous: string,
   next: string,

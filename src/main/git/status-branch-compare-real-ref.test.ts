@@ -20,6 +20,44 @@ afterEach(async () => {
 })
 
 describe('getBranchCompare real refs', () => {
+  it.each([false, true])(
+    'excludes base-only changes after branches diverge: %s',
+    async (diverged) => {
+      const repo = await mkdtemp(path.join(tmpdir(), 'orca-common-ancestor-compare-'))
+      tempRoots.push(repo)
+      git(repo, ['init', '-q'])
+      git(repo, ['config', 'user.email', 'test@example.com'])
+      git(repo, ['config', 'user.name', 'Test User'])
+      git(repo, ['config', 'commit.gpgSign', 'false'])
+      git(repo, ['commit', '--allow-empty', '-qm', 'initial'])
+      const forkOid = git(repo, ['rev-parse', 'HEAD'])
+      git(repo, ['branch', 'base'])
+      git(repo, ['checkout', '-qb', 'feature'])
+      if (diverged) {
+        await writeFile(path.join(repo, 'feature.txt'), 'feature\n')
+        git(repo, ['add', 'feature.txt'])
+        git(repo, ['commit', '-qm', 'feature addition'])
+      }
+      git(repo, ['checkout', '-q', 'base'])
+      await writeFile(path.join(repo, 'upstream.txt'), 'upstream\n')
+      git(repo, ['add', 'upstream.txt'])
+      git(repo, ['commit', '-qm', 'upstream addition'])
+      git(repo, ['checkout', '-q', 'feature'])
+
+      const result = await getBranchCompare(repo, 'base')
+      expect(result.summary).toMatchObject({
+        status: 'ready',
+        mergeBase: forkOid,
+        commitsAhead: diverged ? 1 : 0,
+        commitsBehind: 1,
+        changedFiles: diverged ? 1 : 0
+      })
+      expect(result.entries).toEqual(
+        diverged ? [{ path: 'feature.txt', status: 'added', added: 1, removed: 0 }] : []
+      )
+    }
+  )
+
   it('reports equal commits as empty despite staged and unstaged changes', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'orca-equal-branch-compare-'))
     tempRoots.push(repo)

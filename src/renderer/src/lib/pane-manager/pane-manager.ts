@@ -83,7 +83,6 @@ export class PaneManager {
   private identities = new PaneIdentityRegistry()
   private reparentFrames = new PaneReparentFrameTracker(() => this.destroyed)
 
-  // Drag-to-reorder state
   private dragState = createDragReorderState()
 
   private host: PaneManagerHost
@@ -115,8 +114,7 @@ export class PaneManager {
       },
       requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
-    // Why: atlas recovery must reach every live manager — see
-    // resetAndRefreshAllTerminalWebglAtlases for the shared-atlas rationale.
+    // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
     registerLivePaneManager(this)
   }
 
@@ -163,8 +161,7 @@ export class PaneManager {
     return collectPublicPanes(this.panes, limit)
   }
 
-  /** Why separate from getPanes: the census runs on the crash path, where
-   *  materializing every public pane view just to read `.length` is waste. */
+  /** Count without allocating public pane wrappers on the crash path. */
   getPaneCount(): number {
     return this.panes.size
   }
@@ -185,10 +182,9 @@ export class PaneManager {
     equalizeManagedPaneSizes(this.panes, this.root, this.options.onLayoutChanged)
   }
 
-  /** Applies a host layout's split orientation and ratios to mounted panes in place.
-   *  Why no onLayoutChanged: an applied host geometry must never persist or push back. */
-  applyLayoutGeometry(layout: TerminalPaneLayoutNode): boolean {
-    return applyPaneLayoutGeometry(this.host, layout)
+  /** Apply host split orientation/ratios; followFrameTree also reshapes matching leaves. Never emit onLayoutChanged: host geometry must not persist or push back. */
+  applyLayoutGeometry(layout: TerminalPaneLayoutNode, followFrameTree = false): boolean {
+    return applyPaneLayoutGeometry(this.host, layout, followFrameTree)
   }
 
   getActivePane(): ManagedPane | null {
@@ -261,7 +257,6 @@ export class PaneManager {
     this.withPane(paneId, (pane) => setLigaturesEnabled(pane, enabled))
   }
 
-  /** Enable or disable inline images for one pane in place (live toggle). */
   setPaneInlineImagesEnabled(paneId: number, enabled: boolean): void {
     this.withPane(paneId, (pane) => setInlineImagesEnabled(pane, enabled))
   }
@@ -290,7 +285,7 @@ export class PaneManager {
     clearPaneWebglTextureAtlases(this.panes.values())
   }
 
-  presentForcedViewports(): void {
+  presentViewports(): void {
     presentPaneViewports(this.panes.values())
   }
 
@@ -303,15 +298,12 @@ export class PaneManager {
   }
 
   scheduleRevealRepaint(): void {
-    // Why: the settled-frame callback can fire after hide/destroy; repainting
-    // hidden or disposed panes can revive WebGL contexts and latch attach
-    // backoff, downgrading unrelated new panes to the DOM renderer.
+    // Settled-frame callbacks can outlive hide/destroy; repainting then revives contexts and latches backoff that downgrades unrelated panes.
     schedulePaneRevealRepaint(this, this.panes)
   }
 
   scheduleRevealPresent(): void {
-    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases;
-    // skip the delayed present if the surface was hidden again meanwhile.
+    // Ordinary reveal retains the canvas through DEC 2026; skip delayed presentation if hidden again.
     schedulePaneRevealPresent(this, this.panes)
   }
 

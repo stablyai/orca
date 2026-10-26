@@ -1,16 +1,9 @@
-// Single source of truth for native chat slash-command behavior, shared by the
-// desktop renderer and the mobile app. This is pure data + string helpers (no
-// DOM, no RN-only imports), so both platforms import the SAME values — no
-// mirrored copy to drift, unlike the agent-specific parsers in src/shared that
-// Metro forces us to duplicate.
+// Share pure slash-command data across desktop/mobile without DOM/RN dependencies or mirrored catalogs.
 
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 import type { AgentType } from './agent-status-types'
 
-/** Where the chat finds a command's reply when the agent runs in a terminal.
- *  `composer`: the chat answers from state it holds and never sends the command.
- *  `transcript`: the agent writes its reply as a transcript row the chat shows.
- *  Absent: the agent answers in its own terminal, or the effect is the answer. */
+/** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
 export type NativeChatCommandReply = 'composer' | 'transcript'
 
 export type SlashCommandSuggestion = {
@@ -23,11 +16,11 @@ export type SlashCommandSuggestion = {
   kindUnspecified?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
   reply?: NativeChatCommandReply
+  /** The desktop chat runs it itself: it hides an agent command of the same name, never a skill. */
+  orcaOwned?: true
 }
 
-// Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
-// command list, so these track the common, stable commands each TUI documents.
-// The composer treats commands as plain data, so this can grow freely.
+// Curated stable commands: CLIs provide no machine-readable catalog.
 
 const COMMON_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear the conversation' },
@@ -139,11 +132,7 @@ export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSu
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
 }
 
-/** The command rows for a session that reports its own `/` surface. The report
- *  is the authority on WHICH commands exist and, when it carries one, on how a
- *  command is described; the curated catalog above only covers the names whose
- *  report is text-free. Skills are excluded — they render in the picker's own
- *  skills group. */
+/** Session reports own command presence/descriptions; curated rows fill missing prose. Exclude skills into their own picker group. */
 export function sessionSlashCommandSuggestions(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[]
@@ -164,22 +153,30 @@ export function sessionSlashCommandSuggestions(
     })
 }
 
-/** Names the session reported as skills, in the order it reported them. */
-export function sessionReportedSkillNames(
+export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
+
+export function sessionReportedSkills(
   reported: readonly AgentSessionSlashCommand[]
-): readonly string[] {
-  return reported.filter((entry) => entry.kind === 'skill').map((entry) => entry.name)
+): readonly NativeChatSessionSkill[] {
+  return reported.flatMap((entry) =>
+    entry.kind === 'skill'
+      ? [
+          {
+            name: entry.name,
+            ...(entry.description ? { description: entry.description } : {}),
+            ...(entry.path ? { path: entry.path } : {})
+          }
+        ]
+      : []
+  )
 }
 
-/** Whether the draft is a slash command (leading `/`, ignoring leading space).
- *  Slash drafts dispatch to the agent's own TUI and must NOT render an optimistic
- *  user bubble — they are control actions, not chat turns. */
+/** Slash drafts are TUI controls; suppress optimistic user bubbles for them. */
 export function isSlashCommandDraft(draft: string): boolean {
   return draft.trimStart().startsWith('/')
 }
 
-/** Case-insensitive prefix filter over an agent's commands. An empty query
- *  returns all commands so a bare `/` shows the full menu. */
+/** Case-insensitive prefix matching; empty query opens the full command list. */
 export function filterSlashCommands(
   commands: readonly SlashCommandSuggestion[],
   query: string
@@ -191,14 +188,12 @@ export function filterSlashCommands(
   return commands.filter((command) => command.name.toLowerCase().startsWith(normalized))
 }
 
-/** Replace the slash token with the chosen command plus a trailing space, so the
- *  user can type arguments. This is the Tab-completion path. */
+/** Tab completion keeps a trailing argument space. */
 export function applySlashSuggestion(command: SlashCommandSuggestion): string {
   return `/${command.name} `
 }
 
-/** Text to send when Enter accepts a slash command from the menu — no trailing
- *  space, because the TUI dispatches the command on Enter. */
+/** Enter dispatch omits the trailing completion space. */
 export function slashCommandDispatchText(command: SlashCommandSuggestion): string {
   return `/${command.name}`
 }
@@ -211,9 +206,7 @@ export function classifyNativeChatSend(
   pickerSkillOriginToken: string | null,
   skillPrefix: '/' | '$' | null
 ): NativeChatSendClassification {
-  // Why: the supported TUIs only treat a line-leading token as a command, so a
-  // draft with leading whitespace is prose; trimming here would claim a "Ran"
-  // line for text the agent never dispatched.
+  // TUIs dispatch only line-leading tokens; trimming whitespace would claim commands the agent received as prose.
   const firstToken = draft.split(/\s/, 1)[0] ?? ''
   if (pickerSkillOriginToken && firstToken === pickerSkillOriginToken) {
     return 'chat'
@@ -224,8 +217,7 @@ export function classifyNativeChatSend(
   if (firstToken.startsWith('/')) {
     return 'unknown-token'
   }
-  // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style
-  // token is ordinary prose and must keep its bubble and attachments.
+  // $ is Codex grammar only; other agents’ $PATH-like tokens remain prose with bubbles/attachments.
   if (skillPrefix === '$' && firstToken.startsWith('$')) {
     return 'unknown-token'
   }

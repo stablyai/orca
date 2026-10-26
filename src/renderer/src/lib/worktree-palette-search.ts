@@ -24,6 +24,8 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorkspaceLastActiveAt } from '../../../shared/workspace-last-active'
+import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 import {
   getPaletteWorktreeExecutionHostId,
   getPaletteWorktreeIdentity,
@@ -81,8 +83,7 @@ export function getWorktreePaletteSearchScope(args: {
     return [...args.emptyQueryWorktrees]
   }
 
-  // Why: sidebar filters keep the default list quiet, but explicit search is
-  // a recovery path for sleeping/default-branch workspaces hidden by filters.
+  // Explicit search recovers sleeping/default-branch workspaces hidden by sidebar filters.
   return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 
@@ -183,11 +184,18 @@ export type WorktreePaletteSearchArgs = {
   repoMapByHostIdentity?: ReadonlyMap<string, Repo>
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
   context?: PaletteSearchContext
+  /** Visits count as activity once terminals stop stamping Recent (see workspace-last-active). */
+  lastVisitedAtByWorktreeId?: Readonly<Record<string, number>>
 }
 
 /** Matches prepared documents; callers memoize `documents` across keystrokes. */
 export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): PaletteSearchResult[] {
   const context = args.context ?? createPaletteSearchContext(Date.now())
+  const lastActiveAt = (worktree: Worktree): number =>
+    getWorkspaceLastActiveAt(
+      worktree.lastActivityAt,
+      getWorktreeVisitTimestamp(args.lastVisitedAtByWorktreeId, worktree)
+    )
   const prepared = preparePaletteQuery(args.query)
   if (prepared.state === 'invalid') {
     return []
@@ -198,7 +206,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
         worktree.id,
         getPaletteWorktreeExecutionHostId(worktree),
         context,
-        worktree.lastActivityAt
+        lastActiveAt(worktree)
       )
     )
   }
@@ -214,7 +222,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
         review: args.checksReviewByWorktree?.get(worktree)
       })
       if (match) {
-        const activity = preparePaletteActivity(worktree.lastActivityAt, context)
+        const activity = preparePaletteActivity(lastActiveAt(worktree), context)
         results.push({
           ...match,
           lastActiveAt: activity.timestamp || null,
@@ -241,7 +249,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
           match,
           getPaletteWorktreeExecutionHostId(worktree),
           context,
-          worktree.lastActivityAt
+          lastActiveAt(worktree)
         )
       )
     }

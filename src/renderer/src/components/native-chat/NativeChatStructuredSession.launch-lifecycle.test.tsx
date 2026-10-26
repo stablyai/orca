@@ -3,10 +3,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
+const install = vi.hoisted((): { observation: ManagedRuntimeInstallObservation } => ({
+  observation: { kind: 'inactive' }
+}))
 
 vi.mock('@/lib/structured-agent-session-launch', () =>
   moduleFactories.structuredAgentSessionLaunch()
@@ -27,11 +32,19 @@ vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+vi.mock('@/runtime/use-managed-runtime-install', () => ({
+  useManagedRuntimeInstall: () => install.observation
+}))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 
 const NOT_SIGNED_IN = {
   kind: 'refused',
@@ -67,6 +80,72 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     cleanup()
     localStorage.clear()
     resetStructuredSessionMocks()
+    install.observation = { kind: 'inactive' }
+  })
+
+  it('shows Install over a disabled composer until the host has the program', () => {
+    const notInstalled: ManagedRuntimeInstallState = {
+      agent: 'codex',
+      revision: 1,
+      available: true,
+      version: '1.3.0',
+      installedVersion: null,
+      installedCurrent: false,
+      downloadBytes: 111_500_000,
+      source: null,
+      operation: null
+    }
+    const hostSays = (state: ManagedRuntimeInstallState | null): void => {
+      install.observation = {
+        kind: 'active',
+        subject: { target: { kind: 'local' }, runtimeId: null, agent: 'codex' },
+        snapshot: state ? { kind: 'known', state } : { kind: 'unknown' },
+        removable: false
+      }
+    }
+    const draft = structuredAgentSessionDraftScopeKey('session-1')
+    updateNativeChatComposerDraft(draft, { text: 'hello' }, 'immediate')
+    mocks.messages = []
+    // Before the first answer the composer stays (its sends held) and Install doesn't flash.
+    hostSays(null)
+    const { rerender } = render(sessionView())
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install Codex' })).toBeNull()
+    expect(mocks.composerProps?.unavailableHint).toBeUndefined()
+
+    hostSays(notInstalled)
+    rerender(sessionView())
+    expect(screen.getByRole('button', { name: 'Install Codex' })).toBeTruthy()
+    expect(screen.getByText(/One-time 112 MB download/)).toBeTruthy()
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(mocks.composerProps?.unavailableHint).toBe('Install Codex to start chatting')
+
+    for (const lifecycle of ['pending', 'failed'] as const) {
+      mocks.launchLifecycle = lifecycle
+      mocks.launchResumes = true
+      rerender(<div key={lifecycle}>{sessionView()}</div>)
+      expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
+      expect(mocks.composerProps?.unavailableHint).toBe('Install Codex to continue')
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    }
+    mocks.launchLifecycle = null
+    hostSays({ ...notInstalled, available: false })
+    rerender(sessionView())
+    expect(mocks.composerProps?.unavailableHint).toBe('Codex is not available on this host.')
+    expect(screen.queryByRole('button', { name: /^Install/ })).toBeNull()
+    hostSays(notInstalled)
+
+    mocks.messages = null
+    rerender(sessionView())
+    expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
+    expect(screen.queryByText(/One-time 112 MB download/)).toBeNull()
+
+    hostSays({ ...notInstalled, revision: 2, installedVersion: '1.3.0', source: 'managed' })
+    rerender(sessionView())
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Install/ })).toBeNull()
+    expect(mocks.composerProps?.unavailableHint).toBeUndefined()
+    expect(readNativeChatComposerDraft(draft).text).toBe('hello')
   })
 
   it('shows the ordinary usable chat without a startup label while launch is pending', () => {
@@ -216,7 +295,6 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(screen.getByText('Chat connection could not be confirmed.')).toBeTruthy()
   })
 
-  // The message rides the restart as its first message, held until the chat exists.
   it('relaunches a failed start on send, with the message as its first message', () => {
     mocks.launchLifecycle = 'failed'
     render(sessionView())
@@ -245,7 +323,6 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     }
   )
 
-  // Launch Retry relaunches the chat, and the reader may have scrolled up in it.
   it('brings the latest into view when launch Retry relaunches a failed chat', async () => {
     mocks.launchLifecycle = 'failed'
     render(sessionView())

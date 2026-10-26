@@ -21,7 +21,7 @@ describe('scheduleMobileClaudeAnswer', () => {
   it('writes each question body then its Enter, paced per step, one Enter per line', () => {
     const events: string[] = []
     const timers = scheduleMobileClaudeAnswer(
-      ['', 'b', 'c'], // blank middle answer must still get its own body + Enter
+      ['', 'b', 'c'],
       (line) => events.push(`body:${line}`),
       () => events.push('enter')
     )
@@ -29,7 +29,9 @@ describe('scheduleMobileClaudeAnswer', () => {
 
     vi.advanceTimersByTime(0)
     expect(events).toEqual(['body:'])
-    vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS)
+    vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
+    expect(events).toEqual(['body:'])
+    vi.advanceTimersByTime(1)
     expect(events).toEqual(['body:', 'enter'])
     vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS)
     expect(events).toEqual(['body:', 'enter', 'body:b'])

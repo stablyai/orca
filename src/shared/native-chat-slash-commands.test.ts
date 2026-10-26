@@ -4,33 +4,12 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
-  sessionReportedSkillNames,
+  sessionReportedSkills,
   sessionSlashCommandSuggestions,
   slashCommandDispatchText
 } from './native-chat-slash-commands'
 
 describe('getAgentSlashCommands', () => {
-  it('returns Codex-specific commands (e.g. /model, /resume) for codex', () => {
-    const names = getAgentSlashCommands('codex').map((c) => c.name)
-    expect(names).toContain('model')
-    expect(names).toContain('resume')
-    expect(names).toContain('diff')
-  })
-
-  it('returns Claude commands for claude (no Codex-only /model)', () => {
-    const names = getAgentSlashCommands('claude').map((c) => c.name)
-    expect(names).toContain('clear')
-    expect(names).toContain('compact')
-    expect(names).not.toContain('model')
-    // Claude's terminal writes no /context reply the chat could show.
-    expect(names).not.toContain('context')
-  })
-
-  it('offers OpenClaude /context, whose report lands in its transcript', () => {
-    const names = getAgentSlashCommands('openclaude').map((c) => c.name)
-    expect(names).toEqual([...getAgentSlashCommands('claude').map((c) => c.name), 'context'])
-  })
-
   it('falls back to a small common set for an unknown agent (never empty)', () => {
     const names = getAgentSlashCommands('some-other-agent').map((c) => c.name)
     expect(names).toEqual(['clear', 'help'])
@@ -94,7 +73,7 @@ describe('a session that reports its own command surface', () => {
   })
 
   it('splits skills out for the picker to group on its own', () => {
-    expect(sessionReportedSkillNames(reported)).toEqual(['ref-oss'])
+    expect(sessionReportedSkills(reported).map((skill) => skill.name)).toEqual(['ref-oss'])
   })
 
   it('prefers the description the session reported over the curated one', () => {

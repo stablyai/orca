@@ -5,15 +5,16 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
+import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
-/** Every wall this screen renders: the protocol one and the bundle one. Both are terminal — there
- *  is no native workspace to fall back to, so the only way out is updating one of the two apps. */
+// Protocol/bundle/page-route walls are terminal: no native workspace fallback; update the relevant app or bundle.
 export type BlockedVerdict =
   | Extract<CompatVerdict, { kind: 'blocked' }>
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
+  | PageRouteRefusalVerdict
 
 type Props = {
   verdict: BlockedVerdict
@@ -22,17 +23,18 @@ type Props = {
 const DESKTOP_TOO_OLD_BODY =
   'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
 
-/** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
- *  older than this host's client floor, so a download fixes it and an app update does not. */
+// refresh-bundle fixes cached workspace older than host floor; store app update cannot replace that cache.
 type BlockRemedy = 'update-mobile' | 'update-desktop' | 'refresh-bundle'
 
 function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   switch (verdict.reason) {
     case 'mobile-too-old':
     case 'bundle-shell-too-old':
+    case 'page-route-grant-missing':
       return 'update-mobile'
     case 'desktop-too-old':
     case 'bundle-unavailable':
+    case 'page-route-unlisted':
       return 'update-desktop'
     case 'bundle-incompatible':
       return verdict.side === 'desktop' ? 'update-desktop' : 'refresh-bundle'
@@ -56,9 +58,6 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: stri
   }
   if (verdict.reason === 'mobile-too-old') {
     return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
-  }
-  if (verdict.reason === 'bundle-unavailable') {
-    return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
   }
   if (remedy === 'update-mobile') {
     return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
@@ -102,8 +101,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={() => {
-              // The seam: this screen is in the tasks page closure, where react-native's `openURL`
-              // calls a `window.open` both shells refuse and resolves anyway.
+              // Use external-link seam: page’s RN openURL calls window.open, which both shells refuse despite resolving.
               openExternalLink(primaryAction.url)
             }}
           >
@@ -113,9 +111,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // The handoff, not expo-router's singleton: `/` is the phone's home screen and the
-            // page does not carry it, so inside the shell a singleton replace renders the root
-            // route in the WebView rather than leaving it. This posts the target to the shell.
+            // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
             router.replace('/')
           }}
         >

@@ -10,7 +10,10 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { TuiAgent } from '../../shared/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'
-import { isVerifiedOpenCodeLegacyModelVersion } from './opencode-model-version-policy'
+import {
+  isVerifiedOpenCodeConfigModelVersion,
+  isVerifiedOpenCodeLegacyModelVersion
+} from './opencode-model-version-policy'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
@@ -24,8 +27,6 @@ type StartupScope = {
   inputs: AgentStartupPlanInputs
   cwd: string
   isWsl?: boolean
-  /** TEMPORARY parity: the platform main checked this model on, when it differs. */
-  modelCheckPlatform?: NodeJS.Platform
   hostIdentity?: string
   signal?: AbortSignal
 }
@@ -51,20 +52,20 @@ export async function prepareOpenCodeModelStartupInputs(
   if (typeof model !== 'string' || model.trim().length === 0) {
     refuseModel()
   }
-  const platform = options.modelCheckPlatform ?? inputs.platform
   if (
     Object.entries(inputs.sessionOptions ?? {}).some(
       ([key, value]) => key !== 'model' && value !== undefined
     ) ||
     inputs.isRemote ||
     options.isWsl ||
-    platform !== process.platform ||
+    inputs.platform !== process.platform ||
     options.signal?.aborted
   ) {
     refuseModel()
   }
   const command =
-    inputs.cmdOverrides.opencode || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, platform)
+    inputs.cmdOverrides.opencode ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {
@@ -94,7 +95,7 @@ export async function prepareOpenCodeModelStartupInputs(
     }
     return { inputs }
   }
-  if (capabilities?.version !== '2.0.16' || inputs.agentArgs?.trim()) {
+  if (!isVerifiedOpenCodeConfigModelVersion(capabilities?.version) || inputs.agentArgs?.trim()) {
     refuseModel()
   }
   const before = await probeOpenCodeLaunchModelContext({
@@ -169,7 +170,6 @@ export async function buildExecutionHostAgentStartupPlan(
   return plan
 }
 
-/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
 export async function planExecutionHostStartupWithPromptCandidate(
   options: StartupScope & {
     prompt: string

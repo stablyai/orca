@@ -13,8 +13,7 @@ const build = (params: Record<string, unknown>) =>
 
 describe('buildManagedWorktreeCreateArgs', () => {
   it('omits name provenance when the client did not claim a generated name', () => {
-    // Why: absent must mean user-typed. A truthy default would let the host permanently retire
-    // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".
+    // Absent means user-typed: default true would permanently retire deliberate names such as orca and molly.
     expect(build({ repo: 'id:repo-1', name: 'nautilus' })).not.toHaveProperty('nameWasGenerated')
     expect(
       build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: false })
@@ -41,7 +40,7 @@ describe('buildManagedWorktreeCreateArgs', () => {
   })
 
   it('carries the parent-pick provenance only when the client marked it manual', () => {
-    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    // Older clients omit this and retain CLI-flag behavior.
     expect(
       build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
     ).not.toHaveProperty('parentWorkspaceOrigin')
@@ -77,5 +76,12 @@ describe('buildManagedWorktreeCreateArgs', () => {
       }
     )
     expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+  })
+})
+
+describe('worktree setup choice', () => {
+  it.each([false, true])('preserves the submitted choice across RPC (%s)', (setupOnly) => {
+    const params = WorktreeCreate.parse({ repo: 'repo-1', name: 'choice', setupOnly })
+    expect(buildManagedWorktreeCreateArgs(params, {})).toMatchObject({ setupOnly })
   })
 })

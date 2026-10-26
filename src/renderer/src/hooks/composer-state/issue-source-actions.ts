@@ -33,7 +33,7 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,
@@ -44,6 +44,7 @@ import {
   getLinearLinkedWorkItemBranchName
 } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -122,7 +123,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
+      // Treat typed Linear identifiers as lookup text too, rather than user-owned names.
       if (
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
@@ -139,7 +140,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
       branchAutoNameRef.current = linearBranchName ?? ''
-      // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
+      // Source selection must not inject user instructions through note prefill; match GitHub behavior.
     },
     [
       isProjectGroupTarget,
@@ -181,7 +182,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedWorkItem(linkedItem)
       setLinkedTaskSourceContext(sourceContext)
       const suggestedName =
-        getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ??
+        getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
         getLinkedWorkItemSuggestedName(linkedItem)
       // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
       if (

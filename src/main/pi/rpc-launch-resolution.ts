@@ -5,17 +5,25 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { isStableCliVersionOnLine, probeAgentCliVersion } from '../agent-cli-version-probe'
 import {
+  checkAgentCliVersion,
+  type AgentCliVersionCheck,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
+import {
+  resolveAgainAfterRefreshOnMissingProgram,
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
+import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
   withoutPiCallerEnv,
@@ -25,25 +33,18 @@ import {
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
+  /** Conversation files, newest first; empty for a new conversation. */
+  lineage?: readonly string[]
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
 }
 
-// Stable releases from 0.84.0 emit agent_settled after retries and detached compaction; older
-// Pi (the 0.73.x package included) keeps the terminal chat.
-const PI_RPC_RELEASE_LINES = [
-  { major: 0, floor: '0.84.0' },
-  { major: 1, floor: '1.0.0' }
-] as const
+// RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
+export const PI_RPC_MINIMUM_VERSIONS = ['0.84.0'] as const
 
-function supportsPiRpcVersion(version: string): boolean {
-  return PI_RPC_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line))
-}
-
-/** The binary a Pi launch with `env` spawns; create support resolves through here too. */
 export function resolvePiRpcCommand(
   env: Readonly<Record<string, string>>,
   commandSettings: StructuredAgentCommandSettings = {},
@@ -58,16 +59,26 @@ export function resolvePiRpcCommand(
   )
 }
 
-export function piRpcVersionSupported(
+export function checkPiRpcVersion(
   launch: { command: string; cwd: string; env: Record<string, string> },
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<boolean> {
-  return probe({ program: launch.command, cwd: launch.cwd, env: launch.env }, supportsPiRpcVersion)
+  read?: AgentCliVersionReader
+): Promise<AgentCliVersionCheck> {
+  return checkAgentCliVersion(
+    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    PI_RPC_MINIMUM_VERSIONS,
+    read
+  )
 }
 
-const headerSchema = z.object({ type: z.literal('session'), cwd: z.string().min(1) })
+const headerSchema = z.object({
+  type: z.literal('session'),
+  cwd: z.string().min(1),
+  id: z.string().optional()
+})
 
-async function sessionDirectory(file: string): Promise<string | null> {
+export async function readPiSessionHeader(
+  file: string
+): Promise<{ cwd: string; id?: string } | null> {
   let descriptor
   try {
     descriptor = await open(file, 'r')
@@ -85,20 +96,45 @@ async function sessionDirectory(file: string): Promise<string | null> {
     if (lf === -1) {
       throw new Error('Pi session header is incomplete or oversized')
     }
-    return headerSchema.parse(JSON.parse(data.slice(0, lf))).cwd
+    return headerSchema.parse(JSON.parse(data.slice(0, lf)))
   } finally {
     await descriptor.close()
   }
 }
 
-async function sameDirectory(left: string, right: string): Promise<boolean> {
+export async function samePiDirectory(left: string, right: string): Promise<boolean> {
   const canonical = async (value: string): Promise<string> =>
     realpath(value).catch(() => normalize(value))
   const [a, b] = await Promise.all([canonical(left), canonical(right)])
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
-/** Pi's part of a launch: its account directory, session file or fork, binary and release check. */
+/** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
+export function resolvePiRpcInvocation(deps: {
+  accountDir: string
+  resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
+  commandSettings?: StructuredAgentCommandSettings
+  resolveCommand?: typeof resolveCliCommand
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Base for relative PATH entries; defaults to Orca's working directory. */
+  resolveWorkingDirectory?: () => Promise<string> | string
+}): Promise<{ command: string; env: Record<string, string> }> {
+  return resolveAgainAfterRefreshOnMissingProgram(
+    async () => {
+      const env: Record<string, string> = {}
+      for (const [key, value] of Object.entries(await deps.resolveEnvironment())) {
+        if (value !== undefined) {
+          env[key] = value
+        }
+      }
+      env.PI_CODING_AGENT_DIR = deps.accountDir
+      return { env, command: resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
+    },
+    deps.refreshEnvironmentAfterMiss,
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+  )
+}
+
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
@@ -109,10 +145,14 @@ export function piRpcLaunchPart(
     }
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const cwd = await basis.launchDirectory()
-    const env: Record<string, string> = {
-      ...(await basis.environment()),
-      PI_CODING_AGENT_DIR: accountHome.path
-    }
+    const { env, command } = await resolvePiRpcInvocation({
+      accountDir: accountHome.path,
+      resolveEnvironment: basis.environment,
+      commandSettings: basis.commandSettings(),
+      resolveCommand: deps.resolveCommand,
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: () => cwd
+    })
     const previous = agentSessionProviderHandleChainHead(record.providerHandleChain)
     let sessionFile: string | undefined
     let forkFile: string | undefined
@@ -126,27 +166,38 @@ export function piRpcLaunchPart(
         throw new Error('Pi resume handle is not a host session file')
       }
       const source = previous.handle.nativeId
-      const directory = await sessionDirectory(source)
-      if (directory === null) {
+      const header = await readPiSessionHeader(source)
+      if (
+        previous.origin === 'adopted' &&
+        (!header ||
+          header.id !== sessionIdFromFileName(source) ||
+          !(await samePiDirectory(header.cwd, cwd)))
+      ) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'transcriptNotFound'
+        })
+      }
+      if (header === null) {
         replacement = previous.origin === 'created' ? 'unsaved' : 'restore-failed'
-      } else if (await sameDirectory(directory, cwd)) {
+      } else if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source
       } else {
         forkFile = source
       }
     }
-    const command = resolvePiRpcCommand(env, basis.commandSettings(), deps.resolveCommand)
-    // Again at every launch: the binary on PATH may have changed since the chat was created.
-    if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
+    // Recheck each launch because the PATH binary may have changed.
+    const launchVersion = await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)
+    if (launchVersion.status === 'tooOld') {
+      throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
     return {
       launch: {
         command,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
+        ...(sessionFile || forkFile
+          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {})
@@ -155,6 +206,21 @@ export function piRpcLaunchPart(
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** Follow resumes and directory forks to the original session; forks preserve entry IDs. */
+function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+  const files: string[] = []
+  for (const link of chain.toReversed()) {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+      break
+    }
+    files.push(link.handle.nativeId)
+    if (link.origin !== 'resumed' && link.origin !== 'forked') {
+      break
+    }
+  }
+  return files
 }
 
 export function piRpcProviderLink(

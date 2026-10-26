@@ -1,9 +1,8 @@
-// A dispatch row written before the write-side reason bound (#20654) still carries the provider's
-// full error text; the submission every page and frame attaches must read it bounded.
+// Older rows can contain unbounded provider errors; read paths must apply the current reason limit.
 
 import { describe, expect, it } from 'vitest'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -41,7 +40,7 @@ describe("a dispatch row's reason", () => {
     expect(reason?.startsWith('Write failed: ')).toBe(true)
     expect(reason).toContain('[Orca: output truncated')
     expect(Buffer.byteLength(reason ?? '')).toBeLessThan(
-      DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes + 1024
+      JOURNAL_DISPATCH_REASON_LIMITS.inlineHeadBytes + 1024
     )
   })
 

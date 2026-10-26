@@ -2,8 +2,7 @@ import { optionalNumberParam, optionalStringParam } from './desktop-script-provi
 import type { BridgeSnapshot } from './desktop-script-provider-types'
 
 export const MAX_CACHED_DESKTOP_SNAPSHOTS = 32
-// Why: cached element frames and provider IDs are follow-up hints, not durable
-// state; delayed agents should refresh instead of acting on old UI geometry.
+// Expire geometry hints before delayed agents can act on stale UI positions.
 export const MAX_CACHED_DESKTOP_SNAPSHOT_AGE_MS = 2 * 60 * 1000
 
 export type CachedSnapshotEntry = {

@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeFileCommandHost } from './runtime-file-command-host'
+import type { RuntimeFileCommandHost } from './files/file-command-host'
 
 const mocks = vi.hoisted(() => ({
   resolvePath: vi.fn(),
@@ -13,40 +13,32 @@ const mocks = vi.hoisted(() => ({
   writeBuffer: vi.fn()
 }))
 
-vi.mock('./runtime-file-commands-read-file-explorer-preview', () => ({
-  RuntimeFileCommandsWithReadFileExplorerPreview: class {
-    resolveFileExplorerPath = mocks.resolvePath
-    host = { requireStore: mocks.requireStore }
-  }
-}))
-vi.mock('./runtime-file-commands-mobile-file-list-limit', () => ({
+vi.mock('./files/file-mutation-expectation', () => ({
   assertRuntimeFileMutationExpectation: mocks.expectation
 }))
-vi.mock('./runtime-file-command-target', () => ({ requireRuntimeFileProvider: mocks.provider }))
-vi.mock('../ipc/filesystem-auth', () => ({ resolveAuthorizedPath: mocks.authorize }))
+vi.mock('./files/file-target', () => ({
+  resolveFileExplorerPath: mocks.resolvePath,
+  requireRuntimeFileProvider: mocks.provider
+}))
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({ resolveAuthorizedPath: mocks.authorize }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal()),
   mkdir: mocks.mkdir,
   writeFile: mocks.writeFile
 }))
 
-import { RuntimeFileCommandsWithWriteFileExplorerFile } from './runtime-file-commands-write-file-explorer-file'
+import { RuntimeFileMutations } from './files/file-mutations'
 import { createLocalFilesystemProvider } from '../providers/local-filesystem-provider'
 
 function unexpectedHostCall(): never {
   throw new Error('Unexpected access beyond the isolated file command')
 }
 
-const host: RuntimeFileCommandHost = {
-  getRuntimeId: unexpectedHostCall,
-  requireStore: unexpectedHostCall,
-  resolveWorktreeSelector: unexpectedHostCall,
-  resolveRuntimeFileTarget: unexpectedHostCall,
-  resolveRuntimeGitTarget: unexpectedHostCall,
-  openFile: unexpectedHostCall,
-  openDiff: unexpectedHostCall
+const host: Pick<RuntimeFileCommandHost, 'requireStore' | 'resolveRuntimeFileTarget'> = {
+  requireStore: mocks.requireStore,
+  resolveRuntimeFileTarget: unexpectedHostCall
 }
-const commands = new RuntimeFileCommandsWithWriteFileExplorerFile(host)
+const commands = new RuntimeFileMutations(host)
 const destination = join('workspace', 'uploads', 'binary.dat')
 const target = { executionHostId: 'local', path: destination }
 let remote = false

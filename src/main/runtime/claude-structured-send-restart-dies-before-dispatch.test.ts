@@ -1,9 +1,4 @@
-// A send is accepted into a chat whose Claude child is gone, and its delivery restarts the child
-// and holds the message until that child proves its start. When it dies first, it was never handed
-// the message, so the send settles `rejected` with the child's own diagnostic, never as a
-// delivery nobody can confirm, and a client that was subscribed the whole time receives the
-// failure row and the rejected submission over the wire. Against the production runtime, adapter,
-// record store and host, with only the CLI scripted.
+// Restart failure before dispatch must reject the accepted send and publish its cause to existing subscribers.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -21,14 +16,13 @@ const CALLER = { callerKey: 'client-1' }
 const DIAGNOSTIC = 'claude stream-json exited (code 1): claude: not signed in (rig)'
 const STARTUP_TEXT = 'Claude stopped before it finished starting. Send your message to try again.'
 
-/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+/** Serialized delivery can exceed one second on loaded runners. */
 function eventually(assertion: () => unknown): Promise<unknown> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
 
 let claude = createScriptedClaudeRuntime([SESSION])
 let operations = 0
-/** The dispatch state each send was answered with, before any exit settled it. */
 const answered = new Map<string, string>()
 
 afterEach(async () => {
@@ -95,6 +89,7 @@ async function submission(host: StructuredAgentSessionHost, clientMessageId: str
 
 async function failLatestStart(host: StructuredAgentSessionHost, count: number): Promise<void> {
   await eventually(() => expect(claude.children(SESSION)).toHaveLength(count))
+  await eventually(() => expect(claude.child(SESSION).initializing).toBe(true))
   claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
   await waitForStructuredAgentSessionRecovery()
   await eventually(() =>
@@ -102,7 +97,6 @@ async function failLatestStart(host: StructuredAgentSessionHost, count: number):
   )
 }
 
-/** Everything a subscriber received, flattened to the rows and submissions it was shown. */
 function received(events: AgentSessionSubscribeEvent[]) {
   const statusTexts: string[] = []
   const submissions = new Map<string, string>()
@@ -128,7 +122,7 @@ function received(events: AgentSessionSubscribeEvent[]) {
 }
 
 describe('a send whose restarted Claude child dies before it proves its start', () => {
-  it('settles rejected with the diagnostic, keeps one failure row, and a Retry is one new attempt', async () => {
+  it('settles rejected with the diagnostic, keeps one failure row, and a new send can start after exhaustion', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
@@ -138,39 +132,35 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     const releasedFence = fence(host)
 
     const sent = await send(host, 'hello?')
-    // Accepted: the answer comes before the restart it needs.
     expect(answered.get(sent)).toBe('pending')
     await eventually(() => expect(claude.children(SESSION)).toHaveLength(2))
-    await eventually(() =>
-      expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-    )
+    await eventually(() => expect(claude.child(SESSION).initializing).toBe(true))
+    expect(await submission(host, sent)).toMatchObject({ dispatchState: 'pending' })
     expect(claude.child(SESSION).calls).not.toContain('send')
-    await failLatestStart(host, 2)
+    for (let count = 2; count <= 6; count++) {
+      expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+      await failLatestStart(host, count)
+    }
 
-    // Provably not delivered, with the cause; not "unconfirmed".
     await eventually(async () =>
       expect(await submission(host, sent)).toMatchObject({
         dispatchState: 'rejected',
-        // Worded for the user: the red line under the composer shows it as it stands.
         reason: STARTUP_TEXT,
         rejection: { kind: 'providerStartFailed' }
       })
     )
     expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
-    expect(fence(host)).toBe(releasedFence + 2)
-    expect(claude.children(SESSION)).toHaveLength(2)
+    expect(fence(host)).toBe(releasedFence + 10)
+    expect(claude.children(SESSION)).toHaveLength(6)
 
-    // Retry under a new id: one restart, and once the CLI is healthy the message is written.
     claude.behave(SESSION, {})
     await send(host, 'hello again')
-    await eventually(() => expect(claude.children(SESSION)).toHaveLength(3))
+    await eventually(() => expect(claude.children(SESSION)).toHaveLength(7))
     await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
     expect(claude.child(SESSION).calls.filter((call) => call === 'send')).toHaveLength(1)
     expect(await statusRows(host)).toHaveLength(2)
   })
 
-  // A restart refused because its child died before it was handed over leaves one row, from the
-  // delivery, in the words any failed start uses, and rejects the message with them.
   it.each(['spawn', 'start-time-read'] as const)(
     'leaves one row for a restart whose child exits at %s',
     async (at) => {
@@ -213,13 +203,16 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     try {
       await failLatestStart(host, 1)
       const sent = await send(host, 'hello?')
-      await failLatestStart(host, 2)
+      for (let count = 2; count <= 6; count++) {
+        expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+        await failLatestStart(host, count)
+      }
 
       await eventually(() => {
         const seen = received(events)
         expect(seen.submissions.get(sent)).toBe('rejected')
         expect(seen.statusTexts).toContainEqual(STARTUP_TEXT)
-        // The subscriber ended up on the fence the exit published, not the one the restart did.
+        // Subscribers must finish on the exit fence, not the preceding restart fence.
         expect(seen.fences.at(-1)).toBe(fence(host))
       })
     } finally {
@@ -229,10 +222,8 @@ describe('a send whose restarted Claude child dies before it proves its start', 
 })
 
 describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber open throughout', () => {
-  // The stderr rides beside the sentence as a log detail; the sentence is the same every time.
   const STARTUP_FAILURE = STARTUP_TEXT
 
-  /** Status rows a subscriber has been shown, one per row whatever frame carried it. */
   function shownRows(events: AgentSessionSubscribeEvent[]): Map<string, string> {
     const rows = new Map<string, string>()
     for (const event of events) {
@@ -249,7 +240,7 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     return rows
   }
 
-  it('shows one row naming the cause per failed attempt, however the start died, and none once the CLI is fixed', async () => {
+  it('shows one row naming the cause per exhausted start, however the start died, and none once the CLI is fixed', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     const events: AgentSessionSubscribeEvent[] = []
@@ -267,9 +258,11 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
       await failLatestStart(host, 1)
       await eventually(() => expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE]))
 
-      // Send: accepted, and its delivery restarts the child, which dies before starting.
       const sent = await send(host, 'hello?')
-      await failLatestStart(host, 2)
+      for (let count = 2; count <= 6; count++) {
+        expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+        await failLatestStart(host, count)
+      }
       await eventually(async () =>
         expect(await submission(host, sent)).toMatchObject({
           dispatchState: 'rejected',
@@ -280,8 +273,7 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
         expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE, STARTUP_FAILURE])
       )
 
-      // Retry while still broken: this restart dies before its child is handed over, so the
-      // delivery's start is refused. Still one row, saying the same thing, on the rejected message.
+      // Another failed restart must still produce one cause row for its rejected send.
       claude.behave(SESSION, {
         exitsDuringSpawn: {
           diagnostic: 'claude stream-json exited (code 1): claude: not signed in (rig)',
@@ -304,7 +296,6 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
         ])
       )
 
-      // The CLI is fixed: Retry delivers and adds no row.
       claude.behave(SESSION, {})
       await expect(attempt(host, 'hello?')).resolves.toMatchObject({ ok: true })
       await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))

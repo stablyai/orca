@@ -22,8 +22,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
-  // Only a chat with a message shown as not sent reads the journal's rows and loaded items, so in a
-  // chat with none a streaming turn rebuilds no notice.
+  // Read journal rows/items only for visible rejected messages so ordinary streaming cannot rebuild notices.
   const hasRejected = submissions.some(
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
   )
@@ -45,7 +44,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
       }),
     [pending, journalRows, agentName, startFailures, commandItemIds]
   )
-  // A submission batch rebuilds the map; one that says the same keeps the old, so no row re-renders.
+  // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
   const stable = sameNoticesKept(previousRef.current, notices)
   useEffect(() => {
@@ -56,8 +55,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
 
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** The loaded commands, read only while `enabled`, and held while unchanged so a streaming turn
- *  rebuilds no notice. */
+/** Read command IDs only while enabled; retain unchanged sets through streaming. */
 function useCommandItemIds(
   items: readonly AgentJournalRenderItem[],
   enabled: boolean
@@ -76,7 +74,7 @@ function useCommandItemIds(
   return stable
 }
 
-/** `next`, reusing each notice `previous` words the same way, and `previous` itself when all are. */
+/** Reuse equivalent prior notices and the whole prior map when every entry matches. */
 function sameNoticesKept(
   previous: ReadonlyMap<string, NativeChatDeliveryNotice>,
   next: ReadonlyMap<string, NativeChatDeliveryNotice>

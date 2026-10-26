@@ -1,4 +1,3 @@
-/* Shared daemon server + adapter fixtures for the DaemonPtyAdapter test files. */
 import { vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,7 +35,7 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
-    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
+    // getCwd falls back to OS lookup; keep the fake PID outside the real process range.
     pid: 999_999_999,
     getForegroundProcess: vi.fn(() => null),
     confirmShellForeground: vi.fn(async () => false),

@@ -11,8 +11,7 @@ describe('isSshSessionLimitError', () => {
   })
 
   it('matches the OpenSSH MaxSessions rejection (SSH2_OPEN_CONNECT_FAILED + "open failed")', () => {
-    // Why: stock OpenSSH sshd refuses session channels over MaxSessions with
-    // reason 2, not resource-shortage — observed against OpenSSH 9.2.
+    // OpenSSH 9.2 uses reason 2 plus open failed for MaxSessions refusal.
     expect(
       isSshSessionLimitError(
         Object.assign(new Error('(SSH) Channel open failure: open failed'), { reason: 2 })

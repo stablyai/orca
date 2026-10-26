@@ -8,7 +8,7 @@ import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange,
   currentAgentSessionThreadGoal,
-  currentAgentSessionThreadGoalBySequence,
+  currentAgentSessionThreadGoalSourceBySequence,
   isAgentSessionThreadGoalOpen
 } from './agent-session-thread-goal'
 
@@ -71,12 +71,16 @@ describe('current thread goal', () => {
 
   it('takes the latest transition by sequence for items held unordered', () => {
     const paused = goal({ status: 'paused' })
+    const latest = goalRow(5, 'set', paused)
     const unordered = new Map([
-      ['b', goalRow(5, 'set', paused)],
+      ['b', latest],
       ['a', goalRow(2, 'set')]
     ])
-    expect(currentAgentSessionThreadGoalBySequence(unordered.values())).toEqual(paused)
-    expect(currentAgentSessionThreadGoalBySequence([])).toBeUndefined()
+    expect(currentAgentSessionThreadGoalSourceBySequence(unordered.values())).toEqual({
+      item: latest,
+      goal: paused
+    })
+    expect(currentAgentSessionThreadGoalSourceBySequence([])?.goal).toBeUndefined()
   })
 
   it('answers null once the latest transition cleared the goal', () => {

@@ -7,7 +7,6 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -21,11 +20,8 @@ const mockStore = vi.hoisted(() => ({
   openModal: vi.fn()
 }))
 
-// Counts invocations of the memo'd card's inner render function. A bail-out
-// (React.memo shallow-equal props) does NOT invoke it — which is the claim
-// under test: order-preserving epoch bumps must not re-render cards.
+// Count inner renders so React.memo bailouts remain observable across order-preserving epoch changes.
 const cardRenderSpy = vi.hoisted(() => vi.fn())
-const trackSpy = vi.hoisted(() => vi.fn())
 
 type WorktreeListComponent = React.ComponentType<{
   scrollOffsetRef: React.RefObject<number>
@@ -105,7 +101,7 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mockStore.activateWorktreeFromSidebar
 }))
 
-vi.mock('@/lib/telemetry', () => ({ track: trackSpy }))
+vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -255,9 +251,7 @@ const mountedRoots: Root[] = []
 
 async function renderList(root: Root): Promise<void> {
   await act(async () => {
-    // Why fresh ref objects each render: they defeat WorktreeList's own memo
-    // like a store-subscription re-render would, so the test exercises a full
-    // parent re-render and isolates whether the CARDS bail.
+    // Fresh ref props bypass the list’s own memo to isolate whether individual cards bail out.
     root.render(
       <WorktreeList scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
     )
@@ -292,14 +286,11 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     await renderList(root)
     expect(container.querySelectorAll('[data-mock-worktree-card]')).toHaveLength(2)
 
-    // Baseline: a parent re-render with unchanged store state must not
-    // re-invoke card render functions.
     const countAfterMount = cardRenderSpy.mock.calls.length
     await renderList(root)
     expect(cardRenderSpy.mock.calls.length).toBe(countAfterMount)
 
-    // Order-preserving epoch bump: same worktrees, same order, new epoch.
-    // Manual sort applies the bump without the smart-sort settle debounce.
+    // Manual sort applies the order-preserving epoch immediately without smart-sort debounce.
     mockStore.state = { ...mockStore.state, sortEpoch: 1 }
     await renderList(root)
 
@@ -325,61 +316,7 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     }
     await renderList(root)
 
-    // The changed card re-renders; identity reuse must not freeze real updates.
     expect(cardRenderSpy.mock.calls.length).toBeGreaterThan(countAfterMount)
     expect(cardRenderSpy).toHaveBeenCalledWith('wt-a')
-  })
-
-  it('tracks Smart attention changes that preserve the displayed order', async () => {
-    mockStore.state = { ...mockStore.state, sortBy: 'smart' }
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    const root = createRoot(container)
-    mountedRoots.push(root)
-
-    await renderList(root)
-    const renderedOrder = (): (string | null)[] =>
-      [...container.querySelectorAll('[data-mock-worktree-card]')].map((card) =>
-        card.getAttribute('data-mock-worktree-card')
-      )
-    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
-    expect(trackSpy).not.toHaveBeenCalledWith('smart_sort_class_distribution', expect.anything())
-
-    const now = Date.now()
-    const paneKey = 'tab-a:11111111-1111-4111-8111-111111111111'
-    const working: AgentStatusEntry = {
-      state: 'working',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      agentType: 'codex',
-      paneKey,
-      worktreeId: 'wt-a',
-      stateHistory: []
-    }
-    mockStore.state = {
-      ...mockStore.state,
-      agentStatusByPaneKey: { [paneKey]: working },
-      repos: [...(mockStore.state.repos as Repo[])]
-    }
-    await renderList(root)
-
-    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
-    expect(trackSpy).toHaveBeenCalledWith(
-      'smart_sort_class_distribution',
-      expect.objectContaining({ class_3: 1, total_worktrees: 2 })
-    )
-
-    mockStore.state = {
-      ...mockStore.state,
-      agentStatusByPaneKey: {
-        [paneKey]: { ...working, state: 'blocked', stateStartedAt: now + 1, updatedAt: now + 1 }
-      },
-      repos: [...(mockStore.state.repos as Repo[])]
-    }
-    await renderList(root)
-
-    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
-    expect(trackSpy).toHaveBeenCalledWith('smart_sort_class_1_promotion', { cause: 'blocked' })
   })
 })

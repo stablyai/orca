@@ -14,15 +14,28 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../project-groups/folder-workspace-create-refusal'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
+import {
+  runtimeVisibleFolderWorkspaces,
+  runtimeVisibleProjectGroups
+} from './runtime-visible-catalog'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  assertWslMoveProjectWritable,
+  assertWslMoveRepoWritable,
+  isLocalWslMoveRow,
+  shouldDropWslMoveProjectUpdate
+} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeProjectGroupDependencies = {
   getStore: () => RuntimeStore | null
-  resolveRepo: (selector: string) => Promise<Repo>
+  // `connectionId` narrows twins by their SSH target; undefined keeps the plain selector.
+  resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
   notifyReposChanged: () => void
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
   cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
 }
 
 type FolderWorkspaceUpdates = Partial<
@@ -58,6 +71,15 @@ export class RuntimeProjectGroupController {
 
   listFolderWorkspaces(): FolderWorkspace[] {
     return this.deps.getStore()?.getFolderWorkspaces?.() ?? []
+  }
+
+  /** What a client may list; `listGroups`/`listFolderWorkspaces` keep the full store. */
+  listVisibleGroups(): ProjectGroup[] {
+    return runtimeVisibleProjectGroups(this.deps.getStore())
+  }
+
+  listVisibleFolderWorkspaces(): FolderWorkspace[] {
+    return runtimeVisibleFolderWorkspaces(this.deps.getStore())
   }
 
   async createGroup(input: {
@@ -109,13 +131,19 @@ export class RuntimeProjectGroupController {
     return { deleted }
   }
 
-  async moveProject(repoSelector: string, groupId: string | null, order?: number): Promise<Repo> {
+  async moveProject(
+    repoSelector: string,
+    groupId: string | null,
+    order?: number,
+    connectionId?: string | null
+  ): Promise<Repo> {
     const store = this.deps.getStore()
     if (!store?.moveProjectToGroup) {
       throw new Error('runtime_unavailable')
     }
-    const repo = await this.deps.resolveRepo(repoSelector)
-    const moved = store.moveProjectToGroup(repo.id, groupId, order)
+    const repo = await this.deps.resolveRepo(repoSelector, connectionId)
+    assertWslMoveRepoWritable(store, repo)
+    const moved = store.moveProjectToGroup(repo, groupId, order)
     if (!moved) {
       throw new Error('repo_not_found')
     }
@@ -186,6 +214,14 @@ export class RuntimeProjectGroupController {
     if (!store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    const existing = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+    if (
+      existing &&
+      isLocalWslMoveRow(existing) &&
+      shouldDropWslMoveProjectUpdate(store, { folderWorkspaceId }, updates)
+    ) {
+      return existing
+    }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const workspace = store
         .getFolderWorkspaces?.()
@@ -219,10 +255,12 @@ export class RuntimeProjectGroupController {
       throw new Error('runtime_unavailable')
     }
     const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+    if (workspace && isLocalWslMoveRow(workspace)) {
+      assertWslMoveProjectWritable(store, { folderWorkspaceId })
+    }
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
+      // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
         connectionId = this.deps.resolveFolderConnectionId(workspace)
@@ -237,6 +275,14 @@ export class RuntimeProjectGroupController {
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
       this.deps.notifyReposChanged()
+      // The same removal a worktree announces, so its consumers end work held there too.
+      if (workspace) {
+        this.deps.emitWorktreeLifecycle({
+          kind: 'removed',
+          worktreeId: folderWorkspaceKey(folderWorkspaceId),
+          path: workspace.folderPath
+        })
+      }
     }
     return { deleted }
   }

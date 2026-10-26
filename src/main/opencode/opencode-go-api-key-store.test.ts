@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeFs from 'node:fs'
@@ -25,13 +26,14 @@ vi.mock('node:fs', async (importOriginal) => {
     }
   }
 })
-vi.mock('electron', () => ({
-  safeStorage: {
+beforeEach(() =>
+  setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (key: string) => Buffer.from(`encrypted:${key}`),
-    decryptString: (bytes: Buffer) => bytes.toString().slice('encrypted:'.length)
-  }
-}))
+    decryptString: (bytes: Buffer) => bytes.toString().slice('encrypted:'.length),
+    describeProtectionGap: () => null
+  })
+)
 
 beforeEach(() => {
   home.readError = null

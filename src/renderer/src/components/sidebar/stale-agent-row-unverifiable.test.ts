@@ -1,17 +1,4 @@
-/**
- * A stale agent entry on a pane Orca STILL HOLDS A LIVE PTY FOR is not the same thing as a
- * pane with nothing running in it. Both used to decay to `idle`, which asserts "nothing here"
- * on no evidence at all — the exact substitution docs/reference/ssh-execution-boundary.md
- * exists to prevent (loss of contact is never evidence).
- *
- * The split is on evidence Orca already computes: `tabHasLivePty`. With a live PTY the row
- * reads `unverifiable` and reports the observer's own fact — how long the silence has run —
- * so the user can apply knowledge Orca does not have. With no PTY it stays `idle`.
- *
- * Negative controls are the point of this suite: nothing may claim a pane FINISHED because
- * contact was lost, a fresh pane must still read `working`, and a pane with no agent must
- * still read `idle`.
- */
+/** Silence with a live PTY is unverifiable, never proof of completion or current work; no-PTY rows may idle. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -21,13 +8,12 @@ import { makeTab } from '../../store/slices/store-session-test-harness'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getCompactAgentSecondary } from './worktree-card-compact-agent-row'
-import { resolveAttention } from './smart-attention'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 
 const NOW = new Date('2026-05-04T12:00:00.000Z').getTime()
 const TAB_ID = 'tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
-/** 34 minutes of silence: past the 30-minute window, and a legible elapsed reading. */
 const SILENT_FOR_MS = 34 * 60 * 1000
 
 function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -74,7 +60,6 @@ describe('a stale entry on a pane Orca still holds', () => {
     })
     expect(rows[0].state).not.toBe('done')
     expect(getAgentDotState(rows[0])).not.toBe('done')
-    // Nor the working spinner: Orca has no current evidence of work either.
     expect(getAgentDotState(rows[0])).not.toBe('working')
     expect(getAgentDotState(rows[0])).toBe('unverifiable')
   })

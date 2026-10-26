@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { countLooseRefs } from '../../shared/loose-ref-count'
 import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
 import { PACK_INDEX_MAINTENANCE_COOLDOWN_MS } from '../../shared/repo-pack-index-maintenance-policy'
@@ -16,10 +16,11 @@ import { forceDeleteLocalBranch } from './worktree-branch-removal'
 import { maintainRepoPackIndex, PACK_INDEX_THRESHOLD } from './repo-pack-index-maintenance'
 
 const roots: string[] = []
-// Large enough that the deferral ladder (1x, 2x, 4x ... capped at 8x) outlasts
-// three real `pack-refs` runs before the deferral budget is spent.
+// Let the capped deferral ladder outlast three real pack-refs runs.
 const QUIET_MS = 25
 const THRESHOLD = 20
+let packFixtureRoot = ''
+let packFixtureBlobs: string[] = []
 
 function git(cwd: string, args: string[], input?: string): string {
   return execFileSync('git', args, {
@@ -45,11 +46,32 @@ function hasWriteOption(option: string): boolean {
 }
 
 async function createFragmentedPacks(repoPath: string): Promise<string[]> {
+  await cp(
+    join(packFixtureRoot, '.git', 'objects', 'pack'),
+    join(repoPath, '.git', 'objects', 'pack'),
+    {
+      recursive: true
+    }
+  )
+  return packFixtureBlobs
+}
+
+beforeAll(async () => {
+  packFixtureRoot = await mkdtemp(join(tmpdir(), 'orca-fragmented-packs-'))
+  git(packFixtureRoot, ['init', '--quiet'])
+  packFixtureBlobs = await buildFragmentedPacks(packFixtureRoot)
+})
+
+afterAll(async () => {
+  await rm(packFixtureRoot, { recursive: true, force: true })
+})
+
+async function buildFragmentedPacks(repoPath: string): Promise<string[]> {
   const objects = join(repoPath, '.git', 'objects')
-  const blobs: string[] = []
-  for (let index = 0; index < PACK_INDEX_THRESHOLD; index += 1) {
-    const blob = git(repoPath, ['hash-object', '-w', '--stdin'], `packed-${index}\n`)
-    blobs.push(blob)
+  const files = Array.from({ length: PACK_INDEX_THRESHOLD }, (_, index) => `packed-${index}`)
+  await Promise.all(files.map((file) => writeFile(join(repoPath, file), `${file}\n`)))
+  const blobs = git(repoPath, ['hash-object', '-w', ...files]).split('\n')
+  for (const blob of blobs) {
     git(repoPath, ['pack-objects', join(objects, 'pack', 'pack')], `${blob}\n`)
     await rm(join(objects, blob.slice(0, 2), blob.slice(2)))
   }
@@ -66,7 +88,6 @@ function maintainIndex(repoPath: string) {
   })
 }
 
-/** A repo whose only loose-ref backlog is the one the test asks for. */
 async function createRepo(looseRefs: number): Promise<{ repoPath: string; refsDir: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-ref-maintenance-git-'))
   roots.push(root)
@@ -266,7 +287,6 @@ describe('idle ref maintenance against real Git', () => {
     maintenance.dispose()
 
     await expect(countLooseRefs(refsDir, 10_000)).resolves.toEqual({ count: 0, saturated: false })
-    // The refs survived the move into packed-refs; nothing was lost.
     expect(git(repoPath, ['for-each-ref', '--format=%(refname)']).split('\n')).toHaveLength(
       THRESHOLD + 31
     )
@@ -358,10 +378,7 @@ describe('idle ref maintenance against real Git', () => {
 
 describe('yielding the repository to work that deletes refs', () => {
   it('waits for the packed-refs lock and succeeds while the prune continues', async () => {
-    // The pack is never killed. `packed-refs.lock` is held for ~1.4s of a 30s
-    // run; the rest is the prune, during which a concurrent `update-ref -d`
-    // succeeds on its own because per-ref locks last microseconds. Signalling
-    // the child there strands a `refs/**` lock Git never clears.
+    // Await the packed-refs rewrite window; killing the later prune can strand per-ref locks.
     const { repoPath } = await createRepo(0)
     git(repoPath, ['branch', 'doomed'])
     const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
@@ -376,7 +393,6 @@ describe('yielding the repository to work that deletes refs', () => {
       packRefs: async (lock) => {
         packing = true
         lock.setHeld(true)
-        // Stands in for the rewrite window, then the long prune that follows it.
         await new Promise<void>((resolve) => {
           releaseLock = () => {
             lock.setHeld(false)
@@ -390,18 +406,15 @@ describe('yielding the repository to work that deletes refs', () => {
     }
     expect(packing).toBe(true)
 
-    // The real deletion path, which routes through withRepoRefMaintenancePaused.
     let deleted = false
     const deletion = forceDeleteLocalBranch(repoPath, 'doomed', head).then(() => {
       deleted = true
     })
 
-    // It must still be waiting: the rewrite window is open.
     await new Promise((resolve) => setTimeout(resolve, QUIET_MS * 4))
     expect(deleted).toBe(false)
     expect(git(repoPath, ['branch', '--list', 'doomed'])).toContain('doomed')
 
-    // Releasing the window is enough -- the pack is never cancelled.
     releaseLock?.()
     await deletion
     expect(deleted).toBe(true)
@@ -409,8 +422,6 @@ describe('yielding the repository to work that deletes refs', () => {
   }, 30_000)
 
   it('does not block the caller once the rewrite window has closed', async () => {
-    // The prune phase is concurrency-safe, so a caller arriving during it pays
-    // nothing at all.
     const { repoPath } = await createRepo(0)
     git(repoPath, ['branch', 'doomed'])
     const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])

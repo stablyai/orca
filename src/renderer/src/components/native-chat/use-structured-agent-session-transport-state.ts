@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
-import { runningStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-live-turn'
+import {
+  runningStructuredAgentSessionTurnId,
+  structuredAgentSessionHostSaysWorking
+} from '../../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
@@ -13,6 +16,12 @@ const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
 const NO_SUBAGENT_ROSTER: StructuredAgentSubagentRoster = new Map()
 
+/** Host prompt/working evidence; older hosts omit it and readers derive state from journal rows. */
+export type StructuredAgentSessionHostWork = {
+  actionablePromptIds?: readonly string[]
+  working?: boolean
+}
+
 export function useStructuredAgentSessionTransportState(
   state: StructuredAgentSessionState,
   enabled: boolean
@@ -22,17 +31,20 @@ export function useStructuredAgentSessionTransportState(
   const subagentRoster = (enabled ? state.subagentRoster : undefined) ?? NO_SUBAGENT_ROSTER
   const fence = enabled ? state.fence : null
   const latestTurn = enabled ? state.latestTurn : undefined
+  const actionablePromptIds = enabled ? state.actionablePromptIds : undefined
   const current = useMemo(
     () => agentSessionCurrentContextRows(journalItems, submissions),
     [journalItems, submissions]
   )
-  // The host's whole-journal turn, never the loaded rows': a long turn's record is off the page.
+  // A long turn’s record may be off-page; prefer the host’s whole-journal answer.
   const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
-  // The rule the host projects every session list's Working from, so this chat cannot disagree.
-  const isWorking = isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
+  // Prefer current-provider host evidence; older hosts use the same projection as session lists so chat and sidebar agree.
+  const hostWorking = enabled ? state.working : undefined
+  const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
+    isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
+  )
   const nextQueuedMessageId = (enabled ? state.nextQueuedMessageId : null) ?? null
-  // The host names the card its queue sends next. That send lands in a later update than a turn's
-  // end or a Resume, so until then the chat still reads as working and nothing flips in between.
+  // Keep working through the gap between turn-end/Resume and the host’s next queued-send update.
   const queueSendsNext = nextQueuedMessageId !== null && !isWorking
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
@@ -55,9 +67,19 @@ export function useStructuredAgentSessionTransportState(
       structuredSessionForegroundCommands(roster, { items: journalItems, latestTurn })
     )
   }, [enabled, journalItems, latestTurn, state.backgroundTasks, turnId])
+  const hostWork = useMemo<StructuredAgentSessionHostWork>(
+    () => ({
+      ...(actionablePromptIds ? { actionablePromptIds } : {}),
+      ...(hostWorking !== undefined ? { working: hostWorking } : {})
+    }),
+    [actionablePromptIds, hostWorking]
+  )
   return {
     journalItems,
+    currentRequests: enabled ? state.currentRequests : undefined,
     latestTurn,
+    actionablePromptIds,
+    hostWork,
     subagentRoster,
     submissions,
     fence,

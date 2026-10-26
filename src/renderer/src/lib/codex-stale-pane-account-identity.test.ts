@@ -3,8 +3,7 @@ import { useAppStore } from '@/store'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { markRestoredStaleCodexSessionsForRestart } from './codex-session-restart'
 
-// Why one shared email: doAddAccount has no duplicate-email check, so one OpenAI
-// login used in two ChatGPT workspaces produces two accounts with equal labels.
+// One login can produce separate ChatGPT-workspace accounts with the same email label.
 const SHARED_EMAIL = 'shared@example.com'
 const FALLBACK_LABEL = 'Codex account'
 
@@ -43,7 +42,7 @@ describe('stale Codex panes are decided by account id, not label', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     ;(globalThis as { window: typeof window }).window = {
@@ -138,8 +137,7 @@ describe('stale Codex panes are decided by account id, not label', () => {
   })
 
   it('does not report notified for a pane whose notice the store dropped', async () => {
-    // The pane already carries a notice remembering account-b as its launch
-    // account, so re-marking it against active account-b collapses the notice.
+    // The existing notice remembers account-b as launch account, so re-marking against active account-b collapses it.
     useAppStore.setState({
       codexRestartNoticeByPtyId: {
         'pty-1': {
@@ -157,8 +155,7 @@ describe('stale Codex panes are decided by account id, not label', () => {
     const scans = await markRestoredStaleCodexSessionsForRestart()
 
     expect(noticeFor('pty-1')).toBeUndefined()
-    // Why this matters: the sweep permanently suppresses every pane it is told
-    // was notified, so a dropped notice must never claim one.
+    // Do not claim dropped notices: the sweep permanently suppresses panes it considers notified.
     expect(scans.find((scan) => scan.ptyId === 'pty-1')?.notified).toBe(false)
   })
 })

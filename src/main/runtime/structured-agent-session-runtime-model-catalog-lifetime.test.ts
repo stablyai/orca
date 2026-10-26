@@ -1,6 +1,3 @@
-// The host's catalog listings live exactly as long as the host: installing it starts the
-// runtime-start prewarm, and tearing it down (which quit does too) stops every listing it started.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -35,7 +32,9 @@ afterEach(async () => {
 describe('the host catalog lifetime', () => {
   it('prewarms once the host is installed and stops its listings at teardown', async () => {
     const service = {
+      peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn(),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),

@@ -1,3 +1,7 @@
+import {
+  getWorkspaceJiraIssueKey,
+  prefixJiraReviewTitle
+} from '../../../../shared/jira/jira-review-title'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
@@ -29,6 +33,7 @@ export function useCreatePullRequestDialogFields({
   worktreeId,
   worktreePath,
   branch,
+  workspace,
   eligibility,
   currentBaseRef,
   repo,
@@ -41,7 +46,7 @@ export function useCreatePullRequestDialogFields({
   onBranchChangedByGeneration,
   generation
 }: UseCreatePullRequestDialogFieldsOptions) {
-  // Why: effects key on the host, not on the object, so a caller's fresh literal can't loop them.
+  // Key effects by host identity so fresh target objects cannot loop them.
   const hasTarget = targetInput !== null
   const targetEnvironmentId = targetInput?.kind === 'environment' ? targetInput.environmentId : null
   const target = useMemo(
@@ -76,8 +81,7 @@ export function useCreatePullRequestDialogFields({
   const [draft, setDraft] = useState(false)
   const [baseQuery, setBaseQuery] = useState('')
   const [baseResults, setBaseResults] = useState<string[]>([])
-  // Why: lets the picker withhold "no branches match" until a search settles, so
-  // the debounce and an SSH round-trip can't read as an observed absence.
+  // Do not present debounce/SSH latency as an observed absence of matching branches.
   const [baseSearchPending, setBaseSearchPending] = useState(false)
   const [baseSearchError, setBaseSearchError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -85,7 +89,11 @@ export function useCreatePullRequestDialogFields({
   const hasExternalGeneration = Boolean(generation)
   const currentEligibilityKey =
     open && eligibility ? `${repoId}:${worktreeId ?? worktreePath}:${branch}` : null
-  const seedText = resolveCreateReviewSeedText({ branch, eligibility })
+  const jiraIssueKey =
+    eligibility?.provider === 'github' || eligibility?.provider === 'gitlab'
+      ? getWorkspaceJiraIssueKey(workspace)
+      : null
+  const seedText = resolveCreateReviewSeedText({ branch, eligibility, jiraIssueKey })
   const resolvedDefaultBaseRef = resolveCreateReviewDefaultBaseRef({
     currentBaseRef,
     eligibilityDefaultBaseRef: eligibility?.defaultBaseRef
@@ -135,17 +143,19 @@ export function useCreatePullRequestDialogFields({
     ): PullRequestDraftFields => {
       const currentRevisions = fieldRevisionsRef.current
       const nextFields = { base, title, body, draft }
-      // Why: AI generation runs asynchronously; only fields untouched since
-      // the request started are safe to replace with generated output.
+      // Replace only fields unchanged since generation began.
       if (currentRevisions.base === seedRevisions.base) {
         nextFields.base = stripBaseRef(fields.base)
         setBase(nextFields.base)
         setBaseQuery('')
         setBaseResults([])
       }
-      if (currentRevisions.title === seedRevisions.title) {
-        nextFields.title = fields.title
-        setTitle(fields.title)
+      if (
+        currentRevisions.title === seedRevisions.title &&
+        (!jiraIssueKey || currentRevisions.title === 0)
+      ) {
+        nextFields.title = prefixJiraReviewTitle(fields.title, jiraIssueKey)
+        setTitle(nextFields.title)
       }
       if (currentRevisions.body === seedRevisions.body) {
         nextFields.body = fields.body
@@ -157,7 +167,7 @@ export function useCreatePullRequestDialogFields({
       }
       return nextFields
     },
-    [base, body, draft, title]
+    [base, body, draft, jiraIssueKey, title]
   )
 
   useCreatePullRequestFieldSeeding({
@@ -167,6 +177,7 @@ export function useCreatePullRequestDialogFields({
     worktreePath,
     branch,
     eligibility,
+    jiraIssueKey,
     hasExternalGeneration,
     retainDraftWhenClosed,
     currentEligibilityKey,

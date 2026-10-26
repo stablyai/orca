@@ -21,8 +21,35 @@ import {
   latestStructuredAgentSessionRequest
 } from './structured-agent-session-latest-request'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
+import { latestNativeChatTurnSinceRequest } from './native-chat/native-chat-orca-stop-cut'
+import { selectStructuredAgentTurnTimings } from './structured-agent-session-turn-timing'
 
 const START_FAILURE = 'Claude is not signed in.'
+
+it('keeps unresolved human input as a latest-request uncertainty boundary without a lifecycle', () => {
+  const prior = turn('prior', 1, {
+    state: 'interrupted',
+    startedAt: 10,
+    completedAt: 20,
+    outcome: 'cancellation'
+  })
+  const unknown: AgentJournalRenderItem = {
+    ...userEntry('outside', 2),
+    turnScope: { kind: 'unknown' }
+  }
+  const items = [prior, unknown]
+  expect(latestStructuredAgentSessionRequest([prior], [])?.outcome).toBe('cancellation')
+  expect(latestStructuredAgentSessionRequest(items, [])).toBeNull()
+  expect(latestNativeChatTurnSinceRequest(items, [])).toBeNull()
+  expect(hasStructuredAgentSessionRequest([unknown], [])).toBe(true)
+  expect(selectStructuredAgentTurnTimings(items)).toEqual(selectStructuredAgentTurnTimings([prior]))
+  const next = turn('next', 3, { state: 'running', startedAt: 30 })
+  expect(latestStructuredAgentSessionRequest([...items, next], [])).toMatchObject({
+    id: 'next',
+    turnState: 'running',
+    outcome: null
+  })
+})
 
 /** `intoTurn` names the turn the message's handover delivered it into — a steer. */
 function userEntry(
@@ -191,11 +218,15 @@ const ROWS: Row[] = [
     items: [
       userEntry('m1', 1),
       turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 50 }),
-      userEntry('steer', 3, 't1')
+      userEntry('steer', 3)
     ],
     submissions: [
       sent('m1', { dispatchState: 'accepted' }),
-      rejected('steer', 'no active turn to steer', 30)
+      sent('steer', {
+        dispatchState: 'rejected',
+        reason: 'no active turn to steer',
+        answeredInTurn: { turnItemId: 'codex:turn:t1', via: 'steer' }
+      })
     ],
     outcome: 'success',
     listed: true

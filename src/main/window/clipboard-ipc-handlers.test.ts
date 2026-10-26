@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ProcessHost from '@orca/process-host'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
@@ -9,8 +10,7 @@ import {
 const {
   removeHandlerMock,
   handleMock,
-  spawnMock,
-  childStdinEndMock,
+  runProcessMock,
   resolveAuthorizedPathMock,
   fsAccessMock,
   fsLstatMock,
@@ -33,19 +33,7 @@ const {
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
-  childStdinEndMock: vi.fn(),
-  spawnMock: vi.fn(() => {
-    const child = {
-      stdin: { end: childStdinEndMock },
-      on: vi.fn((event: string, callback: (code?: number) => void) => {
-        if (event === 'exit') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      })
-    }
-    return child
-  }),
+  runProcessMock: vi.fn<typeof ProcessHost.runProcess>(),
   resolveAuthorizedPathMock: vi.fn(),
   fsAccessMock: vi.fn(),
   fsLstatMock: vi.fn(),
@@ -67,8 +55,9 @@ const {
   callRuntimeEnvironmentMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  runProcess: runProcessMock
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -84,7 +73,7 @@ vi.mock('node:fs/promises', () => ({
   default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
   resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -117,7 +106,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
@@ -177,8 +166,14 @@ describe('registerClipboardHandlers', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
-    spawnMock.mockClear()
-    childStdinEndMock.mockClear()
+    runProcessMock.mockReset()
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
     fsLstatMock.mockReset()
@@ -191,7 +186,7 @@ describe('registerClipboardHandlers', () => {
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
     fsOpendirMock.mockReset()
-    // Why: handler registration kicks off the expired-staging sweep; an empty temp root keeps it inert.
+    // Registration starts expired-staging cleanup; an empty temp root keeps it inert.
     fsOpendirMock.mockImplementation(async () => ({
       async *[Symbol.asyncIterator]() {},
       close: vi.fn().mockResolvedValue(undefined)
@@ -286,7 +281,9 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
-  it('writes local files through the trusted clipboard IPC handler', async () => {
+  it('writes local files through the trusted handler into process-host', async () => {
+    // Pinned so the process-host wiring runs on every CI host, macOS included.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -296,14 +293,7 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
     expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe('/tmp/copied-file.txt')
-    if (process.platform === 'darwin') {
-      expect(clipboardWriteBufferMock).toHaveBeenCalledWith(
-        'public.file-url',
-        Buffer.from('file:///tmp/copied-file.txt', 'utf8')
-      )
-    } else {
-      expect(spawnMock).toHaveBeenCalled()
-    }
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
@@ -321,7 +311,7 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-    expect(spawnMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {

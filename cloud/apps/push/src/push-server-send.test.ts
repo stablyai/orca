@@ -56,7 +56,10 @@ describe('push gateway send route', () => {
     await harness.flushDeliveries()
     expect(harness.fcmRequests).toHaveLength(1)
     expect(JSON.parse(harness.fcmRequests[0]!.body)).toMatchObject({
-      message: { token: FCM_TOKEN, data: { title: 'Agent needs input' } }
+      message: {
+        token: FCM_TOKEN,
+        data: { title: 'Agent needs input', tag: expect.stringMatching(/^[a-f0-9]{64}$/) }
+      }
     })
 
     const afterDeath = await harness.post(
@@ -165,22 +168,6 @@ describe('push gateway send route', () => {
     expect(
       new Set(harness.apnsRequests.map((request) => request.headers['apns-collapse-id'])).size
     ).toBe(3)
-  })
-
-  it('sends a lone event through unchanged with its own collapse id', async () => {
-    const sessionToken = await harness.signIn(createPushHostKeypair(25))
-    const registrationId = await harness.registerAndroid(sessionToken)
-    await harness.post(
-      '/v1/send',
-      { v: 1, registrationIds: [registrationId], notification: notification() },
-      sessionToken
-    )
-    await harness.flushDeliveries()
-    const message = JSON.parse(harness.fcmRequests[0]!.body) as {
-      message: { android: { notification: { tag: string } }; data: Record<string, string> }
-    }
-    expect(message.message.data.tag).toMatch(/^[a-f0-9]{64}$/)
-    expect(message.message.data.coalescedCount).toBeUndefined()
   })
 
   it('reports an error for a registration the host does not own', async () => {

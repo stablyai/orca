@@ -32,7 +32,6 @@ type TabProps = {
   gitStatus?: string | null
 }
 
-// Every render of every tab, in order, keyed by the id the strip shows it under.
 const tabRenders: { id: string; props: TabProps }[] = []
 
 vi.mock('./SortableTab', () => ({
@@ -187,6 +186,7 @@ function Strip({
   }
   const actions = useTabBarItemActions({
     props: {
+      worktreeId: 'wt-1',
       onActivate,
       onActivateFile: onActivate,
       onActivateBrowserTab: onActivate,
@@ -390,10 +390,7 @@ describe('tab strip rows', () => {
   })
 })
 
-/**
- * A client-hosted row covers the pane without moving the group's `activeTabId`, so the strip's two
- * halves would each keep painting an underline — the reported double highlight.
- */
+/** Client-hosted rows overlay panes without changing activeTabId; suppress real-tab underlines while they are selected. */
 describe('real tabs while a client-hosted row is selected', () => {
   const activeFlags = (): boolean[] => TAB_IDS.map((tabId) => lastRender(tabId).isActive)
 

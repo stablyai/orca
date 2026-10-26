@@ -15,11 +15,7 @@ function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
   )
 }
 
-/**
- * Drops old-host rows only when main reports the exact repo re-adoption and the
- * renderer has received the corresponding new-host row. Evidence stays pending
- * across the add-response/repos:changed race until that row arrives.
- */
+/** Prune old-host rows only with exact main re-adoption evidence and corresponding new-host row; keep evidence across add-response/repos:changed races. */
 export function reconcileReadoptedSshRepoRows(
   repos: readonly Repo[],
   readoptions: readonly SshRepoReadoption[]
@@ -55,8 +51,7 @@ export function reconcileReadoptedSshRepoRows(
     }
   }
 
-  // Why: pruning nothing must hand back the input array, or the copy alone would defeat the
-  // referential stability reconcileFetchedRepos just established upstream.
+  // No-op pruning preserves upstream reconciliation’s array identity.
   if (prunedOwners.size === 0) {
     return { repos, pendingReadoptions }
   }

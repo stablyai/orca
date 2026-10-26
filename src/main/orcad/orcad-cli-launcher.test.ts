@@ -71,6 +71,35 @@ describe('orcad profile CLI launcher', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    "passes a person's own Orca settings through, adding only the profile",
+    async () => {
+      const path = join(roots.install, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(
+        path,
+        "console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('ORCA_')))))"
+      )
+      await prepareOrcadCliLauncher()
+      const result = await runProcess({
+        program: getOrcadCliLauncherPath()!,
+        args: ['status'],
+        env: {
+          PATH: process.env.PATH,
+          ORCA_ENVIRONMENT: 'other-server',
+          ORCA_PAIRING_CODE: 'other-pairing'
+        },
+        timeoutMs: 5000
+      })
+      expect(result.code).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual({
+        ORCA_USER_DATA_PATH: roots.profile,
+        ORCA_ENVIRONMENT: 'other-server',
+        ORCA_PAIRING_CODE: 'other-pairing'
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'refreshes the launcher when the host switches server slots',
     async () => {
       await writeCli()
@@ -124,7 +153,7 @@ describe('orcad profile CLI launcher', () => {
           ''
         ].join('\n')
       )
-      // cmd.exe reparses `%*`, so no batch or PowerShell proxy may shadow the exe.
+      // Batch/PowerShell proxies can reparse cmd.exe arguments instead of preserving them.
       expect((await readdir(binDir())).sort()).toEqual(
         [ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME, 'orca.exe'].sort()
       )

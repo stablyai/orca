@@ -4,15 +4,17 @@ import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-lo
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
-// Why: import from the shared module, not the codex-cli re-export, so a test that
-// mocks '../codex-cli/command' does not have to restate this pure helper.
+// Import the pure helper directly so CLI-command mocks do not replace it.
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
+import {
+  hasCodexStateDbBackfillRecoveryGivenUp,
+  startCodexStateDbBackfillRecoveryInBackground
+} from '../codex/codex-state-db-backfill-recovery'
 import { spawnProcessOnWorkerThread } from '../worker-thread-child-process/worker-thread-child-process'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { getMainHttpClient } from '../network/http-client'
@@ -29,11 +31,9 @@ import {
   supplementCodexRateLimitResetCredits
 } from './codex-reset-credit-client'
 import { readCodexRateLimitsViaRpc } from './codex-rpc-rate-limit-probe'
-import {
-  getHiddenRateLimitWslCwdSetupCommands,
-  resolveHiddenRateLimitPtyCwd
-} from './hidden-rate-limit-pty-cwd'
-import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { getHiddenProbeWslCwdSetupCommands, resolveHiddenProbeCwd } from './hidden-probe-cwd'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -51,10 +51,10 @@ function buildWslCodexCommand(
     return null
   }
   const setupCommands = [
-    ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
+    ...getHiddenProbeWslCwdSetupCommands(),
+    `export CODEX_HOME=${quotePosixShell(wslInfo.linuxPath)}`
   ].join(' && ')
-  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
+  const execSuffix = `${args.map(quotePosixShell).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )
@@ -91,12 +91,12 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     ? buildWslCodexCommand(options.codexHomePath, codexArgs)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
-  // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
-  // Why a worker thread (#27362): a cold codex.exe can block process creation for seconds.
+  // Worker spawn avoids cold Windows process-creation stalls (#27362); bare npm shims stay visible to spawnProcess.
   const child = spawnProcessOnWorkerThread({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
-    cwd: resolveHiddenRateLimitPtyCwd(),
+    // wsl.exe holds cwd busy for ~60s; keep probes outside profile folders (#29845).
+    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenProbeCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       // WSL probes keep the guest's own proxy env; a Windows proxy address may not resolve there.
@@ -190,8 +190,18 @@ export async function fetchCodexRateLimits(
 
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
+    // HTTP usage never opens the state DB, so it cannot contend with the backfill (#15741).
+    const backendResult = isWslHome ? null : await fetchBackendUsage(options)
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
+    if (backendResult) {
+      return backendResult
+    }
     return codexUnavailable(
-      'Codex is rebuilding its session index; usage will refresh when recovery finishes',
+      hasCodexStateDbBackfillRecoveryGivenUp(options.codexHomePath)
+        ? `Codex could not rebuild its session index in ${options.codexHomePath}; restart Orca to retry (a codex wrapper that sets CODEX_HOME can cause this)`
+        : 'Codex is rebuilding its session index; usage will refresh when recovery finishes',
       'error'
     )
   }
@@ -223,7 +233,7 @@ export async function fetchCodexRateLimits(
   if (isWslHome) {
     return rpcFailure
   }
-  // Why: read usage over HTTP, never by driving the interactive Codex TUI — keystrokes sent there can accept startup dialogs such as "Update now" (#17415).
+  // Interactive Codex keystrokes can accept startup dialogs, including updates; read HTTP usage instead (#17415).
   const backendResult = await fetchBackendUsage(options)
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()

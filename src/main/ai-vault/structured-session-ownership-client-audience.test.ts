@@ -6,7 +6,7 @@ import {
   buildAiVaultResumeShellCommand
 } from '../../shared/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
-import { agentForksConversations } from '../../shared/agent-resume-argv'
+import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { isResumableTuiAgent } from '../../shared/agent-session-resume'
 import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import {
@@ -126,7 +126,6 @@ describe('Session History rows a paired client cannot open as a chat', () => {
           agent
         )
       )
-      // As before: every client that reads structured sessions gets the owned row.
       expect(owned.sessions.map((row) => row.structuredSession?.sessionId)).toEqual(
         caps.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ? ['session-alpha'] : []
       )
@@ -134,15 +133,13 @@ describe('Session History rows a paired client cannot open as a chat', () => {
   })
 })
 
-// Orca's own resume builders and the guard's parser must agree, or a builder change lets a resume
-// of a chat's conversation through. Mobile composes these same shared builders.
+// Shared desktop/mobile resume builders must produce commands the ownership guard recognizes.
 describe('resume commands Orca builds for an owned row', () => {
   const shells: { platform: NodeJS.Platform; shell: AgentStartupShell }[] = [
     { platform: 'darwin', shell: 'posix' },
     { platform: 'win32', shell: 'powershell' },
     { platform: 'win32', shell: 'cmd' }
   ]
-  // A user's command override is the launch command's program, verbatim.
   const overrides = (binary: string): Record<AgentStartupShell, (string | undefined)[]> => ({
     posix: [undefined, `FOO=1 /opt/bin/${binary}`, `env -i FOO=1 /opt/bin/${binary}`],
     powershell: [undefined, `& 'C:\\Program Files\\${binary}\\${binary}.exe'`],
@@ -220,19 +217,19 @@ describe('resume commands Orca builds for an owned row', () => {
     }
   })
 
-  // "Resume in New CLI" opens a copy, so it is no second writer of the chat's conversation.
-  it.each(everyAgent.filter(({ rowAgent }) => agentForksConversations(rowAgent)))(
-    'allows each copy it opens for the $rowAgent row',
-    async (conversation) => {
-      installOwnership({ handle: conversation.handle })
-      const commands = builtCommands(conversation, true)
-      expect(commands.length).toBe(7)
-      for (const command of commands) {
-        await expect(
-          assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
-          command
-        ).resolves.toBeUndefined()
-      }
+  it.each(
+    everyAgent.filter(
+      ({ rowAgent }) => agentForksConversations(rowAgent) && !agentForksThroughChat(rowAgent)
+    )
+  )('allows each copy it opens for the $rowAgent row', async (conversation) => {
+    installOwnership({ handle: conversation.handle })
+    const commands = builtCommands(conversation, true)
+    expect(commands.length).toBe(7)
+    for (const command of commands) {
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
+        command
+      ).resolves.toBeUndefined()
     }
-  )
+  })
 })

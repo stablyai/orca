@@ -9,7 +9,7 @@ import {
   resolveFederatedWorkerLaunchReceipt,
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 describe('orchestration worker launch preferences', () => {
   it('passes a discovered OMP model through the existing launch arguments and receipt', () => {

@@ -12,11 +12,13 @@ import {
 } from './helpers/store'
 import {
   sendToTerminal,
+  splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneCount,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import { compareTerminalScreenshots } from './terminal-screenshot-diff'
+import { compareTerminalScreenshots, type ScreenshotDiffSummary } from './terminal-screenshot-diff'
+import { getDefaultRepoHookSettings } from '../../src/shared/constants'
 
 const RUN_REPRO = process.env.ORCA_E2E_CODEX_SKILL_PREVIEW_REPRO === '1'
 const EXPECT_NO_ARTIFACTS = process.env.ORCA_E2E_EXPECT_NO_CODEX_SKILL_PREVIEW_ARTIFACTS === '1'
@@ -53,10 +55,7 @@ type PaneDescriptor = {
   hasWebgl: boolean
 }
 
-type ArtifactCapture = {
-  diffRatio: number
-  changedPixels: number
-  totalPixels: number
+type ArtifactCapture = ScreenshotDiffSummary & {
   leftPane: PaneDescriptor
   beforeContent: string
   afterContent: string
@@ -107,56 +106,58 @@ async function setStableFullscreenWindow(
 }
 
 async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
-  return page.evaluate(async (repoPath) => {
-    await window.api.repos.add({ path: repoPath }).catch((error: unknown) => {
-      if (!/already|exists|duplicate/i.test(String(error))) {
-        throw error
+  return page.evaluate(
+    async ({ repoPath, defaultHookSettings }) => {
+      await window.api.repos.add({ path: repoPath }).catch((error: unknown) => {
+        if (!/already|exists|duplicate/i.test(String(error))) {
+          throw error
+        }
+      })
+
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store unavailable')
       }
-    })
-
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store unavailable')
-    }
-    const state = store.getState()
-    await state.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-    const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-    if (!repo) {
-      throw new Error(`Real Orca repo did not load: ${repoPath}`)
-    }
-
-    await store.getState().updateRepo(repo.id, {
-      externalWorktreeVisibility: 'show',
-      hookSettings: {
-        ...repo.hookSettings,
-        setupRunPolicy: 'run-by-default',
-        setupAgentStartupPolicy: 'start-immediately'
+      const state = store.getState()
+      await state.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
+      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+      if (!repo) {
+        throw new Error(`Real Orca repo did not load: ${repoPath}`)
       }
-    })
-    await store.getState().fetchWorktrees(repo.id)
 
-    const nextState = store.getState()
-    const worktree = (nextState.worktreesByRepo[repo.id] ?? []).find(
-      (candidate) => candidate.path === repoPath
-    )
-    if (!worktree) {
-      throw new Error(`Real Orca worktree did not load: ${repoPath}`)
-    }
+      await store.getState().updateRepo(repo.id, {
+        externalWorktreeVisibility: 'show',
+        hookSettings: {
+          ...(repo.hookSettings ?? defaultHookSettings),
+          setupRunPolicy: 'run-by-default',
+          setupAgentStartupPolicy: 'start-immediately'
+        }
+      })
+      await store.getState().fetchWorktrees(repo.id)
 
-    nextState.updateSettings({
-      defaultTuiAgent: 'codex',
-      disabledTuiAgents: [],
-      setupScriptLaunchMode: 'split-vertical',
-      terminalGpuAcceleration: 'on',
-      theme: 'dark'
-    })
-    nextState.setActiveRepo(repo.id)
-    nextState.setActiveView('terminal')
-    nextState.setActiveWorktree(worktree.id)
-    nextState.setRightSidebarOpen(false)
-    nextState.setSidebarOpen(true)
-    return repo.id
-  }, repoPath)
+      const nextState = store.getState()
+      const worktree = (nextState.worktreesByRepo[repo.id] ?? []).find(
+        (candidate) => candidate.path === repoPath
+      )
+      if (!worktree) {
+        throw new Error(`Real Orca worktree did not load: ${repoPath}`)
+      }
+
+      nextState.updateSettings({
+        defaultTuiAgent: 'codex',
+        disabledTuiAgents: [],
+        terminalGpuAcceleration: 'on',
+        theme: 'dark'
+      })
+      nextState.setActiveRepo(repo.id)
+      nextState.setActiveView('terminal')
+      nextState.setActiveWorktree(worktree.id)
+      nextState.setRightSidebarOpen(false)
+      nextState.setSidebarOpen(true)
+      return repo.id
+    },
+    { repoPath, defaultHookSettings: getDefaultRepoHookSettings() }
+  )
 }
 
 async function createWorkspaceThroughComposer(page: Page, workspaceName: string): Promise<string> {
@@ -575,7 +576,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
     createdWorktreeIds.length = 0
   })
 
-  test('captures the real Orca repo setup-split Codex skill preview overpaint before any click', async ({
+  test('captures the real Orca repo manual-split Codex skill preview overpaint before any click', async ({
     electronApp,
     orcaPage
   }, testInfo) => {
@@ -595,6 +596,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
 
     await ensureTerminalVisible(orcaPage, 30_000)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2, 60_000)
     await waitForPaneIdentitySnapshot(orcaPage, 2)
     const webglActive = await forceTerminalWebgl(orcaPage)
@@ -602,6 +604,11 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
 
     const leftPane = await focusLeftTerminalPane(orcaPage)
     const rightPane = await getRightTerminalPane(orcaPage)
+    await sendToTerminal(
+      orcaPage,
+      rightPane.ptyId,
+      'for i in $(seq 1 120); do printf "Progress: split output %s\\n" "$i"; sleep 1; done\r'
+    )
     expect(leftPane.hasWebgl).toBe(true)
     expect(rightPane.hasWebgl).toBe(true)
     expect(leftPane.proposed).toEqual({ cols: leftPane.cols, rows: leftPane.rows })
@@ -650,8 +657,8 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
       type: 'codex-skill-preview-click-diff',
       description: JSON.stringify({
         diffRatio: evidence.diffRatio,
-        changedPixels: evidence.changedPixels,
-        totalPixels: evidence.totalPixels,
+        changedPixels: evidence.diffPixels,
+        totalPixels: evidence.width * evidence.height,
         leftPane: evidence.leftPane,
         setupChangesAfterPreview,
         overpaintedSkillRows,

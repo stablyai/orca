@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import type { PendingCreationRef } from './worktree-list/grouping/row-types'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import type { PendingCreationRef } from '../../../../shared/sidebar-list/row-types'
 import { repo, worktree, repoMap } from './worktree-list-groups-test-fixtures'
 
 describe('buildRows pending creations', () => {

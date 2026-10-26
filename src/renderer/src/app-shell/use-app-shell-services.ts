@@ -2,7 +2,7 @@ import { useAppStore } from '../store'
 import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
-import { useAutoAckViewedAgent } from '../hooks/useAutoAckViewedAgent'
+import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
 import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
 import { useAppMenuPaste } from '../hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '../hooks/useAppMenuSelectionActions'
@@ -17,21 +17,19 @@ import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/os
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync/use-web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useHostStructuredAgentsSync } from '../runtime/host-structured-agents-sync'
+import { useLegacyChatRenameMigration } from '../runtime/legacy-chat-rename-migration'
 import { useHostModelCatalogSnapshotsSync } from '../runtime/host-model-catalog-snapshots-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
+import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/browser-client-hosted-download-notices'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
 import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
 
-/**
- * App-level subscriptions that must outlive any individual surface. Each one is here because
- * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
- * absent entirely on the landing path.
- */
+/** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -44,8 +42,8 @@ export function useAppShellServices(): void {
   useWebSessionTabsSync()
   useLocalStructuredSessionTabsSync()
   useHostStructuredAgentsSync()
+  useLegacyChatRenameMigration()
   useHostModelCatalogSnapshotsSync()
-  // Subscribe to IPC push events
   useIpcEvents()
   useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()
@@ -53,17 +51,18 @@ export function useAppShellServices(): void {
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
   useAutomationDispatchEvents()
-  // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
+  // Poll above the removable sidebar to keep rebase/merge badges fresh; wait for session readiness to protect first paint.
   useGitStatusPolling({ enabled: workspaceSessionReady })
-  // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
+  // Watch files above Explorer so editor changes still arrive on Source Control/Checks.
   useEditorExternalWatch()
-  useAutoAckViewedAgent()
+  useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
+  useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
   useCodexSharedSettingsNotice()
 }

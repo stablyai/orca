@@ -1,6 +1,7 @@
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
+import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   aiVaultServiceLane,
@@ -18,7 +19,7 @@ export const AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS = 2_000
 export type AiVaultServiceProcessFactory = () => ChildProcess
 export type AiVaultServiceClientOptions = {
   processFactory: AiVaultServiceProcessFactory
-  /** Resolved per spawn: a respawned child must see current consent, not the first frame's. */
+  /** Resolve current consent on every spawn. */
   init: () => Omit<AiVaultServiceInit, 'type' | 'protocol'>
   resolveSessionSearchRoots?: () => Promise<SessionSearchScanRoots>
   idleTimeoutMs?: number
@@ -53,14 +54,7 @@ export class AiVaultServiceInvalidations {
     })
   }
 
-  /**
-   * Sends one invalidation and resolves on the child's acknowledgement.
-   *
-   * The deadline is a startup-sized budget, but a child mid-scan can be slow to
-   * turn the channel around. Fork IPC ordering already guarantees the child
-   * applies the invalidation before any request sent after it, so a busy child
-   * owes nothing here -- only an idle one that misses the deadline is wedged.
-   */
+  /** IPC ordering protects later requests; only idle children fault on missing acknowledgement. */
   send(
     child: ChildProcess,
     paths: string[],
@@ -123,11 +117,7 @@ export function retireAiVaultServiceChild(child: ChildProcess): void {
   child.unref()
 }
 
-/**
- * `retire`: a request deadline sends the shutdown frame and allows the usual
- * grace to abort and save the parse cache. A broken channel or protocol is
- * killed at once.
- */
+/** Retire on request deadlines to allow cache persistence; kill broken channels immediately. */
 export function stopAiVaultServiceChild(child: ChildProcess, retire: boolean): void {
   if (retire) {
     retireAiVaultServiceChild(child)
@@ -137,16 +127,17 @@ export function stopAiVaultServiceChild(child: ChildProcess, retire: boolean): v
   child.kill()
 }
 
-/** A queued call, already listening for its caller's abort. */
 export function createAiVaultServicePendingCall(
   request: AiVaultServiceRequest,
   signal: AbortSignal | undefined,
   resolve: (value: unknown) => void,
   reject: (error: Error) => void,
-  cancel: (call: AiVaultServicePendingCall) => void
+  cancel: (call: AiVaultServicePendingCall) => void,
+  scanListener?: AiVaultServiceScanListener
 ): AiVaultServicePendingCall {
   const call: AiVaultServicePendingCall = {
     request,
+    scanListener,
     lane: aiVaultServiceLane(request.operation),
     signal,
     resolve,
@@ -155,8 +146,7 @@ export function createAiVaultServicePendingCall(
     onAbort: null,
     cancelled: false,
     sent: false,
-    startRetried: false,
-    progressUnits: 0
+    startRetried: false
   }
   if (signal) {
     call.onAbort = () => cancel(call)
@@ -176,7 +166,6 @@ function armAiVaultServiceCancellationTimeout(
   call.timer.unref?.()
 }
 
-/** Abandons one call, and waits for the child's acknowledgement only when it owes one. */
 export function cancelAiVaultServiceCall(
   call: AiVaultServicePendingCall,
   lanes: {
@@ -202,8 +191,7 @@ export function cancelAiVaultServiceCall(
   if (lanes.active.get(call.lane) !== call) {
     return
   }
-  // Why: a call cancelled before it reached the child gets no acknowledgement,
-  // so waiting on one would kill a healthy service and stall the lane.
+  // Unsent calls get no acknowledgement; waiting would stall the lane and fault a healthy child.
   if (!call.sent) {
     lanes.active.delete(call.lane)
     clearAiVaultServiceCall(call)
@@ -216,7 +204,6 @@ export function cancelAiVaultServiceCall(
   )
 }
 
-/** Wires a freshly forked child to the client's callbacks and hands it the init frame. */
 export function attachAiVaultServiceChild(
   child: ChildProcess,
   init: ReturnType<AiVaultServiceClientOptions['init']>,
@@ -238,10 +225,7 @@ export function attachAiVaultServiceChild(
   } satisfies AiVaultServiceInit)
 }
 
-/**
- * A cold start that faults before the request reached the child self-heals on
- * the scheduled respawn. Requeue once; anything else is the caller's error.
- */
+/** Retry an unsent cold-start request once when a respawn is scheduled. */
 export function requeueOrRejectAiVaultServiceStart(
   call: AiVaultServicePendingCall,
   queue: AiVaultServicePendingCall[],
@@ -287,11 +271,9 @@ export type AiVaultServicePendingCall = {
   timer: NodeJS.Timeout | null
   onAbort: (() => void) | null
   cancelled: boolean
-  /** Whether the child received the request; an unsent call gets no reply. */
   sent: boolean
   startRetried: boolean
-  /** Highest progress counter the child reported for this scan. */
-  progressUnits: number
+  scanListener?: AiVaultServiceScanListener
 }
 
 export type AiVaultServiceReadyWaiter = {
@@ -323,26 +305,14 @@ export class AiVaultServiceIdleRetirement {
   }
 }
 
-/**
- * The parent's half of the index setting.
- *
- * A child running the index is never idle from out here -- its reconcile loop is
- * invisible to the parent -- so this is what stops idle retirement ending the
- * indexing until some later scan happens to respawn a child.
- */
+/** Index reconciliation is invisible to the parent, so enabled indexing prevents idle retirement. */
 export class AiVaultServiceSessionSearchHold {
   private enabled = false
 
-  /** True while a running index needs a child to exist. */
   get holdsChild(): boolean {
     return this.enabled
   }
 
-  /**
-   * Records the policy and tells a live child. A missing one reads the same
-   * policy out of its init frame, which is why `init` is a factory, not a value.
-   * @returns whether a child now has to exist.
-   */
   record(init: AiVaultSessionSearchInit, child: ChildProcess | null): boolean {
     this.enabled = init.settings.enabled
     child?.send({ type: 'sessionSearch', init })

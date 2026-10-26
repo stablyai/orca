@@ -1,13 +1,4 @@
-// A cancel never hides live work. These stories replay hook payloads recorded from Claude Code
-// 2.1.280 over a real PTY (src/shared/__fixtures__/claude-cancel-*-hooks.jsonl, sidecars beside
-// them) through the server's own HTTP ingress, and stand in for the renderer at the moments the
-// driver pressed the cancel key. The captures established that a cancel fires no hook at all,
-// kills only the foreground tool, and that every later Stop inventory matched the process table;
-// the rules below are written against those payloads, not a remembered screen.
-//
-// The driver cancelled with Esc. Orca treats a bare Esc on a Claude pane as navigation (it also
-// closes the /btw composer) and infers a cancel only from Ctrl+C, so each `cancel` record is
-// replayed as the Ctrl+C inference the renderer would have sent.
+// Replay Claude Code 2.1.280 PTY captures; recorded Esc cancellations stand in for Orca Ctrl+C inference.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/claude-owed-task-notifications'
 import { AgentHookServer, _internals } from './server'
@@ -64,8 +55,7 @@ async function post(server: AgentHookServer, hook: CapturedHook): Promise<void> 
   })
 }
 
-/** The renderer's part of a cancel: capture the row as the baseline and, once the settle window
- *  passes with no hook, ask the server to infer the interrupt. */
+/** Infer cancellation against the captured baseline after a hook-free settle window. */
 function pressCtrlC(server: AgentHookServer): boolean {
   const baseline = row(server)
   return server.inferInterrupt({
@@ -87,7 +77,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       for (const index of [0, 1, 2, 3, 4]) {
         await post(server, hookAt(records, index))
       }
-      // The Stop that started the shell lists it; the main agent is settled and the row monitors.
+      // The initial Stop retains the background shell as monitoring work.
       expect(hookAt(records, 4).payload.background_tasks).toEqual([
         expect.objectContaining({ type: 'shell', status: 'running', command: 'sleep 600' })
       ])
@@ -97,7 +87,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
         mainAgent: { state: 'done' }
       })
 
-      // A foreground turn starts on top of it and is cancelled mid-tool.
+      // Cancel a foreground turn while the shell survives.
       await post(server, hookAt(records, 5))
       await post(server, hookAt(records, 6))
       expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
@@ -108,8 +98,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       expect(midTool.hooks_before_next_typed_prompt).toEqual([])
       expect(hookSupersedesCancel(records, midTool)).toBe(false)
       expect(pressCtrlC(server)).toBe(true)
-      // Why: the cancel is the main agent's verdict; the shell is the inventory's fact. The row shows
-      // the shell, the verdict rides `mainAgent.outcome`, and `interrupted` (a done-row flag) is absent.
+      // Main-agent cancellation does not override live shell inventory or mark the whole row interrupted.
       expect(row(server)).toMatchObject({
         state: 'working',
         workingMode: 'monitoring',
@@ -117,7 +106,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       })
       expect(row(server).interrupted).toBeUndefined()
 
-      // The next typed turn ends with the same inventory, and its plain Stop carries no verdict.
+      // A later plain Stop carries the same inventory without a cancellation verdict.
       await post(server, hookAt(records, 7))
       await post(server, hookAt(records, 8))
       expect(hookAt(records, 8).sleep_procs).toEqual([expect.stringContaining('sleep 600')])
@@ -128,7 +117,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       })
       expect(row(server).mainAgent).not.toHaveProperty('outcome')
 
-      // Cancelled again while streaming a reply, with no tool running.
+      // Cancel again while streaming, without a foreground tool.
       await post(server, hookAt(records, 9))
       expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
       const midStream = cancelLabelled(records, 'ESC-during-stream')
@@ -159,13 +148,12 @@ describe('a Claude cancel with a background shell (captured)', () => {
       await post(server, hookAt(records, 11))
       expect(row(server)).toMatchObject({ state: 'working', workingMode: 'monitoring' })
 
-      // The rig SIGKILLs the shell. That is not evidence yet: nothing has reported it.
+      // SIGKILL is not server evidence until a hook reports the changed inventory.
       const kill = records.find((record) => record.kind === 'kill' && record.needle === 'sleep 600')
       expect(kill).toBeDefined()
       expect(row(server)).toMatchObject({ state: 'working', workingMode: 'monitoring' })
 
-      // The CLI notices within a second and injects a task-notification turn whose Stop reports
-      // an empty inventory; that Stop is what retires the shell.
+      // The notification turn reports empty inventory and retires the shell.
       const notification = hookAt(records, 12)
       expect(notification.payload.hook_event_name).toBe('UserPromptSubmit')
       expect(String(notification.payload.prompt)).toContain('<task-notification>')
@@ -193,7 +181,6 @@ describe('a Claude cancel with a background shell (captured)', () => {
       ]) {
         await post(server, hookAt(records, index))
       }
-      // A second shell, listed by its Stop.
       expect(hookAt(records, 20).payload.background_tasks).toEqual([
         expect.objectContaining({ command: 'sleep 500', status: 'running' })
       ])
@@ -201,22 +188,18 @@ describe('a Claude cancel with a background shell (captured)', () => {
       await post(server, hookAt(records, 21))
       expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
 
-      // The shell is killed, then the turn is cancelled. In the capture the CLI's death
-      // notification landed 0.17 s after the cancel key, inside the renderer's settle window, so
-      // the renderer never sent this inference; the notification turn superseded it.
+      // The death notification arrived inside the settle window, superseding inferred cancellation.
       const afterKill = cancelLabelled(records, 'ESC-during-tool-after-kill')
       expect(afterKill.hooks_before_next_typed_prompt).toEqual([22, 23])
       expect(hookSupersedesCancel(records, afterKill)).toBe(true)
 
-      // Had the inference won the race, the row would still read the last inventory: a process
-      // death is not evidence until an inventory reports it, and the next Stop does so at once.
+      // If inference wins, retain the last inventory until the next Stop reports the death.
       expect(pressCtrlC(server)).toBe(true)
       expect(row(server)).toMatchObject({
         state: 'working',
         workingMode: 'monitoring',
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
-      // The shell's death notification opens a real turn, so the cancel's verdict gives way to it.
       const notification = hookAt(records, 22)
       expect(String(notification.payload.prompt)).toContain('<task-notification>')
       await post(server, notification)
@@ -233,8 +216,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
   })
 
   it('keeps a scheduled session check the cancelled turn left registered as monitoring', async () => {
-    // No capture registered a cron (`session_crons` was `[]` on every Stop), so this story takes
-    // the captured Stop and substitutes one entry; the listener reads only the list's length.
+    // Captures contain no crons; substitute one into a recorded Stop to exercise scheduled monitoring.
     const server = await startServer()
     try {
       for (const index of [0, 1, 2, 3]) {
@@ -279,7 +261,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       for (const index of [0, 1, 2, 3, 4, 5]) {
         await post(server, hookAt(records, index))
       }
-      // 2.1.280 launches the Agent tool asynchronously: the main agent Stops with the child running.
+      // Claude 2.1.280 launches Agent asynchronously and Stops while the child runs.
       expect(hookAt(records, 3).payload.tool_response).toMatchObject({ status: 'async_launched' })
       expect(hookAt(records, 5).payload.background_tasks).toEqual([
         expect.objectContaining({ type: 'subagent', status: 'running' })
@@ -291,7 +273,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       })
       expect(row(server).workingMode).toBeUndefined()
 
-      // The main agent starts a foreground turn beside the child and is cancelled mid-tool.
+      // Cancel foreground work while the child survives.
       for (const index of [6, 7, 8]) {
         await post(server, hookAt(records, index))
       }
@@ -307,8 +289,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       })
       expect(row(server).workingMode).toBeUndefined()
 
-      // The child's tool activity after the cancel keeps the row working and does not resurrect
-      // the main agent; the next typed turn's Stop still lists the child.
+      // Child activity preserves working status without reviving the cancelled main agent.
       await post(server, hookAt(records, 9))
       expect(hookAt(records, 9).payload.agent_id).toBeDefined()
       expect(row(server)).toMatchObject({
@@ -330,7 +311,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
   })
 
   it('settles the drained row as a stopped turn, never a completed one', async () => {
-    // Why shouldAdvanceTime: the hooks are real loopback POSTs, which need the clock to move.
+    // Real loopback POSTs need fake time to advance.
     vi.useFakeTimers({
       shouldAdvanceTime: true,
       toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance']
@@ -345,15 +326,14 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       expect(row(server)).toMatchObject({ state: 'working' })
       expect(row(server).turnCompletedAt).toBeUndefined()
 
-      // Why: a completion stamp or a done without `interrupted` is what renderers announce as finished.
+      // Completion stamps and non-interrupted done rows trigger renderer completion announcements.
       for (const index of [4, 9]) {
         await post(server, {
           ...hookAt(records, index),
           payload: { ...hookAt(records, index).payload, hook_event_name: 'SubagentStop' }
         })
       }
-      // Claude owes the main agent a task notification for the launched child, so the drained row
-      // is held, unstamped, until it arrives or stops being waited for.
+      // Wait unstamped for the launched child's owed notification or its lease expiry.
       expect(row(server)).toMatchObject({
         state: 'working',
         mainAgent: { state: 'done', outcome: 'cancellation' }

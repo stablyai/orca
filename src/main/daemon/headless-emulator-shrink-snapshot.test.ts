@@ -1,9 +1,4 @@
-/**
- * xterm keeps a line's old length after a column shrink whenever it does not
- * reflow (the alternate buffer always; the normal buffer on pre-21376 ConPTY).
- * The snapshot must still describe only the visible grid, or the stale
- * right-hand cells wrap into garbage rows when a restore replays it.
- */
+/** Shrink without reflow can retain off-grid cells; snapshots must exclude them to prevent wrapped garbage. */
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
@@ -45,7 +40,7 @@ async function paintShrinkRepaint(target: Writable, prefix: string): Promise<voi
     await target.write(`\x1b[${y};1H${`WIDE${y}`.padEnd(WIDE, '.')}`)
   }
   target.resize(NARROW, ROWS)
-  // Differential repaint of the narrow grid: no clear, like OpenTUI after SIGWINCH.
+  // Repaint without clearing, as OpenTUI does after SIGWINCH.
   for (let y = 1; y <= ROWS; y++) {
     await target.write(`\x1b[${y};1H${`narrow${y}`.padEnd(NARROW, ' ')}`)
   }
@@ -58,7 +53,7 @@ describe('snapshot after a column shrink', () => {
     expect(emu.getVisibleLines()[0]).toMatch(/^narrow1/)
     const snapshot = emu.getSnapshot()
 
-    // The restorer owns the alt-screen transition that the snapshot split strips.
+    // Snapshot splitting removes the alternate-screen transition; the restorer must supply it.
     const restored = await replayAtNarrowGrid(
       `${snapshot.scrollbackAnsi ?? ''}\x1b[?1049h${snapshot.snapshotAnsi}`
     )

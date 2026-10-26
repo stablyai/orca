@@ -6,14 +6,7 @@ const HOST = 'host-1'
 const WORKSPACE = 'workspace-1'
 const TERMINAL = 'terminal-1'
 
-/**
- * Tapping a path a terminal printed: the host resolve, then the worktree open it may lead to.
- *
- * The entry point is fire-and-forget (`void ... .catch`), so the recording observes the two sends,
- * the route it pushed and the miss callback rather than a returned value. Its three delayed
- * activation attempts run on the scenario's own clock, which is what makes the tab-switch order
- * observable at all.
- */
+// Observe sends/routes/misses from the fire-and-forget opener; use scenario time to expose delayed tab-activation ordering.
 export function fileTapOpenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

@@ -13,8 +13,7 @@ import type {
   LaunchAgentInNewTabResult
 } from '@/lib/launch-agent-in-new-tab'
 
-/** How long a new tab waits for its host's answer before deciding without it; the same bound a
- *  local chat's admission waits. */
+/** Bound host-fact waiting to the same deadline as local chat admission. */
 export const HOST_ANSWER_WAIT_MS = 3_000
 
 const DELIVERED: StructuredPromptDeliveryResult = { delivered: true, failureNotified: false }
@@ -22,9 +21,7 @@ const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failur
 
 type AwaitingHostAnswer = { awaited: Promise<void>; replan: () => AgentSessionLaunchPlan }
 
-/** The new tab's route: the caller's own plan, a plan decided now, or, when the chat route waits
- *  only on the host's agent list or this computer's runtime capabilities, the wait for them and
- *  the plan decided after. */
+/** Reuse caller plans; otherwise await missing host agents/local capabilities before deciding the route. */
 export function routeNewTabLaunch(
   store: Parameters<typeof planAgentSessionLaunch>[0],
   args: LaunchAgentInNewTabArgs,
@@ -34,7 +31,9 @@ export function routeNewTabLaunch(
   if (requestId === undefined) {
     return { plan: args.agentSessionLaunchPlan }
   }
-  const awaited = awaitStructuredRouteHostAnswer(store, request, HOST_ANSWER_WAIT_MS)
+  const awaited = request.requestedSurface
+    ? null
+    : awaitStructuredRouteHostAnswer(store, request, HOST_ANSWER_WAIT_MS)
   return awaited
     ? {
         awaited,
@@ -43,11 +42,7 @@ export function routeNewTabLaunch(
     : { plan: planAgentSessionLaunch(store, { requestId, ...request }) }
 }
 
-/**
- * Opens nothing until the host answered or the wait ran out, then launches on the route decided
- * with what is known: the chat, or the terminal. The first launch after startup is not sent to the
- * terminal by an answer that was still loading.
- */
+/** Open only after host facts settle or time out so startup loading cannot spuriously force the first launch into a terminal. */
 export function launchOnceHostAnswered(
   route: AwaitingHostAnswer,
   args: LaunchAgentInNewTabArgs,
@@ -55,6 +50,7 @@ export function launchOnceHostAnswered(
   relaunch: (args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult
 ): LaunchAgentInNewTabResult {
   if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+    args.focusIntent?.cancel()
     return null
   }
   const opened = route.awaited.then(() =>
@@ -70,7 +66,10 @@ export function launchOnceHostAnswered(
       !result
         ? { kind: 'cancelled', sessionId: null }
         : (result.structuredSettlement ?? { kind: 'terminal' }),
-    (error: unknown): StructuredAgentLaunchSettlement => ({ kind: 'failed', error })
+    (error: unknown): StructuredAgentLaunchSettlement => {
+      args.focusIntent?.cancel()
+      return { kind: 'failed', error }
+    }
   )
   const deliversPrompt =
     Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'

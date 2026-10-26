@@ -1,17 +1,28 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelCheckAndReviewActions } from './use-checks-panel-check-and-review-actions'
 
 type Input = ChecksPanelCheckAndReviewActionsInput
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
-const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  startFixChecksAgent: vi.fn(),
+  loadGitLabJobLogDetails: vi.fn()
+}))
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
+}))
+vi.mock('@/lib/fix-checks-agent-launch', () => ({ startFixChecksAgent: mocks.startFixChecksAgent }))
+vi.mock('@/runtime/gitlab-job-trace-client', () => ({
+  loadGitLabJobLogDetails: mocks.loadGitLabJobLogDetails
 }))
 
 function renderActions(overrides: Partial<ChecksPanelCheckAndReviewActionsInput> = {}) {
@@ -236,5 +247,142 @@ describe('useChecksPanelCheckAndReviewActions GitLab links', () => {
       })
     )
     expect(fetchHostedReviewForBranch).toHaveBeenCalledOnce()
+  })
+})
+
+describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
+  beforeEach(() => {
+    mocks.startFixChecksAgent.mockReset().mockResolvedValue(true)
+    mocks.loadGitLabJobLogDetails.mockReset().mockResolvedValue(null)
+  })
+
+  function githubInput(overrides: Partial<Input> = {}): Input {
+    return makeInput({
+      sourceControlAiActionsVisible: true,
+      activeReview: {
+        provider: 'github',
+        number: 42,
+        title: 'Fork PR',
+        state: 'open',
+        url: 'https://github.example.com/fork/widgets/pull/42',
+        status: 'failure',
+        updatedAt: '2026-10-13T00:00:00Z',
+        mergeable: 'UNKNOWN'
+      },
+      checks: [
+        { name: 'build', status: 'completed', conclusion: 'failure', url: null, checkRunId: 123 }
+      ],
+      ...overrides
+    })
+  }
+
+  it('logs only the static category and keeps the existing five-check fetch limit', async () => {
+    const original = Object.assign(new Error('SYNTHETIC_SECRET_message'), {
+      stack: 'SYNTHETIC_SECRET_stack',
+      stdout: 'SYNTHETIC_SECRET_stdout',
+      stderr: 'SYNTHETIC_SECRET_stderr',
+      cause: { cause: { message: 'SYNTHETIC_SECRET_cause' } },
+      response: { error: { message: 'SYNTHETIC_SECRET_rpc' } }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const fetchPRCheckDetails = vi.fn().mockRejectedValueOnce(original).mockResolvedValue(null)
+    const checks: Input['checks'] = Array.from({ length: 7 }, (_, index) => ({
+      name: `build ${index}`,
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      checkRunId: index + 1
+    }))
+    const input = githubInput({ checks, fetchPRCheckDetails })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+    expect(fetchPRCheckDetails).toHaveBeenCalledTimes(5)
+    expect(fetchPRCheckDetails.mock.calls.map(([, args]) => args.checkRunId)).toEqual([
+      1, 2, 3, 4, 5
+    ])
+    expect(fetchPRCheckDetails).toHaveBeenNthCalledWith(
+      1,
+      '/workspace/repo',
+      {
+        checkRunId: 1,
+        workflowRunId: undefined,
+        checkName: 'build 0',
+        url: null,
+        prRepo: null
+      },
+      { repoId: 'repo-1' }
+    )
+    expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
+    expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
+    expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+    expect(input.setIsFixingChecksWithAI).toHaveBeenNthCalledWith(1, true)
+    expect(input.setIsFixingChecksWithAI).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('keeps the stale-result guard after a captured details failure', async () => {
+    const upstream = Promise.withResolvers<null>()
+    const fetchPRCheckDetails = vi.fn().mockReturnValue(upstream.promise)
+    const isCurrentAsyncResult = vi.fn(() => true)
+    const input = githubInput({ fetchPRCheckDetails, isCurrentAsyncResult })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = result.current.handleFixChecksWithAI()
+    })
+    isCurrentAsyncResult.mockReturnValue(false)
+    upstream.reject(new Error('SYNTHETIC_SECRET_stale'))
+    await act(async () => {
+      await pending
+    })
+
+    expect(fetchPRCheckDetails).toHaveBeenCalledOnce()
+    expect(isCurrentAsyncResult).toHaveBeenCalledWith('state')
+    expect(mocks.startFixChecksAgent).not.toHaveBeenCalled()
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(input.setIsFixingChecksWithAI).toHaveBeenLastCalledWith(false)
+  })
+
+  it('preserves the GitLab trace path and static failure warning', async () => {
+    mocks.loadGitLabJobLogDetails.mockRejectedValue(new Error('SYNTHETIC_SECRET_gitlab'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const input = makeInput({
+      sourceControlAiActionsVisible: true,
+      checks: [
+        {
+          name: 'GitLab build',
+          status: 'completed',
+          conclusion: 'failure',
+          url: null,
+          gitlabJobId: 99
+        }
+      ]
+    })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(mocks.loadGitLabJobLogDetails).toHaveBeenCalledOnce()
+    expect(mocks.loadGitLabJobLogDetails).toHaveBeenCalledWith({
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      repoOwnerExecutionHostId: 'ssh:ssh-1',
+      check: input.checks[0],
+      projectRef: null
+    })
+    expect(input.fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
+    expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
   })
 })

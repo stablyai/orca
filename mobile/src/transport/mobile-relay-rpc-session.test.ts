@@ -3,7 +3,10 @@ import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  encodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from '../../../src/shared/terminal-stream-protocol'
 import { scopeRpcClientToExecutionHost } from './execution-host-scoped-rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
@@ -19,7 +22,7 @@ const fakes = vi.hoisted(() => ({
     onBinary(value: Uint8Array): void
     onError(error: Error): void
   },
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   close: vi.fn()
 }))
 
@@ -70,11 +73,11 @@ async function confirmResume() {
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onAuthenticated()
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-  const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
+  const request: {
     id: string
     method: string
     params: unknown
-  }
+  } = JSON.parse(fakes.sendText.mock.calls[0]![0])
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: request.id,
@@ -95,12 +98,12 @@ async function confirmResume() {
     })
   )
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
-  const capabilityRequest = JSON.parse(fakes.sendText.mock.calls[1]![0] as string) as {
+  const capabilityRequest: {
     id: string
     method: string
     deviceToken: string
     params: { clientCapabilities?: string[] }
-  }
+  } = JSON.parse(fakes.sendText.mock.calls[1]![0])
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
@@ -142,7 +145,7 @@ describe('mobile relay RPC session', () => {
     const listener = vi.fn()
     session.subscribe('runtime.clientEvents.subscribe', {}, listener)
     await Promise.resolve()
-    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    const request: { id: string } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: request.id,
@@ -200,17 +203,18 @@ describe('mobile relay RPC session', () => {
   })
 
   it('connects when the relay never answers capability negotiation', async () => {
+    vi.useFakeTimers()
     const { session } = await confirmResume()
+    expect(session.getState()).toBe('handshaking')
 
-    // Why: the advisory's own deadline used to fail confirmResume, so a link too slow to
-    // answer within the request timeout never published 'connected' — it just redialled.
-    await vi.waitFor(() => expect(session.getState()).toBe('connected'), { timeout: 5_000 })
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(session.getState()).toBe('connected')
     expect(session.getFailure()).toBeNull()
+    session.close()
   })
 
-  // Why: ConnectionState stays 'connecting' until relay-hello, so the migration bound
-  // needs a separate signal to tell "cell never answered the upgrade" from "cell took
-  // relay-auth and is still resolving the assignment".
+  // Dial stages distinguish a missing upgrade from slow cell assignment while both report connecting.
   it('reports the dial stage as the link opens, receives hello, and authenticates', async () => {
     const session = openSession()
     const stages: string[] = []
@@ -259,9 +263,9 @@ describe('mobile relay RPC session', () => {
     const terminalListener = vi.fn()
     session.subscribe('terminal.subscribe', { terminal: 'term-1' }, terminalListener)
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const terminalRequest = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
+    const terminalRequest: {
       id: string
-    }
+    } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: terminalRequest.id,
@@ -288,7 +292,7 @@ describe('mobile relay RPC session', () => {
     const onBinaryFrame = vi.fn()
     session.subscribe('browser.screencast', {}, vi.fn(), { onBinaryFrame })
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const browserRequest = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    const browserRequest: { id: string } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: browserRequest.id,
@@ -318,7 +322,6 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions!.onError(new Error('relay transport error'))
 
     await expect(pending).rejects.toThrow('relay transport error')
-    // The frame reached the wire, so the failure must read as delivery-unknown.
     await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
     expect(session.getState()).toBe('disconnected')
   })
@@ -334,7 +337,10 @@ describe('mobile relay RPC session', () => {
       .sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
       .catch((cause: unknown) => cause)
 
-    expect((error as Error).message).toBe('relay outbound overflow')
+    if (!(error instanceof Error)) {
+      throw new Error('Expected the relay failure')
+    }
+    expect(error.message).toBe('relay outbound overflow')
     expect(isRpcDeliveryUnknown(error)).toBe(false)
   })
 
@@ -353,17 +359,32 @@ describe('mobile relay RPC session', () => {
     vi.useFakeTimers()
     try {
       const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
-      const outcome = pending.catch((error: unknown) => ({
-        message: (error as Error).message,
-        unknown: isRpcDeliveryUnknown(error)
-      }))
+      let settled = false
+      const outcome = pending.then(
+        (response) => {
+          settled = true
+          return response
+        },
+        (error: unknown) => {
+          settled = true
+          return error
+        }
+      )
       // Let sendRequest pass its connected-check microtask and register the timer.
       await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(1_000)
-      await expect(outcome).resolves.toEqual({
-        message: 'relay RPC timed out: terminal.send',
-        unknown: true
-      })
+      expect(fakes.sendText).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('"method":"terminal.send"')
+      )
+      await vi.advanceTimersByTimeAsync(999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const error = await outcome
+      if (!(error instanceof Error)) {
+        throw new Error('Expected the relay timeout')
+      }
+      expect(error.message).toBe('relay RPC timed out: terminal.send')
+      expect(isRpcDeliveryUnknown(error)).toBe(true)
+      session.close()
     } finally {
       vi.useRealTimers()
     }
@@ -389,7 +410,7 @@ describe('mobile relay RPC session', () => {
     server.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
     const frames = fakes.sendText.mock.calls.map((call) => JSON.parse(String(call[0])))
-    // The frames #26501 wrote with its own `executionHost` option, ids aside; key order is not read.
+    // Compare envelope routing independently of frame ids and JSON key order.
     expect(frames.map(({ id: _id, ...frame }) => frame)).toStrictEqual([
       {
         method: 'worktree.ps',

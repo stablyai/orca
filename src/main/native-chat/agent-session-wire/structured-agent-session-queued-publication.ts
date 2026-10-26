@@ -1,7 +1,4 @@
-// The published view of a conversation's queue: its whole draft list, the queue's
-// pause and the card it sends next, on the `commands` precedent — read per emit,
-// reference-stable while unchanged, so the subscribers' identity dedup keeps token
-// streams from re-sending it. They ride together: a client never sees one without the others.
+// Publish list/pause/next-card together with stable identity so token frames cannot resend unchanged queues.
 
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -15,34 +12,40 @@ import {
   resumableQueuePause
 } from '../agent-session-journal/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import { nextStructuredQueuedMessage } from './structured-agent-session-queued-messages'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import {
+  nextStructuredQueuedMessage,
+  type StructuredQueueGateInput
+} from './structured-agent-session-queued-messages'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
   queuePause: AgentSessionQueuePause | null
-  /** The card the drain sends next as soon as nothing runs (`nextStructuredQueuedMessage`), so a
-   *  client reads the run as going across a turn's end and that send, which commit apart. */
+  /** Bridge the turn-end/handoff gap with the drain’s next card. */
   nextQueuedMessageId: string | null
 }
 
-/** What the drain's gate reads beyond the journal; resolved per read. */
-export type QueueSendGate = () => { record: AgentSessionRecord | null; fence: number }
+export type QueueSendGate = (journal: AgentSessionJournal) => StructuredQueueGateInput
 
 export function structuredQueueSendGate(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  host: StructuredAgentSessionCurrentWorkHost,
   sessionId: string
 ): QueueSendGate {
-  return () => ({
-    record: store.getRecord(sessionId),
-    fence: structuredAgentSessionConversationFence(store, sessionId)
+  return (journal) => ({
+    record: host.store.getRecord(sessionId),
+    work: heldStructuredAgentSessionCurrentWork(
+      host.store,
+      sessionId,
+      journal,
+      host.sessions.get(sessionId)
+    )
   })
 }
 
-/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
- *  Stop pauses the queue, published once beside it. */
+/** Per-card holds are separate from the queue-level Stop pause published beside the list. */
 function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
@@ -56,7 +59,7 @@ function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSess
       body: row.body,
       state: row.state,
       ...(held ? { paused: true as const } : {}),
-      // The stored reason is a typed marker; an unknown one reads as a plain hold.
+      // Unknown stored reasons remain plain holds.
       ...(held && isPublishedPausedReason(row.holdReason) ? { pausedReason: row.holdReason } : {}),
       ...(row.state === 'returned' ? { returnedReason: row.returnedReason } : {}),
       ...(row.state === 'returned' && row.returnedRejection
@@ -75,9 +78,7 @@ function isPublishedPausedReason(
 
 type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
 
-/** Reference-stable per journal handle: an unchanged list is never
- *  re-serialized onto token-stream frames, and any draft-table write changes
- *  the reference by construction. */
+/** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 
@@ -88,7 +89,7 @@ function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSession
     return memo.list
   }
   const list = computePublishedQueuedMessages(journal)
-  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
+  // Equal recomputed content must retain identity for subscriber deduplication.
   const serialized = JSON.stringify(list)
   if (memo && memo.serialized === serialized) {
     listMemos.set(journal, { key, serialized, list: memo.list })
@@ -98,8 +99,7 @@ function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSession
   return list
 }
 
-/** Presence first: a pause appearing or clearing is a change even when neither side
- *  names a reason this build can read. */
+/** Compare presence first, including unknown reasons. */
 export function sameQueuePause(
   previous: { reason?: string } | null,
   next: { reason?: string } | null
@@ -112,12 +112,8 @@ export function readQueuePublication(
   gate: QueueSendGate
 ): QueuePublication {
   const queuedMessages = readPublishedQueuedMessages(journal)
-  // Read per emit: the pause also turns on submissions (a turn starting). Only a person's Stop is
-  // shown, and only over a card Resume would send, so its header never offers to send nothing;
-  // deleting a blocking returned card shows it again. After a /clear, a restart or a close nothing
-  // is shown, a Stop's from before it included: nothing runs in the chat, its next turn lifts every
-  // pause, and the cards read as plain waiting cards until then. A Stop the person makes after the
-  // reopen shows.
+  // Show personal Stop only when Resume can send a card; hide old pauses after clear/reopen.
+  // Re-derive per emit because submission acceptance can lift a pause.
   const pauses = structuredQueuePauses(journal)
   const stop = pauses.find((pause) => pause.reason === 'stopped')?.since
   const silent = pauses.some(
@@ -130,12 +126,12 @@ export function readQueuePublication(
           stop.sequence < pause.since.sequence))
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
-  // The submissions are read only while a pause would show, never while the queue runs freely.
+  // Avoid scanning submissions when no pause can show.
   const pause =
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
-  // The test narrows the type.
   const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
-  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...gate() })?.messageId ?? null
+  const nextQueuedMessageId =
+    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&
@@ -150,8 +146,7 @@ export function readQueuePublication(
   return publication
 }
 
-/** For readers that must never fail on drafts — a subscriber stream, a history
- *  page: a closing handle answers "no claim" (absent) instead of throwing. */
+/** Closing handles return no claim instead of failing streams/history reads. */
 export function tryReadQueuePublication(
   journal: AgentSessionJournal | undefined,
   gate: QueueSendGate

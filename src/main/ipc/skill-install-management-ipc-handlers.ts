@@ -19,7 +19,7 @@ import {
   supportsSkillRuntimeManagement
 } from '../skills/skill-runtime-capability'
 import { listWslDistrosAsync } from '../wsl'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
 const environmentIdSchema = z.string().min(1).max(128)

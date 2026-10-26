@@ -1,8 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  adoptsCliConversations,
+  CLI_CONVERSATION_ADOPTING_AGENTS
+} from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId,
@@ -16,9 +19,37 @@ import {
 } from '../runtime/structured-agent-runtime-registrations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/structured-agent-session-create-adoption'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { writeOpenCodeSqliteDatabase } from '../ai-vault/session-scanner-opencode-sqlite-fixture'
+import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
+import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { resolveOpenCodeDatabasePath } from '../opencode/opencode-data-directory'
+import * as hostReadableTranscriptPath from './host-readable-transcript-path'
+
+vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
+  const query = await import('./transcript-opencode-sqlite-query')
+  return {
+    ...(await importOriginal<object>()),
+    readOpenCodeTranscriptPageViaWorker: async (
+      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+    ) => query.readOpenCodeTranscriptPage(args),
+    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+  }
+})
 
 const SESSION_ID = '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a'
 let root: string | null = null
+
+async function createAdoptionTestDirectory(prefix: string): Promise<string> {
+  return realpath(await mkdtemp(prefix))
+}
+
+beforeEach(() => {
+  // Keep fallback history discovery away from real user homes.
+  vi.stubEnv('GROK_HOME', join(tmpdir(), 'orca-adopt-no-grok-home'))
+  vi.stubEnv('PI_CODING_AGENT_DIR', join(tmpdir(), 'orca-adopt-no-pi-home'))
+})
 
 afterEach(async () => {
   vi.unstubAllEnvs()
@@ -30,8 +61,7 @@ afterEach(async () => {
   root = null
 })
 
-/** Each agent's CLI conversation as its own CLI lays it out under an account home. */
-const RECORDED: Record<'grok' | 'omp', (home: string, text: string) => Promise<string>> = {
+const RECORDED: Record<'grok' | 'omp' | 'pi', (home: string, text: string) => Promise<string>> = {
   grok: async (home, text) => {
     const dir = join(home, 'sessions', encodeURIComponent('/repo/orca'), SESSION_ID)
     await mkdir(dir, { recursive: true })
@@ -67,48 +97,92 @@ const RECORDED: Record<'grok' | 'omp', (home: string, text: string) => Promise<s
         .join('\n')
     )
     return file
+  },
+  // Pi system prompts live in sections with empty content.
+  pi: async (home, text) => {
+    const dir = join(home, 'sessions', '--repo-orca--')
+    await mkdir(dir, { recursive: true })
+    const file = join(dir, `2026-10-12T00-00-00-000Z_${SESSION_ID}.jsonl`)
+    const records = [
+      { type: 'session', version: 3, id: SESSION_ID, cwd: '/repo/orca' },
+      {
+        type: 'message',
+        id: 'a0b1c2d3',
+        parentId: null,
+        message: { role: 'system', content: '', sections: { preamble: 'You are Pi' } }
+      },
+      {
+        type: 'message',
+        id: 'a1b2c3d4',
+        parentId: 'a0b1c2d3',
+        message: { role: 'user', content: text, timestamp: 1_791_763_201_000 }
+      },
+      {
+        type: 'message',
+        id: 'b2c3d4e5',
+        parentId: 'a1b2c3d4',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Hi!' }], stopReason: 'stop' }
+      }
+    ]
+    await writeFile(file, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`)
+    return file
   }
 }
 
+const ACCOUNT_VARIABLE = {
+  grok: 'GROK_HOME',
+  omp: 'PI_CODING_AGENT_DIR',
+  pi: 'PI_CODING_AGENT_DIR'
+}
+
 function adopt(
-  agent: 'grok' | 'omp',
-  selectedAccountHomePath: string,
+  agent: 'grok' | 'omp' | 'opencode' | 'pi',
+  selectedAccountHome: AgentSessionAccountHome,
+  providerSessionId = SESSION_ID,
   launchEnv: NodeJS.ProcessEnv = process.env,
   workspaceCwd = '/repo/orca'
 ) {
-  // Grok also looks where Session History lists it from; keep that off the real home.
-  vi.stubEnv('GROK_HOME', selectedAccountHomePath)
   const transcriptImport = structuredAgentRuntimeRegistration(agent)?.transcriptImport
   if (!transcriptImport) {
     throw new Error(`${agent} registers no transcript import`)
   }
   return resolveStructuredAgentSessionAdoptionForCreate({
-    host: null,
     settings: {},
     agent,
     transcriptImport,
-    providerSessionId: SESSION_ID,
-    selfSessionId: 'chat-1',
-    selectedAccountHomePath,
+    providerSessionId,
+    selectedAccountHome,
     launchEnv,
     workspaceCwd
   })
 }
 
 describe('which chats can take over a CLI conversation', () => {
-  it('lists exactly the agents the host registers a transcript import for', () => {
-    expect(
-      STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter((registration) => registration.transcriptImport)
-        .map((registration) => registration.definition.agent)
-        .toSorted()
-    ).toEqual([...CLI_CONVERSATION_ADOPTING_AGENTS].toSorted())
+  it('names, for every row an importing chat lists, only chats that import and list it', () => {
+    const importing = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(
+      (registration) => registration.transcriptImport
+    )
+    const rows = new Set(importing.flatMap((registration) => registration.sessionHistory.rowAgents))
+    expect(new Set(Object.keys(CLI_CONVERSATION_ADOPTING_AGENTS))).toEqual(rows)
+    for (const [row, agents] of Object.entries(CLI_CONVERSATION_ADOPTING_AGENTS)) {
+      for (const agent of agents) {
+        const registration = importing.find((entry) => entry.definition.agent === agent)
+        expect(registration?.sessionHistory.rowAgents, `${agent} takes over ${row}`).toContain(row)
+      }
+    }
+    for (const registration of importing) {
+      const { agent } = registration.definition
+      if (adoptsCliConversations(agent)) {
+        expect(CLI_CONVERSATION_ADOPTING_AGENTS[agent][0]).toBe(agent)
+      }
+    }
   })
 })
 
 it.each([false, true])(
   'finds a Grok cwd beyond the generic cap (long path: %s)',
   async (longPath) => {
-    root = await mkdtemp(join(tmpdir(), 'orca-grok-adopt-cwd-'))
+    root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-grok-adopt-cwd-'))
     const workspaceCwd = join(root, longPath ? '中'.repeat(80) : 'workspace')
     const recorded = await RECORDED.grok(root, 'CURRENT-WORKSPACE')
     const group = grokEncodedCwdDirName(workspaceCwd)
@@ -133,12 +207,22 @@ it.each([false, true])(
     }))
 
     expect(await findGrokChatHistoryBySessionId(join(root, 'sessions'), SESSION_ID)).toBeNull()
-    expect((await adopt('grok', root, process.env, workspaceCwd)).transcriptPath).toBe(currentFile)
+    expect(
+      (
+        await adopt(
+          'grok',
+          { variable: 'GROK_HOME', path: root },
+          SESSION_ID,
+          process.env,
+          workspaceCwd
+        )
+      ).transcriptPath
+    ).toBe(currentFile)
   }
 )
 
 it('looks up OMP history under the configured launch XDG and profile root', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-omp-adopt-env-'))
+  root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-omp-adopt-env-'))
   const ambientData = join(root, 'ambient-data')
   const launchData = join(root, 'launch-data')
   const profile = 'work'
@@ -161,11 +245,20 @@ it('looks up OMP history under the configured launch XDG and profile root', asyn
 
   expect(ambientFile.startsWith(ambientSessions)).toBe(true)
   expect(launchFile.startsWith(launchSessions)).toBe(true)
-  expect((await adopt('omp', accountHome, launchEnv)).transcriptPath).toBe(launchFile)
+  expect(
+    (
+      await adopt(
+        'omp',
+        { variable: 'PI_CODING_AGENT_DIR', path: accountHome },
+        SESSION_ID,
+        launchEnv
+      )
+    ).transcriptPath
+  ).toBe(launchFile)
 })
 
 it('uses the configured OMP profile when the ambient profile names another session', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-omp-adopt-profile-'))
+  root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-omp-adopt-profile-'))
   const xdgData = join(root, 'data')
   const ambientProfile = 'ambient'
   const launchProfile = 'configured'
@@ -185,13 +278,22 @@ it('uses the configured OMP profile when the ambient profile names another sessi
     OMP_PROFILE: launchProfile,
     OMP_CODING_AGENT_DIR: ''
   }
-  expect((await adopt('omp', accountHome, launchEnv)).transcriptPath).toBe(launchFile)
+  expect(
+    (
+      await adopt(
+        'omp',
+        { variable: 'PI_CODING_AGENT_DIR', path: accountHome },
+        SESSION_ID,
+        launchEnv
+      )
+    ).transcriptPath
+  ).toBe(launchFile)
 })
 
 it.each(['win32', 'linux', 'darwin'] as const)(
   'follows the child home precedence for a named OMP profile on %s',
   async (platform) => {
-    root = await mkdtemp(join(tmpdir(), 'orca-omp-adopt-home-'))
+    root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-omp-adopt-home-'))
     const home = join(root, 'home')
     const userProfile = join(root, 'user-profile')
     const profile = 'work'
@@ -200,46 +302,144 @@ it.each(['win32', 'linux', 'darwin'] as const)(
       join(userProfile, '.omp', 'profiles', profile, 'agent'),
       'USERPROFILE'
     )
+    const nativePlatform = process.platform
+    const needsWslResolution = hostReadableTranscriptPath.needsWslHostResolution
+    // Simulate home precedence while retaining fixture paths native to the actual host.
+    vi.spyOn(hostReadableTranscriptPath, 'needsWslHostResolution').mockImplementation((path) =>
+      needsWslResolution(path, nativePlatform)
+    )
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
 
-    const adoption = await adopt('omp', join(root, 'account'), {
-      HOME: home,
-      USERPROFILE: userProfile,
-      OMP_PROFILE: profile
-    })
+    const adoption = await adopt(
+      'omp',
+      { variable: 'PI_CODING_AGENT_DIR', path: join(root, 'account') },
+      SESSION_ID,
+      {
+        HOME: home,
+        USERPROFILE: userProfile,
+        OMP_PROFILE: profile
+      }
+    )
 
     expect(adoption.transcriptPath).toBe(platform === 'win32' ? userProfileFile : homeFile)
   }
 )
 
 it('refuses OMP history from another workspace without creating a blank chat', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-omp-adopt-other-cwd-'))
+  root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-omp-adopt-other-cwd-'))
   await RECORDED.omp(root, 'OTHER-WORKSPACE')
-  await expect(adopt('omp', root, process.env, '/another/workspace')).rejects.toMatchObject({
+  await expect(
+    adopt(
+      'omp',
+      { variable: 'PI_CODING_AGENT_DIR', path: root },
+      SESSION_ID,
+      process.env,
+      '/another/workspace'
+    )
+  ).rejects.toMatchObject({
     refusal: { code: 'agent_session_identity_required' }
   })
 })
 
-describe.each(['grok', 'omp'] as const)('adopting a %s CLI conversation', (agent) => {
+describe.each(['grok', 'omp', 'pi'] as const)('adopting a %s CLI conversation', (agent) => {
   it('finds the conversation under the chat account and imports its history', async () => {
-    root = await mkdtemp(join(tmpdir(), `orca-${agent}-adopt-`))
+    root = await createAdoptionTestDirectory(join(tmpdir(), `orca-${agent}-adopt-`))
     const recorded = await RECORDED[agent](root, `ORCA-${agent}-ADOPT`)
+    if (agent === 'pi') {
+      vi.stubEnv('PI_CODING_AGENT_DIR', root)
+    }
 
-    const adoption = await adopt(agent, root)
+    const accountHome = { variable: ACCOUNT_VARIABLE[agent], path: root }
+    const adoption = await adopt(agent, accountHome)
 
-    expect(adoption).toEqual({ accountHomePath: root, transcriptPath: recorded })
+    expect(adoption).toEqual({ accountHome, transcriptPath: recorded })
     const imported = await prepareLegacyTranscriptImport({
       agent,
       sessionId: SESSION_ID,
       options: { filePath: adoption.transcriptPath }
     })
     expect(imported.ok && JSON.stringify(imported.items)).toContain(`ORCA-${agent}-ADOPT`)
+    if (agent === 'pi' && imported.ok) {
+      expect(imported.items.map((item) => item.body.kind === 'message' && item.body.role)).toEqual([
+        'user',
+        'assistant'
+      ])
+    }
   })
 
   it('refuses a conversation the account does not hold, rather than opening a blank chat', async () => {
-    root = await mkdtemp(join(tmpdir(), `orca-${agent}-adopt-missing-`))
-    await expect(adopt(agent, root)).rejects.toMatchObject({
+    root = await createAdoptionTestDirectory(join(tmpdir(), `orca-${agent}-adopt-missing-`))
+    await expect(
+      adopt(agent, { variable: ACCOUNT_VARIABLE[agent], path: root })
+    ).rejects.toMatchObject({
       refusal: { code: 'agent_session_identity_required' }
     })
+  })
+})
+
+describe('adopting a Pi CLI conversation', () => {
+  it('pins the Session History account when another Pi home has the same id', async () => {
+    root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-pi-adopt-homes-'))
+    const selected = join(root, 'selected')
+    const history = join(root, 'history')
+    await RECORDED.pi(selected, 'SELECTED')
+    const source = await RECORDED.pi(history, 'HISTORY')
+    vi.stubEnv('PI_CODING_AGENT_DIR', history)
+
+    expect(await adopt('pi', { variable: 'PI_CODING_AGENT_DIR', path: selected })).toEqual({
+      accountHome: { variable: 'PI_CODING_AGENT_DIR', path: history },
+      transcriptPath: source
+    })
+  })
+})
+
+describe('adopting an OpenCode CLI conversation', () => {
+  const OPENCODE_SESSION = 'ses_orca_adopt'
+  const unmanaged: AgentSessionAccountHome = { kind: 'opencode', locator: { kind: 'unmanaged' } }
+
+  function openCodeData(home: string): string {
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    vi.stubEnv('XDG_DATA_HOME', join(home, 'data'))
+    vi.stubEnv('OPENCODE_DB', '')
+    return join(home, 'data', 'opencode', 'opencode.db')
+  }
+
+  it('imports from the configured database the resumed OpenCode child opens', async () => {
+    root = await createAdoptionTestDirectory(join(tmpdir(), 'orca-opencode-configured-adopt-'))
+    const defaultDb = openCodeData(root)
+    const configuredDb = join(root, 'data', 'opencode', 'work.db')
+    writeOpenCodeSqliteDatabase(defaultDb, [
+      { id: OPENCODE_SESSION, turns: [{ role: 'user', parts: ['wrong database'] }] }
+    ])
+    writeOpenCodeSqliteDatabase(configuredDb, [
+      { id: OPENCODE_SESSION, turns: [{ role: 'user', parts: ['configured database'] }] }
+    ])
+    const baseEnvironment = { HOME: root, XDG_DATA_HOME: join(root, 'data') }
+    const launchEnv = { OPENCODE_DB: 'work.db' }
+    const adoption = await adopt('opencode', unmanaged, OPENCODE_SESSION, {
+      ...baseEnvironment,
+      ...launchEnv
+    })
+    const spec = acpLaunchSpecFor('opencode')
+    if (!spec) {
+      throw new Error('OpenCode launch spec missing')
+    }
+    const launch = await resolveAcpLaunchInvocation(spec, unmanaged, {
+      resolveEnvironment: async () => baseEnvironment,
+      resolveLaunchEnv: () => launchEnv,
+      resolveCommand: () => '/test/opencode',
+      dataDirectory: root
+    })
+
+    expect(adoption.transcriptPath).toBe(configuredDb)
+    expect(resolveOpenCodeDatabasePath(launch.env, launch.env.HOME)).toBe(configuredDb)
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'opencode',
+      sessionId: OPENCODE_SESSION,
+      options: { filePath: adoption.transcriptPath }
+    })
+    expect(imported.ok && JSON.stringify(imported.items)).toContain('configured database')
+    expect(imported.ok && JSON.stringify(imported.items)).not.toContain('wrong database')
   })
 })

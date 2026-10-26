@@ -1,8 +1,13 @@
-import { app } from 'electron'
+import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import {
+  listCapableSharedControlSockets,
+  startDesktopPresenceReporter
+} from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
@@ -15,7 +20,7 @@ import { recoverPendingSkillTransactions } from '../skills/skill-transaction-sta
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
-import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
+import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -29,6 +34,22 @@ export function initializeMainProcessObservers(): void {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
+    readAway: () => readDesktopAwayState(powerMonitor),
+    listTargets: listCapableSharedControlSockets,
+    subscribePowerEvents: ({ away, back }) => {
+      powerMonitor.on('suspend', away)
+      powerMonitor.on('lock-screen', away)
+      powerMonitor.on('resume', back)
+      powerMonitor.on('unlock-screen', back)
+      return () => {
+        powerMonitor.off('suspend', away)
+        powerMonitor.off('lock-screen', away)
+        powerMonitor.off('resume', back)
+        powerMonitor.off('unlock-screen', back)
+      }
+    }
+  })
   state.agentAwakeService = new AgentAwakeService()
   state.agentAwakeService.setMode(
     normalizeComputerAwakeMode(
@@ -36,7 +57,7 @@ export function initializeMainProcessObservers(): void {
       store.getSettings().keepComputerAwakeWhileAgentsRun
     )
   )
-  // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
+  // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
   state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({
     isQuitting: () => state.isQuitting,
@@ -57,7 +78,7 @@ export function initializeMainProcessObservers(): void {
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
   }
-  // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
+  // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   initTelemetry(store)
   const profileStateStartup = state.profileStateStartup
   if (profileStateStartup) {
@@ -69,9 +90,7 @@ export function initializeMainProcessObservers(): void {
       migrated: profileStateStartup.migrated
     })
   }
-  // Why: the trust-grant module is bundled into plain-node CLI entries where
-  // the telemetry client cannot load, so the tracker is injected here instead
-  // of imported there.
+  // Inject tracking because plain-Node CLI imports cannot load the telemetry client.
   setCodexTrustGrantTelemetry(({ outcome, hostKind, lane, reason, errorClass, verifyClass }) => {
     track('codex_trust_grant', {
       outcome,
@@ -82,12 +101,7 @@ export function initializeMainProcessObservers(): void {
       ...(verifyClass !== undefined ? { verify_class: verifyClass } : {})
     })
   })
-  // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
-  // composition root — independent of product telemetry — and must
-  // initialize before any IPC handler / runtime span is created so the
-  // tracer's active sink is populated at the moment the first span fires.
-  // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
-  // / CI internally; those gates do not need to be re-checked here.
+  // Initialize the independent error-tracking sink before any IPC/runtime span; it enforces diagnostics/privacy gates internally.
   initObservability()
   recordDurableCrashBreadcrumb('main_process_lifecycle_started', {
     packaged: app.isPackaged,
@@ -121,16 +135,11 @@ export function initializeMainProcessObservers(): void {
       }
     })
     .catch((error) => console.warn('[skills] startup transaction recovery failed:', error))
-  // Why: cohort-classifier reads repo count synchronously at every emit, so hydrate it here — before any IPC handler or window can trigger track().
+  // Hydrate repo count before IPC/window tracking; cohort classification reads it synchronously.
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
-  // Agent-session stats come from hook status transitions, the same truth the
-  // sidebar and dashboard read — never from OSC terminal titles, which miss
-  // hook-only agents and count any spinner TUI as an agent (#10201).
-  const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
-  agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
-  agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
+  feedAgentSessionStats(state.stats, agentHookServer)
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)

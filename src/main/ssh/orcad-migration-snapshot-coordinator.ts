@@ -1,25 +1,18 @@
-/**
- * Sending a manifest's scrollback snapshots to the destination in bounded, resumable chunks.
- *
- * The source side only reads: each chunk comes from the profile-state store, checked against the
- * signed manifest's length and digest. The destination's catalog operations are passed in, so
- * this driver owns no transport and retires nothing. A chunk whose acknowledgement was lost is
- * confirmed by reading the destination's recorded offset, never assumed.
- */
+/** Read snapshot chunks from source storage and verify manifest length/digest. Resume from destination offsets; re-read after lost acknowledgements instead of assuming delivery. This transport-independent driver retires nothing. */
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   decodeOrcadMigrationSnapshotChunk,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type { Store } from '../persistence'
 
 export type OrcadMigrationSnapshotSource = Pick<Store, 'readOrcadMigrationSourceSnapshotChunk'>
 
-export type OrcadMigrationSnapshotDestination = {
+type OrcadMigrationSnapshotDestination = {
   readState: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
@@ -29,7 +22,6 @@ export type OrcadMigrationSnapshotDestination = {
 export async function transferOrcadMigrationSnapshots(args: {
   source: OrcadMigrationSnapshotSource
   manifest: OrcadMigrationManifest
-  /** The destination's staged state, whose upload offsets say where each snapshot resumes. */
   state: Extract<OrcadMigrationCatalogState, { state: 'staged' }>
   destination: OrcadMigrationSnapshotDestination
 }): Promise<void> {
@@ -37,7 +29,7 @@ export async function transferOrcadMigrationSnapshots(args: {
   if (snapshots.length === 0) {
     return
   }
-  // The journal holds these bytes until commit or abort, so a closed tab still sends on a retry.
+  // Journal retention keeps bytes available after tab close, including retries.
   await sendSnapshots(args, snapshots)
 }
 
@@ -107,7 +99,7 @@ async function stageChunkWithRecovery(
         return received
       }
     } catch {
-      // The chunk stays unverifiable; report the first failure.
+      // Unverifiable chunks retain the original failure.
     }
     throw error
   }

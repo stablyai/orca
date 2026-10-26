@@ -1,3 +1,4 @@
+import { createNormalizedAiVaultScopeCwdMatcher } from '../../../../shared/ai-vault-scope-cwd-match'
 import { resolveActiveProjectKey } from './ai-vault-project-key'
 import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
@@ -11,17 +12,17 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
-  createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+  aiVaultSessionProjectCwdKey,
+  matchAiVaultProjectCandidates
+} from './ai-vault-session-project-candidates'
 import {
   folderGroupKey,
   folderLabel,
   type AiVaultSessionProject
 } from '../../../../shared/ai-vault-session-filters'
 
-// Preserve renderer imports of the renderer-free descriptor.
 export type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
 
 export type AiVaultProjectContext = {
@@ -38,7 +39,7 @@ type SessionProjectCandidate = {
   projectId: string | null
   repoId: string | null
   // Precomputed so a 500-session pass doesn't re-normalize every root per session.
-  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  ownsNormalizedCwd: ReturnType<typeof createNormalizedAiVaultScopeCwdMatcher>
 }
 
 type ProjectResolverArgs = {
@@ -73,10 +74,7 @@ export function buildAiVaultProjectContext({
   }
 }
 
-/**
- * Session→project attribution never reads the active repo/worktree — exposed
- * separately so memoizing callers don't rebuild the map on worktree switches.
- */
+/** Separate attribution from active workspace state so memoized maps survive workspace switches. */
 export function buildAiVaultSessionProjectById({
   repos,
   worktrees,
@@ -104,10 +102,11 @@ export function buildAiVaultSessionProjectById({
       projectsByCwd = new Map()
       projectsByHostAndCwd.set(host, projectsByCwd)
     }
-    let project = projectsByCwd.get(session.cwd)
+    const cwdKey = aiVaultSessionProjectCwdKey(session)
+    let project = projectsByCwd.get(cwdKey)
     if (!project) {
       project = resolveSessionProject(session, candidates, projectLabelByKey)
-      projectsByCwd.set(session.cwd, project)
+      projectsByCwd.set(cwdKey, project)
     }
     sessionProjectById.set(session.id, { ...project })
   }
@@ -235,7 +234,7 @@ function makeProjectCandidate(
   return {
     ...rest,
     normalizedPath,
-    ownsNormalizedCwd: createNormalizedPathInsideOrEqualMatcher(normalizedPath)
+    ownsNormalizedCwd: createNormalizedAiVaultScopeCwdMatcher([path])
   }
 }
 
@@ -265,15 +264,13 @@ function resolveSessionProject(
     return { kind: 'unknown', key: 'unknown', label: '' }
   }
 
-  const normalizedCwd = normalizeRuntimePathForComparison(cwd)
-  const matches = candidates.filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
+  const matches = matchAiVaultProjectCandidates(session, cwd, candidates, compareCandidates)
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const hostMatches = sessionHostId
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)
     : matches
   if (sessionHostId && matches.length > 0 && hostMatches.length === 0) {
-    // Why: same-path projects can exist on several hosts; a tagged transcript
-    // should never be attributed to a project on a different machine.
+    // Identical paths can belong to different hosts; never attribute a tagged transcript to another machine.
     return folderProject(cwd)
   }
 
@@ -282,7 +279,7 @@ function resolveSessionProject(
     return folderProject(cwd)
   }
 
-  const bestCandidate = hostMatches.sort(compareCandidates)[0]
+  const bestCandidate = hostMatches[0]
   if (!bestCandidate) {
     return folderProject(cwd)
   }

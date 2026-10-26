@@ -16,7 +16,8 @@ describe('responsive layout metrics', () => {
     expect(getResponsiveLayoutMetrics(1180, 820)).toMatchObject({
       isLandscape: true,
       isTabletLayout: true,
-      isWideLayout: true
+      isWideLayout: true,
+      isLandscapePhone: false
     })
   })
 
@@ -33,7 +34,11 @@ describe('responsive layout metrics', () => {
       isLandscape: true,
       isTabletLayout: false,
       isWideLayout: false,
+      isLandscapePhone: true,
       horizontalPadding: spacing.lg
     })
+    expect(getResponsiveLayoutMetrics(430, 932)).toMatchObject({ isLandscapePhone: false })
+    // A short, narrow web window is wider than tall but has no room for tabs in the top bar.
+    expect(getResponsiveLayoutMetrics(390, 350)).toMatchObject({ isLandscapePhone: false })
   })
 })

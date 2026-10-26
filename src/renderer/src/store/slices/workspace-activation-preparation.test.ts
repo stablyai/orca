@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -99,7 +100,7 @@ it.each(['folder', 'git'] as const)(
   }
 )
 
-it('clears unread only for the selected folder owner and persists to that host', () => {
+it('reads only the selected folder owner on screen and persists to that host', () => {
   const { store, activate } = seedWorkspace('folder', 'ssh:remote')
   const updateFolderWorkspace = vi.fn().mockResolvedValue(null)
   store.setState({
@@ -110,6 +111,7 @@ it('clears unread only for the selected folder owner and persists to that host',
     updateFolderWorkspace
   })
 
+  installAttentionScreen(store, true)
   activate()
 
   expect(store.getState().folderWorkspaces.map((folder) => folder.isUnread)).toEqual([true, false])

@@ -1,8 +1,11 @@
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 
 export const RUNTIME_HOST_STATUS_CHANNEL = 'runtimeEnvironments:statusChanged'
+
+/** Why a host refused this client: its pairing was revoked, or the versions cannot talk. */
+export type RuntimeHostBlockedReason = 'access-revoked' | 'incompatible'
 
 /** Local client state; never exchanged with the paired host. */
 export type RuntimeHostStatusSnapshot = {
@@ -12,33 +15,23 @@ export type RuntimeHostStatusSnapshot = {
   checkedAt: number
   status: RuntimeStatus | null
   verification: 'checking' | 'verified' | 'unavailable' | 'blocked'
+  /** Set only while a refused status probe holds `verification` at blocked. */
+  blockedReason?: RuntimeHostBlockedReason
   transport: 'unknown' | 'connecting' | 'ready' | 'disconnected'
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   retired?: true
 }
 
-/**
- * One client-side record of a host's last status probe: the projected `status`, and the
- * `snapshot` evidence for what that projection is worth. Declared once rather than duck-typed
- * per consumer — every field added here has been optional, so a local structural copy keeps
- * typechecking against the store while silently missing whatever landed after it was written.
- */
+/** Share projected status and its snapshot evidence; optional fields let structural copies silently miss new semantics. */
 export type RuntimeEnvironmentStatus = {
   snapshot?: RuntimeHostStatusSnapshot
   status: RuntimeStatus | null
   remoteControl?: RuntimeStatus['remoteControl'] | null
   appVersion?: string | null
   checkedAt: number
-  /**
-   * Identity of the connection: which socket epoch retained state belongs to. Every cache key,
-   * stamp and settle fence compares this, so advancing it invalidates the session mirror.
-   */
+  /** Connection identity fences caches/stamps/settlement; advancing it invalidates the session mirror. */
   connectionGeneration?: number
-  /**
-   * Edge count of "the host answered again after we lost contact". A resubscribe trigger only —
-   * the streams died with the transport and nothing else revives them. Never an identity, a cache
-   * key, or a fence: that is `connectionGeneration`, and a flap must not move it (#19647).
-   */
+  /** Resubscribe edge after contact returns, never cache/fence identity: flaps must not move connectionGeneration (#19647). */
   hostContactEpoch?: number
 }
 
@@ -58,22 +51,15 @@ export function runtimeEnvironmentStatusFromSnapshot(
   }
 }
 
-/**
- * The last status the host actually answered with. The snapshot retains it across an
- * unverifiable probe, so this survives a loss of contact; the entry's own `status` does not.
- */
+/** The snapshot keeps the last answered status through unverifiable probes; projected entry.status does not. */
 export function lastVerifiedRuntimeStatus<Status = RuntimeStatus>(
   entry: { status?: Status | null; snapshot?: { status: Status | null } | null } | null | undefined
 ): Status | null {
   return entry?.snapshot?.status ?? entry?.status ?? null
 }
 
-/**
- * The host's own verdict that this pairing is over: retired by an explicit disconnect, or
- * refused — auth rejected or protocol mismatch, which stops every retry for good. Positive
- * evidence, unlike a lost transport, so this is the only state that may withdraw a fact the
- * host already gave us (docs/reference/ssh-execution-boundary.md).
- */
+/** Only explicit retirement or auth/protocol refusal withdraws prior host facts; transport loss cannot prove them gone
+ * (docs/reference/ssh-execution-boundary.md). */
 export function isRuntimeHostContactRevoked(
   entry:
     | { snapshot?: Pick<RuntimeHostStatusSnapshot, 'verification' | 'retired'> | null }
@@ -98,14 +84,22 @@ export function runtimeHostStatusError(error: unknown): RuntimeRpcFailure {
   return runtimeHostStatusFailure(code, error instanceof Error ? error.message : String(error))
 }
 
-export function isRuntimeHostStatusBlocked(response: RuntimeRpcFailure): boolean {
+const ACCESS_REVOKED_CODES = ['unauthorized', 'forbidden']
+
+/** Null when the failure is transient and verification should keep retrying. */
+export function runtimeHostStatusBlockedReason(
+  response: RuntimeRpcFailure
+): RuntimeHostBlockedReason | null {
+  if (ACCESS_REVOKED_CODES.includes(response.error.code)) {
+    return 'access-revoked'
+  }
   return [
-    'unauthorized',
-    'forbidden',
     'invalid_argument',
     'invalid_runtime_response',
     'protocol_version_mismatch',
     'method_not_found',
     'unsupported_method'
   ].includes(response.error.code)
+    ? 'incompatible'
+    : null
 }

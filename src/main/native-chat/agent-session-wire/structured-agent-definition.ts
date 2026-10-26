@@ -1,28 +1,23 @@
-// What the host knows about a structured agent before any session of it runs.
-//
-// Each agent's own module declares its definition, and runtime composition registers it with the
-// agent's adapter in one StructuredAgentRegistry. That registry is the only lookup: the router and
-// shared host code read a definition through it and never branch on the agent's name.
+// Agent modules declare definitions; the runtime registry owns shared lookup instead of agent-name branches.
 
 import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
-import type { AgentSessionStoredAgent } from '../../../shared/agent-session-stored-agent'
+import type { AgentSessionStoredAgent } from '../../../shared/agent-session/lifecycle/agent-session-stored-agent'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 
-/** `agent` names the Orca agent whose sessions this describes; the storage fields bound its records. */
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
-  /** How a session's options read and change while no child runs. */
+  /** Absent means Orca never supplies this agent’s managed runtime. */
+  managedRuntime?: () => boolean
   restingOptions: {
-    /** Whether the agent takes a pick of this option key. */
     acceptsKey: (key: string) => boolean
-    /** The models a running child falls back to with no catalog; null when it has none. */
+    /** Null means no fallback catalog. */
     fallbackModels: () => AgentSessionModelOption[] | null
-    /** An unpicked effort reads as the model's default effort, as a running child reports it. */
+    /** Unpicked effort follows the model default, matching running-child reports. */
     effortDefaultsToModel: boolean
   }
 }
 
-/** An agent whose account is one config directory, as Claude's and Codex's are. */
+/** Accounts represented by a single config directory. */
 export type DirectoryAccountAgentDefinition = StructuredAgentDefinition & {
   accountHomeVariable: string
 }

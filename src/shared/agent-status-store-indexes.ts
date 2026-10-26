@@ -1,12 +1,10 @@
-// Lookups the store keeps beside its maps, so a read or a mutation costs what it touches rather
-// than the whole store. Every index is derived from the committed maps and moved only at commit.
+// Derive indexes from committed maps and change them only at commit; reads/writes cost what they touch, not the whole store.
 
 import {
   serializeAgentChildWorkAliasKey,
   type AgentChildWorkAliasRecord
 } from './agent-status-child-work-alias'
 import type { AgentChildWorkRecord } from './agent-status-child-work'
-import { agentStatusStoreRecordBytes } from './agent-status-store-byte-budget'
 import type {
   AgentStatusFactRecord,
   AgentStatusTombstoneRecord
@@ -22,8 +20,6 @@ type TableName = (typeof TABLE_NAMES)[number]
 type OrderedTableName = Exclude<TableName, 'parents'>
 
 export type AgentStatusStoreIndexes = {
-  /** Serialized bytes of every record per table, for the snapshot budget. */
-  recordBytes: Record<TableName, number>
   childrenByParent: Map<string, Set<string>>
   factsByParent: Map<string, Set<string>>
   aliasesByChild: Map<string, Set<string>>
@@ -109,7 +105,6 @@ function indexTombstone(
 
 export function indexAgentStatusStoreState(state: AgentStatusStoreState): AgentStatusStoreIndexes {
   const indexes: AgentStatusStoreIndexes = {
-    recordBytes: { parents: 0, children: 0, aliases: 0, facts: 0, tombstones: 0 },
     childrenByParent: new Map(),
     factsByParent: new Map(),
     aliasesByChild: new Map(),
@@ -118,46 +113,23 @@ export function indexAgentStatusStoreState(state: AgentStatusStoreState): AgentS
     order: { children: new Map(), aliases: new Map(), facts: new Map(), tombstones: new Map() },
     nextOrder: 0
   }
-  for (const parent of state.parents.values()) {
-    indexes.recordBytes.parents += agentStatusStoreRecordBytes(parent)
-  }
   for (const [id, child] of state.children) {
-    indexes.recordBytes.children += agentStatusStoreRecordBytes(child)
     indexes.order.children.set(id, indexes.nextOrder++)
     indexChild(indexes, id, child, true)
   }
   for (const [key, alias] of state.aliases) {
-    indexes.recordBytes.aliases += agentStatusStoreRecordBytes(alias)
     indexes.order.aliases.set(key, indexes.nextOrder++)
     indexAlias(indexes, key, alias, true)
   }
   for (const [key, fact] of state.facts) {
-    indexes.recordBytes.facts += agentStatusStoreRecordBytes(fact)
     indexes.order.facts.set(key, indexes.nextOrder++)
     indexFact(indexes, key, fact, true)
   }
   for (const [key, tombstone] of state.tombstones) {
-    indexes.recordBytes.tombstones += agentStatusStoreRecordBytes(tombstone)
     indexes.order.tombstones.set(key, indexes.nextOrder++)
     indexTombstone(indexes, key, tombstone, true)
   }
   return indexes
-}
-
-/** Record bytes per table once the drafts land. */
-export function draftedRecordBytes(
-  indexes: AgentStatusStoreIndexes,
-  drafts: AgentStatusStoreDrafts
-): Record<TableName, number> {
-  const bytes = { ...indexes.recordBytes }
-  for (const name of TABLE_NAMES) {
-    for (const { previous, next } of drafts[name].touched()) {
-      bytes[name] +=
-        (next ? agentStatusStoreRecordBytes(next) : 0) -
-        (previous ? agentStatusStoreRecordBytes(previous) : 0)
-    }
-  }
-  return bytes
 }
 
 function moveIndex<V>(
@@ -191,10 +163,8 @@ function moveOrder<V>(
 /** Move every index by what the drafts changed; call before the drafts land in the maps. */
 export function commitAgentStatusStoreIndexes(
   indexes: AgentStatusStoreIndexes,
-  drafts: AgentStatusStoreDrafts,
-  recordBytes: Record<TableName, number>
+  drafts: AgentStatusStoreDrafts
 ): void {
-  indexes.recordBytes = recordBytes
   moveIndex(drafts.children, (key, child, add) => indexChild(indexes, key, child, add))
   moveIndex(drafts.aliases, (key, alias, add) => indexAlias(indexes, key, alias, add))
   moveIndex(drafts.facts, (key, fact, add) => indexFact(indexes, key, fact, add))

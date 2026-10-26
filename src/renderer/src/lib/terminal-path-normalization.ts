@@ -108,8 +108,7 @@ export function resolveTildePath(
     return null
   }
 
-  // Why: remote/devcontainer terminals can have cwd outside the user's home;
-  // prefer the terminal's explicit home when the caller has it.
+  // Prefer explicit terminal home; remote/devcontainer cwd need not sit under the user’s home.
   const resolvedHomePath = normalizeExplicitHomePath(homePath) ?? inferHomePathFromCwd(cwd)
   if (!resolvedHomePath) {
     return null

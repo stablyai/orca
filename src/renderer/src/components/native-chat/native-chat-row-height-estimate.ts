@@ -1,21 +1,12 @@
-// First-paint height for a transcript row. Windowing has to place every row —
-// including the thousand nobody has looked at — before any of them has been
-// measured, so the estimate only has to be close enough that the scrollbar
-// doesn't lurch once the real measurement lands.
-//
-// Deliberately arithmetic over already-derived content: `estimateSize` is called
-// once per item every time a measurement resolves, so anything that walks blocks
-// or joins strings here would turn one row's ResizeObserver callback into a
-// whole-transcript scan.
+// Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
-} from './native-chat-user-message-fold'
+} from '../../../../shared/native-chat-user-message-fold'
 
-/** What a row contains, reduced to the few numbers that drive its height. */
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']
   /** Wrapped display lines of prose, not source lines. */
@@ -27,13 +18,11 @@ export type NativeChatRowContentMetrics = {
   subagentGroupCount: number
 }
 
-/** Extras the message itself doesn't know about — they come from the turn. */
 export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
   hasTurnDiff: boolean
-  /** Behind a folded turn: prose and tool activity draw nothing, so estimating
-   *  them would reserve a screen of height for a row that paints a roster. */
+  /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
   /** Inside a subagent's section, where assistant prose keeps its controls in flow. */
   inSubagentSection?: boolean
@@ -59,7 +48,6 @@ const TOOL_RUN_CHROME_PX = 16
 /** A reasoning row draws only its one-line trigger (`min-h-6`) until opened; opening remeasures it. */
 const COLLAPSED_REASONING_PX = 24
 const SUBAGENT_ROW_PX = 32
-/** The one-line head that names a subagent above its own rows. */
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
@@ -67,17 +55,11 @@ const RECEIPT_PX = 56
 /** How far assistant prose's controls hang below the row (`-mb-5`) outside a section. */
 const AGENT_CONTROLS_OVERHANG_PX = 20
 const ROW_MIN_PX = 24
-/** `gap-5` between the parts stacked inside one row's wrapper. The identical gap
- *  BETWEEN rows is the virtualizer's `gap` option and must never be added here:
- *  counted in both places every row would sit 20px lower than the one above it. */
+/** Charge internal gap-5 only; the virtualizer owns inter-row gaps, which would otherwise compound drift. */
 export const NATIVE_CHAT_ROW_GAP_PX = 20
-// A single row can legitimately be enormous (a pasted file, an open diff). The
-// cap only bounds the *estimate*: measurement replaces it as soon as the row
-// mounts, and an estimate the size of ten viewports makes the scrollbar useless
-// until then.
+// Cap estimates to keep scrolling usable; mounted measurements may legitimately exceed this limit.
 const ROW_MAX_PX = 1600
 
-/** Wrapped line count for a markdown body, counting hard breaks and soft wraps. */
 export function estimateNativeChatTextLines(
   markdown: string,
   charsPerLine = DEFAULT_ROW_TYPOGRAPHY.charsPerLine
@@ -102,8 +84,7 @@ const metricsCache = new WeakMap<
   { charsPerLine: number; metrics: NativeChatRowContentMetrics }
 >()
 
-/** Cached on the message, so its role remains part of the identity and a streaming turn
- *  re-deriving on every frame pays for the changed row only. */
+/** Cache per message identity so streaming rederives metrics only for changed rows. */
 export function nativeChatRowContentMetrics(
   message: NativeChatMessage,
   typography = DEFAULT_ROW_TYPOGRAPHY
@@ -125,8 +106,7 @@ export function nativeChatRowContentMetrics(
   return metrics
 }
 
-/** A collapsed work run: a lead head's own words over one tool-run header. Its thoughts draw
- *  only once it opens, which remeasures it. */
+/** Collapsed work runs show the lead text and one header; opening thoughts triggers remeasurement. */
 export function nativeChatWorkRunContentMetrics(
   head: NativeChatRowContentMetrics,
   headIsLead: boolean
@@ -146,7 +126,6 @@ export function estimateNativeChatRowHeight(
   chrome: NativeChatRowChromeMetrics,
   typography = DEFAULT_ROW_TYPOGRAPHY
 ): number {
-  // Chat spacing and icons scale with the text size, so a row's fixed parts do too.
   const scale = typography.spacingScale
   let partCount = 0
   let height = 0

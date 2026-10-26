@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import { cancelHistoryGc } from '../terminal-history-gc'
-import type { registerSshHandlers } from '../ipc/ssh'
-import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
+import type { registerSshHandlers } from '../ipc/ssh/ssh'
+import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import {
@@ -115,8 +115,8 @@ vi.mock('../ipc/worktree-change-invalidators', () => ({
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: registerPtyHandlersMock }))
 
-vi.mock('../ipc/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
-vi.mock('../ipc/pty-management', () => ({
+vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
+vi.mock('../ipc/pty/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
 vi.mock('../ipc/workspace-cleanup', () => ({
@@ -156,7 +156,8 @@ vi.mock('../macos-tcc-prompt-notice', () => ({
   releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
 }))
 
-import { attachMainWindowServices } from './attach-main-window-services'
+import { attachMainWindowServices, registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers as registerWindowUpdaterHandlers } from './main-window-updater'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -185,8 +186,7 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
     .map(([, handler]) => handler as () => void)
 }
 
-// Updater setup is deferred to first paint; fire the captured ready-to-show
-// handler and flush its setImmediate hop.
+// Fire first paint and its deferred hop before asserting updater setup.
 async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
   const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
     | (() => void)
@@ -198,6 +198,10 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 }
 
 describe('attachMainWindowServices', () => {
+  it('exports the updater handlers exercised by the recovery tests', () => {
+    expect(registerUpdaterHandlers).toBe(registerWindowUpdaterHandlers)
+  })
+
   afterEach(() => {
     cancelHistoryGc()
   })
@@ -296,7 +300,7 @@ describe('attachMainWindowServices', () => {
       }
     )
 
-    // Deferred to first paint — must not be configured at attach time.
+    // Attachment must leave updater setup until first paint.
     expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
     await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)

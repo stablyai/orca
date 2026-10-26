@@ -62,10 +62,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,8 +102,7 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
@@ -158,6 +154,23 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('hasChildProcesses', () => {
+    it('fences full inspection with the original PTY incarnation across awaits', async () => {
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+      await expect(
+        provider.inspectProcess(id, { expectedIncarnationId: 'replacement' })
+      ).resolves.toMatchObject({ childProcessEvidence: 'unverifiable' })
+      let resolveScan!: (resolution: { available: boolean; processName: string }) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const inspection = provider.inspectProcess(id, { expectedIncarnationId: incarnationId })
+      exitCb?.({ exitCode: 0 })
+      resolveScan({ available: true, processName: 'zsh' })
+      await expect(inspection).resolves.toMatchObject({ childProcessEvidence: 'unverifiable' })
+    })
+
     it('returns false when foreground process matches shell', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       expect(await provider.hasChildProcesses(id)).toBe(false)
@@ -240,19 +253,14 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
-      // First call establishes the agent identity via the scan.
       await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
-      // node-pty still only names the shell, but console presence confirms the
-      // agent — no second whole-table scan.
+      // node-pty names only the shell; job membership revalidates the agent without another full scan.
       await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
     })
 
     it('stops trusting job membership once the cached agent goes stale', async () => {
-      // The daemon path is not the only one that short-circuited on `size > 1`.
-      // Here the early return skips the scan that is the ONLY thing able to
-      // clear ptyLastRecognizedForeground, so on a WSL pane -- whose job always
-      // holds console-detached plumbing -- the identity was pinned for good.
+      // An unanchored job superset must age out; WSL detached plumbing can otherwise pin agent identity forever.
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       mockProc.process = 'powershell.exe'
       resolveAgentForegroundProcessMock.mockResolvedValue({
@@ -269,7 +277,6 @@ describe('LocalPtyProvider', () => {
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
 
-        // Past the bound, the superset answer stops standing in for a scan.
         vi.setSystemTime(1_000_000 + 40_000)
         resolveAgentForegroundProcessMock.mockResolvedValue({
           available: true,
@@ -309,12 +316,7 @@ describe('LocalPtyProvider', () => {
     })
 
     it('keeps short-circuiting a live agent instead of scanning on every call', async () => {
-      // The age bound must mean "time since we last confirmed the agent", not
-      // "how long the agent has run". Stamping only on a CHANGE of name makes a
-      // steadily-recognized agent age out permanently: the short-circuit dies
-      // after 30s, every call runs the whole-table scan, and one available-but-
-      // agentless snapshot then deletes a LIVE agent -- the false "agent done"
-      // #9258 exists to prevent.
+      // Confirmation must reset age; measuring total runtime would permanently disable cheap rechecks (#9258).
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       mockProc.process = 'powershell.exe'
       resolveAgentForegroundProcessMock.mockResolvedValue({
@@ -330,12 +332,10 @@ describe('LocalPtyProvider', () => {
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
 
-        // Past the bound: one revalidating scan is expected, and it re-confirms.
         vi.setSystemTime(1_000_000 + 40_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
 
-        // That confirmation must restart the clock, so the short-circuit resumes.
         vi.setSystemTime(1_000_000 + 45_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
@@ -375,9 +375,7 @@ describe('LocalPtyProvider', () => {
     })
 
     it('retires an anchored agent immediately when its pid leaves the job, despite a leftover', async () => {
-      // Fix for stale-identity-behind-a-leftover: with an anchor pid, a detached
-      // descendant surviving in the job no longer stands in for the dead agent
-      // until the age bound -- the missing anchor is proof of exit right now.
+      // A missing anchor proves exit immediately; detached leftovers cannot preserve that identity.
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: 'win32'
@@ -394,16 +392,13 @@ describe('LocalPtyProvider', () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
       await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
-      // Agent 999 exits; a detached leftover 777 keeps the job larger than the shell.
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 777]))
       await expect(provider.getForegroundProcess(id)).resolves.toBeNull()
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
     })
 
     it('never expires an anchored agent the job still holds, even when scans miss it', async () => {
-      // Fix for false removal of a live agent: the anchor pid in the job is
-      // proof of life, so >30s of agentless-but-successful scans no longer
-      // retire a working agent -- and the confirmation restamps the clock.
+      // A live job anchor outranks incomplete scans and refreshes the age bound.
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: 'win32'
@@ -424,18 +419,14 @@ describe('LocalPtyProvider', () => {
 
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
 
-        // Past the bound: one drift-recheck scan runs, finds nothing, and the
-        // live anchor outranks the incomplete snapshot.
         vi.setSystemTime(1_000_000 + 40_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
 
-        // The proof of life restamped the clock, so the short-circuit resumes.
         vi.setSystemTime(1_000_000 + 45_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
 
-        // Much later again: recheck, still alive, still claude.
         vi.setSystemTime(1_000_000 + 80_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(3)
@@ -445,10 +436,7 @@ describe('LocalPtyProvider', () => {
     })
 
     it('holds a restarting agent across a degraded scan instead of reporting an exit', async () => {
-      // The anchor pid died but another job member remains -- possibly the
-      // agent's restarted successor under a new pid. A degraded scan at that
-      // instant must not fire a false "agent done"; the next available scan
-      // re-recognizes and re-anchors.
+      // A degraded scan during restart cannot prove exit; retain unanchored identity until a fresh scan re-anchors.
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       mockProc.process = 'powershell.exe'
       resolveAgentForegroundProcessMock
@@ -462,14 +450,11 @@ describe('LocalPtyProvider', () => {
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
-        // Restart: 999 exits, successor 1000 joins the job; scan degrades.
         readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 1000]))
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
-        // Downgraded evidence ages out; the recheck scan re-anchors the successor.
         vi.setSystemTime(1_000_000 + 40_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(3)
-        // Re-anchored on pid 1000: the short-circuit resumes.
         vi.setSystemTime(1_000_000 + 45_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
         expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(3)
@@ -479,8 +464,7 @@ describe('LocalPtyProvider', () => {
     })
 
     it('drops an anchored agent when the drift recheck proves the pid was recycled', async () => {
-      // The anchor pid stays in the job (a squatter reused it) but the scan
-      // proves the pid now runs a non-agent: proof of life must not apply.
+      // A recycled PID still in the job cannot preserve an identity contradicted by the scan.
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       mockProc.process = 'powershell.exe'
       resolveAgentForegroundProcessMock
@@ -496,7 +480,6 @@ describe('LocalPtyProvider', () => {
 
         vi.setSystemTime(1_000_000 + 40_000)
         await expect(provider.getForegroundProcess(id)).resolves.toBeNull()
-        // The recheck scan received the anchor to test against.
         expect(resolveAgentForegroundProcessMock).toHaveBeenLastCalledWith(
           mockProc.pid,
           'powershell.exe',

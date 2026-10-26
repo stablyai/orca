@@ -1,24 +1,5 @@
-/**
- * Repro spec for the "starts frozen right after an update" report
- * (Discord #performance, GitHub #2836 family).
- *
- * Field evidence: after an app update + relaunch the terminal pane shows
- * restored content but typing produces nothing — daemon output.log never
- * grows. Restore paints the persisted buffer synchronously BEFORE the
- * deferred PTY reattach runs (use-terminal-pane-lifecycle.ts →
- * pty-connection.ts), and every reattach-failure branch swallows into null,
- * so a failed/stalled attach leaves a live-looking, input-dead pane.
- *
- * Existing coverage (daemon-live-session-preservation.spec.ts,
- * terminal-restart-persistence.spec.ts) asserts restored CONTENT after
- * relaunch, but never that INPUT still works. These tests close that gap for
- * three real relaunch shapes:
- *   1. clean restart with a live daemon session (the update model)
- *   2. daemon wedged (SIGSTOP) across the relaunch — the attach stalls while
- *      restore has already painted; input must recover once the daemon does
- *   3. daemon killed between launches — cold-restore + fresh spawn must yield
- *      a typeable pane
- */
+// #2836: restored scrollback can paint before deferred reattach, leaving a live-looking input-dead pane.
+// Require input after clean daemon-preserving restart, stalled-daemon recovery and daemon-killed cold spawn; content-only checks miss all three.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -93,8 +74,7 @@ async function terminateDaemonForColdRestart(pid: number): Promise<void> {
     try {
       process.kill(pid, 'SIGKILL')
     } catch (error) {
-      // Why: the daemon can self-exit between the liveness guard and this
-      // signal; tolerate ESRCH like the Windows branch re-checks liveness.
+      // Tolerate ESRCH if the daemon exits between liveness check and signal, matching Windows revalidation.
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
         throw error
       }
@@ -131,8 +111,7 @@ async function bootstrapFirstLaunch(
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, 1, 30_000)
   const ptyId = await discoverActivePtyId(page)
-  // Why: the separator only appears in daemon session ids. If e2e silently
-  // ran the local provider, these tests would exercise the wrong restore path.
+  // Require daemon-form ids so fallback local providers cannot bypass the restore path.
   expect(ptyId, 'expected a daemon-backed PTY session').toContain(PTY_SESSION_ID_SEPARATOR)
   const marker = `RESTORE_INPUT_PRE_${Date.now()}`
   await execInTerminal(page, ptyId, `echo ${marker}`)
@@ -148,10 +127,7 @@ async function settleRestoredLaunch(page: Page): Promise<void> {
   await waitForPaneCount(page, 1, 30_000)
 }
 
-/**
- * The shared assertion: a restored pane must accept input. Reports layer
- * discrimination when it doesn't.
- */
+// Require restored input and report which transport layer fails.
 async function expectRestoredPaneAcceptsInput(page: Page, context: string): Promise<void> {
   const ptyIds = await getStorePtyIds(page)
   const readinessAlive =
@@ -232,23 +208,17 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
     await session.close(firstApp)
     firstApp = null
 
-    // Wedge the daemon: it stays alive (socket exists, sessions retained) but
-    // cannot accept or answer — the shape of a busy/hung daemon during launch.
+    // SIGSTOP retains socket/sessions while preventing daemon responses during relaunch.
     process.kill(daemonPid, 'SIGSTOP')
     stoppedDaemonPid = daemonPid
 
     const second = await session.launch()
     secondApp = second.app
 
-    // Field-fidelity check, not a hard gate: does the pane paint restored
-    // content while its PTY attach cannot complete? That visible-but-dead
-    // window is exactly what the reporter sees at startup.
+    // Record whether restore paints while attach stalls, matching the reported visible-but-dead interval.
     const paintedWhileWedged = (await getTerminalContent(second.page)).includes(marker)
 
-    // The relaunching app may classify the stopped daemon as unreachable and
-    // kill+replace it (daemon hardening) — then SIGCONT throws ESRCH and the
-    // old sessions are gone. Both shapes must leave the pane typeable, so
-    // record which one we're in and keep probing.
+    // Hardening may replace the stopped daemon; record that outcome and require typeable recovery either way.
     let daemonReplacedWhileWedged = false
     try {
       process.kill(daemonPid, 'SIGCONT')
@@ -298,8 +268,7 @@ test('cold-restored pane accepts typing after the daemon died between launches',
     await session.close(firstApp)
     firstApp = null
 
-    // The daemon dies uncleanly between runs (crash, reboot, force-kill). The
-    // persisted session now references sessions no living daemon holds.
+    // Kill between launches so saved bindings point at sessions no daemon retains.
     await terminateDaemonForColdRestart(daemonPid)
 
     const second = await session.launch()

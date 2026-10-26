@@ -38,8 +38,7 @@ describe('web session close intent', () => {
     ).toBe(false)
   })
 
-  // The durable flip in the tab_not_found path can only reach an entry that is still there, so the
-  // TTL must outlast the RPC that produces that answer. Two independent literals would drift.
+  // TTL must derive from RPC timeout: tab_not_found cannot make an intent durable after snapshot queries evict it.
   it('outlives the tab RPC that can still answer tab_not_found', () => {
     expect(WEB_SESSION_CLOSE_INTENT_TTL_MS).toBeGreaterThan(WEB_SESSION_TAB_RPC_TIMEOUT_MS)
   })

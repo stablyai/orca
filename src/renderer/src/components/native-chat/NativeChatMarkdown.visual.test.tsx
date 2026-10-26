@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -53,7 +53,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', InViewObserver)
   clearNativeChatVisualCacheForTests()
   callRuntimeRpc.mockReset()
-  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', sizeBytes: 9, html: '<p>v</p>' })
+  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', html: '<p>v</p>', path: '/v' })
 })
 
 afterEach(() => {
@@ -75,27 +75,6 @@ describe('NativeChatMarkdown visuals', () => {
       expect(container).not.toHaveTextContent('::orca-visual')
     } finally {
       useAppStore.setState({ settings })
-    }
-  })
-
-  it('opens the visual in its own workspace tab', async () => {
-    const openChatVisualTab = vi.fn()
-    const original = useAppStore.getState().openChatVisualTab
-    useAppStore.setState({ openChatVisualTab })
-    try {
-      const { container } = render(
-        withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />)
-      )
-      await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
-      fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
-      expect(openChatVisualTab).toHaveBeenCalledWith('wt-1', {
-        target: { kind: 'local' },
-        sessionId: 'session-alpha',
-        file: 'usage.html',
-        title: 'Usage'
-      })
-    } finally {
-      useAppStore.setState({ openChatVisualTab: original })
     }
   })
 

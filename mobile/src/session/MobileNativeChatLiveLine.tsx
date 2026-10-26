@@ -1,20 +1,16 @@
-import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useContext } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
 import { formatNativeChatActiveTurnLabel } from '../../../src/shared/native-chat-turn-status'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import { MobileNativeChatReasoningBody } from './MobileNativeChatReasoningRow'
+import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-chat-turn-disclosure'
 
-/** The live turn's tail line: a spinner beside "Stopping…" once the person's Stop is ending the
- *  turn, else what the provider says it is doing, else "Thinking", else "Working…". The clock
- *  stays in the turn bar. While the agent's open reasoning
- *  block has text it is also that block's disclosure, and the block's row draws nothing.
- *  Desktop parity: `NativeChatTurnActivityLine`. */
+// Keep the clock in the turn bar; the live line may disclose reasoning whose standalone row is hidden.
 export function MobileNativeChatLiveLine({
   line,
   onToggleReasoning,
@@ -30,10 +26,7 @@ export function MobileNativeChatLiveLine({
   const open = reasoning !== null && reasoningExpanded
   const label = formatNativeChatActiveTurnLabel(line)
   // Android has no inline selection; the finished row's long-press sheet copies the live text too.
-  // It holds the block it opened for, so it outlives that block ending and never reopens by itself.
-  const [actionsFor, setActionsFor] = useState<NativeChatMessage | null>(null)
-  const liveMessage = reasoning?.message ?? null
-  const openActions = useCallback(() => setActionsFor(liveMessage), [liveMessage])
+  const { openActions } = useContext(MobileNativeChatRowOverlaysContext)
   return (
     <View>
       {/* One element for every state of the line, so TalkBack hears each new label; the body
@@ -53,7 +46,7 @@ export function MobileNativeChatLiveLine({
         accessibilityLiveRegion="polite"
       >
         <View style={styles.glyph}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <LoadingSpinner size={15} color={colors.textMuted} />
         </View>
         <Text style={styles.label} numberOfLines={1}>
           {label}
@@ -67,25 +60,19 @@ export function MobileNativeChatLiveLine({
       {reasoning && open ? (
         <View style={styles.body}>
           <MobileNativeChatReasoningBody
+            positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
             fontScale={fontScale}
             onOpenFile={onOpenFile}
-            onLongPress={INLINE_TEXT_SELECTION ? undefined : openActions}
+            onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
           />
         </View>
-      ) : null}
-      {actionsFor ? (
-        <MobileNativeChatMessageActionsSheet
-          message={actionsFor}
-          onClose={() => setActionsFor(null)}
-        />
       ) : null}
     </View>
   )
 }
 
-// The finished reasoning row's geometry (row gutter, 15 pt glyph slot, its gap, its 32 pt height),
-// so the label and the open text do not move when that row takes over.
+// Match the finished reasoning row’s geometry so its takeover cannot shift the text.
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',

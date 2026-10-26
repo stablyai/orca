@@ -17,8 +17,6 @@ type ScopedTurnTiming = {
   timingByTurn: NativeChatTurnTimingByTurn
 }
 
-/** Per-turn "Thinking / Working for N / Worked for N" timing, on the same shared
- *  state machine the desktop renderer uses so the two surfaces stamp turns alike. */
 export function useMobileNativeChatTurnStatus({
   turnKeys,
   liveTurnKey,
@@ -29,18 +27,13 @@ export function useMobileNativeChatTurnStatus({
   thinking = false,
   scopeKey
 }: {
-  /** Each row's turn, as `nativeChatTurnMembership` places it. */
   turnKeys: readonly (string | undefined)[]
-  /** The live turn, whose bar carries the running clock (`nativeChatTurnMembership`). */
   liveTurnKey: string | undefined
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
-  /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
-  /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
-  /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
   scopeKey: string
 }): {
   active: NativeChatTurnStatus | null
@@ -52,14 +45,12 @@ export function useMobileNativeChatTurnStatus({
     scopeKey,
     timingByTurn: {}
   }))
-  // Do not expose the previous surface's state during the render before the
-  // timing effect adopts the new scope, or scan it while this UI is disabled.
+  // Hide old-scope timing before passive adoption so switched/disabled surfaces cannot expose it.
   const timingByTurn =
     enabled && scopedTiming.scopeKey === scopeKey
       ? scopedTiming.timingByTurn
       : EMPTY_TURN_TIMING_BY_TURN
-  // A running turn can move to a new key (unanchored until its row is drawn), so the
-  // clock must survive the swap.
+  // Keep the clock when an initially unanchored live turn gains its row key.
   const previousActiveTurn = useRef<{ scopeKey: string; turnKey: string } | null>(null)
 
   useEffect(() => {
@@ -89,9 +80,7 @@ export function useMobileNativeChatTurnStatus({
     })
   }, [activeTurnKey, enabled, isWorking, scopeKey, turnKeys, workingStartedAt])
 
-  // Why: the selection rebuilds its status objects on every call, and a streaming
-  // turn re-renders ~20x/s. Without this, every settled turn's row gets fresh
-  // props each tick and the memoized message rows all re-render.
+  // Reuse equivalent status objects so each streaming tick cannot invalidate every settled row’s memo.
   const turnIsWorking = enabled && isWorking
   const turnIsThinking = enabled && thinking
   const settledByTurn = enabled ? (settledTurns ?? undefined) : undefined

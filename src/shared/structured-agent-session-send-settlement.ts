@@ -1,11 +1,20 @@
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentJournalCursor, AgentJournalSubmission } from './agent-session-journal-types'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 
-/**
- * Where the host's published state holds a client's sends, by the id each was sent under: as a
- * card (on the queue, or handed off from it), or recorded as a submission. Either settles the send,
- * whichever of that and the send's own answer comes first; a card wins.
- */
+/** A bounded read supersedes acknowledged sends even when their rows are outside its page. */
+export function structuredAgentSessionReadCoversSend(
+  cursor: AgentJournalCursor | null | undefined,
+  acknowledged: AgentJournalCursor | null | undefined
+): boolean {
+  return Boolean(
+    cursor &&
+    acknowledged &&
+    cursor.epoch === acknowledged.epoch &&
+    cursor.sequence >= acknowledged.sequence
+  )
+}
+
+/** Settle by host-published ID as queued card/handoff or submission, whichever arrives before the send response; cards win. */
 export function structuredAgentSessionSettledSends(
   submissions: readonly AgentJournalSubmission[],
   queuedMessageIds: readonly string[]

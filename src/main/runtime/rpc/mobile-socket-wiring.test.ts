@@ -9,7 +9,7 @@ import {
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
@@ -239,10 +239,7 @@ describe('MobileSocketWiring', () => {
   })
 
   it('lets the capability RPC write capabilities back onto the socket', () => {
-    // `runtime.clientCapabilities.update` stores the advertised set by assigning
-    // `authenticatedSocket.clientCapabilities`. A read-only socket makes that a
-    // TypeError, the RPC answers `runtime_error`, and every structured
-    // agent-session tab is then projected away from a capable phone.
+    // Capability updates must write through to the channel; a getter-only socket throws and hides every structured tab from a capable phone.
     const desktop = generateKeyPair()
     const phone = generateKeyPair()
     const ws = new FakeSocket()
@@ -284,8 +281,7 @@ describe('MobileSocketWiring', () => {
     }).not.toThrow()
     expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
 
-    // Later requests on the same connection must see the updated set, so the
-    // channel is the single source of truth rather than a detached copy.
+    // Later requests must read the updated channel set, not a detached copy.
     transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))
     expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
   })

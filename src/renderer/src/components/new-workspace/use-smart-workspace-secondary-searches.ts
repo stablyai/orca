@@ -4,9 +4,14 @@ import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
 import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../shared/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
+import { restrictJiraQueryToProject } from '../../../../shared/jira/jira-project-reference'
 import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
@@ -50,8 +55,10 @@ export function useSmartWorkspaceSecondarySearches({
     setLinearIssues,
     setLinearLoading,
     setSettledLinearUrlQuery,
+    setLinearReadError,
     jiraSourceContext,
     jiraConnectionStatus,
+    jiraProject,
     searchJiraIssues,
     setJiraIssues,
     setJiraLoading
@@ -72,6 +79,7 @@ export function useSmartWorkspaceSecondarySearches({
     listLinearIssues,
     searchLinearIssues
   }
+  const failedLinearReadRef = useRef<readonly unknown[] | null>(null)
   const linearConnected = linearStatus.connected === true
   const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
   const branchSearchRequest = useMemo(
@@ -148,16 +156,27 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    if (disabled || !shouldQueryLinear || !linearConnected) {
+    const readKey = [linearQuery, linearSourceContext, linearWorkspaceIdOverride] as const
+    // Why: the status refresh after a failure re-runs this same read; don't blink its error.
+    const rereadOfFailure =
+      failedLinearReadRef.current?.every((part, index) => part === readKey[index]) === true
+    const canQuery = !disabled && shouldQueryLinear && linearConnected
+    if (!rereadOfFailure || !canQuery) {
+      failedLinearReadRef.current = null
+      setLinearReadError(null)
+    }
+    if (!canQuery) {
       setLinearIssues([])
       setLinearLoading(false)
       setSettledLinearUrlQuery(null)
       return
     }
     let stale = false
-    setLinearLoading(true)
     const trimmed = linearQuery.trim()
-    setSettledLinearUrlQuery(null)
+    if (!rereadOfFailure) {
+      setLinearLoading(true)
+      setSettledLinearUrlQuery(null)
+    }
     // Why: empty-query list must not briefly paint the previous non-empty result set.
     if (trimmed === '') {
       setLinearIssues([])
@@ -167,7 +186,11 @@ export function useSmartWorkspaceSecondarySearches({
           intent: linearUrlIntent,
           knownStatus: linearStatusRef.current,
           sourceContext: linearSourceContext,
-          fetchLinearIssue: linearReadMethodsRef.current.fetchLinearIssue
+          fetchLinearIssue: (identifier, workspaceId, options) =>
+            linearReadMethodsRef.current.fetchLinearIssue(identifier, workspaceId, {
+              ...options,
+              rejectCredentialError: true
+            })
         }).then((issue) => (issue ? [issue] : []))
       : trimmed
         ? linearReadMethodsRef.current.searchLinearIssues(
@@ -194,12 +217,18 @@ export function useSmartWorkspaceSecondarySearches({
     void request
       .then((issues) => {
         if (!stale) {
+          failedLinearReadRef.current = null
+          setLinearReadError(null)
           setLinearIssues(issues)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!stale) {
           setLinearIssues([])
+          // Why: the read reports its own host's failure; host-wide status may describe another host.
+          const credentialError = isIntegrationCredentialDecryptionError(error)
+          failedLinearReadRef.current = credentialError ? readKey : null
+          setLinearReadError(credentialError ? credentialDecryptionMessage('Linear') : null)
         }
       })
       .finally(() => {
@@ -211,8 +240,6 @@ export function useSmartWorkspaceSecondarySearches({
     return () => {
       stale = true
     }
-    // Why: list/search are stable store methods; unrelated store writes must not refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     linearConnected,
@@ -221,6 +248,9 @@ export function useSmartWorkspaceSecondarySearches({
     linearSourceContext,
     linearWorkspaceIdOverride,
     linearUrlIntent,
+    setLinearIssues,
+    setLinearLoading,
+    setLinearReadError,
     setSettledLinearUrlQuery,
     shouldQueryLinear
   ])
@@ -236,13 +266,20 @@ export function useSmartWorkspaceSecondarySearches({
     const controller = new AbortController()
     setJiraLoading(true)
     const siteId =
-      jiraConnectionStatus?.selectedSiteId ?? jiraConnectionStatus?.activeSiteId ?? null
+      jiraProject?.siteId ??
+      jiraConnectionStatus?.selectedSiteId ??
+      jiraConnectionStatus?.activeSiteId ??
+      null
     void searchJiraIssuesByKeyOrText(jiraSearchQuery, (jql) =>
-      searchJiraIssues(jql, RESULT_LIMIT, {
-        sourceContext: jiraSourceContext,
-        siteId,
-        signal: controller.signal
-      })
+      searchJiraIssues(
+        jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
+        RESULT_LIMIT,
+        {
+          sourceContext: jiraSourceContext,
+          siteId,
+          signal: controller.signal
+        }
+      )
     )
       .then((issues) => {
         if (!stale) {
@@ -267,6 +304,7 @@ export function useSmartWorkspaceSecondarySearches({
     jiraConnectionStatus?.activeSiteId,
     jiraConnectionStatus?.selectedSiteId,
     jiraSearchQuery,
+    jiraProject,
     jiraSourceContext,
     searchJiraIssues,
     setJiraIssues,

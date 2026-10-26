@@ -12,15 +12,7 @@ type TerminalTabReconnectState = Pick<
 type OrphanTerminalDetectionState = Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'> &
   TerminalTabReconnectState
 
-/**
- * Whether a tab is currently attached to, or actively reconnecting to, a live
- * PTY. This deliberately checks only the live-attachment and reconnect maps —
- * NOT terminalLayoutsByTabId leaf bindings, which are a persisted layout that
- * can outlive its session (e.g. after an SSH target is removed) and must not
- * keep a dead tab pinned in the orphan sweep. The reconnect maps are the ones
- * retirement planning also honors as live ownership, so a tab it would tear
- * down on close is never swept as a dead orphan first (#9911).
- */
+/** Live/reconnect maps prove PTY ownership, matching retirement (#9911); persisted leaf bindings may outlive removed SSH sessions and must not pin dead tabs. */
 export function terminalTabHasReconnectablePty(
   state: TerminalTabReconnectState,
   tabId: string,
@@ -45,7 +37,6 @@ type OrphanTerminalCleanupState = Pick<
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
   | 'pendingInitialCwdByTabId'
-  | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
@@ -73,16 +64,10 @@ export function getOrphanTerminalIds(
         if (unifiedTerminalEntityIds.has(tab.id)) {
           return false
         }
-        // A missing PTY is not proof that the user closed the tab: the host
-        // may have gone away and emitted a synthetic exit. Keep the row until
-        // a replacement binds or the user explicitly closes it.
+        // Host loss can emit synthetic exit; missing PTY alone cannot prove user closure. Keep until replacement or explicit close.
         if (state.unverifiedPtyLossTabIds[tab.id]) {
           return false
         }
-        // Why: a tab is orphaned only when it owns NO live/reconnecting PTY; a
-        // tab whose session survives in a reconnect map (SSH relay / daemon
-        // reattach) is alive and must not be swept before reconnect rebinds it
-        // (#9911).
         return !terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
       })
       .map((tab) => tab.id)
@@ -103,7 +88,6 @@ export function buildOrphanTerminalCleanupPatch(
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
   | 'pendingInitialCwdByTabId'
-  | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
@@ -123,7 +107,6 @@ export function buildOrphanTerminalCleanupPatch(
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       pendingStartupByTabId: state.pendingStartupByTabId,
       pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
-      pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
       automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: state.nativeChatLaunchPromptByTabId,
@@ -145,7 +128,6 @@ export function buildOrphanTerminalCleanupPatch(
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
-  const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
   const nextAutomaticAgentResumeClaimsByTabId = {
     ...state.automaticAgentResumeClaimsByTabId
@@ -160,10 +142,7 @@ export function buildOrphanTerminalCleanupPatch(
   }
   const nextCacheTimerByKey = { ...state.cacheTimerByKey }
 
-  // Why: orphan runtime terminals no longer have a backing unified tab or live
-  // PTY, so every per-tab cache keyed off that runtime ID must disappear with
-  // the tab. Centralizing the cleanup keeps orphan detection and teardown in
-  // lockstep across both tab creation and reconciliation paths.
+  // Share per-tab cache teardown across creation/reconciliation so orphan detection and cleanup cannot diverge.
   for (const orphanTabId of orphanTerminalIds) {
     delete nextPtyIdsByTabId[orphanTabId]
     delete nextRuntimePaneTitlesByTabId[orphanTabId]
@@ -172,7 +151,6 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextTerminalLayoutsByTabId[orphanTabId]
     delete nextPendingStartupByTabId[orphanTabId]
     delete nextPendingInitialCwdByTabId[orphanTabId]
-    delete nextPendingSetupSplitByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
     delete nextNativeChatLaunchPromptByTabId[orphanTabId]
@@ -203,7 +181,6 @@ export function buildOrphanTerminalCleanupPatch(
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
     pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
-    pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
     automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
     nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,

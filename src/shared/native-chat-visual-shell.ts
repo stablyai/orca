@@ -1,16 +1,7 @@
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from './plugins/plugin-panel-shell'
 
-/**
- * The document wrapped around an agent-written chat visual before it enters its sandboxed frame.
- * Same placement rule as the plugin panel shell: the CSP meta parses before any visual markup, so
- * nothing later in the document can loosen it, and the visual's own <html>/<head> merge into ours.
- *
- * Network: scripts, styles, fonts and images may load from a pinned set of public CDNs; nothing may
- * fetch, open sockets, frame, or submit. A page can still encode data in a request to an allowed
- * CDN — an accepted, disclosed risk, not a guarantee that no data leaves.
- *
- * Electron-free string builder: desktop, the web client and mobile build the same document.
- */
+/** Shared Electron-free sandbox document. Parse CSP before visual markup so later HTML cannot loosen it.
+ * Allow pinned-CDN scripts/styles/fonts/images only; block fetch/sockets/frames/forms. Allowed-CDN requests can still carry data: disclosed accepted risk, not a no-egress guarantee. */
 
 export const NATIVE_CHAT_VISUAL_CDN_ORIGINS = [
   'https://cdn.jsdelivr.net',
@@ -24,8 +15,7 @@ export const NATIVE_CHAT_VISUAL_CDN_ORIGINS = [
 const ASSET_SOURCES = `'unsafe-inline' data: blob: ${NATIVE_CHAT_VISUAL_CDN_ORIGINS.join(' ')}`
 const MEDIA_SOURCES = `data: blob: ${NATIVE_CHAT_VISUAL_CDN_ORIGINS.join(' ')}`
 
-// A srcdoc page otherwise resolves '#x' against Orca's own URL, so an in-page link would leave it.
-// It precedes the CSP, whose `base-uri 'none'` then refuses any base the visual declares.
+// Set about:srcdoc base before CSP to keep #links inside the frame; subsequent base-uri none rejects visual-supplied overrides.
 const INERT_BASE = '<base href="about:srcdoc">'
 
 const POLICY_WITHOUT_BASE = [
@@ -46,11 +36,8 @@ const POLICY_WITHOUT_BASE = [
 
 export const NATIVE_CHAT_VISUAL_CSP = [...POLICY_WITHOUT_BASE, "base-uri 'none'"].join('; ')
 
-/**
- * For a page that hosts the visual frame and has no URL of its own (mobile). The srcdoc child
- * inherits this policy before its own meta parses, so it must admit the shell's `about:srcdoc` base
- * (CSP cannot name that URL exactly); the child's own policy then refuses every other base.
- */
+/** Mobile URL-less visual hosts must admit about: bases so inherited CSP permits the child’s about:srcdoc base.
+ * The child’s own policy then rejects every other base; CSP cannot name that exact URL. */
 export const NATIVE_CHAT_VISUAL_HOST_CSP = [...POLICY_WITHOUT_BASE, 'base-uri about:'].join('; ')
 
 /** Frame names carry this prefix so the main process registers them before content runs. */
@@ -61,6 +48,7 @@ export const NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE = 'orca-visual-open-link'
 export const NATIVE_CHAT_VISUAL_THEME_TYPE = 'orca-visual-theme'
 export const NATIVE_CHAT_VISUAL_PING_TYPE = 'orca-visual-ping'
 export const NATIVE_CHAT_VISUAL_PONG_TYPE = 'orca-visual-pong'
+export const NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE = 'orca-visual-reader-scroll'
 /** Visuals' own wait for an answer: at 1 s, a busy visual in WebKit answered too late. */
 export const NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS = 5_000
 
@@ -103,8 +91,7 @@ export function nativeChatVisualThemeCss(theme: NativeChatVisualTheme): string {
   return `:root{${declarations.join(';')}}`
 }
 
-// A visual sits in the reply on the thread's own background; its scrollbar stays hidden because the
-// frame grows to fit it. The visual's own CSS comes later and wins.
+// Grow frames to fit, hide their scrollbar and inherit the thread background; later visual CSS may override defaults.
 const BASE_CSS =
   'html{background:var(--background);color:var(--foreground);font-family:var(--font-sans);' +
   'font-size:14px;line-height:1.5;scrollbar-width:none}html::-webkit-scrollbar{display:none}' +
@@ -117,7 +104,8 @@ function bootstrapScript(channel: string): string {
     link: NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
     theme: NATIVE_CHAT_VISUAL_THEME_TYPE,
     ping: NATIVE_CHAT_VISUAL_PING_TYPE,
-    pong: NATIVE_CHAT_VISUAL_PONG_TYPE
+    pong: NATIVE_CHAT_VISUAL_PONG_TYPE,
+    scroll: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE
   })
   // Plain ES5 so it runs before, and independent of, anything the visual loads.
   return `(function () {
@@ -134,8 +122,8 @@ if (window.navigation && typeof window.navigation.addEventListener === 'function
     if (!event.hashChange && event.cancelable) event.preventDefault()
   })
 }
-try { Object.defineProperty(window, 'open', { value: function () { return null }, writable: false, configurable: false }) }
-catch (_) { try { window.open = function () { return null } } catch (_) {} }
+// Keep open configurable for visual declarations; the iframe sandbox blocks popups.
+try { window.open = function () { return null } } catch (_) {}
 document.addEventListener('click', function (event) {
   var node = event.target
   while (node && node.nodeType !== 1) node = node.parentNode
@@ -160,6 +148,15 @@ window.addEventListener('message', function (event) {
   themeStyle.textContent = data.css
   document.documentElement.classList.toggle('dark', data.colorScheme === 'dark')
 })
+// The host pairs uncancelled input with actual transcript movement; only the browser knows
+// whether a visual's nested scroller takes it. Wait for handlers that cancel chart gestures.
+window.addEventListener('wheel', function (event) {
+  if (event.ctrlKey || !event.deltaY) return
+  setTimeout(function () {
+    if (!event.defaultPrevented) send({ type: C.scroll, input: 'wheel', deltaY: event.deltaY })
+  }, 0)
+}, { capture: true, passive: true })
+window.addEventListener('touchmove', function () { send({ type: C.scroll, input: 'touch' }) }, { capture: true, passive: true })
 // Height: report the document's own height whenever layout changes; the host fits the frame.
 var reported = -1
 var pending = false
@@ -199,10 +196,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule)
 })()`
 }
 
-/**
- * The full srcdoc for one visual. `channel` is unique per built document and rides on every message
- * the shell sends, so the host can tell this document's messages from anything else.
- */
+/** Build per-document srcdoc; unique channel tags every shell message so the host can reject other documents’ traffic. */
 export function buildNativeChatVisualDocument(args: {
   html: string
   channel: string
@@ -226,6 +220,9 @@ ${args.html}`
 export type NativeChatVisualFrameMessage =
   | { kind: 'size'; height: number }
   | { kind: 'open-link'; url: string }
+  /** Uncancelled input; the host checks whether the transcript actually moved. */
+  | { kind: 'reader-scroll'; input: 'wheel'; deltaY: number }
+  | { kind: 'reader-scroll'; input: 'touch' }
 
 /** A message from a visual's shell, validated; null for anything else. */
 export function readNativeChatVisualFrameMessage(
@@ -242,6 +239,19 @@ export function readNativeChatVisualFrameMessage(
     const height = 'height' in data ? data.height : undefined
     return typeof height === 'number' && Number.isFinite(height) && height > 0
       ? { kind: 'size', height }
+      : null
+  }
+  if (data.type === NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE) {
+    const input = 'input' in data ? data.input : undefined
+    if (input === 'touch') {
+      return { kind: 'reader-scroll', input }
+    }
+    const deltaY = 'deltaY' in data ? data.deltaY : undefined
+    return input === 'wheel' &&
+      typeof deltaY === 'number' &&
+      Number.isFinite(deltaY) &&
+      deltaY !== 0
+      ? { kind: 'reader-scroll', input, deltaY }
       : null
   }
   if (data.type === NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE) {

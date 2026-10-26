@@ -1,5 +1,4 @@
-// A structured send is one record under the id the host records it under, drawn by the shared
-// projection until its row lands and settled by the host's own record of it, never by its text.
+// Settle local echoes by the host’s submission id, never by matching text.
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -52,11 +51,7 @@ function userRow(clientMessageId: string, text: string, sequence: number): Agent
 }
 
 function journal(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
-  const event = snapshotEvent({ submissions })
-  if (event.type === 'snapshot') {
-    event.page.items = items
-  }
-  return event
+  return snapshotEvent({ items, submissions })
 }
 
 describe('a structured send in the open chat', () => {
@@ -103,7 +98,6 @@ describe('a structured send in the open chat', () => {
     act(() => listener?.(snapshotEvent()))
   }
 
-  /** Sends, answered as a real host answers: the submission is recorded under the sent id. */
   async function send(
     text: string,
     attachments?: { path: string; previewUri: string }[]
@@ -158,7 +152,6 @@ describe('a structured send in the open chat', () => {
     const row = agentJournalSubmissionKey(id)
     expect(shown()).toEqual([[row, 'hello']])
 
-    // A reload that has not recorded it yet keeps the bubble.
     act(() => listener?.(journal([], [])))
     expect(shown()).toEqual([[row, 'hello']])
 
@@ -168,7 +161,39 @@ describe('a structured send in the open chat', () => {
     expect(onSendError).not.toHaveBeenCalled()
   })
 
-  // Same words as a not-sent row: once recorded, the resend is one bubble and hides the earlier copy.
+  it.each([false, true])(
+    'forgets an acknowledged off-page echo after reconnect (snapshot beats reply: %s)',
+    async (snapshotFirst) => {
+      await mount()
+      const snapshot = journal([userRow('newest', 'newest reply', 401)], [])
+      if (snapshot.type !== 'snapshot') {
+        throw new Error('Expected snapshot')
+      }
+      snapshot.page.liveCursor = { epoch: 'epoch-1', sequence: 401 }
+      snapshot.page.window.nextCursor = snapshot.page.liveCursor
+      snapshot.page.hasOlder = true
+      if (snapshotFirst) {
+        answer = (id) => {
+          listener?.(snapshot)
+          return { clientMessageId: id, submission: recorded(id) }
+        }
+      }
+      const id = await send('sent before background streaming')
+      if (!snapshotFirst) {
+        expect(shown()).toEqual([
+          [agentJournalSubmissionKey(id), 'sent before background streaming']
+        ])
+        act(() => listener?.(snapshot))
+      }
+      expect(shown()).toEqual([[agentJournalSubmissionKey('newest'), 'newest reply']])
+      // Later pages must not revive echoes superseded by an authoritative read.
+      act(() => listener?.(journal([], [])))
+      expect(shown()).toEqual([])
+      expect(onSendError).not.toHaveBeenCalled()
+    }
+  )
+
+  // A recorded resend hides the earlier failed copy even when both have identical text.
   it('resends the words of a not-sent row as one bubble, with no stray copy', async () => {
     const failed = recorded('failed', 'rejected', { resolvedAt: 5, submittedAt: 4 })
     await mount()
@@ -314,7 +339,6 @@ describe('a structured send whose answer was lost', () => {
     expect(onSendError).not.toHaveBeenCalled()
   })
 
-  // Already recorded before the lost answer came back.
   it('stays quiet when the record beat the answer', () => {
     render({ sessionKey: 'a', submissions: [recorded('lost')] })
     hold('lost')

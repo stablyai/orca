@@ -191,7 +191,10 @@ describe('profile state backup worker', () => {
     const { directory, job } = fixture()
     const failedWorker = script(directory, source)
     await expect(
-      runProfileStateBackupWorker(job, { workerPath: failedWorker, timeoutMs: 500 })
+      runProfileStateBackupWorker(job, {
+        workerPath: failedWorker,
+        timeoutMs: error === 'timed out' ? 500 : undefined
+      })
     ).rejects.toThrow(error)
     expect(existsSync(job.targetPath)).toBe(false)
     rmSync(directory, { recursive: true })

@@ -82,6 +82,7 @@ function transport(
   setOption: () => Promise<boolean>
 ): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: (text) =>
       dispatchStructuredAgentSessionComposerCommand(text, {
@@ -241,6 +242,7 @@ it.each(['/model', '/effort'])(
 function localAnswerArgs() {
   return {
     agent: 'omp' as const,
+    draftScopeKey: 'terminal-test-scope',
     disabled: false,
     isDispatchingSessionOption: false,
     resolveTarget: () => ({ ptyId: 'pty-a', settings: null }),
@@ -394,21 +396,23 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
     const transcript = useReviewTranscript()
     const submits = useStructuredNativeChatSubmitReveal(
       {
+        capturePresentation: () => () => true,
         respond: async () => host.promise,
         queuedMessages: {
           queueCapable: true,
+          clearCapable: true,
           editCapable: false,
           editor: undefined,
           cards: [],
           pause: null,
-          resuming: false,
           resume: async () => false,
+          clear: async () => true,
+          queuePending: null,
+          pending: () => null,
           steer: async () => {},
           remove: async () => {},
           edit: async () => {},
-          steerNewest: () => false,
-          queueResume: undefined,
-          queueHold: undefined
+          steerNewest: () => false
         }
       },
       vi.fn()

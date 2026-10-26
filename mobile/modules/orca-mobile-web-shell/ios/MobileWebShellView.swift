@@ -3,8 +3,7 @@ import WebKit
 
 private let networkBlockIdentifier = "dev.orca.mobile-web-shell.network-block-v1"
 
-/// Blocks every http(s) and ws(s) load beneath CSP, at the network layer. A nil compile result is a
-/// fence we could not install, which is terminal: nothing loads.
+/// Block http(s)/ws(s) beneath CSP; compilation failure is terminal and must load nothing.
 private let networkBlockRules = """
   [
     { "trigger": { "url-filter": "^https?://" }, "action": { "type": "block" } },
@@ -12,10 +11,8 @@ private let networkBlockRules = """
   ]
   """
 
-/// CSP is the fence for fetch and XMLHttpRequest. This script exists only for the two things a
-/// native layer is never shown: a WebSocket handshake, which no request interceptor sees, and a
-/// service worker registration. Kept in step with the Android copy. `configurable: false` with
-/// `writable: false` is the only property shape the page cannot put back.
+/// CSP fences fetch/XHR; document-start script blocks unobservable WebSocket and service-worker APIs.
+/// Match Android; both non-configurable and non-writable prevent page replacement.
 private let networkApiBlocker = """
   (function(){
   var deny=function(){throw new TypeError('Network access is disabled')};
@@ -25,14 +22,8 @@ private let networkApiBlocker = """
   })();
   """
 
-/// Installs `window.orcaBridge`, the whole page-facing surface: `postMessage(json)` and an
-/// `onmessage` assignment. Android needs no counterpart because `addWebMessageListener` injects an
-/// object of the same name and shape, so the contract is the intersection of the two.
-///
-/// CSP is untouched and the network blocker still runs: this is a second document-start script, not
-/// a replacement. The sink is captured at install time so a page that deletes `window.webkit`
-/// cannot take the channel with it, and every property is non-configurable and non-writable, the
-/// only shape the page cannot put back.
+/// Inject the same orcaBridge surface as Android before scripts, alongside the network blocker.
+/// Capture the sink so deleting window.webkit cannot break it; freeze properties against replacement.
 private let bridgeInstaller = """
   (function(){
   var sink=window.webkit.messageHandlers.orcaBridge;
@@ -49,21 +40,15 @@ private let bridgeInstaller = """
   })();
   """
 
-/// The body of a `callAsyncJavaScript` call, with the payload bound to `m` as a real JS value, so no
-/// reply content is ever parsed as script text.
-///
-/// Unguarded on purpose: a missing global is a page the installer never ran in, and throwing is what
-/// rejects the host's promise. Checking for it would resolve a message nobody received.
+/// Bind payload as JS value m, never script text. A missing installer must throw to reject undelivered posts.
 private let bridgeDeliver = """
   globalThis.orcaBridge.__deliver(m)
   """
 
 private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
-  /// An asset is up to 10 MiB, and WebKit starts and stops scheme tasks on the main thread, so the
-  /// read must not happen there.
+  /// Read up-to-10-MiB assets off WebKit’s main-thread scheme callbacks.
   private let readQueue = DispatchQueue(label: "dev.orca.mobile-web-shell.read")
-  /// Delivering to a task WebKit has already stopped raises an Objective-C exception Swift cannot
-  /// catch, so a task is only touched while it is in this set. Main thread only.
+  /// Main-thread live-task set prevents stopped-task delivery’s uncatchable Objective-C exception.
   private var liveTasks: Set<ObjectIdentifier> = []
 
   var sessionId: String?
@@ -135,8 +120,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
   }
 }
 
-/// `WKUserContentController` retains its message handlers, so the back-reference has to be weak or
-/// the view outlives the React element that owned it.
+/// WKUserContentController retains handlers; a weak view reference prevents a React-unmount leak.
 private final class MobileWebShellBridgeReceiver: NSObject, WKScriptMessageHandler {
   weak var view: OrcaMobileWebShellView?
 
@@ -163,8 +147,7 @@ internal final class MobileWebShellBridgeUnavailableException: Exception, @unche
   }
 }
 
-/// Thrown rather than dropped: the only caller is the React Native host, and a silent drop would
-/// turn a chunking bug there into a request that never settles.
+/// Throw so a host chunking bug rejects rather than leaving its request unsettled.
 internal final class MobileWebShellBridgeMessageTooLargeException: GenericException<Int>,
   @unchecked Sendable {
   override var reason: String {
@@ -198,13 +181,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     let configuration = WKWebViewConfiguration()
     configuration.allowsInlineMediaPlayback = true
     configuration.mediaTypesRequiringUserActionForPlayback = .all
-    // DOM storage and databases cannot be switched off on WebKit. A non-persistent store plus a
-    // per-session origin plus destruction on unmount is the whole mitigation, and no isolation
-    // claim here rests on them being absent.
+    // WebKit cannot disable DOM storage/databases; isolate with a non-persistent store, per-session origin and unmount destruction.
     configuration.websiteDataStore = .nonPersistent()
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-    // Text interaction stays on: with it off a focused field gets keydown but never text. The page's
-    // `user-select: none` is what keeps WebKit's selection off its long presses.
+    // Disabling text interaction suppresses text after keydown; page user-select handles long-press selection.
     configuration.setURLSchemeHandler(schemeHandler, forURLScheme: MobileWebShellOrigin.scheme)
     configuration.userContentController.addUserScript(Self.makeBlockerScript())
     bridgeReceiver.view = self
@@ -212,10 +192,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.navigationDelegate = self
     webView.uiDelegate = self
     webView.allowsBackForwardNavigationGestures = false
-    // Transparent, as the Android view is. A WKWebView is opaque by default and paints white
-    // before its document does, so a dark app opening a page flashed white for the whole of the
-    // page's boot; with no surface of its own, what shows through is the shell's own frame, which
-    // is the one thing that knows the app's colours.
+    // WKWebView’s opaque white default flashes during dark-page boot; transparency exposes the shell’s themed frame.
     webView.isOpaque = false
     webView.backgroundColor = .clear
     webView.scrollView.backgroundColor = .clear
@@ -245,10 +222,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     bridgeEnabled = value
   }
 
-  /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
-  /// in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
-  /// `bridgeEnabled` is in the record because a document-start script only takes effect at the next
-  /// document start: toggling it has to reload, or the prop would silently do nothing.
+  /// Apply unordered props together; identical triples do not retry (remount required).
+  /// Include bridgeEnabled: document-start scripts require a reload to change.
   func propsDidUpdate() {
     let next = MobileWebShellAppliedProps(
       generationDirectory: generationDirectory,
@@ -288,8 +263,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     loadWhenIsolated()
   }
 
-  /// The generation that failed to apply replaces whatever was on screen; leaving the previous one
-  /// served and visible would show a page the caller has just been told is not loaded.
+  /// Retire the old visible generation even when the replacement fails.
   private func failPropUpdate(_ reason: MobileWebShellFailureReason) {
     clearBridgeTarget()
     schemeHandler.sessionId = nil
@@ -300,8 +274,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     emit(loadState.failed(reason))
   }
 
-  /// Rebuilt per install rather than stored: `removeAllUserScripts` is the only removal WebKit has,
-  /// so uninstalling the bridge means re-adding the blocker.
+  /// removeAllUserScripts is WebKit’s only removal API, so disabling the bridge must reinstall the blocker.
   private static func makeBlockerScript() -> WKUserScript {
     WKUserScript(
       source: networkApiBlocker,
@@ -321,8 +294,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
         WKUserScript(
           source: bridgeInstaller,
           injectionTime: .atDocumentStart,
-          // A convenience, not the fence: a subframe can reach a handler this never ran in, and
-          // `accepts` is what refuses it.
+          // Main-frame injection is convenience; accepts must still refuse subframes that reach the handler.
           forMainFrameOnly: true
         )
       )
@@ -334,8 +306,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     bridgeInstalled = bridgeEnabled
   }
 
-  /// The session the page was loaded under, not the latest prop: a document served under the
-  /// previous one is still alive until the next load commits, and it must not be heard.
+  /// Use the loaded session, not latest props; the replaced same-origin document survives until commit.
   fileprivate func receiveBridgeMessage(_ message: WKScriptMessage) {
     guard bridgeInstalled, let json = message.body as? String else { return }
     let origin = message.frameInfo.securityOrigin
@@ -359,10 +330,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     bridgeTarget.clear()
   }
 
-  /// Settles on what WebKit did, not on what we handed it: a post into a dead renderer, a document
-  /// that failed to load, a navigation still in flight or a page that has never spoken rejects here,
-  /// and the delivery itself resolves only once the page has run it. Resolving any of those
-  /// optimistically turns a request the RN host is waiting on into one that never settles.
+  /// Reject posts without a live committed frame that spoke; resolve only after page execution so host requests cannot hang.
   func postBridgeMessage(_ json: String, promise: Promise) throws {
     guard
       MobileWebShellBridge.canPost(
@@ -378,9 +346,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
-    // Two `in:` labels is the real signature: `in frame:` and `in contentWorld:`. Naming the
-    // completion handler is what picks it over the `async` overload. The frame is the one that
-    // spoke, so the reply goes where the request came from rather than to the current main frame.
+    // Use the two in: labels plus completionHandler to select the callback overload and reply to the frame that spoke.
     webView.callAsyncJavaScript(
       bridgeDeliver,
       arguments: ["m": json],
@@ -398,8 +364,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   private func installNetworkBlock(into controller: WKUserContentController) {
     guard let store = WKContentRuleListStore.default() else {
-      // Optional-chaining past this ran no completion handler at all, so the view sat at `loading`
-      // for the rest of its life. No store is no fence, which is the same terminal answer.
+      // Optional chaining skips completion when the store is absent, leaving loading forever; fail closed instead.
       isolationFailed = true
       pendingDocumentUrl = nil
       return
@@ -413,8 +378,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
         guard let ruleList else {
           self.isolationFailed = true
           self.pendingDocumentUrl = nil
-          // Compiling is asynchronous, so this can land after the generation was already refused;
-          // the state machine is what keeps that from being a second terminal reason.
+          // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
           if self.appliedSessionId != nil {
             self.failPropUpdate(.isolationUnavailable)
           }
@@ -430,8 +394,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private func loadWhenIsolated() {
     guard isolationReady, let url = pendingDocumentUrl else { return }
     pendingDocumentUrl = nil
-    // The only thing that tells the load the shell asked for from one a document asked for. The
-    // state machine drops it again on every way a document can end.
+    // Only our own load raises this flag; every document ending clears it.
     loadState.shellLoadStarted()
     webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
   }
@@ -473,13 +436,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if #available(iOS 14.5, *) {
       isDownload = navigationAction.shouldPerformDownload
     }
-    // `.linkActivated` is WebKit's own answer to "did a human start this". It decides only what may
-    // be offered to the opener; nothing is allowed on the strength of it, because a subframe can
-    // navigate the top frame with no gesture reported at all.
+    // linkActivated gates only opener offers; gesture-free subframe top navigation must never authorize a load.
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
       isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
-      isFromSubframe: !navigationAction.sourceFrame.isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,
@@ -489,8 +449,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       onExternalNavigation(["url": url])
     }
     if verdict == .allow {
-      // Spent here, before the decision is handed back: the next main-frame action gets no allow on
-      // the strength of a load that has already been given one.
+      // Spend before handing back the decision so another main-frame action cannot reuse the allowance.
       loadState.shellLoadConsumed()
     }
     decisionHandler(verdict == .allow ? .allow : .cancel)
@@ -511,27 +470,22 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    // The document that spoke is being replaced, so it stops being somewhere to post and stops
-    // being someone to hear: the next one has to commit, then say `ready`, which is what the
-    // envelope has it do.
+    // Clear replies and acceptance when the document is replaced; its successor must commit and send ready.
     clearBridgeTarget()
     loadState.documentEnded()
     guard appliedSessionId != nil else { return }
     emit(loadState.started())
   }
 
-  /// The load the caller was told about is the one now on screen, so this is where the page becomes
-  /// something to hear. Earlier than `didFinish`, because the page speaks at document start.
+  /// Arm at commit, before document-start messages and didFinish.
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
     guard isDocumentUrl(webView.url) else { return }
-    // Cleared here too, not only at the provisional start: arming is what this re-opens, so the
-    // frame the replaced document spoke from must not be inheritable by the one replacing it.
+    // Commit rearms acceptance, so clear the replaced frame here as well as at provisional start.
     clearBridgeTarget()
     loadState.committed()
   }
 
-  /// No URL check: the page rewrites its own path before its first render, so the document that
-  /// committed at "/" finishes at the route it opened. `finished()` holds the rule that is left.
+  /// history.replaceState changes the path before finish; finished() uses commit state instead of URL equality.
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     emit(loadState.finished())
   }
@@ -548,8 +502,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     reportNavigationFailure(error)
   }
 
-  /// Reported, never recovered from here. Renderer memory pressure and a WebView provider update
-  /// look identical at this point, so the retry policy is the caller's and lives in one place.
+  /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     clearBridgeTarget()
     emit(loadState.failed(.renderProcessGone))

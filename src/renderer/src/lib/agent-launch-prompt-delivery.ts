@@ -5,10 +5,7 @@ import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-/** Seed the chat-composer copy of launch context that reaches only the TUI
- *  input (argv prefill or startup paste). No-op for agents without a
- *  native-chat renderer, or for text `canMirrorLaunchDraftToNativeChat`
- *  rejects — the same predicate that decides whether the tab opens in chat. */
+/** Mirror TUI-only launch context into supported native-chat composers, using the same eligibility predicate as chat opening. */
 export function seedNativeChatLaunchDraftForAgentTab(args: {
   tabId: string
   agent: TuiAgent
@@ -35,8 +32,8 @@ export function deliverLaunchPromptToAgentTab(args: {
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
-  /** Whether the paste may be written; the chat copy is seeded only once it opens. */
-  sendGate?: Promise<boolean>
+  /** The launch pane's PTY once its agent started; the chat copy is seeded only then. */
+  launchPty?: Promise<string | null>
 }): Promise<boolean> {
   const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -53,25 +50,22 @@ export function deliverLaunchPromptToAgentTab(args: {
         createdAt: Date.now()
       })
     } else if (submit !== true) {
-      // Why: an unsubmitted draft lives only in the TUI input buffer; seed the
-      // chat-composer copy so the context isn't invisible in the GUI view.
+      // Unsubmitted TUI input is otherwise invisible in chat; seed its composer copy.
       seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: content })
     }
   }
   // Chained ahead of the paste's own wait on the gate, so the copy always precedes the send.
-  const sendGate = args.sendGate?.then((open) => {
-    if (open) {
+  const launchPty = args.launchPty?.then((ptyId) => {
+    if (ptyId) {
       seedChatCopy()
     }
-    return open
+    return ptyId
   })
-  if (!sendGate) {
+  if (!launchPty) {
     seedChatCopy()
   }
 
-  // Why: native-prefill agents (claude/openclaude etc.) get the prompt at launch,
-  // so pasteDraftWhenAgentReady returns false without pasting. That is a successful
-  // native delivery, not a failure — don't flag the seeded bubble in that case.
+  // Native-prefill agents already received the draft; paste returning false must not flag their seeded bubble as failed.
   const deliversViaNativePrefill = agentDeliversDraftViaNativePrefill(agent, forcePaste)
 
   return pasteDraftWhenAgentReady({
@@ -83,7 +77,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     timeoutMs,
     onTimeout,
     onUnconfirmedDelivery,
-    ...(sendGate ? { sendGate } : {})
+    ...(launchPty ? { launchPty } : {})
   }).then(
     (delivered) => {
       if (seeded && !delivered && !deliversViaNativePrefill) {

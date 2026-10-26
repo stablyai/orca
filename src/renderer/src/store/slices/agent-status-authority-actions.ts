@@ -1,4 +1,4 @@
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
@@ -10,13 +10,18 @@ import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,
   removePaneKeys
-} from './agent-status-pane-keyed-records'
+} from './agent-status/agent-status-pane-keyed-records'
 import {
   getLeafIdFromPaneKey,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  movePaneAttention,
+  removePanesAttention
+} from './workspace-attention/subject-attention-transitions'
+import { settleAttentionRemovedBy } from './workspace-attention/attention-removal-follow-up'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -50,78 +55,76 @@ export function createAgentStatusAuthorityActions(
         rendererAgentStatusObservations.forget(key)
       }
       let hadLive = false
-      set((s) => {
-        const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
-        hadLive = retiredLivePaneKeys.length > 0
-        let nextRetentionSuppressedPaneKeys = removePaneKeys(
-          s.retentionSuppressedPaneKeys,
-          retiredPaneKeySet
-        )
-        if (
-          retiredLivePaneKeys.length > 0 &&
-          nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
-        ) {
-          nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
-        }
-        for (const key of retiredLivePaneKeys) {
-          nextRetentionSuppressedPaneKeys[key] = true
-        }
-        return {
-          agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
-          runtimeAgentOrchestrationByPaneKey: removePaneKeys(
-            s.runtimeAgentOrchestrationByPaneKey,
+      settleAttentionRemovedBy(set, get, () =>
+        set((s) => {
+          const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
+          hadLive = retiredLivePaneKeys.length > 0
+          let nextRetentionSuppressedPaneKeys = removePaneKeys(
+            s.retentionSuppressedPaneKeys,
             retiredPaneKeySet
-          ),
-          retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
-            ? s.sleepingAgentSessionsByPaneKey
-            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
-          agentLaunchConfigByPaneKey: removePaneKeys(
-            s.agentLaunchConfigByPaneKey,
-            retiredPaneKeySet
-          ),
-          acknowledgedAgentsByPaneKey: removePaneKeys(
-            s.acknowledgedAgentsByPaneKey,
-            retiredPaneKeySet
-          ),
-          activityClearedAtByPaneKey: removePaneKeys(
-            s.activityClearedAtByPaneKey,
-            retiredPaneKeySet
-          ),
-          manuallyUnreadTurnsByPaneKey: removePaneKeys(
-            s.manuallyUnreadTurnsByPaneKey,
-            retiredPaneKeySet
-          ),
-          paneForegroundAgentByPaneKey: removePaneKeys(
-            s.paneForegroundAgentByPaneKey,
-            retiredPaneKeySet
-          ),
-          unreadTerminalPanes: removePaneKeys(s.unreadTerminalPanes, retiredPaneKeySet),
-          unreadAgentCompletionPanes: removePaneKeys(
-            s.unreadAgentCompletionPanes,
-            retiredPaneKeySet
-          ),
-          lastTerminalInputAtByPaneKey: removePaneKeys(
-            s.lastTerminalInputAtByPaneKey,
-            retiredPaneKeySet
-          ),
-          cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
-          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
-            s.recentlyRetiredAgentStatusPaneKeys,
-            retiredPaneKeys,
-            s.recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === true ||
-              isRecentlyClosedAgentStatusTab(
-                s.recentlyClosedAgentStatusTabIds,
-                getTabIdFromPaneKey(ownerPaneKey)
-              )
-              ? true
-              : retirementId
-          ),
-          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
-        }
-      })
+          )
+          if (
+            retiredLivePaneKeys.length > 0 &&
+            nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
+          ) {
+            nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
+          }
+          for (const key of retiredLivePaneKeys) {
+            nextRetentionSuppressedPaneKeys[key] = true
+          }
+          return {
+            agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
+            runtimeAgentOrchestrationByPaneKey: removePaneKeys(
+              s.runtimeAgentOrchestrationByPaneKey,
+              retiredPaneKeySet
+            ),
+            retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
+            sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
+              ? s.sleepingAgentSessionsByPaneKey
+              : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
+            agentLaunchConfigByPaneKey: removePaneKeys(
+              s.agentLaunchConfigByPaneKey,
+              retiredPaneKeySet
+            ),
+            acknowledgedAgentsByPaneKey: removePaneKeys(
+              s.acknowledgedAgentsByPaneKey,
+              retiredPaneKeySet
+            ),
+            activityClearedAtByPaneKey: removePaneKeys(
+              s.activityClearedAtByPaneKey,
+              retiredPaneKeySet
+            ),
+            manuallyUnreadTurnsByPaneKey: removePaneKeys(
+              s.manuallyUnreadTurnsByPaneKey,
+              retiredPaneKeySet
+            ),
+            paneForegroundAgentByPaneKey: removePaneKeys(
+              s.paneForegroundAgentByPaneKey,
+              retiredPaneKeySet
+            ),
+            ...removePanesAttention(s, retiredPaneKeySet),
+            lastTerminalInputAtByPaneKey: removePaneKeys(
+              s.lastTerminalInputAtByPaneKey,
+              retiredPaneKeySet
+            ),
+            cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
+            retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+            recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
+              s.recentlyRetiredAgentStatusPaneKeys,
+              retiredPaneKeys,
+              s.recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === true ||
+                isRecentlyClosedAgentStatusTab(
+                  s.recentlyClosedAgentStatusTabIds,
+                  getTabIdFromPaneKey(ownerPaneKey)
+                )
+                ? true
+                : retirementId
+            ),
+            agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+            sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+          }
+        })
+      )
       if (hadLive) {
         freshness.scheduleDeferred()
       }
@@ -135,12 +138,7 @@ export function createAgentStatusAuthorityActions(
       }
     },
 
-    // Why: the tombstone claims this pane is gone; a live PTY binding to it proves
-    // otherwise. Lift the fence on that proof rather than on the next hook event —
-    // a pane re-attached mid-turn or while idle emits no new-turn event, so a
-    // turn-triggered revival leaves exactly the reported permanent suppression
-    // (STA-4114). This deliberately does NOT restore the rows retirement dropped;
-    // those are genuinely stale. It only re-opens the pane to future status.
+    // Live PTY binding disproves pane tombstone (STA-4114); revive future status without restoring stale rows. Waiting for a new hook turn permanently suppresses idle/mid-turn reattachments.
     restoreAgentPaneAuthority: (paneKey) => {
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       // Why: a closed tab is a stronger, separate claim — re-attach must not undo it.
@@ -165,13 +163,7 @@ export function createAgentStatusAuthorityActions(
         }
         return { recentlyRetiredAgentStatusPaneKeys: next }
       })
-      // Why: deliberately OUTSIDE the guard above, and not gated on having cleared
-      // anything here. This map is not a mirror of main's — main fences panes the
-      // renderer never hears about (retirePtyAgentLaunchAuthority on command-finished
-      // and PTY exit calls the hook server directly, and nothing pushes that back), and
-      // this map is per-window and non-persisted, so a renderer reload empties it while
-      // main's survives. Gating the send on a local tombstone reintroduces STA-4114 for
-      // exactly those panes. The send is idempotent and main refuses closed tabs itself.
+      // Always send idempotent revival to main, even without local tombstone: main-only fences and renderer reloads make maps diverge. Main independently refuses closed tabs (STA-4114).
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
       }
@@ -183,8 +175,7 @@ export function createAgentStatusAuthorityActions(
       }
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
-      // Why: the moved row carries the observation stamped for its OLD key; renderer-authored
-      // observations for the new key must sort after it, not race it.
+      // Moved row retains old-key observation; new-key renderer writes must sort after it.
       rendererAgentStatusObservations.forget(from)
       rendererAgentStatusObservations.rebind(to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
@@ -195,8 +186,7 @@ export function createAgentStatusAuthorityActions(
           paneKey: to,
           tabId: targetTabId
         })),
-        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
-        // pane-key change they must observe, not a silent remap.
+        // Bump epoch on live pane-key moves so retention/sidebar consumers observe the remap.
         ...(from in s.agentStatusByPaneKey
           ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
           : {}),
@@ -234,8 +224,7 @@ export function createAgentStatusAuthorityActions(
         activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
         manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(s.manuallyUnreadTurnsByPaneKey, from, to),
         paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
-        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+        ...movePaneAttention(s, from, to),
         lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)

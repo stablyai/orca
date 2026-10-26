@@ -20,7 +20,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -57,7 +57,7 @@ describe('RuntimeFileCommands', () => {
           absolutePath: expectedPath
         }
       })
-      expect(resolveAuthorizedPathMock).toHaveBeenCalledWith(expectedPath, expect.anything())
+      expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe(expectedPath)
     })
 
     it('does not translate UNC-style paths as WSL POSIX paths', async () => {

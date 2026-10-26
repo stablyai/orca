@@ -1,12 +1,11 @@
 import { useAppStore } from '@/store'
 import type { RecognizedAgentProcess } from '../../../../../shared/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** The pane's process monitor confirmed its agent exited: retire the live row the way a confirmed
- *  133;D does, since shells without command marks (cmd.exe, Git Bash) never arm that drop. */
+/** Retire confirmed process exits even without OSC command marks, as in cmd.exe/Git Bash, which cannot arm a 133;D drop. */
 export function retireLiveAgentRowOnConfirmedProcessExit(
   session: ConnectPanePtySession,
   exited: RecognizedAgentProcess

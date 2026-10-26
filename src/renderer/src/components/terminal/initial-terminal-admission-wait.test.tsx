@@ -10,19 +10,26 @@ const mocks = vi.hoisted(() => {
     createTab: vi.fn(),
     createUnifiedTab: vi.fn(),
     begin: vi.fn(),
+    select: (selector: (state: { pendingWorktreeCreations: Record<string, never> }) => unknown) =>
+      selector({ pendingWorktreeCreations: {} }),
     answers
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(() => 'none', {
+  useAppStore: Object.assign(mocks.select, {
     getState: () => ({
       activeWorktreeId: 'wt-1',
       tabsByWorktree: {},
       closedTerminalTabTombstonesByTabId: {},
       unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
       activeGroupIdByWorktree: {},
+      // A switch-on chat open places the tab in the workspace's root group.
+      ensureWorktreeRootGroup: () => 'group-1',
       createUnifiedTab: mocks.createUnifiedTab,
+      readLocalAgentInventory: () => ({ ids: null, state: 'pending' }),
       setActiveTabType: vi.fn()
     })
   })
@@ -47,11 +54,20 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
       : new Promise(() => undefined)
 }))
 
+// Main answers the window's chat-tab open (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import type { Tab } from '../../../../shared/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
@@ -61,7 +77,39 @@ afterEach(async () => {
   root = undefined
   mocks.answers.length = 0
   vi.clearAllMocks()
+  layoutApplyTestTransport.reset()
 })
+
+/** No shell created here or (switch-on) asked of main. */
+function expectNoShell(): void {
+  expect(mocks.createTab).not.toHaveBeenCalled()
+  expect(layoutApplyTestTransport.sentOfType('createTerminalTab')).toEqual([])
+}
+
+/** The watcher's shell create: here, or (switch-on) sent to main, whose frame draws it. */
+async function expectShellCreatedOnce(): Promise<void> {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await layoutApplyTestTransport.settle()
+    expect(layoutApplyTestTransport.sentOfType('createTerminalTab')).toEqual([
+      expect.objectContaining({ workspace: 'wt-1' })
+    ])
+    return
+  }
+  expect(mocks.createTab).toHaveBeenCalledOnce()
+}
+
+/** The chat opened: drawn here, or (switch-on) its open sent to main, whose frame draws it. */
+async function expectChatOpenedOnce(): Promise<void> {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await layoutApplyTestTransport.settle()
+    expect(layoutApplyTestTransport.sentOfType('openAgentSessionTab')).toEqual([
+      expect.objectContaining({ workspace: 'wt-1', sessionId: 'claude_1' })
+    ])
+    expect(mocks.createUnifiedTab).not.toHaveBeenCalled()
+    return
+  }
+  expect(mocks.createUnifiedTab).toHaveBeenCalledOnce()
+}
 
 function Watcher(): null {
   useTerminalWatcherEffects({
@@ -135,12 +183,22 @@ function gateAnsweredLater(): {
   return { gate, finish }
 }
 
-// While this machine decides, a passive first-terminal seeder used to put "Terminal 1" beside the
-// chat, since no launch record exists until the host answers.
+// While admission waits, no launch record exists yet; passive seeding must not add Terminal 1 beside the chat.
 describe('a local chat launch waiting on its host', () => {
+  it('defers the watcher shell for a live host launch, then permits a later ordinary mount', async () => {
+    mocks.gate.mockResolvedValueOnce('blocked').mockResolvedValueOnce('empty')
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(createElement(Watcher)))
+    expectNoShell()
+
+    await act(async () => root?.unmount())
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(createElement(Watcher)))
+    await expectShellCreatedOnce()
+  })
+
   it('keeps a watched create free of a stray shell until its chat opens', async () => {
     const { finish } = gateAnsweredLater()
-    // A watched create reveals the workspace, then waits for this machine's answer.
     beginStructuredAgentSessionProvisionalLaunch({
       plan: localChatPlan(),
       hooks: {},
@@ -151,29 +209,27 @@ describe('a local chat launch waiting on its host', () => {
     root = createRoot(document.createElement('div'))
     await act(async () => root?.render(createElement(Watcher)))
     await act(async () => finish())
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    expectNoShell()
 
     await act(async () => mocks.answers[0]?.({ supported: true }))
-    expect(mocks.createUnifiedTab).toHaveBeenCalledOnce()
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    await expectChatOpenedOnce()
+    expectNoShell()
   })
 
   it("keeps an empty workspace's default chat free of a shell seeded by the shared gate", async () => {
     const { gate, finish } = gateAnsweredLater()
-    // The activation's reseed attaches first and opens the default agent as a chat.
     void gate.then(() =>
       beginStructuredAgentSessionProvisionalLaunch({ plan: localChatPlan(), hooks: {} })
     )
     root = createRoot(document.createElement('div'))
-    // The watcher shares that in-flight gate and runs right after the reseed.
     await act(async () => root?.render(createElement(Watcher)))
     await act(async () => finish())
     expect(mocks.begin).not.toHaveBeenCalled()
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    expectNoShell()
 
     await act(async () => mocks.answers[0]?.({ supported: true }))
-    expect(mocks.createUnifiedTab).toHaveBeenCalledOnce()
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    await expectChatOpenedOnce()
+    expectNoShell()
   })
 
   it('stops owning the surface once the host has answered and its surface opened', async () => {

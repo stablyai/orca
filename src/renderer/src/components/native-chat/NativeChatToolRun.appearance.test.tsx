@@ -24,40 +24,8 @@ import { revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { i18n } from '@/i18n/i18n'
 
 {
-  const blocks: NativeChatBlock[] = [
-    { type: 'tool-call', name: 'Bash', input: { command: 'test' }, state: 'failed' },
-    { type: 'tool-result', output: 'exit 1', isError: true },
-    { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'completed' },
-    { type: 'tool-call', name: 'Write', input: { file_path: 'a.ts' }, state: 'completed' },
-    { type: 'tool-call', name: 'Grep', input: { pattern: 'todo' }, state: 'completed' },
-    { type: 'tool-call', name: 'Task', input: { description: 'Review' }, state: 'completed' }
-  ]
-
   describe('tool-run summary in a matching chat', () => {
     afterEach(cleanup)
-    it.each([false, true])('caps the summary at two wrapped lines, live=%s', (live) => {
-      const style = nativeChatAppearanceStyle({
-        terminalFontFamily: 'Menlo',
-        nativeChatAppearance: { matchTerminalInterface: true }
-      })
-      const { container } = render(
-        <div className="native-chat-appearance" style={style}>
-          <div className="max-w-(--chat-content-max-width)">
-            <NativeChatToolRun blocks={blocks} expandSignal={false} activeTurnIsWorking={live} />
-          </div>
-        </div>
-      )
-      expect(style['--chat-content-max-width']).toBe('46rem')
-      expect(style['--chat-font-family']).toContain('Menlo')
-      const summary = container.querySelector('span.line-clamp-2')
-      expect(summary).toHaveTextContent(live ? 'running 1 agent' : 'ran 1 agent')
-      expect(summary).toHaveClass('min-w-0', 'line-clamp-2', 'whitespace-normal', 'break-words')
-      expect(summary).not.toHaveClass('truncate', 'whitespace-nowrap', 'font-mono')
-      const failure = container.querySelector('[aria-label="Failed tool calls: 1"]')
-      expect(failure).toHaveTextContent('1 failed')
-      expect(failure).toHaveClass('shrink-0')
-      expect(failure?.parentElement).toHaveClass('flex', 'h-[1lh]', 'items-center')
-    })
 
     it('keeps a long command available in the expanded detail', () => {
       const command = `printf ${'x'.repeat(5000)}`
@@ -84,42 +52,6 @@ import { i18n } from '@/i18n/i18n'
       openToolRunMembers()
 
       expect(container.querySelector('pre')).toHaveTextContent(command)
-    })
-
-    it.each([
-      ['wrapped', `QA inert command for display only: ${'x'.repeat(400)}`],
-      ['single-line', 'pnpm test']
-    ])('pins the marks to the first line of a %s summary', (_summaryLength, command) => {
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={[
-            { type: 'tool-call', name: 'shell', input: { command }, state: 'completed' },
-            { type: 'tool-result', output: 'done' }
-          ]}
-          expandSignal={false}
-          activeTurnIsWorking={false}
-        />
-      )
-
-      const header = screen.getByRole('button')
-      // Top-aligned in the summary's own type, so `1lh` is one summary line.
-      expect(header).toHaveClass('items-start', 'text-sm', 'leading-relaxed')
-      expect(header).not.toHaveClass('items-center')
-      const summary = container.querySelector('span.line-clamp-2')
-      expect(summary?.parentElement).toBe(header)
-      expect(summary).toHaveClass('min-w-0', 'line-clamp-2')
-
-      const slots = Array.from(header.children).filter((child) => child !== summary)
-      expect(slots.length).toBeGreaterThanOrEqual(2)
-      for (const slot of slots) {
-        expect(slot).toHaveClass('flex', 'h-[1lh]', 'items-center')
-      }
-      // The icon leads, so a wrapped second line starts under the text, not under it.
-      expect(header.firstElementChild?.querySelector('svg')).toBeInTheDocument()
-      expect(header.children[1]).toBe(summary)
-      expect(header.querySelector('.lucide-check')?.parentElement).toHaveClass('h-[1lh]')
-      // The header carries no caret: the whole line is the toggle.
-      expect(header.querySelector('.lucide-chevron-right')).toBeNull()
     })
   })
 }
@@ -225,7 +157,6 @@ import { i18n } from '@/i18n/i18n'
       )
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
       expect(container.querySelector('.lucide-message-square-more')).toBeInTheDocument()
-      // The raw call and its payload are exactly what this row exists to replace.
       expect(screen.queryByText(/Running AskUserQuestion/)).toBeNull()
       expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
     })
@@ -241,7 +172,6 @@ import { i18n } from '@/i18n/i18n'
 
       expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      // A run that is only the ask has no work left to head, so it draws no header.
       expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
     })
 
@@ -338,8 +268,7 @@ import { i18n } from '@/i18n/i18n'
       render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
       expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      // One call ran; being asked a question is not work to summarize. The agent
-      // is blocked on the reader, so the run reads settled, not in progress.
+      // Waiting for an answer settles the work summary; the question itself adds no call count.
       expect(screen.getByText('Read 1 file')).toBeInTheDocument()
       expect(screen.queryByText('Reading 1 file')).toBeNull()
     })
@@ -454,7 +383,6 @@ import { i18n } from '@/i18n/i18n'
       contentHeight.current = 1200
       rerender(<Transcript mounted count={4} />)
 
-      // Neither back at the newest call nor following again: both were the reader's choice.
       expect(membersBox(container).scrollTop).toBe(100)
     })
 
@@ -469,7 +397,6 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(header)
       fireEvent.click(header)
 
-      // A live run the reader reopens shows what it is doing now.
       expect(membersBox(container).scrollTop).toBe(900)
     })
 

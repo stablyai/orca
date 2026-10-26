@@ -19,9 +19,7 @@ import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../share
 
 export type RuntimeLinearSettings = RowLessSource
 
-// Why: mixed-version remotes must not look like an empty filtered result. The
-// Linear store swallows most read failures; this typed error is rethrown so UI
-// can show an upgrade message instead of "no matching issues".
+// Stores swallow ordinary read failures; rethrow typed mixed-version refusal so UI offers upgrade instead of falsely empty filtered results.
 export class LinearIssueAttributeFilterUnsupportedError extends Error {
   constructor(message = 'This remote runtime must be updated to filter Linear issues.') {
     super(message)
@@ -78,7 +76,12 @@ function normalizeLinearIssueCollectionResult(
 export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
-  const target = getLinearRuntimeTarget(settings)
+  return linearStatusForTarget(getLinearRuntimeTarget(settings))
+}
+
+export async function linearStatusForTarget(
+  target: RuntimeClientTarget
+): Promise<LinearConnectionStatus> {
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(target, 'linear.status', undefined, {
         timeoutMs: 15_000
@@ -162,10 +165,18 @@ export async function linearSearchIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
+  return linearSearchIssuesForTarget(getLinearRuntimeTarget(settings), query, limit, workspaceId)
+}
+
+export async function linearSearchIssuesForTarget(
+  target: RuntimeClientTarget,
+  query: string,
+  limit?: number,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearIssue[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
         target,
@@ -203,8 +214,7 @@ export async function linearListIssues(
       30_000
     ))
   ) {
-    // Why: older runtimes silently strip unknown RPC params; rejecting here
-    // prevents their unfiltered rows from being presented or cached as filtered.
+    // Old hosts strip unknown params; refuse here or unfiltered rows would display/cache as filtered.
     throw new LinearIssueAttributeFilterUnsupportedError()
   }
   const result =

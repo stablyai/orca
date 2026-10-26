@@ -4,9 +4,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
 
-afterEach(cleanup)
+const mocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
 
-/** The rendered blocks, without the line breaks the renderer puts between them, which lay out as nothing. */
+vi.mock('./CommentMermaidBlock', () => ({ default: mocks.mermaid }))
+
+afterEach(() => {
+  cleanup()
+  expect(mocks.mermaid).not.toHaveBeenCalled()
+  mocks.mermaid.mockClear()
+})
+
+/** Ignore inter-block line breaks because they have no rendered layout. */
 function blocksOf(container: HTMLElement): string[] {
   return Array.from(container.firstElementChild?.children ?? [], (block) => block.outerHTML)
 }
@@ -40,7 +52,6 @@ describe('growing comment markdown', () => {
         <CommentMarkdown content={REPLY.slice(0, end)} variant="document" growing />
       )
     }
-    // The stream ending must not redraw what is already there.
     streamed.rerender(<CommentMarkdown content={REPLY} variant="document" />)
     expect(blocksOf(streamed.container)).toEqual(expected)
   })

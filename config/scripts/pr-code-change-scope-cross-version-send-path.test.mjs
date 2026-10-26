@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
-// #24901 changed the send builders and orchestration code, and this job skipped. It runs only for
-// code a suite executes: loading a module the dispatcher registers is not coverage.
+// Route code the suite executes; dispatcher registration alone is not coverage (#24901 missed send-path changes).
 describe('cross-version wire routing for the send path', () => {
   it.each([
     'src/shared/agent-session-wire-refusals.ts',
@@ -15,7 +14,9 @@ describe('cross-version wire routing for the send path', () => {
     'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
     'src/main/runtime/rpc/orchestration-mutation-executor.ts',
     'src/shared/orchestration-rpc-contract.ts',
-    'src/main/runtime/orchestration/db/schema/migrate.ts'
+    'src/main/runtime/orchestration/db/schema/migrate.ts',
+    'src/main/runtime/rpc/ws-transport.ts',
+    'src/shared/web-origin-security.ts'
   ])('runs the cross-version suites when %s changes', (file) => {
     expect(classifyPrJobs([file])).toMatchObject({ should_run: true, 'cross-version-wire': true })
   })

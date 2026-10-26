@@ -120,7 +120,7 @@ describe('agent session RPC methods', () => {
       expect(replies[0]).toMatchObject({ ok: true })
       expect(runtime[testCase.runtimeMethod]).toHaveBeenCalledWith(
         { ...testCase.params, presentation: 'background' },
-        { clientId: `paired-${clientKind}`, clientKind }
+        { clientId: `paired-${clientKind}`, clientKind, terminalImageViewerSupported: false }
       )
     }
   })
@@ -305,7 +305,11 @@ describe('agent session RPC methods', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         viewMode: 'chat'
       },
-      { clientId: 'authenticated-device', clientKind: 'runtime' }
+      {
+        clientId: 'authenticated-device',
+        clientKind: 'runtime',
+        terminalImageViewerSupported: false
+      }
     )
   })
 

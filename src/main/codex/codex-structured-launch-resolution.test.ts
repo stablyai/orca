@@ -11,7 +11,10 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -56,14 +59,12 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
-  resolveRollout: () => Promise<string | null> = async () => null,
   resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
-    resolveRollout,
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? [])
   })
 }
@@ -90,7 +91,6 @@ describe('codex structured launch resolution', () => {
               : []
         }),
         undefined,
-        undefined,
         () => args
       )
       await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
@@ -105,19 +105,15 @@ describe('codex structured launch resolution', () => {
     }
   )
 
-  it('starts a new thread after clear without resolving the old rollout', async () => {
-    const resolveRollout = vi.fn(async () => '/old/rollout.jsonl')
+  it('starts a new thread after clear without reusing the old handle', async () => {
     const value = record({
       providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
       providerHandleChain: []
     })
-    const launch = await resolverFor(
-      value,
-      undefined,
-      resolveRollout
-    )({ identity: { ...IDENTITY, providerHandle: codexProviderHandle('old-thread') } })
+    const launch = await resolverFor(value)({
+      identity: { ...IDENTITY, providerHandle: codexProviderHandle('old-thread') }
+    })
     expect(launch.resumeThreadId).toBeNull()
-    expect(resolveRollout).not.toHaveBeenCalled()
   })
 
   it('resumes a floating session in its pinned folder, not the current floating setting', async () => {
@@ -164,14 +160,13 @@ describe('codex structured launch resolution', () => {
       cwd: '/repos/workspace-1',
       codexHome: '/home/work/.codex',
       resumeThreadId: null,
-      // Every launch carries a posture; none is left for config.toml to decide. No mode asks.
       permissionPolicy: {
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
         approvalsReviewer: 'user'
       },
       env: { CODEX_HOME: '/home/work/.codex' },
-      envToDelete: [NATIVE_CHAT_VISUALS_DIR_ENV]
+      envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
     })
   })
 
@@ -253,7 +248,6 @@ describe('codex structured launch resolution', () => {
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
-  // app-server owns the permission posture on the thread RPC, not process flags.
   it.each([
     [
       'ask',
@@ -278,17 +272,23 @@ describe('codex structured launch resolution', () => {
     expect(launch.permissionPolicy).toEqual(policy)
   })
 
-  // The chat's mode replaces Agent Permissions: a Yolo terminal setting grants a chat nothing.
+  it('adds no policy overrides for the agent’s own settings', async () => {
+    const launch = await resolverFor(record())({
+      identity: IDENTITY,
+      spawnToken: TEST_SPAWN_TOKEN,
+      permissionMode: 'own'
+    })
+    expect(launch).not.toHaveProperty('permissionPolicy')
+  })
+
   it('ignores the bypass flag the agent Arguments carry', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, () => [
+    const launch = await resolverFor(record(), undefined, () => [
       '--dangerously-bypass-approvals-and-sandbox'
     ])({ identity: IDENTITY, spawnToken: TEST_SPAWN_TOKEN, permissionMode: 'ask' })
 
     expect(launch.permissionPolicy).toMatchObject({ approvalPolicy: 'on-request' })
   })
 
-  // A thread opened on the configured default and then given a turn on the saved model reads to
-  // Codex as a model switch, and it injects the saved model's whole prompt a second time.
   it('opens the thread on the model the record saved', async () => {
     const launch = await resolverFor(
       record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })
@@ -320,22 +320,20 @@ describe('codex structured launch resolution', () => {
     ])
   })
 
-  it('pins resume to the rollout file that proved the durable thread', async () => {
-    const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
+  it('resumes the durable thread ID under its pinned account home', async () => {
     const launch = await resolverFor(
       record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [
           { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
       }),
-      async (id) => `/repos/${id}`,
-      resolveRollout
+      async (id) => `/repos/${id}`
     )({ identity: IDENTITY })
 
-    expect(resolveRollout).toHaveBeenCalledWith('/home/work/.codex', 'thread-current')
-    expect(launch.resumePath).toBe('/home/work/.codex/sessions/rollout.jsonl')
+    expect(launch.resumeThreadId).toBe('thread-current')
+    expect(launch.codexHome).toBe('/home/work/.codex')
+    expect(launch.env?.CODEX_HOME).toBe('/home/work/.codex')
     expect(launch.args).toEqual([
       '--enable',
       'unified_exec',

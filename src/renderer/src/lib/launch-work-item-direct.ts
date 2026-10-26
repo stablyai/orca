@@ -32,7 +32,10 @@ import {
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import {
+  refineLocalLaunchPlatform,
+  resolveRepoExecutionHostPlatform
+} from '@/lib/execution-host-facts'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
@@ -41,19 +44,9 @@ import {
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { ensureDetectedAgentsForRepo } from '@/lib/agent-detection-target-inventory'
 
-/**
- * "Use" flow: create the workspace, activate it, launch the default agent,
- * and paste the work item context into the agent. Most callers leave it as a draft;
- * fix-check launches can opt into submitting the prompt after the TUI is ready.
- * Falls back to `openModalFallback()` when:
- *   - the repo's `setupRunPolicy` is `'ask'` (the user must pick per-workspace)
- *   - the repo can't be resolved from `repoId`
- *   - no compatible agent is detected on PATH
- *
- * Best-effort: after workspace activation, paste failures only toast a notice — the user still
- * has a usable workspace and can paste the work item context themselves.
- */
+/** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const {
     item,
@@ -89,28 +82,22 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
-  const preflightLaunchPlatform =
-    args.launchPlatform ??
-    resolveSourceControlLaunchPlatform({
-      connectionId: repoConnectionId,
-      worktreePath: repo.path,
-      projectRuntime: repoProjectRuntime
-    })
-  const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
+  const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
+  if (repoLaunchFact.kind === 'withheld') {
+    toast.error(repoLaunchFact.reason)
+    return false
+  }
+  const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
+  const shell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'
   const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
   if (!agentArgsPlan.ok) {
-    // Why: direct launches may create a worktree before the agent startup plan
-    // is built; reject malformed saved args before touching user workspaces.
+    // Validate saved arguments before creation; planning after create would otherwise leave an invalid launch’s workspace behind.
     toast.error(agentArgsPlan.error)
     return false
   }
-  // Why: agent detection shells out and can be cold/slow. Start it now, but
-  // don't let it serialize setup-policy resolution or git worktree creation.
-  const detectedAgentsPromise = agentOverride
-    ? null
-    : repoConnectionId
-      ? store.ensureRemoteDetectedAgents(repoConnectionId)
-      : store.ensureDetectedAgents()
+  // Start cold agent detection concurrently without delaying setup policy or workspace creation.
+  const detectedAgentsPromise = agentOverride ? null : ensureDetectedAgentsForRepo(store, repo)
 
   const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerHostId)
   if (setupResolution.kind === 'needs-modal') {
@@ -148,8 +135,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let resolvedCompareBaseRef: string | undefined
   if (!resolvedBaseBranch && itemType === 'pr' && itemNumber) {
     try {
-      // Why: direct "Use PR" launches bypass the Start-from picker, so they
-      // must still resolve the PR head before `git worktree add`.
+      // Direct Use PR bypasses the picker but still needs its resolved head before git worktree add.
       const result = await resolveDirectPrStartPoint(repoId, itemNumber, repoOwnerTarget, item)
       resolvedBaseBranch = result.baseBranch
       resolvedPushTarget = result.pushTarget
@@ -212,12 +198,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       agentOverride,
       agentArgs,
       repoConnectionId,
+      repoHost: repo,
       detectedAgentsPromise,
       latestStore,
       settings,
       draftContent,
       promptDelivery,
       launchPlatform: args.launchPlatform,
+      repoLaunchHost,
       repoProjectRuntime,
       planLaunch: planAgentSessionLaunch,
       requestId: newAgentLaunchRequestId()
@@ -265,8 +253,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     }
     const activation = activationHolder.value
     if (!activation) {
-      // Worktree vanished between create and activate — extremely unlikely but
-      // worth handling explicitly rather than silently dropping the draft.
+      // Report a workspace disappearing between create and activation rather than silently drop its draft.
       toast.error(workspaceActivationErrorMessage())
       return false
     }
@@ -292,8 +279,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
 
   if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
-    // Why: the draft rides in on argv or the startup payload, so no paste runs
-    // below; mirror it into chat the way the new-tab launcher does.
+    // Mirror argv/startup-payload drafts into chat because the paste path below will not seed them.
     seedNativeChatLaunchDraftForAgentTab({
       tabId: primaryTabId,
       agent: effectiveAgent,

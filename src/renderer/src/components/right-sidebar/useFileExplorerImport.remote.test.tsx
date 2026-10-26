@@ -28,7 +28,6 @@ const clearDrag = vi.fn()
 const setSelected = vi.fn()
 
 function Explorer({ worktreeId, root }: { worktreeId: string; root: string }) {
-  // Like the tree pane, the owner is the one the tree root loaded with.
   const ownerRef = useFileExplorerImport({
     worktreeId,
     worktreePath: root,
@@ -137,5 +136,18 @@ describe('file explorer OS file drops on remote workspaces', () => {
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
     expect(mocks.importPaths).not.toHaveBeenCalled()
     expect(clearDrag).toHaveBeenCalled()
+  })
+
+  it('says why a remote import failed', async () => {
+    const reason = "'shot.png' is 3 GB, over the 2 GB per-file remote import limit"
+    mocks.importPaths.mockResolvedValueOnce({
+      results: [{ sourcePath: '/Users/me/Desktop/shot.png', status: 'failed', reason }]
+    })
+    const view = render(<Explorer worktreeId="wt-runtime" root={RUNTIME_ROOT} />)
+    dropFile(view.getByTestId('src'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.any(String), {
+      description: 'Too large to upload to this host.'
+    })
   })
 })

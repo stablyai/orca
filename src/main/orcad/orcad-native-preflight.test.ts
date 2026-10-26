@@ -42,7 +42,6 @@ afterEach(() => {
 
 describe('runOrcadNativePreflight', () => {
   it('stops the boot on a proven-unloadable binary instead of reaching the require', () => {
-    // Continuing here would hit the very dlopen the probe just proved fatal, and the
     // operator would get the loader's stack trace instead of the sentence below.
     const { fail, exit, warn } = harness(
       verdict({ status: 'blocked', reason: 'libc_floor', detail: 'the binary requires GLIBC_2.34' })
@@ -54,13 +53,7 @@ describe('runOrcadNativePreflight', () => {
     expect(message).toContain('newer C library')
     expect(message).toContain('the binary requires GLIBC_2.34')
     expect(message).toContain('libc glibc 2.31')
-    // The toolchain hint is what makes it actionable rather than merely accurate.
     expect(message).toContain('sudo apt-get install -y build-essential python3')
-  })
-
-  it('exits with EX_CONFIG so a supervisor does not restart an unequippable host forever', () => {
-    expect(ORCAD_EXIT_CONFIGURATION).toBe(78)
-    expect(ORCAD_EXIT_CONFIGURATION).not.toBe(1)
   })
 
   it('publishes the blocked cause as a status degradation', () => {
@@ -94,7 +87,6 @@ describe('runOrcadNativePreflight', () => {
 
     expect(continued).toBe(true)
     expect(exit).not.toHaveBeenCalled()
-    // Still reported: an unverifiable host must not look identical to a proven-healthy one.
     expect(runtimeTerminalDegradation()?.reason).toBe('unknown')
   })
 

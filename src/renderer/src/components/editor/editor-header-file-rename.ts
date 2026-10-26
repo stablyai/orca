@@ -24,21 +24,16 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
   const [renameFilePath, setRenameFilePath] = useState(activeFile.filePath)
   const renameInputElementRef = useRef<HTMLInputElement | null>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
-  // Escape fires setIsRenaming(false), which unmounts the input. The browser
-  // still fires focusout as the focused node is removed, so onBlur can invoke
-  // commitRename *after* cancel — committing the typed value against the
-  // user's intent. This flag suppresses the trailing blur-commit.
+  // Escape unmounts the focused input and triggers blur; suppress that trailing commit so cancellation cannot rename.
   const renameCancelledRef = useRef(false)
-  // Why: the header renders one unkeyed path strip for every file, so a file
-  // switch mid-rename would otherwise commit the typed name against the new path.
+  // The header is unkeyed across files; cancel stale rename intent before it can target a new path.
   if (renameFilePath !== activeFile.filePath) {
     renameCancelledRef.current = true
     setRenameFilePath(activeFile.filePath)
     setIsRenaming(false)
   }
   const currentFileName = basename(activeFile.filePath)
-  // Why: read-only tabs (AI Vault View Log) are never renameable — rename would
-  // rewrite the agent-owned artifact's backing path.
+  // Renaming read-only tabs would mutate provider-owned artifact paths.
   const canRename =
     activeFile.mode === 'edit' &&
     !activeFile.diffSource &&
@@ -65,8 +60,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
       return
     }
     const newName = input.value.trim()
-    // onBlur follows Enter when the input unmounts; consume that trailing event
-    // so one user action cannot start a second rename against the old path.
+    // Enter unmounts the input and triggers blur; consume that trailing event to avoid a second rename.
     renameCancelledRef.current = true
     setIsRenaming(false)
     if (!newName || newName === currentFileName) {
@@ -104,10 +98,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
         return
       }
 
-      // Why: focus belongs to the rename input mount; the frame lets the header
-      // layout settle before selecting text. Preselect the basename only, so
-      // typing replaces the name and leaves the extension — same as the tab bar
-      // and the file explorer.
+      // Focus after header layout settles and select only the basename, preserving the extension as other rename surfaces do.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputElementRef.current !== el) {

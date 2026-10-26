@@ -12,7 +12,6 @@ import {
   updateFailureWallOf
 } from './mobile-web-shell-update-failure'
 
-/** A message the way a transport or a fetch can phrase one: an endpoint and a credential in it. */
 const TOKENED = 'wss://relay.example/pair?token=SECRET-123 bundle asset index.html hashed'
 
 describe('updateFailureCauseOf', () => {
@@ -80,7 +79,7 @@ describe('readFailureSide', () => {
 })
 
 describe('updateFailureWallOf', () => {
-  it('flattens each blocked verdict to one code', () => {
+  it('flattens bundle availability and protocol-version verdicts to stable codes', () => {
     expect(updateFailureWallOf({ kind: 'blocked', reason: 'bundle-unavailable' })).toBe(
       'bundle-unavailable'
     )

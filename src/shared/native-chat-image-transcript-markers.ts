@@ -4,10 +4,17 @@ import {
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from './ansi-escape-sequences'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from './native-chat-types'
+import { imageReferenceToken, replaceImageReferences } from './native-chat-image-reference'
+import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from './agent-image-paste'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
 const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
+// A quoted file reference is matched whole, so a path that reads like a marker is left as typed.
+const IMAGE_PROMPT_MARKER_NUMBERS_OUTSIDE_FILE_REFERENCES = new RegExp(
+  `(${NATIVE_CHAT_QUOTED_FILE_REFERENCE.source})|\\[Image #(\\d+)\\]`,
+  'g'
+)
 const IMAGE_PROMPT_MARKER_AT_START = /^[^\S\r\n]*\[Image #\d+\]/
 const IMAGE_PROMPT_MARKER_AT_END = /\[Image #\d+\][^\S\r\n]*$/
 const HORIZONTAL_WHITESPACE_START = /^[^\S\r\n]+/
@@ -17,13 +24,8 @@ export function imageSourcePathFromText(text: string): string | null {
   return text.match(IMAGE_SOURCE_MARKER)?.[1]?.trim() ?? null
 }
 
-/** Every image-source path a user turn carries, or [] when it is not a pure
- *  image-source turn.
- *
- *  Why not `soleText`: Claude records a multi-image paste as ONE companion message
- *  holding one `[Image: source: ...]` text block per image, so requiring a single
- *  block missed every multi-image turn. A turn qualifies only when it is all text
- *  and every block is a marker, so a real prompt is never mistaken for one. */
+/** Source paths only from all-text turns whose every block is an image-source marker. Claude groups multi-image pastes into one turn;
+ * requiring one block misses them, while accepting mixed blocks would hide real prompts. */
 export function imageSourcePathsFromMessage(message: NativeChatMessage): string[] {
   if (message.role !== 'user' || message.blocks.length === 0) {
     return []
@@ -46,8 +48,51 @@ export function isImageSourceUserTurn(message: NativeChatMessage): boolean {
   return imageSourcePathsFromMessage(message).length > 0
 }
 
+/** Map chips to sent-image [Image #N] positions, matching Claude/Codex TUIs; drop chips whose images were not sent. */
+export function imageReferencesToPromptMarkers(
+  text: string,
+  sentImageIds: readonly string[]
+): string {
+  return replaceImageReferences(text, (attachmentId) => {
+    const index = sentImageIds.indexOf(attachmentId)
+    return index === -1 ? '' : `[Image #${index + 1}]`
+  })
+}
+
+function replaceSentImagePromptMarkers(
+  text: string,
+  replace: (number: number, marker: string) => string
+): string {
+  return text.replace(
+    IMAGE_PROMPT_MARKER_NUMBERS_OUTSIDE_FILE_REFERENCES,
+    (match, fileReference: string | undefined, number: string) =>
+      fileReference === undefined ? replace(Number(number), match) : match
+  )
+}
+
+/** Restore sent markers as image chips; leave out-of-range numbers literal. */
+export function promptMarkersToImageReferences(text: string, imageIds: readonly string[]): string {
+  return replaceSentImagePromptMarkers(text, (number, marker) => {
+    const attachmentId = imageIds[number - 1]
+    return attachmentId === undefined ? marker : imageReferenceToken(attachmentId)
+  })
+}
+
+/** Remove only markers belonging to this structured send’s imageCount; leave out-of-range numbers literal. */
+export function stripSentImagePromptMarkers(text: string, imageCount: number): string {
+  return withoutStrippedMarkerSpace(
+    text,
+    replaceSentImagePromptMarkers(text, (number, marker) =>
+      number >= 1 && number <= imageCount ? '' : marker
+    )
+  )
+}
+
 export function stripImagePromptMarker(text: string): string {
-  const stripped = text.replace(IMAGE_PROMPT_MARKERS, '')
+  return withoutStrippedMarkerSpace(text, text.replace(IMAGE_PROMPT_MARKERS, ''))
+}
+
+function withoutStrippedMarkerSpace(text: string, stripped: string): string {
   if (stripped === text) {
     return text
   }
@@ -164,8 +209,7 @@ export function normalizeImageTranscriptMessages(
         index = nextIndex
         continue
       }
-      // Only THIS turn's paths: `imagePaths` also holds the following source turns the
-      // fold scan looked at, and without a prompt to fold into they stay separate turns.
+      // Without a following prompt, keep only this turn’s paths; later scanned source turns remain separate.
       normalized.push({
         ...message,
         blocks: messageImagePaths.map((path) => ({ type: 'image-ref' as const, path }))

@@ -1,14 +1,5 @@
-/**
- * A phone subscribing to an idle terminal after a relaunch must get its first snapshot on its grid.
- *
- * After a relaunch the daemon PTY is reattached with no host model, and an idle program never
- * paints a byte that would hydrate one. With the pane hidden behind another tab, the host used to
- * serve the pane's desktop-sized screen, and the phone gave up after three mismatched frames.
- *
- * Run:
- *   npx playwright test tests/e2e/mobile-subscribe-idle-hidden-pane-fit.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Require the first phone snapshot on its own grid after relaunch with the pane hidden.
+// An idle PTY emits nothing to hydrate main’s missing model; the old desktop-sized replay exhausted three phone fit attempts.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -23,6 +14,7 @@ import {
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { decodePairingOffer } from '../../src/shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtime-connection'
 import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest
@@ -132,6 +124,7 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
 
     const offer = await createRuntimeDesktopPairingOffer(second.page)
     const pairing = decodePairingOffer(offer.pairingUrl)
+    const connection = pairedRuntimeConnectionFromOffer(pairing)
     let handle: string | undefined
     // The new tab's PTY spawn refuses terminal.list until its pane binds.
     await expect
@@ -139,7 +132,7 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
         async () => {
           const list = await sendRemoteRuntimeRequest<{
             terminals: { handle: string; ptyId: string | null }[]
-          }>(pairing, 'terminal.list', {}, 15_000)
+          }>(connection, 'terminal.list', {}, 15_000)
           if (!list.ok) {
             return JSON.stringify(list)
           }
@@ -152,7 +145,7 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
 
     const seen: { snapshot: { cols: number; rows: number } | null } = { snapshot: null }
     const subscription = await subscribeRemoteRuntimeRequest(
-      pairing,
+      connection,
       'terminal.subscribe',
       {
         terminal: handle,

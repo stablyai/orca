@@ -44,14 +44,13 @@ export function getAutomationSetupDefaultDecision(
 }
 
 export function getVisibleAutomationSetupDecision(args: {
-  createTarget: 'orca' | 'hermes'
   workspaceMode: AutomationWorkspaceMode
   repoId: string
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
   yamlHooks?: OrcaHooks | null
 }): Extract<SetupDecision, 'run' | 'skip'> | undefined {
-  if (args.createTarget !== 'orca' || args.workspaceMode !== 'new_per_run') {
+  if (args.workspaceMode !== 'new_per_run') {
     return undefined
   }
   return getAutomationSetupDefaultDecision(
@@ -60,7 +59,6 @@ export function getVisibleAutomationSetupDecision(args: {
 }
 
 export function resolveAutomationSetupDecisionForSave(args: {
-  createTarget: 'orca' | 'hermes'
   workspaceMode: AutomationWorkspaceMode
   repoId: string
   repos: readonly Repo[]
@@ -68,7 +66,7 @@ export function resolveAutomationSetupDecisionForSave(args: {
   yamlHooks?: OrcaHooks | null
   draftSetupDecision: Extract<SetupDecision, 'run' | 'skip'> | undefined
 }): Extract<SetupDecision, 'run' | 'skip'> | undefined {
-  if (args.createTarget !== 'orca' || args.workspaceMode !== 'new_per_run') {
+  if (args.workspaceMode !== 'new_per_run') {
     return undefined
   }
 
@@ -78,8 +76,7 @@ export function resolveAutomationSetupDecisionForSave(args: {
   }
 
   if (args.yamlHooks === undefined) {
-    // Why: automations cannot pause later for an orca.yaml trust prompt; when
-    // hook inspection is unavailable, fail closed instead of inheriting setup.
+    // Automations cannot pause for later hook trust; failed inspection must skip setup.
     return 'skip'
   }
 
@@ -93,7 +90,6 @@ export function getAutomationSetupDecisionDraftValue(args: {
   if (args.persistedSetupDecision === 'run' || args.persistedSetupDecision === 'skip') {
     return args.persistedSetupDecision
   }
-  // Why: legacy new-run automations had no saved choice and now dispatch as
-  // skip for compatibility; editing them must not silently opt into setup.
+  // Legacy new-per-run records default to skip; editing must not silently opt them into setup.
   return args.workspaceMode === 'new_per_run' ? 'skip' : undefined
 }

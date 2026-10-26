@@ -201,7 +201,10 @@ describe('removeWorktree state cleanup', () => {
 
     // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'setup-runtime-ssh' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'setup-runtime-ssh',
+      hostId: 'ssh:runtime-ssh-orca-1'
+    })
   })
 
   it('cleans up editorDrafts for files in the removed worktree', async () => {
@@ -233,7 +236,6 @@ describe('removeWorktree state cleanup', () => {
       .removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(result).toEqual({ ok: true })
-    // Draft for file-1 should be removed, draft for file-2 should remain
     expect(store.getState().editorDrafts).toEqual({
       'file-2': 'draft content for another worktree'
     })
@@ -649,7 +651,6 @@ describe('removeWorktree state cleanup', () => {
 
     await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
-    // The same reference should be returned (no unnecessary shallow copy)
     expect(store.getState().editorDrafts).toBe(drafts)
   })
 })

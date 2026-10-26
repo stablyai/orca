@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import { collectLeafIdsInOrder } from '../terminal-layout-leaf-ids'
+import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
 
 // Main can give a remounted pane the same PTY, so disposal alone does not make it ownerless.
 export function shouldRetainDisposedPaneSpawn(
@@ -16,8 +17,8 @@ export function shouldRetainDisposedPaneSpawn(
       ? state.deleteStateByWorktreeId?.[composeWorktreeHostIdentity(executionHostId, worktreeId)]
       : undefined) ?? state.deleteStateByWorktreeId?.[worktreeId]
   if (
-    deleteState?.isDeleting &&
-    (!deleteState.executionHostId || deleteState.executionHostId === executionHostId)
+    hasWorktreeTeardownStarted(deleteState) &&
+    (!deleteState?.executionHostId || deleteState.executionHostId === executionHostId)
   ) {
     return false
   }

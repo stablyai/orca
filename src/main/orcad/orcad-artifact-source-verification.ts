@@ -1,4 +1,3 @@
-/** Hashes or, when unchanged since last hashed, recalls the orcad template and slot files. */
 import { createHash, type Hash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -14,25 +13,22 @@ import { fileSha256 } from '../node-runtime/pinned-runtime-materializer'
 export type ArtifactSource = { filename: string; path: string; executable?: boolean }
 export type ExpectedSha256 = { sha256: string; label: string }
 type SignedSource = OrcadArtifactVerificationRecord['sources'][number]
-export type RecordedSlot = NonNullable<OrcadArtifactVerificationRecord['slot']>
-export type ArtifactIdentity = {
+type RecordedSlot = NonNullable<OrcadArtifactVerificationRecord['slot']>
+type ArtifactIdentity = {
   fullVersion: string
   contentDigest: string
   sourceHashes: Map<string, string>
-  /** Null when a source changed too recently for its signature to be remembered. */
+  /** Null when any source changed too recently to trust its signature. */
   signed: SignedSource[] | null
 }
 
-/**
- * One read of each source yields both its manifest check and the slot identity. A recorded
- * verification is reused only while every source keeps the stat signature it was hashed at.
- */
+/** Read each source once for manifest/identity hashes; reuse only unchanged recorded signatures. */
 export async function verifiedArtifactIdentity(
   sources: ArtifactSource[],
   expected: Map<string, ExpectedSha256>,
   record: OrcadArtifactVerificationRecord | null,
   nowMs: number,
-  /** Off for callers that never keep a record, so they pay no stat calls. */
+  /** Avoid stat calls when records are disabled. */
   sign = true
 ): Promise<ArtifactIdentity> {
   const signatures = sign
@@ -94,7 +90,6 @@ export async function verifiedArtifactIdentity(
   }
 }
 
-/** The file's own digest, also fed into `combined`; null when it cannot be read. */
 async function hashSourceInto(path: string, combined: Hash): Promise<string | null> {
   const own = createHash('sha256')
   try {
@@ -118,7 +113,6 @@ export function sameHashes(
   )
 }
 
-/** The slot was hashed against these same sources and none of its files changed since. */
 export async function slotMatchesRecord(
   dir: string,
   fullVersion: string,

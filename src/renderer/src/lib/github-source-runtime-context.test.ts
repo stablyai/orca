@@ -128,6 +128,43 @@ describe('getGitHubRepoRoutingTarget', () => {
     ).toEqual({ kind: 'local' })
   })
 
+  describe('a repo id on two servers', () => {
+    const twins: RepoRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'runtime-a' },
+      repos: [
+        { id: 'repo-1', connectionId: null, executionHostId: 'runtime:runtime-a' },
+        { id: 'repo-1', connectionId: null, executionHostId: 'runtime:runtime-b' }
+      ]
+    }
+
+    it('routes to the host the caller names, not the Active Server focus', () => {
+      expect(getGitHubRepoRoutingTarget(twins, 'repo-1', null, 'runtime:runtime-b')).toEqual({
+        kind: 'environment',
+        environmentId: 'runtime-b'
+      })
+    })
+
+    it('stays local when the caller names this computer', () => {
+      const withLocal: RepoRuntimeOwnerState = {
+        ...twins,
+        repos: [
+          ...(twins.repos ?? []),
+          { id: 'repo-1', connectionId: null, executionHostId: 'local' }
+        ]
+      }
+      expect(getGitHubRepoRoutingTarget(withLocal, 'repo-1', null, 'local')).toEqual({
+        kind: 'local'
+      })
+    })
+
+    it('falls back to the Active Server focus only when the caller names no host', () => {
+      expect(getGitHubRepoRoutingTarget(twins, 'repo-1', null)).toEqual({
+        kind: 'environment',
+        environmentId: 'runtime-a'
+      })
+    })
+  })
+
   it('ignores runtime hosts on non-GitHub sources', () => {
     expect(
       resolveTarget(runtimeOwnedRepo, 'repo-1', {

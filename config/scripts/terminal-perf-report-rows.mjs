@@ -22,8 +22,7 @@ const SCENARIO_LABELS = [
   ['opencode-main-pressure', 'Main renderer pressure'],
   ['opencode-hidden-pressure', 'Hidden pressure'],
   ['opencode-revisit-pressure', 'Revisit under pressure'],
-  // Why: the prefix also matches opencode-parked-memory-disabled, so both
-  // parked-memory scenarios group under one label.
+  // Prefix groups both parked-memory scenarios, including opencode-parked-memory-disabled.
   ['opencode-parked-memory', 'Parked hidden terminal memory']
 ]
 
@@ -110,8 +109,7 @@ function normalizeRow(row) {
     mainPeakInFlightChars: parseCount(row.mainPeakInFlightChars),
     heldAckChars: parseCount(row.heldAckChars),
     hiddenSkippedChars: parseCount(row.hiddenSkippedChars),
-    // Why: parked-memory annotations report a fractional MB heap figure plus
-    // live renderer view counts; Number() keeps the MB float intact.
+    // Keep fractional MB heap alongside live view counts; Number preserves decimals.
     heapUsedMB: parseCount(row.heapUsedMB),
     liveTerminals: parseCount(row.liveTerminals),
     livePaneManagers: parseCount(row.livePaneManagers)

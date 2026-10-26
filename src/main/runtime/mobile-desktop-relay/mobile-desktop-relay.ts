@@ -7,7 +7,7 @@ import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-
 import {
   openRemoteRuntimePassthroughSocket,
   type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime-passthrough-socket'
+} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -22,7 +22,6 @@ import {
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
 
-/** The phone connection a relayed request arrived on. */
 export type RelayedPhone = {
   connectionId: string
   deviceId: string
@@ -49,16 +48,9 @@ class RelayLink {
   }
 }
 
-/**
- * Relays a phone request carrying `executionHost: runtime:<env>` to that configured server, over one
- * socket per (phone connection, server) signed in as the phone's delegated device (minted by
- * `pairing.delegatedMobileDevice.sync`, tokens held in memory only). Contract:
- * - The desktop never interprets replies; it renumbers only host stream ids (RELAYED_STREAM_CARRIERS).
- * - Upstream, the phone's desktop token is swapped wherever it appears, not per field.
- * - Only `execution-host` methods (MOBILE_RPC_METHOD_ROUTES) reach here; `paired-desktop` ones run locally.
- * - A server without the delegated-devices capability is `update-needed`; nothing relays to it.
- * - A server-side revoke of a phone is final until the next sync.
- */
+/** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
+ * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
+ * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
   private readonly grants: DelegatedPhoneGrantCache
@@ -69,8 +61,8 @@ export class MobileDesktopRelay {
       hosts: MobileDesktopRelayHosts
       listPhones: () => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
-      /** This desktop's "new agent tabs open as chats" setting. */
-      nativeChatDefault: () => boolean
+      /** Whether this desktop's settings open `agent` as a chat. */
+      nativeChatDefault: (agent: string) => boolean
     }
   ) {
     this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
@@ -87,7 +79,6 @@ export class MobileDesktopRelay {
     this.grants.clear()
   }
 
-  /** The request to run on this desktop instead, when it renders the page the call targets. */
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
     return localHostedBrowserPageRequest(
       request,
@@ -116,22 +107,20 @@ export class MobileDesktopRelay {
     link.replies.noteForwarded(request.id)
     link.opened.then(
       ({ socket, hostToken }) => {
-        // Why: a link ended while opening already answered this request; never send it late.
+        // An opening link may already have ended and answered; never send its request late.
         if (!this.isCurrent(link)) {
           return
         }
         const outgoing = withRelayedLaunchChatDefault(
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
-          this.options.nativeChatDefault()
+          this.options.nativeChatDefault
         )
         if (!socket.send(outgoing)) {
           this.endLink(link, unavailable('The server connection could not take the request.'))
         }
       },
-      () => {
-        // The open failure already answered every request queued on this link.
-      }
+      () => {}
     )
   }
 
@@ -141,7 +130,7 @@ export class MobileDesktopRelay {
       if (link.phone.connectionId !== connectionId) {
         continue
       }
-      // Why a fresh id: the phone already has the desktop's answer to its own id.
+      // The phone already has the desktop reply for its original id.
       const id = `relay-capabilities:${randomUUID()}`
       link.replies.noteForwarded(id, { swallowReplies: true })
       link.opened.then(
@@ -170,7 +159,6 @@ export class MobileDesktopRelay {
     }
   }
 
-  /** The server was removed, re-paired or disconnected: drop its sockets and grants. */
   retireEnvironment(environmentId: string): void {
     this.grants.delete(environmentId)
     for (const link of this.links.values()) {
@@ -180,7 +168,6 @@ export class MobileDesktopRelay {
     }
   }
 
-  /** The desktop's paired phones changed: re-sync every server already holding grants. */
   phonesChanged(): void {
     for (const environmentId of this.grants.environmentIds()) {
       this.grants.delete(environmentId)
@@ -194,9 +181,7 @@ export class MobileDesktopRelay {
       if (host) {
         await this.grants.get(host, null)
       }
-    } catch {
-      // An unreachable server syncs again on its next relayed request.
-    }
+    } catch {}
   }
 
   private linkFor(phone: RelayedPhone, environmentId: string): RelayLink {
@@ -228,7 +213,7 @@ export class MobileDesktopRelay {
     if (grants.kind === 'update-needed') {
       throw unavailable('The server needs an Orca update to open its workspaces from a phone.')
     }
-    // Why: the phone left or the server was retired while syncing; open nothing for it.
+    // Sync can outlive phone departure or server retirement; never open a stale link.
     if (!this.isCurrent(link)) {
       throw unavailable('The relayed request was cancelled.')
     }
@@ -264,7 +249,7 @@ export class MobileDesktopRelay {
       return { socket, hostToken: grant.token }
     } catch (error) {
       if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {
-        // Why: retrying a revoked token would only raise the host's "unpaired device" prompt.
+        // Retrying revoked tokens would repeatedly raise the host unpaired-device prompt.
         grants.refused.add(phone.deviceId)
         throw unavailable('The server revoked this phone.')
       }

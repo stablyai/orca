@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
 
-// Why: getBrowserTabsByWorktree reads this slice once per worktree inside the build loop,
-// so a counting accessor measures per-worktree work deterministically (no timing flake).
+// Count per-worktree slice reads in the build loop to measure work without timing flakiness.
 function makeCountingState(worktreeCount: number): {
   state: AppState
   reads: () => number
@@ -47,8 +46,7 @@ function makeCountingState(worktreeCount: number): {
   }
 }
 
-// Why: tab.title is read only while a worktree's snapshot content is built, so a counting
-// getter measures rebuilds rather than reads — the reads above survive a cheap hoist alone.
+// tab.title getter counts snapshot rebuilds; slice reads alone would also pass with a cheap hoist.
 function makeTitleCountingState(worktreeCount: number): {
   state: AppState
   titleReads: () => number

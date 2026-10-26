@@ -8,10 +8,10 @@ import {
   captureWorkerOutputArchive,
   summarizeWorkerOutputArchive
 } from '../../../../orchestration/worker-output-archive'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import { readArchivedWorkerOutput } from '../worker/worker-archive-read'
+import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
 import {
-  archiveSummary,
   releaseUnknownRecovery,
   type WorkerReleaseReceipt
 } from '../worker/worker-release-completion'
@@ -23,7 +23,7 @@ import {
 } from '../worker/worker-release-close-error'
 
 export async function readRemoteAttachmentArchive(args: {
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
   attachment: RemoteDispatchAttachmentRow
   source?: 'auto' | 'transcript' | 'terminal'
   cursor?: string | number
@@ -53,7 +53,7 @@ export async function readRemoteAttachmentArchive(args: {
 }
 
 export async function releaseRemoteAttachment(args: {
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
   attachment: RemoteDispatchAttachmentRow
   observation: Awaited<ReturnType<typeof inspectRemoteAttachment>>
   mode?: 'interactive' | 'recovery'
@@ -207,12 +207,10 @@ export async function releaseRemoteAttachment(args: {
       output
     }
   }
-  // An exited worker still owns a terminal record and tab on the host; close it before
-  // reporting `closed_exited_terminal`, exactly as the local release path does.
+  // Close the exited worker's remaining record/tab before reporting closed_exited_terminal, as local release does.
   try {
     const close = await runtime.closeTerminal(observation.terminal.handle)
-    // A host-certified exit already proved the process is gone, so a kill that stops nothing
-    // is not new doubt; anything else that survives the close still is.
+    // A host-certified exit survives a no-op kill; other state surviving close remains uncertain.
     if (!close.ptyKilled && observation.status !== 'exited') {
       const reason = describeUnconfirmedAgentStop(close)
       return {
@@ -230,9 +228,7 @@ export async function releaseRemoteAttachment(args: {
     }
   } catch (error) {
     const closeError = classifyWorkerTerminalCloseError(error)
-    // A close that finds nothing to close is this release's goal once the host certified the
-    // exit; reporting release_unknown wedged the record and told the agent to retry the same
-    // stale handle.
+    // After certified exit, nothing-left-to-close is success; release_unknown would wedge retries on a stale handle.
     if (!(closeError.alreadyGone && observation.status === 'exited')) {
       return {
         dispatchId: attachment.dispatch_id,
@@ -267,7 +263,7 @@ export async function releaseRemoteAttachment(args: {
 }
 
 function remoteAttachmentLeaseIsCurrent(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   attachment: RemoteDispatchAttachmentRow,
   observation: Awaited<ReturnType<typeof inspectRemoteAttachment>>,
   resource: WorkerTerminalResourceRow

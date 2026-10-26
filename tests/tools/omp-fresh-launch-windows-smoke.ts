@@ -10,7 +10,7 @@ if (process.platform !== 'win32') {
 const root = mkdtempSync(join(tmpdir(), 'orca-fresh-windows-'))
 const config = join(root, 'fresh settings.yml')
 const capture = join(root, 'calls')
-const results = []
+const results: { shell: 'cmd' | 'powershell'; state: string; code: number; passed: boolean }[] = []
 try {
   writeFileSync(join(root, 'omp.cmd'), '@echo off\r\necho %*>>"%CAPTURE%"\r\nexit /b 17\r\n')
   for (const shell of ['cmd', 'powershell'] as const) {
@@ -33,13 +33,12 @@ try {
         delete env.ORCA_OMP_FRESH_CONFIG
       }
       const command = withFreshOmpLaunch('omp', shell, ' "task with spaces"')
-      const runner = join(root, 'run.cmd')
-      writeFileSync(runner, `@echo off\r\n${command}\r\n`)
+      // Typed like a pane: a batch file would need the guard's `%!` written as `%%!`.
       const result = await runProcess({
-        program: shell === 'cmd' ? runner : 'powershell.exe',
+        program: shell === 'cmd' ? 'cmd.exe' : 'powershell.exe',
         args:
           shell === 'cmd'
-            ? []
+            ? ['/d']
             : [
                 '-NoProfile',
                 '-NonInteractive',
@@ -48,6 +47,7 @@ try {
                   command
                 }; exit $global:LASTEXITCODE`
               ],
+        input: shell === 'cmd' ? `${command}\r\nexit %errorlevel%\r\n` : undefined,
         cwd: root,
         env
       })

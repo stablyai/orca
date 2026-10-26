@@ -1,18 +1,12 @@
 import { translate } from '@/i18n/i18n'
-import { joinNativeChatToolRunClauses } from '../../../../shared/native-chat-tool-run-sentence'
-import { nativeChatToolRunClauses } from './native-chat-tool-category'
-import type { NativeChatToolCategory } from '../../../../shared/native-chat-tool-icon'
-import { isToolCallBlock, type NativeChatBlock } from '../../../../shared/native-chat-types'
-import { toolInputCommand } from '../../../../shared/native-chat-tool-summary'
+import {
+  nativeChatToolRunSentence as sharedRunSentence,
+  type NativeChatToolRunSentenceWords
+} from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
+import type { NativeChatToolCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
+import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 
-/** One clause, localized.
- *
- *  Spelled out per category, with the English literal at the call site: the
- *  catalog extractor reads only string literals, so a key built at runtime — or
- *  a fallback read from the shared record — never reaches a translator, and the
- *  sentence would stay English in every locale while the row above it translated.
- *  `native-chat-shared-copy-matches-catalog` pins these against the record mobile
- *  renders from, which is what keeps the duplication honest. */
+/** Extraction requires literal keys/fallbacks; parity tests keep these clauses aligned with mobile’s shared record. */
 function clause(category: NativeChatToolCategory, count: number, live: boolean): string {
   const one = count === 1
   const value0 = { value0: count }
@@ -60,6 +54,14 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
             'Searched the web {{value0}} times',
             value0
           )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runBrowserOne', 'Used the browser')
+        : translate(
+            'components.native-chat.tool.runBrowserMany',
+            'Used the browser {{value0}} times',
+            value0
+          )
     case 'mcpToolCall':
       return one
         ? translate('components.native-chat.tool.runIntegrationOne', 'Used 1 integration')
@@ -87,8 +89,6 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
   }
 }
 
-/** The present-tense clause, while the run is still live. Same shape as the
- *  settled one so the header's text changes in place and nothing else does. */
 function liveClause(
   category: NativeChatToolCategory,
   one: boolean,
@@ -143,6 +143,14 @@ function liveClause(
             'Searching the web {{value0}} times',
             value0
           )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runLiveBrowserOne', 'Using the browser')
+        : translate(
+            'components.native-chat.tool.runLiveBrowserMany',
+            'Using the browser {{value0}} times',
+            value0
+          )
     case 'mcpToolCall':
       return one
         ? translate('components.native-chat.tool.runLiveIntegrationOne', 'Using 1 integration')
@@ -174,41 +182,23 @@ function liveClause(
   }
 }
 
-/** The one line a run reads as, localized: past tense once settled, present
- *  while live. */
+const LOCALIZED_WORDS: NativeChatToolRunSentenceWords = {
+  clause,
+  pair: (first, second) =>
+    translate('components.native-chat.tool.runPair', '{{value0}} and {{value1}}', {
+      value0: first,
+      value1: second
+    }),
+  list: (leading, last) =>
+    translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
+      value0: leading,
+      value1: last
+    })
+}
+
 export function nativeChatToolRunSentence(
   blocks: readonly NativeChatBlock[],
   { live = false }: { live?: boolean } = {}
 ): string | null {
-  const calls = blocks.filter(isToolCallBlock)
-  if (calls.length === 0) {
-    return null
-  }
-  // A lone shell call keeps its own command: `git push` identifies the work
-  // better than "Ran 1 command" can, and it is the row the reader would open
-  // anyway. A call carrying no command has nothing better than its category.
-  // Not while live: the command is then the preview beside the sentence, and a
-  // header that swapped shape when the second call arrived is the swap this row
-  // exists to avoid.
-  if (calls.length === 1 && !live) {
-    const command = toolInputCommand(calls[0].input)
-    if (command !== null && command.length > 0) {
-      return command
-    }
-  }
-  return joinNativeChatToolRunClauses(
-    nativeChatToolRunClauses(calls).map(({ category, count }) => clause(category, count, live)),
-    {
-      pair: (first, second) =>
-        translate('components.native-chat.tool.runPair', '{{value0}} and {{value1}}', {
-          value0: first,
-          value1: second
-        }),
-      list: (leading, last) =>
-        translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
-          value0: leading,
-          value1: last
-        })
-    }
-  )
+  return sharedRunSentence(blocks, { live }, LOCALIZED_WORDS)
 }

@@ -4,10 +4,6 @@ import {
   type WsOutboundBackpressureQueue
 } from '../../shared/ws-outbound-backpressure-queue'
 
-/**
- * Serializes CDP replies to the connected websocket client and echoes the
- * request's sessionId back onto its response.
- */
 export class CdpClientResponseWriter {
   private readonly responseSessionIdsByClient = new WeakMap<WebSocket, Map<number, string>>()
   private readonly outboundByClient = new WeakMap<

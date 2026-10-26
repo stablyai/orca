@@ -89,8 +89,7 @@ describe('hang detection marker', () => {
     expect(existsSync(markerPath)).toBe(false)
   })
 
-  // Why: a marker written by the detect leg has no selfRecovered field until the resolve leg
-  // rewrites it, and "never resolved" is the conservative reading of its absence.
+  // Detection-only markers lack selfRecovered; preserve the conservative unresolved reading.
   it('treats a missing selfRecovered flag as an unresolved hang', () => {
     const markerPath = hangDetectionMarkerPath(dir)
     writeFileSync(

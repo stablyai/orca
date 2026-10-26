@@ -61,8 +61,7 @@ function isAnchorVisible(anchorElement: HTMLElement): boolean {
 }
 
 function clampDocumentBubblePosition(linkBubble: LinkBubbleState): React.CSSProperties {
-  // Why: the body portal no longer inherits editor clipping, so keep every
-  // action reachable when the selected link sits at a window edge.
+  // Body portals escape editor clipping; clamp viewport edges so all actions remain reachable.
   const maxLeft = Math.max(
     LINK_BUBBLE_VIEWPORT_MARGIN,
     window.innerWidth - LINK_BUBBLE_MAX_WIDTH - LINK_BUBBLE_VIEWPORT_MARGIN
@@ -123,8 +122,7 @@ function LinkEditInput({
     if (!input) {
       return
     }
-    // Why: edit mode should start with the current URL selected, but typing
-    // changes must not re-select the field on every value update.
+    // Select the URL on entry to edit mode only; reselection on updates would interrupt typing.
     input.focus()
     input.select()
   }, [])
@@ -141,12 +139,10 @@ function LinkEditInput({
         }
         if (e.key === 'Escape') {
           e.preventDefault()
-          // Stop the bubble container's Escape handler (which calls onDismiss)
-          // from also firing; editing Escape must only cancel the edit.
+          // Editing Escape cancels the edit without reaching the container’s dismiss handler.
           e.stopPropagation()
           onCancel()
         }
-        // Cmd/Ctrl+K while editing cancels the edit.
         if (isLinkEditCancelShortcut(e, isMac)) {
           e.preventDefault()
           onCancel()
@@ -237,8 +233,7 @@ export function RichMarkdownLinkBubble({
     const mutationObserver = new MutationObserver(dismissIfLayoutInvalidated)
     const dismissOnScroll = (event: Event): void => {
       const target = event.target
-      // Why: long URL inputs scroll horizontally to keep the caret visible;
-      // only scrolling outside the bubble invalidates its document position.
+      // Caret-driven input scrolling stays inside the bubble; only outside scroll invalidates document position.
       if (target instanceof Node && bubbleRef.current?.contains(target)) {
         return
       }
@@ -260,8 +255,7 @@ export function RichMarkdownLinkBubble({
     window.addEventListener('pointerdown', dismissOutside, true)
     window.addEventListener('focusin', dismissOutside, true)
     window.addEventListener('scroll', dismissOnScroll, true)
-    // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
-    // no dimensions — the bubble would dismiss on every window restore.
+    // Ignore resize events without dimension changes, such as main-window reveal reflow.
     const removeViewportListener = addViewportSizeChangeListener(dismiss)
     return () => {
       resizeObserver.disconnect()
@@ -291,8 +285,7 @@ export function RichMarkdownLinkBubble({
       data-rich-markdown-link-bubble-owner={ownerId}
       style={positionStyle}
       onMouseDown={(e) => {
-        // Prevent editor blur when clicking bubble buttons, but let inputs
-        // receive focus normally.
+        // Keep button clicks from blurring the editor while allowing inputs to receive focus.
         if (!(e.target instanceof HTMLInputElement)) {
           e.preventDefault()
         }
@@ -371,8 +364,7 @@ export function RichMarkdownLinkBubble({
     </div>
   )
 
-  // Why: editor panes clip overflow at the workbench boundary, so the URL
-  // actions must portal to the app layer to remain above the right sidebar.
+  // Portal URL actions above the sidebar because editor panes clip at the workbench boundary.
   return portalToDocument ? createPortal(bubble, document.body) : bubble
 }
 

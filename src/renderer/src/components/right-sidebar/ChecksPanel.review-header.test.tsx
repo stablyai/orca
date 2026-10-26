@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksPanelReviewHeader } from './ChecksPanel'
+import { ChecksPanelReviewHeader } from './checks-panel/review-header'
 import type { ChecksPanelHostedReviewModifierDestination } from './checks-panel-hosted-review-click-routing'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -97,8 +97,7 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).not.toContain('⇧⌘+click')
   })
 
-  // Why: with inverting on and Link Routing off the modifier reaches Orca here, so the
-  // hint must name Orca rather than the destination a plain click already uses.
+  // With inversion on and Link Routing off, the modifier goes to Orca; label that destination.
   it('names Orca when the modifier inverts toward the built-in browser', () => {
     expect(renderHeader({ modifierHintDestination: 'orca' })).toContain('⇧⌘+click to open in Orca')
 

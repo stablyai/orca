@@ -1,19 +1,14 @@
-/**
- * The Store's read-only view of a relay-hosted SSH target, for migrating it to a managed orcad.
- *
- * Everything here reads the profile-state store and returns copies; nothing writes or deletes
- * source rows, and nothing else deletes them after an import either.
- */
+// Export copies of relay-hosted SSH state without mutating source rows.
 import {
   ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES,
   type OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { assertOrcadMigrationManifestDigest } from '../../orcad/orcad-migration-manifest-digest'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
@@ -27,6 +22,11 @@ import {
   type OrcadMigrationDeltaView
 } from './orcad-source-delta-view'
 import { syncOrcadMigrationScrollbackRetention } from './orcad-source-scrollback-retention'
+import { createOrcadMigrationLeaveBehindView } from './orcad-source-leave-behind-view'
+import {
+  collectOrcadMigrationSourceDrafts,
+  type OrcadMigrationSourceDrafts
+} from './orcad-source-draft-rename'
 
 type OrcadSourceExportRuntime = Pick<
   StoreRuntimeState,
@@ -57,12 +57,19 @@ export class OrcadSourceExportPersistence {
     ).payload
   }
 
-  /** A copy of the source with `moved` subtracted from it, for a delta move. */
+  collectOrcadMigrationSourceDrafts(manifest: OrcadMigrationManifest): OrcadMigrationSourceDrafts {
+    return collectOrcadMigrationSourceDrafts(this[orcadSourceExportContext].state, manifest)
+  }
+
   createOrcadMigrationDeltaView(moved: OrcadMigrationManifest): OrcadMigrationDeltaView {
     return createOrcadMigrationDeltaView(this[orcadSourceExportContext], moved)
   }
 
-  /** What still references the target that this manifest cannot carry. */
+  /** Preview "Move anyway" without recording consent. */
+  createOrcadMigrationLeaveBehindView(targetId: string): OrcadMigrationDeltaView {
+    return createOrcadMigrationLeaveBehindView(this[orcadSourceExportContext], targetId)
+  }
+
   inspectOrcadMigrationUntransferredDependencies(
     manifest: OrcadMigrationManifest
   ): OrcadMigrationSourceDependencyCensus {
@@ -74,15 +81,12 @@ export class OrcadSourceExportPersistence {
     )
   }
 
-  /** Holds the snapshots unfinished migrations name; see syncOrcadMigrationScrollbackRetention. */
+  /** Retain unfinished migrations' snapshots even if their tabs close. */
   syncOrcadMigrationScrollbackRetention(pending: readonly OrcadMigrationManifest[]): void {
     syncOrcadMigrationScrollbackRetention(this[orcadSourceExportContext], pending)
   }
 
-  /**
-   * One bounded chunk of a scrollback snapshot the signed manifest names. The bytes are checked
-   * against the manifest's length and digest, so a buffer that changed since export is refused.
-   */
+  /** Verify snapshot bytes against the signed manifest so changed buffers cannot be transferred. */
   readOrcadMigrationSourceSnapshotChunk(
     manifest: OrcadMigrationManifest,
     ref: string,

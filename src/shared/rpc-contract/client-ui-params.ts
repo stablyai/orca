@@ -29,8 +29,7 @@ export const UnknownRecordArray = z.array(UnknownRecord)
 
 export type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
 
-// Derived from the shared union so a new card property cannot drift out of the
-// client schema — it previously omitted 'cli' and rejected the whole payload.
+// Derive from the shared union; drift previously omitted cli and rejected whole client payloads.
 export const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 
 export const WorktreeCardProperties = z
@@ -165,8 +164,7 @@ export const UiUpdateFields = z
       .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
       .optional(),
     ...ClientUiWorkspaceFilterFields,
-    // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
-    // payload (sidebar widths, filters, agent acks) for every paired client.
+    // Part of App.tsx’s debounced writer; missing fields reject the whole paired-client payload.
     explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
@@ -199,9 +197,7 @@ export const UiUpdateFields = z
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),
     dismissedUpdateNudgeId: NullableString.optional(),
-    // Why the predicate rather than an inline z.enum: an enum here is a copy of
-    // RELEASE_CHANNELS, and a copy that drifts silently rejects the new
-    // channel's override on its way here — the picker moves, nothing installs.
+    // Share the release-channel predicate so new channel overrides cannot silently fail parsing.
     releaseChannelOverride: z.custom<ReleaseChannel>(isReleaseChannel).nullable().optional(),
     notificationPermissionRequested: z.boolean().optional(),
     updateReassuranceSeen: z.boolean().optional(),
@@ -216,6 +212,13 @@ export const UiUpdateFields = z
       .optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
+    browserDevToolsDock: z
+      .object({
+        side: z.enum(['bottom', 'right']),
+        bottomFraction: z.number().finite(),
+        rightFraction: z.number().finite()
+      })
+      .optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),
@@ -231,8 +234,7 @@ export const UiUpdateFields = z
     _inlineAgentsDefaultedForAllUsers: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
-    // Why: one-shot dismissals the renderer writes through ui.set; each was a
-    // whole-payload rejection for paired clients while unlisted.
+    // Declare renderer one-shot dismissals to avoid whole-payload rejections for paired clients.
     setupGuideSidebarDismissed: z.boolean().optional(),
     setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
     setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
@@ -245,6 +247,7 @@ export const UiUpdateFields = z
     usageEmptyStateDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),

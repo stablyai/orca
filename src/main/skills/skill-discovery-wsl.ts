@@ -137,8 +137,7 @@ export function buildWslSkillDiscoveryCommand(
 }
 
 async function executeWslSkillDiscovery(distro: string, script: string): Promise<string> {
-  // Why bash: the scan uses process substitution (`done < <(find ...)`), which
-  // dash rejects with `Syntax error: word unexpected` (#14292).
+  // Process substitution requires Bash; dash rejects it (#14292).
   const result = await runWslProcess({
     distro,
     // 'none': find/base64/head/printf/stat over $HOME roots, no bare tool.
@@ -149,9 +148,7 @@ async function executeWslSkillDiscovery(distro: string, script: string): Promise
     timeoutMs: WSL_SCAN_TIMEOUT_MS,
     maxOutputBytes: WSL_SCAN_MAX_OUTPUT_BYTES
   })
-  // Why throw: runWslProcess resolves on a non-zero exit, and an empty stdout
-  // parses into a valid "zero skills" result -- which reads as "nothing is
-  // installed" and re-offers installs for skills that are present.
+  // Nonzero/timeout must throw: empty stdout would parse as zero installed skills.
   if (result.code !== 0 || result.timedOut) {
     throw new Error('skill-discovery-wsl-scan-failed')
   }
@@ -180,15 +177,7 @@ export async function discoverSkillsInWsl(
 export async function discoverSkillObservationInWsl(
   args: WslSkillDiscoveryArgs
 ): Promise<WslSkillDiscoveryObservation> {
-  // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
-  // reads, then fed to the scan's own wsl.exe call below — two sequential
-  // process boots. That is a deliberate one-time-per-pane cost (the renderer
-  // caches per pane); folding both into one invocation would require porting
-  // the plugin-install resolution into bash, which is not worth the risk.
-  //
-  // Why: plugin-metadata enrichment is optional. A failed/timed-out read must
-  // degrade to zero plugin roots (matching the native readMetadataFile path),
-  // not abort the mandatory native/home/repo/bundled scan.
+  // Optional plugin metadata needs a separate WSL boot before scan roots resolve; failure must not abort mandatory home/repo discovery.
   const cwd = args.cwd ?? args.homeDir
   let pluginRoots: SkillScanRoot[] = []
   if (!args.sourceKinds?.length || args.sourceKinds.includes('plugin')) {
@@ -209,8 +198,7 @@ export async function discoverSkillObservationInWsl(
     }),
     ...pluginRoots
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
-  // Why: UNC traversal applies Windows casing and symlink rules. The distro
-  // must own enumeration, metadata reads, and canonical path identity.
+  // Keep enumeration, metadata and path identity in the distro; UNC applies Windows casing/symlink rules.
   const output = await executeWslSkillDiscovery(
     args.distro,
     buildWslSkillDiscoveryCommand(roots, args.names)

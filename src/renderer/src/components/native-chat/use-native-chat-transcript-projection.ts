@@ -7,12 +7,11 @@ import type { NativeChatSubagentRow } from '../../../../shared/native-chat-trans
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
-import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-/** The conversation rows the list draws, and each subagent's rows apart, placed in turns by
- *  the journal when the lane has one. */
+/** Separate conversation/subagent rows, using journal turn placement when available. */
 export function useNativeChatTranscriptProjection(
   session: NativeChatLiveSession,
   journalItems: readonly AgentJournalRenderItem[] | undefined,

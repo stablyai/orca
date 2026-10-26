@@ -1,26 +1,17 @@
-/**
- * Pins the routing of a NON-RECOVERABLE resubscribe failure in
- * remote-runtime-pty-transport.
- *
- * `scheduleResubscribeAfterTransportClose` catches the rejection of
- * `resubscribeAfterTransportClose`. When the error is not a recoverable
- * connection error it must hand the error to `handleRemoteTerminalError`.
- * Surfacing the message directly instead looks harmless — the pane turns red
- * either way — but it skips four lifecycle routes, because none of these
- * messages appear in RECOVERABLE_MESSAGE_FRAGMENTS and so all of them land in
- * exactly this branch:
- *
- *   terminal_handle_stale            -> require-replacement resubscribe (or retire)
- *   terminal_gone / terminal_exited  -> retire the pane
- *   SSH_SESSION_EXPIRED              -> terminal.recoverPane on the hub
- *   snapshot-too-large               -> informational, no red error at all
- *
- * Fault-injection point: window.api.runtimeEnvironments.call, the Electron IPC
- * boundary the transport really uses. Each pane is first driven to a genuinely
- * connected state, then the multiplexed stream is closed so recovery starts
- * with a live epoch, and only the resubscribe attempt fails.
- */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+/** Nonrecoverable resubscribe errors still need central lifecycle routing: stale handles recover, gone/exit retire, SSH expiry delegates to the HUB, and oversized snapshots remain informational. Inject after a connected stream closes. */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -223,8 +214,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     const onPtyRebind = vi.fn()
     const transport = await attachLivePane({ onError, onPtyRebind })
 
-    // The host fenced this handle during the outage and has already minted its
-    // successor; only a require-replacement retry can reach it.
+    // Only replacement-required resolution can reach the host’s already-minted successor.
     failNextResubscribeWith(new Error('terminal_handle_stale'), 'terminal-2')
     dropMultiplexedStream()
 
@@ -246,8 +236,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     const onPtyExit = vi.fn()
     const transport = await attachLivePane({ onError, onPtyExit })
 
-    // Host still advertises the fenced handle; require-replacement forbids
-    // reattaching to it, so the pane must retire rather than mirror a dead PTY.
+    // Do not reuse a fenced handle when inventory offers no replacement.
     failNextResubscribeWith(new Error('terminal_handle_stale'), FIRST_HANDLE)
     dropMultiplexedStream()
 
@@ -270,8 +259,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
       onPtyExit
     })
 
-    // Without tab/leaf/worktree coordinates the resubscribe goes straight back
-    // to the multiplexer, and a stale rejection there has nothing to re-resolve.
+    // Without pane coordinates, stale subscription errors cannot re-resolve ownership.
     subscribeOutcomes = [new Error('terminal_handle_stale')]
     dropMultiplexedStream()
 

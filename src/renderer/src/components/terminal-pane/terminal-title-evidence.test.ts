@@ -34,8 +34,7 @@ describe('resolvePaneTitleDecision', () => {
     const decision = resolvePaneTitleDecision({
       normalizedTitle: 'Pi ready',
       rawTitle: '✦ Gemini CLI',
-      // Display label follows the sticky/tab-scoped owner, but the renderer veto
-      // sees no current pane-scoped owner, so the genuine Gemini pane goes DOM.
+      // Sticky ownership labels the tab, but only current pane ownership can veto Gemini’s DOM fallback.
       displayOwnerAgentType: 'omp',
       rendererOwnerAgentType: undefined,
       userGpuMode: 'auto'

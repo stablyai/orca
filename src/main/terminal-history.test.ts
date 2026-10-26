@@ -58,12 +58,10 @@ vi.mock('fs', () => ({
   closeSync: closeSyncMock
 }))
 
-// Spread the real module: this factory replaces node:fs/promises for the whole import graph, so a
-// transitive readFile/mkdir would otherwise resolve to undefined.
+// Preserve transitive fs/promises imports while replacing the removal and listing entrypoints.
 vi.mock('node:fs/promises', async () => ({
   ...(await vi.importActual<typeof FsPromises>('node:fs/promises')),
   rm: rmAsyncMock,
-  // The tombstone drain lists pending-delete asynchronously; same fixture as the sync reads.
   readdir: async (path: string) => readdirSyncMock(path) ?? []
 }))
 
@@ -108,7 +106,8 @@ describe('terminal-history', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Why: clearAllMocks keeps implementations, so a throwing rename from one test would leak forward.
+    mkdirSyncMock.mockReset()
+    // clearAllMocks retains throwing implementations; reset them between tests.
     renameSyncMock.mockReset()
     readFileSyncMock.mockReset()
     readdirSyncMock.mockReset()
@@ -264,7 +263,6 @@ describe('terminal-history', () => {
       expect(result.shell).toBe('fish')
       expect(result.fishSession).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
       expect(env.fish_history).toBe(result.fishSession)
-      // Deletion can only find the out-of-tree fish file through this record.
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         expect.stringContaining('meta.json'),
         expect.stringContaining(`"fishSession":"${result.fishSession}"`),
@@ -273,9 +271,6 @@ describe('terminal-history', () => {
     })
 
     it('records the history DIRECTORY from the SPAWN env, not this process env', () => {
-      // The file is written by the PTY's fish, and the two envs disagree whenever
-      // Orca was launched with a different XDG_DATA_HOME than the shells it spawns.
-      // Pinned so the assertion cannot accidentally read the developer's own value.
       const originalDataHome = process.env.XDG_DATA_HOME
       process.env.XDG_DATA_HOME = ['', 'main', 'process', 'data'].join(sep)
       try {
@@ -320,9 +315,6 @@ describe('terminal-history', () => {
     })
 
     it('drops an ORCA_HISTFILE inherited from a parent Orca PTY', () => {
-      // Why: an Orca terminal opened from inside another Orca terminal inherits
-      // it, and the zsh wrapper would then re-export the PARENT worktree's
-      // history path here. Credit: caught by @innocarpe in #11146.
       const env: Record<string, string> = {
         ORCA_HISTFILE: ['', 'other', 'wt', 'zsh_history'].join(sep)
       }
@@ -334,8 +326,6 @@ describe('terminal-history', () => {
     })
 
     it('drops an inherited ORCA_HISTFILE even when it injects nothing', () => {
-      // The dangerous variant: the early return would otherwise leave the stale
-      // value pointing the wrapper at another worktree, overriding HISTFILE.
       const env: Record<string, string> = {
         HISTFILE: ['', 'mine', 'zsh_history'].join(sep),
         ORCA_HISTFILE: ['', 'other', 'wt', 'zsh_history'].join(sep)
@@ -364,9 +354,6 @@ describe('terminal-history', () => {
         ].join(sep)
       ]
     ])('drops a %s HISTFILE inherited from a parent Orca pane', (_kind, inherited) => {
-      // HISTFILE stays EXPORTED once the wrapper restores it, so an Orca launched
-      // from a pane in another worktree would otherwise hit the check-before-set
-      // early return in EVERY pane and append into that one worktree's file.
       const env: Record<string, string> = { HISTFILE: inherited }
 
       const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
@@ -378,14 +365,12 @@ describe('terminal-history', () => {
 
     it.each([
       ['an ordinary path', ['', 'home', 'me', '.zsh_history'].join(sep)],
-      // Orca only ever mints absolute paths, so the same shape relative to the
-      // user's cwd is theirs.
+      // Orca mints absolute paths; a matching relative path belongs to the user.
       [
         'a relative path of Orca’s shape',
         ['terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
       ]
     ])('preserves %s the user set as HISTFILE', (_kind, histFile) => {
-      // Only a path Orca minted is droppable; everything else is the user's.
       const env: Record<string, string> = { HISTFILE: histFile }
 
       const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
@@ -406,9 +391,6 @@ describe('terminal-history', () => {
       ['desktop', fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))],
       ['relay', relayFishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))]
     ])('replaces a %s fish_history inherited from a parent Orca', (_kind, inherited) => {
-      // fish EXPORTS fish_history, so an Orca launched from a fish pane hands the
-      // LAUNCHING worktree's session to every pane here — panes in every other
-      // worktree included, which would all then write one worktree's history file.
       const env: Record<string, string> = { fish_history: inherited }
 
       const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
@@ -418,7 +400,6 @@ describe('terminal-history', () => {
     })
 
     it('drops an inherited fish_history even when the shell is not fish', () => {
-      // A fish started by hand inside this zsh pane must not adopt the parent's session.
       const env: Record<string, string> = {
         fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
       }
@@ -442,11 +423,6 @@ describe('terminal-history', () => {
   })
 
   describe('injectWslFishHistoryEnv', () => {
-    // clearAllMocks keeps implementations: drop the throwing mkdir left by the degrade test.
-    beforeEach(() => {
-      mkdirSyncMock.mockReset()
-    })
-
     it('replaces an inherited Orca fish_history with this worktree session', () => {
       const env: Record<string, string> = {
         fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
@@ -575,8 +551,6 @@ describe('terminal-history', () => {
     })
 
     it('ignores a fishSession that does not belong to this history directory', async () => {
-      // Why: the session name is re-derived from the directory's own hash, so a
-      // tampered meta.json naming someone else's session cannot steer the delete.
       existsSyncMock.mockReturnValue(true)
       lstatSyncMock.mockReturnValue({ isFile: () => true })
       readFileSyncMock.mockReturnValue(
@@ -623,8 +597,7 @@ describe('terminal-history', () => {
 
       expect(() => deleteWorktreeHistoryDir('repo-1::/path/wt')).not.toThrow()
 
-      // Why: a path-derived worktree ID can be recreated at the same path, so an async rm aimed at the
-      // live directory could delete a freshly recreated worktree's history. GC reclaims it instead.
+      // A recreated worktree can own the live path before async rm lands; leave it for GC.
       expect(rmAsyncMock).not.toHaveBeenCalled()
       expect(rmSyncMock).not.toHaveBeenCalled()
       await flushPendingWorktreeHistoryDeletions()

@@ -7,8 +7,7 @@ import { createNdjsonParser, encodeNdjson } from './ndjson'
 import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import type { DaemonRequest } from './types'
 
-// Idle time before the first probe. How long the close then takes is the OS's probe schedule, not
-// ours, which is why the producer-stall watchdog never waits on it.
+// Kernel probe timing can exceed this idle delay; producer-stall recovery has its own bound.
 const STREAM_SOCKET_KEEPALIVE_DELAY_MS = 30_000
 
 export type ConnectedDaemonClient = {
@@ -157,7 +156,7 @@ export class DaemonClientConnections {
       encodeNdjson({
         type: 'hello',
         ok: true,
-        // Why: this hello line is the socket's last NDJSON; the client switches readers on this field.
+        // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
@@ -189,7 +188,6 @@ export class DaemonClientConnections {
       this.options.onAuthenticatedPair()
       return
     }
-    // The guard checks only that role is a string; anything else was answered above.
     socket.destroy()
   }
 
@@ -220,7 +218,6 @@ export class DaemonClientConnections {
           this.options.onControlRequest(socket, clientId, message)
           return
         }
-        // Unroutable without an id, so no reply is possible; drop only this connection.
         this.options.log.log('client-frame-rejected', { clientId })
         socket.destroy()
       },
@@ -259,10 +256,7 @@ export class DaemonClientConnections {
   ): void {
     const previous = client.streamSocket
     socket.removeAllListeners('data')
-    // A half-open peer (slept laptop, dropped NAT state) stops draining without closing, which would
-    // otherwise hold a session's producer pause open with no event to release it. Kernel probes give
-    // that peer a close. TCP only: a no-op over a local pipe, and over SSH it is the relay's own link
-    // that dies — the producer-stall watchdog, not this, is what bounds those.
+    // Probe half-open TCP peers; local pipes and SSH relay stalls still need the producer watchdog.
     socket.setKeepAlive(true, STREAM_SOCKET_KEEPALIVE_DELAY_MS)
     client.streamSocket = socket
     client.streamFraming = streamFraming

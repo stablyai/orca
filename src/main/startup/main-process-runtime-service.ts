@@ -10,10 +10,12 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
+import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
-import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
@@ -24,8 +26,9 @@ import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -42,6 +45,7 @@ import {
 } from '../runtime/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -80,8 +84,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         envelope
       )
   }
-  // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
-  // `orca serve`, which never opens one, and the fleet path runs there too.
+  // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
@@ -92,10 +95,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       getProfileUserDataPath(),
       getProfileUserDataPath()
     ),
-    // Why: resolve the PTY provider lazily — a daemon swap happens later, so an eager reference would freeze the pre-daemon provider (design §4.3).
+    // Resolve provider lazily or later daemon adoption leaves a frozen pre-daemon reference (design §4.3).
     getLocalProvider: () => getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
-    // Why: serve can be promoted in place, so wire the listener from startup; runtime enables desktop-only scanners only for a ready renderer.
+    // Serve can activate in place; wire now, but enable desktop scanners only for a ready renderer.
     onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('pty:sideEffect', batch)
@@ -107,28 +110,30 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
-    // Why: evaluated per call, not captured — the RPC server that owns the device registry is
-    // constructed with this runtime and does not exist yet at this point.
+    // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
       state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
-    // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
+    // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
-    prepareAiVaultSessionResume: (args) =>
-      prepareCodexAiVaultSessionResume(args, {
-        runtimeHome: state.codexRuntimeHome,
-        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
-        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
-      }),
+    prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
+      runtimeHome: state.codexRuntimeHome,
+      systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+      preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
+    })),
     ...codexStructuredLaunchHomeResolvers,
     prepareCodexCatalogProbeHome: (homePath) =>
       state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
         homePath,
-        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+        resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
     orchestrationEnvironmentTransport,
-    // Why the same function the settings IPC handler calls: a paired client's write and a
-    // local one must reconcile the scanner child through one path, or they can disagree.
+    workspaceSleepPlatform: {
+      callEnvironment: (environmentId, method, params, timeoutMs) =>
+        callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+    },
+    // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
@@ -136,26 +141,34 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
     getSettings: () => store.getSettings(),
-    // Why read per request rather than snapshot: a repo added or a workspace
-    // renamed between two searches has to be in scope for the second one.
-    // This process answers for its own host, so the catalog is bound to it here.
+    // Read the host catalog per search so added repos/renamed workspaces are immediately in scope.
     getScopeCatalog: () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
   })
   app.once('will-quit', () => sessionSearch?.dispose())
-  // Why here: this runs for the desktop and headless `orca serve`, and each evaluates its own panes.
+  // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
-    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
+    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
-  // Why before anything can attach: a client host that reattaches to a restarted runtime is only
-  // handed its pages back if the runtime found them first.
+  agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  // Main records pane resume state from accepted status.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    agentHookServer.subscribeEnrichedStatus((enriched) =>
+      runtime.recordHookStatusResume(toAgentStatusIpcPayload(enriched))
+    )
+    agentHookServer.subscribePaneStatusClear((clear) => runtime.forgetHookStatusResume(clear))
+    agentHookServer.subscribeStatusDrop((paneKey) => runtime.forgetHookStatusResume({ paneKey }))
+  }
+  // Rehydrate before clients attach so restarted runtimes can return their owned pages.
   runtime.rehydrateClientHostedBrowserPages()
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+  browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
   return runtime
 }
 
@@ -176,7 +189,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
-    // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
+    // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())

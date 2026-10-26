@@ -1,4 +1,5 @@
 import { lstat } from 'node:fs/promises'
+import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
@@ -20,20 +21,16 @@ import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
-/**
- * Remove a worktree.
- */
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
   force = false,
-  // forceBranchDelete: for failed-creation rollback (fresh branch, no user work); user deletes leave it false so unmerged commits survive.
+  // Reserve forceBranchDelete for failed-creation rollback so user deletes preserve unmerged commits.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
   try {
-    // Removal deletes branches, and a ref deletion needs the packed-refs lock a
-    // running idle pack holds while it rewrites. Waits that window out; the
-    // prune phase that follows it is concurrency-safe and is left to finish.
+    // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
       runWithGitReadCacheInvalidation(() =>
         performRemoveWorktree(repoPath, worktreePath, force, options)
@@ -60,13 +57,10 @@ async function performRemoveWorktree(
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
-  // Why: callers outside the IPC/runtime preflight must not bypass Git's lock contract or rely on localized stderr after side effects.
+  // Enforce locks even for callers that bypass IPC/runtime preflight.
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
-  // Why no timeout: this is a write, so none applies by default, and Git deletes the whole checkout
-  // here (prod p90 29 s); a deadline would kill a legitimate large delete halfway through.
-  // Why long paths: creation checks out with them on Windows, so deleting without them fails with
-  // "Filename too long" (#6433) and leaves the branch behind via the Windows recovery.
+  // Avoid default deadlines during large deletes; preserve Windows long-path support used at creation.
   const longPathArgs = windowsLongPathGitArgs(repoPath)
   const execOptions = {
     ...gitExecOptions(repoPath, options),
@@ -100,10 +94,7 @@ function deleteBranchOfRemovedWorktree(
   branchHead: string,
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
-  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
-  // `git worktree remove` being slow unless it is timed separately.
-  // Why serialized per repo: concurrent removals in one repo race `packed-refs.lock` and the
-  // remote-tracking ref locks of `fetch --prune` (#2259); the checkout deletes above need not wait.
+  // Time network-capable branch cleanup separately and serialize per repo to avoid ref-lock races.
   return runKeyedSerializedOperation(branchCleanupQueueByRepo, repoPath, () =>
     withSpan('worktree.remove.branch_delete', () =>
       deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
@@ -111,27 +102,31 @@ function deleteBranchOfRemovedWorktree(
   )
 }
 
-/**
- * Finishes a removal whose checkout Git no longer registers (it finished deleting, or an earlier
- * run did): leftover files, stale admin records, then the branch. Already-gone parts are done.
- * `assertLeftover` refuses unless the path still holds the removed checkout's own leftover.
- */
+/** Prune stale registration and clean up the branch only after the caller verifies the checkout is gone. */
 export async function finishUnregisteredWorktreeRemoval(
   repoPath: string,
   worktreePath: string,
   branch: { name: string; head: string } | null,
-  assertLeftover: () => Promise<void>,
+  assertCheckoutGone: () => Promise<void>,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
+  await assertCheckoutGone()
+  await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
+    console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+  )
+  return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+}
+
+/** Clean up an unregistered checkout's branch using normal preservation rules, without deleting files. */
+export async function deleteBranchOfUnregisteredWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: { name: string; head: string } | null,
+  options: RemoveWorktreeOptions = {}
+): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
   try {
-    await runUnderWorktreeDeleteLimit(async () => {
-      // Why in the slot: the wait can outlast two large deletes, and the path may change meanwhile.
-      await assertLeftover()
-      await removeCheckoutLeftByGit(worktreePath, options)
-    })
-    await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
-      (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
-    )
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
     }
@@ -142,6 +137,11 @@ export async function finishUnregisteredWorktreeRemoval(
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
+}
+
+function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOptions {
+  // uv_spawn can block even for async Git; keep native process creation off Electron's UI loop.
+  return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
 }
 
 async function localBranchExists(
@@ -160,7 +160,7 @@ async function localBranchExists(
   }
 }
 
-// Why: Git for Windows runs $GIT_ASK_YESNO when a file stays locked mid-delete; no prompt program may run here.
+// Git for Windows may invoke GIT_ASK_YESNO for locked files; removal must never launch a prompt.
 function removalGitEnv(): { env?: NodeJS.ProcessEnv } {
   const inherited = Object.keys(process.env).filter((key) => key.toUpperCase() === 'GIT_ASK_YESNO')
   if (inherited.length === 0) {
@@ -173,13 +173,12 @@ function removalGitEnv(): { env?: NodeJS.ProcessEnv } {
   return { env }
 }
 
-// Why: Git for Windows does not descend into junctions and exits 0 with them and their parent
-// directories still on disk; finish the delete Git already accepted instead of leaving it behind.
+// Git for Windows can exit 0 leaving junctions and parent directories; finish that accepted delete.
 async function removeCheckoutLeftByGit(
   worktreePath: string,
   options: RemoveWorktreeOptions
 ): Promise<void> {
-  // Why: WSL-owned checkouts are deleted inside the distro, so Node on Windows must not touch them.
+  // WSL-owned checkouts must be removed inside the distro.
   if (options.wslDistro || parseWslPath(worktreePath)) {
     return
   }

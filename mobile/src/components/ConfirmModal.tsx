@@ -6,9 +6,11 @@ type ContentProps = {
   title: string
   message?: string
   confirmLabel?: string
-  cancelLabel?: string
+  /** `null` drops the Cancel button, for a notice that only needs acknowledging. */
+  cancelLabel?: string | null
   destructive?: boolean
-  onConfirm: () => void
+  /** Optional for a notice, whose one button only dismisses. */
+  onConfirm?: () => void
   onCancel: () => void
 }
 
@@ -38,12 +40,14 @@ export function ConfirmContent({
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
       <View style={styles.buttons}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>{cancelLabel}</Text>
-        </Pressable>
+        {cancelLabel === null ? null : (
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </Pressable>
+        )}
         <Pressable
           style={({ pressed }) => [
             styles.button,
@@ -51,7 +55,7 @@ export function ConfirmContent({
             pressed && styles.pressed
           ]}
           onPress={() => {
-            onConfirm()
+            onConfirm?.()
             onCancel()
           }}
         >

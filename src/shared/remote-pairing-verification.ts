@@ -10,6 +10,8 @@ export type RemotePairingFailureKind =
   | 'protocol-incompatible'
   | 'connection-interrupted'
   | 'environment-save-failed'
+  /** A re-pair link that reaches a server other than the saved one. */
+  | 'different-server'
 
 export type RemotePairingFailure = {
   ok: false
@@ -22,6 +24,8 @@ export type VerifyAndAddRuntimeEnvironmentResult =
       ok: true
       environment: PublicKnownRuntimeEnvironment
       runtimeStatus: RuntimeStatus
+      /** The link was for a saved server, which kept its name and took the new connection. */
+      updatedExisting?: true
     }
   | RemotePairingFailure
 

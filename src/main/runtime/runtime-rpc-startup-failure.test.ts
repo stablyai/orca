@@ -13,8 +13,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../i18n/main-i18n', () => ({
-  // Why: substitute every supplied placeholder, not just {{cause}} — a mock that ignores one
-  // would leave a literal {{...}} in the detail and hide it from every assertion below.
+  // Substitute every template placeholder or assertions may miss literal untranslated details.
   translateMain: (
     _key: string,
     fallback: string,
@@ -61,8 +60,7 @@ function createParentWindow(
   return parentWindow
 }
 
-// Why: the dialog is deferred behind an await, so a synchronous "not called yet" assertion
-// would pass even if the deferral were deleted; drain the microtask queue first.
+// Drain microtasks: an immediate not-called assertion cannot prove deferral behind await.
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve)
@@ -162,8 +160,7 @@ describe('runtime RPC startup failure reporting', () => {
     )
   })
 
-  // Why: a bare "restart" is only true for address_in_use — the other classes need the user to
-  // change something, so each must reach the dialog with its own remediation.
+  // Only address_in_use can be fixed by restart; other failure classes must explain their required repair.
   it.each([
     ['EACCES', "Check permissions on Orca's data folder"],
     ['EPERM', "Check permissions on Orca's data folder"],

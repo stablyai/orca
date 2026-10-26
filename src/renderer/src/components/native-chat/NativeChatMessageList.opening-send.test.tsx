@@ -1,11 +1,29 @@
 // @vitest-environment happy-dom
-// A message sent while the turn ahead is still opening waits at the tail, after that turn's live
-// status, never as a bubble above it: the host holds it until the turn opens. The frames here are
-// the ones a person sees during that wait, and through a Stop pressed during it.
+// Queued sends wait after the opening turn’s live status until actual handover, including across Stop.
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
@@ -150,9 +168,7 @@ describe('a message sent while the turn ahead is still opening', () => {
     return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING)
   }
 
-  /** The live turn's status, which carries the first send's working clock. */
   const liveStatus = () => screen.getByText(/^Working for/)
-  /** The live turn's activity line, the last thing the live turn draws. */
   const liveActivity = () => screen.getByText(/^(Working|Stopping)…$/)
 
   /** `text` is drawn after the live turn: its status and its activity line. */
@@ -186,8 +202,7 @@ describe('a message sent while the turn ahead is still opening', () => {
     waitsAtTheTail('second')
   })
 
-  // A Stop takes back what is still queued: B stays after the live turn with its stop row, never
-  // drawn above it. Settled now, it sits with the transcript, above the live line.
+  // Stop withdraws B from the queue; its settled row stays after the live turn’s status and above its activity.
   it('stays after the live turn when a Stop takes it back, with no frame above the live status', () => {
     const { items, submissions } = openingFirst()
     const view = render(frame(items, submissions, [unrecorded('b', 'B')]))
@@ -200,7 +215,6 @@ describe('a message sent while the turn ahead is still opening', () => {
     )
     waitsAtTheTail('B')
 
-    // Withdrawn with the queue.
     const withdrawn = submission('b', {
       acceptedSequence: 4,
       dispatchState: 'rejected',
@@ -214,7 +228,6 @@ describe('a message sent while the turn ahead is still opening', () => {
     expect(follows(liveActivity(), stopRow)).toBe(true)
   })
 
-  // The Q2 frame: Stop pressed while the host has not recorded B yet, its lane still busy.
   it('keeps an unrecorded B after the Stopping line, and a message typed while Stopping too', () => {
     const { items, submissions } = openingFirst()
     const view = render(frame(items, submissions, [unrecorded('b', 'B')], true))
@@ -230,8 +243,7 @@ describe('a message sent while the turn ahead is still opening', () => {
     waitsAtTheTail('C')
   })
 
-  /** One frame per commit: "second" stays under the first send's live status and above its
-   *  activity line, where it lands, and the live status stays on "first". */
+  /** Check each commit keeps second at its handover position and the live status under first. */
   function walkTurnOpening(
     steps: [
       AgentJournalRenderItem[],
@@ -356,7 +368,6 @@ describe('a send a Stop took back before the agent started it', () => {
     })
   }
 
-  /** "warm up", answered and settled in 3s. */
   function warmUp(): AgentJournalRenderItem[] {
     return [
       sent('warm-up', 'warm up'),

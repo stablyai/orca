@@ -1,5 +1,3 @@
-// The frame shapes a captured Claude stream is rebuilt from, keeping only what the child-work path reads.
-
 export type CapturedFrame = { at: number; frame: Record<string, unknown> }
 
 export function spawn(

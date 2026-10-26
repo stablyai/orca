@@ -9,7 +9,7 @@ import {
   getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   getLegacyGitHubPRCacheKey
-} from '@/store/slices/github-cache-key'
+} from '../../../../shared/github/github-cache-key'
 import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   buildParentPrChecksProjection,
@@ -115,6 +115,25 @@ function makeProjection({
 }
 
 describe('buildParentPrChecksProjection', () => {
+  it('drops a completed merged lookup when its worktree has moved to another head', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature', head: 'merged-head' })
+    const identity = getParentPrChecksRefreshIdentity(worktree, repo, 'feature')
+    const review = makeReview({ state: 'merged', headSha: 'merged-head' })
+    const refreshOutcomes = new Map<string, ParentPrChecksRefreshOutcome>([
+      [identity, { kind: 'found', review }]
+    ])
+
+    expect(makeProjection({ worktree, repo, refreshOutcomes }).rows[0].reviewNumber).toBe(12)
+    expect(
+      makeProjection({
+        worktree: { ...worktree, head: 'new-work-head' },
+        repo,
+        refreshOutcomes
+      }).rows[0].reviewNumber
+    ).toBeNull()
+  })
+
   it('classifies known review states into compact row groups', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/feature' })

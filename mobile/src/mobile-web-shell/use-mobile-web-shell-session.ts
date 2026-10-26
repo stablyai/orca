@@ -1,17 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
-import { useHostProtocolGates } from '../components/HostProtocolGate'
-import { useHostClient } from '../transport/client-context'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostClient } from '../transport/host-client-hooks'
+import {
+  createDownloadProgressFeed,
+  downloadFraction,
+  type DownloadProgressFeed
+} from './download-progress-feed'
 import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 import {
   createMobileWebShellRuntime,
+  DOCUMENT_LOAD_DEADLINE_MS,
   PAGE_READY_DEADLINE_MS,
   type MobileWebShellRuntime
 } from './mobile-web-shell-runtime'
 import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
 import { shellPageBackClaimed } from './shell-page-back-claim'
+import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import {
+  EMPTY_SHELL_LOG_TRACE,
+  SHELL_STALL_LOG_MS,
+  shellSessionStepLines,
+  shellStallLine,
+  traceShellStep
+} from './shell-lifecycle-log'
 import { shellPageFrame, type ShellPageFrame } from './shell-page-frame'
 import {
   createMobileWebShellSession,
@@ -26,59 +40,40 @@ import type {
 
 export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
-  /** The route patterns this shell would render from the page, for the page to be told about. */
+  // Publish before React commit so progress can advance while the JS thread is busy.
+  readonly downloadProgress: DownloadProgressFeed
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
   readonly ownsHostArea: boolean
-  /** Non-null when this generation is a fallback from an update the shell refused, for the caller
-   *  to say so beside the page rather than instead of it. */
+  // Explain fallback beside the running page without replacing it.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
-  /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
   readonly reportShellFailure: (reason: MobileWebShellFailureReason) => void
-  /** The native view began a document; drops what the document it replaces said about itself. */
   readonly reportDocumentStarted: () => void
-  /** The native view finished a document; starts the wait for the page's first word. */
   readonly reportDocumentLoaded: () => void
-  /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. */
   readonly reportPageReady: () => void
-  /** The page has a frame on screen. */
   readonly reportPagePainted: () => void
-  /** The page took the device Back key, or let it go. */
   readonly reportPageBackClaim: (claimed: boolean) => void
-  /**
-   * Whether the page has handshaken on this session, which the bridge host is rebuilt against.
-   *
-   * Projected into state beside `state` rather than read off the ref while rendering: a
-   * `page-ready` changes nothing else, so no other value would re-render to carry it out.
-   */
+  // Project document facts into React state: page-ready alone changes no session-state identity to trigger a render.
   readonly pageReady: boolean
-  /** How far this document has got towards being something to show. Projected for the same
-   *  reason as `pageReady`: `page-painted` moves nothing else. */
+  // Project paint for the same reason: the ready state itself does not change.
   readonly pageFrame: ShellPageFrame
-  /** Whether the shell should take Back off the navigator. Projected for the same reason as
-   *  `pageReady`: a claim moves nothing else, so no other value would re-render to carry it. */
+  // Project Back claims so claim-only events still rerender.
   readonly backClaimed: boolean
 }
 
-/**
- * Drives one hybrid shell session for one host: the reducer decides, this runs what it asks for.
- *
- * Every effect result is checked against an epoch before it is dispatched, so an unmount, a host
- * change or a retry abandons work in flight instead of applying it to the next session. Nothing
- * here decides anything — a rule that lived in this file would be a rule with no table test.
- */
+// Run reducer effects behind an epoch fence so unmount/host change/retry cannot apply abandoned results to the replacement session.
 export function useMobileWebShellSession(args: {
   hostId: string
-  /** The route this mount stands for, matched against the page routes the bundle declares. */
   routePathname: string
-  /** A wide layout; a change restarts the session only where it changes the answer. */
   wide?: boolean
+  appNamesRoute?: boolean
   runtime?: MobileWebShellRuntime
 }): MobileWebShellSessionView {
   const { hostId, routePathname } = args
   const wide = args.wide === true
+  const appNamesRoute = args.appNamesRoute !== false
   const gates = useHostProtocolGates()
   const { client, state: connState } = useHostClient(hostId)
 
@@ -88,40 +83,52 @@ export function useMobileWebShellSession(args: {
   const storeRef = useRef<GenerationStore | null>(null)
   storeRef.current ??= runtime.createStore()
 
-  const sessionRef = useRef(createMobileWebShellSession(routePathname, wide))
+  const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
+  const [downloadProgress] = useState(createDownloadProgressFeed)
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
-  // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
   const epochRef = useRef(0)
-  // Aborted on the same bump: a download nobody will use still holds four of the host's read slots.
+  // Abort abandoned downloads to release their four host read slots.
   const downloadsRef = useRef<Set<AbortController>>(new Set())
-  // Cancelled on the same bump, for the same reason: an armed deadline belongs to the generation it
-  // was armed under, and the epoch check alone would leave a real timer alive until it fired.
+  // Cancel deadlines too; epoch guards alone leave real timers alive until expiry.
   const timersRef = useRef<Set<() => void>>(new Set())
+  const hostIdRef = useRef(hostId)
+  const logTraceRef = useRef(EMPTY_SHELL_LOG_TRACE)
   const runEffectRef = useRef<
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
-  const dispatch = useCallback((epoch: number, event: MobileWebShellSessionEvent): void => {
-    if (epoch !== epochRef.current) {
-      return
-    }
-    const stepped = reduceMobileWebShellSession(sessionRef.current, event)
-    sessionRef.current = stepped.session
-    setState(stepped.session.state)
-    setPageReady(stepped.session.pageReady)
-    setPageFrame(shellPageFrame(stepped.session))
-    setBackClaimed(shellPageBackClaimed(stepped.session))
-    for (const effect of stepped.effects) {
-      // Every effect of a step belongs to the flow that step produced, and its result carries that
-      // number back, so a flow the session has since restarted reports into nothing.
-      runEffectRef.current?.(epoch, stepped.session.flow, effect)
-    }
-  }, [])
+  const dispatch = useCallback(
+    (epoch: number, event: MobileWebShellSessionEvent): void => {
+      if (epoch !== epochRef.current) {
+        return
+      }
+      const stepped = reduceMobileWebShellSession(sessionRef.current, event)
+      const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
+      logTraceRef.current = trace
+      for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
+        recordShellLifecycleLine(hostIdRef.current, line)
+      }
+      sessionRef.current = stepped.session
+      const next = stepped.session.state
+      if (next.kind === 'fetching') {
+        downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
+      }
+      setState(next)
+      setPageReady(stepped.session.pageReady)
+      setPageFrame(shellPageFrame(stepped.session))
+      setBackClaimed(shellPageBackClaimed(stepped.session))
+      for (const effect of stepped.effects) {
+        // Echo the resulting flow so reducer restarts can reject superseded completions.
+        runEffectRef.current?.(epoch, stepped.session.flow, effect)
+      }
+    },
+    [downloadProgress]
+  )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
@@ -144,19 +151,11 @@ export function useMobileWebShellSession(args: {
       const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
       switch (effect.kind) {
         case 'delete-cache':
-          // Reports nothing: the store serialises its own queue, so the sweep and read the reducer
-          // queued behind this one already run after it.
+          // No completion event needed: the store queue orders the following sweep/read after deletion.
           await store.deleteHostCache(hostKey).catch(() => undefined)
           return
-        case 'persist-manifest':
-          // Nothing is reported back and a failure is swallowed: the routes the page is mounted
-          // under are already on the session, so all a refused or failed write costs is the
-          // freshness of the next offline verdict, never the generation being opened here.
-          await store.persistActiveManifest(hostKey, effect.manifest).catch(() => undefined)
-          return
         case 'record-update-failure':
-          // Stamped here because the reducer holds neither: the host is the mount's, the time the
-          // runtime's. Reports nothing, and the store swallows its own failure.
+          // The runner owns host/time; best-effort store failures must not affect the decision.
           await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
           return
         case 'forget-update-failures':
@@ -194,21 +193,23 @@ export function useMobileWebShellSession(args: {
         case 'remount':
           send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
           return
-        case 'await-page-ready': {
-          const cancel = runtime.setTimer(() => {
-            timersRef.current.delete(cancel)
-            send({ type: 'page-ready-deadline', flow })
-          }, PAGE_READY_DEADLINE_MS)
+        case 'await-page-ready':
+        case 'await-document-load': {
+          const pageReady = effect.kind === 'await-page-ready'
+          const cancel = runtime.setTimer(
+            () => {
+              timersRef.current.delete(cancel)
+              send({ type: pageReady ? 'page-ready-deadline' : 'document-load-deadline', flow })
+            },
+            pageReady ? PAGE_READY_DEADLINE_MS : DOCUMENT_LOAD_DEADLINE_MS
+          )
           timersRef.current.add(cancel)
-          return
         }
       }
     },
     [client, dispatch, hostId, hostKey, runtime]
   )
-  // Written after the commit, never during render: React may replay or discard a render, and a
-  // closure from one that never committed would run effects for a session that never existed.
-  // Declared above every effect that dispatches, so the first one already finds it.
+  // Install the runner after commit, before dispatching effects, so discarded renders cannot execute work.
   useEffect(() => {
     runEffectRef.current = (epoch, flow, effect) => {
       void runEffect(epoch, flow, effect)
@@ -216,15 +217,29 @@ export function useMobileWebShellSession(args: {
   }, [runEffect])
 
   useEffect(() => {
-    // A new host is a new session: the old one's latches, cache handle and in-flight work all go.
     invalidate()
-    sessionRef.current = createMobileWebShellSession(routePathname, wide)
+    hostIdRef.current = hostId
+    logTraceRef.current = EMPTY_SHELL_LOG_TRACE
+    sessionRef.current = createMobileWebShellSession(routePathname, wide, appNamesRoute)
     startedAtRef.current = runtime.now()
     setState(sessionRef.current.state)
     setPageReady(sessionRef.current.pageReady)
     setPageFrame(shellPageFrame(sessionRef.current))
     return invalidate
-  }, [hostId, invalidate, routePathname, runtime])
+  }, [appNamesRoute, hostId, invalidate, routePathname, runtime])
+
+  // Log once per parked state identity; shared CHECKING keeps its first timer through checking-to-checking steps.
+  useEffect(() => {
+    if (shellStallLine(state, sessionRef.current, logTraceRef.current) === null) {
+      return
+    }
+    return runtime.setTimer(() => {
+      const line = shellStallLine(state, sessionRef.current, logTraceRef.current)
+      if (line !== null) {
+        recordShellLifecycleLine(hostIdRef.current, line)
+      }
+    }, SHELL_STALL_LOG_MS)
+  }, [hostId, pageFrame, routePathname, runtime, state])
 
   useEffect(() => {
     dispatch(epochRef.current, { type: 'layout-changed', wide })
@@ -243,9 +258,7 @@ export function useMobileWebShellSession(args: {
         hostStatus: hostProtocolWindow
       }
     })
-    // `hostId` and `routePathname` are in the list because they are what rebuilds the session
-    // above: the reducer starts nothing on a repeat verdict, so a fresh session nobody re-armed
-    // would sit in `checking` forever. Both, not just the host, because either one rebuilds it.
+    // Host and pathname rebuild the session; re-arm even on an unchanged verdict or the fresh session would remain checking.
   }, [
     dispatch,
     hostCapabilities,
@@ -258,7 +271,6 @@ export function useMobileWebShellSession(args: {
   ])
 
   const retry = useCallback(() => {
-    // A fresh epoch first: a failed download still in flight must not land on the retried session.
     invalidate()
     startedAtRef.current = runtime.now()
     dispatch(epochRef.current, { type: 'retry-pressed' })
@@ -296,6 +308,7 @@ export function useMobileWebShellSession(args: {
 
   return {
     state,
+    downloadProgress,
     pageReady,
     pageFrame,
     pageRoutes: sessionRef.current.pageRoutes,

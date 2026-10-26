@@ -4,7 +4,6 @@ import {
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
 
-/** Who a conversation's agent is and how it launches: the same whether it is created or founded. */
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
   | 'sessionId'
@@ -20,7 +19,7 @@ export function agentSessionRecordIdentityFields(
   identity: AgentSessionRecordIdentity,
   now: number
 ) {
-  // Callers name the mode among the options, as the wire does; the record keeps it as its own field.
+  // Wire options carry permission mode; records store it separately.
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode, ...options } =
     identity.options ?? {}
   return {
@@ -32,20 +31,30 @@ export function agentSessionRecordIdentityFields(
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
-    // A /clear continues in the same tab, so it stays in the folder the chat ran in.
+    // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
     createdAt: now,
     updatedAt: now
   }
 }
 
-/** The fence a founded conversation starts at; every reservation moves it. */
 export const AGENT_SESSION_FOUNDING_FENCE = 1
 
-/**
- * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain
- * is what makes that start a fresh conversation rather than a resume.
- */
+/** No reservation, owner or provider handle means no agent ever started. */
+export function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
+  const { lease } = record
+  return (
+    lease.claimStatus === 'released' &&
+    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
+    lease.minimumNextFence === undefined &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    record.providerHandleChain.length === 0
+  )
+}
+
+/** An empty handle chain starts a fresh conversation on first send rather than resuming one. */
 export function foundAgentSessionRecord(
   identity: AgentSessionRecordIdentity,
   lease: { claimKeyId: string; now: number }
@@ -56,7 +65,7 @@ export function foundAgentSessionRecord(
     lease: {
       sessionId: identity.sessionId,
       runtimeKind: 'native',
-      // Not 0: clients echo the fence as their expected fence, which the wire requires positive.
+      // Wire expected fences must be positive; zero cannot represent a founded record.
       runtimeFence: AGENT_SESSION_FOUNDING_FENCE,
       handoffStage: null,
       provenHandleLinkId: null,
@@ -65,7 +74,6 @@ export function foundAgentSessionRecord(
       leaseDeadlineAt: lease.now,
       lastRenewedAt: lease.now,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: lease.claimKeyId,
       claimStatus: 'released',
       unreconciled: false,

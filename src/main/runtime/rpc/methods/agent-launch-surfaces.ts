@@ -1,17 +1,6 @@
-/**
- * How `agent.launch` builds the surface the executor decided on.
- *
- * Both halves are deliberately the plain, user-facing forms: a structured session created for the
- * worktree exactly as `agentSession.create` creates one, and a terminal agent created exactly as a
- * new agent tab is. Orchestration's own factories are NOT reusable here — a worker's session
- * carries a redrive subscription, a mailbox and a background tab that a launch the user asked for
- * must not take — which is why the executor injects this rather than branching.
- *
- * Delivering the launch text is here for the same reason: it is the wire-shaped half. Each surface
- * takes it differently — a structured session commits it to a transcript, a terminal agent takes it
- * on its launch command or as a paste into its PTY — and which of those applies is the executor's
- * decision, carried in as `startupPrompt` or asked for through `deliverTerminalPrompt`.
- */
+import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+/** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
+ * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat-session-option-defaults'
@@ -24,11 +13,13 @@ import {
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
@@ -51,8 +42,7 @@ export function agentLaunchSurfaceFactory(
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
-  // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
-  // close can both land after admission.
+  // Read the early pane at spawn: publication and user close can finish after admission.
   view: AgentLaunchView = { early: null, presentation: undefined }
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
@@ -63,10 +53,16 @@ export function agentLaunchSurfaceFactory(
       agent,
       options,
       sessionId: requested,
-      tabId
+      tabId,
+      withoutPrompt
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const seeded = narrowStructuredLaunchSeedOptions(options)
+      // A client that creates chats without starting them starts this one on its first message.
+      const atRest =
+        withoutPrompt === true &&
+        context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
+          true
       const created = await createStructuredAgentSessionForWorktree({
         runtime: context.runtime,
         ensureHost: async () => {
@@ -81,22 +77,20 @@ export function agentLaunchSurfaceFactory(
           clientOperationId:
             attachOperationId ?? createStructuredAgentSessionOperationId(randomUUID),
           expectedRuntimeFence: null,
-          // Overwritten by `prepare` with the host's own attach fingerprint. The create-intent
-          // conflict check it would otherwise feed guards a replayed client operation id, and this
-          // id was minted here rather than accepted from one.
+          // prepare supplies the host fingerprint; this id was host-minted, so no client create-intent conflict needs checking.
           payloadFingerprint: ''
         },
         worktree: `id:${worktreeId}`,
         agent,
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
+        ...(atRest ? { atRest: true as const } : {}),
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
       })
       if (!created.ok) {
-        // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
-        // a definitive one, so the launch does not fall back to a terminal over it.
+        // A caller-named session conflict must surface to that caller, never downgrade to terminal.
         if (requested && created.refusal.code === 'agent_session_conflict') {
           throw new AgentLaunchSessionAlreadyExistsError()
         }
@@ -142,11 +136,10 @@ export function agentLaunchSurfaceFactory(
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
-        // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
-        // `cursor-agent` — so the runtime builds the configured launcher.
+        // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
-        // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
-        // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
+        terminalImageViewerSupported: terminalImageViewerSupported(context),
+        // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
         ...(startupPrompt
           ? {
               startupPrompt,
@@ -180,30 +173,47 @@ export function agentLaunchSurfaceFactory(
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
       if (earlyTab?.closedByUser()) {
-        // Closed while its terminal was being created: stopped before any prompt is pasted. A prompt
-        // that rode the command line reached the agent, which is stopped a moment after it starts.
+        // Close a terminal created after its tab was closed before pasting; command-line prompts may already have reached it.
         await context.runtime.closeTerminal(terminal.handle).catch(() => {})
         throw new AgentLaunchTabClosedError()
       }
       return {
         handle: terminal.handle,
-        // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
-        // dropping it here was what left a client with no way to name the tab it just asked for.
+        // Keep the runtime-minted paneKey so the caller can identify the tab already created.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        // Its only warning is that the host could not reveal the tab, which the caller shows itself.
-        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
+        // A caller that shows the tab itself reports a failed reveal; the fallback it can't know.
+        ...launchWarning(
+          terminal.startupCwdFallback ? STARTUP_CWD_FALLBACK_SENTENCE : undefined,
+          callerPresentsSurface ? undefined : terminal.warning
+        ),
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
-    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt }) =>
-      deliverTerminalAgentLaunchPrompt({
-        runtime: context.runtime,
+    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt, signal }) => {
+      const { runtime } = context
+      // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
+      if (freshLaunch && typeof runtime.deliverStartupFollowup === 'function') {
+        return runtime.deliverStartupFollowup(
+          handle,
+          { agent, prompt: prompt.text },
+          { agentLaunch: true, ...(signal ? { signal } : {}) }
+        )
+      }
+      return deliverTerminalAgentLaunchPrompt({
+        runtime,
         handle,
         agent,
         freshLaunch,
-        text: prompt.text
+        text: prompt.text,
+        ...(signal ? { signal } : {})
       })
+    }
   }
+}
+
+function launchWarning(...parts: (string | undefined)[]): { warning?: string } {
+  const warning = parts.filter(Boolean).join(' ')
+  return warning ? { warning } : {}
 }
 
 function requireInstalledHost(): StructuredAgentSessionHost {

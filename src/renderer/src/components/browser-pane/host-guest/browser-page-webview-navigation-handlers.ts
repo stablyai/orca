@@ -54,6 +54,14 @@ export type BrowserPageWebviewNavigationHandlers = {
   handleAnnotationViewportMessage: (event: { message?: string }) => void
 }
 
+/** Observe main-document starts, including page-initiated navigation; did-start-loading also includes iframe loads. */
+export function isPageDocumentNavigationStart(event: {
+  isMainFrame: boolean
+  isInPlace: boolean
+}): boolean {
+  return event.isMainFrame && !event.isInPlace
+}
+
 export function createBrowserPageWebviewNavigationHandlers({
   webview,
   browserTabId,
@@ -79,8 +87,7 @@ export function createBrowserPageWebviewNavigationHandlers({
     }
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
-    // Why getURL() and not lastKnownWebviewUrlRef: Orca-driven navigations point that ref at the
-    // destination before assigning src, so it can't identify the document being left.
+    // Read the departing URL from the guest; Orca sets lastKnownWebviewUrlRef to the destination before assigning src.
     let committedUrl: string | null = null
     try {
       committedUrl = webview.getURL() || null
@@ -97,18 +104,17 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (event.isMainFrame && event.url) {
       invalidateBrowserAnnotationDocumentRef.current()
     }
-    if (!event.isMainFrame || event.isInPlace || !event.url) {
+    if (!isPageDocumentNavigationStart(event) || !event.url) {
       return
     }
+    onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
     if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
       pendingRecoveryNavigation.started = true
     }
-    // Why here and not on did-start-loading: Chromium re-announces a favicon only when the icon URL
-    // list changes, so clearing on every load strands same-origin navigations with no icon and no
-    // event that would ever restore one.
+    // Clear only across origins; same-site loads may never reannounce an unchanged favicon list.
     clearFaviconIfOriginChanges(event)
   }
 

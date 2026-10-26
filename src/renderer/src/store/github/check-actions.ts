@@ -4,6 +4,13 @@ import type { GitHubSlice } from './slice-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
+import { createRuntimeRpcAbortError } from '@/runtime/abortable-runtime-environment-call'
+import { normalizeCheckRunDetailsLogTails } from '@/lib/check-run-details-log-normalization'
+import { translate } from '@/i18n/i18n'
+import {
+  GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE,
+  isGitHubCheckDetailsTimeout
+} from '../../../../shared/github/check-details-deadline'
 import { syncPRChecksStatus } from '../slices/github-checks'
 import {
   getPRChecksCacheTtl,
@@ -11,7 +18,6 @@ import {
   sourceScopedRepoCacheKey
 } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { debouncedSaveCache } from './cache-persistence'
 import {
   inflightChecksRequests,
   nextProviderRequestId,
@@ -86,7 +92,6 @@ export const createCheckActions = (
       )
       if (prStatusUpdate) {
         set(prStatusUpdate)
-        debouncedSaveCache(get())
       }
       return cachedChecks
     }
@@ -113,7 +118,7 @@ export const createCheckActions = (
       if (!weakerThanRequested) {
         return inflightRequest.promise.catch(recoverChecks)
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests so upgrades coalesce without starvation from repeated weak callers.
       if (waitedForUpgrade) {
         break
       }
@@ -153,9 +158,7 @@ export const createCheckActions = (
               noCache: Boolean(options?.force || options?.noCache),
               sourceContext: options?.sourceContext
             })
-      // Why: the bounded upgrade wait can leave us running beside a stronger request for this
-      // key. Both bypass gh's cache here, but the later-started one holds the newer run state —
-      // let only the key's current owner write checksCache and the PR status it derives.
+      // Bounded waits can overlap stronger requests; only the current key owner may write caches/derived PR state, preserving newer run evidence.
       if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
         return checks
       }
@@ -187,7 +190,6 @@ export const createCheckActions = (
 
         return nextState
       })
-      debouncedSaveCache(get())
       return checks
     })().finally(() => {
       if (ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
@@ -205,45 +207,69 @@ export const createCheckActions = (
   },
 
   fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
-    const repoId = options?.repoId ?? repo?.id
-    const requestContext = getGitHubWorkItemRequestContext(
-      get(),
-      getGitHubSourceTarget(get(), repo, options?.sourceContext),
-      repoId ?? repoPath,
-      repoPath,
-      options?.sourceContext
-    )
-    const requestTarget = requestContext.target
-    return requestTarget.kind === 'environment'
-      ? await withGitHubCheckDetailsTimeout((signal) =>
-          callRuntimeRpc<PRCheckRunDetails | null>(
-            { kind: 'environment', environmentId: requestTarget.environmentId },
-            'github.prCheckDetails',
-            {
-              repo: requestTarget.runtimeRepoId,
-              checkRunId: args.checkRunId,
-              workflowRunId: args.workflowRunId,
-              checkName: args.checkName,
-              url: args.url,
-              prRepo: args.prRepo ?? null
-            },
-            { timeoutMs: 30_000, signal }
-          )
+    try {
+      const repo = get().repos?.find((candidate) =>
+        options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+      )
+      const repoId = options?.repoId ?? repo?.id
+      const requestContext = getGitHubWorkItemRequestContext(
+        get(),
+        getGitHubSourceTarget(get(), repo, options?.sourceContext),
+        repoId ?? repoPath,
+        repoPath,
+        options?.sourceContext
+      )
+      const requestTarget = requestContext.target
+      const rawDetails =
+        requestTarget.kind === 'environment'
+          ? await withGitHubCheckDetailsTimeout((signal) =>
+              callRuntimeRpc<PRCheckRunDetails | null>(
+                { kind: 'environment', environmentId: requestTarget.environmentId },
+                'github.prCheckDetails',
+                {
+                  repo: requestTarget.runtimeRepoId,
+                  checkRunId: args.checkRunId,
+                  workflowRunId: args.workflowRunId,
+                  checkName: args.checkName,
+                  url: args.url,
+                  prRepo: args.prRepo ?? null
+                },
+                { timeoutMs: 30_000, signal }
+              )
+            )
+          : await withGitHubCheckDetailsTimeout(() =>
+              window.api.gh.prCheckDetails({
+                repoPath,
+                repoId,
+                checkRunId: args.checkRunId,
+                workflowRunId: args.workflowRunId,
+                checkName: args.checkName,
+                url: args.url,
+                prRepo: args.prRepo ?? null,
+                sourceContext: options?.sourceContext
+              })
+            )
+      return normalizeCheckRunDetailsLogTails(rawDetails)
+    } catch (error) {
+      const timeoutMessage = translate(
+        'auto.runtime.githubCheckDetailsTimeout.timedOut',
+        GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
+      )
+      if (
+        isGitHubCheckDetailsTimeout(error) ||
+        (error instanceof Error && error.message === timeoutMessage)
+      ) {
+        throw new Error(timeoutMessage)
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw createRuntimeRpcAbortError()
+      }
+      throw new Error(
+        translate(
+          'auto.store.slices.editor.checkRunDetailsLoadFailed',
+          'Failed to load check details.'
         )
-      : await withGitHubCheckDetailsTimeout(() =>
-          window.api.gh.prCheckDetails({
-            repoPath,
-            repoId,
-            checkRunId: args.checkRunId,
-            workflowRunId: args.workflowRunId,
-            checkName: args.checkName,
-            url: args.url,
-            prRepo: args.prRepo ?? null,
-            sourceContext: options?.sourceContext
-          })
-        )
+      )
+    }
   }
 })

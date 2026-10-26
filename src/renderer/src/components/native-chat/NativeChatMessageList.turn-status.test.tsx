@@ -4,6 +4,28 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
@@ -24,11 +46,21 @@ beforeAll(() => {
 afterAll(() => restoreViewport())
 afterEach(cleanup)
 
+const continueUsageLimit = vi.fn()
+const usageLimitView = {
+  hostLabel: null,
+  remoteHost: false,
+  continueAvailable: false,
+  offeredTurnItemId: null,
+  continueNow: vi.fn(),
+  usageLimitTurnItemId: 'item-2',
+  continueUsageLimit
+}
+
 {
   const TURN_MS = 12_000
 
-  // Each turn ends differently. The journal is where each end is recorded, and the lifecycle is
-  // seeded rather than produced, since a crash settles as `interrupted` only once the host proves it.
+  // Seed lifecycle separately: the host must confirm a crash before it settles as interrupted.
   const TURNS: { id: string; end: Pick<AgentJournalTurnItem, 'state' | 'outcome'> }[] = [
     { id: 'user-finished', end: { state: 'completed', outcome: 'success' } },
     { id: 'user-crashed', end: { state: 'interrupted' } },
@@ -116,7 +148,6 @@ afterEach(cleanup)
   }
 
   describe('NativeChatMessageList folded turn headers', () => {
-    // A crash-cut turn reads like a finished one; the chat's notice row is what says it stopped.
     it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
       render(
         <NativeChatMessageList
@@ -136,7 +167,6 @@ afterEach(cleanup)
         ['Worked for 12s', 'false'],
         ['Interrupted after 12s', 'false']
       ])
-      // The turn's detail stays inside the fold.
       expect(screen.queryByText('narration user-crashed')).toBeNull()
       expect(screen.getByText('answer user-crashed')).toBeInTheDocument()
     })
@@ -225,29 +255,107 @@ afterEach(cleanup)
     readPhase: 'ready'
   }
 
-  // The turn still runs while a Stop ends it, so its bar keeps the running clock; only the tail line
-  // says the turn is stopping, and the bar settles to "Interrupted after" once the turn ends.
+  it.each(['claude', 'codex', 'grok'] as const)(
+    'keeps a collapsed %s quota warning visible without a continuation action',
+    (agent) => {
+      continueUsageLimit.mockClear()
+      const items: AgentJournalRenderItem[] = [
+        journalItem(1, {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Start' }]
+        }),
+        journalItem(2, {
+          kind: 'turn',
+          turnId: 'turn-1',
+          userItemId: 'item-1',
+          state: 'completed',
+          outcome: 'failure',
+          startedAt: 1000,
+          completedAt: 2000
+        }),
+        {
+          ...journalItem(3, {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Earlier work' }]
+          }),
+          turnScope: { kind: 'turn', turnItemId: 'item-2' }
+        },
+        {
+          ...journalItem(4, {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(
+              {
+                kind: 'usageLimitReached',
+                usageLimit: { window: 'session', resetsAt: Date.now() + 3600_000 },
+                detail: { text: 'The provider refused this request.', audience: 'person' }
+              },
+              { surface: 'row' }
+            )
+          }),
+          turnScope: { kind: 'turn', turnItemId: 'item-2' }
+        }
+      ]
+      render(
+        <TooltipProvider>
+          <NativeChatOrcaStopContext.Provider value={usageLimitView}>
+            <NativeChatMessageList
+              session={{
+                ...session,
+                agent,
+                status: 'ready',
+                messages: projectStructuredAgentSessionMessages(items, [], [])
+              }}
+              journalItems={items}
+              settledTurns={selectStructuredAgentSettledTurns(items)}
+              isWorking={false}
+              expandSignal={false}
+            />
+          </NativeChatOrcaStopContext.Provider>
+        </TooltipProvider>
+      )
+      expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
+      expect(screen.queryByText('Earlier work')).toBeNull()
+      expect(screen.getByText(/hit its session limit/)).toBeVisible()
+      expect(screen.getByText('Details')).toBeVisible()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+    }
+  )
+
+  // Stop leaves the bar’s clock running until settlement; only the tail says Stopping.
   describe("the turn bar while a person's Stop ends the turn", () => {
     it('keeps the running clock above the Stopping tail line', () => {
-      render(
+      const transcript = (stopping: boolean) => (
         <NativeChatMessageList
           session={session}
           journalItems={[journalItem(1, turnItem)]}
+          turnActivity={{ kind: 'description', text: 'Running pnpm test' }}
           isWorking
-          stopping
+          stopping={stopping}
           expandSignal={false}
         />
       )
+      const { rerender } = render(transcript(false))
+      expect(screen.getByText('Running pnpm test')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping…')).toBeNull()
+
+      rerender(transcript(true))
 
       const bar = screen.getByText('Working for 0s')
       const stopping = screen.getByText('Stopping…')
       expect(bar.compareDocumentPosition(stopping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
       expect(screen.getAllByText(/Stopping/)).toHaveLength(1)
+      expect(screen.queryByText('Running pnpm test')).toBeNull()
     })
   })
 
-  // Where the host does not queue sends, one made while Stopping is held until the turn ends: it is
-  // drawn after the Stopping line, not inside the turn being stopped.
+  // Hosts without queueing hold sends after the Stopping line until the turn ends.
   describe('a message sent while Stopping, before the host has handed it over', () => {
     const pending = {
       id: 'pending-send',
@@ -286,7 +394,6 @@ afterEach(cleanup)
       expect(sent.compareDocumentPosition(working)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     })
 
-    // Sent just before the Stop, the host steers it into the turn: it stays there, never jumping.
     it('keeps a send made before the Stop in the turn', () => {
       const { sentWhileStopping: _made, ...beforeStop } = pending
       render(

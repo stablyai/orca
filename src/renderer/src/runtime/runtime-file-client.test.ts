@@ -205,18 +205,29 @@ describe('runtime file client', () => {
   })
 
   it('rejects truncated remote reads instead of returning partial editable content', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        worktree: 'id:wt-1',
-        relativePath: 'large.log',
-        content: 'partial',
-        truncated: true,
-        byteLength: 524_288
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        args.method === 'files.read'
+          ? {
+              id: 'rpc-1',
+              ok: true,
+              result: {
+                worktree: 'id:wt-1',
+                relativePath: 'large.log',
+                content: 'partial',
+                truncated: true,
+                byteLength: 524_288
+              },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+          : {
+              id: 'rpc-2',
+              ok: false,
+              error: { code: 'method_not_found', message: `Unknown method: ${args.method}` },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+      )
+    )
 
     await expect(
       readRuntimeFileContent({
@@ -225,7 +236,7 @@ describe('runtime file client', () => {
         relativePath: 'large.log',
         worktreeId: 'wt-1'
       })
-    ).rejects.toThrow('Remote file is too large to open in the editor')
+    ).rejects.toThrow('Update the server to open it')
   })
 
   it('falls back to files.readPreview when a remote binary file is opened', async () => {
@@ -339,9 +350,7 @@ describe('runtime file client', () => {
   })
 
   it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
-    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
-    // classified the file as binary. A transport-level failure that happens to
-    // carry the same message text must propagate, not trigger a preview read.
+    // Only typed RuntimeRpcCallError(binary_file) authorizes preview fallback; matching transport-error text must propagate.
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'files.read') {
         return Promise.reject(new Error('binary_file'))

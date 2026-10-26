@@ -6,12 +6,7 @@ export type ResourceSessionBindingInputs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
-  /**
-   * Sessions restore knows exist on an SSH host but has not reattached yet, keyed by tab. Restore
-   * skips reattach while the relay is not connected (`terminals.ts` reconnectPersistedTerminals),
-   * so these are live remote sessions no other binding source can see. Omitting them is what let
-   * Resource Manager classify live agent sessions as orphans and force-kill them (#8459).
-   */
+  /** Live SSH sessions awaiting relay reattachment have no other binding; retain them so agent sessions cannot become killable orphans. */
   deferredSshSessionIdsByTabId?: Record<string, string>
   workspaceSessionReady: boolean
 }
@@ -60,9 +55,7 @@ export function buildResourceSessionBindingIndex(
     }
   }
 
-  // Why: startup-deferred reattach intentionally leaves inactive tabs out of
-  // ptyIdsByTabId, but their daemon sessions are still owned by tab/layout
-  // wake hints. Resource Manager should not classify those as orphans.
+  // Deferred inactive tabs retain ownership through tab/layout wake hints even without live-PTY bindings.
   for (const tabs of Object.values(inputs.tabsByWorktree)) {
     for (const tab of tabs) {
       addBinding(ptyIdToTabId, tab.id, tab.ptyId)
@@ -78,8 +71,7 @@ export function buildResourceSessionBindingIndex(
     }
   }
 
-  // Why last: a deferred reattach is the one case where the session is known live but has no
-  // live-PTY, tab, or layout binding to find it by.
+  // Add deferred SSH sessions last because earlier binding sources cannot see their live sessions.
   for (const [tabId, sessionId] of Object.entries(inputs.deferredSshSessionIdsByTabId ?? {})) {
     if (!tabIdToWorktreeId.has(tabId)) {
       continue
@@ -95,11 +87,7 @@ export function buildResourceSessionBindingIndex(
   }
 }
 
-/**
- * The sessions Resource Manager may offer for bulk destruction: unbound in this renderer *and*
- * unclaimed by any agent. Single source of truth so the advertised count and the set actually
- * killed cannot diverge — that divergence would be live agent sessions (#8459).
- */
+/** Share bulk-kill eligibility between the count and action: sessions must be unbound with proven owner absence. */
 export function selectUnboundDaemonSessions(
   sessions: readonly DaemonSession[],
   inputs: ResourceSessionBindingInputs
@@ -108,8 +96,7 @@ export function selectUnboundDaemonSessions(
     return []
   }
   const { boundPtyIds } = buildResourceSessionBindingIndex(inputs)
-  // Why the ownership check: this renderer's binding map is empty during restore, so it cannot
-  // decide alone. Only proven absence of an owner qualifies — 'unknown' protects.
+  // An empty restore-time binding map cannot prove idleness; unknown ownership protects the session.
   return sessions.filter(
     (session) => !boundPtyIds.has(session.id) && mayDestroyWithoutOwnerEvidence(session)
   )

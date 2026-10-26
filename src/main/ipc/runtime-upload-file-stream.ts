@@ -9,11 +9,10 @@ import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-impor
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} from './runtime-environment-manual-disconnect'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+} from './runtime-environments/runtime-environment-manual-disconnect'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 
-// Why: base64 turns 3 bytes into 4 chars, so a 384 KiB slice lands on the wire
-// as exactly 512 KiB — the chunk size the renderer used before streaming.
+// Base64 expands 384 KiB into the established 512 KiB wire chunk.
 export const RUNTIME_UPLOAD_SLICE_BYTES = 384 * 1024
 
 const RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS = 30_000
@@ -22,17 +21,10 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
   /** Resolved environment id, not a selector: the manual-disconnect check keys on it. */
   environmentId: string
   userDataPath: string
-  /** Aborts the transfer; the caller's lifetime is what raises it today. */
   signal?: AbortSignal
 }
 
-/**
- * Stream one client-local file to a runtime environment in slices.
- *
- * Replaces reading the whole file into memory and base64-encoding it before the
- * first byte moves. Peak memory is one slice, so imports are no longer bounded
- * by main-process heap.
- */
+/** Stream with one slice in memory rather than buffering and encoding the whole file. */
 export async function streamExternalFileToRuntime(
   args: RuntimeUploadFileStreamArgs
 ): Promise<{ byteLength: number }> {
@@ -61,17 +53,13 @@ export type ExternalFileSliceStreamArgs = {
   writeSlice: (contentBase64: string, offset: number) => Promise<void>
 }
 
-/**
- * Read a staged client-local file in slices and hand each to `writeSlice`, refusing a source that
- * was swapped or changed since staging. The destination decides what a slice becomes.
- */
+/** Recheck staged source identity while streaming; refuse changes before committing the temporary destination. */
 export async function streamExternalFileSlices(
   args: ExternalFileSliceStreamArgs
 ): Promise<{ byteLength: number }> {
   const sourcePath = resolveEntrySourcePath(args.sourceRootPath, args.entryRelativePath)
 
-  // Why: relativePath is the hidden .orca-upload-<nonce> temp destination, so a
-  // dropped file names its source instead of a path the user never chose.
+  // The hidden upload destination is not a user-chosen path; name the source in errors.
   const displayPath = args.entryRelativePath || basename(args.sourceRootPath)
   const lstatResult = await lstat(sourcePath)
   if (lstatResult.isSymbolicLink()) {
@@ -96,14 +84,11 @@ export async function streamExternalFileSlices(
     if (!isSameFile(openedStat, lstatResult)) {
       throw new Error(`File changed during upload: '${displayPath}'`)
     }
-    // Why: the handle is what the slices are read from, so the staged identity
-    // has to hold here too — checking only the pre-open lstat leaves a window
-    // where the path is swapped between lstat and open.
+    // Validate the opened handle too: the source can be swapped between lstat and open.
     assertMatchesStagedIdentity(openedStat, args.expected, displayPath)
 
     const totalBytes = openedStat.size
-    // Why: enforced again where the bytes actually move. Staging is a separate
-    // call, so the ceiling only holds here if this boundary checks it too.
+    // Staging and transfer are separate calls; enforce the size limit where bytes move.
     if (totalBytes > args.maxFileBytes) {
       throw new Error(
         `'${displayPath}' is ${formatByteCeiling(totalBytes)}, over the ` +
@@ -111,15 +96,12 @@ export async function streamExternalFileSlices(
       )
     }
     if (totalBytes === 0) {
-      // Why: a zero-byte source produces no slices, but the destination still
-      // has to exist before commitUpload renames it into place.
+      // Empty sources still need a temporary destination for commitUpload to rename.
       await args.writeSlice('', 0)
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
       let offset = 0
       while (offset < totalBytes) {
-        // Why: checked per slice, so an abort stops the transfer at the next
-        // boundary instead of after the whole file has moved.
         args.signal?.throwIfAborted()
         const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
         if (bytesRead === 0) {
@@ -130,10 +112,7 @@ export async function streamExternalFileSlices(
       }
     }
 
-    // Why: the destination is a temp path the caller commits, so a source
-    // rewritten mid-transfer is caught before anything lands at the final path.
-    // mtime catches an in-place edit that kept the size. An empty source runs
-    // this too: its chunk is still a round trip the source can change during.
+    // Recheck before commit, including empty-file round trips; mtime catches same-size in-place edits.
     const afterReadStat = await handle.stat()
     if (afterReadStat.mtimeMs !== openedStat.mtimeMs || !isSameFile(afterReadStat, openedStat)) {
       throw new Error(`File changed during upload: '${displayPath}'`)
@@ -144,12 +123,7 @@ export async function streamExternalFileSlices(
   }
 }
 
-/**
- * Refuse a source that no longer matches what staging measured.
- *
- * Inode and device are compared only when both sides report one, because some
- * filesystems leave them at 0; size and mtime then carry the check alone.
- */
+/** Some filesystems report zero inode/device; compare them only when available, retaining size/mtime checks. */
 function assertMatchesStagedIdentity(
   observed: Stats,
   expected: StagedRuntimeUploadFileIdentity,
@@ -165,7 +139,6 @@ function assertMatchesStagedIdentity(
   }
 }
 
-/** Same inode on the same device, where the filesystem reports them. */
 function isSameFile(a: Stats, b: Stats): boolean {
   return (
     a.size === b.size &&
@@ -174,15 +147,12 @@ function isSameFile(a: Stats, b: Stats): boolean {
   )
 }
 
-/** Append one base64 slice, carrying the host guards that must hold per chunk. */
 async function sendChunk(
   args: RuntimeUploadFileStreamArgs,
   contentBase64: string,
   append: boolean
 ): Promise<void> {
-  // Why: the renderer's per-chunk calls went through an IPC handler that refuses
-  // a manually disconnected environment. The loop lives in main now, so it makes
-  // the same check, or a disconnect mid-upload keeps pushing bytes to that host.
+  // Main now owns chunk dispatch; each slice must still honor a concurrent manual disconnect.
   if (isRuntimeEnvironmentManuallyDisconnected(args.environmentId)) {
     throw new Error(RUNTIME_MANUALLY_DISCONNECTED_MESSAGE)
   }
@@ -200,13 +170,11 @@ async function sendChunk(
       expectedExecutionHostId: args.expectedExecutionHostId
     },
     RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS,
-    // Why: re-checked per chunk, so a re-pair mid-upload aborts instead of
-    // appending the rest of the file on a different host.
+    // Abort if re-pairing changes the host between chunks.
     args.expectedEnvironmentPairingRevision,
     undefined,
     {
-      // Why: a replacement runtime keeps the pairing but invalidates its
-      // predecessor's capability proof, so the identity rides every chunk too.
+      // Restarts retain pairing but invalidate runtime capability proof; pin every chunk to its runtime.
       expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
       signal: args.signal
     }
@@ -217,8 +185,7 @@ async function sendChunk(
 }
 
 function resolveEntrySourcePath(sourceRootPath: string, entryRelativePath: string): string {
-  // Why: staging resolves the source first, so the streamer has to agree on
-  // the same absolute path or the two checks can disagree.
+  // Resolve exactly as staging does so both identity checks refer to the same source.
   const root = resolve(sourceRootPath)
   return entryRelativePath ? join(root, entryRelativePath) : root
 }
@@ -231,7 +198,7 @@ async function assertEntryInsideRoot(
   const rootRealPath = await realpath(sourceRootPath)
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
-  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  // Names beginning with .. are valid; only parent traversal escapes.
   if (
     relativeToRoot !== '' &&
     (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))

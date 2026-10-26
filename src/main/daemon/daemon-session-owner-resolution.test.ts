@@ -7,6 +7,7 @@ import type {
 } from '../providers/pty-provider-contract'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 
 function provider(
   processes: () => Promise<PtyProcessInfo[]>,
@@ -203,6 +204,84 @@ describe('DaemonSessionOwnerResolver', () => {
     expect(inventory).toHaveBeenCalledTimes(2)
   })
 
+  it('does not use cached absence as checked-termination proof for a newly discovered session', async () => {
+    const sessions = [{ id: 'existing', incarnationId: 'current', cwd: '', title: 'existing' }]
+    const owner = provider(async () => [...sessions])
+    owner.supportsFencedTermination = () => true
+    owner.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    const resolver = new DaemonSessionOwnerResolver([owner], new Map())
+    await expect(resolver.resolve('existing', 'replaced', true)).resolves.toEqual({
+      kind: 'unknown'
+    })
+    sessions.push({ id: 'new-session', incarnationId: 'new', cwd: '', title: 'new' })
+    const request = {
+      id: 'new-session',
+      expectedIncarnationId: 'new',
+      requireNoAgentOwner: true,
+      requireUnattached: true
+    }
+
+    await expect(
+      terminateResolvedDaemonSession(request, () => resolver.resolveTermination(request.id, 'new'))
+    ).resolves.toEqual({ outcome: 'ended' })
+    expect(owner.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+    expect(owner.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('dispatches to an exact spawn owner without accepting pre-spawn in-flight absence', async () => {
+    const { promise: gate, resolve: release } = Promise.withResolvers<PtyProcessInfo[]>()
+    const owner = provider(() => gate)
+    owner.supportsFencedTermination = () => true
+    owner.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    const resolver = new DaemonSessionOwnerResolver([owner], new Map())
+    const oldInventory = resolver.resolve('unrelated')
+    resolver.recordRoute('new-session', owner, 'new')
+    const request = {
+      id: 'new-session',
+      expectedIncarnationId: 'new',
+      requireNoAgentOwner: true,
+      requireUnattached: true
+    }
+    const termination = terminateResolvedDaemonSession(request, () =>
+      resolver.resolveTermination(request.id, 'new')
+    )
+    release([])
+
+    await expect(termination).resolves.toEqual({ outcome: 'ended' })
+    await expect(oldInventory).resolves.toEqual({ kind: 'unknown' })
+    expect(owner.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+    expect(owner.listProcesses).toHaveBeenCalledOnce()
+  })
+
+  it('requires post-spawn inventory when a new route has no exact incarnation proof', async () => {
+    const { promise: gate, resolve: release } = Promise.withResolvers<PtyProcessInfo[]>()
+    const inventory = vi
+      .fn<() => Promise<PtyProcessInfo[]>>()
+      .mockReturnValueOnce(gate)
+      .mockResolvedValueOnce([{ id: 'new-session', incarnationId: 'new', cwd: '', title: 'new' }])
+    const owner = provider(inventory)
+    owner.supportsFencedTermination = () => true
+    owner.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    const resolver = new DaemonSessionOwnerResolver([owner], new Map())
+    const oldInventory = resolver.resolve('unrelated')
+    resolver.recordRoute('new-session', owner)
+    const request = {
+      id: 'new-session',
+      expectedIncarnationId: 'new',
+      requireNoAgentOwner: true,
+      requireUnattached: true
+    }
+    const termination = terminateResolvedDaemonSession(request, () =>
+      resolver.resolveTermination(request.id, 'new')
+    )
+    release([])
+
+    await expect(termination).resolves.toEqual({ outcome: 'ended' })
+    await expect(oldInventory).resolves.toEqual({ kind: 'unknown' })
+    expect(owner.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+    expect(owner.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
   it('uses the expected incarnation to disambiguate duplicate session ids', async () => {
     const oldOwner = provider(async () => [
       { id: 'session', incarnationId: 'old', cwd: '', title: 'old' }
@@ -216,6 +295,56 @@ describe('DaemonSessionOwnerResolver', () => {
       kind: 'owner',
       provider: exactOwner
     })
+  })
+
+  it('records the exact candidate incarnation instead of the first row from its provider', async () => {
+    const owner = provider(async () => [
+      { id: 'session', incarnationId: 'older', cwd: '/old', title: 'older' },
+      { id: 'session', incarnationId: 'expected', cwd: '/expected', title: 'expected' }
+    ])
+    const resolver = new DaemonSessionOwnerResolver([owner], new Map())
+
+    await expect(resolver.resolve('session', 'expected', true)).resolves.toEqual({
+      kind: 'owner',
+      provider: owner
+    })
+    await expect(resolver.resolveTermination('session', 'expected')).resolves.toEqual({
+      kind: 'owner',
+      provider: owner
+    })
+    expect(owner.listProcesses).toHaveBeenCalledOnce()
+  })
+
+  it('keeps identical incarnation evidence from different providers ambiguous', async () => {
+    const first = provider(async () => [
+      { id: 'session', incarnationId: 'same', cwd: '/first', title: 'first' }
+    ])
+    const second = provider(async () => [
+      { id: 'session', incarnationId: 'same', cwd: '/second', title: 'second' }
+    ])
+    const routes = new Map<string, IPtyProvider>()
+    const resolver = new DaemonSessionOwnerResolver([first, second], routes)
+    resolver.recordRoute('session', first, 'same')
+
+    await expect(resolver.resolve('session', 'same', true)).resolves.toEqual({ kind: 'unknown' })
+    expect(routes.get('session')).toBe(first)
+  })
+
+  it('does not let a bare-id route choose between listed incarnations', async () => {
+    const first = provider(async () => [
+      { id: 'session', incarnationId: 'first', cwd: '/first', title: 'first' }
+    ])
+    const second = provider(async () => [
+      { id: 'session', incarnationId: 'second', cwd: '/second', title: 'second' }
+    ])
+    const routes = new Map<string, IPtyProvider>()
+    const resolver = new DaemonSessionOwnerResolver([first, second], routes)
+    resolver.recordRoute('session', first)
+
+    await expect(resolver.listProcesses()).rejects.toBeInstanceOf(
+      TerminalSessionOwnerUnverifiedError
+    )
+    expect(routes.get('session')).toBe(first)
   })
 
   it('accepts one exact-id owner when persisted incarnation evidence is stale', async () => {
@@ -348,11 +477,31 @@ describe('DaemonSessionOwnerResolver', () => {
     })
   })
 
-  it('does not trust persisted incarnation proof from an incomplete inventory', async () => {
+  it('accepts the exact persisted incarnation while another inventory fails', async () => {
+    const exactOwner = provider(async () => [
+      { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+    ])
+    const resolver = new DaemonSessionOwnerResolver(
+      [
+        exactOwner,
+        provider(async () => {
+          throw new Error('offline')
+        })
+      ],
+      new Map()
+    )
+
+    await expect(resolver.resolve('session', 'persisted')).resolves.toMatchObject({
+      kind: 'owner',
+      provider: exactOwner
+    })
+  })
+
+  it('does not trust another incarnation of the id from an incomplete inventory', async () => {
     const resolver = new DaemonSessionOwnerResolver(
       [
         provider(async () => [
-          { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+          { id: 'session', incarnationId: 'other', cwd: '', title: 'candidate' }
         ]),
         provider(async () => {
           throw new Error('offline')
@@ -362,6 +511,46 @@ describe('DaemonSessionOwnerResolver', () => {
     )
 
     await expect(resolver.resolve('session', 'persisted')).resolves.toEqual({ kind: 'unknown' })
+    await expect(resolver.resolve('session')).resolves.toEqual({ kind: 'unknown' })
+  })
+
+  it('proves absence once a failed provider is proven gone, and stops asking it', async () => {
+    const reachable = provider(
+      async () => [],
+      async () => {
+        throw new SessionNotFoundError('missing')
+      }
+    )
+    const gone = provider(async () => {
+      throw new Error('connect ENOENT')
+    })
+    const isProvenGone = vi.fn((candidate: IPtyProvider) => candidate === gone)
+    const resolver = new DaemonSessionOwnerResolver([reachable, gone], new Map(), isProvenGone)
+    const attach = { sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 }
+
+    await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(reachable.spawn).not.toHaveBeenCalled()
+    await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(reachable.spawn).toHaveBeenCalledOnce()
+    expect(gone.listProcesses).toHaveBeenCalledOnce()
+    expect(isProvenGone).toHaveBeenCalledOnce()
+  })
+
+  it('keeps absence unverified when a failed provider is not proven gone', async () => {
+    const resolver = new DaemonSessionOwnerResolver(
+      [
+        provider(async () => []),
+        provider(async () => {
+          throw new Error('wedged')
+        })
+      ],
+      new Map(),
+      () => false
+    )
+
+    await expect(
+      resolver.spawnAttachOnly({ sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 })
+    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
   })
 
   it('accepts positive liveness proof from an incomplete inventory', async () => {

@@ -537,7 +537,7 @@ describe('staged background worktree creation', () => {
       undefined,
       undefined,
       undefined,
-      { activateCreatedTabs: false, backendStartupTerminalSpawned: true }
+      expect.objectContaining({ activateCreatedTabs: false, backendStartupTerminalSpawned: true })
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
@@ -545,9 +545,7 @@ describe('staged background worktree creation', () => {
     })
   })
 
-  // Why: one-click "Start workspace from issue" commonly backgrounds, so the
-  // user-moved-on path is the common delivery for the repo's issue command; it
-  // must thread through as the 5th positional arg, not be dropped to undefined.
+  // Background issue launches must retain the fifth positional issueCommand; this is the common one-click path.
   it('threads the request issue command into the background terminal seed', async () => {
     store.activeView = 'tasks'
     store.createWorktree.mockResolvedValueOnce({
@@ -564,9 +562,7 @@ describe('staged background worktree creation', () => {
     )
 
     expect(started).toBe(true)
-    // Why: vi.waitFor instead of a fixed microtask flush — the await count in
-    // executeWorktreeCreation grows over time (e.g. VM preflight), and a fixed
-    // flush silently starves this assertion in merged builds.
+    // Wait on the condition; fixed microtask counts drift as async preflight grows and silently starve assertions.
     await vi.waitFor(() =>
       expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
         store,
@@ -575,7 +571,7 @@ describe('staged background worktree creation', () => {
         undefined,
         { command: 'gh issue view 42' },
         undefined,
-        { activateCreatedTabs: false }
+        { activateCreatedTabs: false, worktreeCreationId: 'creation-1' }
       )
     )
   })
@@ -609,13 +605,14 @@ describe('staged background worktree creation', () => {
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
   })
 
-  it('opens only the setup tab when the composer chose None and setup runs', async () => {
+  it('opens only the setup tab despite templates when the composer choice is cleared', async () => {
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
     store.createWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
-      setup
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
     })
     vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: null })
 
@@ -628,6 +625,9 @@ describe('staged background worktree creation', () => {
       )
     )
     expect(store.createWorktree.mock.calls[0]?.at(-1)).toMatchObject({ setupOnly: true })
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+      'defaultTabs'
+    )
   })
 
   it('falls back to a blank terminal for None when no setup runs', async () => {
@@ -646,12 +646,13 @@ describe('staged background worktree creation', () => {
     )
   })
 
-  it('seeds only the setup tab for None when the user moved on before completion', async () => {
+  it('seeds only setup despite templates when the user moved on before completion', async () => {
     store.activeView = 'tasks'
     const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
     store.createWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
-      setup
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
     })
 
     continueBackgroundWorktreeCreation('creation-1', makeRequest({ setupOnly: true }), {
@@ -666,7 +667,7 @@ describe('staged background worktree creation', () => {
         setup,
         undefined,
         undefined,
-        { activateCreatedTabs: false, callerProvidesSurface: true }
+        expect.objectContaining({ activateCreatedTabs: false, callerProvidesSurface: true })
       )
     )
   })
@@ -706,8 +707,7 @@ describe('staged background worktree creation', () => {
   })
 
   it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
-    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
-    // a tab that runs no agent; main's startup terminal is the agent's own tab.
+    // Default tabs can be dev/log shells; backend startup terminal, not activation primaryTabId, identifies the agent.
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }

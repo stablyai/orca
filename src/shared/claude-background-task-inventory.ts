@@ -1,4 +1,3 @@
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 
@@ -24,22 +23,17 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'timed_out'
 ])
 
-/** One agent entry from the `background_tasks` array Claude attaches to Stop
- *  (and SubagentStop) hook payloads. Non-agent tasks do not become rows. */
+/** Agent entries from Stop/SubagentStop background_tasks; non-agent tasks do not become rows. */
 export type ClaudeBackgroundAgentTask = {
   id: string
   agentType?: string
   description?: string
   running: boolean
-  /** True for `type: "teammate"` entries. Their ids never match lifecycle
-   *  agent_ids and they report "running" permanently — even after the named
-   *  agent finished — so they carry no per-agent state at all. */
+  /** Teammate IDs never match lifecycle agent_ids and stay running even after completion, so they prove no per-agent state. */
   teammate: boolean
 }
 
-/** Read the agent-typed entries of a hook payload's `background_tasks` field.
- *  `present: false` means the field was absent/malformed (older Claude builds),
- *  so callers must keep their tracked roster instead of clearing it. */
+/** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
@@ -91,12 +85,6 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       continue
     }
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
-      truncated = true
-      continue
-    }
-    if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-      // Why: a capped inventory cannot prove a tracked id is absent; callers
-      // must retain unlisted rows rather than deleting live overflow tasks.
       truncated = true
       continue
     }

@@ -6,6 +6,7 @@ import {
   type AgentDetectionOwnerState
 } from '@/hooks/useAgentDetectionTarget'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 type DetectionReadState = Pick<
@@ -42,7 +43,6 @@ export function readDetectedAgentsForTarget(
     : state.detectedAgentIds
 }
 
-/** Loads a target's list from the host that owns it. */
 export function ensureDetectedAgentsForTarget(
   state: DetectionActionState,
   target: AgentDetectionTarget
@@ -78,14 +78,83 @@ export function readDetectedAgentsForWorktree(
   return target ? readDetectedAgentsForTarget(state, target) : null
 }
 
-/**
- * Loads the worktree's agents from the host that runs them: a hub-owned SSH workspace asks the hub,
- * never this client's SSH map. An unresolved owner lists nothing rather than probing this machine.
- */
+/** Ask the workspace owner, including hub-owned SSH; unresolved owners list nothing rather than probing this client. */
 export function ensureDetectedAgentsForWorktree(
   state: WorktreeAgentInventoryState,
   worktreeId: string | null
 ): Promise<TuiAgent[]> {
   const target = detectionTargetForWorktree(state, worktreeId)
   return target ? ensureDetectedAgentsForTarget(state, target) : Promise.resolve([])
+}
+
+export function getDetectionTargetIdentityForWorktree(
+  state: AgentDetectionOwnerState,
+  worktreeId: string | null
+): string | null {
+  const target = detectionTargetForWorktree(state, worktreeId)
+  return target ? JSON.stringify(target) : null
+}
+
+export async function loadDetectedAgentsForWorktree(
+  state: WorktreeAgentInventoryState,
+  worktreeId: string | null
+): Promise<TuiAgent[]> {
+  const cached = readDetectedAgentsForWorktree(state, worktreeId)
+  // Why: a shortcut pressed before the tab bar's probe lands must wait for it, not report "none".
+  return cached?.length ? cached : ensureDetectedAgentsForWorktree(state, worktreeId)
+}
+
+export type RepoHostFields = { connectionId?: string | null; executionHostId?: string | null }
+
+/** Resolve project agents before workspace creation; paired projects return null until the new workspace identifies its server-owned SSH/WSL target. */
+export function ensureDetectedAgentsForRepo(
+  state: DetectionActionState,
+  repo: RepoHostFields
+): Promise<TuiAgent[]> | null {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'runtime') {
+    return null
+  }
+  return host?.kind === 'ssh'
+    ? state.ensureRemoteDetectedAgents(host.targetId)
+    : state.ensureDetectedAgents()
+}
+
+/** A just-created workspace's agents; names it to its project's host while the new row hydrates. */
+export function ensureDetectedAgentsForNewWorktree(
+  state: WorktreeAgentInventoryState,
+  worktreeId: string,
+  repo: RepoHostFields
+): Promise<TuiAgent[]> {
+  const target = detectionTargetForWorktree(state, worktreeId)
+  if (target) {
+    return ensureDetectedAgentsForTarget(state, target)
+  }
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  return host?.kind === 'runtime'
+    ? state.ensureRuntimeDetectedAgents(host.environmentId, worktreeId)
+    : (ensureDetectedAgentsForRepo(state, repo) ?? Promise.resolve([]))
+}
+
+/** IDs and the latest attempt outcome always describe the same target. */
+export function readAgentInventoryForTarget(state: AppState, target: AgentDetectionTarget) {
+  if (target.kind === 'local') {
+    return state.readLocalAgentInventory(target.worktreeId)
+  }
+  const ids = readDetectedAgentsForTarget(state, target)
+  if (target.kind !== 'runtime') {
+    return { ids, state: state.remoteAgentInventoryOutcome(target.connectionId) }
+  }
+  const key = getRuntimeAgentInventoryKey(target.environmentId, target.worktreeId)
+  const unsupported = state.runtimeAgentDetectionNeedsServerUpdate[key]
+  return {
+    ids,
+    state: unsupported ? ('unsupported' as const) : state.runtimeAgentInventoryOutcome(key)
+  }
+}
+export function readAgentInventoryForWorktree(state: AppState, worktreeId: string) {
+  const target = detectionTargetForWorktree(state, worktreeId)
+  return target
+    ? readAgentInventoryForTarget(state, target)
+    : { ids: null, state: 'unresolved' as const }
 }

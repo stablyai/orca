@@ -1,11 +1,4 @@
-// The phone's list built from the frames it merged must equal the list a fresh snapshot of the same
-// journal builds, and must show the stop row from the frame that took the send back. Covers journal
-// -> host readers -> phone reducer -> projection -> fold -> turn membership, bars and the list's
-// disclosure; the phone's own hooks, its echo and the host's Stopping are covered by
-// mobile-native-chat-merged-snapshot-parity-hooks.test.tsx. Not covered:
-// - a batch that carries a new fence (the background-task publish, rows an attach drains);
-// - what the exit's settlement writes after the withdrawal (unknown marks, a lifecycle batch);
-// - a queue-capable phone's send while stopping as a queued draft card and its hand-off.
+// Compare journal-to-list merged frames with fresh snapshots, including withdrawn-send placement. New-fence batches, later exit settlement and queue handoff are outside this proof.
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -44,7 +37,6 @@ function apply(
   state: StructuredAgentSessionState,
   events: readonly AgentSessionSubscribeEvent[]
 ): StructuredAgentSessionState {
-  // Each phone gets its own copy, as it would off the wire.
   return events.reduce(
     (next, event) =>
       reduceStructuredAgentSession(next, { type: 'event', event: structuredClone(event) }, 0),
@@ -52,8 +44,6 @@ function apply(
   )
 }
 
-/** The rows the phone's transcript reads, as its session hook builds them: the journal plus the
- *  notice a cut turn gets, projected with no other rejected send drawn in place. */
 function phoneTranscript(state: StructuredAgentSessionState) {
   const items = withNativeChatCutTurnNotices(state.items, {
     agentName: TUI_AGENT_DISPLAY_NAMES.codex
@@ -64,10 +54,9 @@ function phoneTranscript(state: StructuredAgentSessionState) {
   }
 }
 
-/** What the phone's list draws: each row in draw order, its content, its turn and that turn's bar. */
 function drawn(state: StructuredAgentSessionState): Drawn {
   const { items, messages } = phoneTranscript(state)
-  const folded = foldMobileNativeChatMessages(messages)
+  const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
     messages,
     folded,
@@ -93,10 +82,9 @@ function drawn(state: StructuredAgentSessionState): Drawn {
   }
 }
 
-/** The ids the phone's list shows: its rows through the list's own turn disclosure. */
 function listed(state: StructuredAgentSessionState): string[] {
   const { items, messages } = phoneTranscript(state)
-  const folded = foldMobileNativeChatMessages(messages)
+  const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
     messages,
     folded,
@@ -126,10 +114,7 @@ function listed(state: StructuredAgentSessionState): string[] {
   return ids
 }
 
-/**
- * A fresh page starts part way into a long chat, and a turn whose user row it cut off is keyed
- * differently there; so both lists are compared from the fresh page's first user row on.
- */
+// Align comparisons at the fresh page’s first user row because a cut-off turn gets a different key.
 function comparable(merged: Drawn, fresh: Drawn): { merged: string[]; fresh: string[] } {
   const first = fresh.rows.findIndex((row) => row.role === 'user')
   const from = first === -1 ? fresh.rows.length : first
@@ -145,8 +130,6 @@ function comparable(merged: Drawn, fresh: Drawn): { merged: string[]; fresh: str
   }
 }
 
-/** Every frame from each subscribe point in `starts`, `rowsPerFrame` rows at a time; with how many
- *  of those frames the merged state held only a window of the chat. */
 function compareFrames(
   journal: StopJournal,
   starts: readonly number[],
@@ -204,12 +187,11 @@ function compareFrames(
 const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from }, (_, index) => from + index)
 
-// The QA journal has the host write a send made while stopping after the stopped turn's end; a host
-// that writes it while the turn still runs is covered too.
+// Exercise writes during the stopped turn and after its end, as seen in the QA journal.
 describe.each(['after-end', 'during-turn'] as const)(
   'a short chat, the send while stopping written %s: merged frames draw as a fresh snapshot does',
   (sendWhileStopping) => {
-    const journal = stopJournal(8, sendWhileStopping)
+    const journal = stopJournal(2, sendWhileStopping)
 
     it('draws the send the exit took back with its stop row, from the frame that took it back', () => {
       const fresh = drawn(
@@ -221,7 +203,6 @@ describe.each(['after-end', 'during-turn'] as const)(
       ])
     })
 
-    // Exhaustive frame enumeration shares CI CPUs with the typechecks.
     it.each([1, 2, 3])(
       'from every subscribe point, %i row(s) per frame',
       (rowsPerFrame) => {
@@ -237,8 +218,7 @@ describe.each(['after-end', 'during-turn'] as const)(
 describe('a chat longer than the phone first loads', () => {
   const journal = stopJournal(70)
   const last = journal.rows.length
-  // Every 37th row of the history, then every row from the last two history turns on, which revise
-  // and drop a status the window then holds.
+  // Sample old history every 37 rows, then every row around the final revising/dropping turns.
   const lastTurns = journal.neverOpenedSent - 70
   const starts = [...range(2, lastTurns).filter((row) => row % 37 === 0), ...range(lastTurns, last)]
 

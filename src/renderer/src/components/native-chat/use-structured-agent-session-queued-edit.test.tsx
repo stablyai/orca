@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The inline editor's lifecycle against a scripted host: what it acquires and saves, and that
-// typing is never lost — a card that leaves mid-edit puts dirty text in the chat box, and lease
-// bookkeeping failing never gates typing, Save or Cancel.
+// Exercise real edit lifecycle with a scripted host: preserve dirty text on departure and keep lease failures from blocking typing/Save/Cancel.
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -76,6 +74,7 @@ type Props = {
   messages: AgentSessionQueuedMessage[] | null
   sessionId?: string
   submissions?: AgentJournalSubmission[]
+  imagesCapable?: boolean
   promptOpen?: boolean
 }
 function harness(capable = true, initial: Props = { messages: [message] }) {
@@ -87,6 +86,7 @@ function harness(capable = true, initial: Props = { messages: [message] }) {
           target: { kind: 'environment', environmentId: 'remote-host' },
           sessionId: props.sessionId ?? SESSION,
           capable,
+          imagesCapable: props.imagesCapable,
           write
         },
         messages: props.messages,
@@ -230,6 +230,21 @@ describe('inline queued editor', () => {
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
 
+  it('moves typing into the chat box without image markers, since the card keeps its images', async () => {
+    const withImage: AgentSessionQueuedMessage = {
+      ...message,
+      body: {
+        ...message.body,
+        blocks: [{ type: 'image-ref', path: '/tmp/a.png' }, ...message.body.blocks]
+      }
+    }
+    const hook = harness(true, { messages: [withImage] })
+    await begin(hook)
+    act(() => hook.result.current.editor?.change('see [Image #1] not [Image #2]'))
+    hook.rerender({ messages: [] })
+    expect(readNativeChatDraftCache(SCOPE)).toBe('see  not [Image #2]')
+  })
+
   it('a clean edit whose card leaves just closes; an unloaded list proves nothing', async () => {
     const hook = harness()
     await begin(hook)
@@ -370,11 +385,13 @@ describe('inline queued editor', () => {
 
     it('a lost answer for a Save that landed says nothing either', async () => {
       const finish = deferred()
-      const hook = harness()
+      const hook = harness(true, { messages: [message], imagesCapable: true })
       await begin(hook)
-      act(() => hook.result.current.editor?.change('saved'))
+      act(() => hook.result.current.editor?.images?.intake.append(['/tmp/new.png']))
       act(() => hook.result.current.editor?.save())
-      hook.rerender({ messages: [withText('saved')] })
+      const saved = withText('original [Image #1]')
+      saved.body.blocks.push({ type: 'image-ref', path: '/tmp/new.png' })
+      hook.rerender({ messages: [saved], imagesCapable: true })
       await finish({ kind: 'not-done', notice: 'lost', failure: { kind: 'unconfirmed' } })
       expect(hook.result.current.editor).toBeUndefined()
       expect(toast.error).not.toHaveBeenCalled()
@@ -475,7 +492,6 @@ describe('inline queued editor', () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     expect(hook.result.current.editor).toBeUndefined()
     expect(holdCalls('release')).toHaveLength(1)
-    // Ended: no more beats.
     await act(() => vi.advanceTimersByTimeAsync(120_000))
     expect(rpc).toHaveBeenCalledTimes(4)
     expect(toast.error).not.toHaveBeenCalled()

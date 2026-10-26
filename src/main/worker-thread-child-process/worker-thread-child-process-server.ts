@@ -7,10 +7,11 @@ import type {
 } from './worker-thread-child-process-protocol'
 
 // Worker-thread half; must stay electron-free (plain-Node entry guard).
+const OUTPUT_HIGH_WATER_BYTES = 256 * 1024
 
 export type WorkerThreadChildPort = {
   on(event: 'message', listener: (request: WorkerThreadChildRequest) => void): unknown
-  postMessage(event: WorkerThreadChildEvent): void
+  postMessage(event: WorkerThreadChildEvent, transferList?: ArrayBuffer[]): void
 }
 
 function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
@@ -23,7 +24,7 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
 }
 
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
-  const children = new Map<number, PipedChildProcess>()
+  const children = new Map<number, { child: PipedChildProcess; pendingOutputBytes: number }>()
 
   const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
     let child: PipedChildProcess
@@ -33,17 +34,23 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
-    children.set(id, child)
+    const state = { child, pendingOutputBytes: 0 }
+    children.set(id, state)
+    const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
+      state.pendingOutputBytes += chunk.byteLength
+      if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
+        child.stdout?.pause()
+        child.stderr?.pause()
+      }
+      // Own the pipe chunk before transfer; a pooled Buffer may share its backing allocation.
+      const bytes = new Uint8Array(chunk)
+      port.postMessage({ type, id, chunk: bytes }, [bytes.buffer])
+    }
     const postError = (error: Error): void =>
       port.postMessage({ type: 'error', id, error: toErrorPayload(error) })
     child.on('spawn', () => port.postMessage({ type: 'spawn', id, pid: child.pid }))
-    // Copied so the clone carries only this chunk, not the whole backing allocation.
-    child.stdout?.on('data', (chunk: Buffer) =>
-      port.postMessage({ type: 'stdout', id, chunk: new Uint8Array(chunk) })
-    )
-    child.stderr?.on('data', (chunk: Buffer) =>
-      port.postMessage({ type: 'stderr', id, chunk: new Uint8Array(chunk) })
-    )
+    child.stdout?.on('data', (chunk: Buffer) => postOutput('stdout', chunk))
+    child.stderr?.on('data', (chunk: Buffer) => postOutput('stderr', chunk))
     // An unhandled stream error would take the whole worker, and every other child, down.
     child.stdout?.on('error', () => {})
     child.stderr?.on('error', () => {})
@@ -62,12 +69,19 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       spawnChild(request)
       return
     }
-    const child = children.get(request.id)
-    if (!child) {
+    const state = children.get(request.id)
+    if (!state) {
       return
     }
+    const { child } = state
     try {
-      if (request.type === 'stdin-write') {
+      if (request.type === 'output-consumed') {
+        state.pendingOutputBytes = Math.max(0, state.pendingOutputBytes - request.bytes)
+        if (state.pendingOutputBytes < OUTPUT_HIGH_WATER_BYTES) {
+          child.stdout?.resume()
+          child.stderr?.resume()
+        }
+      } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {
         child.stdin?.end()

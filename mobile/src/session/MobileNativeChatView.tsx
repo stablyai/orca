@@ -1,16 +1,18 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 import {
   ActivityIndicator,
-  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   Text,
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown, ChevronsDownUp, ChevronsUpDown } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
@@ -18,6 +20,7 @@ import type {
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
@@ -27,80 +30,72 @@ import {
   mobileNativeChatEmptyState,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
+import { useMobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import {
   mobileNativeChatComposerPlaceholder,
   useSettledMobileNativeChatInputLock
-} from './use-mobile-native-chat-input-lease'
+} from './native-chat/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
-import { MobileNativeChatStopButton } from './MobileNativeChatStopButton'
-import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
+import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
+import {
+  MobileNativeChatComposer,
+  type MobileNativeChatStructuredComposer
+} from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { NO_COMPOSER_TRAY, type ComposerTrayProps } from './use-mobile-native-chat-composer-tray'
+import {
+  NO_COMPOSER_TRAY,
+  type ComposerTrayProps
+} from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
+import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
+import { MobileNativeChatRowList } from './MobileNativeChatRowList'
+import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { OlderPagePhase } from './use-mobile-older-page-loader'
 
-/** Why the composer input is locked: the transport is disconnected, or the
- *  terminal subscription has not acknowledged its input lease yet. */
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = ComposerTrayProps & {
-  /** Raw transcript, only for telling "still loading" from "loaded and empty". */
+  // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
   messages: NativeChatMessage[]
-  /** `messages` with noise stripped and tool turns folded in, from the overlay. */
   folded: NativeChatMessage[]
   status: MobileNativeChatStatus
   error?: string
-  /** The read failed for good (damage, a newer Orca's chat): its error takes the whole pane. */
+  // Permanent read failure replaces the pane because further chat actions cannot succeed.
   readFailedFinally?: boolean
-  /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
   canStop?: boolean
-  /** Structured lane: per-turn "Working for N" status plus live tool progress,
-   *  replacing the bridge lane's static three-dot working row (desktop parity). */
   structuredActivityUi?: boolean
-  /** What labels the live turn's one indicator row (structured lane only). */
   turnIndicator?: NativeChatLiveTurnIndicator | null
-  /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
-  /** Structured lane: the journal that places each row in its turn. */
   turnJournal?: NativeChatTurnJournal | null
-  /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
-  /** Interrupt a provider turn. */
+  receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
+  actionablePromptIds?: readonly string[]
   onStop?: () => void
-  /** Live partial assistant text to show as an in-progress bubble, already gated
-   *  by the overlay against the transcript catching up. */
+  // The overlay already gates partial text against authoritative transcript replacement.
   streaming: string | null
   hasMore?: boolean
-  loadingEarlier?: boolean
+  olderPages?: OlderPagePhase
   onLoadEarlier?: () => void
   onSend: (text: string) => Promise<boolean>
-  /** Route identity used to fence accepted sends that settle after a tab/view switch. */
+  // Fence send completion by route identity after tab/view switches.
   sendSurfaceId: string
-  /** Reads the retained route's focus generation for accepted-send fencing. */
   getSendCompletionGeneration: () => number
-  /** Reads user draft mutations from the route-owned controller. */
   getComposerEditGeneration: () => number
-  /** Accepted user echoes awaiting transcript replacement, including image previews. */
   pending: MobileNativeChatPendingItem[]
-  /** Local photo URIs retained when the authoritative transcript replaces an
-   *  optimistic image bubble. */
+  // Retain local preview URIs after authoritative image messages replace optimistic rows.
   imagePreviewsByMessageId?: Record<string, string[]>
-  /** Controlled composer text (owned by the route so dictation can write to it). */
   composerText: string
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
-  /** Pending image attachments shown as composer thumbnails until the next send. */
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -110,32 +105,21 @@ type Props = ComposerTrayProps & {
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   inputLockReason?: MobileNativeChatInputLockReason | null
-  /** Route-reported send failure (answer cards, permission replies, stop). Shares the
-   *  inline banner with a rejected composer send, so one failure paints once. The
-   *  route routes these here only while this view is mounted, and falls back to its
-   *  toast otherwise — a deferred failure must not land on an unmounted banner. */
+  // Report send failures here only while mounted; the route uses a toast otherwise.
   sendErrorMessage?: string | null
-  /** Clears `sendErrorMessage` once a later send is accepted. */
   onClearSendError?: () => void
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
-  /** Model/session-option pickers for the composer action row (desktop parity). */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  /** A pending agent question/permission detected from live status, shown as a
-   *  native card above the composer; answering sends text to the agent. */
-  /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
-   *  the heuristic question card). */
+  structuredComposer?: MobileNativeChatStructuredComposer | null
   ask?: AskPrompt | null
-  /** Stable key for the ask card. Dismissal state lives in the controller (it
-   *  must survive this subtree unmounting on a chat↔terminal toggle). */
+  // Keep dismissal identity above chat/terminal toggles.
   askKey?: string | null
-  /** Hide the answered/dismissed ask until a different question arrives. */
   onDismissAsk?: () => void
-  /** Deliver the ask answer as per-question selections; the send hook turns them
-   *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  askRequiresTerminal?: boolean
+  onAnswerInTerminal?: () => void
   onCancelAsk?: () => Promise<boolean>
-  /** Cancel a structured approval/question with exact item identity when supported. */
   onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
   onCollapseAsk?: () => void
   onCollapsePrompt?: () => void
@@ -145,10 +129,7 @@ type Props = ComposerTrayProps & {
   permission?: MobileChatPermission | null
   promptKey?: string | null
   onRespondPermission?: (send: string) => Promise<boolean>
-  /** Open a worktree file tapped in agent markdown. */
   onOpenFile?: (relativePath: string) => void
-  /** Pixels to lift the composer by when the soft keyboard is open. The route
-   *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
   keyboardInset?: number
 }
 
@@ -166,10 +147,12 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
+  receipts = null,
+  actionablePromptIds,
   onStop,
   streaming,
   hasMore,
-  loadingEarlier,
+  olderPages = 'idle',
   onLoadEarlier,
   onSend,
   sendSurfaceId,
@@ -194,10 +177,13 @@ export function MobileNativeChatView({
   filePaths,
   onNeedFiles,
   sessionOptions,
+  structuredComposer = null,
   ask,
   askKey,
   onDismissAsk,
   onAnswerAsk,
+  askRequiresTerminal = false,
+  onAnswerInTerminal,
   onCancelAsk,
   onCancelPrompt,
   onCollapseAsk,
@@ -213,15 +199,10 @@ export function MobileNativeChatView({
   keyboardInset = 0
 }: Props): React.JSX.Element {
   const insets = useSafeAreaInsets()
-  const [toolsExpanded, setToolsExpanded] = useState(false)
-  // Lift the composer clear of the keyboard, plus the bottom safe-area so it
-  // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
-  // `data` is the list source: folded transcript + synthetic streaming bubble +
-  // route-owned accepted echoes. Memoize on the same deps so the
-  // downstream autoscroll effects/`renderItem` keep referential stability.
+  // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
   const { data } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
@@ -233,19 +214,8 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
-  const {
-    listRef,
-    showJumpToTail,
-    pinToTail,
-    pinToTailAfterContentResize,
-    jumpToTail,
-    beginUserScroll,
-    endUserDrag,
-    beginMomentum,
-    endMomentum,
-    detachFromTail,
-    recordScrollMetrics
-  } = useMobileNativeChatTailFollow<NativeChatMessage>({ hasItems: data.length > 0 })
+  const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
+  const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -253,38 +223,30 @@ export function MobileNativeChatView({
       if (!accepted) {
         return false
       }
-      // The route-owned banner outlives this send; a success must retire it too,
-      // or a stale "Message not sent" sits above the delivered message.
+      // Retire the route-owned banner too or an accepted send keeps the old failure visible.
       onClearSendError?.()
-      // Always jump to the newest message when the user sends.
       jumpToTail()
       return true
     },
     [onSend, onClearSendError, jumpToTail]
   )
 
-  const loadEarlier = useCallback(() => {
-    detachFromTail()
-    onLoadEarlier?.()
-  }, [detachFromTail, onLoadEarlier])
+  const loadEarlier = useCallback(() => onLoadEarlier?.(), [onLoadEarlier])
+  // After failure require a tap; automatic near-top retries could spin forever.
+  const loadEarlierNearTop = hasMore && olderPages === 'idle' ? loadEarlier : undefined
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset } = e.nativeEvent
       recordScrollMetrics(e.nativeEvent)
-      // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
-        loadEarlier()
+      // Only reader drags trigger native pagination; tail-pin offsets may also look near-top.
+      if (contentOffset.y < 60 && scrollMayLoadEarlier()) {
+        loadEarlierNearTop?.()
       }
     },
-    [hasMore, loadingEarlier, loadEarlier, recordScrollMetrics]
+    [loadEarlierNearTop, scrollMayLoadEarlier, recordScrollMetrics]
   )
 
-  // Per-turn status rows: one live indicator while the turn runs, then a settled
-  // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
-  // three-dot indicator.
-  // The display status, decided once in the session hook.
-  const stopping = turnIndicator?.stopping === true
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
@@ -294,30 +256,29 @@ export function MobileNativeChatView({
     turnJournal,
     thinking: turnIndicator?.thinking === true,
     activityText: turnIndicator?.activityText ?? null,
-    stopping,
-    lineYields: structuredActivityUi && (ask != null || permission != null || question != null),
+    stopping: turnIndicator?.stopping === true,
+    lineYields: ask != null || permission != null || question != null,
+    receipts,
     scopeKey: sendSurfaceId
   })
 
-  const unsentNotices = useMemo(
-    () => mobileNativeChatUnsentNotices(turnJournal, agent),
-    [turnJournal, agent]
-  )
-  const renderItem = useCallback(
-    ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <MobileNativeChatMessage
-        message={item}
-        toolsExpanded={toolsExpanded}
-        fontScale={fontScale}
-        onOpenFile={onOpenFile}
-        structuredActivityUi={structuredActivityUi}
-        onToggleTurn={turns.onToggleTurn}
-        unsentNotice={item.unsent ? unsentNotices.get(item.id) : undefined}
-        {...turns.resolveRow(index, item)}
-      />
-    ),
-    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns, unsentNotices]
-  )
+  const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
+  const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
+  const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
+  const renderItem = useMobileNativeChatRowRenderer({
+    scope: sendSurfaceId,
+    rowKeyOf: rowKeys.keyOf,
+    runOwners: rowKeys.runOwners,
+    taskListPredecessors,
+    fontScale,
+    onOpenFile,
+    structuredActivityUi,
+    turns,
+    turnJournal,
+    agent,
+    receipts,
+    actionablePromptIds
+  })
 
   const liveStatus = turns.liveLine ? (
     <MobileNativeChatLiveLine
@@ -328,12 +289,18 @@ export function MobileNativeChatView({
     />
   ) : null
 
+  const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
+  // Changing text scale relays out every row, so preserve the page’s reading anchor.
+  const layoutKey = `${fontScale}`
+  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
-  const showLoading = status === 'loading' && messages.length === 0
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
-  // Why only Send, terminal-backed only: that send types into the agent's prompt and can answer it,
-  // while drafting never does; the host queues a structured send behind it.
+  const composerPlaceholder = mobileNativeChatComposerPlaceholder(
+    lockReason,
+    turnIndicator?.afterStop
+  )
+  // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
   const expandedPromptOwnsSend =
     !structuredActivityUi && !collapsedPrompt && (ask ?? permission ?? question) != null
   const emptyStateView = emptyState ? (
@@ -343,90 +310,56 @@ export function MobileNativeChatView({
     </View>
   ) : null
 
-  // Whatever was already on screen: nothing here can act on a chat that cannot load, and its words
-  // say why once, as a fresh open's do.
   if (readFailedFinally && emptyStateView) {
     return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>
   }
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
-      {showLoading ? (
+      {status === 'loading' && messages.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <GestureDetector gesture={pinchGesture}>
-            <FlatList
-              ref={listRef}
-              data={turns.listMessages}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              contentContainerStyle={styles.listContent}
-              // Let link/file taps land while the composer keyboard is up
-              // instead of being swallowed by the dismiss gesture.
-              keyboardShouldPersistTaps="handled"
-              onScroll={onScroll}
-              onScrollBeginDrag={beginUserScroll}
-              onScrollEndDrag={endUserDrag}
-              onMomentumScrollBegin={beginMomentum}
-              onMomentumScrollEnd={endMomentum}
-              scrollEventThrottle={32}
-              onContentSizeChange={pinToTailAfterContentResize}
-              onLayout={pinToTail}
-              ListHeaderComponent={mobileNativeChatListHeader(hasMore, loadingEarlier, loadEarlier)}
-              ListFooterComponent={mobileNativeChatListFooter(
-                liveStatus,
-                turns.waitingRows,
-                renderItem
-              )}
-              ListEmptyComponent={emptyStateView}
-            />
-          </GestureDetector>
-          {/* Jump-to-latest control. */}
-          {showJumpToTail ? (
-            <Pressable
-              accessibilityLabel="Scroll to latest"
-              style={[styles.fab, styles.fabBottom]}
-              onPress={jumpToTail}
+          <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+            <MobileNativeChatScrollRootsBoundary
+              {...{ rowKeys, layoutKey }}
+              roots={disclosures.roots}
+              runPlacements={rowKeys.runPlacements}
             >
-              <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+              <GestureDetector gesture={pinchGesture}>
+                <MobileNativeChatRowList
+                  {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
+                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                  rows={turns.listMessages}
+                  runs={turns.presentation.workRuns.heads}
+                  roots={disclosures.roots}
+                  contentContainerStyle={styles.listContent}
+                />
+              </GestureDetector>
+            </MobileNativeChatScrollRootsBoundary>
+          </MobileNativeChatDisclosureContext.Provider>
+          <MobileNativeChatFloatingControls
+            showJumpToTail={tail.showJumpToTail}
+            onJumpToTail={jumpToTail}
+          />
         </GestureHandlerRootView>
       )}
-      {trayContent}
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         {...{ ask, askKey, onDismissAsk, onAnswerAsk, onCancelAsk, onCancelPrompt, onCollapseAsk }}
+        requiresTerminal={askRequiresTerminal}
+        onAnswerInTerminal={onAnswerInTerminal}
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
         collapsedPrompt={collapsedPrompt}
       />
-      <View style={styles.chromeRow}>
-        <View style={styles.chromeLeft}>
-          {agentWorking && !structuredActivityUi ? <MobileAgentWorkingIndicator /> : null}
-          <Pressable
-            style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
-            onPress={() => setToolsExpanded((v) => !v)}
-            hitSlop={8}
-          >
-            {toolsExpanded ? (
-              <ChevronsDownUp size={14} color={colors.textMuted} strokeWidth={2} />
-            ) : (
-              <ChevronsUpDown size={14} color={colors.textMuted} strokeWidth={2} />
-            )}
-            <Text style={styles.chromeToggleLabel}>{toolsExpanded ? 'Collapse' : 'Tools'}</Text>
-          </Pressable>
-        </View>
-        {canStop ? (
-          // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-          <MobileNativeChatStopButton
-            onStop={onStop}
-            held={agentWorking === true && turnIndicator?.stopRequestInFlight === true}
-          />
-        ) : null}
-      </View>
+      <Text
+        style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
+        accessibilityLiveRegion="polite"
+      >
+        {lockReason === 'waiting' ? composerPlaceholder : null}
+      </Text>
       {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
         <View
@@ -437,10 +370,10 @@ export function MobileNativeChatView({
           <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
         </View>
       ) : null}
+      {}
+      {trayContent}
       <MobileNativeChatComposer
-        structuredCommands={
-          structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
-        }
+        structured={structuredActivityUi ? structuredComposer : null}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
@@ -459,9 +392,17 @@ export function MobileNativeChatView({
         onMicPressOut={onMicPressOut}
         disabled={lockReason !== null}
         sendDisabled={expandedPromptOwnsSend}
-        placeholder={mobileNativeChatComposerPlaceholder(lockReason, turnIndicator?.afterStop)}
+        placeholder={composerPlaceholder}
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
+        stop={
+          canStop
+            ? {
+                onStop,
+                held: agentWorking === true && turnIndicator?.stopRequestInFlight === true
+              }
+            : null
+        }
       />
     </View>
   )

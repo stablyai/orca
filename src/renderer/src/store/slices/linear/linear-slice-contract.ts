@@ -33,6 +33,8 @@ export type LinearFetchOptions = {
   force?: boolean
   sourceContext?: TaskSourceContext | null
   workspaceId?: LinearWorkspaceSelection | null
+  // Issue reads only: reject on an undecryptable credential instead of resolving null.
+  rejectCredentialError?: boolean
 }
 export type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
 

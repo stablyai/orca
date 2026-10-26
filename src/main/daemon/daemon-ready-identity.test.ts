@@ -27,8 +27,6 @@ describe('parseDaemonReadyIdentity', () => {
   })
 
   it('rejects a readiness payload with no self-reported PID', () => {
-    // The launcher has no other trustworthy source: its own child may be the systemd-run
-    // wrapper of a durable-scope launch rather than the daemon.
     expect(parseDaemonReadyIdentity({ type: 'ready', startedAtMs: 123 })).toBeNull()
   })
 

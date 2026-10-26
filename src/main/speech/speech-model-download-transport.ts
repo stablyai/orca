@@ -37,11 +37,11 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
     for (;;) {
       requestCount += 1
       const offset = this.getPartialDownloadBytes(filePath)
-      // Why: transport can fail after the last byte hits disk; the SHA-256 check is the real completion test.
+      // The final write can precede transport failure; SHA-256 remains authoritative.
       if (offset === totals.totalBytes) {
         return
       }
-      // Why: absolute backstop against a server that never lets the download finish.
+      // Bound servers that advance forever without finishing.
       if (requestCount > MAX_TOTAL_DOWNLOAD_REQUESTS) {
         throw describeInterruptedDownload(
           new Error('too many download requests'),
@@ -51,7 +51,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
         )
       }
       try {
-        // Why: restart from the canonical URL, not the last redirect, because signed CDN redirect URLs expire.
+        // Restart from the canonical URL because signed CDN redirects expire.
         await this.downloadFile(
           url,
           filePath,
@@ -76,7 +76,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
           `Model download response ended at ${receivedBytes} of ${totals.totalBytes} bytes`
         )
         if (receivedBytes > offset) {
-          // Why: some proxies cap each range segment; request the next immediately and reset the stall counter.
+          // Range-capping proxies require another segment immediately; progress resets stalls.
           noProgressStreak = 0
           continue
         }
@@ -94,7 +94,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
         if (!isRetryableDownloadError(err)) {
           throw err
         }
-        // Why: give up only on a genuine stall; a download still advancing across drops keeps going.
+        // Bound consecutive stalls independently of the total request ceiling.
         if (noProgressStreak >= MAX_NO_PROGRESS_ATTEMPTS) {
           throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, requestCount)
         }
@@ -148,7 +148,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
         cleanup()
         reject(error)
       }
-      const onData = (chunk: Buffer): void => {
+      const onData = (chunk: string | Buffer): void => {
         hash.update(chunk)
       }
       const onError = (error: Error): void => {
@@ -157,7 +157,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
       const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
-          // Why: model artifacts feed native runtimes, so verify every downloaded file before installation.
+          // Verify artifacts before feeding native runtimes.
           settleReject(new Error('Downloaded model file failed integrity verification'))
           return
         }

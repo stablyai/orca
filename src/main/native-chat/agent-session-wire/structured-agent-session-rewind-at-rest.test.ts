@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// A Codex rewind whose outcome only the provider can prove, found on a chat at rest: nothing on
-// screen will start the agent that settles it, so the next send does, and its message is kept.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -29,6 +27,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -44,39 +43,45 @@ const rewindSupport = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewindSup
 const dispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>()
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    supportsCreate: (_location, agent) => agent === 'codex',
-    supportsLocation: () => true,
-    acquire: async (input) => {
-      acquires += 1
-      sink = input.events!
-      return {
-        process: {
-          hostId: 'local',
-          pid: 4000 + acquires,
-          processStartTimeMs: HOST_TEST_NOW,
-          spawnToken: input.spawnToken
-        },
-        acquisitionGeneration: `generation-${acquires}`,
-        link: {
-          linkId: `link-${acquires}`,
-          mintedAtFence: input.fence,
-          observedAt: HOST_TEST_NOW,
-          origin: acquires === 1 ? 'created' : 'resumed',
-          handle: codexProviderHandle(THREAD)
+  return startsWhenPublished(
+    {
+      supportsCreate: (_location, agent) => agent === 'codex',
+      supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
+      acquire: async (input) => {
+        acquires += 1
+        sink = input.events!
+        return {
+          process: {
+            hostId: 'local',
+            pid: 4000 + acquires,
+            processStartTimeMs: HOST_TEST_NOW,
+            spawnToken: input.spawnToken
+          },
+          acquisitionGeneration: `generation-${acquires}`,
+          link: {
+            linkId: `link-${acquires}`,
+            mintedAtFence: input.fence,
+            observedAt: HOST_TEST_NOW,
+            origin: acquires === 1 ? 'created' : 'resumed',
+            handle: codexProviderHandle(THREAD)
+          }
         }
-      }
+      },
+      dispatch,
+      cancelTurn: async () => ({ cancelled: false }),
+      answerPrompt: async () => {},
+      setOption: async () => {},
+      rewindSupport,
+      rewind,
+      recoverRewind,
+      releaseAcquisition: async () => true,
+      closeSession: async () => true
     },
-    dispatch,
-    cancelTurn: async () => ({ cancelled: false }),
-    answerPrompt: async () => {},
-    setOption: async () => {},
-    rewindSupport,
-    rewind,
-    recoverRewind,
-    releaseAcquisition: async () => true,
-    closeSession: async () => true
-  }
+    () => host
+  )
 }
 
 function openHost(): StructuredAgentSessionHost {
@@ -97,10 +102,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   acquires = 0
   rewind.mockReset()
-  recoverRewind.mockReset().mockResolvedValue({
-    ok: true,
-    items: [{ identity: KEPT, body: hostTestMessage('verified history') }]
-  })
+  recoverRewind.mockReset().mockResolvedValue({ ok: true })
   rewindSupport.mockReset().mockReturnValue({ supported: true })
   dispatch.mockReset().mockImplementation(async (input): Promise<AgentSessionDispatchOutcome> => ({
     state: 'accepted',
@@ -159,7 +161,6 @@ function sendParams(text: string) {
   }
 }
 
-/** A chat whose rewind the provider applied, whose Orca side never finished, reopened at rest. */
 async function interruptedRewindAtRest(): Promise<void> {
   expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const drop = { ...KEPT, turnId: 'drop' }
@@ -199,7 +200,6 @@ describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
         ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
         : []
     )
-    // The recovered history, then the new message — nothing the rewind dropped, nothing lost.
     expect(texts).toEqual(['verified history', 'after the rewind'])
     expect(snapshot.submissions.at(-1)?.dispatchState).toBe('accepted')
   })

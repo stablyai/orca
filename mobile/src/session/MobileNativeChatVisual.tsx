@@ -1,8 +1,8 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Maximize2, X } from 'lucide-react-native'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-visual-host-document'
@@ -12,7 +12,6 @@ import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-c
 
 const DEFAULT_TITLE = 'Visualization'
 
-/** The quiet reserved space a visual takes while it loads. */
 function MobileNativeChatVisualPlaceholder() {
   return (
     <View style={[styles.frame, styles.placeholder]}>
@@ -21,7 +20,6 @@ function MobileNativeChatVisualPlaceholder() {
   )
 }
 
-/** The transcript's visual renderer for a structured chat's source; null without one. */
 export function useMobileNativeChatVisualRenderer(
   source: MobileNativeChatVisualSource | null
 ): MobileNativeChatVisualRender | null {
@@ -34,7 +32,6 @@ export function useMobileNativeChatVisualRenderer(
   )
 }
 
-/** A `::orca-visual{...}` line in a finished assistant reply, rendered from the chat's host. */
 export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   directive,
   source
@@ -43,7 +40,6 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   source: MobileNativeChatVisualSource
 }) {
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
-  // A frame that navigated away or kept crashing; cleared by the reader's retry.
   const [frameFailed, setFrameFailed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const title = directive.title ?? DEFAULT_TITLE
@@ -113,10 +109,20 @@ function MobileNativeChatVisualFullscreen({
   onClose: () => void
   onFailed: () => void
 }) {
-  const insets = useSafeAreaInsets()
+  const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={[styles.sheet, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            paddingTop: insets.top,
+            paddingRight: insets.right,
+            paddingBottom: insets.bottom,
+            paddingLeft: insets.left
+          }
+        ]}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle} numberOfLines={1}>
             {title}

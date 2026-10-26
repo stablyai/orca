@@ -2,7 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { openHttpLink, registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  openHttpLink,
+  registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { buildFileLinkActions, handleTerminalFileLink } from './terminal-file-link-actions'
@@ -24,7 +28,7 @@ const deps = {
   runtimeEnvironmentId: null
 }
 const createBrowserTab = vi.fn()
-const openFile = vi.fn()
+const openFileForLink = vi.fn(() => null)
 const markWorktreeVisited = vi.fn()
 const recordWorktreeVisit = vi.fn()
 const revealWorktreeInSidebar = vi.fn()
@@ -68,7 +72,7 @@ beforeEach(() => {
     activeBrowserTabId: 'main-browser',
     rightSidebarTab: 'explorer',
     createBrowserTab,
-    openFile,
+    openFileForLink,
     markWorktreeVisited,
     recordWorktreeVisit,
     revealWorktreeInSidebar
@@ -77,6 +81,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  registerWorkspaceHttpLinkBrowserOpener(null)
   useAppStore.setState(initialState, true)
   vi.unstubAllGlobals()
 })
@@ -141,9 +146,11 @@ describe('floating file links preserve main-window selection', () => {
     await buildFileLinkActions(filePath, null, null, deps, { kind: 'local' }).primary.run()
     await flushOpen()
 
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
-      { forceContentReload: true }
+      { forceContentReload: true },
+      null,
+      expect.any(Function)
     )
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
@@ -153,9 +160,11 @@ describe('floating file links preserve main-window selection', () => {
     const before = mainSelection()
     openDetectedFilePath('/Users/me/floating/app.ts', null, null, deps)
     await flushOpen()
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
-      { forceContentReload: true }
+      { forceContentReload: true },
+      null,
+      expect.any(Function)
     )
     expect(mainSelection()).toEqual(before)
   })
@@ -171,16 +180,20 @@ describe('floating file links preserve main-window selection', () => {
   })
 
   it('keeps HTTP links in the floating browser as well', () => {
+    const openBrowserTab = vi.fn(async () => null)
+    registerWorkspaceHttpLinkBrowserOpener(openBrowserTab)
     const before = mainSelection()
     openHttpLink('https://example.com', {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       sourceOwner: { kind: 'local' }
     })
-    expect(createBrowserTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      'https://example.com',
-      { activate: true }
-    )
+    expect(openBrowserTab).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'https://example.com',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
+    })
+    expect(createBrowserTab).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
   })
 })

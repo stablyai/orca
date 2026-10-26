@@ -1,8 +1,4 @@
-/**
- * A fresh worker starts through the shared launch executor, and its durable dispatch records must
- * read exactly as they did when the placement sequenced the launch itself: the same effects, the
- * same stage rows in the same order, one host question, and a refused chat that fails the start.
- */
+/** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -15,7 +11,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
 import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
 import type { WorkerEffect } from './worker-topology'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 const sessionCreate = vi.hoisted((): { refusal: { code: string } | null } => ({ refusal: null }))
 
@@ -129,14 +125,14 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.stages).toEqual(['terminal_creating'])
   })
 
-  it('fails a refused structured worker in the worktree it created, with no terminal', async () => {
+  it('fails a refused structured worker in the worktree it created, leaving a shell', async () => {
     const f = fakes()
     sessionCreate.refusal = { code: 'structured_agent_session_unsupported' }
 
     await expect(place(f, { mode: STRUCTURED })).rejects.toMatchObject({
       code: 'agent_unconfigured'
     })
-    expect(f.runtime.createTerminal).not.toHaveBeenCalled()
+    expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', { surfaceOwner: false })
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
   })
 
@@ -172,7 +168,8 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledTimes(1)
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       'id:wt_new',
-      'claude'
+      'claude',
+      { requireInstalledChatProgram: true }
     )
     expect(f.stages).toEqual(['worktree_creating', 'worktree_created', 'terminal_creating'])
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
@@ -196,6 +193,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })
@@ -258,6 +256,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_existing', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })

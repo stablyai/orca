@@ -43,7 +43,6 @@ describe('killAllProcessesForWorktree', () => {
   })
 
   it('reaches daemon sessions and registry entries without a runtime', async () => {
-    // Simulate headless-CLI: no renderer, so `runtime` is undefined.
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@abcd1234', cwd: '/tmp/w1', title: 'shell' },
       { id: 'w2@@efef5678', cwd: '/tmp/w2', title: 'shell' }
@@ -95,7 +94,6 @@ describe('killAllProcessesForWorktree', () => {
 
     const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
 
-    // Prefix sweep must kill nothing; registry sweep must still fire.
     expect(result.providerStopped).toBe(0)
     expect(result.registryStopped).toBe(1)
     expect(localProvider.shutdown).toHaveBeenCalledWith(
@@ -439,7 +437,6 @@ describe('killAllProcessesForWorktree', () => {
       resolvedWorktreeId: 'w1'
     })
 
-    // Without this the sweep resolves a selector whose repo is gone and throws selector_not_found.
     expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
       deadline: expect.any(Number),
       stopPty: expect.any(Function),
@@ -699,10 +696,7 @@ describe('killAllProcessesForWorktree', () => {
     }
   })
 
-  // Why: on win32 the DaemonPtyAdapter is the local provider, so an unbounded
-  // kill RPC (30s default > the 10s sweep deadline) let the outer deadline win
-  // with the confusing "Timed out waiting for physical PTY teardown" instead of
-  // the accurate stop failure. The bound must fire first (native-Windows regression).
+  // Bound Windows daemon kill RPCs below the sweep deadline so failures report the stop cause (#9500).
   it('destructive teardown surfaces a bounded stop failure when the daemon kill RPC never replies (#9500 regression)', async () => {
     vi.useFakeTimers()
     try {
@@ -710,20 +704,13 @@ describe('killAllProcessesForWorktree', () => {
       const sessionId = 'w1@@dead0001'
       let killRequests = 0
 
-      // A fake daemon RPC client standing in for a wedged daemon: it answers
-      // listSessions (so the session is discovered as owned) but never sends a
-      // reply to 'kill'. It faithfully models the real DaemonClient.request
-      // contract — a request is only bounded by its own timeoutMs, which
-      // defaults to REQUEST_TIMEOUT_MS (30_000). The adapter's shutdown passes
-      // no override, so the kill can only settle after 30s: long past the 10s
-      // sweep deadline.
+      // List ownership but never answer kill; absent an explicit timeout override, requests use the daemon's 30s default.
       const DAEMON_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
       const fakeClient = {
         onDisconnected: () => () => {},
         onEvent: () => () => {},
         ensureConnected: async () => {},
-        // Why: bounded teardown connects via ensureConnectedWithin; model the real
-        // DaemonClient method so the shared connect+RPC budget path is exercised.
+        // Model bounded connection so connect and kill share the real RPC budget.
         ensureConnectedWithin: async () => {},
         isConnected: () => true,
         getDaemonIdentity: () => null,
@@ -741,8 +728,7 @@ describe('killAllProcessesForWorktree', () => {
           }
           if (type === 'kill') {
             killRequests += 1
-            // The daemon never replies; the request only rejects when its own
-            // timeout elapses, exactly like the real client.
+            // Only the request's own timeout can reject this silent daemon call.
             return new Promise((_resolve, reject) => {
               setTimeout(
                 () => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)),
@@ -759,9 +745,7 @@ describe('killAllProcessesForWorktree', () => {
 
       listRegisteredPtysMock.mockReturnValue([])
 
-      // Capture the rejection as a value so a wrong error is a clean assertion
-      // failure below rather than a floating unhandled rejection while fake
-      // timers fire.
+      // Capture rejection before advancing time so an incorrect result fails this assertion, not another test.
       const outcome = killAllProcessesForWorktree(worktreeId, {
         localProvider: adapter as unknown as IPtyProvider,
         includeLocalRegistry: false,
@@ -774,16 +758,11 @@ describe('killAllProcessesForWorktree', () => {
         (error: Error) => error
       )
 
-      // Advance past the daemon's 8s physical-exit budget AND the 10s sweep
-      // deadline. A bounded adapter shutdown would have rejected inside this
-      // window, letting the sweep report a clean stop failure. Today nothing
-      // settles before the deadline, so the sweep throws its deadline error.
+      // Advance through the sweep deadline; a correctly bounded kill must have already reported its stop failure.
       await vi.advanceTimersByTimeAsync(WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
 
       const error = await outcome
       expect(killRequests).toBeGreaterThan(0)
-      // Why: the adapter bounds its kill RPC below the sweep deadline, so a wedged
-      // daemon yields the accurate stop failure — not the confusing deadline error.
       expect(error.message).toContain('Failed to physically stop every PTY')
     } finally {
       vi.useRealTimers()
@@ -805,8 +784,7 @@ describe('killAllProcessesForWorktree', () => {
   })
 
   it('tolerates an unresolved runtime selector during destructive removal', async () => {
-    // Why: a just-created/removed worktree can be absent from the runtime
-    // graph; that means zero runtime-owned PTYs, not a failed teardown.
+    // An absent newly created/removed graph entry means no runtime-owned PTYs, not failed teardown.
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('selector_not_found'))
     const runtime = {
       stopTerminalsForWorktree

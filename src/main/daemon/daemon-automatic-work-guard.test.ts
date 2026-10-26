@@ -67,7 +67,6 @@ describe('DaemonAutomaticWorkGuard growth breaker', () => {
         trips: expect.arrayContaining([expect.objectContaining({ scope: 'session-0001' })])
       })
     )
-    // A pressure pause lives for this run only, so the breaker never writes one.
     expect(JSON.parse(readFileSync(markerPath, 'utf8'))).toMatchObject({ mode: { kind: 'normal' } })
   })
 

@@ -102,4 +102,26 @@ describe('ClientHostedBrowserUnavailableNotice', () => {
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
     expect(mocks.ensure).toHaveBeenCalledWith(expect.anything(), 'env-a')
   })
+
+  it('offers reopening on the server only when the server has a browser of its own', () => {
+    renderNotice(live)
+    expect(screen.getByRole('button', { name: 'Reopen on server' })).toBeInTheDocument()
+    cleanup()
+
+    const status = live.status
+    if (!status) {
+      throw new Error('fixture status missing')
+    }
+    // orcad with no engine: it hosts pages on desktops but cannot render one itself.
+    renderNotice({
+      ...live,
+      status: {
+        ...status,
+        capabilities: (status.capabilities ?? []).filter(
+          (capability) => capability !== 'browser.screencast.v1'
+        )
+      }
+    })
+    expect(screen.queryByRole('button', { name: 'Reopen on server' })).not.toBeInTheDocument()
+  })
 })

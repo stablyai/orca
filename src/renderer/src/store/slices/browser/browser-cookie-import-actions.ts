@@ -35,8 +35,7 @@ export function createBrowserCookieImportActions(
         // Why: tracked across the try so a failed fallback RPC still reports the machine it ran on.
         let ranOnClient = false
         try {
-          // Why: client-hosted pages render on this desktop, so their logins live
-          // here -- detecting and importing on the headless remote finds nothing.
+          // Client-hosted pages use desktop login jars; headless remote detection/import finds nothing.
           const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
             environmentId: runtimeEnvironmentId,
             profileId,

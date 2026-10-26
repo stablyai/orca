@@ -1,5 +1,3 @@
-// A fake Claude stream-json child for the structured-session integration suite.
-
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -19,7 +17,6 @@ export type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | '
 export function fakeClaude(providerSession: string) {
   const connections: FakeClaudeConnection[] = []
   let initializeAccount: unknown
-  /** A child that dies during start, with the close verdict its ladder observed. */
   let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
     null
   let contextUsage: () => Promise<unknown> = async () => ({})
@@ -35,7 +32,12 @@ export function fakeClaude(providerSession: string) {
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {
-          handlers.onExit?.(new Error(selfExit.message))
+          const error = new Error(selfExit.message)
+          if (selfExit.exitVerdict.root === 'exited') {
+            handlers.onExit?.(error)
+          } else {
+            handlers.onFault?.(error)
+          }
           return { models: [] }
         }
         handlers.onMessage?.({
@@ -80,7 +82,8 @@ export function fakeClaude(providerSession: string) {
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
       },
-      send: async (message) => {
+      send: async (message, beforeDispatch) => {
+        await beforeDispatch?.()
         connection.sent.push(message)
         if (message.type === 'user') {
           handlers.onMessage?.({ ...message, uuid: 'user-1' })

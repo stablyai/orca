@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { Pressable, Text } from 'react-native'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
-import type { MobileNativeChatTab } from '../mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
@@ -57,6 +57,7 @@ vi.mock('lucide-react-native', () =>
       'ChevronsUpDown',
       'ShieldQuestion',
       'ImagePlus',
+      'Plus',
       'Mic',
       'Square',
       'X',
@@ -66,18 +67,17 @@ vi.mock('lucide-react-native', () =>
   )
 )
 vi.mock('../MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
+vi.mock('../MobileNativeChatRowOverlaysHost', () => ({ MobileNativeChatRowOverlaysHost: 'View' }))
 vi.mock('../MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
+vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('../MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('../MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 vi.mock('../MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../MobileNativeChatComposerSuggestions', () => ({
-  MobileNativeChatComposerSuggestions: 'Suggestions',
-  composerSuggestionInsertText: () => ''
+vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
+  MobileNativeChatComposerMenu: 'Suggestions',
+  composerMenuInsertText: () => ''
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
@@ -105,15 +105,15 @@ const structured = {
 vi.mock('../use-mobile-session-view-mode', () => ({
   useMobileSessionViewMode: () => ({
     isTabChatView: () => visible.value,
-    toggleTabChatView: () => {
-      visible.value = !visible.value
-    }
+    setTabView: (_tabId: string, view: string) =>
+      Object.assign(visible, { value: view === 'chat' }),
+    toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
 }))
 vi.mock('../use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession: structured })
 }))
-vi.mock('../use-mobile-native-chat-drafts', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => ({
     composerText: 'ordinary message',
     setComposerText: vi.fn(),
@@ -136,14 +136,14 @@ vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
     recordCommand: vi.fn()
   })
 }))
-vi.mock('../use-mobile-native-chat-file-search', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-vi.mock('../use-mobile-native-chat-composer-tray', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))
-vi.mock('../use-mobile-native-chat-streaming-bubble', () => ({
+vi.mock('../native-chat/use-mobile-native-chat-streaming-bubble', () => ({
   useMobileNativeChatStreamingBubble: () => null
 }))
 
@@ -232,6 +232,7 @@ function Harness(props: HarnessProps) {
     sendErrorMessage: null,
     onClearSendError: vi.fn(),
     sendSurfaceId: 'surface',
+    sessionId: null,
     getSendCompletionGeneration: () => 0,
     keyboardInset: 0
   })
@@ -250,7 +251,6 @@ export async function render(props: HarnessProps = lastProps ?? {}) {
 export function sendButton() {
   return getTree().root.findByProps({ accessibilityLabel: 'Send message' })
 }
-/** Index 1 is Deny. */
 export function permissionAction(index = 1) {
   return getTree()
     .root.findByProps({ testID: 'native-chat-approval-actions' })

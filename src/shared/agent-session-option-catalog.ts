@@ -79,9 +79,7 @@ export function mergeCatalogModels(
   return [...merged, ...discoveredById.values()]
 }
 
-/** Discovery decides membership; the seed keeps its option menus, which discovery never carries.
- *  Why: an unseeded model inherits the default seed's options because these catalogs' options are
- *  global CLI flags, not per-model capabilities — dropping them would hide the picker entirely. */
+/** Discovery controls membership; retain seed option menus. Unseeded models inherit default-seed global CLI flags so their picker stays available. */
 export function mergeDiscoveredAuthoritativeModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]
@@ -92,8 +90,7 @@ export function mergeDiscoveredAuthoritativeModels(
     const { isDefault: _seeded, ...merged } = seedMatch
       ? { ...seedMatch, ...disc, options: seedMatch.options }
       : { ...disc, options: inheritedOptions }
-    // Why: the probe reports which id the CLI defaults to today; a seed flag frozen at
-    // release would keep naming the old one after the account's default moves.
+    // Use the probe's current CLI default; a release-frozen seed mislabels changed account defaults.
     return disc.isDefault ? { ...merged, isDefault: true } : merged
   })
 }

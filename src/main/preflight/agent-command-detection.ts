@@ -1,6 +1,6 @@
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -28,10 +28,7 @@ export async function detectAgentCommandsOnHost(
     }))
   )
   const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  // Same PATH as the walk above: a WSL host's orcad must not re-admit /mnt/<drive> shims.
-  // Elsewhere (Windows included) keep the process PATH the fallback always searched.
+  // Resolve cold-GUI install dirs once; use the same WSL-filtered PATH while retaining process PATH elsewhere.
   const guestMounts = readGuestWindowsDriveMounts()
   const installDirCommands = detectCommandsInInstallDirs(
     missedCommands,

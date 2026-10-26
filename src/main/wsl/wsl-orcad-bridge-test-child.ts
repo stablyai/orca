@@ -1,8 +1,4 @@
-/**
- * Test-only: a `wsl.exe` spawner whose children run the stdio bridge in-process. Each child dials
- * the port the bridge command names on this machine and prints the real sentinel, so the listener
- * and WSL transport above it run unchanged.
- */
+/** Fake wsl.exe children dial a local port and emit the real bridge sentinel, leaving the listener/WSL transport unchanged. */
 import { EventEmitter } from 'node:events'
 import { connect } from 'node:net'
 import { PassThrough } from 'node:stream'
@@ -11,7 +7,7 @@ import {
   ORCAD_STDIO_BRIDGE_READY,
   ORCAD_STDIO_BRIDGE_REFUSED,
   orcadPosixStdioBridgeCommand
-} from '../ssh/orcad-stdio-bridge-script'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 import type { OrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
 
 export type FakeWslBridgeChildren = {

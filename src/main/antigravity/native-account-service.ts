@@ -19,6 +19,14 @@ function matches(account: StoredAntigravityAccount, current: AntigravityNativeCr
   if (current.identity && account.subject) {
     return account.subject === current.identity.subject && account.authMethod === current.authMethod
   }
+  // agy's token refresh stores no id_token but keeps the grant's refresh token.
+  if (
+    current.refreshToken &&
+    account.authMethod === current.authMethod &&
+    parseAntigravityNativeCredential(account.credentials).refreshToken === current.refreshToken
+  ) {
+    return true
+  }
   return account.credentials === current.contents
 }
 
@@ -41,13 +49,13 @@ export class AntigravityAccountService {
       if (!current) {
         throw new Error('Sign in with agy on this execution host, then save the current account.')
       }
-      if (!current.identity) {
-        throw new Error(
-          'The current Antigravity credential has no stable Google identity; it cannot be saved for switching.'
-        )
-      }
       let account = vault.accounts.find((entry) => matches(entry, current))
       if (!account) {
+        if (!current.identity) {
+          throw new Error(
+            'The current Antigravity credential has no stable Google identity; it cannot be saved for switching.'
+          )
+        }
         const timestamp = this.now()
         account = {
           id: randomUUID(),
@@ -167,18 +175,18 @@ export class AntigravityAccountService {
     vault: AntigravityAccountVault
     current: AntigravityNativeCredential | null
   }): AntigravityAccountState {
+    const active = current ? vault.accounts.find((entry) => matches(entry, current)) : undefined
+    const subject = current?.identity?.subject ?? active?.subject ?? null
     return {
       accounts: vault.accounts.map(({ credentials: _credentials, ...account }) => account),
-      activeAccountId: current
-        ? (vault.accounts.find((entry) => matches(entry, current))?.id ?? null)
-        : null,
+      activeAccountId: active?.id ?? null,
       selectedAccountId: vault.selectedAccountId,
       currentAccount: current
         ? {
-            email: current.identity?.email ?? null,
-            subject: current.identity?.subject ?? null,
+            email: current.identity ? current.identity.email : (active?.email ?? null),
+            subject,
             authMethod: current.authMethod,
-            identityKnown: current.identity !== null
+            identityKnown: subject !== null
           }
         : null
     }

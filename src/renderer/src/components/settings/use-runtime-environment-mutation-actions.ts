@@ -1,18 +1,20 @@
-import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import type { RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
+import { defaultServerNameForAccessLink } from './runtime-server-default-name'
+import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
+import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
 
 type RuntimeEnvironmentMutationActionParams = {
-  environments: PublicKnownRuntimeEnvironment[]
   settings: GlobalSettings
   allowLocalRuntime: boolean
   mountedRef: MutableRefObject<boolean>
-  setAddServerFormOpen: Dispatch<SetStateAction<boolean>>
+  setAddServerFormOpen: (open: boolean) => void
   loadEnvironments: (verified?: {
     environmentId: string
     runtimeStatus: RuntimeStatus
@@ -21,7 +23,6 @@ type RuntimeEnvironmentMutationActionParams = {
 }
 
 export function useRuntimeEnvironmentMutationActions({
-  environments,
   settings,
   allowLocalRuntime,
   mountedRef,
@@ -47,8 +48,10 @@ export function useRuntimeEnvironmentMutationActions({
   }
 
   const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
-    const trimmedName = name.trim()
     const trimmedPairingCode = pairingCode.trim()
+    const trimmedName =
+      name.trim() ||
+      defaultServerNameForAccessLink(trimmedPairingCode, useAppStore.getState().runtimeEnvironments)
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
         translate(
@@ -58,22 +61,10 @@ export function useRuntimeEnvironmentMutationActions({
       )
       return
     }
-    const duplicate = environments.find(
-      (environment) => environment.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    )
-    if (duplicate) {
-      toast.error(
-        translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.5ef712f407',
-          'A server named "{{value0}}" already exists.',
-          { value0: duplicate.name }
-        )
-      )
-      return
-    }
     setAddServerFailure(null)
     setIsSaving(true)
     try {
+      // Main distinguishes duplicate names from refreshing the same saved server.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
@@ -93,19 +84,29 @@ export function useRuntimeEnvironmentMutationActions({
         environmentId: result.environment.id,
         runtimeStatus: result.runtimeStatus
       })
+      if (result.updatedExisting && mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.serverAlreadyPaired',
+            'This server is already paired as {{value0}}; updated its connection.',
+            { value0: result.environment.name }
+          )
+        )
+      }
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
-        if (!connected) {
+        // Rollback must not remove an existing server refreshed by this pairing.
+        if (!connected && !result.updatedExisting) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
           return
         }
-      } else {
+      } else if (!result.updatedExisting) {
         if (mountedRef.current) {
           toast.success(
             translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.7b5986c8df',
-              'Connected to {{value0}}. To create new projects there by default, choose it under Advanced > Default host for new projects.',
+              'auto.components.settings.RuntimeEnvironmentsPane.connectedNewProjectsHint',
+              'Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.',
               { value0: result.environment.name }
             )
           )
@@ -142,14 +143,15 @@ export function useRuntimeEnvironmentMutationActions({
         if (mountedRef.current) {
           setRemoveError(
             translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerBlocked',
-              'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+              'auto.components.settings.RuntimeEnvironmentsPane.removeDefaultServerBlocked',
+              'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
             )
           )
         }
         return false
       }
       await window.api.runtimeEnvironments.remove({ selector: environment.id })
+      forgetCachedRuntimeHostDetails(environment.id)
       await loadEnvironments()
       if (mountedRef.current) {
         toast.success(

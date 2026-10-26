@@ -1,15 +1,6 @@
-/**
- * STA-4343: correct host-qualified routing is useless if the user cannot select
- * the row it would route to.
- *
- * A repo id can be registered once per execution host, so the same repo checked
- * out at the same path on the local host and on an SSH host publishes the SAME
- * `repoId::path` workspace id twice. The sidebar collapsed that to one row, which
- * meant the other host's workspace could never be confirmed — and a delete
- * confirmed on the surviving row carried the wrong host.
- */
+/** Same-path checkouts on different hosts share an ID but need separate selectable rows and confirmed delete targets. */
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -39,8 +30,7 @@ const sshWorktree: Worktree = { ...localWorktree, hostId: 'ssh:build-box' }
 function buildCollidingRows(
   worktrees: Worktree[] = [localWorktree, sshWorktree]
 ): ReturnType<typeof buildRows> {
-  // Only one repo can be keyed per id in the repo map; the SSH row still has to
-  // render, so the collision must be resolved from the worktree rows themselves.
+  // The repo map holds one host per ID; workspace rows must preserve both hosts.
   return buildRows(
     'repo',
     worktrees,
@@ -94,10 +84,8 @@ describe('sidebar rows for a workspace id owned by two hosts', () => {
     expect(itemRows.map((row) => row.worktree.hostId)).toEqual(['local', 'ssh:build-box'])
   })
 
-  // The same-host duplicate that this dedup was originally built for collapses a
-  // layer up, in the store index — see worktree-host-collision-index.test.ts.
+  // The store index already collapses same-host duplicates; see worktree-host-collision-index.test.ts.
 })
 
-// Referenced so the SSH repo fixture documents the two-host registration this
-// scenario requires, even though buildRows keys its repo map by id alone.
+// Keep the second-host fixture explicit even though buildRows accepts an ID-keyed repo map.
 export const SSH_REPO_FIXTURE = sshRepo

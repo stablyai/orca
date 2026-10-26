@@ -85,6 +85,9 @@ The injected preamble is authoritative. A dispatched worker must:
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.
+   After processing every message, ack the batch, which returns the next one, and
+   repeat until `count` is 0; an unacked batch replays and hides newer mail:
+   `ORCA orchestration check --terminal <your_handle> --ack <delivery_id> --json`.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
@@ -108,6 +111,12 @@ ORCA orchestration worker-start --spec "<worker B task>" --worktree current --ag
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
 
+After a restart, resume your own Run with `run-use --id <run_id>`. A worker
+cannot bind the Run it works for or an ancestor, and cannot use
+`--takeover-legacy`; an already-bound no-op remains allowed. When its
+coordinator directs a handoff, a replacement worker may resume a separate Run
+with plain `run-use`.
+
 If `worker-start` exits non-zero, do not relaunch. Read the receipt's
 `failedStage` and `residualResources`, then load
 `references/recovery-and-cleanup.md`.
@@ -116,6 +125,8 @@ Use `task-create` plus `worker-start --task <task_id>` for planned fan-out with
 dependencies or a retry of a known Task. Use dependencies only for real ordering
 and prefer parallel waves over chains deeper than three or four steps; nested
 workers obey the depth limit, and a new Run does not reset the caller's depth.
+A dispatched worker starts its own helpers with `worker-start --spec` on the Run
+it works for, without `run-create`; the helpers report to that worker.
 
 A consuming `check` names its caller with `--terminal <handle>`, never `--from`;
 omit it inside the coordinator's own Orca terminal. It returns the bound Run's

@@ -6,10 +6,7 @@ import {
   type WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 
-export type GitStatusRefWatchTarget = Pick<
-  WorktreeBaseWatchTarget,
-  'kind' | 'connectionId' | 'repos' | 'path'
-> & {
+export type GitStatusRefWatchTarget = Pick<WorktreeBaseWatchTarget, 'kind' | 'repos' | 'path'> & {
   gitStatusRefPaths: Set<string>
 }
 
@@ -50,7 +47,7 @@ function watchMatchesBinding(
 ): boolean {
   return (
     watch.kind === 'git-common' &&
-    watch.connectionId === binding.connectionId &&
+    binding.connectionId === undefined &&
     watch.repos.has(binding.repoId)
   )
 }
@@ -61,7 +58,7 @@ function watchMatchesResolution(
 ): boolean {
   return (
     watch.kind === 'git-common' &&
-    watch.connectionId === resolution.connectionId &&
+    resolution.connectionId === undefined &&
     watch.repos.has(resolution.repoId)
   )
 }
@@ -73,10 +70,7 @@ export function applyActiveGitStatusRefBinding(watch: GitStatusRefWatchTarget): 
   }
 }
 
-// Why: at most one worktree holds a selected upstream ref at a time, so every
-// other repo's ref poll would wake only to stat nothing. Publishing the
-// transition lets those pollers stay unscheduled until they actually have a ref,
-// with no detection delay — rebinding is an in-process event, not a timer.
+// Only the selected upstream needs polling; binding events schedule it immediately without idle per-repo timers.
 const bindingChangeListeners = new Set<() => void>()
 
 export function onActiveGitStatusRefBindingChanged(listener: () => void): () => void {

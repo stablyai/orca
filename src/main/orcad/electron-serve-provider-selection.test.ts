@@ -16,6 +16,9 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: spawnProcessMock
 }))
 
+// Real macOS installs would register a park in the developer’s home.
+vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
+
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
@@ -27,7 +30,6 @@ let chromiumExecutable: string
 let sidecarMode: string | undefined
 let provider: OrcadBrowserProvider | null
 
-/** Strips the session/profile/args prefix the agent-browser invocation carries. */
 function commandFromArgs(args: readonly string[]): string[] {
   let index = 0
   while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {

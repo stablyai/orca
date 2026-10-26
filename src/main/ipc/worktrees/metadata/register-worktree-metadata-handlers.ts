@@ -6,11 +6,22 @@ import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 import { parseWorktreeId } from '../../worktree-logic'
-import { planWorktreeSortOrderUpdates } from '../../../../shared/worktree/sort-order-update'
+import {
+  writeWorktreeSortOrder,
+  type WorktreeSortOrderRequest
+} from '../../../persistence/worktree-sort-order-write'
 import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
+import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import {
+  isWslMoveSourceHost,
+  isWslMoveWorkspaceBlocked,
+  shouldDropWslMoveProjectUpdate,
+  wslMoveProjectRefForWorkspace
+} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -31,28 +42,42 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       if (args.executionHostId !== undefined && !executionHostId) {
         throw new Error('Invalid execution host identity.')
       }
+      if (
+        isWslMoveSourceHost(executionHostId) &&
+        shouldDropWslMoveProjectUpdate(
+          store,
+          wslMoveProjectRefForWorkspace(args.worktreeId),
+          args.updates
+        )
+      ) {
+        return null
+      }
       const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
       const updates =
         validatedUpdates.displayName !== undefined
           ? {
               ...validatedUpdates,
-              // The host persists provenance; do not rely on renderer-authored metadata.
+              // Persist label provenance on the host rather than trusting renderer metadata.
               displayNameIsPinned: displayNameUpdatePinsLabel(validatedUpdates.displayName),
               pendingFirstAgentMessageRename: false,
               firstAgentMessageRenameError: null
             }
           : validatedUpdates
       const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
-      // Why: a late write from a terminal still bound to a removed folder workspace (#22712).
+      // Late terminal activity must not resurrect a removed folder instance (#22712).
       if (isRemovedFolderWorkspaceInstance(store, args.worktreeId, executionHostId)) {
         return null
       }
-      const meta = executionHostId
-        ? store.setWorktreeMetaForHost(args.worktreeId, executionHostId, sanitizedUpdates)
-        : store.setWorktreeMeta(args.worktreeId, sanitizedUpdates)
-      // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
+      const target = executionHostId
+        ? hostWorktreeTarget({ id: args.worktreeId, hostId: executionHostId })
+        : resolveWorktreeMetaOwner(store, args.worktreeId)
+      if (!target) {
+        return null
+      }
+      const meta = store.setWorktreeMeta(target, sanitizedUpdates)
+      // Local optimistic state is current; notifying it would re-sort the sidebar (#209).
       if (args.updates.displayName !== undefined) {
-        // Why: remote clients have no optimistic rename and stopped polling titles, so push a remote-only invalidation; gate on displayName so per-click isUnread updates stay event-free.
+        // Remote clients need rename pushes; per-click unread changes must remain event-free.
         runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
       }
       return meta
@@ -83,18 +108,16 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle('worktrees:persistSortOrder', (_event, args: { orderedIds: string[] }) => {
+  ipcMain.handle('worktrees:persistSortOrder', (_event, args: WorktreeSortOrderRequest) => {
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
-    const updates = planWorktreeSortOrderUpdates(
-      args.orderedIds,
-      (worktreeId) => store.getWorktreeMeta(worktreeId),
+    writeWorktreeSortOrder(
+      store,
+      args,
+      (worktreeId) => isWslMoveWorkspaceBlocked(store, worktreeId),
       Date.now()
     )
-    for (const update of updates) {
-      store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
-    }
   })
 
   ipcMain.handle(

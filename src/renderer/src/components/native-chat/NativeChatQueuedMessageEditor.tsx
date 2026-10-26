@@ -1,23 +1,38 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, Plus, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import { isMacPlatform } from './native-chat-shortcut'
+import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
+import { NativeChatPaneFileDropOverlay } from './NativeChatPaneFileDropSurface'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
+import {
+  useNativeChatQueuedEditImageIntake,
+  type QueuedEditAttachTarget
+} from './use-native-chat-queued-edit-image-intake'
 
-/** The inline editor that replaces a queued card's row while it is edited. It lives in the card,
- *  not the composer, so it stays usable while a question or approval holds the composer's slot. */
+/** Edit inside the card so questions and approvals occupying the composer do not block queued-draft editing. */
 export function NativeChatQueuedMessageEditor({
   editor,
-  sender
+  sender,
+  images,
+  attachTo
 }: {
   editor: QueuedMessageInlineEditor
   /** The card's "From <name>" line, kept beside the label. */
   sender?: ReactNode
+  /** The card's image count, shown where the host edits text only and so keeps the images. */
+  images?: ReactNode
+  /** The chat this card's added files attach to, as its chat box attaches them. */
+  attachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
   const field = useRef<HTMLTextAreaElement>(null)
+  const intake = useNativeChatQueuedEditImageIntake(editor, attachTo, field)
+  const chips = editor.images?.chips ?? []
+  const empty = editor.images?.empty === true
   useLayoutEffect(() => {
     if (editor.acquiring) {
       return
@@ -37,7 +52,12 @@ export function NativeChatQueuedMessageEditor({
     }
   }, [editor.acquiring])
   return (
-    <div data-queued-message-editor>
+    <div
+      data-queued-message-editor
+      className="relative px-2.5 py-1.5"
+      onPasteCapture={intake.onPasteCapture}
+    >
+      {intake.isDragActive ? <NativeChatPaneFileDropOverlay queuedMessage /> : null}
       <div className="flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground">
         <Pencil className="size-3.5 shrink-0" aria-hidden />
         <span className="shrink-0">
@@ -49,11 +69,11 @@ export function NativeChatQueuedMessageEditor({
             <div className="min-w-0">{sender}</div>
           </>
         ) : null}
+        <div className="ml-auto flex items-center">{editor.images ? null : images}</div>
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="ml-auto"
           aria-label={translate(
             'components.native-chat.queuedMessages.cancelEditing',
             'Cancel editing'
@@ -63,6 +83,18 @@ export function NativeChatQueuedMessageEditor({
           <X className="size-3.5" />
         </Button>
       </div>
+      {chips.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
+          {chips.map((chip) => (
+            <NativeChatImageAttachmentPreview
+              key={chip.id}
+              attachment={chip}
+              hostEnvironmentId={intake.hostEnvironmentId}
+              onRemove={(id) => editor.images?.intake.remove(id)}
+            />
+          ))}
+        </div>
+      ) : null}
       <Textarea
         ref={field}
         aria-label={translate('components.native-chat.queuedMessages.editMessage', 'Edit message')}
@@ -71,8 +103,7 @@ export function NativeChatQueuedMessageEditor({
         value={editor.text}
         readOnly={editor.acquiring || editor.saving}
         onChange={(event) => editor.change(event.currentTarget.value)}
-        // Enter or Cmd/Ctrl+Enter saves, Shift+Enter is a newline, Escape cancels; an IME's own
-        // Enter and Escape never get here (`ImeTextarea`). Handled keys stay out of the prompt.
+        // Handle save/cancel keys outside the prompt; ImeTextarea keeps IME Enter/Escape out of this handler.
         onKeyDown={(event) => {
           const mod = isMacPlatform() ? event.metaKey : event.ctrlKey
           if (event.key === 'Escape') {
@@ -93,17 +124,49 @@ export function NativeChatQueuedMessageEditor({
           }
         }}
       />
-      <div className="mt-1.5 flex justify-end">
-        <Button
-          type="button"
-          size="xs"
-          disabled={editor.acquiring || editor.saving || !editor.canSave}
-          onClick={editor.save}
-        >
-          {translate('components.native-chat.queuedMessages.save', 'Save')}
-          <ButtonKeyHint />
-        </Button>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        {intake.editable ? <QueuedEditAttachButton onAttach={intake.attach} /> : null}
+        {intake.editable ? (
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            {empty
+              ? translate(
+                  'components.native-chat.queuedMessages.saveNeedsContent',
+                  'Add text or an image to save'
+                )
+              : translate(
+                  'components.native-chat.queuedMessages.pasteOrDropImages',
+                  'Paste or drop images'
+                )}
+          </span>
+        ) : null}
+        <div className="ml-auto">
+          <Button
+            type="button"
+            size="xs"
+            disabled={editor.acquiring || editor.saving || !editor.canSave}
+            onClick={editor.save}
+          >
+            {translate('components.native-chat.queuedMessages.save', 'Save')}
+            <ButtonKeyHint />
+          </Button>
+        </div>
       </div>
     </div>
+  )
+}
+
+function QueuedEditAttachButton({ onAttach }: { onAttach: () => void }): React.JSX.Element {
+  const label = translate('components.native-chat.composer.attach', 'Attach file')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={label} onClick={onAttach}>
+          <Plus className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

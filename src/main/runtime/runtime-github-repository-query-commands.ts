@@ -16,8 +16,9 @@ import {
   validateGhAccountBinding
 } from '../github/gh-account-binding-inventory'
 import { getRateLimit } from '../github/rate-limit'
-import { githubHostFromIdentityKey } from '../../shared/github/repository-identity-key'
+import { resolveGhAccountRequiredHost } from '../github/account-binding-required-host'
 import { getWorkItemDetails } from '../github/work-item-details'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -43,7 +44,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       query,
       page,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       noCache,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -58,7 +59,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       limit,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
     return result.items
@@ -74,7 +75,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference
     )
@@ -92,7 +93,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       ownerRepo,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -107,7 +108,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference
     )
@@ -119,7 +120,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       query,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -129,7 +130,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -141,7 +142,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -157,8 +158,9 @@ export class RuntimeGitHubRepositoryQueryCommands {
     options?: { refreshCapability?: boolean }
   ): Promise<Awaited<ReturnType<typeof listGhAccountBindingInventory>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const requiredHost = githubHostFromIdentityKey(repo.gitRemoteIdentity?.canonicalKey)
-    return listGhAccountBindingInventory(this.deps.getLocalGitArgs(repo)[0] ?? {}, {
+    const localGitOptions = this.deps.getLocalGitArgs(repo)[0] ?? {}
+    const requiredHost = await resolveGhAccountRequiredHost(repo, localGitOptions)
+    return listGhAccountBindingInventory(localGitOptions, {
       refreshCapability: options?.refreshCapability === true,
       ...(requiredHost ? { requiredHost } : {})
     })
@@ -169,11 +171,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
     binding: { host: string; user: string }
   ): Promise<Awaited<ReturnType<typeof validateGhAccountBinding>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const requiredHost = githubHostFromIdentityKey(repo.gitRemoteIdentity?.canonicalKey)
-    return validateGhAccountBinding(
-      binding,
-      this.deps.getLocalGitArgs(repo)[0] ?? {},
-      requiredHost ? { requiredHost } : {}
-    )
+    const localGitOptions = this.deps.getLocalGitArgs(repo)[0] ?? {}
+    const requiredHost = await resolveGhAccountRequiredHost(repo, localGitOptions)
+    return validateGhAccountBinding(binding, localGitOptions, requiredHost ? { requiredHost } : {})
   }
 }

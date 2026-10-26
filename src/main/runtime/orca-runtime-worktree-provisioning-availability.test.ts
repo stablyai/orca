@@ -12,6 +12,9 @@ import {
 } from './orca-runtime-test-mocks.spec'
 import { store } from './orca-runtime-test-fixtures.spec'
 import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
+import { tmpdir } from 'node:os'
+import type { Worktree } from '../../shared/worktree/types'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 describe('host worktree creation while its renderer is unavailable', () => {
   it.each([
@@ -91,4 +94,105 @@ describe('host worktree creation while its renderer is unavailable', () => {
       }
     }
   )
+})
+
+describe('startup hosts retain current runtime capabilities', () => {
+  it('refuses base prefetch without a runtime store', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    await expect(
+      runtime.prefetchManagedWorktreeCreateBase({ repoSelector: 'id:missing' })
+    ).rejects.toThrow('runtime_unavailable')
+  })
+
+  it('reads the current create override with the captured worktree and three arguments', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    onTestFinished(() => {
+      vi.restoreAllMocks()
+    })
+    const created: Worktree = {
+      id: 'created-worktree',
+      repoId: 'repo-1',
+      displayName: 'Created',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      path: tmpdir(),
+      head: 'abc',
+      branch: 'created',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const host = runtime['getWorktreeTerminalProvisioningHost'](created)
+    const options = { command: 'echo startup' }
+    const create = vi.spyOn(runtime, 'createTerminal').mockImplementation(async function (
+      this: OrcaRuntimeService,
+      selector,
+      input,
+      evidence
+    ) {
+      expect(this).toBe(runtime)
+      expect(arguments.length).toBe(3)
+      expect([selector, input, evidence]).toEqual(['id:created-worktree', options, created])
+      expect(evidence).toBe(created)
+      return { handle: 'created-handle', worktreeId: created.id, title: null }
+    })
+    await host.createTerminal('id:created-worktree', options)
+    expect(create).toHaveBeenCalledOnce()
+  })
+
+  it('reads replacement providers and preserves readiness failures after removal', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const host = runtime['getWorktreeStartupReadinessHost']()
+    const hasChildProcesses = host.hasChildProcesses
+    if (!hasChildProcesses) {
+      throw new Error('missing readiness child-process callback')
+    }
+    const provisioning = runtime['getWorktreeTerminalProvisioningHost']()
+    expect(provisioning.canSpawn()).toBe(false)
+    const controller: RuntimePtyController = {
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: vi.fn(async function (this: RuntimePtyController, ptyId: string) {
+        expect(this).toBe(controller)
+        expect(arguments.length).toBe(1)
+        expect(ptyId).toBe('startup-pty')
+        return 'late provider'
+      })
+    }
+    runtime.setPtyController(controller)
+    await expect(host.getForegroundProcess('startup-pty')).resolves.toBe('late provider')
+    await expect(hasChildProcesses('startup-pty')).resolves.toBe(false)
+    const replacement: RuntimePtyController = {
+      write: () => true,
+      kill: () => true,
+      spawn: async () => ({ id: 'spawned' }),
+      getForegroundProcess: async () => 'replacement provider',
+      hasChildProcesses: async () => true
+    }
+    runtime.setPtyController(replacement)
+    expect(provisioning.canSpawn()).toBe(true)
+    await expect(host.getForegroundProcess('startup-pty')).resolves.toBe('replacement provider')
+    await expect(hasChildProcesses('startup-pty')).resolves.toBe(true)
+    runtime.setPtyController(null)
+    expect(provisioning.canSpawn()).toBe(false)
+    expect(() => host.getForegroundProcess('startup-pty')).toThrow(TypeError)
+    expect(() => hasChildProcesses('startup-pty')).toThrow(TypeError)
+  })
+
+  it('writes the canonical setup-token map when invoked', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const host = runtime['getWorktreeTerminalProvisioningHost']()
+    const original = runtime['setupCompletionTokenByPtyId']
+    const replacement = new Map<string, string>()
+    Object.defineProperty(runtime, 'setupCompletionTokenByPtyId', { value: replacement })
+    host.recordSetupCompletionToken?.('startup-pty', 'late-token')
+    expect(replacement.get('startup-pty')).toBe('late-token')
+    expect(original.has('startup-pty')).toBe(false)
+  })
 })

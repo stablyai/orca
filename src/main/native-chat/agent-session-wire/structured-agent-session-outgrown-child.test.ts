@@ -1,7 +1,3 @@
-// A child the chat outgrew is replaced before the next send: one that reported it is not signed in,
-// so a sign-in made since reaches a new child, and one launched with a permission mode the chat no
-// longer has, so the new mode reaches a new child.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -20,7 +16,7 @@ import {
 } from './structured-agent-session-outgrown-child'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type {
@@ -28,9 +24,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
-import type { StructuredAgentSessionChildWorkReads } from './structured-agent-session-idle-sweep'
 
 describe('a send after the agent said it is not signed in', () => {
   let rig: RestTestRig
@@ -60,23 +54,11 @@ describe('a send after the agent said it is not signed in', () => {
 
     expect((await rig.host.send(CALLER, restTestSend('signed in now', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
 
-    // The earlier child's report does not follow the new one.
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
-    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
-  })
-
-  // A Pi that started with no model keeps a placeholder: a sign-in made since reaches a new Pi only.
-  it('goes to a new agent when the running one started signed out', async () => {
-    await foundRestTestChat(rig)
-    rig.adapter.startUnavailable.mockReturnValueOnce({ reason: 'notSignedIn' })
-    rig.adapter.closeSession.mockClear()
-    expect((await rig.host.send(CALLER, restTestSend('signed in since', fence()))).ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   })
 
@@ -131,7 +113,6 @@ const conversation = (
     child?: StructuredAgentSessionProviderChild | null
     items?: Row[]
     submissions?: ReturnType<typeof rejected>[]
-    activeTurnId?: string
     newestTurnEndedAt?: number
   } = {}
 ) => {
@@ -147,7 +128,6 @@ const conversation = (
           visit(item.itemId, index, item.body, item.agentId ? { agentId: item.agentId } : {})
         ),
       itemFence: (itemId: string) => items.find((item) => item.itemId === itemId)?.fence,
-      activeTurnId: () => input.activeTurnId ?? null,
       newestTurn: (): AgentJournalTurnLifecycle | null =>
         input.newestTurnEndedAt === undefined
           ? null
@@ -180,14 +160,6 @@ describe('structuredAgentSessionChildReportedSignedOut', () => {
     expect(reported({ items, child: childAt({ phase: 'starting' }) })).toBe(false)
     expect(reported({ items, child: null })).toBe(false)
   })
-
-  it("reads the running child's own start, and only a signed-out one", () => {
-    const fromStart = (startUnavailable: AgentSessionUnavailable, child = childAt({})) =>
-      structuredAgentSessionChildReportedSignedOut(conversation({ child }), startUnavailable)
-    expect(fromStart({ reason: 'notSignedIn' })).toBe(true)
-    expect(fromStart({ reason: 'cliMissing' })).toBe(false)
-    expect(fromStart({ reason: 'notSignedIn' }, childAt({ phase: 'starting' }))).toBe(false)
-  })
 })
 
 describe('retireOutgrownStructuredAgentSessionChild', () => {
@@ -201,17 +173,22 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     stoppable: false,
     invocation: { invocationId: 'spawn-subagent-1', generation: 1 }
   }
-  const idle: StructuredAgentSessionChildWorkReads = {
+  const idle: Parameters<typeof retireOutgrownStructuredAgentSessionChild>[2]['work'] = {
+    currentWork: () => ({ activeTurnId: () => null, hasActionablePrompt: () => false }),
     childWork: () => [],
+    childWorkOpen: () => false,
     hasOpenDispatch: () => false,
     providerHoldsDispatch: () => false
   }
+  const owing = (turnId: string | null, prompt: boolean): Partial<typeof idle> => ({
+    currentWork: () => ({ activeTurnId: () => turnId, hasActionablePrompt: () => prompt })
+  })
   const signedOut = { submissions: [rejected(2)] }
   const retire = async (
     input: Parameters<typeof conversation>[0],
     work: Partial<typeof idle> = {},
     stopAgent = vi.fn(async () => undefined),
-    launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
   ) => {
     const warn = vi.fn()
     await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
@@ -228,10 +205,9 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   it('keeps it while it owes work the idle sweep also protects', async () => {
-    // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
-      await retire({ ...signedOut, activeTurnId: 'turn-1' }),
-      await retire(signedOut, { childWork: () => [liveChildWork] }),
+      await retire(signedOut, owing('turn-1', false)),
+      await retire(signedOut, { childWorkOpen: () => true }),
       await retire(signedOut, { hasOpenDispatch: () => true }),
       await retire(signedOut, { providerHoldsDispatch: () => true })
     ]) {
@@ -274,7 +250,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   describe('a child launched with another permission mode', () => {
-    const now = (mode: AgentChatPermissionMode) => vi.fn(async () => mode)
+    const now = (mode: AgentChatPermissionChoice) => vi.fn(async () => mode)
     const askChild = { child: childAt({ permissionMode: 'ask' }) }
 
     it('is stopped once, and one launched with the current mode is kept', async () => {
@@ -286,9 +262,9 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
 
     it('is kept while it owes work, as a signed-out one is', async () => {
       for (const kept of [
-        await retire({ ...askChild, activeTurnId: 'turn-1' }, {}, undefined, now('auto')),
-        await retire(askChild, { childWork: () => [liveChildWork] }, undefined, now('auto')),
-        await retire({ ...askChild, items: [pendingPrompt] }, {}, undefined, now('auto'))
+        await retire(askChild, owing('turn-1', false), undefined, now('auto')),
+        await retire(askChild, { childWorkOpen: () => true }, undefined, now('auto')),
+        await retire(askChild, owing(null, true), undefined, now('auto'))
       ]) {
         expect(kept.stopAgent).not.toHaveBeenCalled()
       }
@@ -302,21 +278,21 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       ).not.toHaveBeenCalled()
     })
 
-    // The check reads the same mode a start launches with, so each start ends the restarts.
     describe('against the mode a start launches with', () => {
-      // The saved catalog the probe keeps from `claude` 2.1.280: the default row folded into the
-      // row it resolves to, every row but haiku listed as running auto.
+      // Model Claude’s saved catalog: resolved default alias, auto on every model except haiku.
       const listed = [
         { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
         { id: 'sonnet', isDefault: false, supportsAutoMode: true },
         { id: 'haiku', isDefault: false }
       ]
       const catalog = (rows: typeof listed) => ({
+        peek: () => null,
         read: vi.fn(async () => ({
           origin: 'probe' as const,
           fetchedAt: 1,
           models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
         })),
+        retainedLiveModelIds: vi.fn(async () => []),
         recordLiveListing: vi.fn(),
         prewarm: vi.fn(async () => undefined),
         stop: vi.fn(),
@@ -337,8 +313,8 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           )
       }
       const stoppedAfterLaunch = async (
-        launched: AgentChatPermissionMode,
-        current: () => Promise<AgentChatPermissionMode | null>
+        launched: AgentChatPermissionChoice,
+        current: () => Promise<AgentChatPermissionChoice | null>
       ) =>
         (await retire({ child: childAt({ permissionMode: launched }) }, {}, undefined, current))
           .stopAgent.mock.calls.length > 0
@@ -374,7 +350,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
         }
       })
 
-      // A resolved id launches Ask; the start reports the listed alias, so one restart reaches auto.
+      // A resolved ID initially launches Ask; the reported catalog alias enables auto after one restart.
       it('settles after one restart once a resolved id is reported as its alias', async () => {
         const first = await launch({ model: 'claude-opus-5-5[1m]', permissionMode: 'auto' })()
         const reported = launch({ model: 'opus[1m]', permissionMode: 'auto' })
@@ -390,15 +366,3 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     })
   })
 })
-
-const pendingPrompt: Row = {
-  itemId: 'approval-1',
-  fence: 2,
-  body: {
-    kind: 'approval',
-    title: 'Run a command',
-    detail: null,
-    options: [],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  }
-}

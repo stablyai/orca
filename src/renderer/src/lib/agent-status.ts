@@ -3,12 +3,11 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
-import { tabHasLivePty } from './tab-has-live-pty'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 import type { AgentKind } from '../../../shared/telemetry-events'
 
-// Re-export from shared so existing renderer imports work; main process now shares the detection logic.
 export {
   type AgentStatus,
   detectAgentStatusFromTitle,
@@ -94,10 +93,8 @@ export function getWorkingAgentsPerWorktree({
   return result
 }
 
-// Re-export: shared so mobile shows the same agent labels; kept here for existing importers.
 export { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 
-// Why: the record requires every recognized terminal agent to have an icon.
 const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   claude: true,
   'claude-agent-teams': true,
@@ -160,26 +157,14 @@ export function agentTypeToIconAgent(
   return isTuiAgent(agentType) && Object.hasOwn(ICONABLE_AGENT_TYPES, agentType) ? agentType : null
 }
 
-// Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.
 export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
   return isTuiAgent(tuiAgent) ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
-// Re-export: freshness gate moved into pane-agent-evidence; keeps existing importers unchanged.
 export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
-/**
- * Map an explicit AgentStatusState to the visual Status used by
- * StatusIndicator and WorktreeCard.
- *
- * | Explicit State | Visual Status | Meaning                        |
- * |----------------|---------------|--------------------------------|
- * | working        | working       | agent actively executing       |
- * | blocked        | permission    | agent needs user attention     |
- * | waiting        | permission    | agent needs user attention     |
- * | done           | done          | task complete but pane live    |
- */
+/** Map explicit agent states to shared visual statuses; blocked and waiting both require permission attention. */
 export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
   switch (state) {
     case 'working':

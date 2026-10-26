@@ -50,14 +50,15 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
   const words = message.role === 'reasoning' ? '' : markdown
-  // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
-  // A working turn's last row is only its frontier: more can still land under it.
+  // Hide controls on system asides and the still-working frontier, where more content may arrive.
   const showControls =
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
 
   return (
     <div
       ref={rowRef}
+      // The context menu offers Copy message only where the hover controls offer it.
+      data-native-chat-message-id={showControls ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
@@ -81,8 +82,7 @@ export function NativeChatAssistantMessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
-          // Structured text streams in place with no per-row state: only the live turn's frontier
-          // row, still ending in prose, can be mid-sentence.
+          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
           streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
         />
       ) : null}

@@ -1,10 +1,4 @@
-/**
- * Starting an agent in a workspace that already exists, through the host's `agent.launch`.
- *
- * The phone states intent (which agent, where, what to say) and the host decides whether it runs
- * as a structured chat or a terminal agent, and how the prompt reaches it. Kept free of React so
- * every outcome is unit-testable.
- */
+// Send launch intent to the host, which selects terminal versus structured execution and prompt delivery.
 
 import type {
   AgentLaunchPlacement,
@@ -24,10 +18,8 @@ import {
   isAgentLaunchReservationTakenRefusal
 } from '../../../src/shared/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
-import {
-  structuredSessionOperationId,
-  structuredSessionRandomUuid
-} from './structured-session-operation-id'
+import { structuredSessionOperationId } from './structured-session-operation-id'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
@@ -43,29 +35,19 @@ export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host'
 export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
   "Couldn't confirm the agent started. Check the workspace before trying again."
 
-// The host started nothing, and the next tap reserves new ids.
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
-// Who closed it, and whether the agent had started, are unknown here: the phone or the computer.
 export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
   "The agent's tab was closed, so the agent was stopped."
 
-/**
- * The tab a launch will create, named by this device before it asks, so it can land there as soon
- * as the tab is listed rather than when the host replies (which waits for prompt delivery).
- *
- * Minted once per launch and sent unchanged on every replay: the host's replay fingerprint covers
- * both ids. A host that predates either field ignores it; the reply still names what it built.
- */
+// Reserve ids once so snapshots can select the new tab before prompt delivery replies; replays must reuse both ids covered by the host fingerprint.
 export type MobileAgentLaunchReservation = {
-  /** The terminal pane: its tab and leaf halves, as the host lists them. */
   pane: { tabId: string; leafId: string }
-  /** For any agent the host may start as a chat; a launch that settles as a terminal ignores it. */
   sessionId: string | null
 }
 
 export function reserveMobileAgentLaunch(
   agent: TuiAgent,
-  randomUuid: () => string = structuredSessionRandomUuid
+  randomUuid: () => string = randomV4Uuid
 ): MobileAgentLaunchReservation {
   return {
     pane: { tabId: randomUuid(), leafId: randomUuid() },
@@ -74,15 +56,11 @@ export function reserveMobileAgentLaunch(
 }
 
 export type MobileExistingAgentLaunch =
-  /** The host answered. `promptDelivered` is null when no prompt was sent. */
   | { kind: 'launched'; result: AgentLaunchResult; promptDelivered: boolean | null }
-  /** This host can't take the launch; nothing was started. */
   | { kind: 'unsupported' }
-  /** The host refused before starting anything. */
   | { kind: 'failed'; message: string }
-  /** The agent may or may not be running; the caller must not launch again on its own. */
+  // Unknown delivery must not trigger an automatic new launch.
   | { kind: 'unknown'; message: string }
-  /** A user closed the launch's tab, which stopped it; not a failure of the launch. */
   | { kind: 'tab-closed'; message: string }
 
 export function supportsMobileExistingAgentLaunch(
@@ -101,7 +79,6 @@ export async function launchAgentInExistingWorkspace(args: {
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
-  // Injected in tests; each call is one new operation, so a later tap never replays this one.
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
@@ -137,7 +114,6 @@ export async function launchAgentInExistingWorkspace(args: {
       { kind: 'durable' }
     )
   } catch {
-    // The request reached the wire and no answer came back, even after replays.
     return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
   }
   const { response, replayed } = sent
@@ -153,7 +129,7 @@ export async function launchAgentInExistingWorkspace(args: {
   return {
     kind: 'launched',
     result,
-    // A receipt missing from a prompted launch under-claims: the phone keeps the text.
+    // Missing prompted-launch receipts underclaim success so the phone retains its draft.
     promptDelivered: args.prompt
       ? result.prompt !== undefined && result.prompt.outcome !== 'not-delivered'
       : null

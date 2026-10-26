@@ -1,4 +1,7 @@
-import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import {
+  getRepoDisplayLabelKey,
+  getRepoDisplayLabelsByPath
+} from '../../../../shared/repo-display-labels'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -8,8 +11,8 @@ import {
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectHeaderRevealTarget } from '../sidebar/worktree-list/grouping/project-grouping'
-import type { ProjectGroupingModel } from '../sidebar/worktree-list/grouping/project-grouping'
+import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
+import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 import {
   expandEquivalentExecutionHostIds,

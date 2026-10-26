@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer-operation-owner'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export function useQuickOpenInteraction(worktreeId: string | null): {
   opening: boolean
@@ -25,11 +30,11 @@ export function useQuickOpenInteraction(worktreeId: string | null): {
         state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
         ((state.settings !== previous.settings ||
           state.repos !== previous.repos ||
-          state.worktreesByRepo !== previous.worktreesByRepo ||
-          state.detectedWorktreesByRepo !== previous.detectedWorktreesByRepo ||
+          selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) ||
+          selectDetectedWorktreesByRepo(state) !== selectDetectedWorktreesByRepo(previous) ||
           state.restoredRuntimeHostIdByWorkspaceSessionKey !==
             previous.restoredRuntimeHostIdByWorkspaceSessionKey ||
-          state.folderWorkspaces !== previous.folderWorkspaces ||
+          selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous) ||
           state.projectGroups !== previous.projectGroups) &&
           JSON.stringify(getFileExplorerOperationOwnerFromState(state, worktreeId)) !==
             JSON.stringify(getFileExplorerOperationOwnerFromState(previous, worktreeId)))

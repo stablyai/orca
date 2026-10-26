@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
-import { computeVisibleWorktrees, type VisibleWorktreeOptions } from './visible-worktrees'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { computeVisibleWorktrees, type VisibleWorktreeOptions } from './compute-visible-worktrees'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 
 function scenario(hostId: ExecutionHostId) {
   const parent = { ...worktree, id: 'parent', instanceId: 'parent-instance', hostId }

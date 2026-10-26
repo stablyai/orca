@@ -27,9 +27,8 @@ export function normalizeClaudeAccountSelectionTarget(
 }
 
 export function normalizeClaudeRuntimeSelection(
-  settings: Pick<
-    GlobalSettings,
-    'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'>
   >
 ): ClaudeManagedAccountRuntimeSelection {
   return {
@@ -42,9 +41,8 @@ export function normalizeClaudeRuntimeSelection(
 }
 
 export function getSelectedClaudeAccountIdForTarget(
-  settings: Pick<
-    GlobalSettings,
-    'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'>
   >,
   target?: ClaudeAccountSelectionTarget | null
 ): string | null {
@@ -54,7 +52,13 @@ export function getSelectedClaudeAccountIdForTarget(
     return selection.host
   }
   if (normalizedTarget.wslDistro) {
-    return selection.wsl[getClaudeWslSelectionKey(normalizedTarget.wslDistro)] ?? null
+    // Exact spelling retains precedence for selections saved before alias support.
+    if (Object.hasOwn(selection.wsl, normalizedTarget.wslDistro)) {
+      return selection.wsl[normalizedTarget.wslDistro] ?? null
+    }
+    const matches = matchingWslSelectionKeys(selection.wsl, normalizedTarget.wslDistro)
+    const ids = new Set(matches.map((key) => selection.wsl[key]))
+    return ids.size === 1 ? (ids.values().next().value ?? null) : null
   }
   const selectedIds = Array.from(new Set(Object.values(selection.wsl).filter(Boolean)))
   return (
@@ -78,12 +82,15 @@ export function setSelectedClaudeAccountIdForTarget(
       wsl: Object.fromEntries(Object.keys(selection.wsl).map((key) => [key, null]))
     }
   }
+  const wsl = { ...selection.wsl }
+  const matches = matchingWslSelectionKeys(wsl, normalizedTarget.wslDistro)
+  // Retain saved spelling for older clients; an explicit switch reconciles existing aliases.
+  for (const key of matches.length > 0 ? matches : [normalizedTarget.wslDistro ?? '__default__']) {
+    wsl[key] = accountId
+  }
   return {
     host: selection.host,
-    wsl: {
-      ...selection.wsl,
-      [getClaudeWslSelectionKey(normalizedTarget.wslDistro)]: accountId
-    }
+    wsl
   }
 }
 
@@ -118,7 +125,7 @@ export function pruneInvalidClaudeRuntimeSelection(
     nextWsl[distroKey] =
       account &&
       account.managedAuthRuntime === 'wsl' &&
-      getClaudeWslSelectionKey(account.wslDistro) === distroKey
+      getClaudeWslSelectionKey(account.wslDistro) === getClaudeWslSelectionKey(distroKey)
         ? accountId
         : null
   }
@@ -138,7 +145,15 @@ export function getClaudeSelectionTargetForAccount(
 }
 
 export function getClaudeWslSelectionKey(wslDistro: string | null | undefined): string {
-  return normalizeWslDistro(wslDistro) ?? '__default__'
+  return normalizeWslDistro(wslDistro)?.toLowerCase() ?? '__default__'
+}
+
+function matchingWslSelectionKeys(
+  selection: Record<string, string | null>,
+  distro: string | null
+): string[] {
+  const key = getClaudeWslSelectionKey(distro)
+  return Object.keys(selection).filter((saved) => getClaudeWslSelectionKey(saved) === key)
 }
 
 function normalizeWslDistro(wslDistro: string | null | undefined): string | null {

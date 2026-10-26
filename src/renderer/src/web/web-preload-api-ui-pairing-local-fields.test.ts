@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PAIRING_LOCAL_UI_FIELDS,
   type PairingLocalUiField
@@ -10,15 +10,28 @@ import {
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
 
-describe('web UI preload API pairing-local fields', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
+const runtimeClient = vi.hoisted(() => ({
+  call: vi.fn<(method: string, params?: unknown) => Promise<RuntimeRpcResponse<unknown>>>()
+}))
 
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-    vi.doUnmock('./web-runtime-client')
+vi.mock('./web-runtime-client', () => ({
+  WebRuntimeClient: class {
+    call = runtimeClient.call
+
+    close(): void {}
+  }
+}))
+
+describe('web UI preload API pairing-local fields', () => {
+  afterEach(async () => {
+    try {
+      const { removeActiveRuntimeEnvironment } = await import('./preload-api/web-runtime-session')
+      removeActiveRuntimeEnvironment()
+    } finally {
+      runtimeClient.call.mockReset()
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
   })
 
   // Different host samples expose any missing browser-local pin.
@@ -69,21 +82,15 @@ describe('web UI preload API pairing-local fields', () => {
     'keeps the browser-local %s and never sends it to the host through %s',
     async (field, method) => {
       const runtimeCalls: { method: string; params: unknown }[] = []
-      vi.doMock('./web-runtime-client', () => ({
-        WebRuntimeClient: class {
-          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-            runtimeCalls.push({ method, params })
-            return Promise.resolve({
-              id: method,
-              ok: true,
-              result: { ui: { [field]: hostUiSamples[field] } },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-
-          close(): void {}
-        }
-      }))
+      runtimeClient.call.mockImplementation((method, params) => {
+        runtimeCalls.push({ method, params })
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: { ui: { [field]: hostUiSamples[field] } },
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      })
 
       const browserLocal: Partial<PersistedUIState> = { [field]: browserLocalUiSamples[field] }
       const globals = installBrowserGlobals('Linux')

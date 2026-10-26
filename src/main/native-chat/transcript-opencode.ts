@@ -17,8 +17,6 @@ import type {
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 
-// OpenCode SQLite reads use the same bounded worker as AI Vault.
-
 export type OpenCodeTranscriptDeps = {
   resolveDbPath?: (
     sessionId?: string,
@@ -102,11 +100,12 @@ export async function readOpenCodeNativeChatTranscriptFull(
   signal?: AbortSignal,
   agent?: 'zcode'
 ): Promise<ReadTranscriptResult> {
-  // Pages arrive newest-window first; reverse windows, preserving message order.
+  // Reverse newest-first windows while preserving order inside each page.
   const pages: NativeChatMessage[][] = []
   let records = 0
   let bytes = 0
   let cursor: number | undefined
+  let sourceEmpty = false
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
@@ -134,6 +133,9 @@ export async function readOpenCodeNativeChatTranscriptFull(
         }
         break
       }
+      if (pages.length === 0) {
+        sourceEmpty = page.beforeMessageRowId === null && !page.hasMore
+      }
       pages.push(page.items.map((item) => item.message))
       records += page.items.length
       bytes += Buffer.byteLength(JSON.stringify(page.items))
@@ -148,5 +150,5 @@ export async function readOpenCodeNativeChatTranscriptFull(
   } catch (err) {
     return { error: errorMessage(err) }
   }
-  return { messages: pages.toReversed().flat() }
+  return { messages: pages.toReversed().flat(), sourceEmpty }
 }

@@ -4,10 +4,14 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import {
+  getProjectIdentityKey,
+  projectHostSetupProjectionFromRepos
+} from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveComposerRepoId } from './new-workspace-composer-repo'
+import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
 
 export type WorkspaceCreationTarget = {
   projectId: string
@@ -16,6 +20,25 @@ export type WorkspaceCreationTarget = {
   repoId: string
   repo: Repo
   setup: ProjectHostSetup
+}
+
+export type WorkspaceCreationTargetHint = Pick<WorkspaceCreationTarget, 'projectId' | 'hostId'> & {
+  projectHostSetupId?: string | null
+}
+
+export function getRepoWorkspaceCreationTargetHint(
+  repo: Repo,
+  projectHostSetups: readonly ProjectHostSetup[]
+): WorkspaceCreationTargetHint {
+  const hostId = getRepoExecutionHostId(repo)
+  const setup = projectHostSetups.find(
+    (candidate) => candidate.repoId === repo.id && candidate.hostId === hostId
+  )
+  return {
+    projectId: setup?.projectId ?? getProjectIdentityKey(repo),
+    hostId,
+    ...(setup ? { projectHostSetupId: setup.id } : {})
+  }
 }
 
 export type WorkspaceCreationTargetResolution =
@@ -41,6 +64,7 @@ type ProjectHostWorkspaceTargetInput = {
   projectId?: string | null
   hostId?: ExecutionHostId | null
   projectHostSetupId?: string | null
+  projectHostSetupHostId?: ExecutionHostId | null
   focusedHostScope?: ExecutionHostScope | null
   actionableHostIds?: ReadonlySet<ExecutionHostId>
 }
@@ -138,22 +162,28 @@ export function resolveWorkspaceCreationTarget(
     : allSetups
 
   if (projectHostSetupId) {
-    const setup = allSetups.find((entry) => entry.id === projectHostSetupId)
+    const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
+    const setupHostId = input.projectHostSetupHostId ?? (matchingSetups.length > 1 ? hostId : null)
+    // Unnamed: only actionable copies compete, so a lone runnable host still resolves.
+    const setup = findSoleHostCopy(
+      setupHostId
+        ? matchingSetups.filter((entry) => entry.hostId === setupHostId)
+        : matchingSetups.filter(
+            (entry) => !actionableHostIds || actionableHostIds.has(entry.hostId)
+          ),
+      (entry) => entry.hostId
+    )
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
     if (actionableHostIds && !actionableHostIds.has(setup.hostId)) {
-      // Why: the caller named this exact setup. Silently creating the workspace on a
-      // sibling host would put files (and any agent run) somewhere the user never chose,
-      // so fail closed and let them re-pick a host.
+      // Exact setup selection must fail closed; a sibling host would run files/agents somewhere the user never chose.
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
     if (!isReadySetup(setup)) {
       return { status: 'unavailable', reason: 'setup-not-ready' }
     }
-    // Why: a project resolves to one setup per host, and the run-target picker shows only the first.
-    // A stale draft can still name a same-host duplicate from a legacy profile; canonicalize to the
-    // same setup the picker displays so the shown path is the path the workspace is created in.
+    // Canonicalize legacy same-host duplicate drafts to the picker’s first setup so displayed and created paths match.
     const canonical =
       findReadySetupTarget(
         setups,
@@ -213,8 +243,7 @@ export function resolveWorkspaceCreationTarget(
     if (target) {
       return { status: 'ready', target }
     }
-    // Why: the caller named this host. Falling through to the legacy repo (or any other
-    // actionable host) would create the workspace somewhere the user never selected.
+    // Explicit host selection must never fall through to another ready host or legacy repo.
     return { status: 'unavailable', reason: 'project-not-set-up-on-host' }
   }
 
@@ -240,16 +269,14 @@ export function resolveWorkspaceCreationTarget(
         : null)
     legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
   } else if (repoId) {
-    // Why: duplicate repo ids across hosts leave no single legacy repo. Stay on the resolved id's
-    // own setup instead of failing closed and letting the composer re-pick an arbitrary repo.
+    // Cross-host duplicate repo IDs are ambiguous; retain the resolved setup instead of letting the composer repick arbitrarily.
     legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
   }
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
   }
   if (input.draftRepoId && reposById.has(input.draftRepoId)) {
-    // Why: the draft named this repo. Swapping in any other ready project would create the
-    // workspace in a project, and on a host, the user never chose.
+    // An explicit repo must not fall back to a different ready project/host.
     return { status: 'unavailable', reason: 'setup-not-found' }
   }
   const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)

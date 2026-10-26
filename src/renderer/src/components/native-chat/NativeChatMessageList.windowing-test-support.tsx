@@ -15,23 +15,14 @@ const VIEWPORT_PX = 600
 
 export const TRANSCRIPT_LENGTH = 200
 
-/** Everything the document holds below the last row: the transcript column's
- *  trailing chrome and the scroll root's bottom padding. Non-zero on purpose —
- *  the document's bottom sits past the window's last row, which is exactly where
- *  a pin computed from the virtualizer's totals and one computed from the
- *  document disagree. */
+/** Nonzero trailing chrome exposes disagreement between document end and virtualizer totals. */
 const BELOW_TRANSCRIPT_PX = 24
 let belowTranscriptPx = BELOW_TRANSCRIPT_PX
 
-/** Everything the document holds above the spacer: the scroll root's top gutter,
- *  and the "load earlier" block whenever there is older history to page in. This
- *  is the virtualizer's `scrollMargin`, and it is the larger half of the gap
- *  between the document's end and the end the virtualizer computes. */
+/** In-flow chrome above the spacer supplies scrollMargin and offsets the document end. */
 let aboveTranscriptPx = 0
 
-/** Heights the stubbed layout reports per row index, when a case wants a row to
- *  measure as something other than its estimate. Empty means "every row at its
- *  estimate", which is what every non-growth case wants. */
+/** Override measured heights; empty means each row measures at its estimate. */
 let measuredRowHeights: readonly number[] = []
 
 export function marker(index: number): NativeChatMessage {
@@ -50,7 +41,6 @@ const ROW_PX = estimateNativeChatRowHeight(nativeChatRowContentMetrics(marker(0)
   hasTurnDiff: false
 })
 
-/** Replace a layout property on every element, and hand back the undo. */
 function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): () => void {
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)
   Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor })
@@ -67,30 +57,24 @@ function reservedTranscriptHeight(root: ParentNode): number {
   return transcriptWindowHeight(root)
 }
 
-// The virtualizer measures with `offsetHeight` — not `clientHeight`, not a
-// bounding rect — so that is the one thing a DOM without layout has to answer
-// for windowing to engage at all. Rows report the height their own estimate
-// predicted, which keeps the totals exact and independent of which rows happen
-// to have been mounted long enough to be measured; `measuredRowHeights` is how a
-// case says a row measures as something else.
-//
-// `scrollGeometry` additionally gives the scroll root a document to scroll: a
-// height, a viewport, and a `scrollTop` that clamps the way a real one does.
-// Off by default, because a transcript with a real document opens pinned to its
-// bottom and the cases above are about where the window sits, not where it lands.
+// Provide offsetHeight for measurement; optional clamped scroll geometry opens at the document end.
 export function stubLayout({
   scrollGeometry = false,
   offsetChain = false,
   viewportHeight = () => VIEWPORT_PX
 }: {
   scrollGeometry?: boolean
-  /** Give the spacer an `offsetTop` and a chain to walk up to the scroll root,
-   *  so `scrollMargin` can be something other than zero. */
+  /** Supply an offset chain so scrollMargin can be nonzero. */
   offsetChain?: boolean
   viewportHeight?: () => number
 } = {}): () => void {
   const scrollTops = new WeakMap<HTMLElement, number>()
   const restores = [
+    overrideLayoutProperty('clientWidth', {
+      get(this: HTMLElement): number {
+        return this.hasAttribute('data-native-chat-scroll') ? 800 : 0
+      }
+    }),
     overrideLayoutProperty('offsetHeight', {
       get(this: HTMLElement): number {
         if (this.hasAttribute('data-native-chat-scroll')) {
@@ -103,8 +87,7 @@ export function stubLayout({
         if (index !== undefined) {
           return measuredRowHeights[Number(index)] ?? ROW_PX
         }
-        // The transcript column: as tall as the window it wraps, plus what sits
-        // under it. This is the element the list observes for streamed growth.
+        // The observed column includes reserved rows and trailing chrome.
         return this.hasAttribute('data-native-chat-transcript-column')
           ? reservedTranscriptHeight(this) + belowTranscriptPx
           : 0
@@ -130,8 +113,7 @@ export function stubLayout({
           return scrollTops.get(this) ?? 0
         },
         set(this: HTMLElement, value: number): void {
-          // A browser clamps; without this `scrollTop = scrollHeight` would park
-          // the view past the end and every distance-from-bottom would read 0.
+          // Clamp like a browser so scrollHeight assignments cannot park past the document end.
           const max = Math.max(0, this.scrollHeight - this.clientHeight)
           scrollTops.set(this, Math.min(Math.max(0, value), max))
         }
@@ -149,8 +131,7 @@ export function stubLayout({
               : 0
         }
       }),
-      // happy-dom has no `offsetParent` at all, so production's walk to the
-      // scroll root ends before it starts and every margin reads zero.
+      // Provide the offsetParent chain missing from happy-dom so scrollMargin can be measured.
       overrideLayoutProperty('offsetParent', {
         get(this: HTMLElement): HTMLElement | null {
           return this.hasAttribute('data-index')
@@ -189,11 +170,7 @@ export function list(messages: NativeChatMessage[]): React.JSX.Element {
   )
 }
 
-/** Reads the window, and refuses to pass if there is no window to read.
- *
- *  Without this a change to the usability gate would quietly send every case
- *  below down the whole-transcript path, where "fewer rows than messages" is
- *  false but every other assertion still holds. */
+/** Fail if windowing is disabled; whole-transcript rendering would satisfy most assertions vacuously. */
 export function windowState(container: HTMLElement): { totalSize: number; indexes: number[] } {
   const spacer = container.querySelector<HTMLElement>('[data-native-chat-window]')
   if (!spacer) {

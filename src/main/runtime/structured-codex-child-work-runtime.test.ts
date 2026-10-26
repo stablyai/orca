@@ -7,9 +7,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
@@ -102,6 +102,9 @@ describe('structured Codex child work through the production runtime', () => {
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
     const attached = await host.attach({ callerKey: 'runtime-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
     // Creating the session starts its child; nothing else has to keep it running.
     expect(connections).toHaveLength(1)
     const notify = (method: string, params: Record<string, unknown>) =>

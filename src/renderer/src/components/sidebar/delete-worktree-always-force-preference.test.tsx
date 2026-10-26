@@ -38,6 +38,9 @@ function renderRecovery(onAlwaysForceDelete: () => Promise<void>, canForceDelete
     root?.render(
       <TooltipProvider delayDuration={0}>
         <div
+          data-sonner-toast=""
+          data-expanded="true"
+          data-front="false"
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) {
               onOutsideBlur()
@@ -109,6 +112,34 @@ it('keeps portaled menu focus from triggering toast focus restoration', async ()
   expect(document.querySelector('[role="menu"]')).not.toBeNull()
 })
 
+it('keeps the menu shut and unfocused while the toast stack hides its toast', async () => {
+  const { container } = renderRecovery(vi.fn())
+  const trigger = container.querySelector('button[aria-label="More force delete options"]')
+  if (!(trigger instanceof HTMLElement)) {
+    throw new Error('Missing dropdown trigger')
+  }
+  const pressArrowDown = (): Promise<void> =>
+    act(async () => {
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+  await act(async () => trigger.focus())
+  await pressArrowDown()
+  expect(document.querySelector('[role="menu"]')).not.toBeNull()
+
+  await act(async () => {
+    container.querySelector('[data-sonner-toast]')?.setAttribute('data-expanded', 'false')
+  })
+  await act(async () => {
+    // Radix returns focus after close in a timeout.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  expect(document.querySelector('[role="menu"]')).toBeNull()
+  expect(document.activeElement).not.toBe(trigger)
+
+  await pressArrowDown()
+  expect(document.querySelector('[role="menu"]')).toBeNull()
+})
+
 it('waits for the preference to persist before force-deleting and dismissing', async () => {
   let finishSaving: (() => void) | undefined
   const savePreference = vi.fn(
@@ -128,7 +159,7 @@ it('waits for the preference to persist before force-deleting and dismissing', a
   expect(toast.dismiss).not.toHaveBeenCalled()
   await act(async () => finishSaving?.())
   expect(onForceDelete).toHaveBeenCalledOnce()
-  expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+  expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
 })
 
 it('keeps recovery available when saving the preference fails', async () => {

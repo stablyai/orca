@@ -11,9 +11,9 @@ const title = 'Profile storage is taking longer than usual'
 const frames: FrameRequestCallback[] = []
 const listeners = new Set<(delayed: boolean) => void>()
 
-function Notice() {
+function Notice({ closeButton = false }: { closeButton?: boolean }) {
   useProfileStateSaveDelayNotice()
-  return <Toaster />
+  return <Toaster closeButton={closeButton} />
 }
 
 beforeEach(() => {
@@ -95,6 +95,16 @@ it('does not let StrictMode cleanup dismiss the initial delayed snapshot', async
   await finishDismissal()
   expect(listeners.size).toBe(1)
   expect(view.queryAllByText(title)).toHaveLength(1)
+})
+
+it('lets the user close the warning with the app toaster close button', async () => {
+  const view = render(<Notice closeButton />)
+  await advanceTimers()
+  expect(view.queryByText(title)).not.toBeNull()
+
+  act(() => view.getByRole('button', { name: 'Close toast' }).click())
+  await finishDismissal()
+  expect(view.queryByText(title)).toBeNull()
 })
 
 it('keeps a new warning if recovery and another delay arrive before a dismissal frame', async () => {

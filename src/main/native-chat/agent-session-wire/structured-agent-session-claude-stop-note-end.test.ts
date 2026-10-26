@@ -1,6 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-// Stop notes follow interrupted ends written by the shipping Claude translator.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,7 +11,6 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-a
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
-  claudeStartupSettled,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
@@ -98,7 +96,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
-    // Ticked by hand only, and with no idle window: a tick reaps whatever is at rest.
+    // Tick manually with no idle threshold to reap resting agents.
     idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
     now: () => NOW
   })
@@ -109,7 +107,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
   await host.subscribe({
     id: 'stop-note-live',
@@ -134,7 +132,6 @@ function envelope(
     | 'agentSession.cancel'
     | 'agentSession.setOption'
     | 'agentSession.queuedMessageSend',
-  // The fingerprint's own field shape, as the sibling host tests type it.
   fields: Parameters<typeof computeAgentSessionPayloadFingerprint>[0]['fields']
 ) {
   return {
@@ -217,7 +214,7 @@ const stopAcrossGrace = createStoppedClaudeDeadline({
   laneDrained
 })
 
-/** As the real connection: once a close begins it refuses every write, proven or not. */
+/** Refuse writes as soon as close starts, before exit proof. */
 function closeUnprovenFor(connection: FakeConnection, failures: number): void {
   const close = connection.close
   let left = failures

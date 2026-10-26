@@ -1,6 +1,4 @@
-// Why: PR context generation depends on command order across remote-state
-// variants; keeping the table of git command mocks together makes regressions
-// easier to audit than splitting the suite by helper.
+// Keep remote-state command-order cases together so Git regressions stay reviewable.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPullRequestDraftContext } from './pull-request-context'
 
@@ -283,8 +281,7 @@ describe('getPullRequestDraftContext', () => {
     })
 
     expect(exactProbeCount).toBe(22)
-    // Equality, not a ceiling: 22 candidates saturate the pool, so a regression
-    // to serial probing has to fail here.
+    // Require saturated concurrency: an upper bound alone would also pass serial probes.
     expect(maxActiveProbes).toBe(8)
   })
 

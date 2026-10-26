@@ -1,6 +1,8 @@
 const revisionByEnvironmentId = new Map<string, number>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
 const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
+// Re-pairs whose host identity is not decided yet: id → the pairing they may continue.
+const pendingContinuationByEnvironmentId = new Map<string, number>()
 const retirementListeners = new Set<(environmentIds: readonly string[]) => void>()
 const revisionChangeListeners = new Set<(environmentIds: readonly string[]) => void>()
 
@@ -9,6 +11,8 @@ export type RuntimeEnvironmentContinuity = {
   retired: readonly string[]
   /** Re-pairs proven to be the same machine (same registration and host key). */
   sameHost: readonly { id: string; fromRevision: number; toRevision: number }[]
+  /** Re-pairs not yet proven either way, with the pairing they may continue. */
+  pending?: readonly { id: string; fromRevision: number }[]
 }
 
 export function replaceRuntimeEnvironmentRevisions(
@@ -24,8 +28,7 @@ export function replaceRuntimeEnvironmentRevisions(
   for (const id of retired) {
     continuedRevisionsByEnvironmentId.delete(id)
   }
-  // Why first: an old machine's transports must be fenced while the old revision still stands,
-  // so nothing they retry can be authenticated with the replacement's credentials.
+  // Fence old transports before publishing replacement credentials so retries cannot authenticate to another machine.
   if (retired.size > 0) {
     for (const listener of retirementListeners) {
       listener([...retired])
@@ -38,6 +41,12 @@ export function replaceRuntimeEnvironmentRevisions(
     const continued = continuedRevisionsByEnvironmentId.get(id) ?? new Map<number, number>()
     continued.set(fromRevision, toRevision)
     continuedRevisionsByEnvironmentId.set(id, continued)
+  }
+  pendingContinuationByEnvironmentId.clear()
+  for (const { id, fromRevision } of continuity.pending ?? []) {
+    if (nextIds.has(id) && !retired.has(id)) {
+      pendingContinuationByEnvironmentId.set(id, fromRevision)
+    }
   }
   revisionByEnvironmentId.clear()
   for (const environment of environments) {
@@ -95,6 +104,16 @@ export function resolveContinuedRuntimeEnvironmentRevision(
     current = continued.get(current) ?? current
   }
   return current
+}
+
+/** True while a re-pair that may continue `revision` is still waiting for its host identity. */
+export function isRuntimeEnvironmentContinuationPending(
+  environmentId: string,
+  revision: number | undefined
+): boolean {
+  return (
+    revision !== undefined && pendingContinuationByEnvironmentId.get(environmentId) === revision
+  )
 }
 
 export function captureRuntimeEnvironmentRequestRevision(

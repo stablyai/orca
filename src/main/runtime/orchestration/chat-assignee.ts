@@ -1,9 +1,3 @@
-/**
- * A chat as a Dispatch assignee. Its Dispatch row names it by its `/clear` root address,
- * `orca_session_id:<root>`, and holds no pane or process: whether it can still work is read off the
- * session records the same way mail to it is, so the two can never disagree.
- */
-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   ORCA_SESSION_ADDRESS_PREFIX,
@@ -33,10 +27,7 @@ export type ChatAssigneeObservation =
   | { status: 'exited'; reason: string }
   | { status: 'unverifiable'; reason: string }
 
-/**
- * A chat at rest is live: the send that reaches it starts its agent. Only a closed chat has
- * exited; a record this host lacks, or another host, is unverifiable: missing evidence is no exit.
- */
+/** Idle chats remain live; only closed chats exited, while missing or remote records are unverifiable. */
 export function observeChatAssignee(
   sessionId: OrcaSessionId,
   db: OrchestrationDb | null | undefined,
@@ -68,7 +59,7 @@ export function observeChatAssignee(
         case 'closed':
           return { status: 'exited', reason: 'The chat was closed.' }
         case 'worker-identity-lost':
-          // Not reachable for a chat today (its Dispatch records no worker incarnation); still no exit.
+          // Chats currently have no worker incarnation; unexpected observation still cannot prove exit.
           return {
             status: 'unverifiable',
             reason:
@@ -78,16 +69,12 @@ export function observeChatAssignee(
   }
 }
 
-/**
- * The unsettled Dispatches of the chat whose current session's tab was hidden, once that chat has
- * exited, re-derived from the records at the notice. Only that chat: another chat may be mid-close
- * with its tab hidden, and a close can still put its tab back.
- */
+/** Select unsettled Dispatches only for this hidden session after its exit is proven; other closes may roll back. */
 export function exitedChatDispatchesForSession(
   hiddenSessionId: string,
   db: OrchestrationDb,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): DispatchContextRow[] {
+): (DispatchContextRow & { assignee_handle: string })[] {
   if (!store) {
     return []
   }
@@ -98,12 +85,14 @@ export function exitedChatDispatchesForSession(
     )
     .all(ORCA_SESSION_ADDRESS_PREFIX.length, ORCA_SESSION_ADDRESS_PREFIX)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns Dispatch rows; the adapter exposes unknown.
-  return (rows as DispatchContextRow[]).filter((dispatch) => {
-    const chat = chatAssigneeSessionId(dispatch.assignee_handle)
-    return (
-      chat !== null &&
-      lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
-      observeChatAssignee(chat, db, store).status === 'exited'
-    )
-  })
+  return (rows as DispatchContextRow[]).filter(
+    (dispatch): dispatch is DispatchContextRow & { assignee_handle: string } => {
+      const chat = chatAssigneeSessionId(dispatch.assignee_handle)
+      return (
+        chat !== null &&
+        lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
+        observeChatAssignee(chat, db, store).status === 'exited'
+      )
+    }
+  )
 }

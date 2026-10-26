@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// A /clear moves the chat to a new conversation, and its host refuses a send made meanwhile. Text
-// typed during it stays in the box: it is never sent into that refusal.
+// Hold sends during /clear so newly typed text stays in the composer instead of reaching the host’s transitioning conversation.
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -10,6 +9,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))
@@ -40,7 +40,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../shared/agent-session-conversation-command'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../shared/agent-session/agent-session-conversation-command'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 import { structuredAgentSessionSendOut } from './structured-agent-session-pending-sends'
@@ -129,7 +129,6 @@ it('takes no send while a /clear is out: the text stays in the box and nothing i
   expect(sent).toBe(false)
   expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.send')).toBe(false)
 
-  // A /clear that did not move the chat gives the slot back.
   await act(async () => {
     clears[0].resolve(cleared())
   })
@@ -197,7 +196,6 @@ it('holds nothing for a /compact, which the host runs as a turn with sends queue
   expect(result.current.sendOut).toBe(false)
 })
 
-// The local call has no deadline of its own: a /clear that never answers must not keep Send off.
 it('takes sends again once a /clear that never answers passes its deadline', async () => {
   vi.useFakeTimers()
   try {

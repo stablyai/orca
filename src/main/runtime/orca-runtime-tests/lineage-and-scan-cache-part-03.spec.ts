@@ -13,6 +13,7 @@ import {
   store,
   withPlatform
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('hides agent scratch created inside a linked checkout from runtime listings', async () => {
@@ -116,7 +117,6 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    // Why: the SSH host lists only its own stored rows, so the local row never surfaces there.
     const result = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`, 'ssh-1')
 
     expect(result.worktrees).toEqual([])
@@ -212,8 +212,7 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  // #11994: the host renderer already applied its own repos:changed, so re-notifying it
-  // would re-sort the sidebar; only the client-event stream may fire here.
+  // #11994: host already applied repos:changed; notify clients only or sidebar re-sorts.
   it('notifyReposChangedForRemoteClients emits to clients without re-notifying the host', () => {
     const runtime = createRuntime()
     const reposChanged = vi.fn()
@@ -235,7 +234,7 @@ describe('OrcaRuntimeService', () => {
       [firstId]: { sortOrder: 200 },
       [secondId]: { sortOrder: 100 }
     }
-    const setWorktreeMeta = vi.fn((id: string, updates: Partial<WorktreeMeta>) => {
+    const setWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...updates }
     })
     const runtime = new OrcaRuntimeService({
@@ -255,7 +254,15 @@ describe('OrcaRuntimeService', () => {
 
     expect(setWorktreeMeta).toHaveBeenCalledTimes(2)
     expect(events).toEqual([
-      { type: 'worktreesChanged', repoId: TEST_REPO_ID, sortOrderOnly: true }
+      {
+        type: 'worktreesChanged',
+        repoId: TEST_REPO_ID,
+        sortOrderOnly: true,
+        sortOrders: [
+          { worktreeId: secondId, sortOrder: metaById[secondId].sortOrder },
+          { worktreeId: firstId, sortOrder: metaById[firstId].sortOrder }
+        ]
+      }
     ])
   })
 
@@ -271,8 +278,7 @@ describe('OrcaRuntimeService', () => {
 
   it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
     vi.mocked(listWorktrees).mockClear()
-    // TTL reads Date.now(). Flushing the timer queue also runs scans earlier tests left
-    // scheduled, and a real git dir can prove "unchanged" and skip the rescan entirely.
+    // Test Date.now TTL without flushing queued scans; stub fingerprint or real Git could skip rescanning.
     vi.useFakeTimers({ now: 0 })
     const fingerprint = vi
       .spyOn(repoWorktreeAdminFingerprint, 'readRepoWorktreeAdminFingerprint')
@@ -445,7 +451,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
@@ -491,7 +497,7 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+    const removeWorktreeLineage = vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
       delete lineageById[worktreeId]
     })
     const runtimeStore = {
@@ -500,10 +506,12 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-        return metaById[worktreeId]
-      }),
+      setWorktreeMeta: vi.fn(
+        ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+          return metaById[worktreeId]
+        }
+      ),
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }

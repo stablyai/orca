@@ -107,8 +107,6 @@ describe('appimage extracted root', () => {
     expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBeNull()
   })
 
-  // Why: an update replaces the file in place, so stat identity must change the key or the command
-  // would keep resolving through the previous version's payload.
   it('keys the payload on file identity and metadata, not just path', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
     const before = resolveAppImageCacheKey(appImagePath)
@@ -123,8 +121,7 @@ describe('appimage extracted root', () => {
     )
   })
 
-  // Why: `chmod +x` is what every AppImage user is told to run, and a backup restore or SELinux
-  // relabel does the same thing. Re-keying on that cost a full re-extraction of an unchanged payload.
+  // chmod, backup restores and SELinux relabels must not trigger re-extraction of unchanged payloads.
   it('does not re-key the payload when only inode metadata changes', async () => {
     const { appImagePath } = await makeFixture()
     const before = resolveAppImageCacheKey(appImagePath)
@@ -136,8 +133,6 @@ describe('appimage extracted root', () => {
     expect(resolveAppImageCacheKey(appImagePath)).toBe(before)
   })
 
-  // Why: a crashed extraction must not leave a directory that later reads treat
-  // as a usable payload — the command would exec a path that does not exist.
   it('publishes nothing when extraction fails partway', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
 

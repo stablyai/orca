@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
 import { SourceControlBranchContextRow } from './branch-context-row'
 import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
@@ -235,7 +235,7 @@ export function SourceControlHeaderToolbar({
               <span className="min-w-0 flex-1" aria-hidden="true" />
             )}
             {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
-              // Why: keep filter/overflow pinned right without stretching Create PR.
+              // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
             <button
@@ -259,8 +259,7 @@ export function SourceControlHeaderToolbar({
           </>
         ) : (
           <>
-            {/* Why: expanded filter owns the toolbar row so typing isn't squeezed
-                beside PR links or overflow actions — collapse to reach those. */}
+            {/* Give expanded search the row so PR links and overflow controls do not squeeze typing. */}
             <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
               <ImeInput

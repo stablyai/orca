@@ -6,8 +6,8 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage,
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
-} from '@/components/task-page-github-status-actions'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page-github-dialog-state-authority'
+} from '@/components/task-page/github/task-page-github-status-actions'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
@@ -70,8 +70,7 @@ export function runGHEditStateChange({
     return
   }
   const prevState = localState
-  // Why: without registry authority a search-lagged Tasks refetch silently
-  // reverts this row to its pre-mutation state (STA-3343).
+  // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
   let authority: { revert: () => boolean } | null = null
   void run('state', {
     mutate: () =>

@@ -15,7 +15,7 @@ import {
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { callEnvironmentEnvelope } from './web-runtime-calls'
+import { assertEnvironmentPairing, callEnvironmentEnvelope } from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
   subscribeWebRuntimeStatus,
@@ -27,7 +27,10 @@ import {
   removeActiveRuntimeEnvironment,
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
-  webRuntimeState
+  webRuntimeState,
+  runtimeCallQueuePool,
+  updateEnvironmentFromResponse,
+  manuallyDisconnectedResponse
 } from './web-runtime-session'
 
 export function createRuntimeEnvironmentsApi(): NonNullable<
@@ -165,6 +168,15 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         runtimeStatus
       }
     },
+    // Why: the browser keeps a single paired server; pairing it again replaces that one.
+    repairFromPairingCode: async () => ({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: translate(
+        'auto.web.webPreloadApi.remotePairingRepairUnavailable',
+        'Re-pairing is not available in the browser. Pair this browser with the server again.'
+      )
+    }),
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {
@@ -198,15 +210,32 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       observeOnly
         ? observeWebRuntimeStatus(selector, timeoutMs)
         : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
-    retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
-    call: ({ selector, method, params, timeoutMs }) =>
-      callEnvironmentEnvelope(selector, method, params, timeoutMs),
+    call: ({
+      selector,
+      method,
+      params,
+      timeoutMs,
+      expectedEnvironmentPairingRevision,
+      expectedEnvironmentRuntimeId
+    }) =>
+      callEnvironmentEnvelope(
+        selector,
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentPairingRevision,
+        expectedEnvironmentRuntimeId
+      ),
     cancelSubscription: async ({ subscriptionId }) => {
       pendingSubscriptions.get(subscriptionId)?.abort()
     },
-    subscribe: async ({ selector, method, params, timeoutMs, subscriptionId }, callbacks) => {
+    subscribe: async (
+      { selector, method, params, timeoutMs, subscriptionId, expectedEnvironmentPairingRevision },
+      callbacks
+    ) => {
       const environment = resolveEnvironment(selector)
+      assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
       const client = getClientForEnvironment(environment)
       const controller = new AbortController()
       if (subscriptionId) {
@@ -217,10 +246,44 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       }
       let subscription
       try {
-        subscription = await client.subscribe(method, params, callbacks, {
-          timeoutMs,
-          signal: controller.signal
-        })
+        subscription = await runtimeCallQueuePool.enqueue(
+          environment.id,
+          method,
+          () => {
+            assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
+            if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+              throw new Error('runtime_manually_disconnected')
+            }
+            return client.subscribe(
+              method,
+              params,
+              {
+                ...callbacks,
+                onResponse: (response) => {
+                  try {
+                    assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
+                  } catch (error) {
+                    callbacks.onError?.({
+                      code: 'runtime_environment_changed',
+                      message: String(error)
+                    })
+                    callbacks.onClose?.()
+                    controller.abort()
+                    return
+                  }
+                  const result = manuallyDisconnectedEnvironmentIds.has(environment.id)
+                    ? manuallyDisconnectedResponse(environment)
+                    : response
+                  updateEnvironmentFromResponse(environment, result)
+                  callbacks.onResponse(result)
+                }
+              },
+              { timeoutMs, signal: controller.signal }
+            )
+          },
+          0,
+          controller.signal
+        )
       } finally {
         if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
           pendingSubscriptions.delete(subscriptionId)

@@ -1,7 +1,9 @@
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId
+} from '../../../shared/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 export type AgentStatusConnectionRouting = { connectionId: string | null }
 
@@ -56,8 +58,7 @@ export function resolveAgentStatusConnectionRouting(args: {
     return undefined
   }
 
-  // Why: app-wide SSH and remote-runtime PTY IDs are namespaced; a remaining
-  // concrete PTY is authoritative local/WSL ownership, never an SSH guess.
+  // Namespaced SSH/runtime PTYs leave concrete IDs authoritative for local/WSL ownership, never an SSH guess.
   if (typeof expectedConnectionId === 'string') {
     return undefined
   }
@@ -83,8 +84,7 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   if (!routing) {
     return undefined
   }
-  // Why: transient relay reconnect clears statuses without dropping durable
-  // PTY bindings; old renderer callbacks must stay blocked until reconnect.
+  // Relay reconnect clears status before durable PTY bindings; keep old callbacks blocked until reconnection.
   if (
     routing.connectionId !== null &&
     (args.state.sshConnectionStates.get(routing.connectionId)?.status !== 'connected' ||

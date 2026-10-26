@@ -13,11 +13,14 @@ import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_TYPECHECK_PROJECTS,
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
   planTypecheckBatches,
   resolveProjectCompiler,
+  resolveTypecheckCommand,
   parseTypecheckOptions,
+  selectTypecheckCompiler,
   typecheckBatches,
   runTypecheckProjects
 } from './run-typecheck-projects-in-parallel.mjs'
@@ -131,17 +134,123 @@ describe('workspace package test typecheck', () => {
   })
 })
 
-describe('CI compiler selection', () => {
-  it('keeps native incremental checking as the local default', () => {
-    expect(parseTypecheckOptions([]).compiler).toBe('native')
+describe('local and CI compiler selection', () => {
+  it('defaults to automatic compiler selection while CI explicitly selects Bun', () => {
+    expect(parseTypecheckOptions([]).compiler).toBe('auto')
+    const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+    expect(manifest.scripts['typecheck:ci']).toContain('--compiler=bun')
   })
 
-  it.each(['--compiler=typo', '--bun-concurrency=0', '--bun-threads=NaN', '--bun-concurrency=5'])(
-    'rejects unsafe or unknown options: %s',
-    (argument) => {
-      expect(() => parseTypecheckOptions([argument])).toThrow()
+  it.each([
+    ['darwin', 'arm64', 'tsrs'],
+    ['linux', 'x64', 'tsrs'],
+    ['linux', 'arm64', 'tsrs'],
+    ['darwin', 'x64', 'bun'],
+    ['win32', 'x64', 'bun'],
+    ['win32', 'arm64', 'bun']
+  ])('selects %s/%s without probing an unsupported binary', (platform, arch, compiler) => {
+    const selection = selectTypecheckCompiler('auto', {
+      root: repoRoot,
+      platform,
+      arch,
+      resolveBunExecutable: () => {
+        if (compiler !== 'bun') {
+          throw new Error('unexpected Bun probe')
+        }
+        return 'pinned-bun'
+      }
+    })
+    expect(selection.compiler).toBe(compiler)
+  })
+
+  it('rejects explicitly requested tsrs on an unsupported platform', () => {
+    expect(() => selectTypecheckCompiler('tsrs', { platform: 'win32', arch: 'x64' })).toThrow(
+      'use --compiler=bun'
+    )
+    expect(parseTypecheckOptions(['--compiler=tsrs']).compiler).toBe('tsrs')
+  })
+
+  it('bounds local tsrs concurrency and respects memory admission', () => {
+    for (const memoryBytes of [4, 16, 128].map((gib) => gib * 1024 ** 3)) {
+      const batches = typecheckBatches(TYPECHECK_PROJECTS, {
+        compiler: 'tsrs',
+        memoryBytes,
+        parallelism: 16
+      })
+      expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThanOrEqual(2)
+      if (memoryBytes === 4 * 1024 ** 3) {
+        expect(batches.every((batch) => batch.length === 1)).toBe(true)
+      }
     }
-  )
+  })
+
+  it('pins the Bun devDependency to config/.bun-version', () => {
+    const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+    expect(manifest.devDependencies.bun).toBe(
+      readFileSync(join(repoRoot, 'config', '.bun-version'), 'utf8').trim()
+    )
+  })
+
+  it('narrows to the requested projects and rejects unknown ones', () => {
+    expect(parseTypecheckOptions(['--project=config/tsconfig.node.json']).projects).toEqual([
+      TYPECHECK_PROJECTS[0]
+    ])
+    expect(parseTypecheckOptions([]).projects).toEqual(TYPECHECK_PROJECTS)
+    expect(parseTypecheckOptions(['--project=mobile/tsconfig.test.json']).projects).toEqual([
+      MOBILE_TYPECHECK_PROJECTS[1]
+    ])
+    expect(TYPECHECK_PROJECTS).not.toContainEqual(MOBILE_TYPECHECK_PROJECTS[0])
+    expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
+  })
+
+  it('selects the resolved Bun path and rejects a missing executable', () => {
+    expect(
+      selectTypecheckCompiler('bun', {
+        root: repoRoot,
+        resolveBunExecutable: () => '/repo/node_modules/bun/bin/bun.exe'
+      })
+    ).toEqual({ compiler: 'bun', bunExecutable: '/repo/node_modules/bun/bin/bun.exe' })
+    expect(() =>
+      selectTypecheckCompiler('bun', { root: repoRoot, resolveBunExecutable: () => null })
+    ).toThrow('run pnpm install')
+  })
+
+  it('never probes Bun when tsc is requested', () => {
+    expect(
+      selectTypecheckCompiler('native', {
+        root: repoRoot,
+        resolveBunExecutable: () => {
+          throw new Error('probed')
+        }
+      })
+    ).toEqual({ compiler: 'native' })
+  })
+
+  it.each([
+    '--compiler=typo',
+    '--bun-concurrency=0',
+    '--bun-threads=NaN',
+    '--bun-concurrency=5',
+    '--checkers=0',
+    '--checkers=two',
+    '--project'
+  ])('rejects unsafe or unknown options: %s', (argument) => {
+    expect(() => parseTypecheckOptions([argument])).toThrow()
+  })
+
+  it('passes a checker cap to the native compiler only when one is requested', () => {
+    const command = (checkers) =>
+      resolveTypecheckCommand('config/tsconfig.node.json', {
+        compiler: 'native',
+        checkers,
+        root: repoRoot
+      }).args
+    expect(command(parseTypecheckOptions(['--checkers=4']).checkers).slice(-2)).toEqual([
+      '--checkers',
+      '4'
+    ])
+    expect(command(parseTypecheckOptions([]).checkers)).not.toContain('--checkers')
+  })
 
   it('bounds Bun project concurrency and reserves memory for overlapping checks', () => {
     const options = parseTypecheckOptions([

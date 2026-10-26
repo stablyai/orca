@@ -12,6 +12,7 @@ import type {
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
+import { createBrowserUuid } from './browser-uuid'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from './client-creation-action-policy'
 
@@ -79,8 +80,7 @@ export function resolvePortOpenInOrcaBrowser({
   event?: PortOpenClickEvent | null
   isMac: boolean
 }): boolean {
-  // Why: Shift+Cmd/Ctrl is the external-browser escape hatch; no pointer
-  // event means context-menu and keyboard opens should keep the saved setting.
+  // Shift+Cmd/Ctrl forces external browser; keyboard/context-menu opens without pointer events retain saved settings.
   if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
     return false
   }
@@ -96,6 +96,23 @@ export function goToWorkspacePortOwner(port: WorkspacePort): boolean {
   return Boolean(worktreeId && activateAndRevealWorktree(worktreeId))
 }
 
+/** The URL a port opens at: its labelled localhost name when one is set up locally, else its raw URL. */
+export async function resolveWorkspacePortBrowserUrl(args: {
+  port: WorkspacePort
+  runtimeTarget: RuntimeClientTarget
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
+}): Promise<string> {
+  const rawUrl = browserUrlForPort(args.port)
+  if (args.runtimeTarget.kind !== 'local' || !args.localhostLabelRoute) {
+    return rawUrl
+  }
+  try {
+    return (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+  } catch {
+    return rawUrl
+  }
+}
+
 export async function openWorkspacePortInBrowser(args: {
   port: WorkspacePort
   activeWorktreeId?: string | null
@@ -108,15 +125,11 @@ export async function openWorkspacePortInBrowser(args: {
   if (!args.runtimeTarget) {
     return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
   }
-  const rawUrl = browserUrlForPort(args.port)
-  let url = rawUrl
-  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
-    try {
-      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
-    } catch {
-      url = rawUrl
-    }
-  }
+  const url = await resolveWorkspacePortBrowserUrl({
+    port: args.port,
+    runtimeTarget: args.runtimeTarget,
+    localhostLabelRoute: args.localhostLabelRoute
+  })
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)
@@ -132,8 +145,7 @@ export async function openWorkspacePortInBrowser(args: {
   if (!worktreeId) {
     return { ok: false, reason: 'No workspace selected for the browser.' }
   }
-  // Why: the browser tab opened below is this jump's surface; seeding a shell would add a
-  // PTY the user never asked for in a workspace whose last terminal they closed.
+  // The browser is this navigation’s surface; never add an unrequested shell after the last terminal was closed.
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
@@ -148,14 +160,13 @@ export async function openWorkspacePortInBrowser(args: {
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
-      const tab = args.createBrowserTab(worktreeId, url, {
+      const browserPageId = createBrowserUuid()
+      args.createBrowserTab(worktreeId, url, {
         activate: true,
-        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId,
+        browserPageId
       })
-      if (!tab.activePageId) {
-        return { ok: false, reason: 'Failed to create a browser page.' }
-      }
-      args.setRemoteBrowserPageHandle(tab.activePageId, {
+      args.setRemoteBrowserPageHandle(browserPageId, {
         environmentId: args.runtimeTarget.environmentId,
         remotePageId: remotePage.browserPageId
       })
@@ -174,14 +185,7 @@ export async function openWorkspacePortInBrowser(args: {
   }
 }
 
-/**
- * Stores one host's scan and republishes the aggregate the status bar reads.
- * Why: a single-host publish used to overwrite that aggregate, so every other
- * host's ports vanished from the count until the next background poll. One
- * replaceWorkspacePortScans update (not setWorkspacePortScan) keeps the synthetic
- * all-hosts key out of workspacePortScansByKey, where re-merging it would
- * duplicate rows — and notifies subscribers once instead of twice for one scan.
- */
+/** Atomically publish host scan plus aggregate so hosts cannot overwrite each other or notify twice. Keep synthetic aggregate keys out of the per-host map or later merges duplicate rows. */
 export function publishWorkspacePortScanForHost(
   args: WorkspacePortScanPublisher & { scanKey: string; scan: WorkspacePortScanResult }
 ): void {
@@ -218,11 +222,7 @@ export async function refreshWorkspacePortScanAfterStop(
     }
     publishScan(firstScan)
 
-    // Why: stopping sends SIGTERM, and the listener can remain visible for a
-    // short window. A settled re-scan keeps worktree cards from showing a stale
-    // port row after the process actually exits. Failures here are swallowed
-    // because the UI is already correct from the first scan; surfacing a
-    // 'Failed to refresh ports' toast on top of the stop success would lie.
+    // SIGTERM can leave listeners briefly visible; rescan after settling. Ignore refresh failure because the first scan already updated UI and stop succeeded.
     await delay(WORKSPACE_PORT_STOP_SETTLE_MS)
     try {
       const settledScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
@@ -259,8 +259,7 @@ export function mergeWorkspacePortScans(
   const ports = entries.flatMap(([key, scan]) =>
     scan.ports.map((port) => ({
       ...port,
-      // Why: local and runtime scanners can both report simple ids like
-      // `tcp:3000`; aggregate All-hosts views need stable unique row keys.
+      // Simple scanner IDs (tcp:3000) collide across hosts; qualify aggregate row keys.
       id: `${key}:${port.id}`
     }))
   )
@@ -293,9 +292,7 @@ export async function scanWorkspacePortsForTarget(
     return existing
   }
 
-  // Why: visible surfaces can request the same scan on the same tick
-  // (focus refresh, status bar, side panel, stop refresh). Share it so one
-  // UI burst cannot fan out into duplicate lsof/netstat/RPC work.
+  // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
   const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
     if (inFlightWorkspacePortScans.get(key) === promise) {
       inFlightWorkspacePortScans.delete(key)

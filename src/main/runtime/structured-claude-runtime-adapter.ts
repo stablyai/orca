@@ -11,9 +11,10 @@ import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-s
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
-} from './agent-session-provider-handle-transition'
+} from './agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
+import type { ClaudeCommandCatalogProbe } from '../claude/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-connection'
 import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import { prewarmClaudeCliFlags } from '../claude/claude-cli-flag-prewarm'
@@ -21,20 +22,20 @@ import { prewarmClaudeCliFlags } from '../claude/claude-cli-flag-prewarm'
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** The registration's composed launch: the shared launch path with Claude's part. */
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
   /** The binary and env the startup version prewarm asks, as a launch would. */
-  resolveClaudeCommand?: () => string
+  resolveClaudeCommand?: typeof resolveClaudeCommand
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
+  /** Asks Claude for a chat's `/` menu while it isn't running; absent reads the folders. */
+  atRestCommandProbe?: ClaudeCommandCatalogProbe
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
-  onSessionIdle?: ClaudeStructuredSessionAdapterDeps['onSessionIdle']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
@@ -43,11 +44,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (
-    event.type === 'started' ||
-    event.type === 'options-reported' ||
-    event.type === 'options-skipped'
-  ) {
+  if (event.type === 'options-reported') {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.
@@ -66,9 +63,7 @@ export function structuredClaudeLifecycleEvent(
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
       // The instant the translator ended the open turn at; the host reads the exit's turn by it.
-      ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {}),
-      ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {})
+      ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt })
     }
   }
   return null
@@ -92,7 +87,8 @@ export function createStructuredClaudeRuntimeAdapter(
   }
   return new ClaudeStructuredSessionAdapter({
     atRestCommands: new ClaudeAtRestCommandCatalog({
-      resolveWorkspacePath: deps.resolveWorkspacePath
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
@@ -130,7 +126,6 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
-    ...(deps.onSessionIdle ? { onSessionIdle: deps.onSessionIdle } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
@@ -138,8 +133,7 @@ export function createStructuredClaudeRuntimeAdapter(
   })
 }
 
-/** The child's connection, watched for a CLI refusing a version-gated flag, so the start that
- *  failed on it is the last one to pass it. */
+/** Watch flag-refusal exits so the next start omits the unsupported flag. */
 export function openClaudeConnectionOf(
   deps: Pick<StructuredClaudeRuntimeAdapterDeps, 'openClaudeConnection' | 'claudeCliFlags'>
 ): Pick<ClaudeStructuredSessionAdapterDeps, 'openConnection'> {

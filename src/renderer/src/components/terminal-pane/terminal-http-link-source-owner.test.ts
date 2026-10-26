@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 

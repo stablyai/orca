@@ -36,8 +36,7 @@ describe('SessionRowTrailingActions', () => {
 
     expect(markup).toContain('data-testid="ai-vault-session-continue-in-new-session"')
     expect(markup).toContain('aria-label="Hand Off to Another Agent"')
-    // Why: edge-usage action lives in the hover group; the gating class is what
-    // keeps it click-proof while the row is unhovered.
+    // Hidden hover actions must reject clicks as well as disappear.
     const buttonMarkup = markup.split('data-testid="ai-vault-session-continue-in-new-session"')[0]
     expect(buttonMarkup.slice(-600)).toContain('can-hover:pointer-events-none')
   })

@@ -29,7 +29,6 @@ import {
 } from './terminal-windows-search'
 import {
   getManageSessionsSearchEntries,
-  getTerminalSetupScriptSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -61,8 +60,7 @@ export {
 } from './terminal-advanced-platform-search'
 export {
   getManageSessionsSearchEntries,
-  getTerminalWindowSearchEntries,
-  getTerminalSetupScriptSearchEntries
+  getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
 
 type TerminalAppearanceSearchOptions = {
@@ -105,9 +103,7 @@ export function getTerminalPaneSearchEntries(platform: {
   isMac: boolean
 }): SettingsSearchEntry[] {
   const isWindowsTerminalHost = platform.isWindowsTerminalHost ?? platform.isWindows
-  // Why: the settings search index must mirror the visible controls. Keeping
-  // platform-only controls out of other platforms' search results prevents
-  // users from landing on an option the UI intentionally hides.
+  // Mirror visible platform controls so search cannot link to hidden options.
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
@@ -179,7 +175,6 @@ export function getTerminalPaneSearchEntries(platform: {
         ]
       : []),
     ...getTerminalRightClickToPasteSearchEntry(),
-    ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),
     ...(platform.isMac

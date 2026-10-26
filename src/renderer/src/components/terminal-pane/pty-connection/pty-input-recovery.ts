@@ -1,5 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
@@ -22,15 +23,17 @@ import {
 
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { buildPaneTransportOptions } from './pane-transport-options'
-import { createUnservedSshPaneTransport } from './unserved-ssh-pane-connect'
+import { createUnservedSshRowTransport } from './unserved-ssh-pane-connect'
 import { createLegacyRelayBridgeTransport } from '../legacy-relay-bridge-transport'
 import { legacyRelayBridgePtyIdForPane } from '../legacy-relay-bridge-panes'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PtyTransport } from '../pty-transport-types'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
+import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/program-status/protocol'
+import { readCachedRuntimeEnvironmentCapability } from '../../../runtime/runtime-rpc-client'
 
-/** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.markAcceptedTerminalInputSent = (): void => {
     session.markTerminalInputSent()
@@ -43,19 +46,18 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
   session.transportOptions = buildPaneTransportOptions(session)
   if (session.connectionOwnerHydrating) {
-    // Why: this pane holds an inert transport until its host resolves; register it so
-    // the repos:changed handler remounts it instead of leaving the terminal blank.
+    // Register unresolved-host panes for repo-change remount so hydration cannot leave an inert blank terminal.
     recordTerminalTabParkedOnUnresolvedHost(session.deps.worktreeId, session.deps.tabId)
   }
   session.transport =
     session.terminalOwnerUnresolved || session.connectionOwnerHydrating
       ? createUnresolvedOwnerPtyTransport(
           session.terminalOwnerUnresolved
-            ? 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+            ? ambiguousWorkspaceOwnerMessage(useAppStore.getState(), session.deps.worktreeId)
             : 'Workspace host is still loading. Retry when the project finishes hydrating.'
         )
       : session.unservedSshTargetId
-        ? createUnservedSshPaneTransport()
+        ? createUnservedSshRowTransport(session, session.unservedSshTargetId)
         : session.runtimeEnvironmentId
           ? withLegacyRelayBridge(
               session,
@@ -69,14 +71,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     const ptyId = session.transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
   }
-  // Why: parser/capability handlers bypass the ordinary onData guard. Keep
-  // desktop silent while the elected mobile xterm owns query replies.
+  // Capability handlers bypass onData; mobile ownership must silence desktop replies here too.
   session.sendDesktopQueryReplyImmediate = (data: string): boolean =>
     session.canSendDesktopQueryReply() && session.transport.sendInputImmediate(data)
-  // Why (gate mode only): gate-managed PTYs never see the subscribe bytes, so this fact is
-  // their only cue to record the subscription — without the registry entry a later theme
-  // flip never pushes the CSI 997 update and the TUI keeps a stale theme after reveal.
-  // Record-only: a subscribe is not a query (see session.observeLiveMode2031Chunk, #9993).
+  // Gated panes see no subscription bytes; record the fact for later theme flips without replying to subscribe (#9993).
   session.handleHiddenMode2031SubscribeFact = (): void => {
     const ptyId = session.transport.getPtyId()
     if (
@@ -91,12 +89,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     )
     session.deps.recordPaneMode2031Subscription?.(session.pane.id, mode)
   }
-  // Why (gate mode only): the counterpart to the subscribe fact. These panes never
-  // receive the withdrawal bytes — main drops them before delivery — and the chunk
-  // scanner is disabled for them, so this fact is the ONLY observer that can retire
-  // the subscription. Without it a TUI that exits while hidden leaves paneMode2031
-  // set, and the next theme flip pushes CSI 997 into the shell that replaced it
-  // (#9993 via maybePushMode2031Flip).
+  // Only facts retire gated subscriptions; missing withdrawal bytes would otherwise send theme replies to the replacement shell (#9993).
   session.handleHiddenMode2031UnsubscribeFact = (): void => {
     const ptyId = session.transport.getPtyId()
     if (
@@ -112,18 +105,20 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
     terminal: session.pane.terminal,
     parser: session.pane.terminal.parser,
-    // Why: OSC 10/11 + DA1 replies must beat the querying program's raw-mode
-    // read window; the remote transport's input debounce would corrupt them
-    // (#7329), so send immediately.
+    // Send query replies immediately to beat raw-mode read windows; remote input debounce can corrupt late replies (#7329).
     sendInput: session.sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(session.deps.replayingPanesRef, session.pane.id),
-    // Advertise Sixel in DA1 only when the decoder is actually attached: the setting
-    // can be on while the lazy chunk is still loading or after it failed to load, and
-    // a false positive makes a feature-detecting tool emit DCS that nothing renders.
+    // Advertise Sixel only after decoder attachment; enabled settings can precede lazy load or survive a failed load.
     sixelSupported: () =>
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
     skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
+    answerProgramStatusQueries: () =>
+      !session.runtimeEnvironmentId ||
+      readCachedRuntimeEnvironmentCapability(
+        session.runtimeEnvironmentId,
+        PROGRAM_STATUS_RUNTIME_CAPABILITY
+      ) === true,
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
@@ -131,9 +126,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.sendDesktopQueryReplyImmediate
   )
 
-  session.claimViewportForUserActivity = (): void => {
+  session.claimViewportForUserActivity = (input?: string): void => {
     const currentPtyId = session.transport.getPtyId()
     if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
+      return
+    }
+    // Focus reports after SIGWINCH are not ownership claims; otherwise different-grid mirrors steal the viewport forever (#26469).
+    if (input !== undefined && isPassiveTerminalInputReport(input)) {
       return
     }
     let proposed: { cols: number; rows: number } | undefined
@@ -145,8 +144,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     const cols = proposed?.cols ?? session.pane.terminal.cols
     const rows = proposed?.rows ?? session.pane.terminal.rows
     if (cols > 0 && rows > 0) {
-      // Why: queuing a claim is not convergence. Keep the pane parked until the
-      // runtime confirms desktop-fit so a transient resize failure retries.
+      // Keep parked until runtime confirms desktop-fit; queued claims must remain retryable after transient failure.
       session.transport.claimViewport?.(cols, rows)
     }
   }
@@ -200,11 +198,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     }
   })
 
-  // Why: an unbound transport (detached during a remount/move and never
-  // rebound) silently rejects every keystroke while the PTY stays alive and
-  // the last frame stays painted — the pane looks healthy and eats input
-  // (issue #8104 class). None of the dead-session reconciles cover it because
-  // the PTY is live; recover by remounting the tab over the live PTY.
+  // Live PTYs with detached bindings can reject input while showing cached frames; remount because dead-session checks cannot detect that state (#8104).
   session.transportConnectInFlightSince = null
   session.requestRecoveryForUndeliverableInput = (providerRejected = false): void => {
     if (
@@ -214,13 +208,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ) {
       return
     }
-    // Why: input rejected while a connect/reattach is still settling is "not
-    // deliverable YET", not a dead binding. Remounting here destroys the
-    // unbound transport, and pty-transport's destroyed check then kills the
-    // PTY the in-flight reattach resolves to — the live shell recovery exists
-    // to preserve. The fossil case this detector targets has no pending
-    // connect, so it still recovers. Same for a late async reject landing
-    // after dispose: the successor pane owns the tab now.
+    // Pending connect rejects are temporary; do not race remount against their live PTY, or against a successor after disposal.
     const connectStillSettling =
       session.transportConnectInFlightSince !== null &&
       Date.now() - session.transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
@@ -231,12 +219,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     }
     const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null
     const undeliverablePtyId = session.transport.getPtyId() ?? storePtyId
-    // Why the split: for a local (daemon/app-SSH) id main's registry can answer,
-    // and a `false` there means the shell really died — the dead-session
-    // reconcile owns that teardown and a remount would race it. For a `remote:`
-    // id main owns no registry entry, so `pty:hasPty` routes to the local
-    // provider and fabricates "dead"; that answer blocked every recovery this
-    // signal exists to trigger (STA-2830). The host's own rejection replaces it.
+    // Local main can prove local/SSH liveness but owns no remote-runtime registry; use the remote host’s rejection instead of fabricated local absence (STA-2830).
     const hostRejectedRemoteInput = providerRejected && isRemoteRuntimePtyId(undeliverablePtyId)
     void requestTerminalPaneRecovery({
       tabId: session.deps.tabId,
@@ -244,26 +227,23 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       reason: hostRejectedRemoteInput ? 'input-rejected-by-host' : 'input-undeliverable',
       terminalRecoveryGeneration: session.terminalRecoveryGeneration,
       terminalRecoveryInstanceId: session.terminalRecoveryInstance.id,
-      // Why: pty:hasPty answers null for ids the local registry doesn't own,
-      // and a disconnected remote pane would otherwise remount-churn on every
-      // cooldown window while typing. Local panes keep the lenient gate.
+      // Require authoritative remote/SSH liveness so local null results cannot cause repeated typing-driven remounts.
       requireAuthoritativeLiveness:
         Boolean(session.transport.getConnectionId?.()) || isRemoteRuntimePtyId(undeliverablePtyId),
-      // Why only the rejected path: it is the only one whose remount can land on
-      // a fresh shell. A stalled-pipeline remount always reattaches to the same
-      // shell, so its half-typed line is still on screen and intact.
-      endpointReplaced: providerRejected
+      // Only host rejection can replace the shell and lose a partial line; stalled-pipeline recovery retains that line on the same PTY.
+      endpointReplaced: providerRejected,
+      // Check all panes at admission: one remount replaces siblings too, and input can arrive during the liveness probe.
+      hasUndeliveredInput: () =>
+        [...session.deps.paneTransportsRef.current.values()].some(
+          (transport) => transport.hasUndeliveredInput?.() === true
+        )
     })
   }
-  // Why: the write-pipeline health watch (scheduler stall probe, replay-guard
-  // wedge certification) detects a dead xterm pipeline; route its verdict to
-  // the same tab remount. Registered per xterm instance — recovery replaces
-  // the instance, which resets certification naturally.
+  // Route dead-pipeline certification through tab recovery; replacing xterm resets its per-instance certification.
   session.unregisterUndeliverableWriteHandler = registerUndeliverableWriteHandler(
     session.pane.terminal,
     (reason) => {
-      // Certification can arrive while this terminal still owns queued or
-      // detached scheduler work; release its delivery credits immediately.
+      // Release queued/detached output credit immediately on pipeline death.
       discardTerminalOutput(session.pane.terminal)
       const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null
       void requestTerminalPaneRecovery({

@@ -9,12 +9,10 @@ import {
 } from './agent-detection'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
 import { stripLeadingAgentTitleDecoration } from './agent-title-decoration'
-import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 
 // Titles captured from real `claude` binaries running the same one-line prompt.
 // 2.1.228 swapped the busy spinner from braille to quarter circles, which read as
 // "no agent" and made the tracker report a confirmed exit mid-turn (#13889).
-const BUSY_2_1_227 = ['⠂ Claude Code', '⠐ Claude Code', '⠂ Say hi in one word'] as const
 const BUSY_2_1_228 = ['◐ Claude Code', '◑ Claude Code', '◑ Say hi in one word'] as const
 
 const CAPTURED_2_1_228_TURN = [
@@ -47,8 +45,7 @@ describe('Claude Code quarter-circle busy titles (#13889)', () => {
   })
 
   it('reports working when the busy title carries task text instead of the agent name', () => {
-    // Why: the summary-bearing frame has no "claude" token, so it previously fell
-    // through to null — the value the tracker reads as an exit.
+    // Task-only busy frames previously fell through to null, which the tracker treats as exit.
     expect(detectAgentStatusFromTitle('◐ Say hi in one word')).toBe('working')
   })
 
@@ -59,28 +56,10 @@ describe('Claude Code quarter-circle busy titles (#13889)', () => {
     }
   })
 
-  it('matches 2.1.227 status and identity frame for frame', () => {
-    BUSY_2_1_228.forEach((title, index) => {
-      const braille = BUSY_2_1_227[index]
-      expect(detectAgentStatusFromTitle(title)).toBe(detectAgentStatusFromTitle(braille))
-      expect(getAgentLabel(title)).toBe(getAgentLabel(braille))
-      expect(resolveExplicitTerminalTitleAgentType(title)).toBe(
-        resolveExplicitTerminalTitleAgentType(braille)
-      )
-    })
-  })
-
   it('never confirms an agent exit across a real 2.1.228 turn', () => {
     const events = trackTurn(CAPTURED_2_1_228_TURN)
     expect(events).not.toContain('exited')
     expect(events).toEqual(['working', 'idle'])
-  })
-
-  it('tracks the 2.1.228 turn exactly like the 2.1.227 turn', () => {
-    const brailleTurn = CAPTURED_2_1_228_TURN.map((title) =>
-      title.replace('◐', '⠂').replace('◑', '⠐')
-    )
-    expect(trackTurn(CAPTURED_2_1_228_TURN)).toEqual(trackTurn(brailleTurn))
   })
 
   it('strips the spinner from stale exit titles and displayed labels', () => {

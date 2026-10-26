@@ -2,35 +2,33 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { MobilePushRegistration } from '../../shared/mobile-push-contract'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from './rpc/rpc-method-permission'
 
 export type DeviceEntry = {
   deviceId: string
   name: string
-  // Why: token rows only; a keyed row has no bearer, so an older build finds nothing to match (inert).
+  // Keyed rows have no bearer, so older builds cannot authenticate them.
   token?: string
   scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
-  // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
-  // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
+  // STA-2370: local-only grants prove no off-host reach for listener binding.
   pairingReach?: RuntimePairingReach
-  // Why: survives a desktop restart so the host can keep pushing without the phone
-  // re-registering. Absent on every registry written before background push existed.
+  // Persist push across desktop restart; older registries have none.
   pushRegistration?: MobilePushRegistration
-  // Why: a phone relayed by a paired desktop is that desktop's child; it dies with the parent's grant.
+  // Relayed phones lose access with their parent desktop grant.
   parentDeviceId?: string
   phoneKey?: string
-  // Why: administrative permissions are granted only when pairing; absent on older rows means none.
+  // Grant only at pairing; absent on older rows means no administrative powers.
   grants?: RuntimeDeviceGrant[]
-  // Why: authenticated sockets are bound to this; a credential change bumps it. Absent = 0.
+  // Credential changes invalidate bound sockets; absent revision is 0.
   credentialRevision?: number
-  // Why: orchestration ownership survives a credential change. Absent = sha256(token).
+  // Preserve orchestration ownership across credential change; absent defaults to sha256(token).
   callerFingerprint?: string
-  // Why: absent = token row. A keyed row authenticates only by a proof from this public key.
+  // Absent means bearer row; device-key rows require this public key's proof.
   credentialKind?: 'device-key'
   devicePublicKeyB64?: string
   // The token row this installation migrated from; that row stays for its other holders.
@@ -39,17 +37,16 @@ export type DeviceEntry = {
   ephemeral?: true
 }
 
-/** A row that authenticates by bearer token: every pairing offer and delegated child. */
 export type TokenDeviceEntry = DeviceEntry & { token: string }
 
 export type DeviceKeyLookup =
   | { kind: 'found'; device: DeviceEntry & { devicePublicKeyB64: string } }
   | { kind: 'unknown' }
-  // The row exists but has no usable key: never a revocation verdict.
+  // An unusable key is not revocation evidence.
   | { kind: 'not-keyed' }
   | { kind: 'unavailable' }
 
-// Why: a never-scanned token row is a pairing offer; keyed rows are never offers or rotated away.
+// Only unscanned token rows are rotatable pairing offers; keyed rows never are.
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (
     device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
@@ -61,7 +58,7 @@ export function sameGrants(entry: DeviceEntry, grants: readonly RuntimeDeviceGra
   return current.length === grants.length && current.every((grant) => grants.includes(grant))
 }
 
-// Why: "unknown" must mean "readable and absent" — clients delete their key only on that verdict.
+// Clients erase keys on unknown; reserve that verdict for readable absence.
 export function lookupDeviceKeyRow(device: DeviceEntry | null): DeviceKeyLookup {
   if (!device) {
     return { kind: 'unknown' }
@@ -84,7 +81,7 @@ export function isStillAuthenticated(
   return (
     (device.credentialRevision ?? 0) === principal.credentialRevision &&
     (principal.deviceToken === undefined || device.token === principal.deviceToken) &&
-    // Why: a keyed socket must not survive its row turning back into (or being replaced by) a token row.
+    // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
 }
@@ -95,7 +92,6 @@ export function mobilePairingConnectionModeOf(
   if (device?.scope !== 'mobile') {
     return null
   }
-  // Why: pairings created before this preference existed used automatic
-  // direct-first Relay fallback, so missing state must preserve that behavior.
+  // Legacy pairings used automatic direct-first Relay fallback.
   return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
 }

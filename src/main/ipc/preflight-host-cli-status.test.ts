@@ -63,7 +63,6 @@ vi.mock('@orca/process-host', () => ({
   })
 }))
 
-// WSL commands now route through the runner, not execFile('wsl.exe', ...).
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('../startup/hydrate-shell-path', () => ({
@@ -75,9 +74,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
+// Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   isCommandOnLocalPath: isCommandOnLocalPathMock,
@@ -101,7 +98,8 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { _resetPreflightCache, registerPreflightHandlers, runPreflightCheck } from './preflight'
+import { _resetPreflightCache, runPreflightCheck } from '../preflight/agent-detection'
+import { registerPreflightHandlers } from './preflight'
 import {
   defaultAzureDevOpsStatus,
   defaultBitbucketStatus,
@@ -143,9 +141,7 @@ describe('preflight', () => {
     })
   })
 
-  // Why: every preflight run probes (in order) `git --version`, `gh --version`,
-  // `glab --version`, then in parallel `gh auth status` + `glab auth status` —
-  // five execFile calls per cycle. Tests below provide values for all five.
+  // Sequential version probes precede concurrent gh/glab auth checks; fixtures supply all five responses.
   it('marks gh as authenticated when gh auth status exits successfully', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
@@ -214,10 +210,7 @@ describe('preflight', () => {
     expect(status.gh).toEqual({ installed: true, authenticated: true })
   })
 
-  // Why (#22975): these two cases key the spawn mock on (command, args) instead
-  // of call order, because the fallback probes exactly which copy runs is the
-  // behaviour under test — and `gh auth status` runs in parallel with
-  // `glab auth status`, so a fixed sequence would not be the real one.
+  // Match command/args because fallback version probes and concurrent auth checks vary call order.
   it('authenticates the gh copy that actually ran, not the shim PATH chose', async () => {
     const shim = '/Users/octocat/.asdf/shims/gh'
     const working = '/opt/homebrew/bin/gh'
@@ -306,8 +299,7 @@ describe('preflight', () => {
     const status = await runPreflightCheck()
 
     expect(status.glab).toEqual({ installed: false, authenticated: false })
-    // Why: with glab uninstalled, glab auth status must not run — that
-    // would surface a misleading "command not found" error in logs.
+    // An absent glab must not generate a misleading auth command failure.
     expect(execFileAsyncMock).toHaveBeenCalledTimes(4)
   })
 
@@ -424,8 +416,7 @@ describe('preflight', () => {
   })
 
   describe('WSL preflight caching', () => {
-    // Why win32 + these stubs: a WSL target probes git/gh/glab through the
-    // runner, so every case below counts runner spawns rather than execFile.
+    // WSL probes use the runner, so count runner calls rather than local execFile calls.
     function stubWslProbes(): void {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       execFileAsyncMock.mockImplementation(async () => {
@@ -488,21 +479,13 @@ describe('preflight', () => {
       await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
 
       expect(first).toEqual(second)
-      // One shared run, not two: a second full set would double the spawn count.
       expect(singleRunSpawns).toBe(runWslProcessMock.mock.calls.length)
     })
 
-    // Why this matters: an unreachable distro reports the same `installed:
-    // false` as a distro with no tooling, so a session-lifetime cache would pin
-    // "git not installed" until relaunch. The TTL must let it recover.
-    // Why these two: a slower run settling last must not overwrite a newer
-    // answer, or a forced refresh silently returns to the status it replaced.
+    // A superseded probe must not overwrite the forced refresh even when it settles last.
     it('does not let a superseded probe overwrite a newer forced refresh', async () => {
       stubWslProbes()
-      // Why gate on phase captured at call time: the stale run's three
-      // --version probes all start before the refresh, and all report nothing
-      // installed, so it never issues auth calls. The two runs are then
-      // trivially distinguishable in the cached result.
+      // Capture phase at issue time so the held stale probes remain distinguishable from refreshed probes.
       let phase: 'stale' | 'fresh' = 'stale'
       let releaseStale!: () => void
       const staleGate = new Promise<void>((resolve) => {
@@ -535,8 +518,6 @@ describe('preflight', () => {
       const staleResult = await stalePending
       expect(staleResult.git).toEqual({ installed: false })
 
-      // The superseded run still returns its own answer to its own caller, but
-      // must not have become the cached one.
       const cachedNow = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
       expect(cachedNow.git).toEqual({ installed: true })
     })

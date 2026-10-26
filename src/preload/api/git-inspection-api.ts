@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
+import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -57,6 +58,10 @@ export type GitInspectionApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<GitConflictOperation>
+  mutationInFlight: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitMutationInFlight>
   diff: (args: {
     worktreePath: string
     filePath: string

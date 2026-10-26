@@ -1,7 +1,15 @@
+import type { TerminalWaiter } from './runtime-terminal-contracts'
+import type {
+  RuntimeTerminalWait,
+  RuntimeTerminalAgentStatus
+} from '../../shared/runtime-terminal-contracts'
+import { RuntimeMachineName } from './runtime-machine-name'
+import { OrcaRuntimeService } from './orca-runtime'
+import { makeTuiIdleLeaf, makeTuiIdlePty } from './tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import {
   createTranscriptPane,
@@ -20,14 +28,10 @@ vi.mock('electron', () => ({
 }))
 
 describe('Interactive wait visibility and terminal admission', () => {
-  // A worker parked on an interactive prompt must be distinguishable from one that is thinking
-  // or inside a long tool call (STA-4513, STA-3714).
+  // Distinguish interactive waits from thinking/tool calls (STA-4513, STA-3714).
 
-  // cursor-agent 2026.08.11-e8db854's screens, but NOT raw PTY output: these files contain no
-  // escape bytes and no carriage returns, so they came through a terminal's renderer and a
-  // clipboard. They evidence wording, ordering and glyphs — which is all the rules below key on —
-  // and evidence nothing about the caret, cursor moves, repaints or the alternate screen buffer.
-  // Record new fixtures with config/scripts/capture-agent-pty-transcript.mjs, which keeps the bytes.
+  // Cursor 2026.08.11-e8db854 fixtures are rendered clipboard text, not PTY captures; they prove wording/order/glyphs, not cursor/repaint/alternate-buffer behavior.
+  // New captures use config/scripts/capture-agent-pty-transcript.mjs to retain bytes.
   function fixture(name: string): string {
     return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
   }
@@ -51,14 +55,12 @@ describe('Interactive wait visibility and terminal admission', () => {
   async function createPane(
     options: TranscriptPaneOptions
   ): Promise<Awaited<ReturnType<typeof createTranscriptPane>>> {
-    // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
-    // production status path rather than silently disappearing in a bare runtime fixture.
+    // Use production status wiring so OSC rows reach the real hook store.
     const statusWiring = makeAgentStatusStoreWiring()
     return createTranscriptPane(options, statusWiring.deps)
   }
 
-  // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
-  // that as `working`; the title is identical whether it is running a command or waiting.
+  // Cursor uses the same spinner title for working and waiting, so title alone cannot distinguish them.
   const CURSOR_TITLE = '⠇ Cursor Agent'
 
   afterEach(() => vi.useRealTimers())
@@ -83,9 +85,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('refuses a guarded send and a dispatch preamble while the approval is up', async () => {
-        // Why this matters beyond reporting: the coordinator's preamble was typed straight into
-        // the approval dialog instead of being refused (the STA-2631 shape). Both refusal paths
-        // are asserted here, not just the `permission` verdict they read.
+        // Refuse both injection paths so coordinator preambles cannot land in approval dialogs (STA-2631).
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -151,8 +151,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('treats an answered menu still in scrollback as scrollback', async () => {
-        // Why: the menu is not erased on every terminal, so a live dialog is one that still owns
-        // the bottom of the screen rather than one that merely appears somewhere in the tail.
+        // A live dialog must still own the screen bottom; stale menu text can remain in scrollback.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -163,8 +162,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('treats an answered menu followed by any later output as scrollback', async () => {
-        // Why not keyed on cursor's own follow-up line: output after the menu can be anything,
-        // and a stale hit here fails tui-idle and refuses prompt injection on a healthy lane.
+        // Any output after a menu can disprove it; matching only Cursor's follow-up text would block healthy prompt injection.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -182,8 +180,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('is not anchored by the agent narrating a choice after the menu', async () => {
-        // Why: matching each marker independently let prose below the answered menu carry the
-        // anchor down to the bottom of the screen and revive it.
+        // Independent marker matches can let later prose revive an answered menu at screen bottom.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -204,8 +201,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('requires the dialog to be the last thing on the screen', async () => {
-        // Not a tolerance question: one line of slack is exactly enough for the agent's own
-        // narration to revive an answered menu, and every capture of a live dialog ends on it.
+        // One line of slack revives answered menus; live captures end exactly at the dialog.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -257,9 +253,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('still lets a live working title clear a stale startup prompt', async () => {
-        // Pins the shared authority getTerminalAgentStatus and the agent-prompt send guard
-        // already use: for the startup modals, a live non-permission title is the staleness
-        // proof, because their text survives in scrollback with no self-dismissal marker.
+        // Startup prompt text lacks dismissal markers; a live non-permission title proves staleness for both status and send guards.
         const { runtime, handle } = await createPane({
           paneTitle: '✻ Claude Code',
           foregroundProcess: 'claude',
@@ -298,9 +292,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('drops a retained permission row once the agent stops owning the pane', async () => {
-        // Why not the title alone: a shell that takes the pane back usually sets something like
-        // `user@host: ~/repo`, which no title rule recognizes, and a hook row stays fresh for
-        // AGENT_STATUS_STALE_AFTER_MS — half an hour of reporting a dead agent as waiting.
+        // Shell titles may match no rule; a fresh hook row could otherwise report a dead agent waiting for 30 minutes.
         const { runtime, handle } = await createPane({
           paneTitle: 'jinwoo@host: ~/repo',
           foregroundProcess: 'zsh',
@@ -322,10 +314,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('still reports a live dialog restored from terminal history', async () => {
-      // Why this case exists: a lane parked on a prompt emits no bytes, so an Orca restart is
-      // exactly when it would go quiet forever. A restored tail carries no waitBlockedAt, and
-      // the approval menu does not need one — being at the bottom of the restored screen is
-      // itself the proof that this is where the pane stopped.
+      // Restored bottom-of-screen menus prove wait even without waitBlockedAt; parked agents emit no new bytes after restart.
       const { runtime, handle } = await createPane({
         paneTitle: CURSOR_TITLE,
         foregroundProcess: 'cursor-agent',
@@ -340,8 +329,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('does not resurrect a startup modal from a restored tail', async () => {
-      // The startup prompts keep the timestamp rule: their text lingers in scrollback with no
-      // marker for whether it was answered, so restored bytes alone must not mint a wait.
+      // Startup prompts retain timestamp gating because their scrollback text cannot prove they remain unanswered.
       const { runtime, handle } = await createPane({
         paneTitle: 'sta4513-claude',
         foregroundProcess: 'claude',
@@ -353,8 +341,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('stops reporting a wait once the pane is no longer running', async () => {
-      // Why: the menu stays at the bottom of a dead pane's tail forever. A worker whose process
-      // is gone needs intervention, not an answer, so it must not read as blocked on a human.
+      // Dead panes retain menu text indefinitely; lost processes need intervention, not a prompt answer.
       const { runtime, handle } = await createPane({
         paneTitle: CURSOR_TITLE,
         foregroundProcess: 'cursor-agent',
@@ -368,8 +355,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('does not accrue a probe per poll while the foreground probe wedges', async () => {
-      // Why: the timeout abandons the wait, not the request. Without single-flighting, a
-      // coordinator watching a wedged remote host adds one live probe on every poll.
+      // Timeout abandons the wait, not the request; single-flight prevents one stranded remote probe per poll.
       let probes = 0
       const { runtime, handle } = await createPane({
         paneTitle: '✻ Claude Code',
@@ -425,8 +411,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('leaves the wait unevaluated when the foreground probe wedges', async () => {
-      // Why bounded: this probe reaches a PTY controller that can be a remote host. A wedged
-      // one must leave the wait unknown, not stall every caller of showTerminal.
+      // Bound remote PTY probes; a wedged host must leave wait unknown without stalling showTerminal.
       const { runtime, handle } = await createPane({
         paneTitle: '✻ Claude Code',
         foregroundProcess: 'claude',
@@ -485,5 +470,209 @@ describe('Screen rule readiness scope', () => {
         satisfied: true
       })
     }, 20_000)
+  })
+})
+
+describe('terminal wait ownership', () => {
+  beforeEach(() => {
+    vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function pendingStatus() {
+    const { promise, resolve } = Promise.withResolvers<RuntimeTerminalAgentStatus>()
+    return { status: promise, finish: resolve }
+  }
+
+  function interactiveWait(getStatus: (handle: string) => Promise<RuntimeTerminalAgentStatus>) {
+    const runtime = new OrcaRuntimeService()
+    runtime['getTerminalAgentStatusPtyId'] = () => 'pty-1'
+    runtime['getTerminalWaitPermissionInputs'] = () => ({
+      terminal: {
+        waitText: '',
+        waitBlockedAt: null,
+        title: null,
+        titleStatus: null,
+        titleStatusIsLive: false
+      },
+      lifecycle: null
+    })
+    runtime['getFreshExplicitAgentStatusForHandle'] = () => ({
+      status: 'permission',
+      updatedAt: 42,
+      stateStartedAt: 42
+    })
+    runtime['resolveAuthoritativeTerminalWaitPermission'] = () => null
+    runtime.getTerminalAgentStatus = getStatus
+    return runtime
+  }
+
+  it('shares permission probes per PTY and releases the completed probe', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const wait = interactiveWait(getStatus)
+    const first = wait.getTerminalInteractiveWait('handle-1')
+    const second = wait.getTerminalInteractiveWait('handle-2')
+    expect(getStatus).toHaveBeenCalledOnce()
+    pending.finish({ handle: 'handle-1', isRunningAgent: true, status: 'permission' })
+    expect(await first).toEqual({ source: 'hook', since: 42 })
+    expect(await second).toEqual({ source: 'hook', since: 42 })
+    await wait.getTerminalInteractiveWait('handle-3')
+    expect(getStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a timed-out permission probe in flight until its host responds', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const wait = interactiveWait(getStatus)
+    const first = wait.getTerminalInteractiveWait('handle-1')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(await first).toBeUndefined()
+    const second = wait.getTerminalInteractiveWait('handle-2')
+    expect(getStatus).toHaveBeenCalledOnce()
+    pending.finish({ handle: 'handle-1', isRunningAgent: true, status: 'permission' })
+    expect(await second).toEqual({ source: 'hook', since: 42 })
+  })
+
+  it('isolates permission probes between runtimes with the same PTY id', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const first = interactiveWait(getStatus).getTerminalInteractiveWait('handle-1')
+    const second = interactiveWait(getStatus).getTerminalInteractiveWait('handle-1')
+    expect(getStatus).toHaveBeenCalledTimes(2)
+    pending.finish({ handle: 'handle-1', isRunningAgent: false, status: null })
+    expect(await first).toBeNull()
+    expect(await second).toBeNull()
+  })
+
+  it('rechecks current leaf evidence before delivery and coalesces repeated refusals', async () => {
+    let leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
+    const deliver = vi.fn()
+    const runtime = new OrcaRuntimeService()
+    const key = runtime['getLeafKey'](leaf.tabId, leaf.leafId)
+    runtime['leaves'].set(key, leaf)
+    runtime['deliverPendingMessagesForLeaf'] = deliver
+    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
+    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
+    expect(vi.getTimerCount()).toBe(1)
+    leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'idle' })
+    runtime['leaves'].set(key, leaf)
+    await vi.advanceTimersByTimeAsync(3050)
+    expect(deliver).toHaveBeenCalledOnce()
+    expect(deliver).toHaveBeenCalledWith(leaf)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels only the delivery recheck belonging to its runtime', async () => {
+    const leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
+    const first = new OrcaRuntimeService()
+    const second = new OrcaRuntimeService()
+    const key = first['getLeafKey'](leaf.tabId, leaf.leafId)
+    first['leaves'].set(key, leaf)
+    second['leaves'].set(key, leaf)
+    first['checkDeliverySettledAndArmRecheck'](leaf)
+    second['checkDeliverySettledAndArmRecheck'](leaf)
+    expect(vi.getTimerCount()).toBe(2)
+    first['clearDeliveryRecheck'](key)
+    expect(vi.getTimerCount()).toBe(1)
+    second['clearDeliveryRecheck'](key)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears a pending blocked scan without cancelling another runtime scan', async () => {
+    const pty = makeTuiIdlePty({ waitBlockedAt: null })
+    const getPty = vi.fn(() => pty)
+    const first = new OrcaRuntimeService()
+    const second = new OrcaRuntimeService()
+    vi.spyOn(first['ptysById'], 'get').mockImplementation(getPty)
+    vi.spyOn(second['ptysById'], 'get').mockImplementation(getPty)
+    first['scheduleWaitBlockedCheck']('pty-1', 'output', 10_000)
+    second['scheduleWaitBlockedCheck']('pty-1', 'output', 10_000)
+    first['scheduleWaitBlockedCheck']('pty-1', 'more', 10_001)
+    second['scheduleWaitBlockedCheck']('pty-1', 'more', 10_001)
+    expect(vi.getTimerCount()).toBe(2)
+    first['clearWaitBlockedCheckState']('pty-1')
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(getPty).toHaveBeenCalledTimes(3)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('routes settlement through the current runtime verdict and resolver', async () => {
+    const runtime = new OrcaRuntimeService()
+    const pending = Promise.withResolvers<RuntimeTerminalWait>()
+    const waiter: TerminalWaiter = {
+      handle: 'handle-1',
+      condition: 'tui-idle',
+      resolve: pending.resolve,
+      reject: pending.reject,
+      timeout: null,
+      cancelIdlePoll: null,
+      abortCleanup: null
+    }
+    runtime['handleByPtyId'].set('pty-1', waiter.handle)
+    runtime['terminalWaiters'].add(waiter)
+    const verdict = vi.fn<OrcaRuntimeService['evaluateTuiIdleForPty']>(() => ({
+      kind: 'ready-strong'
+    }))
+    runtime['evaluateTuiIdleForPty'] = verdict
+    const original = runtime['resolveWaiter']
+    const resolve = vi.fn<OrcaRuntimeService['resolveWaiter']>((...args) =>
+      original.call(runtime, ...args)
+    )
+    runtime['resolveWaiter'] = resolve
+    const pty = makeTuiIdlePty({ lastAgentStatus: 'working' })
+    runtime['resolvePtyTuiIdleWaiters'](pty, 'pty-1')
+    expect(verdict).toHaveBeenCalledExactlyOnceWith(pty)
+    expect(resolve).toHaveBeenCalledOnce()
+    await expect(pending.promise).resolves.toMatchObject({ satisfied: true, condition: 'tui-idle' })
+  })
+
+  it('keeps an absent launcher target as a rejected promise', async () => {
+    const runtime = new OrcaRuntimeService()
+    const result = runtime.resolveOrchestrationAgentLauncherForTarget('custom', {})
+    expect(result).toBeInstanceOf(Promise)
+    await expect(result).rejects.toThrow()
+  })
+
+  it('reads the launcher resolver before forwarding an absent target', async () => {
+    const runtime = new OrcaRuntimeService()
+    const events: string[] = []
+    const rejection = new Error('original_resolver_rejection')
+    const resolve = vi.fn<OrcaRuntimeService['resolveTerminalWorkspaceLaunchScope']>(
+      async function (this: OrcaRuntimeService) {
+        events.push('original-call')
+        expect(this).toBe(runtime)
+        throw rejection
+      }
+    )
+    const replacement = vi.fn()
+    Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+      configurable: true,
+      get() {
+        events.push('callee')
+        return resolve
+      }
+    })
+    const target = {
+      get worktree() {
+        events.push('argument')
+        Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+          value: replacement
+        })
+        return undefined
+      }
+    }
+    const result = runtime.resolveOrchestrationAgentLauncherForTarget('custom', target)
+    expect(result).toBeInstanceOf(Promise)
+    await expect(result).rejects.toBe(rejection)
+    expect(events).toEqual(['callee', 'argument', 'original-call'])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(undefined)
+    expect(replacement).not.toHaveBeenCalled()
   })
 })

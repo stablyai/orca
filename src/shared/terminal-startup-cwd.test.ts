@@ -20,8 +20,6 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('allows absolute cwds outside the worktree (#7685)', () => {
-    // Why: opening/splitting a terminal outside the worktree (e.g. after
-    // `cd ..`) is allowed; the cwd is resolved, not constrained.
     expect(resolveTerminalStartupCwd('/repo/app', '/repo/app-other')).toBe('/repo/app-other')
   })
 
@@ -64,8 +62,7 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('passes floating terminal cwds through untouched', () => {
-    // Why: floating terminal cwds are validated against trusted-directory
-    // grants in main and have no worktree root to resolve against.
+    // Main validates floating cwds against trusted-directory grants; there is no workspace root to anchor them.
     expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -101,8 +98,7 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('falls back to a non-ASCII workspace root for a missing cwd (#7239)', () => {
-    // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback
-    // must preserve the selected worktree path verbatim.
+    // Preserve the Japanese workspace path from the #7239 reproduction verbatim.
     const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
     expect(
       resolveTerminalStartupCwd(worktreePath, '/var/tmp/orca-stale', {
@@ -134,8 +130,7 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('keeps the requested cwd when the workspace root is missing too', () => {
-    // Why: unmounted volume / stopped WSL distro — falling back would spawn a
-    // misleading shell; let the provider surface its normal error instead.
+    // An unmounted volume/stopped WSL distro should surface the provider error, not spawn a misleading fallback shell.
     const onFallbackToWorkspaceRoot = vi.fn()
     expect(
       resolveTerminalStartupCwd('/repo/app', '/repo/app/deleted-folder', {

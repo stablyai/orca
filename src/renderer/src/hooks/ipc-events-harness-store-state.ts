@@ -13,7 +13,6 @@ export type HarnessStoreState = {
   [key: string]: unknown
 }
 
-/** Store surface useIpcEvents touches at mount plus the terminal-reveal path. */
 export function createHarnessStoreState(
   overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
 ): HarnessStoreState {
@@ -24,6 +23,7 @@ export function createHarnessStoreState(
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     isNavigatingHistory: false,
+    sleepingAgentSessionsByPaneKey: {},
     setActiveTabType: vi.fn(),
     setActiveTab: vi.fn(),
     revealWorktreeInSidebar: vi.fn(),
@@ -47,7 +47,10 @@ export function createHarnessStoreState(
     setRateLimitsFromPush: vi.fn(),
     setSshConnectionState: vi.fn(),
     setSshTargetLabels: vi.fn(),
+    setSshTargetsMetadata: vi.fn(),
+    setRemovedSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),
+    setUnrestoredPortForwards: vi.fn(),
     clearPortForwards: vi.fn(),
     setDetectedPorts: vi.fn(),
     enqueueSshCredentialRequest: vi.fn(),

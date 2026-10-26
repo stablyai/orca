@@ -15,8 +15,7 @@ import { withWslWindowsCheckoutGitConfig } from '../wsl-windows-checkout-git-con
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import type { GitExecOptions } from './git-exec-options'
 
-// Why: Linux Git misreads a Windows Git checkout unless it runs with Windows Git's settings.
-// Classification reads the caller's args; only the spawned argv carries the injected config.
+// Linux Git needs Windows-checkout settings; classify original args and inject only at spawn.
 function wslGitArgs(args: string[], options: GitExecOptions): string[] {
   return withWslWindowsCheckoutGitConfig(args, options.cwd, options.wslDistro)
 }
@@ -54,13 +53,7 @@ export function resolveGitCommand(
   return resolveGitCommandWithoutProbe(args, options, captureLoginShellOutput)
 }
 
-/**
- * The distro this command could run shell-free in, or null when it can't.
- *
- * Why cwd counts: a `\\wsl.localhost\<distro>\...` worktree names its distro in
- * the path, so requiring the caller to have resolved a WSL project runtime first
- * left every diff read on the login shell — one rc run per `git show`.
- */
+/** Infer the direct-read distro from overrides or UNC cwd so plain reads can bypass login rc output. */
 function directWslGitReadDistro(
   args: string[],
   options: GitExecOptions,
@@ -75,9 +68,7 @@ function directWslGitReadDistro(
 function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boolean {
   return Boolean(
     process.platform === 'win32' &&
-    // Why either: callers can still opt in explicitly, but a plain read no
-    // longer has to -- it needs nothing the login shell provides, and routing
-    // it through one is what exposes callers to the shell's rc output.
+    // Known reads need no login environment; explicit callers may also opt in.
     (options.preferWslDirectGit || isWslDirectGitReadCommand(args)) &&
     !options.useConfiguredSshCommandForNetwork &&
     !Object.entries(options.env ?? {}).some(
@@ -87,28 +78,17 @@ function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boo
   )
 }
 
-/**
- * Give a read the chance to take the shell-free route instead of silently
- * falling back while the probe is still resolving.
- *
- * The probe is one `wsl.exe` call, shared per distro and reused by every later
- * command, so waiting costs at most once. Bounded because a cold or wedged
- * distro must not hold a read behind it — past the bound the login-shell route
- * runs exactly as it did before.
- */
+/** Wait once per distro for direct-read setup, bounded so cold or wedged WSL falls back to a login shell. */
 export function pendingWslDirectGitReadEnvironment(
   args: string[],
   options: GitExecOptions
 ): Promise<unknown> | null {
-  // Why null rather than a resolved promise: every non-WSL git call goes through here, and
-  // awaiting even an already-settled promise would push the spawn into a later microtask.
-  // A settled probe — including a distro whose direct route was permanently disabled — has
-  // nothing left to wait for, and neither does a read that is already aborted.
+  // Return null for settled/aborted probes: even awaiting a resolved promise would defer native spawning.
   const distro = directWslGitReadDistro(args, options, false)
   if (!distro || isWslGitReadEnvironmentSettled(distro) || options.signal?.aborted) {
     return null
   }
-  // withTimeout also absorbs rejection, so a probe failure can never become a read failure.
+  // Absorb probe failures so setup cannot fail the read.
   return withTimeout(
     waitForPromiseWithSignal(getWslGitReadEnvironment(distro), options.signal),
     WSL_GIT_READ_ENVIRONMENT_WAIT_MS,
@@ -124,6 +104,7 @@ export function resolveGitCommandWithoutProbe(
   return resolveCommand('git', wslGitArgs(args, options), options.cwd, options.wslDistro, {
     useWslLoginShell: Boolean(options.wslDistro),
     captureLoginShellOutput,
+    env: options.env,
     terminationBarrier: options.terminationBarrier
   })
 }
@@ -145,14 +126,7 @@ export function directWslGitExitCode(error: unknown, resolved: ResolvedCommand):
   return typeof code === 'number' ? code : null
 }
 
-/**
- * Exit 1 with nothing on stderr is Git answering "no" (a missing ref under
- * `show-ref --verify --quiet`, no differences under `diff --quiet`), not a
- * broken environment. `wsl.exe` always explains its own launch failures, so
- * this cannot mask a dead distro. Retrying such an exit through the user's
- * interactive login shell doubles the spawn count and runs the distro's rc
- * files for a result the direct route already produced correctly.
- */
+/** Quiet exit 1 is Git control flow; WSL launch errors include diagnostics and may need shell fallback. */
 export function isQuietGitControlFlowExit(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false

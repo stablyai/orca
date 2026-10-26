@@ -1,0 +1,29 @@
+/** Share app isolation and real SSH setup across Docker, loopback and Windows hostile-host lanes. */
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { setAppEnvironment } from '../../../shared/app-environment'
+import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import type { SshTarget } from '../../../shared/ssh-types'
+import { SshConnection } from '../connection/ssh-connection'
+
+export function installHostileHostAppEnvironment(): () => void {
+  const userData = mkdtempSync(join(tmpdir(), 'orca-hostile-hosts-userdata-'))
+  const { version } = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+  setAppEnvironment({
+    getPath: (name) => (name === 'userData' ? userData : tmpdir()),
+    getAppPath: () => process.cwd(),
+    getVersion: () => version,
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  })
+  return () => removeTreeSync(userData)
+}
+
+export async function connectHostileHost(sshTarget: SshTarget): Promise<SshConnection> {
+  const conn = new SshConnection(sshTarget, { onStateChange: () => {} })
+  await conn.connect()
+  return conn
+}

@@ -1,11 +1,5 @@
-// What each Orca runtime that ran chats here says about itself: that it started, and, when it ends
-// gracefully, how (a quit or an update). A later start reads them to tell an owner that died with a
-// quit from one that died in a crash. A crash is only ever concluded from a runtime known to have
-// started and never ended; a runtime with no readable record names no cause.
-//
-// One file per runtime, written only by that runtime, so two processes sharing the directory never
-// lose each other's word to a read-modify-write. Pruned to the newest few, and losing a record only
-// costs the distinction.
+// One file per runtime avoids cross-process read/modify/write loss; record start plus graceful quit/update.
+// Only a recorded start without end implies crash; missing/unreadable/pruned records leave cause unknown.
 
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,10 +12,10 @@ import {
 } from '../../shared/agent-session-resume-marker'
 
 const RUNTIMES_DIRECTORY = 'agent-session-runtimes'
-/** Enough runtimes that an owner a few restarts old still finds its runtime's record. */
+// Retain enough history to attribute owners from recent restarts.
 const MAX_RUNTIME_RECORDS = 16
 const MAX_RUNTIME_RECORD_BYTES = 4 * 1024
-/** A temp file older than this belongs to a writer that died between write and rename. */
+// Reap temp files left by writers dying before rename.
 const STALE_TEMP_FILE_MS = 60_000
 const RECORD_FILE = /^([A-Za-z0-9-]{1,64})\.json$/
 
@@ -31,7 +25,6 @@ type RuntimeRecord = {
   end?: { trigger: AgentSessionResumeTrigger; at: number }
 }
 
-/** This process's runtime, once its store opened: the one record a graceful end rewrites. */
 let current: { path: string; record: RuntimeRecord } | null = null
 
 function writeRecord(path: string, record: RuntimeRecord): void {
@@ -56,9 +49,7 @@ function prune(directory: string, keep: string): void {
   }
 }
 
-/** A graceful exit no call site recorded, such as an `app.exit(0)` or `process.exit(0)`, is a quit:
- *  Electron emits the process's 'exit' on every quit or exit once its loop runs, and Node on every
- *  `process.exit`. A non-zero exit records nothing, so it stays a crash. */
+/** Record unhandled zero-code process exits as quit; nonzero exits retain crash classification. */
 export function recordAgentSessionRuntimeEndOnExit(code: number): void {
   if (code === 0) {
     recordAgentSessionRuntimeEnd('quit')
@@ -67,8 +58,7 @@ export function recordAgentSessionRuntimeEndOnExit(code: number): void {
 
 let exitHookInstalled = false
 
-/** Records that this runtime started. Never throws: a runtime with no record reads as unknown. A
- *  second start of the same runtime (a host reinstalled during its quit) keeps the end it recorded. */
+/** Record startup without throwing; repeated opens during quit must preserve the first ending. */
 export function beginAgentSessionRuntimeRecord(
   stateDirectory: string,
   runtime: string,
@@ -92,10 +82,7 @@ export function beginAgentSessionRuntimeRecord(
   }
 }
 
-/**
- * The one "this Orca runtime is ending" entry point, for every graceful exit. Synchronous, so an
- * exit that cannot await still records it; the first call wins. Never throws.
- */
+/** First graceful ending wins; synchronous/no-throw so nonawaiting exit paths can record it. */
 export function recordAgentSessionRuntimeEnd(
   trigger: AgentSessionResumeTrigger,
   now = Date.now()
@@ -107,11 +94,11 @@ export function recordAgentSessionRuntimeEnd(
   try {
     writeRecord(current.path, current.record)
   } catch {
-    // The start alone would read as a crash; with no record its owners name no cause.
+    // If end persistence failed, remove the start so it cannot falsely imply crash.
     try {
       rmSync(current.path, { force: true })
     } catch {
-      // Nothing left to try: the start stays, and reads as a crash.
+      // Failed removal leaves only the start, so later readers infer crash.
     }
   }
 }
@@ -120,7 +107,6 @@ function readTrigger(value: unknown): AgentSessionResumeTrigger | undefined {
   return AGENT_SESSION_RESUME_TRIGGERS.find((trigger) => trigger === value)
 }
 
-/** How a recorded runtime ended: its quit or update, else a crash. Undefined when unreadable. */
 function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
   try {
     const parsed: unknown = JSON.parse(
@@ -148,10 +134,7 @@ function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCau
   }
 }
 
-/**
- * How each recorded runtime ended. A runtime missing from the map (never recorded, pruned, or
- * unreadable) names no cause. Null when the records cannot be listed at all.
- */
+/** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */
 export function readAgentSessionRuntimeEnds(
   stateDirectory: string
 ): ReadonlyMap<string, AgentSessionOrcaStopCause> | null {

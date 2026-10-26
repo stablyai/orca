@@ -28,7 +28,6 @@ function createLoadingHandlers(currentUrl: string) {
     addressBarInputRef: ref(null),
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref<string | null>(null),
-    trackNextLoadingEventRef: ref(true),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
     invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),

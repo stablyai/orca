@@ -6,7 +6,11 @@ import {
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
-import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../src/shared/agent-session-resume'
+import { getAiVaultAgentProviderSession } from '../../../src/shared/ai-vault-resume-startup'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
@@ -15,6 +19,7 @@ import {
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import { managedDataAccountResumeEnv } from '../../../src/shared/managed-data-account-resume'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
@@ -72,6 +77,7 @@ export type MobileAiVaultResumeLaunch = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
@@ -98,13 +104,20 @@ export function buildMobileAiVaultResumeLaunch(args: {
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
-      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(args.session.agent, args.settings, args.hostPlatform),
+        ...managedDataAccountResumeEnv(args.session)
+      },
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})
     })
     if (startupPlan) {
+      const resumeProviderSession = getAiVaultAgentProviderSession({
+        ...args.session,
+        ...(resumeFilePath ? { filePath: resumeFilePath } : {})
+      })
       return {
         command:
           args.session.agent === 'omp'
@@ -129,7 +142,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
         // real-home override must strip Codex homes at pane spawn like desktop.
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent
+        launchAgent: startupPlan.agent,
+        ...(resumeProviderSession ? { resumeProviderSession } : {})
       }
     }
   }
@@ -174,8 +188,7 @@ export async function resumeAiVaultSessionInTerminal(
     launch.launchAgent === 'qoder' &&
     Boolean(launch.clientMutationId) &&
     launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY) === true
-  // Each request is awaited outside its catch so a transport drop propagates as the original error
-  // object; only a refusal is rewritten into this step's own copy.
+  // Await requests outside refusal handling so transport errors keep their original delivery-unknown identity.
   const created = await reviewTerminalCreateRun.request(
     client,
     {
@@ -185,6 +198,10 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
+      // Older hosts strip it and learn the session from the agent's first report instead.
+      ...(launch.resumeProviderSession
+        ? { resumeProviderSession: launch.resumeProviderSession }
+        : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
       activate: false,
       select: true,
@@ -226,9 +243,7 @@ export type MobileAiVaultResumeMutationRegistry = {
   releaseOnSuccess(sessionId: string): void
 }
 
-// Why: a retry after a failed/interrupted resume must reuse the same
-// idempotency key so the host dedups the create, while a resume after success
-// mints a fresh key so the user can intentionally fork the session.
+// Reuse mutation ids after failed/interrupted resumes for deduplication; mint fresh only after success so deliberate forks remain possible.
 export function createMobileAiVaultResumeMutationRegistry(
   mintId: (sessionId: string) => string
 ): MobileAiVaultResumeMutationRegistry {

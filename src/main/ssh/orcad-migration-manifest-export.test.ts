@@ -4,9 +4,15 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
+import {
+  assertOrcadMigrationManifestDigest,
+  computeOrcadMigrationManifestSha256
+} from '../orcad/orcad-migration-manifest-digest'
 import { emptyDormantPayload } from '../persistence/migrating-orcad-catalog/orcad-source-dormant-state'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import {
+  createOrcadMigrationManifest,
+  describeOversizedOrcadMigrationPayload
+} from './orcad-migration-manifest-export'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -164,5 +170,59 @@ describe('orcad migration manifest export', () => {
     expect(manifest.payload.dormantState?.workspaceSession?.tabsByWorktree).toHaveProperty(
       'repo-prod::/srv/worktree'
     )
+  })
+})
+
+describe('the signature', () => {
+  it('covers the session as the host parses it, even with a field the parser drops', () => {
+    // A runtime-only field in the live session (dropped by the next load) made the conversion's own
+    // journal and the host refuse the digest until a restart.
+    const dormant = emptyDormantPayload()
+    const tab = {
+      id: 'tab-dormant',
+      ptyId: null,
+      worktreeId: 'repo-prod::/srv/worktree',
+      title: 'Dormant',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      fieldNoParserKeeps: 1
+    }
+    dormant.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'repo-prod::/srv/worktree': [tab] }
+    }
+    const manifest = createOrcadMigrationManifest(
+      {
+        collectOrcadMigrationSourceDormantState: () => dormant,
+        getRepos: () => [repo('repo-prod', TARGET.id)],
+        getProjectGroups: () => [],
+        getFolderWorkspaces: () => []
+      },
+      TARGET,
+      { migrationId: 'migration-parsed' }
+    )
+    expect(() =>
+      assertOrcadMigrationManifestDigest(JSON.parse(JSON.stringify(manifest)))
+    ).not.toThrow()
+  })
+})
+
+describe('an oversized manifest', () => {
+  it('names its largest parts and what to trim instead of a bare code', () => {
+    const message = describeOversizedOrcadMigrationPayload({
+      repositories: [repo('repo-1', TARGET.id)],
+      projectGroups: [],
+      folderWorkspaces: [],
+      dormantState: {
+        ...emptyDormantPayload(),
+        workspaceSession: { ...getDefaultWorkspaceSession(), activeRepoId: 'x'.repeat(4096) }
+      }
+    })
+    expect(message).toMatch(/^This SSH host's saved state is too large to move/)
+    expect(message).toContain('Largest parts: saved tabs and panes (5 KB)')
+    expect(message).toContain('Close tabs you no longer need')
+    expect(message).toContain('(orcad_migration_manifest_too_large)')
   })
 })

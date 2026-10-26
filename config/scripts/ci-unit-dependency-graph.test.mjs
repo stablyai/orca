@@ -1,8 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  buildUnitDependencyGraph,
+  collectUnitDependencyGraph
+} from './ci-unit-dependency-graph.mjs'
 import { selectUnitFiles } from './ci-unit-selection.mjs'
 
 const temporary = []
@@ -141,3 +144,115 @@ it.each([
     })
   }
 )
+
+describe('unit graph import resolution', () => {
+  it('retains every existing candidate across literal paths, extensions and index files', () => {
+    const sources = new Map([
+      ['src/leaf', ''],
+      ['src/leaf.ts', ''],
+      ['src/leaf.tsx', ''],
+      ['src/component.tsx', ''],
+      ['src/component.js', ''],
+      ['src/folder/index.ts', ''],
+      ['src/folder/index.tsx', ''],
+      ['src/config.json', '{}'],
+      ['src/renderer/src/view.tsx', ''],
+      ['src/use.ts', "import './leaf'; import './component'; import './folder'; import './config'"],
+      ['src/aliases.ts', "import '@renderer/view'; import '@/view'; import 'external-package'"],
+      ['src/missing.ts', "import './missing-file'"],
+      ['src/dynamic.ts', 'import(variablePath)'],
+      ['config/owner.mjs', "import '../src/leaf'"],
+      ['tests/owner.ts', "import '../src/leaf'"]
+    ])
+    expect(buildUnitDependencyGraph(sources)).toMatchObject({
+      reverse: new Map([
+        ['src/leaf', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
+        ['src/leaf.ts', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
+        ['src/leaf.tsx', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
+        ['src/component.tsx', new Set(['src/use.ts'])],
+        ['src/component.js', new Set(['src/use.ts'])],
+        ['src/folder/index.ts', new Set(['src/use.ts'])],
+        ['src/folder/index.tsx', new Set(['src/use.ts'])],
+        ['src/config.json', new Set(['src/use.ts'])],
+        ['src/renderer/src/view.tsx', new Set(['src/aliases.ts'])]
+      ]),
+      opaque: new Set(['src/missing.ts', 'src/dynamic.ts', 'config/owner.mjs', 'tests/owner.ts'])
+    })
+  })
+
+  it('keeps extensionless consumers when a covered JavaScript sibling changes', () => {
+    const graph = collectUnitDependencyGraph(
+      fixture({
+        'src/value.ts': 'export const value = 1',
+        'src/value.js': 'export const value = 2',
+        'src/extensionless.test.ts': "import { value } from './value'",
+        'src/explicit.test.ts': "import { value } from './value.js'"
+      })
+    )
+    const tests = ['src/extensionless.test.ts', 'src/explicit.test.ts', 'src/unrelated.test.ts']
+    expect(selectUnitFiles(tests, ['src/value.js'], graph)).toMatchObject({
+      full: false,
+      files: ['src/extensionless.test.ts', 'src/explicit.test.ts']
+    })
+  })
+
+  it.each(['jsx', 'mts', 'cts', 'mjs', 'cjs'])(
+    'follows transitive imports through a competing .%s source',
+    (extension) => {
+      const graph = collectUnitDependencyGraph(
+        fixture({
+          'src/value.ts': 'export const value = 1',
+          [`src/value.${extension}`]: "export { value } from './selected-input'",
+          'src/selected-input.ts': 'export const value = 2',
+          'src/extensionless.test.ts': "import { value } from './value'",
+          'src/explicit.test.ts': "import { value } from './selected-input'"
+        })
+      )
+      const tests = ['src/extensionless.test.ts', 'src/explicit.test.ts', 'src/unrelated.test.ts']
+      expect(selectUnitFiles(tests, ['src/selected-input.ts'], graph)).toMatchObject({
+        full: false,
+        files: ['src/extensionless.test.ts', 'src/explicit.test.ts']
+      })
+    }
+  )
+
+  it.each([
+    ['js', 'ts'],
+    ['js', 'tsx'],
+    ['jsx', 'tsx'],
+    ['mjs', 'mts'],
+    ['cjs', 'cts']
+  ])('retains TypeScript substitutions for .%s imports through .%s', (output, source) => {
+    const graph = collectUnitDependencyGraph(
+      fixture({
+        [`src/value.${source}`]: 'export const value = 1',
+        [`src/value.${output}.ts`]: 'export const value = 2',
+        'src/substitution.test.ts': `import { value } from './value.${output}'`,
+        'src/explicit.test.ts': `import { value } from './value.${source}'`
+      })
+    )
+    const tests = ['src/substitution.test.ts', 'src/explicit.test.ts', 'src/unrelated.test.ts']
+    expect(selectUnitFiles(tests, [`src/value.${source}`], graph)).toMatchObject({
+      full: false,
+      files: ['src/substitution.test.ts', 'src/explicit.test.ts']
+    })
+  })
+
+  it('retains directory consumers whose manifest can override an index file', () => {
+    const graph = collectUnitDependencyGraph(
+      fixture({
+        'src/folder/package.json': JSON.stringify({ main: './entry.js' }),
+        'src/folder/index.ts': 'export const value = 1',
+        'src/folder/entry.js': "export { value } from '../selected-input'",
+        'src/selected-input.ts': 'export const value = 2',
+        'src/directory.test.ts': "import { value } from './folder'",
+        'src/explicit.test.ts': "import { value } from './selected-input'"
+      })
+    )
+    const tests = ['src/directory.test.ts', 'src/explicit.test.ts', 'src/unrelated.test.ts']
+    expect(selectUnitFiles(tests, ['src/selected-input.ts'], graph)).toMatchObject({
+      full: false,
+      files: ['src/directory.test.ts', 'src/explicit.test.ts']
+    })
+  })
+})

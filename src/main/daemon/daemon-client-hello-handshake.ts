@@ -16,13 +16,12 @@ export type DaemonHelloRequest = {
   requestBinaryStream?: boolean
 }
 
-// Kill switch: ORCA_DAEMON_BINARY_STREAM=0 keeps every stream socket on NDJSON.
 const REQUEST_BINARY_STREAM_BY_DEFAULT = process.env.ORCA_DAEMON_BINARY_STREAM !== '0'
 
 export type DaemonHelloOutcome = {
   identity: DaemonEndpointIdentity | null
   streamFraming: DaemonStreamFraming
-  /** Bytes after the hello line in the same read; the socket's next reader must start with them. */
+  /** Preserve bytes after hello for the next reader, including partial binary frames. */
   remainder: Buffer
 }
 
@@ -65,7 +64,6 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       }
       resolve(outcome)
     }
-    // Binary frame prefixes following hello must remain exact bytes.
     const onData = (chunk: Buffer): void => {
       const newlineIdx = chunk.indexOf(0x0a)
       const lineBytes = bufferedBytes + (newlineIdx === -1 ? chunk.length : newlineIdx)
@@ -80,7 +78,7 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
         return
       }
 
-      // Flowing sockets otherwise drain buffered chunks before the awaiting reader can attach.
+      // Pause before handing off so flowing data cannot drain before the next reader attaches.
       socket.pause()
       chunks.push(chunk.subarray(0, newlineIdx))
       const line = Buffer.concat(chunks, lineBytes).toString('utf8')
@@ -115,8 +113,7 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       finish(new DaemonProtocolError('Connection closed before hello response'))
 
     timer = setTimeout(() => {
-      // Why: a stale daemon can accept the socket but never answer hello;
-      // without a handshake timeout, startup waits forever on ensureConnected().
+      // An accepted socket can still be a hung daemon; bound the hello wait.
       finish(new DaemonProtocolError('Hello response timed out'))
       socket.destroy()
     }, timeoutMs)

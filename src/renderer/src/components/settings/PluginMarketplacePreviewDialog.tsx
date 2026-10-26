@@ -31,8 +31,7 @@ function contributionSummary(
   preview: PluginMarketplaceHostInstallPreview
 ): { key: string; label: string }[] {
   const { contributes } = preview.manifest
-  // Why: two static keys per kind (not one dynamic key) so the localization
-  // catalog sync can extract them, and "1 language packs" never renders.
+  // Use literal singular/plural keys so catalog extraction works and counts retain correct grammar.
   const entries: { key: string; count: number; one: string; many: string }[] = [
     {
       key: 'languagePacks',
@@ -152,7 +151,7 @@ export function PluginMarketplacePreviewDialog({
     : undefined
   return (
     <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl">
+      <DialogContent surface="security" scrollable className="sm:max-w-xl">
         {preview ? (
           <>
             <DialogHeader>

@@ -21,7 +21,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** What Grok says about one subagent, translated as the adapter would. */
 function subagent(lane: AcpStructuredLane, state: 'working' | 'completed'): AcpTimelineEvent[] {
   const update =
     state === 'working'
@@ -184,7 +183,9 @@ describe('ACP subagent evidence at the ordered journal boundary', () => {
     throwing.apply(subagent(throwing, 'working'))
     throwing.apply(subagent(throwing, 'completed'))
     throwing.apply([{ type: 'turn.open', turn: 'turn', at: 2 }])
-    expect(await rig.rows()).toHaveLength(1)
+    expect((await rig.rows()).map((row) => row.body)).toMatchObject([
+      { kind: 'turn', turnId: 'p:provider-session-1:turn', state: 'running', startedAt: 2 }
+    ])
     expect(failure).toHaveBeenCalledTimes(2)
   })
 

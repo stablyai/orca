@@ -1,4 +1,5 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
+import { taskRepoClient } from './task-repo-host-routing'
 import {
   normalizeSetupHookTrust,
   pickWorkspaceAgent,
@@ -107,21 +108,26 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       return
     }
     if (workspaceCreateTargetRepo.connectionId && workspaceCreateSshStatus !== 'connected') {
-      // Why: remote agent detection runs on the SSH host through the relay; a
-      // disconnected repo would fail and cache an empty agent list.
+      // Do not cache empty remote-agent detection while SSH is disconnected; probes run on that host.
       setWorkspaceDetectedAgentIds(null)
       return
     }
     let stale = false
     setWorkspaceDetectedAgentIds(null)
+    const repoClient = taskRepoClient(client, workspaceCreateTargetRepo)
     const detection = workspaceCreateTargetRepo.connectionId
       ? {
           operation: remoteAgentDetectionRead,
-          reply: remoteAgentDetectionRead.request(client, {
+          reply: remoteAgentDetectionRead.request(repoClient, {
             connectionId: workspaceCreateTargetRepo.connectionId
           })
         }
-      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(client) }
+      : {
+          operation: localAgentDetectionRead,
+          reply: localAgentDetectionRead.request(repoClient, {
+            repoId: workspaceCreateTargetRepo.id
+          })
+        }
     void detection.reply
       .then((reply) => {
         if (stale) {

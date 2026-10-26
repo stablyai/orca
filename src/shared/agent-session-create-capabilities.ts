@@ -1,27 +1,37 @@
-// The capabilities that gate what an agent-session create (structured or terminal) or an
-// `agentSession.send` may carry.
-
-// Why: `agentSession.create` is a strict object, so an older host refuses a payload carrying the
-// reserved `tabId` rather than ignoring it. A client sends the field only to a host advertising this.
+// Create is strict: send reserved tabId only to hosts advertising support.
 export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
-// Why: same strict object; a host advertising this records the conversation's first message with
-// the chat it creates, so the message is the host's from the start.
+// Create is strict: advertise tabPlacement before sending it; the host saves its own group/tab IDs for the paired client (L270).
+export const AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY =
+  'agentSession.create.tab-placement.v1' as const
+// Create is strict: this capability lets the host own the first message from creation.
 export const AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY =
   'agentSession.create.message.v1' as const
 
-// Why: `agentSession.send` is a strict object, so an older host refuses `options`. A host advertising
-// this applies a send's model and effort to the turn it starts and records them on the chat.
+// Send is strict: advertise options before sending model/effort choices for the new turn and chat record.
 export const AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY =
   'agent-session.send-options.v1' as const
 
-// Why: terminal.createAgentSession and terminal.ensureAgentSession are strict objects too, so an
-// older host refuses `accountEnv`. A client sends it only to a host advertising this.
+// Terminal create/ensure are strict: send accountEnv only to hosts advertising support.
 export const AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY = 'agent-session.account-env.v1' as const
 
+// Send is strict: advertise skills before sending selected paths; name-based agents still use the $name text.
+export const AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY = 'agent-session.send-skills.v1' as const
+
+// Ensure is strict: send a resumed Claude session's effort only to hosts advertising support.
+export const AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY =
+  'agent-session.resume-effort.v1' as const
+
+export const AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY =
+  'agent-session.send-usage-limit-continuation.v1' as const
+
 export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
+  AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY
+  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY
 ] as const

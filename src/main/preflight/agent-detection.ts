@@ -1,10 +1,4 @@
-/**
- * Agent/tool preflight detection. Split out of `ipc/preflight.ts` so the Orca
- * runtime — which calls `detectInstalledAgentsWithShellPathHydration`
- * during normal operation — can reach this logic without
- * dragging `ipcMain` into its module graph. The Electron handler registration
- * stays in `ipc/preflight.ts` and imports from here.
- */
+// Runtime preflight must stay independent of ipcMain registration.
 import type {
   PathSource,
   ShellHydrationFailureReason
@@ -27,30 +21,26 @@ import {
   execCommandInWslOrThrow,
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
-  isCommandAvailable,
-  shellQuote
+  isCommandAvailable
 } from '../ipc/preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
-import {
-  getTuiAgentDetectionProbeCommands,
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
-} from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { detectInstalledAgents } from './installed-agent-detection'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
+export {
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration
+} from './installed-agent-detection'
 
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  // Why: optional so existing renderer call sites that only render git/gh
-  // status keep typechecking. Consumers that surface GitLab-specific
-  // affordances (the GitLab tab in the source picker, MR list, etc.)
-  // gate on `glab?.authenticated`.
+  // Optional for older git/gh-only clients; GitLab consumers gate on authenticated.
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
@@ -72,32 +62,15 @@ export type PreflightStatus = {
 export { detectRemoteWindowsTerminalCapabilities }
 export type { RemoteWindowsTerminalCapabilities }
 
-// Why: cache the result so repeated Landing mounts don't re-spawn processes.
-// The check only runs once per app session — relaunch to re-check.
+// Collapse repeated Landing probes within an app session.
 let cached: PreflightStatus | null = null
-// Why keyed by distro rather than one slot: each distro carries its own
-// toolchain, so distro A's result must never answer for distro B. Previously a
-// WSL target skipped the cache entirely and re-spawned five wsl.exe probes —
-// two of them login shells — on every caller, waking an idle VM each time.
-//
-// Why a TTL here when the local cache lasts the session: `isCommandAvailable`
-// collapses every failure into `installed: false`, so an unreachable distro is
-// indistinguishable from one with no tooling. Pinning that for the session
-// would report "git not installed" until relaunch; expiring lets it self-heal
-// while still collapsing the burst of calls that made this expensive.
+// Cache per distro; a short TTL recovers unreachable distros whose failures appear as missing tooling.
 const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
 const MAX_WSL_PREFLIGHT_DISTRO_ENTRIES = 128
 const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
-// Collapses concurrent callers (several panes mounting at once) onto one probe
-// set instead of one full set each before the first result lands.
 const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
 
-// Why a generation per key: two runs for the same target can overlap (a forced
-// refresh started while a slower probe is still out). Without this the slower
-// one settles last and writes its older result over the newer one, so the next
-// caller reads staler status than the refresh it asked for. The epoch does the
-// same for `_resetPreflightCache`, which integrations call on credential
-// changes: a probe already in flight must not repopulate the cache it cleared.
+// Per-key generations and reset epochs prevent older probes repopulating refreshed/cleared caches.
 const latestPreflightRun = new Map<string, number>()
 let preflightRunCounter = 0
 let preflightCacheEpoch = 0
@@ -114,8 +87,7 @@ export function _resetPreflightCache(): void {
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
-  // Why bump rather than just clear: a probe already in flight would otherwise
-  // settle after this and repopulate the cache an integration just invalidated.
+  // In-flight probes must not repopulate the cleared cache.
   preflightCacheEpoch += 1
 }
 
@@ -139,57 +111,23 @@ async function detectCommandRuntime(
     : { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const commands = getTuiAgentDetectionProbeCommands(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
-  )
-  return resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    await detectAgentCommandsOnHost(commands, { context }),
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
-  )
-}
-
-export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
-): Promise<string[]> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
-}
-
 export type RefreshAgentsResult = {
-  /** Agents detected after hydrating PATH from the user's login shell. */
   agents: string[]
-  /** PATH segments that were added this refresh (empty if nothing new). */
   addedPathSegments: string[]
-  /** True when the shell spawn succeeded. False = relied on existing PATH. */
+  /** False means detection used existing PATH after shell failure. */
   shellHydrationOk: boolean
-  /** Whether `detectInstalledAgents` ran against shell-hydrated PATH or only
-   *  the seed list from `patchPackagedProcessPath`. Drives the on_path:false
-   *  triage in tile A on dashboard 1562016. */
+  /** Distinguish shell-hydrated PATH from the packaged seed for missing-agent triage. */
   pathSource: PathSource
-  /** Why hydration failed (or `'none'` on success). Typed against the shared
-   *  alias so the IPC boundary stays in lockstep with the renderer-visible
-   *  enum on `onboardingAgentPickedSchema`. */
   pathFailureReason: ShellHydrationFailureReason
 }
 
-/**
- * Re-spawn the user's login shell to refresh process.env.PATH, then re-run
- * agent detection. Called by the Agents settings pane when the user clicks
- * Refresh — handles the "installed a new CLI, Orca doesn't see it yet" case
- * without requiring an app restart.
- */
+/** Refresh login-shell PATH so newly installed CLIs appear without restarting Orca. */
 export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    // Why invalidate first: the guest PATH is cached per distro for the process
-    // lifetime, so Refresh would otherwise re-read the pre-install PATH and
-    // keep reporting a just-installed CLI as absent -- the exact case this
-    // function exists to handle.
+    // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
     const agents = await detectInstalledAgents(context)
     return {
@@ -213,22 +151,15 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-// Why the probe object rather than the bare command name: on the local path
-// `binary` is the copy that just passed `--version`, which on a shim-shadowed
-// host is not what PATH would resolve (#22975). WSL has no `binary` — the guest
-// resolves the name inside the distro, where Orca's PATH ordering cannot apply.
+// Local auth must use the verified binary, bypassing dead PATH shims; WSL resolves inside its guest (#22975).
 async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${shellQuote('gh')} auth status`)
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('gh')} auth status`)
       : execLocalPreflightCommandOrThrow(probe.binary ?? 'gh', ['auth', 'status']))
-    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
-    // authentication issues for the checked hosts/accounts.
     return true
   } catch (error) {
-    // Why: some environments may surface partial command output on the thrown
-    // error object. Keep a compatibility fallback so we avoid a false auth
-    // warning if success markers are present despite a non-zero result.
+    // Some nonzero auth results retain success markers; preserve compatibility with partial output.
     const stdout = (error as { stdout?: string }).stdout ?? ''
     const stderr = (error as { stderr?: string }).stderr ?? ''
     const output = `${stdout}\n${stderr}`
@@ -236,12 +167,11 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
+// glab versions split auth status across stdout/stderr; inspect both.
 async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${shellQuote('glab')} auth status`)
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
       : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status']))
     return true
   } catch (error) {
@@ -288,8 +218,7 @@ export async function runPreflightCheck(
   preflightInFlight.set(cacheKey, run)
   try {
     const result = await run
-    // Superseded by a newer run, or the cache was reset while this was out:
-    // return what we probed, but do not let it become the cached answer.
+    // Superseded/reset probes may answer their caller but cannot populate the cache.
     const isCurrent =
       latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
     if (isCurrent) {
@@ -310,8 +239,7 @@ export async function runPreflightCheck(
     }
     return result
   } finally {
-    // Why the identity check: a concurrent force run replaces this entry, and
-    // that newer run must stay joinable after this one settles.
+    // A newer forced probe must remain joinable after this older probe settles.
     if (preflightInFlight.get(cacheKey) === run) {
       preflightInFlight.delete(cacheKey)
     }
@@ -330,12 +258,7 @@ async function executePreflightCheck(
   }
 
   if (force) {
-    // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
-    // first GitLab request and never invalidated within a session. A user who
-    // runs `glab auth login` for a self-hosted host after Orca starts would
-    // otherwise see "No GitLab project found" until app relaunch. The Re-check
-    // path in IntegrationsPane forces preflight, so piggyback on that signal
-    // to refresh the host list too.
+    // Refresh GitLab host discovery too, or self-hosted login stays invisible until relaunch.
     _resetKnownHostsCache()
   }
 

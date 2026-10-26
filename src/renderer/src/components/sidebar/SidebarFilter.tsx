@@ -30,8 +30,8 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { searchRepos } from '@/lib/repo-search'
-import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
+import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
+import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { translate } from '@/i18n/i18n'
 
 type SidebarFilterProps = {
@@ -49,8 +49,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
 }: SidebarFilterProps) {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
-  // Surface the user-assigned shortcut here so the filter menu doubles as its
-  // discovery point ('Unassigned' until they bind one in Settings → Shortcuts).
+  // Expose user bindings here so the filter menu also teaches the sleeping-workspace shortcut.
   const sleepingShortcut = useShortcutLabel('sidebar.sleepingWorkspaces.toggle')
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
@@ -98,8 +97,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
 
   const canFilterRepos = repos.length > 1
-  // Why: derive from current repos so stale ids (e.g. lingering after a repo
-  // is removed) don't inflate counts or falsely signal an applied filter.
+  // Ignore removed repo IDs so they cannot inflate counts or imply an active filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
     for (const r of repos) {
@@ -111,29 +109,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
-  const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
-  // Why counted: turning the exemption off is the only way that row narrows the
-  // list — but only while its parent row is on, which is also when it renders.
-  const hasSleepingExemptionFilter = isSleepingSweepExemptionNarrowingList(
-    showSleepingWorkspaces,
-    alwaysShowDefaultBranchWorkspace
-  )
-  const hasAnyFilter =
-    hasSleepingFilter ||
-    hideDefaultBranchWorkspace ||
-    hideAutomationGeneratedWorkspaces ||
-    hideCliCreatedWorkspaces ||
-    hideDetachedHeadWorkspaces ||
-    hasSleepingExemptionFilter ||
-    hasRepoFilter
-  const activeFilterCount =
-    (hasSleepingFilter ? 1 : 0) +
-    (hideDefaultBranchWorkspace ? 1 : 0) +
-    (hideAutomationGeneratedWorkspaces ? 1 : 0) +
-    (hideCliCreatedWorkspaces ? 1 : 0) +
-    (hideDetachedHeadWorkspaces ? 1 : 0) +
-    (hasSleepingExemptionFilter ? 1 : 0) +
-    selectedCount
+  const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
   const commandValue =
@@ -143,25 +119,11 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
-    setShowSleepingWorkspaces(DEFAULT_SHOW_SLEEPING_WORKSPACES)
-    setHideDefaultBranchWorkspace(false)
-    setHideAutomationGeneratedWorkspaces(false)
-    setHideCliCreatedWorkspaces(false)
-    setHideDetachedHeadWorkspaces(false)
-    setAlwaysShowDefaultBranchWorkspace(true)
-    setFilterRepoIds([])
-  }, [
-    setShowSleepingWorkspaces,
-    setHideDefaultBranchWorkspace,
-    setHideAutomationGeneratedWorkspaces,
-    setHideCliCreatedWorkspaces,
-    setHideDetachedHeadWorkspaces,
-    setAlwaysShowDefaultBranchWorkspace,
-    setFilterRepoIds
-  ])
+    const store = useAppStore.getState()
+    clearSidebarFilters(selectSidebarFilterState(store), store)
+  }, [])
 
-  // Why: derive ids from the live repos list at click time so a repo added
-  // while the popover is open is included immediately.
+  // Use current repos so Select All includes projects added while the popover stays open.
   const selectAllRepos = useCallback(() => {
     setFilterRepoIds(repos.map((r) => r.id))
   }, [repos, setFilterRepoIds])
@@ -194,8 +156,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             >
               <ListFilter className="size-3.5" strokeWidth={2.25} />
               {hasAnyFilter && (
-                // Why: the only at-a-glance affordance that filters are
-                // applied — without it the list can silently hide workspaces.
+                // Expose active filters so silently hidden workspaces have an at-a-glance explanation.
                 <span
                   aria-hidden
                   className="absolute -top-0.5 -right-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-none text-primary-foreground"
@@ -226,8 +187,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
           shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
         />
-        {/* Why gated: the exemption only has an effect while sleeping workspaces
-            are being swept, so it stays hidden until its parent row is on. */}
+        {/* Show the exemption only while its parent sleeping-workspace filter can use it. */}
         {!showSleepingWorkspaces && (
           <FilterToggleRow
             indented
@@ -324,8 +284,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 )}
                 value={query}
                 onValueChange={(nextQuery) => {
-                  // Why: typing creates a new filtered list, so keyboard
-                  // selection should return to the derived first match.
+                  // Reset keyboard selection when typing produces a new result list.
                   setCommandValueOverride(null)
                   setQuery(nextQuery)
                 }}
@@ -375,9 +334,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
         )}
 
         <DropdownMenuSeparator />
-        {/* Why: "Add project" stays visible regardless of project count so users
-            can recover from the 0/1-project state where the project section is
-            hidden. Reset sits beside it only when a filter is active. */}
+        {/* Keep Add project visible even when the project-filter section disappears at zero/one projects. */}
         <div className="flex items-center justify-between gap-1 px-1 py-1">
           {hasAnyFilter ? (
             <button

@@ -9,7 +9,7 @@ import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-lossy-snapshot-'))
 const fixturePath = path.join(scratch, 'lossy-snapshot-terminal.mjs')

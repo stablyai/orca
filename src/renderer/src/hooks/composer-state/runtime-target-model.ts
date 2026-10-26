@@ -32,6 +32,7 @@ export type ComposerRuntimeTargetModel = {
   folderDetectedIds: TuiAgent[] | null
   folderDetectedAgentIds: Set<TuiAgent> | null
   selectedWorkspaceTarget: WorkspaceCreationTargetResolution
+  resolvedRepoId: string
   selectedRepo: Repo | undefined
   selectedRepoIsGit: boolean
   selectedRepoExecutionHostId: ExecutionHostId | null

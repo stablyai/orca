@@ -5,7 +5,7 @@ import {
   writePersistedStateJson,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -16,6 +16,7 @@ import { AutomationService } from './service'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import type * as PrecheckRunner from './precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 let hasCreatedStoreInCase = false
@@ -31,7 +32,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', () => ({
+vi.mock('./precheck-runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
 
@@ -56,7 +58,7 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   ...overrides
 })
 
-/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+/** Inject persisted drift that normal creation would resolve. */
 function mutateDataFile(
   mutate: (state: {
     automations: Record<string, unknown>[]
@@ -82,56 +84,6 @@ describe('AutomationService prechecks', () => {
     await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('runs scheduled prechecks in the target repo before dispatch', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
-    const store = await createStore()
-    store.addRepo(makeRepo({ path: '/repo/path' }))
-    const automation = store.createAutomation({
-      name: 'Conditional check',
-      prompt: 'Check the repo',
-      precheck: {
-        command: 'test -f ready',
-        timeoutSeconds: 30
-      },
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
-    const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
-    const precheckResult = {
-      command: 'test -f ready',
-      exitCode: 0,
-      timedOut: false,
-      durationMs: 5,
-      stdout: '',
-      stderr: '',
-      stdoutTruncated: false,
-      stderrTruncated: false,
-      error: null,
-      startedAt: Date.now(),
-      completedAt: Date.now()
-    }
-    runAutomationPrecheckMock.mockResolvedValue(precheckResult)
-    const service = new AutomationService(store, { tickMs: 60_000 })
-
-    const result = await service.runPrecheck(automation.id, run.id)
-
-    expect(result).toEqual(precheckResult)
-    expect(runAutomationPrecheckMock).toHaveBeenCalledWith({
-      precheck: {
-        command: 'test -f ready',
-        timeoutSeconds: 30
-      },
-      target: {
-        type: 'local',
-        cwd: '/repo/path'
-      }
-    })
   })
 
   it('does not run scheduled prechecks when the selected host setup is stale', async () => {
@@ -259,5 +211,64 @@ describe('AutomationService prechecks', () => {
       status: 'skipped_precheck',
       error: 'Precheck exited with code 1.'
     })
+  })
+
+  it('holds a Run Now behind a scheduled headless run that is still in its precheck', async () => {
+    vi.setSystemTime(new Date('2026-05-12T08:59:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Reused session',
+      prompt: 'Check the repo',
+      precheck: { command: 'test -f ready', timeoutSeconds: 30 },
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00Z').getTime()
+    })
+    let passPrecheck = (): void => {}
+    runAutomationPrecheckMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          passPrecheck = () =>
+            resolve({
+              command: 'test -f ready',
+              exitCode: 0,
+              timedOut: false,
+              durationMs: 5,
+              stdout: '',
+              stderr: '',
+              stdoutTruncated: false,
+              stderrTruncated: false,
+              error: null,
+              startedAt: Date.now(),
+              completedAt: Date.now()
+            })
+        })
+    )
+    const dispatched: string[] = []
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher: async ({ run }) => {
+        dispatched.push(run.trigger)
+        return { workspaceId: 'wt-1', terminalSessionId: null }
+      }
+    })
+    vi.setSystemTime(automation.nextRunAt + 30_000)
+    service.start()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(runAutomationPrecheckMock).toHaveBeenCalledTimes(1)
+
+    const manual = service.runNow(automation.id)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(dispatched).toEqual([])
+
+    passPrecheck()
+    await manual
+    expect(dispatched).toEqual(['scheduled', 'manual'])
+    service.stop()
   })
 })

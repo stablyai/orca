@@ -11,6 +11,7 @@ import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-l
 import { useWorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import { useWorktreeJumpPaletteSelectionActions } from './use-worktree-jump-palette-selection-actions'
 import { useWorktreeJumpPaletteCreateAction } from './use-worktree-jump-palette-create-action'
+import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useWorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-task-url'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
@@ -63,6 +64,7 @@ export function useWorktreeJumpPaletteController({
     createLookupGuard
   })
   const filter = useWorktreeJumpPaletteFilter({ ...storeState, ...localState })
+  const taskSearch = useWorktreeJumpPaletteTaskSearch({ ...storeState, ...localState, ...filter })
   const worktrees = useWorktreeJumpPaletteWorktrees({
     ...storeState,
     ...localState,
@@ -111,6 +113,7 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...openTabs,
     ...sections,
+    ...taskSearch,
     ...taskUrl
   })
   const selectionLifecycle = useWorktreeJumpPaletteSelectionLifecycle({
@@ -124,12 +127,14 @@ export function useWorktreeJumpPaletteController({
     ...quickActions,
     ...sections,
     ...listEntries,
+    ...taskSearch,
     ...taskUrl
   })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
     ...storeState,
     ...localState,
     ...quickActions,
+    ...taskSearch,
     ...selectionLifecycle
   })
   const emojiInput = useWorkspaceEmojiShortcodeInput({
@@ -153,6 +158,7 @@ export function useWorktreeJumpPaletteController({
     ...storeState,
     ...localState,
     ...taskUrl,
+    ...taskSearch,
     ...filter,
     ...worktrees,
     ...openTabs,

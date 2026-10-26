@@ -4,7 +4,7 @@ import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
 } from '../orcad/orcad-host-unavailable'
-import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
+import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import type { HostServerConnectEvent } from './ssh-host-server-connect-events'
 import {
   resolveHostServerOnConnect,

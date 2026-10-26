@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
@@ -31,7 +29,9 @@ const MIGRATION_METHOD_NAMES = [
   'orcad.migration.stageCatalog',
   'orcad.migration.commitCatalog',
   'orcad.migration.stageSnapshotChunk',
+  'orcad.migration.stageBlobChunk',
   'orcad.migration.abortCatalog',
+  'orcad.migration.abortCatalogByReference',
   'orcad.migration.catalogState'
 ] as const
 
@@ -123,9 +123,13 @@ describe('orcad migration RPC', () => {
             ? 'commitStagedOrcadMigrationCatalog'
             : name === 'orcad.migration.stageSnapshotChunk'
               ? 'stageOrcadMigrationSnapshotChunk'
-              : name === 'orcad.migration.abortCatalog'
-                ? 'abortStagedOrcadMigrationCatalog'
-                : 'getOrcadMigrationCatalogState'
+              : name === 'orcad.migration.stageBlobChunk'
+                ? 'stageOrcadMigrationBlobChunk'
+                : name === 'orcad.migration.abortCatalog'
+                  ? 'abortStagedOrcadMigrationCatalog'
+                  : name === 'orcad.migration.abortCatalogByReference'
+                    ? 'abortStagedOrcadMigrationCatalogByReference'
+                    : 'getOrcadMigrationCatalogState'
 
       await expect(
         method.handler(
@@ -135,6 +139,61 @@ describe('orcad migration RPC', () => {
       ).rejects.toThrow('orcad_migration_runtime_client_required')
       expect(invoke).not.toHaveBeenCalled()
     }
+  })
+
+  it('passes a named blob set to commit only when the sender sent one', async () => {
+    const input = manifest()
+    const commit = vi.fn().mockResolvedValue({ state: 'committed' })
+    const caller = context(vi.fn(), {}, { commitStagedOrcadMigrationCatalog: commit })
+    const method = migrationMethod('orcad.migration.commitCatalog')
+    const expectedBlobs = [
+      {
+        blobKind: 'shell-history',
+        key: `${'a'.repeat(16)}-zsh`,
+        sha256: 'b'.repeat(64),
+        byteLength: 1
+      }
+    ]
+
+    await method.handler(method.params?.parse({ manifest: input, expectedBlobs }), caller)
+    expect(commit).toHaveBeenLastCalledWith(input, {
+      signal: undefined,
+      expectedBlobs
+    })
+    await method.handler(method.params?.parse({ manifest: input }), caller)
+    expect(commit).toHaveBeenLastCalledWith(input, { signal: undefined })
+    expect(
+      method.params?.safeParse({
+        manifest: input,
+        expectedBlobs: [
+          {
+            ...expectedBlobs[0],
+            blobKind: 'agent-session-records',
+            key: 'con'
+          }
+        ]
+      }).success
+    ).toBe(false)
+  })
+
+  it('stages a blob chunk through its own method and refuses malformed descriptors', async () => {
+    const input = manifest()
+    const blob = vi.fn().mockReturnValue({ receivedBytes: 1 })
+    const caller = context(vi.fn(), {}, { stageOrcadMigrationBlobChunk: blob })
+    const method = migrationMethod('orcad.migration.stageBlobChunk')
+    const request = migrationBlobRequest(input)
+
+    await expect(method.handler(method.params?.parse(request), caller)).resolves.toEqual({
+      receivedBytes: 1
+    })
+    expect(blob).toHaveBeenCalledWith(request)
+    for (const key of ['../escape', `${'A'.repeat(16)}-zsh`, `${'a'.repeat(16)}-pwsh`]) {
+      expect(method.params?.safeParse(migrationBlobRequest(input, key)).success, key).toBe(false)
+    }
+    expect(
+      method.params?.safeParse({ ...request, blob: { ...request.blob, blobKind: 'future-kind' } })
+        .success
+    ).toBe(false)
   })
 
   it('rejects malformed and tampered manifests before staging', async () => {
@@ -205,7 +264,23 @@ function migrationSnapshotRequest(input: OrcadMigrationManifest) {
 
 function migrationMethodInput(name: (typeof MIGRATION_METHOD_NAMES)[number]) {
   const input = manifest()
+  if (name === 'orcad.migration.stageBlobChunk') {
+    return migrationBlobRequest(input)
+  }
+  if (name === 'orcad.migration.abortCatalogByReference') {
+    return { migrationId: input.migrationId, manifestSha256: input.manifestSha256 }
+  }
   return name === 'orcad.migration.stageSnapshotChunk'
     ? migrationSnapshotRequest(input)
     : { manifest: input }
+}
+
+function migrationBlobRequest(input: OrcadMigrationManifest, key = `${'a'.repeat(16)}-zsh`) {
+  return {
+    migrationId: input.migrationId,
+    manifestSha256: input.manifestSha256,
+    blob: { blobKind: 'shell-history', key, sha256: 'b'.repeat(64), byteLength: 1 },
+    offset: 0,
+    bytesBase64: 'YQ=='
+  }
 }

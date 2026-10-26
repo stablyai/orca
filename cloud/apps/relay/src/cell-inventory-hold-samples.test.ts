@@ -60,9 +60,7 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
 
-  // Why: this is the case the hold metrics alone cannot see. A NOWAIT grab that
-  // fails has no duration, so a retry storm used to leave every hold field at
-  // zero while the lock was saturated.
+  // Failed NOWAIT has no duration; saturated retry storms must not leave all hold metrics looking healthy.
   it('counts failed acquisitions in a window that recorded no holds', () => {
     const samples = new CellInventoryHoldSamples()
     for (let attempt = 0; attempt < 65; attempt++) samples.recordUnavailable()

@@ -246,11 +246,7 @@ describe('pane terminal output scheduler', () => {
   })
 
   it('schedules a follow-up repaint for a Claude-style in-place CR redraw without scroll', async () => {
-    // Why: issue #5656/#5653 — Claude Code's plain-ASCII prompt redraw (CR + CHA +
-    // reprint + erase-line, no DEC 2026, no scroll, no cursor hide/show restore)
-    // paints one frame late on Windows ConPTY. A single sync refresh races that
-    // late paint, so the connection layer requests followupForegroundRefresh.
-    // Prove the scheduler turns that into a second next-frame repaint.
+    // Claude’s CR/CHA/reprint/erase prompt paints one frame late on Windows ConPTY (#5656/#5653); require the second next-frame repaint, since synchronous repair races it.
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)

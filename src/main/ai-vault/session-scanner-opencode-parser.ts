@@ -5,17 +5,14 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
-  seedFullFirstUserPrompt,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
-import { extractFullFirstUserPromptText } from './session-scanner-first-user-prompt'
+import { addSessionContent, addPreviewMessage } from './session-scanner-messages'
 import {
   asRecord,
-  extractPreviewContentText,
   extractString,
   findOpenCodeStorageRoot,
   normalizeTitleText,
@@ -23,6 +20,11 @@ import {
   timestampMs,
   tokenTotal
 } from './session-scanner-values'
+
+/** Scope discovery reads cwd without opening message files. */
+export function openCodeSessionCwd(record: Record<string, unknown>): string | null {
+  return extractString(record.directory)
+}
 
 export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
@@ -36,24 +38,20 @@ export async function parseOpenCodeSessionFile(
   const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
   const accumulator = createAccumulator({ agent: 'opencode', file, sessionId, messages })
   accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
-  accumulator.cwd = extractString(record.directory)
+  accumulator.cwd = openCodeSessionCwd(record)
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
   updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
   await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId)
   return finalizeSession(accumulator, platform)
 }
 
-// Why: OpenCode stores one file per message and `readdir` order is arbitrary,
-// so the transcript has to be rebuilt by creation time before anything reads
-// "the first user prompt". Undated messages sort last, by file name, so a
-// missing timestamp can never displace a real first turn.
+// Rebuild arbitrary directory order by creation time; undated files sort last so they cannot displace the first prompt.
 async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<string, unknown>[]> {
   let entries
   try {
     entries = await wslGatedReaddir(messageDir, 'scan')
   } catch (error) {
-    // A session with no message dir yet is empty; a gate refusal is not — an
-    // empty transcript would otherwise be cached under the session's mtime.
+    // Propagate WSL refusal so an unreachable message directory is not cached as an empty transcript.
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
@@ -70,9 +68,7 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
         JSON.parse(await wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan')) as unknown
       )
     } catch (error) {
-      // A live OpenCode process can leave a half-written file; skip it rather
-      // than discard the whole session. A refused read is not a bad file — the
-      // partial transcript it would produce must not become the cached answer.
+      // Skip malformed live writes, but propagate WSL refusal so incomplete transcripts remain retryable.
       if (error instanceof WslTranscriptFsError) {
         throw error
       }
@@ -112,22 +108,15 @@ export async function consumeOpenCodeMessages(
       if (role === 'user') {
         accumulator.title ??= extractString(summary?.title) ?? extractString(summary?.body)
       }
-      // Why: the summary fallbacks are AI-generated. Seed the copyable first
-      // prompt from real typed content only, never from a summary of a
-      // harness-injected turn. Extraction stays inside the thunk so list scans
-      // (capture mode `none`) never pay for it.
-      seedFullFirstUserPrompt(accumulator, role, () =>
-        extractFullFirstUserPromptText(message.content)
-      )
-      addPreviewMessage(accumulator, {
-        role,
-        text:
-          extractPreviewContentText(message.content) ??
-          extractString(summary?.body) ??
-          extractString(summary?.title),
-        timestamp: timeObjectValue(message.time, 'created'),
-        seedFirstUserPrompt: false
-      })
+      const timestamp = timeObjectValue(message.time, 'created')
+      const hasPreview = addSessionContent(accumulator, role, message.content, timestamp)
+      if (!hasPreview) {
+        addPreviewMessage(accumulator, {
+          role,
+          text: extractString(summary?.body) ?? extractString(summary?.title),
+          timestamp
+        })
+      }
       accumulator.model =
         extractString(asRecord(message.model)?.modelID) ||
         extractString(message.modelID) ||

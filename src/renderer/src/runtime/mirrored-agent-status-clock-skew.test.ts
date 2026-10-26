@@ -1,19 +1,4 @@
-/**
- * A paired client mirrors a remote host's agent-status rows verbatim, host wall clock and all.
- * The staleness gate then computed `rendererNow - hostStamp`, so the effective window was
- * 30 minutes ± the two machines' clock skew: a host running fast kept every remote row
- * permanently fresh, and a host running slow decayed them on arrival. Tuning the constant
- * cannot fix a subtraction that straddles two clocks.
- *
- * The replica now stamps its own receipt time and decays against that, so both sides of the
- * subtraction come from this machine. Skew is injected at the seam the defect lives on: the
- * host's stamps run on `hostNow`, the client's on `clientNow`, and elapsed time is measured
- * only in client time.
- *
- * The rejected alternative — carrying the authority's own freshness verdict — is asserted
- * against below by the third case: a verdict computed at publish time cannot age while nothing
- * arrives, which is exactly the loss-of-contact case the window exists for.
- */
+// Age mirrored evidence by client receipt time: rendererNow minus hostStamp gains clock skew and makes remote rows immediately stale or permanently fresh. Inject separate host/client clocks. Published freshness verdicts cannot decay during silence; exact repaints must not renew receipt time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -159,8 +144,7 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
   })
 
   it('keeps decaying while the host publishes nothing new', () => {
-    // The case a published freshness verdict could never cover: silence produces no snapshot
-    // to carry a fresh verdict in, so the replica has to age the last one it received.
+    // No fresh snapshot arrives during silence, so replica must age its last evidence locally.
     const store = seedPairedClientStore()
     applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0)
 
@@ -174,8 +158,7 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     const store = seedPairedClientStore()
     const hostNow = T0 + HOST_SKEW_MS
     applyChangedHostSnapshot(store, hostNow, T0, 1)
-    // Same observation, later snapshot: a repaint restates evidence, it does not renew it —
-    // so it must not even rewrite the row, let alone move its receipt.
+    // Repaint restates evidence without renewing it; neither row nor receipt should change.
     expect(
       applyHostSnapshot(store, hostNow, T0 + AGENT_STATUS_STALE_AFTER_MS - 1_000, 2),
       'an exact repaint must leave the store untouched'

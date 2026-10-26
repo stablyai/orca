@@ -3,22 +3,29 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
+import {
+  isAgentSessionCreateAdmissionRefusal,
+  isDefinitiveAgentSessionCreateRefusal
+} from '../../../shared/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
 } from './launch-structured-agent-session'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,
+  StructuredAgentSessionCreateAbandonedError,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
@@ -45,12 +52,7 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
   return null
 }
 
-/**
- * Only the host that will execute the session can answer whether it supports creating one there.
- * Both providers ask: the host classifies per agent, and Codex inherits the
- * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
- * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
- */
+/** Only the executing host can classify create support for either provider. Retry unresolvable selectors; unknown attempts stay recoverable because create may have succeeded with a lost reply. Return the actual create seed. */
 async function requireHostCreateSupport(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<LaunchSeed> {
@@ -66,24 +68,53 @@ async function requireHostCreateSupport(
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
-      'structured_agent_session_unsupported'
+      'structured_agent_session_unsupported',
+      undefined,
+      support.kind === 'declined' ? support.reason : undefined
     )
   }
   return support.seedOptions
 }
 
-/** Told the seed a paired server says this create will use, which may differ from an earlier
- *  attempt's; a local launch reads its own settings instead. */
+/** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
+const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
+
+async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+  const permission =
+    intent.target.kind === 'local'
+      ? { kind: 'allowed' as const }
+      : await readStructuredChatHostPermissionVerdict(intent.target, intent.agent)
+  if (permission.kind === 'allowed') {
+    return
+  }
+  if (permission.kind === 'unverified') {
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The host could not say what access the chat would run with.',
+      'runtime_unavailable'
+    )
+  }
+  abandonStructuredAgentSessionLaunchIntent(intent)
+  throw new StructuredAgentSessionCreateRefusalError(
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL,
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL
+  )
+}
+
+// Use each paired attempt’s actual seed; local creates read local settings instead.
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
 export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent,
-  onHostSeed?: StructuredLaunchHostSeedListener
+  onHostSeed?: StructuredLaunchHostSeedListener,
+  priorCreateOutcomeUnknown = false,
+  /** A chat closed while its host was being asked issues no create. */
+  isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
   }
+  await requireHostPermission(intent)
   if (!intent.createPrepared) {
     let supported = false
     try {
@@ -98,11 +129,21 @@ export async function launchStructuredAgentSession(
     }
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
+  // Typed so an async placement fails to compile: a tick here drops an eager joiner's create.
+  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement(intent)
+  // Nothing is created for a chat closed while its host was asked, or whose source retired.
+  if (isCancelled() || intent.beforeCreate?.() === false) {
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateAbandonedError(
+      'Conversation source retired before create.'
+    )
+  }
+  delete intent.beforeCreate
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      intent.params
+      params
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
@@ -119,8 +160,17 @@ export async function launchStructuredAgentSession(
   if (!result.ok) {
     const { code, message, ownerVerdict } = result.refusal
     const refusal = readAgentSessionRefusalReference(result.refusal)
-    // A failed operation whose provider is proven gone is a failure a new operation may retry.
-    if (!isDefinitiveAgentSessionCreateRefusal(code) && ownerVerdict !== 'exited') {
+    const attemptRefusedBeforeCommit =
+      !priorCreateOutcomeUnknown &&
+      result.refusal.createAttemptRefusedBeforeCommit === true &&
+      refusal !== undefined &&
+      isAgentSessionCreateAdmissionRefusal(refusal)
+    // Attempt proof cannot settle an earlier create whose reply was lost.
+    if (
+      !attemptRefusedBeforeCommit &&
+      !isDefinitiveAgentSessionCreateRefusal(code) &&
+      ownerVerdict !== 'exited'
+    ) {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.
       throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code, refusal)
     }
@@ -148,6 +198,6 @@ export async function launchStructuredAgentSession(
   return {
     sessionId: result.value.sessionId,
     fence: result.value.fence,
-    ...(firstMessage ? { firstMessage } : {})
+    ...(firstMessage ? { firstMessage, cursor: result.cursor } : {})
   }
 }

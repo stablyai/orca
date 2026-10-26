@@ -1,25 +1,26 @@
-/** Proving that the orcad an activation record names is the one actually serving. */
-import { evaluateOrcadActivation, type OrcadActivationExpectation } from './orcad-activation-gate'
+import {
+  evaluateOrcadActivation,
+  type OrcadActivationExpectation
+} from '../managed-server/activation/orcad-activation-gate'
 import {
   orcadLivenessProbeCommand,
   parseOrcadLiveness,
   type OrcadLaunchSpec,
   type OrcadReadinessParse
-} from './orcad-remote-launch'
+} from '../managed-server/install/orcad-remote-launch'
 import {
   execOrcadRemote,
   launchOrcadAndAwaitReadiness,
   type OrcadRemoteExecTarget
-} from './orcad-remote-runtime-control'
+} from '../managed-server/install/orcad-remote-runtime-control'
 import {
   parseOrcadReadinessWaitOutput,
   readOrcadReadinessNowCommand
-} from './orcad-remote-readiness-wait'
+} from '../managed-server/install/orcad-remote-readiness-wait'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { withOrcadLogTail } from './orcad-remote-log-tail'
+import { withOrcadLogTail } from '../managed-server/install/orcad-remote-log-tail'
 
-/** `exited` is proven absence; `unverifiable` means the host could not say, which is not death. */
-export type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
+type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
 
 export class OrcadActiveReadinessError extends Error {
   constructor(
@@ -57,12 +58,8 @@ function gatedReadiness(
   return readiness
 }
 
-/**
- * A slot proves terminals only when its daemon's self-test spawned a PTY, or completed the
- * handshake on a platform whose daemon never spawn-probes. A build that predates the coverage
- * field keeps the identity gate alone, so an older slot is not stranded.
- */
-export function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | null {
+/** Require PTY self-test coverage, or handshake on platforms that cannot spawn-probe. Older slots without coverage metadata retain the identity-only gate. */
+function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | null {
   const health = readiness.health
   const coverage = health?.terminalDaemon?.selfTest?.coverage
   if (!health || coverage === undefined || coverage === 'pty-spawn') {
@@ -77,7 +74,6 @@ export function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | 
   )
 }
 
-/** Checks a recorded-active slot without starting anything. */
 export async function probeActiveOrcadReadiness(
   target: OrcadRemoteExecTarget & { remoteInstallDir: string },
   expectation: OrcadActivationExpectation
@@ -89,6 +85,12 @@ export async function probeActiveOrcadReadiness(
     throw new OrcadActiveReadinessError(
       'exited',
       `orcad ${expectation.fullVersion} is recorded active but its process has exited.`
+    )
+  }
+  if (liveness === 'NEVER_LAUNCHED') {
+    throw new OrcadActiveReadinessError(
+      'exited',
+      `orcad ${expectation.fullVersion} is recorded active but was never started from its install directory.`
     )
   }
   if (liveness !== 'LIVE') {
@@ -107,7 +109,7 @@ export async function probeActiveOrcadReadiness(
   return gatedReadiness(parsed, expectation, 'The active orcad')
 }
 
-/** Starts a slot (recovery or rollback) and accepts it only if it proves the expected build. */
+/** Accept recovery/rollback launches only when they prove the expected build. */
 export async function launchOrcadSlotAndAwaitReadiness(
   target: OrcadRemoteExecTarget & {
     readinessTimeoutMs?: number

@@ -1,5 +1,10 @@
+import type { SmartTier } from './sidebar-list/sort-stamps'
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
+import type { ProgramStatusFacet } from './program-status/facet'
+import type { CheckStatus } from './github/pull-request-types'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -30,16 +35,20 @@ export type RuntimeWorktreeAgentRow = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
-  /** The main agent's own state, verdict and clock, sent whenever the host row has one, including
-   *  while subagents hold the row `working`. Optional on the wire: old hosts never send it, and a
-   *  reader without it falls back to `interrupted`. */
+  /** Main-agent state/verdict/clock even while subagents keep the row working; old hosts omit it, falling back to interrupted. */
   mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
+  /** Native canonical views win over the CLI roster, including an explicit empty list. */
+  children?: AgentChildWorkView[]
+  subagents?: AgentSubagentSnapshot[]
+  /** The host's freshness verdict; child clocks cannot be compared with the phone's clock. */
+  subagentObservation?: 'live' | 'unverifiable'
   restoredUnconfirmed?: boolean
-  /** The structured session host still runs this row's provider child, so it is fresh regardless
-   *  of age. Optional on the wire: old hosts never send it. */
+  /** A structured host still owns the provider child, so age alone cannot stale it. Old hosts omit this. */
   structuredHostOwned?: true
+  /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
+  programStatus?: ProgramStatusFacet
 }
 
 export type RuntimeWorktreePsSummary = {
@@ -64,10 +73,22 @@ export type RuntimeWorktreePsSummary = {
   sortOrder: number
   manualOrder?: number
   lastActivityAt?: number
+  /** The owning host's Smart stamps (sidebar-list/sort-stamps.ts); absent tier is Rest. */
+  smartTier?: SmartTier
+  smartAt?: number
+  /** Set by a host that writes sort stamps: clients sort Recent and Smart by them alone. */
+  sortedByStamps?: true
   createdAt?: number
   creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
-  linkedPR: { number: number; state: string } | null
+  /** Host-cached PR, else linked number with unknown state; old hosts omit title/url/checks. */
+  linkedPR: {
+    number: number
+    state: string
+    title?: string
+    url?: string
+    checksStatus?: CheckStatus
+  } | null
   linkedLinearIssue: string | null
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
@@ -78,10 +99,7 @@ export type RuntimeWorktreePsSummary = {
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
-  /**
-   * Terminals whose host lost contact; they are not in `liveTerminalCount`, and not exited either.
-   * Always sent by current hosts, 0 included; absent only from hosts that predate the field.
-   */
+  /** Lost-contact terminals are neither liveTerminalCount nor exited; current hosts send even zero, old hosts omit. */
   unverifiableTerminalCount?: number
   lastOutputAt: number | null
   preview: string
@@ -93,6 +111,16 @@ export type RuntimeWorktreePsSummary = {
   removing?: true
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
+  /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.
+   * Older hosts omit these facts. */
+  defaultBranch?: boolean
+  automationCreated?: true
+  /** The automation's name when it made the row; older hosts send only `automationCreated`. */
+  automationName?: string
+  cliCreated?: true
+  detachedHead?: true
+  /** Other-client classification for this host’s own phone, which shares its filter setting. */
+  desktopOtherClient?: true
 }
 
 export type RuntimeGitLocalBranches = {

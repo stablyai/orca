@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
 
-// Why this suite: collectHeadlessOscLinkRanges skips its per-cell scan when
-// xterm holds no OSC 8 registration. That skip is only safe if it can never
-// fire while a link is reachable, so each case below pins one way it could.
 let emulator: HeadlessEmulator | undefined
 
 const link = (uri: string, text: string): string => `\x1b]8;;${uri}\x1b\\${text}\x1b]8;;\x1b\\`
@@ -30,8 +27,7 @@ describe('headless OSC link ranges', () => {
     expect(emulator.getSnapshot().oscLinks).toEqual([])
   })
 
-  // The dangerous case: restored ranges are seeded without xterm registering
-  // anything, so an early-out keyed only on the registry would drop them.
+  // Restored ranges have no xterm registration, so the empty-registry shortcut must still map them.
   it('still maps restored ranges when the buffer itself has no link', async () => {
     emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
     await emulator.write('restored row')

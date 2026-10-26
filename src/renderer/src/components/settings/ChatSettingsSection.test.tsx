@@ -1,9 +1,13 @@
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-permission-modes-capability'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { decodeAgentSessionAgentsResult } from '../../../../shared/agent-session/agent-session-registered-agents'
 import { ChatSettingsSection } from './ChatSettingsSection'
+import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { TooltipProvider } from '../ui/tooltip'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
@@ -13,6 +17,7 @@ import { getChatBehaviorSearchEntries } from './chat-behavior-search'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { useStructuredAgentSessionHostQueuesMessages } from '@/runtime/structured-agent-session-host-capability'
+import type * as HostStructuredAgentsModule from '@/runtime/host-structured-agents'
 import { i18n } from '@/i18n/i18n'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
@@ -20,10 +25,19 @@ import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import { getSettingsSectionId, getSettingsScrollTarget } from './settings-navigation-foundations'
 import { getSettingsSectionSearchEntries, matchesSettingsSearch } from './settings-search'
 
-const state = vi.hoisted((): { settingsSearchQuery: string; settings: GlobalSettings | null } => ({
-  settingsSearchQuery: '',
-  settings: null
+const state = vi.hoisted(
+  (): {
+    settingsSearchQuery: string
+    settings: GlobalSettings | null
+    localDetectedAgentIdsByContext: Record<string, TuiAgent[] | null>
+  } => ({ settingsSearchQuery: '', settings: null, localDetectedAgentIdsByContext: {} })
+)
+vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof HostStructuredAgentsModule>()),
+  readHostStructuredAgents: () =>
+    decodeAgentSessionAgentsResult({ agents: [{ agent: 'grok', capabilities: {} }] }) ?? []
 }))
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
     getState: () => state
@@ -38,6 +52,7 @@ afterEach(async () => {
 beforeEach(() => {
   state.settingsSearchQuery = ''
   state.settings = null
+  state.localDetectedAgentIdsByContext = {}
   setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
 })
 
@@ -77,10 +92,65 @@ function renderChat(
 }
 
 describe('Chat settings page', () => {
+  it('shows each agent’s start permission and links to Agents on an own-settings host', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY])
+    renderChat(true, true, false, {
+      agentPermissionDefault: 'own',
+      agentPermissionOverrides: { codex: 'auto' }
+    })
+    expect(screen.getByRole('button', { name: 'Settings → Agents' })).toBeDefined()
+    expect(screen.getByText('Approve for me')).toBeDefined()
+    expect(screen.getAllByText('Own settings').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Permissions Full access' })).toBeNull()
+  })
+
+  it('preserves clicked provider choices while queued saves and inventory changes settle', async () => {
+    let latest = getDefaultSettings('/tmp')
+    state.settings = latest
+    state.localDetectedAgentIdsByContext = { host: [] }
+    let finish: () => void = () => {}
+    const delayed = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
+      await delayed
+      latest = { ...latest, ...updates }
+      state.settings = latest
+    })
+    const element = () => (
+      <NativeChatProvidersSetting settings={latest} updateSettings={updateSettings} />
+    )
+    const { rerender } = render(element())
+    const claude = screen.getByRole('switch', { name: 'Open Claude as a chat' })
+    const grok = screen.getByRole('switch', { name: 'Open Grok as a chat' })
+    expect(grok.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(claude)
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+    fireEvent.click(grok)
+    fireEvent.click(claude)
+    state.localDetectedAgentIdsByContext = { host: ['grok'] }
+    rerender(element())
+    expect(grok.getAttribute('aria-checked')).toBe('true')
+    finish()
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(3))
+    expect(latest.nativeChatProviders).toEqual({ claude: false, grok: true })
+  })
+
+  it.each([false, true])('displays saved provider choice %s when disabled in Agents', (on) => {
+    renderChat(true, true, false, {
+      nativeChatProviders: { claude: on },
+      disabledTuiAgents: ['claude']
+    })
+    const toggle = screen.getByRole('switch', { name: 'Open Claude as a chat' })
+    expect(toggle.getAttribute('aria-checked')).toBe(String(on))
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+  })
+
   it('keeps Chat appearance on paired web without ineffective host naming controls or search results', () => {
     const { container } = renderChat(true, false)
     expect(screen.getByRole('spinbutton', { name: 'Text size' })).toBeTruthy()
     expect(container.querySelector('#chat-names')).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Open Claude as a chat' })).toBeNull()
     expect(screen.queryByRole('switch', { name: 'Name chats automatically' })).toBeNull()
     expect(screen.queryByRole('switch', { name: 'Toggle inline visuals' })).toBeNull()
     const sections = buildSettingsNavigationMetadata({
@@ -93,6 +163,7 @@ describe('Chat settings page', () => {
     const results = buildCmdJSettingsResults(sections).filter((entry) => entry.sectionId === 'chat')
     expect(results.some((entry) => entry.targetSectionId === 'chat-text-size')).toBe(true)
     expect(results.some((entry) => entry.targetSectionId === 'chat-names')).toBe(false)
+    expect(results.some((entry) => entry.targetSectionId === 'chat-providers')).toBe(false)
     expect(results.some((entry) => entry.targetSectionId === 'chat-inline-visuals')).toBe(false)
   })
 

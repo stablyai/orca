@@ -53,8 +53,7 @@ describe('createRootPathRewriter', () => {
     expect(rewrite('\\\\srv\\share\\real\\src\\a.ts')).toBe('//srv/share/link/src\\a.ts')
   })
 
-  // Why: a fabricated path is worse than no fix — a consumer would act on the
-  // wrong file — so the prefix match is separator-aware in both directions.
+  // Separator-aware matching prevents fabricating paths for sibling directories.
   it('never mistakes a sibling directory for the root', () => {
     const rewrite = createRootPathRewriter('/a/link', '/b/real', 'darwin')
     expect(rewrite('/b/real-backup/x.ts')).toBe('/b/real-backup/x.ts')
@@ -79,8 +78,7 @@ describe('createRootPathRewriter', () => {
     expect(rewrite('c:\\real\\x.ts')).toBe('C:\\link\\x.ts')
   })
 
-  // Why: toLowerCase can change length for some scripts; folding per segment
-  // keeps a non-match a non-match instead of slicing the path mid-character.
+  // Unicode case folding can change length; segment-wise matching avoids slicing raw characters.
   it('does not fold unrelated scripts into a match', () => {
     const rewrite = createRootPathRewriter('/a/DIYARBAKIR', '/a/DIYARBAKIR', 'darwin')
     expect(rewrite('/a/d\u0131yarbak\u0131r/x.ts')).toBe('/a/d\u0131yarbak\u0131r/x.ts')
@@ -111,8 +109,7 @@ describe('resolveWatcherRootPaths', () => {
     expect(rewriteEventPath('/tmp/gone/a.ts')).toBe('/tmp/gone/a.ts')
   })
 
-  // Why: Linux cannot inotify-watch a symlink at all (IN_ONLYDIR), so the
-  // resolved directory — not the caller's spelling — is what gets watched.
+  // Linux IN_ONLYDIR cannot watch symlink roots; resolve first, then restore caller spelling.
   it('watches the resolved root and restores the caller spelling', () => {
     const { watchRoot, rewriteEventPath } = resolveWatcherRootPaths('/tmp/link', {
       realpath: () => '/private/tmp/real',

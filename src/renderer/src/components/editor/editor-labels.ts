@@ -33,10 +33,6 @@ export function getEditorDisplayLabel(
     return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }
 
-  if (file.mode === 'chat-visual') {
-    return file.relativePath
-  }
-
   if (file.mode === 'markdown-preview') {
     return `${getBaseLabel(file, variant)} (preview)`
   }

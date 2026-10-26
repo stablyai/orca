@@ -13,19 +13,18 @@ const { readFileMock, extractCredsMock } = vi.hoisted(() => ({
 }))
 const fetchMock = vi.fn()
 
-// Why: mock the extractor at the module boundary rather than re-routing every
-// child_process/fs call. The extractor is a self-contained dependency with a
-// simple async contract; mocking it directly keeps tests focused on the
-// fetcher's refresh/quota logic rather than on filesystem plumbing that has
-// already been integration-tested elsewhere.
+// Mock extraction at its module boundary so tests cover refresh/quota behavior independently of install layouts.
 vi.mock('./gemini-cli-oauth-extractor', () => ({
   extractOAuthClientCredentials: extractCredsMock
 }))
 
 vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock,
-  writeFile: vi.fn().mockResolvedValue(undefined),
-  rename: vi.fn().mockResolvedValue(undefined)
+  readFile: readFileMock
+}))
+
+// Refresh must never write the developer's real ~/.gemini.
+vi.mock('../integration-credential-file', () => ({
+  writeCredentialFileAtomic: vi.fn().mockReturnValue(true)
 }))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
@@ -48,7 +47,6 @@ describe('fetchGeminiRateLimits', () => {
       }
       return Promise.resolve(makeResponse({ error: `Unhandled fetch to ${url}` }, 500))
     })
-    // Default: no CLI installed, refresh path cannot find client credentials.
     extractCredsMock.mockResolvedValue(null)
     readFileMock.mockRejectedValue({ code: 'ENOENT' })
   })
@@ -230,7 +228,6 @@ describe('fetchGeminiRateLimits', () => {
     })
     const result = await fetchGeminiRateLimits(true)
     expect(result.status).toBe('ok')
-    // The second quota call should have been made with the refreshed token.
     expect(quotaCallCount).toBe(2)
   })
 })

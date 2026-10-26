@@ -1,21 +1,10 @@
-/**
- * Shared oracle for "a host-created terminal stays the live terminal".
- *
- * Every retention spec (paired desktop host, windowless `orca serve`, local
- * unpaired CLI) imports this file unchanged, so the topologies are judged by
- * identical code and none can be claimed to prove another by accident.
- *
- * Two independent signals per claim:
- *   1. the host's own session inventory still lists the tab and its ptyId;
- *   2. a byte written to that handle reaches the SAME fixture process — proven
- *      by its pid and by the sink holding exactly one READY line, so a
- *      respawned replacement cannot pass as a survivor.
- */
+// Reuse one retention oracle across desktop, windowless and local-CLI hosts.
+// Require both original inventory bindings and replies from the same PID with exactly one READY line; replacements must fail.
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, type Page } from '@stablyai/playwright-test'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 export type RuntimeRpcCall = <TResult>(method: string, params: unknown) => Promise<TResult>
 
@@ -46,9 +35,7 @@ type SessionTabsListResult = {
 
 const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
-/** Daemon session id form. Deliberately excluded from id-shape classification,
- *  which is why a host-created tab needs its own binding to be preserved —
- *  a `serve-`/`ssh-` shaped id would take an already-correct path instead. */
+// Use daemon ids deliberately outside serve-/ssh- classification so the test reaches host-created binding retention.
 function isDaemonPtyIdForm(ptyId: string, worktreeId: string): boolean {
   return (
     ptyId.startsWith(`${worktreeId}@@`) &&
@@ -62,14 +49,17 @@ export function createRetentionFixtureDirectory(): string {
   return mkdtempSync(path.join(os.tmpdir(), 'orca-host-terminal-retention-'))
 }
 
-/** Long-lived stand-in for the agent a CLI dispatch spawns: it never exits, so
- *  a pruned tab is never explained away by a dead PTY. */
-export function writeRetentionFixture(directory: string): string {
+// Keep the agent alive so PTY death cannot explain a pruned tab.
+export function writeRetentionFixture(
+  directory: string,
+  options: { processTitle?: string } = {}
+): string {
   const fixturePath = path.join(directory, 'host-created-agent-terminal.mjs')
   writeFileSync(
     fixturePath,
     [
       "import { appendFileSync } from 'node:fs'",
+      ...(options.processTitle ? [`process.title = ${JSON.stringify(options.processTitle)}`] : []),
       'const sink = process.argv[2]',
       'const record = (line) => appendFileSync(sink, `${line}\\n`)',
       'record(`READY:${process.pid}`)',
@@ -113,12 +103,7 @@ function readySignatures(sinkPath: string): string[] {
     .filter((line) => line.startsWith('READY:'))
 }
 
-/**
- * `orca terminal create`: the host-initiated background create. Sibling paths
- * are deliberately NOT used — `session.tabs.createTerminal` routes through
- * createRuntimeOwnedMobileSessionTerminal, which persists its binding on every
- * revision and would pass without exercising this seam at all.
- */
+// Use terminal.create: session.tabs.createTerminal already preserves its binding and would bypass the tested seam.
 export async function createHostCliTerminal(
   call: RuntimeRpcCall,
   worktreeId: string,
@@ -138,8 +123,7 @@ export async function createHostCliTerminal(
   if (!tabId) {
     throw new Error('Host did not report a tab id for the CLI-created terminal')
   }
-  // The host mints the pane identity before spawn, so read it back from the host
-  // rather than from a renderer that may not have materialized the tab yet.
+  // Read host-minted pane identity before a renderer may have materialized the tab.
   const summary = (
     await call<{ terminal: { ptyId: string | null; leafId: string } }>('terminal.show', {
       terminal: handle
@@ -192,11 +176,7 @@ export async function readHostTerminalInventory(
   }
 }
 
-/**
- * Signal 2. Writes through the handle and requires the ORIGINAL process to
- * answer: same pid, still exactly one READY line. A replacement PTY would
- * satisfy "a terminal is there" and fail here.
- */
+// Require a reply from the original PID with one READY line so a respawned terminal cannot pass.
 export async function proveSameLivePty(
   call: RuntimeRpcCall,
   terminal: HostCreatedTerminal,
@@ -215,7 +195,6 @@ export async function proveSameLivePty(
   ).toEqual([`READY:${terminal.pid}`])
 }
 
-/** A renderer-owned terminal tab on the HOST, i.e. an ordinary user pane. */
 export async function createHostRendererTerminalTab(
   page: Page,
   worktreeId: string

@@ -1,49 +1,31 @@
-import { optionalSettingsRead } from '../transport/settings-read-operations'
 import { useCallback } from 'react'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
-import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import { repoColor } from '../worktree/repo-color'
-import {
-  buildHostLabelById,
-  buildRepoHostIdByRepoId
-} from '../worktree/worktree-host-context-labels'
+import type { ConnectionState } from '../transport/types'
+import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-labels'
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
+import type { SectionRepo } from '../worktree/workspace-list-types'
+import type { HostRepoCatalogRow } from './host-screen-reply-schema'
+import { hostPlatformRead, hostRepoCatalogRead } from './host-screen-operations'
 import {
-  hostPlatformRead,
-  hostRepoCatalogRead,
-  hostSshTargetSummariesRead
-} from './host-screen-operations'
+  acceptedMetadata,
+  readHostSshTargetLabels,
+  settledMetadataReply
+} from './host-ssh-target-labels-read'
 import type { HostScreenState } from './use-host-screen-state'
 
 const REPO_METADATA_REFRESH_MS = 60_000
 
-async function settledMetadataReply(send: () => Promise<RpcResponse>): Promise<RpcResponse | null> {
-  try {
-    return await send()
-  } catch {
-    // Best-effort: hosts that predate a method still list repos; labels degrade to host ids.
-    return null
+function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
+  return {
+    id: repo.id,
+    displayName: repo.displayName,
+    path: repo.path ?? repo.id,
+    executionHostId: getRepoExecutionHostId(repo),
+    ...(repo.badgeColor ? { badgeColor: repo.badgeColor } : {}),
+    ...(repo.repoIcon ? { repoIcon: repo.repoIcon } : {})
   }
-}
-
-/** An accepted metadata payload, or null for a refusal or a send that never landed. */
-function acceptedMetadata<Value>(
-  reply: RpcResponse | null,
-  interpret: (reply: RpcResponse) => RpcAcceptedResult<Value>
-): Value | null {
-  if (!reply) {
-    return null
-  }
-  const verdict = interpret(reply)
-  return verdict.accepted ? verdict.value : null
-}
-
-function readHostSettingOverrides(result: unknown): unknown {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  return (result as { hostSettingOverrides?: unknown } | null)?.hostSettingOverrides
 }
 
 export function useHostRepoMetadata(args: {
@@ -60,11 +42,9 @@ export function useHostRepoMetadata(args: {
     repoMetadataFetchedAtRef,
     setHostLabelById,
     setHostHealthById,
+    setDesktopRepos,
     setHostPlatform,
-    setRepoColorsByName,
-    setRepoHostIdByRepoId,
-    setRepoIconsByName,
-    setRepoIdsByName
+    setRepoHostIdByRepoId
   } = state
 
   const fetchRepoMetadata = useCallback(
@@ -101,54 +81,24 @@ export function useHostRepoMetadata(args: {
           const catalog = repos.value
           repoMetadataFetchedAtRef.current = Date.now()
           setCachedRepos(requestHostId, catalog)
-          setRepoColorsByName(
-            new Map(
-              catalog.map((repo) => [
-                repo.displayName,
-                repo.badgeColor || repoColor(repo.displayName)
-              ])
-            )
-          )
-          setRepoIconsByName(
-            new Map(
-              catalog.flatMap((repo) =>
-                repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
-              )
-            )
-          )
-          setRepoIdsByName(new Map(catalog.map((repo) => [repo.displayName, repo.id])))
+          setDesktopRepos(catalog.map(desktopSectionRepo))
           setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
-          // Why: rows name their host when the list spans hosts or an SSH host may be unhealthy,
-          // so a local-only catalog never pays for the label lookups. Counted over repos, not the
-          // id-keyed map: one repo id registered on two hosts is two hosts.
+          // Fetch labels only for mixed-host or potentially unhealthy SSH rows. Count repos, not the id-keyed map: the same repo id may exist on two hosts.
           const hostIds = new Set(catalog.map((repo) => getRepoExecutionHostId(repo)))
           const hasSshHost = [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
           if (hostIds.size > 1 || hasSshHost) {
-            const [sshTargets, hostSettings, hostPlatform] = await Promise.all([
-              settledMetadataReply(() => hostSshTargetSummariesRead.request(requestClient)),
-              optionalSettingsRead.request(requestClient).catch(() => null),
+            const [{ sshTargetSummaries, hostLabelById }, hostPlatform] = await Promise.all([
+              readHostSshTargetLabels(requestClient),
               settledMetadataReply(() => hostPlatformRead.request(requestClient))
             ])
             if (clientRef.current !== requestClient || hostId !== requestHostId) {
               return
             }
-            const hostSettingsResult = hostSettings
-              ? optionalSettingsRead.interpret(hostSettings)
-              : null
-            const sshTargetSummaries =
-              acceptedMetadata(sshTargets, hostSshTargetSummariesRead.interpret) ?? []
             setHostHealthById(buildSshHostHealthById(sshTargetSummaries))
-            setHostLabelById(
-              buildHostLabelById({
-                sshTargets: sshTargetSummaries,
-                hostSettingOverrides: readHostSettingOverrides(
-                  hostSettingsResult?.accepted ? hostSettingsResult.value : undefined
-                )
-              })
-            )
+            setHostLabelById(hostLabelById)
             setHostPlatform(acceptedMetadata(hostPlatform, hostPlatformRead.interpret) ?? null)
           } else {
-            // Why: a host that left the catalog must not keep badging rows that still name it.
+            // Clear labels for departed hosts so stale metadata cannot badge remaining rows.
             setHostHealthById(new Map())
             setHostLabelById(new Map())
           }

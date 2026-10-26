@@ -8,6 +8,8 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyAgentPaneActivityFlags,
@@ -15,17 +17,19 @@ import {
 } from '@/lib/agent-pane-activity-flags'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
-// Why: a terminal tab is a container of panes, exactly like a worktree card is
-// a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
-// the tab's live states resolve identically to the sidebar (tabs intentionally
-// skip the card's retained-done promotion — see resolveTerminalTabActivityStatus).
+// Share sidebar pane-state resolution, excluding worktree-only retained-done promotion.
 export type TerminalTabActivityStatus = WorktreeStatus
 
-// Per-tab live-hook flags, folded by the same applyAgentPaneActivityFlags as the worktree card.
+type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permission'>
+
+type PaneProgramProgress = { progress: number; updatedAt: number }
+
 type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
+  /** Newest program progress per status it would drive, so ring tone and percent share a pane. */
+  programProgress: Partial<Record<ProgressRingStatus, PaneProgramProgress>>
 }
 
 type FlagsCache = {
@@ -34,21 +38,14 @@ type FlagsCache = {
   flagsByTabId: Map<string, TerminalTabActivityFlags>
 }
 
-// Why: Zustand reruns every tab's selector on each store write. Bucketing the
-// full pane-status map by tab once per snapshot keeps the cost O(agents + tabs)
-// instead of O(agents * tabs) — the same memo strategy the sidebar summaries
-// use (worktree-agent-activity-summary.ts / worktree-agent-row-selectors.ts).
+// Index each pane-status snapshot once so per-tab Zustand selectors cost O(agents + tabs), not O(agents × tabs).
 let flagsCache: FlagsCache | null = null
 
 function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {
-  // Why: freshness is time-based, so the store bumps agentStatusEpoch without
-  // replacing the map at the 30m stale boundary (createFreshnessScheduler).
-  // Keying on the map reference alone would keep serving flags computed at the
-  // old `now`, spinning an abandoned tab forever while the sidebar — which keys
-  // on agentStatusEpoch — correctly de-spins. Invalidate on either changing.
+  // Invalidate on freshness epoch as well as map identity; stale boundaries advance without replacing hook rows.
   if (
     flagsCache &&
     flagsCache.agentStatusByPaneKey === agentStatusByPaneKey &&
@@ -69,8 +66,7 @@ function getTerminalTabActivityFlags(
       flags.paneIds.add(identity.paneId)
       continue
     }
-    // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
-    // must not keep a tab spinning. Same freshness gate as the sidebar.
+    // Apply sidebar freshness rules so abandoned/slept panes cannot keep tab spinners alive.
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
@@ -82,6 +78,7 @@ function getTerminalTabActivityFlags(
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
     applyAgentPaneActivityFlags(flags, entry)
+    recordPaneProgramProgress(flags, entry)
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
@@ -103,16 +100,40 @@ function getOrCreateTerminalTabActivityFlags(
       hasUnconfirmed: false,
       hasLiveDone: false,
       paneIds: new Set(),
-      stalePaneIds: new Set()
+      stalePaneIds: new Set(),
+      programProgress: {}
     }
     flagsByTabId.set(tabId, flags)
   }
   return flags
 }
 
-// Why: mirror the sidebar summary's parse — live entries on restored/imported
-// sessions can still carry pre-UUID numeric pane keys. Keep the numeric pane id
-// so the title-heuristic dedup in resolveWorktreeStatus can still match them.
+// Mirrors applyAgentPaneActivityFlags: monitoring and verdict-marked rows drive no ring status.
+function progressRingStatusForEntry(entry: AgentStatusEntry): ProgressRingStatus | null {
+  if (entry.state === 'blocked' || entry.state === 'waiting') {
+    return 'permission'
+  }
+  return entry.state === 'working' &&
+    entry.workingMode !== 'monitoring' &&
+    agentVerdictDisplayMark(entry) === null
+    ? 'working'
+    : null
+}
+
+function recordPaneProgramProgress(flags: TerminalTabActivityFlags, entry: AgentStatusEntry): void {
+  const progress = resolveProgramStatusPresentation(entry).progress
+  const status = progress === undefined ? null : progressRingStatusForEntry(entry)
+  if (progress === undefined || status === null) {
+    return
+  }
+  // A split tab with several reporting panes shows the most recently updated one.
+  const current = flags.programProgress[status]
+  if (!current || current.updatedAt < entry.updatedAt) {
+    flags.programProgress[status] = { progress, updatedAt: entry.updatedAt }
+  }
+}
+
+// Preserve legacy numeric pane IDs so title-evidence deduplication matches restored/imported sessions.
 function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: string } | null {
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
@@ -125,25 +146,17 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
 type TerminalTabActivityInput = {
-  // Why: launchAgent is read, not just carried — the status gate needs it to attribute a
-  // bare spinner title to an agent (#9040). Narrowing it away here compiles (it is optional)
-  // but silently drops the tab-bar dot back to the pre-#9040 behavior.
+  // Carry launchAgent to attribute providerless spinner titles; omitting this optional field compiles but loses the status signal.
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
-  // Why: the store bumps this at the 30m stale boundary without replacing the
-  // pane-status map; it is the flag cache's invalidation key (see above).
+  // Freshness epochs invalidate cached flags even when pane-map identity is unchanged.
   agentStatusEpoch?: number
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
 }
 
-/**
- * Resolve a terminal tab's status glyph through the canonical WorktreeCard
- * resolver. Fresh hook state is authoritative per pane; hookless-but-live panes
- * fall back to the same title heuristic used by the sidebar and smart sort.
- * Returns a `WorktreeStatus` primitive so the tab re-renders only when it flips.
- */
+/** Resolve fresh hook state and live title fallback like the sidebar, returning a primitive to avoid unrelated rerenders. */
 export function resolveTerminalTabActivityStatus({
   tab,
   agentStatusByPaneKey,
@@ -174,15 +187,31 @@ export function resolveTerminalTabActivityStatus({
   })
 }
 
+/** Use the newest progress from a pane driving this resolved state, sharing freshness and identity rules with activity flags. */
+export function resolveTerminalTabProgramProgress({
+  tabId,
+  status,
+  agentStatusByPaneKey,
+  agentStatusEpoch
+}: {
+  tabId: string
+  status: TerminalTabActivityStatus
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusEpoch?: number
+}): number | undefined {
+  if (status !== 'working' && status !== 'permission') {
+    return undefined
+  }
+  return getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tabId)
+    ?.programProgress[status]?.progress
+}
+
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */
 export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): boolean {
   return status === 'working' || status === 'monitoring' || status === 'permission'
 }
 
-/**
- * Glyph-bearing attention states for a terminal tab (tab bar + Cmd+J recent chats).
- * Quiet active/inactive map to null so identity icons stay clean.
- */
+/** Map attention to state glyphs or unread bells; quiet activity leaves identity icons unobscured. */
 export type TerminalTabAttentionBadge =
   | 'working'
   | 'monitoring'
@@ -193,10 +222,7 @@ export type TerminalTabAttentionBadge =
   | 'unread'
   | 'done'
 
-/**
- * Single priority ladder shared by the tab strip and Cmd+J recent rows:
- * in-turn (working / permission) → unread bell → freshly done check.
- */
+/** Share attention precedence across tab-strip and recent rows: live state, unread bell, then settled verdict. */
 export function resolveTerminalTabAttentionBadge({
   status,
   hasUnread
@@ -305,12 +331,10 @@ export function hasUnreadAgentCompletionForTerminalTab(
     : false
 }
 
-/** Test-only: clear the memoized per-tab flag cache between cases. */
 export function resetTerminalTabActivityFlagsCacheForTest(): void {
   flagsCache = null
 }
 
-/** Test-only: clear the unread marker snapshot index between cases. */
 export function resetUnreadAgentCompletionTabIdsCacheForTest(): void {
   unreadAgentCompletionTabIdsBySnapshot = new WeakMap()
 }

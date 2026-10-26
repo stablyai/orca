@@ -14,10 +14,12 @@ import { SshTargetSelect } from './SshTargetSelect'
 const DEFAULT_REMOTE_PORT = '6768'
 
 type RuntimeSshAccessControlProps = {
-  api: ManagedOrcadPreloadApi
+  api: Pick<ManagedOrcadPreloadApi, 'linkSshAccess' | 'unlinkSshAccess'>
   environment: PublicKnownRuntimeEnvironment
   targets: SshTarget[]
   onChanged: () => void
+  /** Rendered before the submit button, e.g. a dialog's Cancel. */
+  footerStart?: React.ReactNode
 }
 
 /** Reaches an already-paired server through an SSH tunnel instead of its network address. */
@@ -25,27 +27,21 @@ export function RuntimeSshAccessControl({
   api,
   environment,
   targets,
-  onChanged
+  onChanged,
+  footerStart
 }: RuntimeSshAccessControlProps): React.JSX.Element {
-  const [targetId, setTargetId] = useState('')
+  const [targetId, setTargetId] = useState(targets.length === 1 ? (targets[0]?.id ?? '') : '')
   const [remotePort, setRemotePort] = useState(DEFAULT_REMOTE_PORT)
   const [busy, setBusy] = useState(false)
   const targetFieldId = useId()
   const portFieldId = useId()
   const linked = environment.sshAccess
+  const pending = environment.pendingSshAccessOperation
 
-  const submit = async (): Promise<void> => {
+  const run = async (call: () => Promise<unknown>): Promise<void> => {
     setBusy(true)
     try {
-      const requestId = createBrowserUuid()
-      await (linked
-        ? api.unlinkSshAccess({ selector: environment.id, requestId })
-        : api.linkSshAccess({
-            selector: environment.id,
-            requestId,
-            sshTargetId: targetId,
-            remotePort: Number(remotePort)
-          }))
+      await call()
       onChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
@@ -54,21 +50,95 @@ export function RuntimeSshAccessControl({
     }
   }
 
-  if (linked) {
+  if (pending) {
+    // Reuse the recorded operation ID; fresh IDs cannot resume/cancel unfinished links and can trap server removal (#27765).
+    const requestId = pending.requestId
+    const retry = (): Promise<unknown> =>
+      pending.operation === 'link'
+        ? api.linkSshAccess({
+            selector: environment.id,
+            requestId,
+            sshTargetId: pending.sshTargetId,
+            remotePort: pending.remotePort
+          })
+        : api.unlinkSshAccess({ selector: environment.id, requestId })
     return (
-      <div className="flex items-center gap-2 px-4 py-3">
-        <div className="min-w-0 flex-1 truncate text-sm">
-          {translate('auto.components.settings.managedServers.access.linked', '{{name}} via SSH', {
-            name: environment.name
-          })}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+        <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+          {pending.operation === 'link'
+            ? translate(
+                'auto.components.settings.managedServers.access.pendingLink',
+                'Connecting through SSH didn’t finish.'
+              )
+            : translate(
+                'auto.components.settings.managedServers.access.pendingUnlink',
+                'Stopping SSH access didn’t finish.'
+              )}
+        </p>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {pending.operation === 'link' ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={busy}
+              onClick={() =>
+                void run(() => api.unlinkSshAccess({ selector: environment.id, requestId }))
+              }
+            >
+              {translate('auto.components.settings.managedServers.access.cancelLink', 'Cancel')}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void run(retry)}
+          >
+            {translate('auto.components.settings.managedServers.access.retry', 'Retry')}
+          </Button>
         </div>
+      </div>
+    )
+  }
+
+  const submit = (): Promise<void> => {
+    const requestId = createBrowserUuid()
+    return run(() =>
+      linked
+        ? api.unlinkSshAccess({ selector: environment.id, requestId })
+        : api.linkSshAccess({
+            selector: environment.id,
+            requestId,
+            sshTargetId: targetId,
+            remotePort: Number(remotePort)
+          })
+    )
+  }
+
+  if (linked) {
+    const linkedTarget = targets.find((target) => target.id === linked.sshTargetId)
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          {translate(
+            'auto.components.settings.managedServers.access.linkedRoute',
+            'Reached through {{host}}, server port {{port}}.',
+            {
+              host: linkedTarget?.label ?? linked.sshTargetId,
+              port: linked.remotePort
+            }
+          )}
+        </p>
         <Button
           type="button"
-          size="xs"
+          size="sm"
           variant="outline"
           disabled={busy}
           onClick={() => void submit()}
         >
+          {busy ? <Loader2 className="animate-spin" /> : null}
           {translate('auto.components.settings.managedServers.access.unlink', 'Stop using SSH')}
         </Button>
       </div>
@@ -77,21 +147,31 @@ export function RuntimeSshAccessControl({
   const port = Number(remotePort)
   const valid = targetId !== '' && Number.isInteger(port) && port >= 1 && port <= 65_535
   return (
-    <div className="flex flex-wrap items-end gap-2 px-4 py-3">
-      <div className="min-w-0 flex-1 space-y-1">
-        <Label htmlFor={targetFieldId}>{environment.name}</Label>
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!busy && valid) {
+          void submit()
+        }
+      }}
+    >
+      <div className="space-y-2">
+        <Label htmlFor={targetFieldId}>
+          {translate('auto.components.settings.managedServers.deploy.host', 'SSH host')}
+        </Label>
         <SshTargetSelect
           id={targetFieldId}
           targets={targets}
           value={targetId}
           onChange={setTargetId}
           placeholder={translate(
-            'auto.components.settings.managedServers.access.target',
-            'Reach through SSH host'
+            'auto.components.settings.managedServers.access.chooseHost',
+            'Choose a host'
           )}
         />
       </div>
-      <div className="w-24 space-y-1">
+      <div className="w-32 space-y-2">
         <Label htmlFor={portFieldId}>
           {translate('auto.components.settings.managedServers.access.port', 'Server port')}
         </Label>
@@ -102,12 +182,15 @@ export function RuntimeSshAccessControl({
           onChange={(event) => setRemotePort(event.target.value)}
         />
       </div>
-      <Button type="button" disabled={busy || !valid} onClick={() => void submit()}>
-        {busy ? <Loader2 className="animate-spin" /> : null}
-        {busy
-          ? translate('auto.components.settings.managedServers.access.linking', 'Connecting…')
-          : translate('auto.components.settings.managedServers.access.link', 'Use SSH')}
-      </Button>
-    </div>
+      <div className="flex justify-end gap-2">
+        {footerStart}
+        <Button type="submit" size="sm" disabled={busy || !valid}>
+          {busy ? <Loader2 className="animate-spin" /> : null}
+          {busy
+            ? translate('auto.components.settings.managedServers.access.linking', 'Connecting…')
+            : translate('auto.components.settings.managedServers.access.connect', 'Connect')}
+        </Button>
+      </div>
+    </form>
   )
 }

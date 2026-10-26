@@ -15,13 +15,7 @@ import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-ite
 const MAX_RESOLVED_TASK_IDENTITIES = 512
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
-/** Durable identity for one RUN of a task.
- *
- *  A provider may reuse a task id for a distinct later invocation, and a row
- *  keyed by the id alone would overwrite the first run's transcript history
- *  instead of leaving it standing beside the restart. The generation suffix
- *  separates them. Generation 1 carries no suffix, so every row written before
- *  generations existed keeps the key it already has. */
+/** Generation suffixes preserve restarted runs; generation 1 retains the legacy journal key. */
 export function claudeBackgroundTaskIdentity(
   taskId: string,
   generation = 1
@@ -35,7 +29,6 @@ export function claudeBackgroundTaskIdentity(
 
 export const claudeBackgroundTaskBody = backgroundTaskJournalBody
 
-/** Reconcile one queued row against the durable run identity after a rebind. */
 export function resolveClaudeBackgroundTaskIdentity(
   journal: StructuredAgentSessionLifecycleJournal,
   id: string,
@@ -71,7 +64,6 @@ export function resolveClaudeBackgroundTaskIdentity(
   )
 }
 
-/** Resolves each immutable provider run once per bound journal epoch. */
 export class ClaudeBackgroundTaskIdentityResolver {
   private journal: StructuredAgentSessionLifecycleJournal | null = null
   private epoch: string | null = null
@@ -132,8 +124,7 @@ export function writeClaudeBackgroundTaskRow(
   row: ClaudeBackgroundTaskRow,
   /** The turn the row belongs to, read once `beforeAppend` has opened it. */
   turnScope: () => AgentJournalTurnScope,
-  /** Runs before admission to preserve turn-before-row ordering; duplicate
-   *  delivery skips it, and a retry reuses the turn the first attempt opened. */
+  /** Open the turn before append; duplicate writes and retries must not open another. */
   beforeAppend?: () => void,
   lifecycle = false
 ): StructuredAgentSessionSinkAdmission {
@@ -144,8 +135,10 @@ export function writeClaudeBackgroundTaskRow(
   }
   beforeAppend?.()
   const identity = claudeBackgroundTaskIdentity(id, row.generation)
+  // A reused row belongs to the current run, so it must count as executing.
   const appendOptions = {
     turnScope: turnScope(),
+    executes: true as const,
     ...(lifecycle ? { lifecycle: true } : {})
   }
   const publishOptions = lifecycle ? { lifecycle: true } : {}
@@ -154,8 +147,7 @@ export function writeClaudeBackgroundTaskRow(
   const appendAndPublish = sink.tryAppendResolvedItemAndPublish
   let admission: StructuredAgentSessionSinkAdmission
   if (appendAndPublish) {
-    // Reserve enough space for any safe generation suffix; the actual identity
-    // is selected once the deferred sink is bound to the durable journal.
+    // Budget for any safe generation suffix before the deferred sink resolves its durable identity.
     const identitySizeBound = claudeBackgroundTaskIdentity(id, Number.MAX_SAFE_INTEGER)
     admission = appendAndPublish(identitySizeBound, body, resolveIdentity, appendOptions)
   } else if (sink.tryAppendResolvedItem) {

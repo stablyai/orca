@@ -1,23 +1,29 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
+import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
+import type { runCodexAppServerSession } from '../../../codex/codex-app-server-session'
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
-  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import {
   call,
   clearStructuredHostStub,
   hostStub,
   SESSION,
-  STRUCTURED_CLIENT
+  STRUCTURED_CLIENT as OLD_STRUCTURED_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
+
+const STRUCTURED_CLIENT = {
+  clientKind: 'runtime' as const,
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+}
 
 afterEach(() => {
   clearStructuredHostStub()
@@ -35,6 +41,69 @@ describe('agentSession.modelCatalog', () => {
         deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
       })
     )
+  })
+
+  it('lists the local desktop catalog under its pinned account, folder and launch arguments', async () => {
+    record = {
+      ...agentSessionRecordFixture(),
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/account/work' },
+      launchDirectory: '/repo/work'
+    }
+    const listed = vi.fn()
+    const runSession: typeof runCodexAppServerSession = async (invocation, body) => {
+      listed(invocation)
+      expect(invocation).toMatchObject({
+        command: '/installed/codex',
+        cwd: '/repo/work',
+        env: { CODEX_HOME: '/account/work' }
+      })
+      expect(invocation.args).toEqual(expect.arrayContaining(['-c', 'model_provider="work"']))
+      return body({
+        notify: () => {},
+        request: async (method) =>
+          method === 'model/list'
+            ? {
+                data: [{ model: 'work-model', isDefault: true, supportedReasoningEfforts: [] }],
+                nextCursor: null
+              }
+            : { config: {} }
+      })
+    }
+    const catalog = createAgentModelCatalogService({
+      store: new AgentModelCatalogStore(),
+      getRecord: () => record ?? undefined,
+      drivesRecord: () => true,
+      recordWorkspacePath: async () => '/repo/work',
+      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account/other' }),
+      probes: {
+        codex: createCodexModelCatalogProbe({
+          resolveCommand: () => '/installed/codex',
+          resolveEnvironment: async () => ({}),
+          resolveLaunchArgs: () => ['-c', 'model_provider="work"'],
+          runSession
+        })
+      }
+    })
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        deps: { modelCatalog: catalog, store: { getRecord: () => record }, adapter: {} }
+      })
+    )
+    try {
+      const reply = await call(
+        'agentSession.modelCatalog',
+        { agent: 'codex', sessionId: record.sessionId, waitForListing: true },
+        STRUCTURED_CLIENT
+      )
+      expect(reply).toMatchObject({
+        ok: true,
+        result: { origin: 'probe', models: [{ id: 'work-model' }] }
+      })
+      expect(listed).toHaveBeenCalledTimes(1)
+    } finally {
+      catalog.stop()
+    }
   })
 
   it("reads a floating chat's catalog in the folder it was created in", async () => {
@@ -130,8 +199,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     clearStructuredHostStub()
   })
 
-  // A new chat's picker reads before its create lands; on a host with no saved chats nothing else
-  // has built the host yet, and a refusal here left the picker on the client's built-in list.
+  // New-chat pickers may be the first host caller; refusing before installation leaves only client-built-in models.
   it('builds the host for a structured chat and answers from its catalog', async () => {
     const reply = await call(
       'agentSession.modelCatalog',
@@ -144,8 +212,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION })
   })
 
-  // Terminal-backed chat reads with no session: a host that runs no structured chat keeps its
-  // journal closed, and the read falls back to the CLI listing.
+  // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
   it('does not build the host for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
       ensureStructuredAgentSessionHost: installHost
@@ -167,67 +234,42 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   })
 })
 
-const PI_CLIENT = {
-  ...STRUCTURED_CLIENT,
-  clientCapabilities: [
-    ...STRUCTURED_CLIENT.clientCapabilities,
-    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-    PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
-  ]
-}
-
-describe("agentSession.modelCatalog with what the running agent's start said", () => {
-  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({ origin: 'unknown' }))
-  const startUnavailable = vi.fn((_sessionId: string): AgentSessionUnavailable | undefined => ({
-    reason: 'notSignedIn'
+describe('agentSession.modelCatalog for a chat on a model its CLI stopped listing', () => {
+  const opus = { id: 'opus', label: 'Opus', isDefault: true, efforts: [] }
+  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [opus]
   }))
-  const record: AgentSessionRecord = { ...agentSessionRecordFixture(), provider: 'pi' }
-  const readFor = (agent: string) =>
-    call('agentSession.modelCatalog', { agent, sessionId: record.sessionId }, PI_CLIENT)
+  const record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    provider: 'claude',
+    options: { model: 'opus[1m]', effort: 'max' }
+  }
 
   beforeEach(() => {
-    read.mockReset()
-    read.mockResolvedValue({ origin: 'unknown' })
-    startUnavailable.mockClear()
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: {
-          modelCatalog: { read },
-          store: { getRecord: () => record },
-          adapter: { startUnavailable }
-        }
+        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
       })
     )
   })
 
-  it("answers a Pi chat's catalog with its signed-out start", async () => {
-    const reply = await readFor('pi')
-    expect(startUnavailable).toHaveBeenCalledWith(record.sessionId)
-    expect(reply).toMatchObject({
+  it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
+    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const forChat = { agent: 'claude', sessionId: record.sessionId }
+    expect(await call('agentSession.modelCatalog', forChat, OLD_STRUCTURED_CLIENT)).toMatchObject({
       ok: true,
-      result: { origin: 'unknown', unavailable: { reason: 'notSignedIn' } }
+      result: { models: [opus, own] }
     })
-  })
-
-  it('keeps the reason the catalog itself found', async () => {
-    read.mockResolvedValue({ origin: 'unknown', unavailable: { reason: 'cliMissing' } })
-    expect(await readFor('pi')).toMatchObject({
-      ok: true,
-      result: { unavailable: { reason: 'cliMissing' } }
-    })
-  })
-
-  it("never lends one agent's start to another agent's read", async () => {
-    const reply = await readFor('codex')
-    expect(startUnavailable).not.toHaveBeenCalled()
-    expect(reply).toMatchObject({ ok: true, result: { origin: 'unknown' } })
-    expect(reply).not.toMatchObject({ result: { unavailable: expect.anything() } })
-  })
-
-  it('stays quiet while the start said nothing', async () => {
-    startUnavailable.mockReturnValueOnce(undefined)
-    const reply = await readFor('pi')
-    expect(reply).toMatchObject({ ok: true })
-    expect(reply).not.toMatchObject({ result: { unavailable: expect.anything() } })
+    // A new chat's read, which seeds the next new chat's list, and the account's name only the CLI's.
+    const newChat = { ...forChat, worktree: 'id:wt-1' }
+    const runtime = { resolveStructuredAgentSessionLocalWorkspacePath: async () => '/repo' }
+    for (const reply of [
+      await call('agentSession.modelCatalog', newChat, STRUCTURED_CLIENT, runtime),
+      await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
+    ]) {
+      expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
+    }
   })
 })

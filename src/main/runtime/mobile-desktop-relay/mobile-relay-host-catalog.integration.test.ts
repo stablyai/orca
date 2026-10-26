@@ -21,6 +21,7 @@ import {
 } from '../runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import { partialRuntimeStore } from '../runtime-store-partial-fixture'
 
 vi.mock('../../git/worktree', () => {
   const worktrees = [
@@ -49,8 +50,7 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
   })
 
   async function startRuntime() {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store carries the surface these RPCs read, as in the sibling relay tests.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-relay-hosts-')),
@@ -70,7 +70,6 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     return offer.pairingUrl
   }
 
-  /** The desktop's status snapshot for a server: what its status owner last heard. */
   function snapshot(
     environmentId: string,
     contact: Contact,
@@ -143,7 +142,9 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
           5_000
         ),
       hostsBrowserPage: () => false,
-      onEnvironmentRetired: () => () => {}
+      onEnvironmentRetired: () => () => {},
+      onStatusChanged: () => () => {},
+      watchChanges: () => ({ close: () => {}, current: () => true })
     }
     desktop.setMobileDesktopRelayHosts(hosts)
     const session = await authenticateMobileWsSession(pairingUrl(desktop, 'mobile'))
@@ -178,7 +179,7 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       ]
     })
 
-    // The update-needed server still answers the desktop, so its rows are live.
+    // Update-needed servers can still answer catalog reads.
     await expect(
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:old' })
     ).resolves.toMatchObject({
@@ -190,7 +191,6 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     await expect(phoneCall('mobileRelay.hosts.list')).resolves.toMatchObject({
       hosts: [{ hostId: 'runtime:box', relay: 'unavailable' }, { hostId: 'runtime:old' }]
     })
-    // The last rows exactly as fetched, provenance kept.
     await expect(
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:box' })
     ).resolves.toEqual(warm)

@@ -5,13 +5,7 @@ import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
 
-export type OrcadProfileStateProfile = {
-  dataFile: string
-  stateDatabaseFile: string
-  profile: { id: string }
-}
-
-export type OrcadProfileStateStartup = {
+type OrcadProfileStateStartup = {
   store: ProfileStateStoreFactoryResult['store']
   authority: {
     backend: ProfileStateStoreFactoryResult['backend']
@@ -22,16 +16,14 @@ export type OrcadProfileStateStartup = {
   }
 }
 
-/** Build the headless Store and publish its authority selection at one Node-only seam. */
 export async function createOrcadProfileStateStartup(
   userDataPath: string
 ): Promise<OrcadProfileStateStartup> {
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(userDataPath)
-  // Why a real Store: without one, persistence-backed RPCs throw and `store?.x ?? []` reads answer
-  // "empty", so a server that pairs and lists nothing looks healthy. As the runtime authority,
-  // orcad must not load as 'desktop', which would orphan its own scheduled automations.
+  // Real persistence avoids falsely empty RPCs; headless authority keeps automations owned by this host.
   const result = await createProfileStateStoreForStartup({
+    userDataPath,
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,

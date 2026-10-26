@@ -14,6 +14,7 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
@@ -35,7 +36,7 @@ const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
 
 export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
@@ -67,7 +68,7 @@ const worktreeLookupIndexes = new WeakMap<
 >()
 
 export function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
-  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const worktreesByRepo = selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO
   const repos = state.repos ?? EMPTY_WORKTREE_REPOS
   const cached = worktreeLookupIndexes.get(worktreesByRepo)
   if (cached && cached.repos === repos) {
@@ -153,7 +154,7 @@ export function shouldApplyDivergedLinkedPRClear(args: {
   )
 }
 
-// Why: a linked PR is branch-scoped; it's stale once the worktree switched branches with neither push target nor HEAD at the PR head, else Checks stays pinned to the old branch's PR.
+// Clear linked PR after branch switch only when neither push target nor HEAD matches its head; otherwise Checks remains pinned to old work.
 export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   pr: PRInfo | null
   linkedPRNumber: number | null

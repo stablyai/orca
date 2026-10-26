@@ -38,7 +38,7 @@ describe('useCombinedDiffFileTreeResize', () => {
     view.rerender(<TreeHarness collapsed={true} />)
     expect(view.queryByTestId('tree')).toBeNull()
 
-    // Why: the hook outlives the unmounted aside, so a stale layout effect would leave it width-less.
+    // The hook outlives the collapsed aside; reopening must rerun width application.
     view.rerender(<TreeHarness collapsed={false} />)
     expect(view.getByTestId('tree').style.width).toBe('420px')
   })

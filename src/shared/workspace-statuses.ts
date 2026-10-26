@@ -213,9 +213,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: a previous build briefly wrote the default columns in reverse order.
-  // The repair is one-shot and checks the raw payload, because normalized
-  // IDs/labels are indistinguishable from a user-authored column reorder.
+  // Repair only the raw known reversed default payload once; normalized values cannot distinguish it from a user reorder.
   if (
     options.repairReorderedDefaultStatuses === true &&
     isKnownBadPRReorderedDefaultStatusPayload(value)
@@ -257,6 +255,13 @@ export function getDefaultWorkspaceStatusId(
   return statuses.some((status) => status.id === DEFAULT_WORKSPACE_STATUS_ID)
     ? DEFAULT_WORKSPACE_STATUS_ID
     : (statuses[0]?.id ?? DEFAULT_WORKSPACE_STATUS_ID)
+}
+
+/** The statuses to group by: a payload with none (a partially hydrated store) keeps the defaults. */
+export function withDefaultWorkspaceStatuses(
+  statuses: readonly WorkspaceStatusDefinition[]
+): readonly WorkspaceStatusDefinition[] {
+  return statuses.length > 0 ? statuses : DEFAULT_WORKSPACE_STATUSES
 }
 
 export function getWorkspaceStatus(

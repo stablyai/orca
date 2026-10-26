@@ -2,12 +2,7 @@ import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../shared/browser
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 
-/**
- * `unsupported` is the mixed-version case — the lease attached to a host that never offered the file
- * channel — and is the only one that may fall back to the desktop Downloads folder. `unavailable`
- * (no lease yet, transport lost, host closed) must fail closed instead: the host may well support
- * the channel, so a local save would be a silent downgrade of where the bytes land.
- */
+/** Only unsupported legacy hosts permit local saves; unavailable channels must refuse transfers. */
 export type BrowserClientFileChannelAvailability = 'negotiated' | 'unsupported' | 'unavailable'
 
 export type BrowserClientFileChannelSender = {
@@ -22,10 +17,7 @@ export type BrowserClientFileChannelSender = {
 
 export const BROWSER_CLIENT_FILE_CHANNEL_REQUEST_TIMEOUT_MS = 30_000
 
-/**
- * Indirection between the page command executor and the browser-host lease that carries file-channel
- * requests. The lease is replaced on authority transitions, so the executor holds this instead.
- */
+/** Keep executor transport stable while authority changes replace the host lease. */
 export class BrowserClientFileChannelTransport {
   private sender: BrowserClientFileChannelSender | null = null
 

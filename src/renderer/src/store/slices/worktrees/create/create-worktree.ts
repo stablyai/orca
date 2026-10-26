@@ -1,3 +1,4 @@
+import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -7,17 +8,17 @@ import {
 import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
+import {
+  pickClientWorktreeCreateSettings,
+  type ClientWorktreeCreateSettings
+} from './client-worktree-create-settings'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
   getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../../../runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
@@ -29,10 +30,11 @@ import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
   buildLocalWorktreeCreateArgs,
-  buildRuntimeWorktreeCreateParams,
+  type CreatedWorktreeResult,
   type WorktreeCreateAttempt,
   type WorktreeCreateRequest
 } from './worktree-create-payload'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
@@ -42,7 +44,7 @@ import {
 type RuntimeTarget = RuntimeClientTarget
 
 type CreateAttemptOutcome = {
-  result: CreateWorktreeResult
+  result: CreatedWorktreeResult
   /** The host had no such parent, so this attempt was retried unattached. */
   droppedParent: boolean
 }
@@ -50,12 +52,13 @@ type CreateAttemptOutcome = {
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  target: RuntimeTarget
+  target: RuntimeTarget,
+  clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
-  ): Promise<CreateWorktreeResult> =>
+  ): Promise<CreatedWorktreeResult> =>
     provisionedRoot
       ? target.kind === 'environment'
         ? await adoptRuntimeProvisionedRoot(
@@ -73,11 +76,11 @@ async function runCreateAttempt(
           await window.api.worktrees.create(
             buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
           )
-        : await callRuntimeRpc<CreateWorktreeResult>(
-            target,
-            'worktree.create',
-            buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
-            { timeoutMs: 10 * 60_000 }
+        : await createWorktreeOnRuntimeHost(
+            target.environmentId,
+            request,
+            { ...attempt, parentWorkspace },
+            clientCreateSettings
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
@@ -169,19 +172,6 @@ export function createCreateWorktree(
       options
     }
     try {
-      // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
-      const parent = resolveWorktreeCreateParent(get(), repoId, options?.parentWorktreeId)
-      let warnedParentDropped = false
-      const warnParentDroppedOnce = (): void => {
-        if (warnedParentDropped) {
-          return
-        }
-        warnedParentDropped = true
-        notifyWorktreeParentDropped(get(), parent)
-      }
-      if (parent.staleBeforeCreate) {
-        warnParentDroppedOnce()
-      }
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
       if (isUnresolvedOwnerHostId(options?.executionHostId)) {
@@ -200,6 +190,19 @@ export function createCreateWorktree(
         requestedHostId: options?.executionHostId,
         resolveOwnHostId: () => repoHostId(get(), repoId)
       })
+      // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
+      const parent = resolveWorktreeCreateParent(get(), options?.parentWorktreeId, creationHostId)
+      let warnedParentDropped = false
+      const warnParentDroppedOnce = (): void => {
+        if (warnedParentDropped) {
+          return
+        }
+        warnedParentDropped = true
+        notifyWorktreeParentDropped(get(), parent)
+      }
+      if (parent.staleBeforeCreate) {
+        warnParentDroppedOnce()
+      }
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -233,14 +236,22 @@ export function createCreateWorktree(
               parentWorkspace: parent.parentWorkspace,
               manualOrder
             },
-            target
+            target,
+            pickClientWorktreeCreateSettings(get().settings)
           )
           if (lostRequestedParent(outcome, parent, target)) {
             warnParentDroppedOnce()
           }
           applyCreatedWorktree(set, repoId, outcome.result, creationHostId)
+          const created = get().getKnownWorktreeById(outcome.result.worktree.id, creationHostId)
+          if (created) {
+            holdCreatedSidebarWorkspace({ worktree: created })
+          }
           const { result } = outcome
-          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
+            updateSettings: get().updateSettings,
+            executionHostId: creationHostId
+          })
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }

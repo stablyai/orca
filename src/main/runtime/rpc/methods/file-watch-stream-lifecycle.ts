@@ -1,10 +1,12 @@
-import { isWatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
+import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
 export async function runFileWatchStream(args: {
   runtime: OrcaRuntimeService
   worktree: string
+  batchCadence?: FileWatchBatchCadence
   connectionId?: string
   signal?: AbortSignal
   subscriptionId: string
@@ -24,7 +26,7 @@ export async function runFileWatchStream(args: {
     let logicalCleanupStarted = false
     let endEmitted = false
     const setupAbortController = new AbortController()
-    const eventBatcher = createFileWatchEventBatcher(args.worktree, args.emit)
+    const eventBatcher = createFileWatchEventBatcher(args.worktree, args.emit, args.batchCadence)
     const settle = (callback: () => void): void => {
       if (settled) {
         return
@@ -40,15 +42,13 @@ export async function runFileWatchStream(args: {
       const attempt = (async () => {
         if (!logicalCleanupStarted) {
           logicalCleanupStarted = true
-          // Mark cleanup complete before emitting so a synchronous transport
-          // abort cannot re-enter this function and duplicate error/end.
+          // Mark cleanup complete before emitting; synchronous transport abort can re-enter and duplicate error/end.
           if (!setupFailed) {
             settle(resolve)
           }
           setupAbortController.abort()
           if (terminalError) {
-            // Why: recovery emits overflow before giving up. Flush that final
-            // refresh so clients never end on a knowingly stale snapshot.
+            // Flush recovery's final overflow so the stream never ends on a known stale snapshot.
             eventBatcher.flush()
             eventBatcher.dispose()
             args.emit({ type: 'error', message: terminalError.message })
@@ -56,8 +56,7 @@ export async function runFileWatchStream(args: {
             eventBatcher.flush()
             eventBatcher.dispose()
           } else {
-            // Why: setup can queue events before it returns an unsubscribe;
-            // cancellation before ready must not publish that partial crawl.
+            // Cancellation before ready must discard the partial crawl queued during setup.
             eventBatcher.dispose()
           }
         }
@@ -91,8 +90,7 @@ export async function runFileWatchStream(args: {
       cleanupPromise = attempt
       void attempt.catch(() => {
         if (cleanupPromise === attempt) {
-          // Why: callers deliberately retry transient unwatch failures; only
-          // concurrent callers should share the rejected cleanup generation.
+          // Reset rejected cleanup for later transient retries; only concurrent callers share it.
           cleanupPromise = null
         }
       })
@@ -110,8 +108,7 @@ export async function runFileWatchStream(args: {
     }
 
     args.signal?.addEventListener('abort', handleAbort, { once: true })
-    // Why: paired clients must be able to cancel while native setup is
-    // waiting indefinitely for global child capacity, before ready exists.
+    // Register cancellation before ready: native setup may wait indefinitely for global child capacity.
     args.runtime.registerSubscriptionCleanup(args.subscriptionId, cleanup, args.connectionId)
     args.emit({ type: 'starting', subscriptionId: args.subscriptionId })
     setupPromise = args.runtime.watchFileExplorer(

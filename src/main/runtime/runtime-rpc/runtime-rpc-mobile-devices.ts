@@ -1,4 +1,7 @@
-import type { RelayDeviceBinding, RelayRevokeOutboxItem } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutboxItem
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
@@ -27,8 +30,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         return false
       }
     }
-    // Why: unpairing must delete the phone's push token at the gateway too, and the
-    // registration id is only readable while the device row still exists.
+    // Capture gateway registration before deleting its device row so unpair also revokes push.
     this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
@@ -45,7 +47,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       return false
     }
     for (const child of this.deviceRegistry?.listDelegatedMobileDevices(deviceId) ?? []) {
-      // Why: keep the parent until every child's cleanup is saved, so a retry can still find them.
+      // Keep parent until child cleanup is durable so retry can rediscover them.
       if (!this.revokeMobileDeviceNow(child.deviceId)) {
         return false
       }

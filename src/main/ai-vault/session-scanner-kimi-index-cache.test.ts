@@ -106,7 +106,7 @@ describe('KimiSessionIndexCache', () => {
     cache.clear()
   })
 
-  it('does not repopulate after an owner clears an in-flight read', async () => {
+  it('does not cache a read whose generation predates an owner clear', async () => {
     const cache = new KimiSessionIndexCache()
     const staleGeneration = cache.beginRead()
     cache.clear()
@@ -138,7 +138,7 @@ describe('Kimi session index reader cache', () => {
     expect(hasKimiSessionIndexCacheEntryForTests(indexPath)).toBe(false)
   })
 
-  it('invalidates when size changes even if the mtime is restored', async () => {
+  it('reloads a grown index after its mtime is restored', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-kimi-index-mutation-'))
     tempDirs.push(root)
     const indexPath = join(root, 'session_index.jsonl')

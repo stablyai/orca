@@ -4,17 +4,35 @@ import type {
   WorktreeSlice
 } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 
-function getDeleteStateTargetKey(target: string | WorktreeDeleteStateTarget): string {
-  if (typeof target === 'string') {
-    return target
+type DeleteStateKeyState = Parameters<typeof findKnownWorktreeById>[0]
+
+/** The one key every delete-state write uses: the identity the sidebar card for that row reads. */
+export function getWorktreeDeleteStateKey(
+  state: DeleteStateKeyState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId | null
+): string {
+  if (!executionHostId) {
+    return worktreeId
   }
-  return target.hostId ? getWorktreeHostIdentity(target) : target.id
+  // Why: a card whose record carries no host reads the bare id, even when the caller names its host.
+  const record = findKnownWorktreeById(state, worktreeId, executionHostId)
+  return record && !record.hostId
+    ? worktreeId
+    : composeWorktreeHostIdentity(executionHostId, worktreeId)
+}
+
+function getDeleteStateTargetKey(
+  state: DeleteStateKeyState,
+  target: string | WorktreeDeleteStateTarget
+): string {
+  return typeof target === 'string'
+    ? target
+    : getWorktreeDeleteStateKey(state, target.id, target.hostId)
 }
 
 function getDeleteStateTargetHostId(
@@ -53,10 +71,9 @@ export function createMarkWorktreesDeleting(
     set((s) => {
       const nextDeleteState = { ...s.deleteStateByWorktreeId }
       let changed = false
-      for (const target of new Map(
-        worktrees.map((item) => [getDeleteStateTargetKey(item), item])
-      ).values()) {
-        const key = getDeleteStateTargetKey(target)
+      for (const [key, target] of new Map(
+        worktrees.map((item) => [getDeleteStateTargetKey(s, item), item])
+      )) {
         const executionHostId = getDeleteStateTargetHostId(target)
         const current = nextDeleteState[key]
         // Phase-aware: a queued row must still be promoted to deleting.
@@ -94,10 +111,9 @@ export function createMarkWorktreesQueuedForDeletion(
     set((s) => {
       const nextDeleteState = { ...s.deleteStateByWorktreeId }
       let changed = false
-      for (const target of new Map(
-        worktrees.map((item) => [getDeleteStateTargetKey(item), item])
-      ).values()) {
-        const key = getDeleteStateTargetKey(target)
+      for (const [key, target] of new Map(
+        worktrees.map((item) => [getDeleteStateTargetKey(s, item), item])
+      )) {
         const executionHostId = getDeleteStateTargetHostId(target)
         const current = nextDeleteState[key]
         if (current?.isDeleting && current.error === null && !current.canForceDelete) {
@@ -123,10 +139,8 @@ export function createClearWorktreeDeleteState(
   _get: WorktreeSliceGet
 ): WorktreeSlice['clearWorktreeDeleteState'] {
   return (worktreeId, executionHostId) => {
-    const key = executionHostId
-      ? composeWorktreeHostIdentity(executionHostId, worktreeId)
-      : worktreeId
     set((s) => {
+      const key = getWorktreeDeleteStateKey(s, worktreeId, executionHostId)
       if (!s.deleteStateByWorktreeId[key]) {
         return s
       }

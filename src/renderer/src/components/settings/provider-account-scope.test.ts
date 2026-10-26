@@ -14,7 +14,7 @@ describe('getProviderAccountScope', () => {
       expect(getProviderAccountScope({ activeRuntimeEnvironmentId })).toEqual({
         label: LOCAL_HOST_LABEL,
         description:
-          'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+          'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
       })
     }
   })
@@ -23,7 +23,7 @@ describe('getProviderAccountScope', () => {
     expect(getProviderAccountScope({ activeRuntimeEnvironmentId: ' env-1 ' })).toEqual({
       label: 'Remote server: env-1',
       description:
-        'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+        'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
     })
   })
 

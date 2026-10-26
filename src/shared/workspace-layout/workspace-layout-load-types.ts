@@ -7,19 +7,20 @@ import type {
   LayoutContentFacts
 } from './workspace-layout-beside'
 import type { LayoutLoadChange } from './workspace-layout-load-report'
+import type { LayoutEditorView } from './layout-editor-view'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 export type WorkspaceLayoutLoadContext = {
-  /**
-   * Mints ids for groups and tabs the stored data lacks or repeats. `seed` names what the id
-   * stands in for, unique in the partition, so a context may derive the id from it.
-   */
+  /** Mint missing or repeated group/tab IDs from a partition-unique seed identifying what they replace. */
   mintId: (seed: string) => string
-  /** Mints pane ids (UUIDs) for a repeated pane id or a legacy row's one pane; `seed` as above. */
+  /** Mint UUID pane IDs for repeated IDs or legacy one-pane rows, using the same seed convention. */
   mintLeafId: (seed: string) => string
+  /** A live pane's binding generation (main's, in memory); absent when the context has none. */
+  ptyGenerationOf?: (leafId: string) => number | undefined
+  /** A workspace's editor tab views (main's, in memory: never saved); absent when it has none. */
+  editorViewsOf?: (workspaceKey: string) => Readonly<Record<string, LayoutEditorView>> | undefined
 }
 
-/** A stored session partition, split into the layout and what is kept beside it. */
 export type LoadedWorkspaceLayout = {
   layout: WorkspaceLayoutModel
   desktopView: DesktopLayoutView
@@ -43,4 +44,6 @@ export type WorkspaceLoadArgs = {
   facts: LayoutContentFacts
   /** Terminal tab id → its stored pane layout (a legacy row's built one). */
   layouts: Map<string, TerminalLayoutSnapshot>
+  /** A dropped row's id → the tab-bar terminal that holds its terminals. */
+  canonicalTabIdBySubsumedTabId: Map<string, string>
 }

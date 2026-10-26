@@ -17,13 +17,11 @@ export type HostWorktreeInfo = {
   catalogUnavailable?: boolean
   // The counts are the last proven ones, kept across a failed refresh.
   staleCounts?: boolean
-  // When the host last answered with these counts (ms epoch); absent in snapshots an older
-  // build persisted, which is why an unstamped count counts as expired rather than fresh.
+  // Epoch ms of the last proven counts; older snapshots without it have unknown age and count as expired.
   countsProvenAt?: number
 }
 
-// Why: the home snapshot is persisted across launches, so counts could otherwise be rendered as
-// live while describing a workspace set proven days ago. Past this window they are only history.
+// Persisted counts may be days old; bound their live label without discarding history.
 export const HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS = 10 * 60_000
 
 export function markHomeWorktreeCatalogUnavailable(
@@ -34,8 +32,7 @@ export function markHomeWorktreeCatalogUnavailable(
     return current
   }
   if (current) {
-    // Why: `current` predates this failure, so its counts are proven host truth — a dropped
-    // socket must not erase them, only flag them as no longer live.
+    // A dropped socket cannot disprove prior counts; retain them as stale.
     return { ...current, catalogUnavailable: true, staleCounts: true }
   }
   return {
@@ -55,21 +52,18 @@ export function homeHostWorktreeSummary(
   if (!info) {
     return null
   }
-  // Why (STA-3123): a catalog that never loaded must not assert a count the host has not proven.
+  // Never claim a count the host has not proven (STA-3123).
   if (info.catalogUnavailable && !info.staleCounts) {
     return 'Worktree list unavailable'
   }
   const counts = `${info.totalWorktrees} worktree${info.totalWorktrees === 1 ? '' : 's'}${
     info.activeCount > 0 ? ` · ${info.activeCount} active` : ''
   }`
-  // Age bounds liveness, not the counts themselves: a failed refresh — or a rehydrated snapshot the
-  // host has not re-confirmed — is still the last thing it told us, so keep it and drop the claim
-  // that it is current.
+  // Keep historical counts after age-out or refresh failure, but stop labeling them current.
   return info.staleCounts || !provenRecently(info, now) ? `Last known: ${counts}` : counts
 }
 
 function provenRecently(info: HostWorktreeInfo, now: number): boolean {
-  // A snapshot written before countsProvenAt existed has an unknowable age; treat it as expired.
   return (
     typeof info.countsProvenAt === 'number' &&
     now - info.countsProvenAt <= HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS

@@ -6,17 +6,17 @@ name: SSH Windows hosts
 # sessions behind logging shims, and deploys orcad on the pinned node.exe in both DefaultShell cases.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/main/ssh/ssh-relay-*'
+      - 'src/main/ssh/remote-*'
       - 'src/main/ssh/*runtime*'
       - 'src/main/ssh/orcad-*'
+      - 'src/main/managed-server/**'
       - 'src/main/orcad/orcad-artifact-materializer.ts'
       - 'src/main/orcad/orcad-host-unavailable.ts'
       - 'src/main/node-runtime/**'
-      - 'src/main/ssh/remote-install-*'
       - 'src/main/ssh/ssh-remote-*'
-      - 'src/main/ssh/ssh-hostile-host-*'
+      - 'src/main/ssh/hostile-host-test-support/**'
       - 'src/main/ssh/ssh-windows-host-*'
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
@@ -41,9 +41,14 @@ on:
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
       - 'src/shared/windows-breakaway-launch*.ts'
-      - 'src/main/ipc/ssh-host-server-*.ts'
+      - 'src/main/ipc/ssh/ssh-host-server-*.ts'
+      # The deploy runs over this SSH transport.
+      - 'src/main/ssh/connection/**'
+      - 'src/main/ssh/ssh-reconnect-error-classification.ts'
+      - 'src/main/ssh/ssh-posix-command-wrapper.ts'
+      - 'src/shared/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
-      - 'src/main/ssh/orcad-windows-host-lane.test.ts'
+      - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
       - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
       - 'tests/e2e/helpers/orcad-convert-host.ts'
       - 'tests/e2e/helpers/orcad-convert-flow.ts'
@@ -52,6 +57,7 @@ on:
       - 'tests/e2e/helpers/compiled-orca-cli.ts'
       - 'tests/e2e/helpers/windows-host-orcad-processes.ts'
       - 'config/ci/windows-ssh-provider/**'
+      - 'config/ci/windows-lifecycle-receipt.ps1'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/actions/restore-pnpm-verification/**'
@@ -62,36 +68,56 @@ on:
         description: Comma-separated cell ids from src/main/ssh/ssh-windows-host-cells.ts; empty runs the default set (orcad-cli-* cells run only when named).
         required: false
         default: ''
+      preparation_mode:
+        description: Compare inbox capability preparation overlapping builds or running after them.
+        type: choice
+        options: [overlap, serial]
+        required: false
+        default: overlap
+      arm_inbox_only:
+        description: Run only the native ARM inbox lane for a preparation timing comparison.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ssh-windows-hosts-${{ github.event.pull_request.number || github.ref }}
+  group: ssh-windows-hosts-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'workflow_dispatch' && inputs.arm_inbox_only && format('-{0}', inputs.preparation_mode || 'overlap') || '' }}
   cancel-in-progress: true
 
 jobs:
+  mobile_web_bundle:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
+          path: out/mobile-web/
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
   hosts:
-    # A draft carries no verdict; readiness re-triggers this workflow.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
+    needs: mobile_web_bundle
+    if: >-
+      ${{ !cancelled() && needs.mobile_web_bundle.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: x64
-            runner: windows-2022
-            server: inbox
-          - arch: x64
-            runner: windows-2022
-            server: preview
-            archive: OpenSSH-Win64.zip
-          - arch: arm64
-            runner: windows-11-arm
-            server: inbox
-          - arch: arm64
-            runner: windows-11-arm
-            server: preview
-            archive: OpenSSH-ARM64.zip
+        include: >-
+          ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.arm_inbox_only &&
+          '[{"arch":"arm64","runner":"windows-11-arm","server":"inbox"}]' ||
+          '[{"arch":"x64","runner":"windows-2022","server":"inbox"},{"arch":"x64","runner":"windows-2022","server":"preview","archive":"OpenSSH-Win64.zip"},{"arch":"arm64","runner":"windows-11-arm","server":"inbox"},{"arch":"arm64","runner":"windows-11-arm","server":"preview","archive":"OpenSSH-ARM64.zip"}]') }}
     runs-on: ${{ matrix.runner }}
     # Installing the inbox capability alone can take several minutes on a fresh image; the CLI matrix
     # cells launch the e2e app several times each.
@@ -99,15 +125,18 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_ISOLATED_SSH_CI: '1'
+      INBOX_PREPARATION_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.preparation_mode == 'serial' && 'serial' || 'overlap' }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
           # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
+          # mobile: the template ships the mobile web page, which builds from mobile/.
           sparse-checkout: |
             .github
             config
+            mobile
             native
             resources
             tests
@@ -127,11 +156,11 @@ jobs:
         background: true
         shell: pwsh
         run: |
-          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){
+          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64' -and $env:INBOX_PREPARATION_MODE -eq 'overlap'){
             $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
             New-Item -ItemType Directory -Force -Path $receipts | Out-Null
             . config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1
-            Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json')
+            Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json') -PreparationMode $env:INBOX_PREPARATION_MODE
           }
       - uses: ./.github/actions/install-node-dependencies
         id: dependencies
@@ -158,12 +187,34 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: ${{ matrix.arch }}
+      - uses: actions/download-artifact@v8
+        id: mobile-bundle
+        continue-on-error: true
+        with:
+          name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
+          path: out/mobile-web/
+      # A failed-only retry may outlive the producer artifact's retention.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: steps.mobile-bundle.outcome != 'success'
+      - name: Verify the mobile bundle before staging it
+        shell: bash
+        run: node -e "require('./config/scripts/verify-packaged-mobile-web-bundle.cjs').assertMobileWebBundleBuilt()"
       - name: Build the win32 template
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && steps.dependencies.outcome == 'success' }}
         run: |
           pnpm build:orcad-prebuilds --require-slots "win32-${{ matrix.arch }}"
           node config/scripts/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"
       - wait: inbox-capability
+      - name: Prepare the Windows inbox SSH capability after the builds
+        if: ${{ matrix.server == 'inbox' && matrix.arch == 'arm64' && env.INBOX_PREPARATION_MODE == 'serial' }}
+        shell: pwsh
+        run: |
+          $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
+          New-Item -ItemType Directory -Force -Path $receipts | Out-Null
+          . config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1
+          Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json') -PreparationMode $env:INBOX_PREPARATION_MODE
       - name: Run the Windows host cells against a private ${{ matrix.server }} sshd
         shell: pwsh
         timeout-minutes: ${{ contains(github.event.inputs.cells || '', 'orcad-cli') && 130 || 50 }}

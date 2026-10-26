@@ -1,20 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  isBackgroundRuntimeMethod,
-  RuntimeRpcCallQueueOverloadError,
-  RuntimeRpcCallQueuePool
-} from './runtime-rpc-call-queue'
+import { RuntimeRpcCallQueueOverloadError, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
-  it('classifies per-worktree decoration lookups as background work', () => {
-    expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
-    expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
-    expect(isBackgroundRuntimeMethod('terminal.agentStatus')).toBe(false)
-    expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
-  })
-
   it('limits background calls while allowing foreground runtime work through', async () => {
     const queue = new RuntimeRpcCallQueuePool(2, 1)
     const started: string[] = []

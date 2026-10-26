@@ -2,7 +2,10 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { MAX_TERMINAL_READ_LIMIT } from '../terminal-tail-limits'
 import { redactWorkerTerminalView } from './worker-terminal-redaction'
 
-export async function readWorkerTerminalArchive(runtime: OrcaRuntimeService, handle: string) {
+export async function readWorkerTerminalArchive(
+  runtime: Pick<OrcaRuntimeService, 'readTerminal'>,
+  handle: string
+) {
   // Cursor reads retain completed history; the screen read also preserves partial output/drafts.
   const history = await runtime.readTerminal(handle, { cursor: 0, limit: MAX_TERMINAL_READ_LIMIT })
   const screen = await runtime.readTerminal(handle, {

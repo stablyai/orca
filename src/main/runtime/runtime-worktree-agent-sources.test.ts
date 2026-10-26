@@ -84,4 +84,16 @@ describe('worktree agent source admission', () => {
     })
     expect(providerSessionOnly.size).toBe(0)
   })
+
+  it('carries the pane facet from the hook row to the source', () => {
+    const programStatus = { state: 'working' as const, progress: 42, observedAt: now }
+    const sources = collectRuntimeWorktreeAgentSources({
+      ...connected,
+      hookSnapshots: [{ ...hookRow, programStatus }]
+    })
+    expect(sources.get(paneKey)?.programStatus).toEqual(programStatus)
+    expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)).not.toHaveProperty(
+      'programStatus'
+    )
+  })
 })

@@ -15,7 +15,7 @@ import {
   type CursorSessionToken
 } from './cursor-session-token'
 
-// Why: cursor-agent 2026.06+ stores the session in the login keychain, not auth.json.
+// cursor-agent 2026.06+ stores tokens in Keychain instead of auth.json.
 const KEYCHAIN_SERVICE = 'cursor-access-token'
 const KEYCHAIN_ACCOUNT = 'cursor-user'
 
@@ -83,7 +83,7 @@ async function readKeychainToken(): Promise<TokenReadResult> {
     const token = await readKeychainPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
     return token ? { status: 'ok', token } : { status: 'missing' }
   } catch {
-    // Why: a denied or locked keychain must not mask a readable auth.json below it.
+    // Locked/denied Keychain must not mask readable auth.json.
     return { status: 'error', error: 'Unable to read the Cursor login from the macOS Keychain' }
   }
 }
@@ -99,7 +99,7 @@ function readCliFileToken(authPath: string): TokenReadResult {
       ? { status: 'ok', token }
       : { status: 'missing' }
   } catch (error) {
-    // Why: filesystem errors quote the full path; account state must not leak local usernames.
+    // Filesystem errors include paths; keep usernames out of account state.
     return {
       status: 'error',
       error:
@@ -134,11 +134,7 @@ export type CursorAuthReadOptions = {
   desktopStateDbPath?: string
 }
 
-/**
- * Resolve the Cursor session Orca should poll with, preferring the CLI login
- * (keychain, then legacy auth.json) over the Cursor IDE's own session. Read-only:
- * Orca never writes, refreshes, or rotates the user's Cursor credentials.
- */
+/** Prefer live CLI sessions (Keychain, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
 export async function readCursorAuthSession(
   options: CursorAuthReadOptions = {}
 ): Promise<CursorAuthReadResult> {
@@ -146,10 +142,7 @@ export async function readCursorAuthSession(
   const cliConfigPath = options.cliConfigPath ?? getCursorCliConfigPath()
   const desktopDbPath = options.desktopStateDbPath ?? getCursorDesktopStateDbPath()
   const errors: string[] = []
-  // Why a live session wins over precedence: a user who signed the CLI in once and
-  // now works only in the IDE has an expired keychain token in front of a fresh
-  // desktop one. Returning the first token that parses would report "sign-in
-  // expired" forever while a usable session sat one source below.
+  // A live lower-priority session outranks an expired CLI token.
   let expired: CursorAuthSession | null = null
   const takeLive = (session: CursorAuthSession | null): CursorAuthSession | null => {
     if (!session) {
@@ -188,9 +181,7 @@ export async function readCursorAuthSession(
     }
   }
 
-  // Why not pushed to `errors`: the IDE holds a lock on state.vscdb while it runs,
-  // so a busy open is transient. Reporting it would pin an alert-triangle bar on
-  // every Cursor IDE user who never set Cursor up in Orca.
+  // Busy IDE databases are transient; reporting their lock would leave unrelated IDE users with a permanent alert.
   const desktopRead = await readCursorDesktopProfile(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
     const session = takeLive(
@@ -201,8 +192,7 @@ export async function readCursorAuthSession(
     }
   }
 
-  // Why still returned: with no live session anywhere, the expired one is what the
-  // user must act on, and the fetcher turns it into "run cursor-agent login".
+  // With no live token, return the expired session so the fetcher can offer login guidance.
   if (expired) {
     return { status: 'ok', session: expired }
   }

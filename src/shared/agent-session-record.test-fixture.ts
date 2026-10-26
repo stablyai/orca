@@ -29,7 +29,6 @@ export function agentSessionLeaseFixture(
     leaseDeadlineAt: 60_000,
     lastRenewedAt: 30_000,
     handoffOperationId: null,
-    journalCheckpoint: null,
     claimKeyId: 'key-1',
     claimStatus: 'live',
     unreconciled: false,

@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 describe('agent status retention + prefix sweep', () => {
-  // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
-  // queueMicrotask. Use fake timers so the handle does not leak into the
-  // test process.
+  // Use fake timers: setAgentStatus schedules a real 30-minute timer through queueMicrotask.
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -24,8 +22,7 @@ describe('agent status retention + prefix sweep', () => {
     const map = store.getState().agentStatusByPaneKey
     expect(map['tab-1:0']).toBeUndefined()
     expect(map['tab-1:1']).toBeUndefined()
-    // Why: the ":" delimiter on the prefix guards against false-prefix matches
-    // across tab ids that share a leading substring (tab-1 vs tab-10).
+    // Delimiter prevents tab-1 matching tab-10 prefixes.
     expect(map['tab-10:0']).toBeDefined()
   })
 
@@ -129,12 +126,7 @@ describe('agent status retention + prefix sweep', () => {
   })
 
   it('dismissRetainedAgentsByWorktree plants retention suppressors for paneKeys that also have a live entry', () => {
-    // Why: regression guard for the "Dismiss all" resurrection bug. If a
-    // dismissed paneKey still has a live entry in agentStatusByPaneKey, the
-    // retention sync (collectRetainedAgentsOnDisappear) would re-retain the
-    // row the next time the live agent disappears — silently undoing the
-    // user's bulk dismissal. Mirror dismissRetainedAgent's hasLive-gated
-    // suppressor logic so the next live→gone transition is ignored.
+    // Dismiss-all must suppress the next live→gone transition or retention resurrects dismissed rows; plant only for live entries like dismissRetainedAgent.
     vi.useFakeTimers()
     const store = createTestStore()
     const now = Date.now()
@@ -179,8 +171,7 @@ describe('agent status retention + prefix sweep', () => {
     const suppressed = store.getState().retentionSuppressedPaneKeys
     // hasLive → suppressor planted, so the next live→gone will not re-retain.
     expect(suppressed['tab-a:0']).toBe(true)
-    // retained-only (no live entry) → no suppressor, to avoid indefinite
-    // leaks when no live→gone transition will ever fire for this paneKey.
+    // Retained-only rows have no live→gone transition to consume suppressors; planting would leak.
     expect(suppressed['tab-a:1']).toBeUndefined()
   })
 

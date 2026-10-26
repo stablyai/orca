@@ -1,6 +1,7 @@
 name: ZCode transcript contract
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/ai-vault/session-scanner-zcode*'
       - 'src/main/ai-vault/session-scanner-opencode*'
@@ -18,11 +19,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   transcript-readers:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-15, windows-2022]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204","macos-15":"blacksmith-6vcpu-macos-15","windows-2022":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

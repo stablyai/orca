@@ -182,6 +182,45 @@ describe('terminal send RPC', () => {
     expect(sendTerminal).toHaveBeenCalled()
   })
 
+  it('does not claim the viewport for a focus report or query reply (#26469)', async () => {
+    const refreshRemoteDesktopViewer = vi.fn().mockResolvedValue(true)
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 3
+    })
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      refreshRemoteDesktopViewer,
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const send = (text: string, suffix: { enter?: boolean } = {}) =>
+      dispatcher.dispatch(
+        makeRequest('terminal.send', {
+          terminal: 'terminal-1',
+          text,
+          ...suffix,
+          client: { id: 'desktop-1', type: 'desktop' },
+          viewport: { cols: 96, rows: 32 },
+          claimViewport: true
+        })
+      )
+
+    await expect(send('\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[O\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[?62;22c')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).not.toHaveBeenCalled()
+    expect(sendTerminal).toHaveBeenCalledTimes(3)
+
+    await expect(send('\x1b[I', { enter: true })).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledTimes(1)
+
+    await expect(send('a')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', 'desktop-1', 96, 32, true)
+  })
+
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const write = vi.fn()
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
@@ -833,8 +872,7 @@ describe('terminal send RPC', () => {
     expect(response.result).toEqual({ restored: true })
     expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
   })
-  // Why: mobile gates reply forwarding on this static capability; removing it
-  // would silently re-break mobile query answering against current hosts.
+  // Mobile gates query replies on this static capability; removing it breaks forwarding to current hosts.
   it('advertises query-reply input support to mobile clients', () => {
     expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY)
   })

@@ -1,31 +1,48 @@
-import { ChevronDown } from 'lucide-react'
-import type { SshTarget } from '../../../../shared/ssh-types'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { Button } from '../ui/button'
+import { DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { sshHostServerStatusLine } from '@/ssh/ssh-host-server-status-copy'
-import { SshHostChangedActions } from './SshHostChangedActions'
+import {
+  hasSshHostSourceChanged,
+  SshHostKeepServerVersionDialog
+} from './SshHostKeepServerVersionDialog'
+import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
+import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
+import { OpenPlainSshTerminalButton } from '../plain-ssh-terminal/OpenPlainSshTerminalButton'
+import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnywayAction'
+import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
+import { canRecoverSshHostServer, SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
+import { Button } from '../ui/button'
+import { getManagedOrcadApi } from './use-managed-server-catalog'
 
-/** Whether this SSH host's managed Orca server serves it, and why not when it doesn't. */
-export function SshTargetServerStatus({
+export type SshTargetServerDialog =
+  | 'details'
+  | 'delta-move'
+  | 'keep-server'
+  | 'restart'
+  | 'recover'
+  | 'move-anyway'
+
+export function SshTargetServerStatusLine({
   target,
-  onChanged
+  state,
+  onOpenDialog
 }: {
   target: SshTarget
-  onChanged: () => void
+  state: SshConnectionState | undefined
+  onOpenDialog?: (dialog: SshTargetServerDialog) => void
 }): React.JSX.Element | null {
-  const state = useAppStore((s) => s.sshConnectionStates.get(target.id))
   const line = sshHostServerStatusLine(target, state)
   if (!line) {
     return null
   }
   return (
-    <div className="space-y-1">
+    <div className="mt-0.5 flex flex-wrap items-center gap-2">
       <p
         className={cn(
-          'px-1 text-xs',
+          'text-xs',
           line.tone === 'muted' && 'text-muted-foreground',
           line.tone === 'warning' && 'text-status-warning',
           line.tone === 'destructive' && 'text-destructive'
@@ -33,22 +50,146 @@ export function SshTargetServerStatus({
       >
         {line.text}
       </p>
-      {line.detail ? (
-        <Collapsible>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="ghost" size="xs" className="group">
-              {translate('auto.components.settings.sshHostServer.failureDetails', 'Details')}
-              <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              {line.detail}
-            </pre>
-          </CollapsibleContent>
-        </Collapsible>
+      {line.hint ? <p className="px-1 text-xs text-muted-foreground">{line.hint}</p> : null}
+      {/* Keep failure recovery inline rather than buried in the menu. */}
+      <SshHostNodeMirrorAction targetId={target.id} status={state?.managedServer} />
+      <OpenPlainSshTerminalButton
+        targetId={target.id}
+        targetLabel={target.label}
+        status={state?.managedServer}
+      />
+      {onOpenDialog && canRecoverSshHostServer(state?.managedServer) ? (
+        <Button type="button" size="xs" variant="outline" onClick={() => onOpenDialog('recover')}>
+          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
+        </Button>
       ) : null}
-      <SshHostChangedActions target={target} onChanged={onChanged} />
     </div>
+  )
+}
+
+export function SshTargetServerMenuItems({
+  target,
+  state,
+  onOpenDialog
+}: {
+  target: SshTarget
+  state: SshConnectionState | undefined
+  onOpenDialog: (dialog: SshTargetServerDialog) => void
+}): React.JSX.Element | null {
+  const status = state?.managedServer
+  const hasDetail = Boolean(sshHostServerStatusLine(target, state)?.detail)
+  const sourceChanged = hasSshHostSourceChanged(target)
+  const canRestart = canRestartSshHostServer(status)
+  const canRecover = canRecoverSshHostServer(status)
+  const canMoveAnyway = canMoveSshHostAnyway(status)
+  if (!hasDetail && !sourceChanged && !canRestart && !canRecover && !canMoveAnyway) {
+    return null
+  }
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {sourceChanged ? (
+        <>
+          <DropdownMenuItem onSelect={() => onOpenDialog('delta-move')}>
+            {translate('auto.components.settings.deltaMove.action', 'Move the new projects…')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onOpenDialog('keep-server')}>
+            {translate('auto.components.settings.keepServer.action', 'Keep the server’s version…')}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+      {canRestart ? (
+        <DropdownMenuItem onSelect={() => onOpenDialog('restart')}>
+          {translate('auto.components.settings.restartServer.action', 'Restart Orca’s server…')}
+        </DropdownMenuItem>
+      ) : null}
+      {canRecover ? (
+        <DropdownMenuItem onSelect={() => onOpenDialog('recover')}>
+          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
+        </DropdownMenuItem>
+      ) : null}
+      {canMoveAnyway ? (
+        <DropdownMenuItem onSelect={() => onOpenDialog('move-anyway')}>
+          {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+        </DropdownMenuItem>
+      ) : null}
+      {hasDetail ? (
+        <DropdownMenuItem onSelect={() => onOpenDialog('details')}>
+          {translate('auto.components.settings.sshHostServer.failureDetails', 'Details')}
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  )
+}
+
+/** Lives outside the row menu so a dialog outlasts the menu that opened it. */
+export function SshTargetServerDialogs({
+  target,
+  state,
+  dialog,
+  onDialogChange,
+  onChanged
+}: {
+  target: SshTarget
+  state: SshConnectionState | undefined
+  dialog: SshTargetServerDialog | null
+  onDialogChange: (dialog: SshTargetServerDialog | null) => void
+  onChanged: () => void
+}): React.JSX.Element {
+  const api = getManagedOrcadApi()
+  const status = state?.managedServer
+  const detail = sshHostServerStatusLine(target, state)?.detail
+  const openChange =
+    (which: SshTargetServerDialog) =>
+    (open: boolean): void =>
+      onDialogChange(open ? which : null)
+  return (
+    <>
+      {api ? (
+        <SshHostDeltaMoveDialog
+          api={api}
+          target={dialog === 'delta-move' ? target : null}
+          onClose={() => onDialogChange(null)}
+          onFinished={onChanged}
+        />
+      ) : null}
+      <SshHostKeepServerVersionDialog
+        target={target}
+        open={dialog === 'keep-server'}
+        onOpenChange={openChange('keep-server')}
+        onChanged={onChanged}
+      />
+      <SshHostRestartServerDialog
+        status={status}
+        open={dialog === 'restart'}
+        onOpenChange={openChange('restart')}
+        onChanged={onChanged}
+      />
+      <SshHostRecoverServerDialog
+        status={status}
+        open={dialog === 'recover'}
+        onOpenChange={openChange('recover')}
+        onChanged={onChanged}
+      />
+      <SshHostMoveAnywayDialog
+        target={target}
+        status={status}
+        open={dialog === 'move-anyway'}
+        onOpenChange={openChange('move-anyway')}
+        onChanged={onChanged}
+      />
+      <Dialog open={dialog === 'details' && Boolean(detail)} onOpenChange={openChange('details')}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {translate('auto.components.settings.sshHostServer.failureDetails', 'Details')}
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="scrollbar-sleek max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {detail}
+          </pre>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

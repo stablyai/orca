@@ -3,7 +3,10 @@ import type { AppState } from '../types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
+import {
+  getGitHubPRCacheKey,
+  getLegacyGitHubPRCacheKey
+} from '../../../../shared/github/github-cache-key'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,

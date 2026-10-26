@@ -4,8 +4,11 @@ import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
-import { createSshOperationAbortError, type SshExecOptions } from '../ssh/ssh-connection-utils'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
+import {
+  createSshOperationAbortError,
+  type SshExecOptions
+} from '../ssh/connection/ssh-exec-options'
 import { writeStringViaExecStdin } from '../ssh/ssh-exec-stdin-file-transfer'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { wrapWslCommandProcess } from './wsl-command-channel'
@@ -13,6 +16,8 @@ import { WSL_COMMAND_LOOP_ARGV0, WSL_COMMAND_LOOP_SCRIPT } from './wsl-command-l
 import { createWslCommandLoopPool } from './wsl-command-loop-pool'
 import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
 import { resolveWslExecutablePath } from './wsl-executable-path'
+import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
+import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 export type WslOrcadHostTransport = OrcadHostTransport & {
@@ -25,20 +30,15 @@ type WslOrcadHostTransportOptions = {
   target: WslOrcadHostTarget
   /** Test seam; production spawns through process-host. */
   spawn?: PipedProcessSpawner
-  /**
-   * Tar over stdin by default: on win-lowspec it beat the guest's `/mnt` copy (0.97 s vs 1.6 s for
-   * 20 MB). `guest-mount` copies from `/mnt/<drive>` when the guest can see the source.
-   */
+  /** Default tar beat /mnt copy on win-lowspec (0.97s vs 1.6s/20MB); guest-mount opts into direct reads when visible. */
   uploadSource?: 'tar' | 'guest-mount'
   /** Test seam: false runs every command on its own wsl.exe. */
   commandLoops?: boolean
+  /** Test seam; production shares the deploy's own registry read (no extra reg.exe). */
+  readDistroRegistryId?: (distro: string) => Promise<string | null>
 }
 
-/**
- * orcad's host connection to a WSL distro: an exec that may write stdin is its own
- * `wsl.exe --exec sh -c` child; a stdin-free one reuses a pooled command loop when it can.
- * The distro is never a Windows host and has no SFTP, so every transfer runs over exec.
- */
+/** Reuse loops for stdin-free probes; stdin consumers get dedicated wsl.exe children. WSL is a Linux host without SFTP, so transfers use exec. */
 export function createWslOrcadHostTransport(
   options: WslOrcadHostTransportOptions
 ): WslOrcadHostTransport {
@@ -54,7 +54,7 @@ export function createWslOrcadHostTransport(
       program,
       args,
       cwd: resolveWslInteropSpawnCwd(),
-      // Why WSL_UTF8: otherwise wsl.exe writes its own errors as UTF-16LE.
+      // Request UTF-8 for wsl.exe's own errors; default is UTF-16LE.
       env: { ...process.env, WSL_UTF8: '1' }
     })
   }
@@ -66,14 +66,14 @@ export function createWslOrcadHostTransport(
             spawnWsl(['sh', '-c', WSL_COMMAND_LOOP_SCRIPT, WSL_COMMAND_LOOP_ARGV0, marker])
         })
   const transport: WslOrcadHostTransport = {
-    // `wrapCommand` is SSH-only: there is no login shell between wsl.exe and `sh -c`.
+    // wrapCommand is SSH-only; WSL starts sh directly without a login shell.
     async exec(command: string, execOptions?: SshExecOptions): Promise<RemoteCommandChannel> {
       if (execOptions?.signal?.aborted) {
         throw createSshOperationAbortError()
       }
       const child = spawnWsl(['sh', '-c', command])
       const channel = wrapWslCommandProcess(child)
-      // Like an SSH channel open: a child that never started rejects here, not as a stream error.
+      // Reject spawn failure while opening the channel, matching SSH, rather than as a later stream error.
       const spawnError = (error: Error): void => {
         channel.destroy(error)
       }
@@ -91,8 +91,15 @@ export function createWslOrcadHostTransport(
       )
     },
     dispose: () => loops?.dispose(),
-    // MEASURED: `nohup … &` dies when its `wsl.exe --exec` exits on a distro without systemd.
+    // Without systemd, nohup children die with wsl.exe; launch orcad in a new session.
     orcadLaunchDetach: 'setsid',
+    // D1b-2: bind launches to the registration the guest cannot read itself.
+    orcadLaunchEnv: async () => {
+      const id = await (options.readDistroRegistryId ?? readWslDistroRegistryIdShared)(
+        target.distro
+      )
+      return id ? [[ORCAD_WSL_DISTRO_GUID_ENV, id]] : []
+    },
     usesSystemSshTransport: () => false,
     // One transport, one wsl.exe lane: nothing underneath is ever replaced.
     getConnectGeneration: () => 0,

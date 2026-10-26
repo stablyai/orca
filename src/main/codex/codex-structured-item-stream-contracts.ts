@@ -6,7 +6,7 @@ import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
-  /** The turn a delta-only item belongs to, read the way its first delta names it. */
+  /** Resolve turn provenance from the first delta. */
   turnIdFor: (threadId: string, params: unknown) => string | null
   identityFor: (
     threadId: string,
@@ -17,14 +17,13 @@ export type CodexItemStreamDeps = {
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
-  maxMetadataBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
 
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
-  /** Host clock when the item started, for a row its stream writes first. */
+  /** Host start time for rows first written by a stream. */
   startedAt?: number
 }
 
@@ -44,14 +43,13 @@ export type CodexStructuredItemStreamHandleResult = {
 
 export type CodexStructuredItemStreams = {
   readonly persistentCount: number
-  canTrack: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => boolean
   track: (
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem,
     identity: AgentJournalItemIdentity,
     startedAt?: number
-  ) => boolean
+  ) => void
   handle: (
     threadId: string,
     method: string,

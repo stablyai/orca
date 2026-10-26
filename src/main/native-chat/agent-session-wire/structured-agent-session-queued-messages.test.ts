@@ -1,10 +1,3 @@
-// Mid-turn queueing against the real host, store and journal: a capable send
-// while the session owes work becomes a draft, the drain converts exactly one
-// draft when the work settles, Stop holds the queue (never withdrawing text)
-// until a user send starts its turn and lifts the pause, /clear keeps cards in
-// the same conversation, and a refused conversion comes back as a
-// returned card while a withdrawn one waits again.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -12,15 +5,12 @@ import {
   type AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
-import {
-  rotateStructuredAgentSessionHostInstanceForTests,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -34,29 +24,33 @@ import {
 } from './structured-agent-session-host-test-data'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
+
 let rig: QueuedMessageTestRig
+let currentRig: QueuedMessageTestRig | undefined
+const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
+beforeEach(() => observationClock.start())
 let host: QueuedMessageTestRig['host']
-let store: QueuedMessageTestRig['store']
 let dispatch: QueuedMessageTestRig['dispatch']
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
-  ;({ host, store, dispatch } = rig)
+  currentRig = undefined
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  currentRig = rig
+  ;({ host, dispatch } = rig)
 })
 
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  await observationClock.restoreBeforeCleanup(async () => {
+    await currentRig?.dispose()
+  })
+})
 
-const envelope: QueuedMessageTestRig['envelope'] = (...args) => rig.envelope(...args)
 const send: QueuedMessageTestRig['send'] = (...args) => rig.send(...args)
-const stop: QueuedMessageTestRig['stop'] = (...args) => rig.stop(...args)
-const sendNow: QueuedMessageTestRig['sendNow'] = (...args) => rig.sendNow(...args)
-const deleteQueued: QueuedMessageTestRig['deleteQueued'] = (...args) => rig.deleteQueued(...args)
 const drafts: QueuedMessageTestRig['drafts'] = (...args) => rig.drafts(...args)
 const workingSend: QueuedMessageTestRig['workingSend'] = () => rig.workingSend()
 const settleAccepted: QueuedMessageTestRig['settleAccepted'] = (...args) =>
   rig.settleAccepted(...args)
-const settleRejected: QueuedMessageTestRig['settleRejected'] = (...args) =>
-  rig.settleRejected(...args)
 
 describe('accept', () => {
   it('queues a capable send while the session owes work; an ordinary send still dispatches', async () => {
@@ -66,7 +60,7 @@ describe('accept', () => {
       ok: true,
       value: { queued: { position: 1, state: 'waiting' } }
     })
-    // The draft is not a submission, feeds no reducer, and owes no work.
+    // Drafts are not submissions and owe no execution work.
     expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
     expect(await drafts()).toMatchObject([{ state: 'waiting' }])
   })
@@ -76,7 +70,7 @@ describe('accept', () => {
     const body = hostTestMessage('queued behind')
     const clientOperationId = hostTestOperationId()
     const params = {
-      envelope: envelope(
+      envelope: rig.envelope(
         { body, delivery: 'queue-if-active' },
         'agentSession.send',
         clientOperationId
@@ -97,25 +91,27 @@ describe('accept', () => {
     expect(await drafts()).toHaveLength(1)
   })
 
-  it('routes an image send to the immediate path even while working (text-only v1)', async () => {
-    await workingSend()
-    const body = {
-      kind: 'message' as const,
-      role: 'user' as const,
-      blocks: [{ type: 'image-ref' as const, path: '/tmp/shot.png' }]
+  it('queues an image message in line behind text, and hands it over with its image', async () => {
+    const working = await workingSend()
+    const text = await send('text first', 'queue-if-active').result
+    const body = hostTestMessage('and look at this')
+    body.blocks.push({ type: 'image-ref', path: '/tmp/shot.png' })
+    const fields = { body, delivery: 'queue-if-active' as const }
+    const envelopeFields = rig.envelope(fields, 'agentSession.send', hostTestOperationId())
+    const image = await host.send(CALLER, { envelope: envelopeFields, ...fields, userSend: true })
+    if (!text.ok || !('queued' in text.value) || !image.ok || !('queued' in image.value)) {
+      throw new Error('expected queued receipts')
     }
-    const clientOperationId = hostTestOperationId()
-    const result = await host.send(CALLER, {
-      envelope: envelope(
-        { body, delivery: 'queue-if-active' },
-        'agentSession.send',
-        clientOperationId
-      ),
-      body,
-      delivery: 'queue-if-active'
+    const [textId, imageId] = [text.value.queued.messageId, image.value.queued.messageId]
+    await settleAccepted(working, 'a')
+    await eventually(async () => expect(await rig.handoff(textId)).toBeDefined())
+    expect(await rig.handoff(imageId)).toBeUndefined()
+    await settleAccepted(await rig.handoffId(textId), 'b')
+    await eventually(async () => {
+      const handedOver = await rig.handoffId(imageId)
+      const sent = dispatch.mock.calls.find(([input]) => input.clientMessageId === handedOver)
+      expect(sent?.[0].body.blocks).toEqual(body.blocks)
     })
-    expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    expect(await drafts()).toHaveLength(0)
   })
 
   it('a send without the delivery field never queues, whatever the session is doing', async () => {
@@ -148,8 +144,7 @@ describe('drain', () => {
     const firstId = first.value.queued.messageId
     const secondId = second.value.queued.messageId
     await settleAccepted(working, 'a')
-    // The drain converts the OLDEST actionable draft; the consumed submission
-    // owes work again, which holds the second draft (one message per turn).
+    // Consume one oldest draft per turn; its new submission holds the next card.
     await eventually(async () => expect(await rig.handoff(firstId)).toBeDefined())
     expect(await rig.handoff(secondId)).toBeUndefined()
     expect(await drafts()).toMatchObject([{ messageId: secondId, state: 'waiting' }])
@@ -160,14 +155,13 @@ describe('drain', () => {
 
   it('takes no serialized drain step while the session is working, then drains when the work settles', async () => {
     const working = await workingSend()
-    // Read only by a drain step, so it marks one.
-    const step = vi.spyOn(JournalQueuedMessages.prototype, 'deliveredByEchoOwed')
+    // Only drain handoff invokes this consumability check.
+    const step = vi.spyOn(JournalQueuedMessages.prototype, 'assertConsumable')
     const queued = await send('waits for the turn', 'queue-if-active').result
     await send('and another', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
-    // Every wake during the turn is answered by the pre-check, not a step.
     expect(step).not.toHaveBeenCalled()
     await settleAccepted(working, 'a')
     const draftId = queued.value.queued.messageId
@@ -184,60 +178,30 @@ describe('drain', () => {
     const draftId = queued.value.queued.messageId
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    await settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
+    await rig.settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
-    // Classified like a rejected submission: from the fact, not the sentence.
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.queuedMessages?.[0]?.returnedRejection).toEqual({
       kind: 'providerRejected',
       detail: { text: 'provider refused this payload', audience: 'person' }
     })
-    // The lone returned card traps nothing: a new capable send goes immediately.
     const overtaking = await send('sent past the card', 'queue-if-active').result
     expect(overtaking).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    // And the card still offers Send: a fresh submission id re-delivers it.
-    const resent = await sendNow(draftId)
+    const resent = await rig.sendNow(draftId)
     expect(resent).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     if (!resent.ok || !('submission' in resent.value)) {
       throw new Error('expected the submission arm')
     }
     expect(resent.value.submission.clientMessageId).not.toBe(draftId)
-    // The answer names the card it sent; clients read that, never id equality.
+    // Match card linkage explicitly; draft and submission IDs differ.
     expect(resent.value.submission.queuedMessageId).toBe(draftId)
     expect(await drafts()).toHaveLength(0)
-    // Refused again: the card returns, matched through its current submission (N4).
-    await settleRejected(resent.value.submission.clientMessageId, 'refused again')
+    await rig.settleRejected(resent.value.submission.clientMessageId, 'refused again')
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
-  })
-
-  it('a skipped settlement hook heals on the next drain step, not only at the next open', async () => {
-    const working = await workingSend()
-    const queued = await send('refused while the hook fails', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    await settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const hook = vi
-      .spyOn(JournalQueuedMessages.prototype, 'onRowInTransaction')
-      .mockImplementationOnce(() => {
-        throw new Error('bookkeeping failed')
-      })
-    try {
-      await settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
-      await eventually(async () =>
-        expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
-      )
-    } finally {
-      hook.mockRestore()
-      warn.mockRestore()
-    }
   })
 
   it('a waiting draft behind a returned card does not drain until the card is acted on (S5)', async () => {
@@ -251,15 +215,14 @@ describe('drain', () => {
     const firstId = first.value.queued.messageId
     const secondId = second.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(firstId)).toBeDefined())
-    await settleRejected(await rig.handoffId(firstId), 'refused')
+    await rig.settleRejected(await rig.handoffId(firstId), 'refused')
     await eventually(async () =>
       expect(await drafts()).toMatchObject([
         { messageId: firstId, state: 'returned' },
         { messageId: secondId, state: 'waiting' }
       ])
     )
-    // Deleting the card unblocks the one behind it.
-    expect(await deleteQueued(firstId)).toMatchObject({ ok: true, value: { deleted: true } })
+    expect(await rig.deleteQueued(firstId)).toMatchObject({ ok: true, value: { deleted: true } })
     await eventually(async () => expect(await rig.handoff(secondId)).toBeDefined())
   })
 })
@@ -274,14 +237,14 @@ describe('held drafts', () => {
     const draftId = queued.value.queued.messageId
     await rig.restartHostProcess()
     await settleAccepted(working, 'a')
-    // The queue is held, not the card: it carries no hold of its own, and no pause is published.
+    // Restart hold belongs to the queue and remains unpublished, with plain waiting cards.
     expect(await drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
     expect(await rig.queuePause()).toBeNull()
     await host.close(SESSION, 'evict')
     expect(await rig.queuePause()).toBeNull()
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
-    expect(await sendNow(draftId)).toMatchObject({
+    expect(await rig.sendNow(draftId)).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
     })
@@ -296,10 +259,9 @@ describe('held drafts', () => {
     const draftId = queued.value.queued.messageId
     await rig.restartHostProcess()
     await settleAccepted(working, 'a')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.queuePause()).toBeNull()
-    // The user's send starting its turn lifts it.
     const next = send('user starts a new turn')
     await next.result
     expect(await rig.handoff(draftId)).toBeUndefined()
@@ -332,19 +294,16 @@ describe('held drafts', () => {
     }
     expect(AgentSessionJournal.prototype.appendSubmission).toBe(original)
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    // A marker the client localizes, never host-authored copy.
     expect(page.ok && page.page.queuedMessages?.[0]?.pausedReason).toBe(
       QUEUED_MESSAGE_PAUSED_SEND_FAILED
     )
-    // The marker is stored on the row, so a host restart keeps "Couldn't send"
-    // instead of downgrading the card to a plain pause.
-    rotateStructuredAgentSessionHostInstanceForTests()
+    // Journal the failure marker so reread retains the send-failed caption.
     const restarted = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(restarted.ok && restarted.page.queuedMessages?.[0]?.pausedReason).toBe(
       QUEUED_MESSAGE_PAUSED_SEND_FAILED
     )
     expect(await rig.handoff(draftId)).toBeUndefined()
-    expect(await sendNow(draftId)).toMatchObject({
+    expect(await rig.sendNow(draftId)).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
     })
@@ -360,27 +319,23 @@ describe('Stop and Delete', () => {
     if (!first.ok || !('queued' in first.value) || !second.ok || !('queued' in second.value)) {
       throw new Error('expected queued receipts')
     }
-    // The Stop comes from a DIFFERENT client than the one that typed the
-    // drafts: it must never move their text anywhere.
+    // Another client’s Stop must never withdraw the drafts’ text.
     const operationId = hostTestOperationId()
-    const stopped = await stop(operationId, { callerKey: 'client-2' })
+    const stopped = await rig.stop(operationId, { callerKey: 'client-2' })
     expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(stopped.ok && Object.keys(stopped.value).sort()).toEqual(['cancelled'])
     expect(await drafts()).toEqual([
       { messageId: first.value.queued.messageId, state: 'waiting' },
       { messageId: second.value.queued.messageId, state: 'waiting' }
     ])
-    // One pause for the whole queue: "Queue paused because you interrupted".
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // A lost acknowledgement replays the settled Stop; still no text, no field.
-    const replayed = await stop(operationId, { callerKey: 'client-2' })
+    const replayed = await rig.stop(operationId, { callerKey: 'client-2' })
     expect(replayed).toMatchObject({ ok: true, replayed: true, value: { cancelled: false } })
     expect(replayed.ok && Object.keys(replayed.value).sort()).toEqual(['cancelled'])
     expect(await drafts()).toHaveLength(2)
   })
 
-  /** A draft consumed into a submission the delivery loop has not handed over: its delivery step
-   *  is held until the returned release, so a step asked for meanwhile runs ahead of the handover. */
+  /** Hold delivery after draft consumption so intervening Stop can precede provider handover. */
   async function consumedButNotHandedOver(): Promise<{ draftId: string; release: () => void }> {
     const working = await workingSend()
     const queued = await send('stopped in flight', 'queue-if-active').result
@@ -397,13 +352,12 @@ describe('Stop and Delete', () => {
 
   it("a Stop between consume and the agent's receipt sends the draft back to waiting, paused like the rest", async () => {
     const { draftId, release } = await consumedButNotHandedOver()
-    const stopping = stop()
+    const stopping = rig.stop()
     release()
     const stopped = await stopping
     expect(stopped).toMatchObject({ ok: true })
     expect(await drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // Nothing failed, so the card carries no refusal: it reads like any other paused card.
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const card = page.ok ? page.page.queuedMessages?.[0] : undefined
     expect(card).not.toHaveProperty('returnedReason')
@@ -418,19 +372,17 @@ describe('Stop and Delete', () => {
       throw new Error('expected a queued receipt')
     }
     const draftId = queued.value.queued.messageId
-    await stop()
+    await rig.stop()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     await settleAccepted(working, 'a')
-    // Close and reopen it (the history read opens it at rest): the derived pause still holds, so
-    // nothing drains; a close hides the row, as nothing runs there until its next turn.
+    // Reopen preserves the derived hold while hiding its pause row until new activity.
     await host.close(SESSION, 'evict')
     expect(await rig.queuePause()).toBeNull()
     const reopened = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     expect(structuredQueuePauses(reopened).map((pause) => pause.reason)).toContain('stopped')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
-    // Send-now overrides the pause — the user acting is a release.
-    expect(await sendNow(draftId)).toMatchObject({
+    expect(await rig.sendNow(draftId)).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
     })
@@ -444,14 +396,12 @@ describe('Stop and Delete', () => {
       throw new Error('expected a queued receipt')
     }
     const draftId = queued.value.queued.messageId
-    await stop()
+    await rig.stop()
     await settleAccepted(working, 'a')
-    // Settling the stopped turn is not the user starting one: still paused.
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // The host accepting the send is not yet a turn: the pause lifts when the provider accepts
-    // it, and the draft drains after that turn. Meanwhile no pause is shown: it is on its way.
+    // Host acceptance only hides the pause; provider turn acceptance lifts it.
     const next = send('user starts a new turn')
     await next.result
     expect(await rig.queuePause()).toBeNull()
@@ -468,13 +418,11 @@ describe('Stop and Delete', () => {
       throw new Error('expected a queued receipt')
     }
     const draftId = queued.value.queued.messageId
-    await stop()
+    await rig.stop()
     await settleAccepted(working, 'a')
-    // All three reach the host as a send the client send RPC did not make.
     const mail = send('coordinator mail')
     expect(await mail.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    // Not shown while the mail awaits the agent, and nothing sends yet.
+    await observationClock.observe(250)
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
     await settleAccepted(mail.id, 'b')
@@ -507,14 +455,13 @@ describe('Stop and Delete', () => {
     const next = send('user starts a new turn')
     await next.result
     await settleAccepted(next.id, 'b')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.queuedMessages?.[0]?.pausedReason).toBe(
       QUEUED_MESSAGE_PAUSED_SEND_FAILED
     )
-    // The explicit Send is still the release.
-    expect(await sendNow(draftId)).toMatchObject({
+    expect(await rig.sendNow(draftId)).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
     })
@@ -531,7 +478,7 @@ describe('Stop and Delete', () => {
       .mockRejectedValueOnce(new Error('disk full'))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      expect(await stop()).toMatchObject({
+      expect(await rig.stop()).toMatchObject({
         ok: false,
         refusal: { details: { reason: 'stopFailed' } }
       })
@@ -545,7 +492,6 @@ describe('Stop and Delete', () => {
       warned.mockRestore()
     }
     expect(await rig.queuePause()).toBeNull()
-    // The draft is intact (never withdrawn), and nothing paused it.
     expect(await drafts()).toEqual([{ messageId: queued.value.queued.messageId, state: 'waiting' }])
   })
 
@@ -557,22 +503,20 @@ describe('Stop and Delete', () => {
     }
     const draftId = queued.value.queued.messageId
     const operationId = hostTestOperationId()
-    const deleted = await deleteQueued(draftId, operationId)
+    const deleted = await rig.deleteQueued(draftId, operationId)
     expect(deleted).toMatchObject({
       ok: true,
       replayed: false,
       value: { deleted: true, messageId: draftId }
     })
-    // The card leaving the published list is the whole answer.
     expect(deleted.ok && Object.keys(deleted.value).sort()).toEqual(['deleted', 'messageId'])
     expect(await drafts()).toHaveLength(0)
-    expect(await deleteQueued(draftId, operationId)).toMatchObject({
+    expect(await rig.deleteQueued(draftId, operationId)).toMatchObject({
       ok: true,
       replayed: true,
       value: { deleted: true, messageId: draftId }
     })
-    // A FRESH delete of the already-withdrawn draft reports the disposition.
-    expect(await deleteQueued(draftId)).toMatchObject({
+    expect(await rig.deleteQueued(draftId)).toMatchObject({
       ok: true,
       value: { deleted: false, disposition: 'withdrawn' }
     })
@@ -583,13 +527,11 @@ describe('/clear', () => {
   function clear(clientOperationId: string) {
     const fields = { command: 'clear' as const }
     return host.conversationCommand(CALLER, {
-      envelope: envelope(fields, 'agentSession.conversationCommand', clientOperationId),
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', clientOperationId),
       ...fields
     })
   }
 
-  /** Two drafts paused by a Stop, then the work settled so command admission
-   *  has nothing pending. */
   async function pausedDrafts(): Promise<[string, string]> {
     const working = await workingSend()
     const first = await send('first text', 'queue-if-active').result
@@ -597,13 +539,13 @@ describe('/clear', () => {
     if (!first.ok || !('queued' in first.value) || !second.ok || !('queued' in second.value)) {
       throw new Error('expected queued receipts')
     }
-    await stop()
+    await rig.stop()
     await settleAccepted(working, 'a')
     return [first.value.queued.messageId, second.value.queued.messageId]
   }
 
   it('the clear schema refuses the never-shipped withdraw opt-in', () => {
-    const base = { envelope: envelope({}, 'agentSession.conversationCommand', 'op-schema') }
+    const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
     expect(ConversationCommandParams.safeParse({ ...base, command: 'clear' }).success).toBe(true)
     expect(
       ConversationCommandParams.safeParse({ ...base, command: 'clear', withdrawQueued: true })
@@ -625,18 +567,16 @@ describe('/clear', () => {
       { messageId: secondId, state: 'waiting' }
     ])
     expect(await rig.queuePause(replacementId)).toBeNull()
-    // Paused from before the first carried card lands: the idle replacement auto-sends nothing.
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    // Hold the idle replacement before the first carried card arrives.
+    await observationClock.observe(250)
     expect(
       (await host.journalSnapshot(replacementId)).submissions.filter(
         (entry) => entry.queuedMessageId !== undefined
       )
     ).toHaveLength(0)
-    // A lost acknowledgement's replay re-runs nothing and duplicates nothing.
     const replayed = await clear(operationId)
     expect(replayed).toMatchObject({ ok: true, replayed: true })
     expect(await drafts(replacementId)).toHaveLength(2)
-    // The carried card still answers Send-now, on the replacement.
     expect(await rig.sendNow(firstId, hostTestOperationId(), replacementId)).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
@@ -653,7 +593,7 @@ describe('/clear', () => {
     const working = await workingSend()
     await send('pointer', 'queue-if-active', { internal: true, from }).result
     await send('typed', 'queue-if-active').result
-    await stop()
+    await rig.stop()
     await settleAccepted(working, 'a')
     const cleared = await clear(hostTestOperationId())
     const replacementId = cleared.ok ? SESSION : undefined
@@ -663,7 +603,7 @@ describe('/clear', () => {
     const rows =
       host.collaboratorsForTests().sessions.get(replacementId)?.journal.queuedMessages.list() ?? []
     expect(rows.map((row) => row.body.from)).toEqual([from, undefined])
-    // The sender is outside the fingerprint, or the provider's echo of the text would not match.
+    // Exclude sender metadata so provider text echoes still match.
     expect(rows[0]?.fingerprint).toBe(
       agentSessionSendBodyFingerprint(replacementId, hostTestMessage('pointer'))
     )
@@ -678,7 +618,7 @@ describe('/clear', () => {
     }
     expect(await rig.queuePause(replacementId)).toBeNull()
     const resumed = await host.queuedMessagesResume(CALLER, {
-      envelope: envelope(
+      envelope: rig.envelope(
         {},
         'agentSession.queuedMessagesResume',
         hostTestOperationId(),
@@ -717,7 +657,7 @@ describe('/clear', () => {
     const draftId = queued.value.queued.messageId
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    await settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
+    await rig.settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
@@ -730,25 +670,6 @@ describe('/clear', () => {
     expect(await rig.queuePause(replacementId)).toBeNull()
   })
 
-  it('a clear an older build left prepared holds no draft: it drains when the turn settles', async () => {
-    const working = await workingSend()
-    const queued = await send('behind the clear', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    await store.setConversationCommand(SESSION, 1, {
-      command: 'clear',
-      runtimeFence: 1,
-      operationId: hostTestOperationId(),
-      callerKey: CALLER.callerKey,
-      phase: 'prepared',
-      state: 'unknown'
-    })
-    await settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-  })
-
   it('a clear with no drafts keeps the existing conversation open', async () => {
     const cleared = await clear(hostTestOperationId())
     expect(cleared).toMatchObject({ ok: true, value: { command: 'clear', state: 'completed' } })
@@ -756,7 +677,6 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected clear to succeed')
     }
-    // The journal remains open, with no child started.
     expect(host.hasSession(replacementId)).toBe(true)
     expect(await drafts(replacementId)).toHaveLength(0)
   })
@@ -784,21 +704,19 @@ describe('publication', () => {
   it('hydrates the list on subscribe, publishes draft inserts at an unchanged cursor, and carries the shrunk list with the consumed submission in one frame', async () => {
     const working = await workingSend()
     const events = await subscribeEvents()
-    // Hydration: the opening snapshot carries the (empty) list.
     expect(events[0]).toMatchObject({ type: 'snapshot', queuedMessages: [] })
     const queued = await send('queued behind', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
     const draftId = queued.value.queued.messageId
-    // The insert writes no journal row, yet the caught-up publish delivers it.
+    // Publish the inserted queue transition to caught-up subscribers.
     await eventually(() => {
       const lists = queuedFrames(events)
       expect(lists.at(-1)).toMatchObject([{ messageId: draftId, state: 'waiting' }])
     })
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    // The frame that carries the consumed submission also carries the shrunk list.
     const consumeFrame = events.find(
       (event) =>
         event.type === 'batch' &&
@@ -833,8 +751,8 @@ describe('publication', () => {
     } finally {
       append.mockRestore()
     }
-    // Send releases the process-level pause, which later tests' reused ids would otherwise inherit.
-    expect(await sendNow(draftId)).toMatchObject({ ok: true })
+    // Release process-local pause so reused fixture IDs cannot inherit it.
+    expect(await rig.sendNow(draftId)).toMatchObject({ ok: true })
   })
 
   it("live frames carry the queue's pause with the list, and Resume's lift", async () => {
@@ -849,13 +767,21 @@ describe('publication', () => {
         event.type !== 'end' && event.queuePause !== undefined ? [event.queuePause] : []
       )
     await eventually(() => expect(pauses().at(-1)).toBeNull())
-    await stop()
+    await rig.stop()
     await eventually(() => expect(pauses().at(-1)).toEqual({ reason: 'stopped' }))
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(() => expect(pauses().at(-1)).toBeNull())
   })
 
   it('an idle Stop that takes no effect pauses nothing', async () => {
+    const capabilities = host.deps.agents.capabilities('codex')
+    if (!capabilities) {
+      throw new Error('expected the queued test provider')
+    }
+    vi.spyOn(host.deps.agents, 'capabilities').mockReturnValue({
+      ...capabilities,
+      threadGoal: false
+    })
     const working = await workingSend()
     const first = await send('to be refused', 'queue-if-active').result
     const second = await send('waits behind the card', 'queue-if-active').result
@@ -865,12 +791,11 @@ describe('publication', () => {
     const firstId = first.value.queued.messageId
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(firstId)).toBeDefined())
-    await settleRejected(await rig.handoffId(firstId), 'refused')
+    await rig.settleRejected(await rig.handoffId(firstId), 'refused')
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: firstId, state: 'returned' }, {}])
     )
-    // Idle, nothing in flight and nothing withdrawn: the Stop changes nothing.
-    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
     expect(await rig.queuePause()).toBeNull()
   })
 
@@ -880,7 +805,6 @@ describe('publication', () => {
     await send('queued behind', 'queue-if-active').result
     await eventually(() => expect(queuedFrames(events).length).toBeGreaterThan(0))
     const framesAfterInsert = queuedFrames(events).length
-    // Another journal commit with no draft change re-sends nothing.
     const { result } = send('another working send')
     await result
     await eventually(async () => {

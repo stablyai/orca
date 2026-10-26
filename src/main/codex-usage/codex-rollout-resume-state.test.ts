@@ -55,10 +55,7 @@ afterEach(() => {
 })
 
 describe('buildCodexRolloutResumeState', () => {
-  // Without the short-read guard the digest is recorded over whatever bytes did
-  // arrive. A later scan hashes the same too-short range, gets the same digest,
-  // and accepts a resume point past EOF — so the caller resumes over history
-  // that is no longer in the file.
+  // Matching short-read digests must not validate an offset past EOF.
   it('refuses to record an offset the file no longer reaches', async () => {
     const filePath = writeRollout('short-prefix.jsonl', 2000)
 
@@ -67,8 +64,6 @@ describe('buildCodexRolloutResumeState', () => {
     ).resolves.toBeNull()
   })
 
-  // Same guard, disjoint-window layout: the head window is fully readable and
-  // only the boundary window falls past the end of the file.
   it('refuses when only the boundary window falls past the end of the file', async () => {
     const filePath = writeRollout('short-boundary.jsonl', 4 * WINDOW_BYTES)
 
@@ -77,9 +72,7 @@ describe('buildCodexRolloutResumeState', () => {
     ).resolves.toBeNull()
   })
 
-  // Verifying a short prefix costs more than re-reading it, so no resume point
-  // is recorded there. This is also what keeps every digest read past the point
-  // where the two windows could overlap.
+  // Digest verification costs more than rereading a short prefix.
   it('refuses a prefix at or under the resumable floor', async () => {
     const filePath = writeRollout('at-floor.jsonl', 4 * WINDOW_BYTES)
 
@@ -114,9 +107,7 @@ describe('resolveCodexRolloutResume', () => {
     await expect(resolveCodexRolloutResume(filePath, previous)).resolves.toBeNull()
   })
 
-  // A persisted offset under the floor would put the boundary window at a
-  // negative start, so this is input validation on the cache file, not a
-  // restatement of the builder's guard.
+  // Validate untrusted cache offsets before calculating the boundary window.
   it('rejects a persisted offset under the floor', async () => {
     const filePath = writeRollout('under-floor.jsonl', 4 * WINDOW_BYTES)
     const previous = persistedFile(filePath, {

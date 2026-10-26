@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationDestinationCatalog } from './orcad-migration-cutover-coordinator'
 
 type Catalog = OrcadMigrationDestinationCatalog
@@ -11,10 +11,7 @@ export type FakeOrcadMigrationDestination = { commits: number } & {
   [Method in keyof Catalog]: Mock<Catalog[Method]>
 }
 
-/**
- * An in-memory destination with the T6-9 semantics: idempotent stage, receipt-keyed commit, one
- * catalog state per migration so a delta move after a first migration starts absent.
- */
+/** Model idempotent stage and receipt-keyed commit with separate catalog state for each migration, including later deltas. */
 export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
   const states = new Map<string, 'absent' | 'staged' | 'committed'>()
   const stateOf = (manifest: OrcadMigrationManifest) => states.get(manifest.migrationId) ?? 'absent'
@@ -65,6 +62,18 @@ export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
         states.set(manifest.migrationId, 'absent')
       }
       return { ...view(manifest), aborted, ...(aborted ? {} : { durableAbsent: true as const }) }
+    }),
+    abortByReference: vi.fn<Catalog['abortByReference']>(async (manifest) => {
+      const identity = {
+        migrationId: manifest.migrationId,
+        manifestSha256: manifest.manifestSha256
+      }
+      if (stateOf(manifest) === 'committed') {
+        return { ...identity, state: 'committed', aborted: false }
+      }
+      const aborted = stateOf(manifest) === 'staged'
+      states.delete(manifest.migrationId)
+      return { ...identity, state: 'absent', aborted, durableAbsent: true }
     }),
     stageChunk: vi.fn<Catalog['stageChunk']>()
   }

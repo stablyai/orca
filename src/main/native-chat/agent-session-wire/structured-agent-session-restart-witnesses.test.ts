@@ -4,7 +4,7 @@ import type { AgentSessionResumeMarker } from '../../../shared/agent-session-res
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { marker } from './structured-agent-session-restart-resume-test-harness'
 
-// Every stopped session counts as cut off; what is under test is which witnesses a clear drops.
+// Mock every stopped session as working to isolate witness-clear scope.
 vi.mock('./structured-agent-session-working-at-teardown', () => ({
   structuredAgentSessionWorkingAtStop: (input: { sessionId: string; now: number }) =>
     marker({ sessionId: input.sessionId, recordedAt: input.now })
@@ -19,8 +19,8 @@ function witnessed() {
     getRecord: (sessionId) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: clear reads only the record's provider.
       AGENTS[sessionId] ? ({ provider: AGENTS[sessionId] } as AgentSessionRecord) : null,
+    childWorkOpen: () => false,
     childWork: () => undefined,
-    startAnswered: () => undefined,
     capsule: { record: async (markers) => void recorded.push([...markers]) },
     teardownId: 'teardown',
     now: () => 1,

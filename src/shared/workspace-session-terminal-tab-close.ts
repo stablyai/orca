@@ -74,7 +74,7 @@ function collectTabPtyIds(
   return ids
 }
 
-function findUnifiedTerminalTabs(
+export function findUnifiedTerminalTabs(
   session: WorkspaceSessionState,
   worktreeId: string,
   tabId: string

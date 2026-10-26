@@ -1,6 +1,6 @@
+import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
@@ -12,14 +12,20 @@ import type { AgentHookSource } from '../shared/agent-hook-relay'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
+import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
+import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
   res: ServerResponse,
   options: {
+    isCurrent: () => boolean
     token: string
+    forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
     env: string
     state: HookListenerState
+    checkAgentPresence: (paneKey: string) => Promise<void>
+    providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
     applyEvent: (
@@ -51,6 +57,13 @@ export async function handleRelayHookRequest(
   })
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+      const body = await readRequestBody(req)
+      const reply = options.isCurrent() ? await options.forwardClaudeAgentView?.(body) : {}
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(reply ?? {}))
+      return
+    }
     const source = resolveHookSource(pathname)
     if (!source) {
       res.writeHead(404)
@@ -58,21 +71,44 @@ export async function handleRelayHookRequest(
       return
     }
     const body = await readRequestBody(req)
+    if (!options.isCurrent()) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
     const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
     if (await options.ingestTmuxHook?.(source, hookBody)) {
       res.writeHead(204)
       res.end()
       return
     }
+    await checkHookOwnerPresence(
+      options.state,
+      source,
+      hookBody,
+      options.env,
+      options.checkAgentPresence
+    )
+    if (!options.isCurrent()) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
     let admittedOpenCodeTuiOwner = false
-    const event = normalizeHookPayload(options.state, source, hookBody, options.env, {
-      deferCompactOwnershipToClient: true,
-      admitOpenCodeTui: (identity) => {
-        const admission = admitRelayOpenCodeTui(options, identity)
-        admittedOpenCodeTuiOwner = admission === true
-        return admission
+    const event = options.providerNormalization.normalize(
+      options.state,
+      source,
+      hookBody,
+      options.env,
+      {
+        deferCompactOwnershipToClient: true,
+        admitOpenCodeTui: (identity) => {
+          const admission = admitRelayOpenCodeTui(options, identity)
+          admittedOpenCodeTuiOwner = admission === true
+          return admission
+        }
       }
-    })
+    )
     if (event) {
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
       const env = hookBodyEnv(hookBody)
@@ -90,12 +126,11 @@ export async function handleRelayHookRequest(
     res.writeHead(204)
     res.end()
   } catch (err) {
-    // Why (#11217): a remote host can run the same IDS; count truncations here so a blocked SSH
-    // relay reports the cause instead of an anonymous "hook request failed".
+    // Count remote truncations too so a blocked relay names the cause rather than an anonymous request failure (#11217).
     if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
       options.transportInterference.record({ source: null, error: err })
     }
-    // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
+    // Fail open with 204 so hook errors cannot block agents, but log failures for diagnosis.
     process.stderr.write(
       `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
     )

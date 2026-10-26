@@ -1,7 +1,13 @@
 // Real-shaped stored partitions: the desktop's own, a relay-fallback SSH host's, a remote server's.
 
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
 import { toRemoteRuntimePtyId } from '../remote-runtime-pty-id'
 import { toAppSshPtyId } from '../ssh-pty-id'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -34,7 +40,7 @@ export function sleepingRecord(
   }
 }
 
-/** The desktop's own partition: a git worktree split into two groups, and a folder workspace. */
+/** Desktop partition with git and folder workspaces, including split groups. */
 export function localDesktopSession(): WorkspaceSessionState {
   const session = addWorkspace(emptySession(), GIT_KEY, [
     {
@@ -189,6 +195,14 @@ export function localDesktopSession(): WorkspaceSessionState {
     closedTerminalTabTombstonesByTabId: {
       'tab-closed': { closedAt: 1_700_000_450_000, worktreeId: GIT_KEY, reason: 'user' }
     },
+    closedTerminalPanesByPaneKey: {
+      'tab-closed:leaf-closed': {
+        ptyId: 'pty-closed',
+        incarnationId: 'inc-closed',
+        worktreeId: GIT_KEY,
+        closedAt: 1_700_000_450_000
+      }
+    },
     clientHostedBrowserCloseIntentsByEnvironment: {}
   }
 }
@@ -242,3 +256,37 @@ export function serverRuntimeSession(environmentId: string): WorkspaceSessionSta
     toRuntimeExecutionHostId(environmentId)
   )
 }
+
+export type WorkspaceLayoutProfile = {
+  name: string
+  /** The partition the session is stored under. */
+  hostId: ExecutionHostId
+  build: () => WorkspaceSessionState
+}
+
+export const WORKSPACE_LAYOUT_PROFILES: readonly WorkspaceLayoutProfile[] = [
+  {
+    name: 'local desktop (git worktree, folder workspace, all tab kinds)',
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    build: localDesktopSession
+  },
+  {
+    name: 'floating terminal',
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    build: () =>
+      addWorkspace(emptySession(), FLOATING_TERMINAL_WORKTREE_ID, [
+        { id: 'group-floating', tabs: [{ id: 'tab-floating', leaves: [[leaf(1), 'floating@@1']] }] }
+      ])
+  },
+  {
+    name: 'relay SSH host partition',
+    hostId: toSshExecutionHostId('target-1'),
+    build: () => relaySshSession('target-1')
+  },
+  {
+    name: 'remote server partition',
+    hostId: toRuntimeExecutionHostId('env-1'),
+    build: () => serverRuntimeSession('env-1')
+  },
+  { name: 'empty profile', hostId: LOCAL_EXECUTION_HOST_ID, build: emptySession }
+]

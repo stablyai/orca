@@ -1,5 +1,10 @@
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule,
@@ -7,7 +12,9 @@ import type {
 } from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
@@ -18,8 +25,6 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
-  RuntimeMarkdownReadTabResult,
-  RuntimeMarkdownSaveTabResult,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -41,12 +46,14 @@ export type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  browserProfilesChanged?(): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    providesInitialSurface?: boolean
   ): void
   createTerminal(
     worktreeId: string,
@@ -68,6 +75,9 @@ export type RuntimeNotifier = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      targetGroupId?: string
+      afterTabId?: string
+      shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
@@ -93,6 +103,8 @@ export type RuntimeNotifier = {
   ): Promise<AgentLaunchTabPublished>
   /** A launch pane's fate, for the window to keep on its tab or act on. */
   agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
+  /** A launch's recipe when no reveal carried it, so resume can replay it. */
+  rememberLaunchRecipe?(recipe: PaneLaunchRecipe): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -113,21 +125,25 @@ export type RuntimeNotifier = {
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
+  /** False when the window could not be reached; absent on notifiers that predate pane titles. */
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
+  revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
-  /**
-   * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving
-   * it, absent keeps the original switch. Paired clients are never navigated (intended; 'all' == 'host').
-   */
+  /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */
   openFile?(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    position?: RuntimeFileOpenPosition
   ): void
+  /** Layout-owner builds: shows a tab main already wrote for a file it opened. */
+  revealEditorTab?(reveal: RuntimeEditorTabReveal): void
   openDiff?(
     worktreeId: string,
     filePath: string,
@@ -136,13 +152,6 @@ export type RuntimeNotifier = {
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget
   ): void
-  readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
-  saveMobileMarkdownTab?(
-    worktreeId: string,
-    tabId: string,
-    baseVersion: string,
-    content: string
-  ): Promise<RuntimeMarkdownSaveTabResult>
   /** Closes the whole tab. */
   closeTerminal(tabId: string): void
   /** Drops one split pane main already closed; never closes its tab. */
@@ -151,11 +160,9 @@ export type RuntimeNotifier = {
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
   ): Promise<void>
-  sleepWorktree(worktreeId: string): void
-  // Why: a phone opening a worktree wakes its slept agents by asking the host
-  // renderer to run its own navigation-free wake (experimental agent sleep);
-  // the runtime has no in-memory sleeping records or wake authority. Optional to
-  // match the many renderer-backed notifier methods only the real bridge wires.
+  /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
+  workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
+  // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
   resumeSleepingAgents?(worktreeId: string): void
   terminalFitOverrideChanged(
     ptyId: string,
@@ -163,12 +170,7 @@ export type RuntimeNotifier = {
     cols: number,
     rows: number
   ): void
-  // Why: presence-based lock signal — desktop renderer mounts the lock
-  // banner when `driver.kind === 'mobile'` and unmounts otherwise. The
-  // structured payload (vs a `locked: boolean`) carries the active mobile
-  // actor's clientId so the renderer can disambiguate multi-phone scenarios
-  // and so a future write coordinator can use the same signal as scheduling
-  // input. See docs/mobile-presence-lock.md.
+  // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
   terminalDriverChanged(ptyId: string, driver: DriverState): void
   nativeChatLaunchDraftResolved?(
     tabId: string,

@@ -92,6 +92,15 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('hides machine-provider SSH targets the same way', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [{ connectionId: 'machine-0123', executionHostId: 'ssh:machine-0123' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshTargetLabels: new Map([['machine-0123', 'omarchy-dev']])
+    })
+    expect(hosts.some((h) => h.id.includes('machine-0123'))).toBe(false)
+  })
+
   it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
     const hosts = buildExecutionHostRegistry({
       // A VM-backed repo carries the hidden runtime-owned target on both fields.
@@ -103,12 +112,11 @@ describe('execution host registry', () => {
         { connectionId: 'repo-ssh' }
       ],
       settings: { activeRuntimeEnvironmentId: null },
-      // Even if a stale label leaked in, it must still be filtered out.
+      // Stale labels must not reveal hidden runtime targets.
       sshTargetLabels: new Map([['runtime-ssh-orca-instance-1', 'Hidden VM']])
     })
 
     expect(hosts.some((h) => h.id.includes('runtime-ssh-orca-instance-1'))).toBe(false)
-    // The ordinary repo SSH host is still present.
     expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
   })
 

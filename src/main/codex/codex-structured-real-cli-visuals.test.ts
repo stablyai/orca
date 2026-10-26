@@ -1,6 +1,3 @@
-// The installed Codex, driven through Orca's own visuals setup in an isolated CODEX_HOME: Codex must
-// list the bundled skill and open the thread with the chat folder beside the user's own writable
-// root. Opt-in (ORCA_REAL_CODEX_CLI_TEST=1); no account is used, nothing reaches a model.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,7 +18,7 @@ describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
       const codexHome = join(base, 'codex-home')
       const cwd = join(base, 'workspace')
       const userRoot = join(base, 'user-root')
-      const folder = join(base, 'state', 'native-chat-visuals', 'chat')
+      const folder = join(base, 'state', 'chat-scratch', 'chat')
       for (const dir of [codexHome, cwd, folder]) {
         mkdirSync(dir, { recursive: true })
       }

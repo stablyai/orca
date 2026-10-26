@@ -1,3 +1,4 @@
+import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -17,13 +18,16 @@ import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
+  resolveCurrentWorktreeSelection,
   resolveCurrentWorktreeSelector
 } from '../selectors'
+import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
@@ -32,11 +36,12 @@ import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdic
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
-  resolveProjectCreateRepoSelector
+  getCreateRepoTarget
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
   getEnvParentWorkspace,
+  getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
@@ -44,27 +49,18 @@ import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
-import { assertReferenceWritesSupported, getCreateReferences } from '../reference-input'
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string,
-  options: { allowEmpty?: boolean } = {}
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && (options.allowEmpty || value.length > 0)) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
-}
+import {
+  assertReferenceWritesSupported,
+  getCreateReferenceInputs,
+  resolveReferenceInputs
+} from '../reference-input'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
   if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'retry-launch'].find((name) => flags.has(name))
+    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
+      flags.has(name)
+    )
     if (needsAgent) {
       throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
     }
@@ -92,48 +88,13 @@ function getOptionalSetupDecision(
   return setup
 }
 
-function getRepoSelectorFromWorktreeSelector(selector: string | undefined): string | undefined {
-  if (!selector?.startsWith('id:')) {
-    return undefined
-  }
-  const worktreeId = selector.slice('id:'.length)
-  const separatorIndex = worktreeId.indexOf('::')
-  if (separatorIndex <= 0) {
-    return undefined
-  }
-  return `id:${worktreeId.slice(0, separatorIndex)}`
-}
-
-async function getCreateRepoSelector(
-  flags: Map<string, string | boolean>,
-  cwdParentWorktree: string | undefined,
-  client: Parameters<CommandHandler>[0]['client']
-): Promise<string> {
-  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
-  if (projectRepoSelector) {
-    return projectRepoSelector
-  }
-  const explicitRepo = getPresentStringFlag(flags, 'repo')
-  if (explicitRepo) {
-    return explicitRepo
-  }
-  const inferredRepo = getRepoSelectorFromWorktreeSelector(cwdParentWorktree)
-  if (inferredRepo) {
-    return inferredRepo
-  }
-  throw new RuntimeClientError(
-    'invalid_argument',
-    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
-  )
-}
-
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
       'worktree.ps',
       { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     const worktrees = result.result.worktrees.map(projectWorktreePsTerminalVerdict)
     printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
       formatWorktreePs(result.result)
@@ -147,7 +108,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         limit: getOptionalPositiveIntegerFlag(flags, 'limit')
       }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     printResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
@@ -162,8 +123,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatWorktreeShow)
   },
-  'worktree create': async ({ flags, client, cwd, json, rawArgs }) => {
-    const linkedItems = getCreateReferences(flags)
+  'worktree create': async (context) => {
+    const { flags, client, cwd, json, rawArgs } = context
+    const referenceInputs = getCreateReferenceInputs(flags)
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags)
@@ -186,17 +148,15 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       !noParent && !explicitParentWorkspace && !explicitParentWorktree
         ? getEnvParentWorkspace()
         : undefined
-    let cwdParentWorktree: string | undefined
+    let cwdParentWorktree: HostScopedWorktreeSelection | undefined
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
     if (
       (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
       needsCwdRepoInference
     ) {
       try {
-        // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
-        // inside an Orca worktree. Cwd keeps CLI-created children nestable and
-        // lets create infer the repo for the common current-workspace case.
-        cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
+        // Cwd preserves parent/repo inference when agent shells lose ORCA_TERMINAL_HANDLE.
+        cwdParentWorktree = await resolveCurrentWorktreeSelection(cwd, client)
       } catch {
         cwdParentWorktree = undefined
       }
@@ -204,13 +164,17 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
-    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
-    await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
+    const repoTarget = await getCreateRepoTarget(flags, cwdParentWorktree, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
+    const linkedItems = referenceInputs
+      ? await resolveReferenceInputs(context, referenceInputs)
+      : undefined
     if (linkedItems) {
       await assertReferenceWritesSupported(client)
     }
     const create = {
-      repo,
+      // Older hosts drop `repoHostId` and keep refusing an id on several hosts, as before.
+      ...repoTarget,
       name,
       displayName: name,
       displayNameKind: 'user',
@@ -227,11 +191,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
+      ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
       noParent,
       callerTerminalHandle,
-      // Why: marks the workspace as CLI-created so the sidebar can badge and
-      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+      // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
     }
     if (agentLaunch) {
@@ -250,6 +213,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       flags,
       'Choose either --parent-worktree or --no-parent, not both.'
     )
+    const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
+    if (parentSelector && getWorkspaceKeyParentSelector(parentSelector)?.startsWith('folder:')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Parent selector "${parentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
+      )
+    }
     const isUnread = getOptionalWorktreeUnreadFlag(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
@@ -257,7 +227,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
+    const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
@@ -265,9 +235,22 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,
-      parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
+      parentWorktree: await withWorktreeSelectorRecovery(
+        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
+        parentCwdNextSteps(parentSelector),
+        parentSelector
+      ),
       noParent: flags.get('no-parent') === true
     })
+    const result = await withWorktreeSelectorRecovery(
+      pending,
+      parentSelector
+        ? [
+            `Orca could not find the worktree selector "${worktree}" or the parent selector "${parentSelector}". The server did not identify which selector failed.`,
+            'Check both selectors with orca worktree show --worktree <selector> --json.'
+          ]
+        : []
+    )
     if (!json) {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)
@@ -287,8 +270,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    // Why (#19334): the waiver only ever applies to a hook that ran, so without --run-hooks it
-    // silently does nothing. Rejecting it beats letting someone believe they waived something.
     if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -299,11 +280,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree,
       hostId,
       force: flags.get('force') === true,
-      // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
+      // --force also waives PTY-stop proof.
       allowUnverifiedPtyStop: flags.get('force') === true,
       runHooks: flags.get('run-hooks') === true,
-      // Why (#19334): deliberately NOT coupled to --force, which above already waives PTY-stop
-      // proof. Waiving a failed archive hook is a separate decision about the user's data.
+      // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
     printHookWarning(result.result, json)

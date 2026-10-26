@@ -1,20 +1,8 @@
-/**
- * Memory-leak regression: pane-scoped agent-status, unread, and terminal-input
- * maps must be purged when a worktree is removed via the BULK path.
- *
- * These maps are keyed by `${tabId}:${leafId}` (or by tabId for
- * `unreadTerminalTabs`). The single `removeWorktree` path clears them via
- * `shutdownWorktreeTerminals` / `dropAgentStatusByWorktree` /
- * `clearPaneForegroundAgentByWorktree`, but the bulk `purgeWorktreeTerminalState`
- * reducer (used by the authoritative-scan reconcile, remove-project, and the
- * hydration stale-purge) never ran terminal teardown — so an externally-removed
- * worktree (CLI `git worktree remove`, another Orca window, SSH, or a removed
- * project) orphaned one entry per agent pane for the lifetime of the renderer
- * session, plus a phantom unread dock badge.
- */
+/** Bulk worktree purge must clear pane status/unread/input maps like single removal. External scans/project removal/hydration run no terminal teardown; missed entries otherwise leak for renderer lifetime and leave unread dock badges. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
 vi.mock('sonner', () => ({
@@ -33,7 +21,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -66,6 +53,23 @@ function liveEntry(paneKey: string): AgentStatusEntry {
     stateStartedAt: 0,
     paneKey,
     stateHistory: []
+  }
+}
+
+function launchEntry(): AppState['agentLaunchConfigByPaneKey'][string] {
+  return { launchConfig: { agentArgs: '', agentEnv: {} }, registeredAt: 0, identity: {} }
+}
+
+function sleepingRecord(paneKey: string, worktreeId: string): SleepingAgentSessionRecord {
+  return {
+    paneKey,
+    worktreeId,
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: paneKey },
+    prompt: '',
+    state: 'working',
+    capturedAt: 1,
+    updatedAt: 1
   }
 }
 
@@ -146,6 +150,37 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
   })
 
+  it('drops sleeping records of the removed worktree whose tab is already gone (#24784)', () => {
+    const store = createTestStore()
+    const OTHER = 'repo1::/path/wt2'
+    // Why no tab: a record can outlive its tab, so the tab-prefix purge alone cannot reach it.
+    const ORPHAN_PANE = 'gone-tab:leaf-z'
+    const OTHER_PANE = 'other-tab:leaf-y'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: OTHER, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: { [WT]: [], [OTHER]: [] },
+      agentLaunchConfigByPaneKey: {
+        [ORPHAN_PANE]: launchEntry(),
+        [OTHER_PANE]: launchEntry()
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [ORPHAN_PANE]: sleepingRecord(ORPHAN_PANE, WT),
+        [OTHER_PANE]: sleepingRecord(OTHER_PANE, OTHER)
+      }
+    })
+
+    store.getState().purgeWorktreeTerminalState([WT])
+
+    const s = store.getState()
+    expect(Object.keys(s.sleepingAgentSessionsByPaneKey)).toEqual([OTHER_PANE])
+    expect(Object.keys(s.agentLaunchConfigByPaneKey)).toEqual([OTHER_PANE])
+  })
+
   it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {
     resetAgentPaneAuthorityAliasesForTests()
     const store = createTestStore()
@@ -162,8 +197,7 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
 
     store.getState().purgeWorktreeTerminalState([WT])
 
-    // Why: the alias registry outlives the store maps, so a purged tab must not
-    // keep routing status posts to a pane that no longer exists.
+    // Purge authority aliases too or module registry keeps routing posts to removed panes.
     expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(sourcePaneKey)
     expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
     resetAgentPaneAuthorityAliasesForTests()

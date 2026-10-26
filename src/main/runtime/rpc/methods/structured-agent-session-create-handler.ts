@@ -18,13 +18,13 @@ import {
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  structuredAgentSessionClosedBeforeCreate,
+  structuredAgentSessionClosedBeforeCreateRefusal
+} from './structured-agent-session-close-before-create'
 
-/**
- * The attach-shaped entries take the location from the client instead of resolving it from a
- * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
- * host the same question directly: only it knows which agents and locations it runs, and a client
- * cannot forge that answer.
- */
+/** Attach-shaped requests bypass workspace create-support; ask the execution host directly so client-supplied locations cannot forge support. */
 async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
   await ensureHostInstalled(ctx, params.agent)
   const host = requireHost(ctx, params.agent)
@@ -64,8 +64,7 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
-  // Everything up to `attach` is pre-commit, and answers with a refusal rather than a throw so
-  // a client can tell "nothing was created" from "the outcome is unknown".
+  // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
       const conflict = agentSessionFingerprintConflict(
@@ -85,6 +84,7 @@ export async function handleStructuredAgentSessionCreate(
         worktree: params.worktree,
         agent: params.agent,
         caller: callerFor(ctx),
+        structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.options ? { options: params.options } : {}),
@@ -101,10 +101,21 @@ export async function handleStructuredAgentSessionCreate(
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
+  // Nothing is created yet, so a close that came first refuses the create outright.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+  ) {
+    return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+  }
   return commitStructuredAgentSessionCreate({
     runtime: ctx.runtime,
     caller: callerFor(ctx),
     prepared,
-    activate: true
+    activate: true,
+    placedByWindow: ctx.caller?.kind === 'desktop',
+    ...('tabPlacement' in params && params.tabPlacement
+      ? { tabPlacement: params.tabPlacement }
+      : {})
   })
 }

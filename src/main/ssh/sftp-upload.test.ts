@@ -1,11 +1,19 @@
 import { spawnSync } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { SFTPWrapper } from 'ssh2'
-import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
+import type { SFTPWrapper, WriteStreamOptions } from 'ssh2'
+import { SFTP } from 'ssh2/lib/protocol/SFTP.js'
+import {
+  removeDirectorySftp,
+  SFTP_UPLOAD_IN_FLIGHT_BYTES,
+  uploadBuffer,
+  uploadDirectory,
+  uploadFile
+} from './sftp-upload'
 
 function createWritable(): Writable {
   return new Writable({
@@ -16,7 +24,8 @@ function createWritable(): Writable {
 }
 
 function createSftpMock(): SFTPWrapper {
-  return {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tests call only the methods stubbed here and the session's events.
+  return Object.assign(new EventEmitter(), {
     mkdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
     createWriteStream: vi.fn(() => createWritable()),
     readdir: vi.fn((_path: string, cb: (err?: Error | null, entries?: unknown[]) => void) =>
@@ -24,7 +33,7 @@ function createSftpMock(): SFTPWrapper {
     ),
     unlink: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
     rmdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null))
-  } as unknown as SFTPWrapper
+  }) as unknown as SFTPWrapper
 }
 
 describe('sftp-upload', () => {
@@ -40,8 +49,7 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
-    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
     expect(writeStream.listenerCount('error')).toBe(1)
   })
 
@@ -57,12 +65,12 @@ describe('sftp-upload', () => {
 
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/nested', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/nested/asset.txt', {
-      flags: 'wx'
+      flags: 'wx',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
-    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
     expect(writeStream.listenerCount('error')).toBe(1)
   })
 
@@ -78,7 +86,8 @@ describe('sftp-upload', () => {
 
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/..fixtures', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/..fixtures/asset.txt', {
-      flags: 'wx'
+      flags: 'wx',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
   })
 
@@ -86,14 +95,15 @@ describe('sftp-upload', () => {
     const realDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     await writeFile(join(realDir, 'asset.txt'), 'asset')
     const aliasDir = `${realDir}-alias`
-    // Why a junction on Windows: directory symlinks need Developer Mode or admin there.
+    // Windows directory symlinks require privileges; junctions exercise the same alias path.
     await symlink(realDir, aliasDir, process.platform === 'win32' ? 'junction' : 'dir')
     const sftp = createSftpMock()
 
     await uploadDirectory(sftp, aliasDir, '/remote/assets')
 
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-      flags: 'w'
+      flags: 'w',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     await rm(aliasDir, { force: true })
     await rm(realDir, { recursive: true, force: true })
@@ -114,7 +124,8 @@ describe('sftp-upload', () => {
         await uploadDirectory(sftp, localDir, '/remote/assets', localDir)
 
         expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-          flags: 'w'
+          flags: 'w',
+          highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
         })
       } finally {
         await rm(linkedParent, { force: true })
@@ -146,8 +157,7 @@ describe('sftp-upload', () => {
     const linkPath = join(localDir, process.platform === 'win32' ? 'link-dir' : 'link.txt')
     if (process.platform === 'win32') {
       await mkdir(targetPath)
-      // Why: file symlinks often require Developer Mode/admin on Windows, while
-      // junctions still exercise the symlink rejection branch.
+      // Use a Windows junction to exercise rejection without symlink privileges.
       await symlink(targetPath, linkPath, 'junction')
     } else {
       await writeFile(targetPath, 'secret')
@@ -279,5 +289,95 @@ describe('sftp-upload', () => {
     expect(sftp.rmdir).toHaveBeenNthCalledWith(1, '/remote/assets/nested', expect.any(Function))
     expect(sftp.unlink).toHaveBeenNthCalledWith(2, '/remote/assets/logo.png', expect.any(Function))
     expect(sftp.rmdir).toHaveBeenNthCalledWith(2, '/remote/assets', expect.any(Function))
+  })
+})
+
+describe('uploadFile over a high-latency link', () => {
+  // ssh2's own WriteStream over a fake session whose every request takes one "round trip".
+  function slowSftp(
+    roundTripMs: number,
+    stallAfterWrites = Number.POSITIVE_INFINITY
+  ): {
+    sftp: SFTPWrapper
+    written: Map<number, Buffer>
+    maxInFlight: () => number
+  } {
+    let inFlight = 0
+    let peak = 0
+    const written = new Map<number, Buffer>()
+    // A dead link: once stalled, no request (WRITE or the stream's CLOSE) is ever answered.
+    const later = (cb: () => void): void => {
+      if (written.size <= stallAfterWrites) {
+        setTimeout(cb, roundTripMs)
+      }
+    }
+    const session = Object.assign(new EventEmitter(), {
+      server: false,
+      open: (_path: string, _flags: string, _mode: number, cb: (e: null, h: Buffer) => void) =>
+        later(() => cb(null, Buffer.from('h'))),
+      fchmod: (_h: Buffer, _mode: number, cb: (e: null) => void) => later(() => cb(null)),
+      write: (
+        _h: Buffer,
+        buf: Buffer,
+        off: number,
+        len: number,
+        pos: number,
+        cb: (e: null, n: number) => void
+      ) => {
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        written.set(pos, Buffer.from(buf.subarray(off, off + len)))
+        later(() => {
+          inFlight -= 1
+          cb(null, len)
+        })
+      },
+      close: (_h: Buffer, cb: (e: null) => void) => later(() => cb(null))
+    })
+    const sftp = Object.assign(session, {
+      createWriteStream: (path: string, options: WriteStreamOptions) =>
+        SFTP.prototype.createWriteStream.call(session, path, options)
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadFile only calls createWriteStream, which drives open/fchmod/write/close above.
+    return { sftp: sftp as unknown as SFTPWrapper, written, maxInFlight: () => peak }
+  }
+
+  it('keeps many writes in flight instead of one chunk per round trip', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const contents = Buffer.alloc(4 * 1024 * 1024)
+    for (let i = 0; i < contents.length; i += 4096) {
+      contents[i] = i % 251
+    }
+    await writeFile(join(dir, 'node.tar.gz'), contents)
+    const { sftp, written, maxInFlight } = slowSftp(20)
+    try {
+      await uploadFile(sftp, join(dir, 'node.tar.gz'), '/remote/node.tar.gz')
+      // One 64 KiB read chunk per round trip would keep a single write in flight.
+      expect(maxInFlight()).toBeGreaterThanOrEqual(8)
+      const reassembled = Buffer.concat(
+        [...written.entries()].sort(([a], [b]) => a - b).map(([, chunk]) => chunk)
+      )
+      expect(reassembled.equals(contents)).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails, as contact lost, when the SSH session closes under a stalled upload', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    await writeFile(join(dir, 'node.tar.gz'), Buffer.alloc(8 * 1024 * 1024))
+    const { sftp, written } = slowSftp(1, 4)
+    try {
+      const upload = uploadFile(sftp, join(dir, 'node.tar.gz'), '/remote/node.tar.gz')
+      await vi.waitFor(() => expect(written.size).toBeGreaterThan(4))
+      sftp.emit('close')
+      await expect(upload).rejects.toMatchObject({
+        name: 'SftpSessionClosedError',
+        sshChannelCloseConfirmed: false
+      })
+      expect(sftp.listenerCount('close')).toBe(0)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

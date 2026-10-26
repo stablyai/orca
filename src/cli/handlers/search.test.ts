@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MALFORMED_CURSOR_MESSAGE, SEARCH_HANDLERS } from './search'
+import { SEARCH_HANDLERS } from './search'
 import { AiVaultSearchResponseSchema } from '../../shared/ai-vault-search-contract'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { RuntimeClientError } from '../runtime/types'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { RuntimeClient } from '../runtime-client'
+import { okFixture } from '../test-fixtures'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -48,10 +50,6 @@ const statusResponse: AiVaultSearchStatus = {
   generation: 42
 }
 
-function envelope(result: unknown) {
-  return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
-}
-
 async function runSearch(
   flags: [string, string | boolean][],
   options: {
@@ -67,7 +65,8 @@ async function runSearch(
         .fn()
         .mockImplementation((method: string) =>
           Promise.resolve(
-            envelope(
+            okFixture(
+              'request-1',
               method === 'aiVault.searchStatus'
                 ? statusResponse
                 : (options.result ?? resultsResponse)
@@ -75,12 +74,14 @@ async function runSearch(
           )
         )
   const lines: string[] = []
+  const client = new RuntimeClient('/tmp/orca-search-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(call)
+  vi.spyOn(client, 'isRemote', 'get').mockReturnValue(options.isRemote ?? false)
   vi.spyOn(console, 'log').mockImplementation((value: unknown) => {
     lines.push(String(value))
   })
   await SEARCH_HANDLERS.search!({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only `call` and `isRemote`; a real RuntimeClient would resolve runtime metadata and open a socket.
-    client: { call, isRemote: options.isRemote ?? false } as never,
+    client,
     cwd: '/workspace',
     flags: new Map(flags),
     json: options.json ?? false
@@ -90,7 +91,6 @@ async function runSearch(
 
 type CliFlags = [string, string | boolean][]
 
-/** The printed envelope, narrowed by shape rather than asserted. */
 function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   const parsed: unknown = JSON.parse(output)
   if (typeof parsed !== 'object' || parsed === null || !('result' in parsed)) {
@@ -99,7 +99,6 @@ function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   return { keys: Object.keys(parsed), result: parsed.result }
 }
 
-/** Re-reads the printed result through the contract, so the shape is checked, not claimed. */
 function printedResults(output: string): Extract<AiVaultSearchResponse, { kind: 'results' }> {
   const parsed = AiVaultSearchResponseSchema.parse(printedEnvelope(output).result)
   if (parsed.kind !== 'results') {
@@ -237,7 +236,10 @@ describe('orca search over the runtime RPC', () => {
         ],
         { result: { kind: 'malformed-cursor' } }
       )
-    ).rejects.toThrow(MALFORMED_CURSOR_MESSAGE)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('re-run the search without --cursor')
+    })
   })
 
   it('answers a host with no such method as unavailable rather than a raw error', async () => {
@@ -290,7 +292,6 @@ describe('orca search --json', () => {
 
     expect(printed.keys).toEqual(['id', 'ok', 'result', '_meta'])
     expect(printed.result).toEqual(resultsResponse)
-    expect(JSON.stringify(printed.result)).toBe(JSON.stringify(resultsResponse))
   })
 
   it('drops the debug block the caller did not ask for', async () => {

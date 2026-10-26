@@ -8,7 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import {
@@ -78,7 +78,7 @@ export function automationTouchesScope(
 ): boolean {
   return (
     (automation.executionTargetType === 'ssh' && automation.executionTargetId === scope.targetId) ||
-    // Why the target too: a generation is per target, so another host's can share the number.
+    // Generations are target-local; another host can share the same number.
     (scope.targetGeneration !== null &&
       automation.executionTargetId === scope.targetId &&
       automation.executionTargetGeneration === scope.targetGeneration) ||

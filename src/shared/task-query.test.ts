@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hasExplicitTaskScope,
   parseTaskQuery,
   serializeTaskQuery,
   stripRepoQualifiers,
@@ -33,6 +34,21 @@ describe('tokenizeSearchQuery', () => {
 
   it('returns an empty list for an empty string', () => {
     expect(tokenizeSearchQuery('')).toEqual([])
+  })
+})
+
+describe('hasExplicitTaskScope', () => {
+  it('recognizes scope qualifiers and their quoted values', () => {
+    for (const query of ['is:issue', 'IS:PR', 'is:pull-request', 'is:"pr"']) {
+      expect(hasExplicitTaskScope(query)).toBe(true)
+    }
+  })
+
+  it('keeps quoted phrases and values of other qualifiers as search text', () => {
+    for (const query of ['"is:pr"', "'is:issue'", 'label:is:pr', 'title:"is:pull-request"']) {
+      expect(hasExplicitTaskScope(query)).toBe(false)
+      expect(parseTaskQuery(query).scope).toBe('all')
+    }
   })
 })
 
@@ -132,8 +148,7 @@ describe('stripRepoQualifiers', () => {
   })
 
   it('re-quotes a standalone token that contains whitespace', () => {
-    // Standalone quoted tokens are unwrapped by the tokenizer; the stripper
-    // re-wraps them in quotes so they still serialize as one token.
+    // Re-quote standalone phrases or serialization would split them into separate search tokens.
     const stripped = stripRepoQualifiers('"needs review" repo:x/y')
     expect(stripped).toBe('"needs review"')
   })

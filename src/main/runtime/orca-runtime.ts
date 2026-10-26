@@ -1,5 +1,13 @@
+import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
+import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
+import {
+  OrcaRuntimeWithSidebarTemporal,
+  sidebarFactsRuntime
+} from './sidebar-inputs/orca-runtime-sidebar-temporal'
+import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -13,38 +21,110 @@ import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invali
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
   listReferenceWorkspaces,
-  selectReferenceWorkspace,
+  selectWarmedReferenceWorkspace,
   listWorkspaceReferences
 } from './runtime-reference-catalog'
 import { findWorkspaceReferences } from './runtime-reference-find'
 import { createReferenceAgentIndex, referenceConnectionHosts } from './runtime-reference-agents'
 import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
+import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
+import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
+import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
+import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
+import { getMainHttpClient } from '../network/http-client'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+import { CollapseWriteOrder } from './workspace-view-collapse-writes'
+import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
+import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
+import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
+import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 
-class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
-  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
-    const catalog = listReferenceWorkspaces(
-      this.requireStore(),
-      this.resolvedWorktrees.peek()?.worktrees
-    )
-    try {
-      return selectReferenceWorkspace(catalog, selector, cwd)
-    } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
-        throw error
-      }
-      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
-      const warmed = listReferenceWorkspaces(
-        this.requireStore(),
-        await this.listResolvedWorktrees()
+const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
+  ? OrcaRuntimeWithSidebarTemporal
+  : OrcaRuntimeWithAgentTransitions
+
+// oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
+class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  /** Sidebar facts are absent unless ORCA_SIDEBAR_INPUTS=main. */
+  get sidebarFacts() {
+    return sidebarFactsRuntime(this)
+  }
+  // Idle without relay hosts; refresh only while a window or phone consumes sidebar state.
+  readonly pairedServerRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new PairedServerRowsProducer({
+        hasDemand: () =>
+          this.sidebarInputsFeed?.subscribed === true ||
+          (this.authoritativeWindowId !== null &&
+            this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+            this.store?.getUI?.().sidebarOpen !== false),
+        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
+      })
+    : null
+  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new RepoIconDataUrls({
+        repos: () => this.store?.getRepos() ?? [],
+        // The desktop net.fetch wrapper rejects manual redirects.
+        fetch: (url, init) => {
+          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
+          return manualRedirectFetch
+            ? manualRedirectFetch(url, init)
+            : getMainHttpClient().fetch(url, init)
+        },
+        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+      })
+    : null
+  readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
+  readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new WorkspaceRowsProducer({
+        store: this.store,
+        // Join metadata at read time so writes do not wait on Git scans.
+        scan: () => this.scanResolvedWorktreeRepos(),
+        join: (scans) => this.joinResolvedWorktreeScans(scans),
+        visible: (snapshot) => this.visibleResolvedWorktreeSnapshot(snapshot),
+        lifecycle: this.workspaceLifecycle,
+        onClientEvent: (listener, options) => this.onClientEvent(listener, options)
+      })
+    : null
+  readonly sidebarInputsFeed = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new SidebarInputsFeed(
+        () =>
+          sidebarInputsFeedDomains({
+            facts: requireSwitchedOn(this.sidebarFacts),
+            pairedServerRows: requireSwitchedOn(this.pairedServerRows),
+            workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
+            workspaceRows: requireSwitchedOn(this.workspaceRows),
+            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            store: () => this.store,
+            onClientEvent: (listener, options) => this.onClientEvent(listener, options)
+          }),
+        (event) => this.emitClientEvent(event)
       )
-      return selectReferenceWorkspace(warmed, selector, cwd)
-    }
+    : null
+
+  private selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
+    return selectWarmedReferenceWorkspace(
+      this.requireStore(),
+      {
+        cached: () => this.resolvedWorktrees.peek()?.worktrees,
+        scan: () => this.listResolvedWorktrees()
+      },
+      selector,
+      cwd
+    )
   }
 
   async listWorkspaceReferences(selector: string, cwd?: string) {
@@ -80,22 +160,28 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
-    // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
-    // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
-    // module registers the generation bump at load; a headless host never loads it.
+    // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
-  /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
+  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+
+  /** Subscribe from first use; returns the release function. */
+  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+    return this.structuredAgentAvailability.subscribe(read)
+  }
+
+  /** Whether a layout-owning window can show a tab before process creation. */
   canPublishAgentLaunchTab(): boolean {
     return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
   }
 
-  /** Shows an agent launch's tab before its process exists, in the window that owns the layout;
-   *  null when no window does, and the launch's tab then appears when it spawns, as before. */
+  /** Publish before spawn when a window owns the layout; otherwise return null. */
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
@@ -105,8 +191,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     return this.notifier.publishAgentLaunchTab(request)
   }
 
-  /** Tells the window a launch pane's fate: it keeps a final one on the tab, clears a settled one,
-   *  and takes a withdrawn pane back (the pane alone when the user split the tab). */
+  /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */
   reportAgentLaunchPaneVerdict(
     pane: AgentLaunchPaneAddress,
     verdict: AgentLaunchPaneVerdict
@@ -119,48 +204,90 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     open: () => this.openAgentSessionRecordStore()
   })
 
-  /** Startup is done; the launch record may open once a client that can launch is here too. */
+  /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
   }
 
-  /** A client that can call `agent.launch` connected; its first launch should not open the record. */
+  /** Warm up before the first client launch so that launch does not open the record. */
   noteAgentLaunchClientReady(): void {
     this.agentLaunchRecordWarmup.launchClientReady()
   }
 
-  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
-  hasLiveTerminalForPaneKey(paneKey: string): boolean {
-    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
+  /** Plan a pane spawn through the host launch planner, including runtime attribution. */
+  async planAgentPaneLaunch(
+    worktreeId: string,
+    opts: TerminalCreateOptions
+  ): Promise<TerminalCreateOptions> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    return this.resolveAgentTerminalCreateOptions(workspace, opts)
   }
 
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
     store: () => this.store,
-    homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key)
+    homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
+    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
+    ...this.paneFactSources()
   })
 
-  /** The read-only layout stream (`layout.subscribe`, not advertised yet). */
+  protected markPaneLiveTitlesDirty(): void {
+    this.workspaceLayoutStream.markLiveTitlesDirty()
+  }
+
+  /** Read-only layout stream; layout.subscribe is not advertised yet. */
   subscribeWorkspaceLayouts(
     listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
   ): ReturnType<WorkspaceLayoutStream['subscribe']> {
     return this.workspaceLayoutStream.subscribe(listener)
   }
 
-  /** This desktop's display-only copy of each paired server's layout (`layout.getRemoteSnapshots`). */
+  /** Current main-owned layout projection, independent of window availability. */
+  get workspaceLayoutReads(): WorkspaceLayoutReads {
+    return this.workspaceLayoutStream
+  }
+
+  /** Apply a window command to the partitions that hold its tab. */
+  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+    // Wait for live terminal placement before creating the first workspace surface.
+    const placing = this.livePlacementSettledFor(command)
+    const apply = (): Promise<LayoutApplyReply> =>
+      applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        command,
+        (move) => rekeyMovedPaneOwners(this, move),
+        this.layoutCommandRun(command)
+      )
+    // Order sleep/wake after previously accepted hook statuses.
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
+      ? this.inResumeRecordOrder(apply)
+      : (placing?.then(apply) ?? apply()))
+    // The frame precedes the reply so the window can wait for its visible change.
+    return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
+  }
+
+  /** Display-only copies of paired-server layouts. */
   getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
     return this.store?.getRemoteLayoutSnapshots?.() ?? {}
   }
 
-  /** The launch record when it is already open, for a reader that must not wait for it. */
+  /** Return the already-open record store without waiting. */
   openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
     return peekOpenedAgentSessionRecordStore()
   }
 }
+// Linear installs these methods on the final runtime prototype below.
+// oxlint-disable-next-line typescript/consistent-type-definitions -- SAFETY: This merge models the installed Linear API.
+interface OrcaRuntimeService extends RuntimeLinearCommandSurface {}
+
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>
-const OrcaRuntimeServiceExport = OrcaRuntimeService as unknown as {
+const OrcaRuntimeServiceExport: {
   new (...args: ConstructorParameters<typeof OrcaRuntimeService>): OrcaRuntimeServiceExport
   readonly prototype: OrcaRuntimeServiceExport
-}
+} = OrcaRuntimeService
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 

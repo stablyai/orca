@@ -1,11 +1,4 @@
-/**
- * Exactly one host sidebar on a wide layout, under every shell and page pairing, counted off the
- * real host layout rendered once natively and once per page document the shell would mount. Which
- * sessions are served comes from the real reducer against each desktop's manifest.
- *
- * Two renderers are stand-ins because their code is not on this branch: the shipped shell's layout
- * drew whenever it was wide, and so did a page built before `canOwnHostArea`.
- */
+// Count sidebars from the real layout and reducer decisions; model released layouts/pages separately because both rendered whenever wide before canOwnHostArea.
 import { useCallback, useContext } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -31,7 +24,6 @@ const env = vi.hoisted(
     height: number
     pathname: string
     renderer: Renderer
-    /** The host route's session beneath, as the real reducer left it; null for none mounted. */
     hostSession: MobileWebShellSession | null
     reports: boolean[]
   } => ({
@@ -46,7 +38,6 @@ const env = vi.hoisted(
 
 vi.mock('react-native', () => ({
   ...mocks['react-native'](),
-  // The page renderers are web documents; the rest are the native app.
   Platform: {
     get OS() {
       return env.renderer === 'page' || env.renderer === 'old-page' ? 'web' : 'ios'
@@ -75,9 +66,8 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
-// The screen's session is the reducer's, as `sessionFor` carried it.
 vi.mock('./use-mobile-web-shell-session', () => ({
   useMobileWebShellSession: () => ({
     ...mocks['./use-mobile-web-shell-session']().useMobileWebShellSession(),
@@ -101,7 +91,6 @@ vi.mock('../components/HostProtocolGate', () => ({
   HostProtocolGate: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../host-screen/HostScreen', () => ({ HostScreen: HostSidebar }))
-// The real host-route shell screen when one is mounted, with its reports to the layout recorded.
 vi.mock('../navigation/host-stack', async () => {
   const serving = await import('./host-area-serving')
   const { MobileWebShellScreen } = await import('./MobileWebShellScreen')
@@ -118,7 +107,7 @@ vi.mock('../navigation/host-stack', async () => {
       return (
         <serving.HostAreaServingContext.Provider value={recorded}>
           {env.hostSession === null ? null : (
-            <MobileWebShellScreen hostId="host-1" route={{ pathname: HOST }} fallback={null} />
+            <MobileWebShellScreen hostId="host-1" route={{ pathname: HOST }} />
           )}
         </serving.HostAreaServingContext.Provider>
       )
@@ -133,7 +122,6 @@ vi.mock('../transport/host-client-hooks', () => ({
   usePrimeHosts: () => () => {},
   useRefreshHostClient: () => () => {}
 }))
-// The page's override, as each document would resolve it; an old page drew whenever wide.
 vi.mock('./page-owns-host-area', async () => {
   const native =
     await vi.importActual<typeof import('./page-owns-host-area')>('./page-owns-host-area')
@@ -192,8 +180,6 @@ function pageRoutes(page: Page): MobileWebPageRoute[] | null {
   ]
 }
 
-/** The real reducer's session for this route against this desktop's page, as the hook drives it:
- *  opened, told its layout class, and carried to `activating` if it serves the page. */
 function sessionFor(page: Page, pathname: string, wide: boolean) {
   const routes = pageRoutes(page)
   const opened = run(
@@ -251,10 +237,7 @@ async function sidebarsIn(
   return count
 }
 
-/**
- * Every sidebar on screen with the native stack showing `at`. `hostAreaBeneath` is a detail pushed
- * over the host route (a handoff to a native screen), as opposed to one deep-linked in on its own.
- */
+// hostAreaBeneath models a detail pushed over the host page; without it, the detail was deep-linked.
 async function countSidebars(
   shell: Shell,
   page: Page,
@@ -266,7 +249,6 @@ async function countSidebars(
   const pageCode: Renderer = page === 'declared' ? 'page' : 'old-page'
   if (shell === 'shipped') {
     const native = await sidebarsIn('shipped-shell', window, { pathname: at })
-    // The shipped wide host route is a native placeholder; every other route opens the page.
     const opens = page !== 'none' && !(wide && at === HOST) && served(page, at, false)
     const pane = wide ? { ...window, width: window.width - SIDEBAR } : window
     return { native, pages: opens ? await sidebarsIn(pageCode, pane, { pathname: at }) : 0 }
@@ -297,7 +279,6 @@ describe('host sidebars on screen, per shell, page and width, on the host route'
     ['shipped', 'declared', true, { native: 1, pages: 0 }],
     ['new', 'none', true, { native: 1, pages: 0 }],
     ['new', 'undeclared', true, { native: 1, pages: 0 }],
-    // The page owns the area: the native layout steps aside on this route only.
     ['new', 'declared', true, { native: 0, pages: 1 }]
   ]
 
@@ -308,9 +289,8 @@ describe('host sidebars on screen, per shell, page and width, on the host route'
 
 describe('host sidebars on a wide detail route', () => {
   const rows: [string, Shell, Page, boolean, { native: number; pages: number }][] = [
-    // The one pairing nothing on this branch reaches: both sides are already released.
+    // Both released versions are outside this tree; retain their pairing as a compatibility fixture.
     ['old app opening a detail', 'shipped', 'undeclared', false, { native: 1, pages: 1 }],
-    // A new page in an old shell never had the init fact, so it draws none.
     ['old app opening a detail', 'shipped', 'declared', false, { native: 1, pages: 0 }],
     ['deep link or notification', 'new', 'none', false, { native: 1, pages: 0 }],
     ['deep link or notification', 'new', 'undeclared', false, { native: 1, pages: 0 }],
@@ -338,8 +318,7 @@ describe('the native sidebar beside a declaring page on its way in', () => {
   ).session
   const failed = run(fetching, { type: 'download-failed', cause: BUNDLE_REFUSED }).session
   const rechecking = run(failed, { type: 'retry-pressed' }).session
-  // Shown until the manifest says the page owns the area, then full screen like a phone's,
-  // a failure included; a retry checks again, with it back.
+  // Keep native sidebar until ownership is declared, including failures; retry must show it while checking again.
   const rows: [string, MobileWebShellSession, number][] = [
     ['checking', checking, 1],
     ['fetching', fetching, 0],

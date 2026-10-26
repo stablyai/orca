@@ -119,7 +119,7 @@ function serializedLifecycleBatchOverhead(
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1
 }
 
-/** Sized as a Stop may write it (`turnEndAfterStop`), so the chunk built from it still fits. */
+// Budget for Stop's expanded turn outcome so the written mutation still fits.
 function sizedAsStopped(mutation: JournalLifecycleMutationInput): JournalLifecycleMutationInput {
   if (
     mutation.kind !== 'item' ||
@@ -136,6 +136,8 @@ function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): Journa
   return journalLifecycleMutationRow(
     sizedAsStopped(mutation),
     journalLifecycleMutationItemId(mutation),
+    Number.MAX_SAFE_INTEGER,
+    // Budget for the widest possible provenance value.
     Number.MAX_SAFE_INTEGER
   )
 }

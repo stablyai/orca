@@ -46,8 +46,7 @@ function compositeTerminalBackground(
     return null
   }
 
-  // Why: transparent terminal backgrounds visually blend with the app surface,
-  // so title UI must use the composited color rather than the raw alpha color.
+  // Composite transparent terminal backgrounds with the app surface before choosing title contrast.
   const alpha = clampNumber(color.a * (options.backgroundOpacity ?? 1), 0, 1)
   const appSurface = APP_SURFACE_COLORS[options.appSurface ?? 'dark']
   return alpha < 1 ? compositeRgb(color, appSurface, alpha) : { ...color, a: 1 }
@@ -106,8 +105,7 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
   return { r: channels[0]!, g: channels[1]!, b: channels[2]!, a: alpha }
 }
 
-// Why: imported terminal themes can supply modern rgb() syntax; keep this
-// render-path parser from allocating regex split arrays.
+// Support imported modern rgb() without allocating regex-split arrays on the render path.
 function getCssRgbFunctionWhitespaceParts(body: string, maxParts: number): string[] {
   const parts: string[] = []
   let tokenStart = -1

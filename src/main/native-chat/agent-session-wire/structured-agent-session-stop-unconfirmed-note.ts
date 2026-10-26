@@ -1,5 +1,4 @@
-// A Stop saved, then unable to confirm it took effect, says so on the turn it is about: its answer
-// is its receipt, so this row is how the chat learns the cancellation was not confirmed.
+// The durable Stop receipt stays fixed; this note communicates cancellation uncertainty.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -10,13 +9,13 @@ import type {
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type StopNoteContext = Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'logger' | 'sessionId'>
 
-/** Keyed as the Stop's own note (`stopKey`: its turn, else its operation), so it replaces whatever
- *  that note said. Bookkeeping: a write that fails is logged. */
+/** Replace the Stop’s note by turn/operation key; log failed writes. */
 export async function noteStructuredAgentSessionStopUnconfirmed(
-  ctx: StopNoteContext,
+  ctx: StopNoteContext & Pick<AgentSessionTurnContext, 'currentWork'>,
   stop: { turnId: string | null; operationId: string },
   error: unknown,
   turnScope?: AgentJournalTurnScope
@@ -37,11 +36,11 @@ export async function noteStructuredAgentSessionStopUnconfirmed(
       (stop.turnId !== null
         ? structuredAgentSessionNamedTurnScope(ctx.journal, stop.turnId)
         : null) ??
-      ctx.journal.liveTurnScope()
+      contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   )
 }
 
-/** Writes a Stop's note under its key; what the Stop did stands whether or not the note lands. */
+/** Best-effort feedback cannot change the accepted Stop result. */
 export async function writeStructuredAgentSessionStopNote(
   ctx: StopNoteContext,
   stopKey: string,

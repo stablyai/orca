@@ -1,7 +1,4 @@
-/**
- * A structured worker whose launch throws after its session exists: the caller never gets a
- * placement to tear down, so the placement itself must discard the session.
- */
+/** Placement must discard structured sessions created before a throw, because callers receive no placement to tear down. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchModeReceipt } from '../../../../../agent-launch/agent-launch-mode'
@@ -11,7 +8,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type * as StructuredWorkerSessionModule from '../../orchestration-structured-worker-session'
 import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 const discard = vi.hoisted(() => vi.fn(async (_sessionId: string) => {}))
 const surfaced = vi.hoisted((): { sessionId: string | null } => ({ sessionId: null }))

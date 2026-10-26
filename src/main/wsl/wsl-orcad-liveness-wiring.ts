@@ -1,7 +1,10 @@
-/** The production probes behind `WslOrcadLivenessSupervisor`; C7 supplies what is user-visible. */
+/** C7 supplies visible demand; these production probes serve the WSL liveness supervisor. */
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
-import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import {
+  type OrcadTerminalCensus,
+  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+} from '../../shared/orcad-terminal-census'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../system-power-lifecycle'
 import {
@@ -16,12 +19,6 @@ import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
 
-const UNVERIFIABLE_CENSUS: OrcadTerminalCensus = {
-  liveSessions: null,
-  startedSinceActivation: null,
-  daemonProtocolVersion: null
-}
-
 function transportFor(distro: string, environmentId = defaultWslOrcadEnvironmentId(distro)) {
   return createWslOrcadHostTransport({
     target: { kind: 'wsl', id: environmentId, distro, label: distro }
@@ -33,7 +30,7 @@ function collectWslOrcadCensus(connection: WslOrcadConnection): Promise<OrcadTer
   const offer = parsePairingCode(connection.pairingOffer)
   return offer
     ? requestOrcadTerminalCensus(pairedRuntimeConnectionFromOffer(offer), 0)
-    : Promise.resolve(UNVERIFIABLE_CENSUS)
+    : Promise.resolve(UNVERIFIABLE_ORCAD_TERMINAL_CENSUS)
 }
 
 export function createWslOrcadLivenessSupervisor(options: {

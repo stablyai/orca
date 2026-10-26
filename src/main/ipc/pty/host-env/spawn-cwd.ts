@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -10,6 +10,33 @@ import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus
 } from '../../../project-groups/folder-workspace-path-status'
+import {
+  isWslMoveWorkspaceBlocked,
+  WslMoveProjectFencedError
+} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
+
+/** WSL moves block new PTYs, but proven daemon reattach must survive reload; folder workspaces still require usable paths. */
+export function assertWorkspaceAcceptsNewPty(
+  store: Store | undefined,
+  worktreeId: string | undefined,
+  sessionId?: string
+): Promise<void> | void {
+  if (isWslMoveWorkspaceBlocked(store, worktreeId)) {
+    return assertReattachesLiveSession(sessionId).then(() =>
+      assertFolderWorkspacePtyPathUsable(store, worktreeId)
+    )
+  }
+  return assertFolderWorkspacePtyPathUsable(store, worktreeId)
+}
+
+async function assertReattachesLiveSession(sessionId: string | undefined): Promise<void> {
+  // An unanswered census is never proof the session lives, so it refuses.
+  const live = sessionId ? await listLiveDaemonPtyIds() : null
+  if (!sessionId || !live?.includes(sessionId)) {
+    throw new WslMoveProjectFencedError()
+  }
+}
 
 export function assertFolderWorkspacePtyPathUsable(
   store: Store | undefined,
@@ -40,13 +67,14 @@ export function resolvePtySpawnStartupCwd(
   })
 }
 
-export function localStartupCwdDirectoryExists(path: string): boolean {
-  // Why: Win32 statSync on \\wsl.localhost 9P shares can falsely report ENOENT; defer to the provider's WSL-aware validation.
+export async function localStartupCwdDirectoryExists(path: string): Promise<boolean> {
+  // Win32 9P stat can falsely report WSL-share absence; defer to WSL-aware provider validation.
   if (isWslUncPath(path)) {
     return true
   }
+  // A dead network mount must not block main's event loop.
   try {
-    return statSync(path).isDirectory()
+    return (await stat(path)).isDirectory()
   } catch {
     return false
   }

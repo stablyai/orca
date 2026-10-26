@@ -55,6 +55,35 @@ function parseCjkFriendlyMarkdown(markdown: string) {
 }
 
 describe('MarkdownPreviewBody', () => {
+  it('renders forward reference links in research prose and tables without exposing definitions', () => {
+    const url = 'https://github.com/example/app/blob/revision/src/app/(mobile)/language.tsx#L95'
+    const markdown = [
+      '# Language picker research',
+      '',
+      'Sources: [Picker][picker], [Automatic][], and [Settings].',
+      '',
+      '| App | Evidence |',
+      '| --- | --- |',
+      '| Example | [Picker][picker] |',
+      '',
+      `[picker]: ${url} "Mobile picker"`,
+      '[automatic]: https://example.com/automatic',
+      '[settings]: ./settings.md'
+    ].join('\n')
+
+    const html = renderToStaticMarkup(<MarkdownPreviewBody content={markdown} components={{}} />)
+
+    expect(html).toContain('<h1 id="language-picker-research">Language picker research</h1>')
+    expect(html.split(`href="${url}"`)).toHaveLength(3)
+    expect(html).toContain('title="Mobile picker"')
+    expect(html).toContain('<a href="https://example.com/automatic">Automatic</a>')
+    expect(html).toContain('<a href="./settings.md">Settings</a>')
+    expect(html).toContain('<table>')
+    expect(html).not.toContain('[picker]')
+    expect(html).not.toContain('[automatic]')
+    expect(html).not.toContain('[settings]')
+  })
+
   it.each(cjkEmphasisExamples)('renders emphasis for $name', ({ markdown, expectedHtml }) => {
     const html = renderToStaticMarkup(<MarkdownPreviewBody content={markdown} components={{}} />)
 

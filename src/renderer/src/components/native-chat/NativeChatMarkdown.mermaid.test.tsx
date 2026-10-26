@@ -3,6 +3,19 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+})
+
 const mermaid = vi.hoisted(() => ({ initialize: vi.fn(), render: vi.fn() }))
 const theme = vi.hoisted(() => ({ value: 'light', listeners: new Set<() => void>() }))
 vi.mock('mermaid', () => ({ default: mermaid }))
@@ -40,7 +53,6 @@ function reply(source: string, streaming: boolean): React.JSX.Element {
 }
 
 const heldRenders: PromiseWithResolvers<{ svg: string }>[] = []
-/** Holds the next Mermaid render until the test settles it. */
 function holdNextRender(): PromiseWithResolvers<{ svg: string }> {
   const held = Promise.withResolvers<{ svg: string }>()
   heldRenders.push(held)

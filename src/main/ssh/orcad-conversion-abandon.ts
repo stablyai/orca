@@ -1,12 +1,8 @@
-/**
- * Gives a host whose conversion stopped short back to the relay. A destination that was never
- * registered held nothing; a registered one must prove through an abort that it holds nothing,
- * and is unregistered before the fence goes so no later start re-fences the host to it.
- */
+/** Registered destinations must abort/prove empty, then unregister before fence release so later starts cannot reclaim the host. Never-registered destinations held nothing. */
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import {
   abortOrcadMigrationCutover,
   type OrcadMigrationAbortResult,
@@ -27,7 +23,7 @@ export async function abandonOrcadConversion(args: {
   destinationFor: (environment: KnownRuntimeEnvironment) => OrcadMigrationDestinationCatalog
 }): Promise<OrcadMigrationAbortResult | 'none'> {
   const cutover = findOrcadMigrationSourceCutoverForTarget(args.userDataPath, args.targetId)
-  // A delta move keeps its committed chain; it resolves through the delta flow, never here.
+  // Committed delta chains resolve only through the delta flow.
   if (!cutover || cutover.supersedesMigrationId) {
     return 'none'
   }

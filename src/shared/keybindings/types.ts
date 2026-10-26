@@ -85,6 +85,7 @@ export type KeybindingActionId =
   | 'browser.reload'
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
+  | 'browser.showHistory'
   | 'browser.grabElement'
   | 'browser.annotateElement'
   | 'editor.find'
@@ -153,6 +154,8 @@ export type KeybindingDefinition = {
   searchKeywords: readonly string[]
   defaultBindings: PlatformBindings
   allowInTerminal?: boolean
+  // Leaving it out means a focused text field keeps every key.
+  allowInTextField?: 'non-default-chords'
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string
@@ -201,4 +204,6 @@ export type KeybindingConflict = {
 export type FindKeybindingConflictOptions = {
   ignoredActionIds?: Iterable<KeybindingActionId>
   relevantActionIds?: Iterable<KeybindingActionId>
+  /** Settings-only diagnostic; the loader and writes keep the scope-only check so saved overrides still load. */
+  includeMainProcessInterception?: boolean
 }

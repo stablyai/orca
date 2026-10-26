@@ -64,21 +64,18 @@ export function structuredSessionMailReach(
   }
   const live = running.record
   if (isOrcaSessionId(live.sessionId) && !addressableSessionParty(live.sessionId, db)) {
-    // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
+    // Lost worker identity cannot act through the caller resolver and therefore cannot read mail.
     return { kind: 'ended', reason: 'worker-identity-lost' }
   }
   const visible = store.getVisibleSessionTabIndex?.()
   if (visible?.present && !visible.sessionIds.includes(live.sessionId)) {
-    // Why: reviving a chat the user closed would run turns nobody can see; its mail waits instead.
+    // Do not revive closed chats into invisible turns; their mail waits.
     return { kind: 'ended', reason: 'closed' }
   }
   return { kind: 'reachable', session: live }
 }
 
-/**
- * The party a session resolves to, or null for a worker whose identity this host lost: the party
- * resolver refuses it in every role, so it can never read mail and none is owed to it.
- */
+/** Exclude only proven lost worker identity, which the party resolver refuses in every role. */
 export function addressableSessionParty(
   sessionId: OrcaSessionId,
   db: OrchestrationDb | null | undefined

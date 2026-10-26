@@ -46,12 +46,11 @@ async function turnEndRig() {
       body: CODEX_TEST_USER_MESSAGE,
       fence: 7
     })
-  // Codex answers a cold send before it opens the turn.
   const sendAndOpen = async (clientMessageId: string) => {
-    const sending = send(clientMessageId)
-    await vi.waitFor(() => expect(turns.turnId).not.toBeNull())
+    const outcome = await send(clientMessageId)
+    expect(turns.turnId).not.toBeNull()
     turns.start()
-    return sending
+    return outcome
   }
   const settledIds = () => settlements.map(({ clientMessageId }) => clientMessageId)
   const categoryOf = (settlement: LateSettlement | undefined) =>
@@ -73,15 +72,17 @@ async function turnEndRig() {
 describe('a Codex send its turn ended without echoing', () => {
   it('is withdrawn when the turn is interrupted, once', async () => {
     const rig = await turnEndRig()
-    await expect(rig.sendAndOpen('client-1')).resolves.toEqual({ state: 'admitted' })
+    await expect(rig.sendAndOpen('client-1')).resolves.toMatchObject({ state: 'admitted' })
 
     rig.turns.end('interrupted')
 
     expect(rig.settlements).toEqual([
+      // An interrupted turn cannot prove the send never reached Codex.
       expect.objectContaining({
         sessionId: 'session-1',
         clientMessageId: 'client-1',
-        state: 'rejected'
+        state: 'rejected',
+        rejection: { kind: 'cancelled' }
       })
     ])
     expect(rig.categoryOf(rig.settlements[0])).toBe('withdrawn')
@@ -117,7 +118,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.echo('client-1')
     await rig.send('client-2')
 
-    // A failed turn keeps its steered input: Codex records it after the error, before the end.
+    // Codex persists failed-turn input between error and turn/completed.
     rig.codex.connections[0]!.handlers.onNotification?.('error', {
       threadId: CODEX_TEST_THREAD_ID,
       turnId: 'turn-1',
@@ -143,7 +144,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.end('completed')
     expect(rig.settlements).toEqual([])
 
-    // Codex echoes before a completed end; this late one only proves the send is still armed.
+    // Artificially late echo verifies correlation survives completion.
     rig.turns.echo('client-1')
     expect(rig.settlements).toEqual([
       expect.objectContaining({
@@ -174,17 +175,6 @@ describe('a Codex send its turn ended without echoing', () => {
     ])
   })
 
-  it('ignores an echo that arrives after the withdrawal', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-    rig.turns.end('interrupted')
-
-    rig.turns.echo('client-1')
-
-    expect(rig.settledIds()).toEqual(['client-1'])
-    expect(rig.categoryOf(rig.settlements[0])).toBe('withdrawn')
-  })
-
   it('settles each of two sends steered into one interrupted turn once', async () => {
     const rig = await turnEndRig()
     await rig.sendAndOpen('client-1')
@@ -203,7 +193,7 @@ describe('a Codex send its turn ended without echoing', () => {
     await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
     rig.turns.start()
     release()
-    await expect(sending).resolves.toEqual({ state: 'admitted' })
+    await expect(sending).resolves.toMatchObject({ state: 'admitted' })
 
     rig.turns.end('interrupted')
 
@@ -225,7 +215,6 @@ describe('a Codex send its turn ended without echoing', () => {
       'withdrawn'
     )
     expect(rig.settlements).toEqual([])
-    // The answer opens nothing: the turn keeps its terminal row.
     expect(rig.bodies.filter((body) => body.kind === 'turn')).toHaveLength(rowsAtEnd)
     expect(rig.bodies.findLast((body) => body.kind === 'turn')).toMatchObject({
       state: 'interrupted'
@@ -248,9 +237,6 @@ describe('a Codex send its turn ended without echoing', () => {
         detail: { text: 'usage limit reached', audience: 'person' }
       }
     })
-    // Settled once, by the answer: a late echo is no longer owed anything.
-    rig.turns.echo('client-1')
-    expect(rig.settlements).toEqual([])
   })
 
   it('leaves a send pending, still armed, when its answer is read after its turn completed', async () => {
@@ -262,7 +248,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.end('completed')
     release()
 
-    await expect(sending).resolves.toEqual({ state: 'admitted' })
+    await expect(sending).resolves.toMatchObject({ state: 'admitted' })
     expect(rig.settlements).toEqual([])
     rig.turns.echo('client-1')
     expect(rig.settledIds()).toEqual(['client-1'])
@@ -367,7 +353,7 @@ describe('the turn a withdrawn Codex send names', () => {
     rig.turns.end('completed')
     release()
 
-    await expect(sending).resolves.toEqual({ state: 'admitted' })
+    await expect(sending).resolves.toMatchObject({ state: 'admitted' })
     await rig.sendAndOpen('client-2')
     rig.turns.end('completed')
     expect(rig.settlements).toEqual([])

@@ -18,4 +18,18 @@ describe('mapBridgeError', () => {
     expect(mapBridgeError('unknown element_index').code).toBe('element_not_found')
     expect(mapBridgeError('element metadata unavailable').code).toBe('accessibility_error')
   })
+
+  it('names the python3 that could not load PyGObject', () => {
+    const error = mapBridgeError(
+      "PyGObject unavailable in interpreter: /home/me/.pyenv/shims/python3\nNo module named 'gi'"
+    )
+    expect(error.code).toBe('unsupported_capability')
+    expect(error.message).toContain('(/home/me/.pyenv/shims/python3)')
+  })
+
+  it('says computer use is unavailable when no python3 is on PATH', () => {
+    const error = mapBridgeError('spawn python3 ENOENT')
+    expect(error.code).toBe('unsupported_capability')
+    expect(error.message).toContain("Computer use isn't available on this host")
+  })
 })

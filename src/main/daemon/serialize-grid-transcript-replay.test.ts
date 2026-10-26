@@ -12,12 +12,9 @@ import {
   type Verdict
 } from './serialize-grid-roundtrip'
 
-// Replays captured agent/TUI PTY transcripts through the serialize round trip
-// under resize schedules the app never saw (a pane resized while hidden), and
-// serializes at random chunk boundaries. With ORCA_OLD_SERIALIZE_ADDON set it
-// also checks I1/I3 against the previous build; see serialize-grid.differential.fuzz.test.ts.
-//   SERIALIZE_TRANSCRIPT_DIR=<dir>  also replay local, uncommitted captures (<name>.txt + .meta.json)
-//   SERIALIZE_TRANSCRIPT_SEEDS=20   seeds per transcript × schedule (default 2)
+// Replay captured PTY streams with synthetic resizes and random snapshot boundaries.
+// ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons; see serialize-grid.differential.fuzz.test.ts.
+// SERIALIZE_TRANSCRIPT_DIR adds local captures (<name>.txt + .meta.json); SERIALIZE_TRANSCRIPT_SEEDS defaults to 2.
 
 const FIXTURE_DIRS = [
   join(__dirname, '../runtime/__fixtures__'),
@@ -27,71 +24,64 @@ const EXTRA_DIR = process.env.SERIALIZE_TRANSCRIPT_DIR
 const OLD_ADDON_PATH = process.env.ORCA_OLD_SERIALIZE_ADDON
 const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
 
-// Checkpoints (default seeds) whose new replay diverges exactly as the previous
-// build's did — pre-existing serializer limitations, not regressions (verified
-// with ORCA_OLD_SERIALIZE_ADDON): the live SGR pen leaks into the alt buffer, and
-// an alt buffer first entered after a shrink keeps hidden scrollback. Shrink when one is fixed.
+// Default-seed counts reproduce baseline serializer limitations; reduce counts as those faults are fixed.
 const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
   opencode: 5,
-  // Captured boots expose the existing background/cursor restore loss; serializer code is unchanged.
+  // Boot captures expose existing background and cursor restore loss.
   'opencode-1-18-32-timed-boot-hidden-pane': 16,
   'opencode-1-18-32-timed-boot-slow': 16,
   'opencode-1-18-32-timed-first-launch': 16,
   'opencode-2-0-18-timed-boot-hidden-pane': 14,
-  // STA-9359 OpenCode 2 captures, serializer untouched: every background diff is the live pen's
-  // panel colour on restored cells, plus the rows kept below the source after a shrink.
+  // OpenCode 2 captures retain live-pen background colors and hidden rows after shrink.
   'opencode-2-0-14-timed-cold-standalone': 4,
   'opencode-2-0-21-timed-cold-standalone': 36,
   'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
   'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
   'opencode-cmd-2-0-21-timed-warm-server': 21,
-  // The same, plus the cursor one column short after a shrink and the pen's bold bit on a glyph.
+  // Narrow captures also restore a cursor one column short and leak the pen’s bold attribute.
   'opencode-2-0-21-timed-narrow-pane': 8,
-  // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
+  // Qoder also restores the cursor one column short after shrinking.
   'qoder-no-account': 2,
   'qoder-ready': 2,
-  // Codex 0.157 header border restores with an extra attribute bit (STA-8628 fixtures).
+  // Codex 0.157 header borders restore with an extra attribute bit.
   'codex-0157-config-override-embedded-warning': 22,
   'codex-0157-effort-override-embedded-warning': 4,
   'codex-0157-no-daemon-effort-override': 16,
   'codex-0157-plain-ready': 18,
-  // Fresh-home 0.157/0.158 captures: the live pen's true-colour fg/bg leaks onto restored cells.
+  // Fresh-home Codex captures leak live-pen foreground and background colors.
   'codex-0157-fresh-home-daemon-install': 48,
   'codex-0158-fresh-home-greeting': 9,
   'codex-0158-model-announcement-dialog': 8,
-  // Codex 0.157/0.158 startup-dialog captures: the same live-pen true-colour leak onto restored cells.
   'codex-0157-update-available-dialog': 26,
   'codex-0158-update-available-dialog': 8,
   'codex-0157-hooks-review-dialog': 24,
   'codex-0158-hooks-review-dialog': 8,
   'codex-0157-model-retired-dialog': 22,
   'codex-0158-model-retired-dialog': 6,
-  // Same extra dim bit on the 0.157/0.158 header row (STA-8834 fixtures).
+  // These header rows restore with an extra dim attribute.
   'codex-0-157-1-update-dialog': 16,
   'codex-0-157-1-timed-sleep-turn': 6,
   'codex-0-158-0-approval': 12,
   'codex-0-158-0-timed-turn': 20,
   'codex-0-158-0-trustprompt': 36,
-  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  // Fullscreen captures match divergences in baseline b58f8197dc36.
   'codex-fullscreen-custom-footer': 18,
   'codex-fullscreen-early-input': 4,
   'codex-fullscreen-multiline-early-input': 10,
   'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
-  // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
-  // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
-  // background that the round trip does not restore to default. Verified as upstream, not a
-  // regression, by replaying it against the previous build
-  // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
+  // DSH’s true-color background loss also occurs in the previous build; I1 and I3 hold.
   'dsh-tui-ready-no-key': 10,
-  // Capacity capture (#28231): identical attribute leaks with the pre-capture serializer.
+  // Capacity captures reproduce baseline attribute leaks.
   'codex-model-capacity-fullscreen': 12,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
-  // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
-  // left on restored cells as DSH, plus Prime's cursor row after its alternate-screen repaints.
+  'hermes-0-22-slash-setup': 2,
+  // Hermes 0.22's bottom statusbar restores the cursor one column short after shrink.
+  'hermes-0-22-statusbar-bottom': 2,
+  // Agy/Cline/Prime reproduce background leaks; Prime also has cursor-row diffs after alt-screen repaint.
   'antigravity-1-2-14-busy-thinking': 2,
   'antigravity-1-2-14-command-palette': 4,
   'antigravity-1-2-14-draft': 4,
@@ -121,14 +111,15 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'prime-agent-0-9-8-tool-turn': 40,
   'prime-agent-0-9-8-trace-question': 4,
   'prime-agent-0-9-8-turn-ended': 24,
-  // OMP 18.4.5 captures, serializer untouched: after a shrink the restored cursor sits one column
-  // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
+  // OMP restores the cursor one column short after shrink, including in unscrubbed captures.
   'omp-18-composer': 2,
   'omp-18-composer-narrow': 7,
-  'omp-18-setup': 6
+  'omp-18-setup': 6,
+  // ConPTY’s wrap-pending cursor at column 120 restores at 119 without resizing.
+  'pwsh-7-6-psreadline-history-prediction-conpty': 2
 }
 
-// Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
+// Pin resize checkpoints and GridDiff hashes measured on baseline 6835b9b4e3ea.
 const FREEBUFF_BASELINE: Record<string, readonly string[]> = JSON.parse(
   readFileSync(join(__dirname, '__fixtures__/freebuff-serialize-baseline.json'), 'utf8')
 )
@@ -154,7 +145,7 @@ function readTranscripts(dir: string): Transcript[] {
     })
 }
 
-// Never splits a surrogate pair: PTY bytes reach JS as whole code points.
+// Preserve surrogate pairs to match decoded PTY chunks.
 function chunk(data: string, rng: () => number, count: number): string[] {
   const chunks: string[] = []
   let start = 0
@@ -226,9 +217,17 @@ describe('serialize round trip over captured PTY transcripts', () => {
       const blocking: string[] = []
       const failureSignatures: string[] = []
       for (const schedule of SCHEDULES) {
+        const cases: SerializeFuzzCase[] = []
+        for (let seed = 1; seed <= SEEDS; seed++) {
+          cases.push(buildReplayCase(transcript, schedule, false, seed))
+        }
         for (const conpty of [false, true]) {
-          for (let seed = 1; seed <= SEEDS; seed++) {
-            const testCase = buildReplayCase(transcript, schedule, conpty, seed)
+          for (const replayCase of cases) {
+            const { seed } = replayCase
+            const testCase: SerializeFuzzCase = {
+              ...replayCase,
+              category: conpty ? 'conpty' : 'normal'
+            }
             const run = await runSerializeFuzzCase(testCase, serializers)
             expect(run.sourceCrash).toBeNull()
             for (const check of run.checks) {
@@ -269,7 +268,7 @@ describe('serialize round trip over captured PTY transcripts', () => {
           'jitter/true/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63'
         ])
       }
-      // The pre-#22586 serializer has these same row-1 bold diffs on the untouched capture.
+      // Pre-#22586 builds reproduce these row-1 bold-attribute diffs on the original capture.
       if (SEEDS === 2 && transcript.name === 'dsb-6-9-0-folder') {
         expect(failureSignatures).toEqual([
           'jitter/false/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27',

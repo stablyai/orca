@@ -7,9 +7,9 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { OrcaRuntimeWithGetOrchestrationDispatchAuthority } =
-  await import('./orca-runtime-get-orchestration-dispatch-authority')
+  await import('./terminal/output/terminal-orchestration-authority')
 const { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } =
-  await import('./orca-runtime-verify-orchestration-compatibility-caller')
+  await import('./orchestration/terminal-authority/verify-orchestration-compatibility-caller')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -21,8 +21,7 @@ const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 const getAuthority =
   OrcaRuntimeWithGetOrchestrationDispatchAuthority.prototype.getOrchestrationDispatchAuthority
-// Both borrowed from the real prototype through their public surface: a stubbed copy of the
-// method under test would pin nothing.
+// Use the production prototype methods; stubbing the implementation would not exercise attestation.
 const verifyCaller =
   OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller.prototype
     .verifyOrchestrationCompatibilityCaller
@@ -60,9 +59,7 @@ function runtimeStub(overrides: Record<string, unknown> = {}) {
       getAuthority.call(runtimeStub(overrides), handle),
     orchestrationCompatibilityHostMatches: () => true,
     attestAgentHookCompatibilityAuthorityFn: undefined,
-    // `freeze...` is protected and is reached only on the SUCCESS path, which every test here
-    // asserts is never taken. Leaving it off the stub means a regression that does reach it fails
-    // loudly instead of quietly returning a frozen authority.
+    // Omit the protected success-only freeze method so bypassing refusal fails loudly.
     ...overrides
   }
 }

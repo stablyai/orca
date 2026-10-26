@@ -1,13 +1,11 @@
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { fetchNudge, shouldApplyNudge } from '../updater-nudge'
 import { NUDGE_ACTIVATION_COOLDOWN_MS, NUDGE_POLL_INTERVAL_MS } from './updater-state'
 import { UpdaterBuildSelection } from './updater-build-selection'
 
-/** Polls update campaigns and exposes their dismissal actions. */
 export abstract class UpdaterNudge extends UpdaterBuildSelection {
   protected async checkForUpdateNudge(): Promise<void> {
-    if (!app.isPackaged || is.dev) {
+    if (!app.isPackaged) {
       return
     }
     if (this.nudgeCheckInFlight) {
@@ -66,7 +64,7 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
     }
   }
 
-  /** Abandons an un-acted local or pinned update and restores the release feed. */
+  /** Abandon only an unacted local/pinned update and restore the release feed. */
   protected dismissAvailableUpdate(): void {
     if (this.activeUpdateSource === 'release' && !this.isPinnedBuildActive) {
       return
@@ -74,13 +72,13 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
     if (this.localBuildSelectionInProgress || this.pinnedBuildSelectionInProgress) {
       return
     }
-    // Why: only an un-acted 'available' card is abandoned — 'downloading'/'downloaded' still need the pinned feed and allowDowngrade.
+    // Downloading/downloaded cards still own the pinned feed and downgrade permission.
     if (this.currentStatus.state !== 'available') {
       return
     }
     this.clearAvailableUpdateContext()
     this.restoreReleaseUpdateSource()
-    // Why: leaving the card's 'available' status behind would let a retry download the local version off the restored release feed.
+    // Clear available status or Retry could download the abandoned version from the restored feed.
     this.sendStatus({ state: 'idle' })
   }
 }

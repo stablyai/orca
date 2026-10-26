@@ -95,6 +95,10 @@ describe('matching chat surfaces with opposite app schemes', () => {
     expect(matched.getPropertyValue('--chat-source-foreground')).toBe(
       terminalScheme === 'light' ? '#000000' : '#ffffff'
     )
+    // The unread marker is mixed toward the chat's own foreground, not the app's.
+    expect(matched.getPropertyValue('--chat-unread')).toContain(
+      terminalScheme === 'light' ? '#0969da 70%, #000000' : '#4493f8 70%, #ffffff'
+    )
     const codeForeground = matched.getPropertyValue('--chat-code-foreground')
     expect(codeForeground).toContain(`${terminalScheme === 'light' ? '#000000' : '#ffffff'} 85%`)
     expect(codeForeground).toContain(terminalScheme === 'light' ? '#ffffff' : '#000000')

@@ -1,10 +1,7 @@
-// The one launch path every native-chat agent's resolver runs through. The shared steps live here:
-// admitting the record, its launch directory, the base environment and the user's overlay, the
-// chat's visuals, and sealing the child. An agent's own part never sets the directory or the
-// sealed environment; it only adds what is that agent's.
+// Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
@@ -31,11 +28,12 @@ export type StructuredAgentLaunchSources = {
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  /** Rereads the base environment after a lookup that started at `askedAt` found no program in
+   *  it; absent never retries. */
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
-/** What an agent's part reads. Each read runs once, when the part first asks, so every agent keeps
- *  its own order: a refusal it states before reading the directory still leaves a floating record
- *  unpinned. */
+/** Resolve each input lazily once in agent-defined order; refusals before directory reads leave floating records unpinned. */
 export type StructuredAgentLaunchBasis = {
   /** Exists, belongs to this agent, runs on this host, and pins what this agent drives. */
   record: AgentSessionRecord
@@ -48,19 +46,24 @@ export type StructuredAgentLaunchBasis = {
   /** Null when the chat gets no visuals. */
   visuals(): Promise<NativeChatVisualsLaunch | null>
   commandSettings(): StructuredAgentCommandSettings
+  /** After a missing program, refresh both environment reads together; absent means no retry. */
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 }
 
 export type StructuredLaunchRequest = {
   identity: AgentSessionJournalIdentity
   /** The reservation's token, which the seal hands the child. */
   spawnToken: string
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 }
 
+/** What the composition sets on a launch; an agent's part never does. */
+type ComposedLaunchFields = 'cwd' | 'env' | 'envToDelete' | 'commandEnv'
+
 export type StructuredAgentLaunchPart<L> = {
-  launch: Omit<L, 'cwd' | 'env' | 'envToDelete'>
+  launch: Omit<L, ComposedLaunchFields>
   /** The agent's environment, before the seal names the child. */
   env: Record<string, string>
   /** Inherited keys this agent's child must not keep; required, so an agent states even none. */
@@ -75,10 +78,12 @@ export type StructuredAgentLaunchPartResolver<L> = (
   identity: AgentSessionJournalIdentity
 ) => Promise<StructuredAgentLaunchPart<L>>
 
-export type ComposedStructuredLaunch<L> = Omit<L, 'cwd' | 'env' | 'envToDelete'> & {
+export type ComposedStructuredLaunch<L> = Omit<L, ComposedLaunchFields> & {
   cwd: string
   env: Record<string, string>
   envToDelete: string[]
+  /** See `SealedStructuredSessionChild`; absent from a read, which seals no child. */
+  commandEnv?: Record<string, string>
 }
 
 /** The child to spawn, sealed with the reservation's token. */
@@ -109,8 +114,7 @@ function admittedRecord(
     throw new Error(`session ${sessionId} is a ${record.provider} session`)
   }
   const { location } = record
-  // A session pinned elsewhere belongs to that host's runtime; starting it here would put a second
-  // writer on the same provider session.
+  // A session pinned elsewhere belongs to that host; local launch would create a second provider-session writer.
   if (!isNativeLocalLocation(location)) {
     throw new Error(
       `${definition.agent} structured sessions run on the local host, not ${location.executionHostId}`
@@ -131,18 +135,32 @@ async function composedPart<L>(
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>,
   identity: AgentSessionJournalIdentity,
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
+  const readEnvironments = () => ({
+    base: once(sources.resolveBaseEnvironment),
+    agent: once(() => sources.resolveAgentEnvironment(definition.agent))
+  })
+  let environments = readEnvironments()
+  const refresh = sources.refreshAfterMissingProgram
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory: once(() => resolveAgentSessionLaunchDirectory(sources, record)),
-    baseEnvironment: once(sources.resolveBaseEnvironment),
+    baseEnvironment: () => environments.base(),
     launchEnv,
-    environment: once(() => sources.resolveAgentEnvironment(definition.agent)),
+    environment: () => environments.agent(),
     visuals: once(async () => (await sources.prepareVisuals?.(record.sessionId)) ?? null),
     commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
+    ...(refresh
+      ? {
+          refreshAfterMissingProgram: async (askedAt) => {
+            await refresh(askedAt)
+            environments = readEnvironments()
+          }
+        }
+      : {}),
     ...(permissionMode ? { permissionMode } : {})
   }
   const composed = await part(basis, identity)
@@ -169,7 +187,13 @@ export function composeStructuredLaunch<L>(
       inheritedEnvToDelete,
       ...(cliRuntimeCommand ? { cliRuntimeCommand } : {})
     })
-    return { ...launch, cwd, env: child.env, envToDelete: child.envToDelete }
+    return {
+      ...launch,
+      cwd,
+      env: child.env,
+      envToDelete: child.envToDelete,
+      commandEnv: child.commandEnv
+    }
   }
 }
 
@@ -199,6 +223,7 @@ export function structuredAgentLaunchSources(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     resolveBaseEnvironment: context.environment.resolveBaseEnvironment,
     resolveAgentEnvironment: context.environment.resolveAgentEnvironment,
+    refreshAfterMissingProgram: context.environment.refreshAfterMissingProgram,
     ...(deps.resolveAgentLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
     ...(deps.resolveAgentCommandSettings
       ? { resolveCommandSettings: deps.resolveAgentCommandSettings }

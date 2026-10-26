@@ -1,7 +1,4 @@
-// Why: per-device tokens replace the shared runtime auth token for WebSocket
-// (mobile) connections. Each paired device gets its own revocable token so
-// compromising one device doesn't expose others. The registry is a simple
-// JSON file with hardened permissions matching the runtime metadata pattern.
+// Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
 import { join } from 'node:path'
 import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
@@ -12,7 +9,7 @@ import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
 import { quarantineCorruptRegistry } from './device-registry-corruption'
 import { readDeviceRegistryFile } from './device-registry-file-read'
-import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DelegatedPhone } from '../../shared/delegated-mobile-device-contract'
@@ -39,24 +36,23 @@ export type { DeviceScope }
 
 export type { DeviceEntry, DeviceKeyLookup, TokenDeviceEntry }
 
-// Why: a lastSeen refresh is pure bookkeeping, so coalesce reconnect bursts into one write instead of
-// paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
+// Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
-  /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
+  /** Never overwrite an unreadable registry from the empty in-memory list. */
   private registryUnreadable = false
-  /** A parse failure, now or in an earlier run, means an unlisted device may still exist. */
+  /** Parse failures prevent authoritative absence/revocation verdicts. */
   private registryDoubtful = false
   private corruptFilePending = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
-    // Why: a write killed between writeFile and rename (e.g. a crash mid-write, #20497) orphans its temp forever.
+    // #20497: reap temp files orphaned by a crash before rename.
     void removeStaleDurableWriteTempFiles(this.registryPath, {
       minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
     })
@@ -90,32 +86,26 @@ export class DeviceRegistry {
       ...(validatedGrants ? { grants: validatedGrants } : {})
     }
     const nextDevices = [...existingDevices, entry]
-    // Why: a credential is not valid until its durable registry write succeeds.
+    // Credentials become valid only after durable persistence.
     this.save(nextDevices)
     this.devices = nextDevices
     return entry
   }
 
-  // Why: coalesce repeated QR-regenerate clicks onto a single pending token.
-  // Each call to addDevice() produces a valid auth credential; without
-  // coalescing, every renderer call to mobile:getPairingQR (e.g. the new
-  // copy-button flow that encourages regeneration) leaves an orphaned token
-  // forever. Returns an existing never-scanned entry if present; otherwise
-  // mints a new one and drops any stale pending entries.
+  /** Coalesce re-advertisement onto one unused token so repeated QR requests cannot orphan credentials. */
   getOrCreatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
-    // Why: a pending token is reused only for the same grants, so re-advertising never widens one.
+    // Reuse only identical grants so re-advertisement cannot expand permissions.
     const existing = this.devices.find(
       (d): d is TokenDeviceEntry =>
         isPendingTokenRow(d) && d.scope === scope && sameGrants(d, validGrants(grants, scope) ?? [])
     )
     if (existing) {
-      // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
-      // or a link already handed out for off-host use would stop being served after the next launch.
+      // Widen advertised reach, never narrow it and break an off-host link already handed out.
       return pairingReach === 'network' && existing.pairingReach === 'this-computer'
         ? this.setPairingReach(existing, 'network')
         : existing
@@ -132,19 +122,14 @@ export class DeviceRegistry {
     return updated
   }
 
-  // Why: explicit rotation path for "Regenerate QR" — invalidates any
-  // existing never-scanned token (e.g. one that was screenshotted, copied
-  // to clipboard, or shown on a screen-share) and mints a fresh one. Without
-  // this, getOrCreatePendingDevice keeps returning the same token forever
-  // until a phone actually pairs, so users have no way to revoke a leaked
-  // pre-pairing token.
+  /** Explicit QR regeneration revokes leaked unused offers; ordinary re-advertisement reuses them. */
   rotatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
-    // Why: a pending runtime device has no delegated children — its first auth sets lastSeenAt before any sync.
+    // Authentication marks seen before child sync, so pending runtime offers cannot have children.
     const retainedDevices = this.devices.filter((d) => !isPendingTokenRow(d) || d.scope !== scope)
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach, grants)
   }
@@ -171,8 +156,7 @@ export class DeviceRegistry {
     if (nextDevices.length === this.devices.length) {
       return false
     }
-    // Why: persist before memory swap so a failed write does not drop a device
-    // only in-process while disk still lists it (and vice versa on reload).
+    // Persist before swapping memory so failure cannot revoke a device only until restart.
     this.save(nextDevices)
     this.devices = nextDevices
     return true
@@ -197,7 +181,6 @@ export class DeviceRegistry {
     )
   }
 
-  /** Passing null clears the registration (unregister, or a token the gateway reported dead). */
   setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean {
     return (
       this.getDevice(deviceId)?.scope === 'mobile' &&
@@ -230,7 +213,7 @@ export class DeviceRegistry {
     )
   }
 
-  // Why: "unknown" must mean "readable and absent" — clients delete their key only on that verdict.
+  // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
     const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
@@ -238,7 +221,6 @@ export class DeviceRegistry {
       : lookup
   }
 
-  /** Forks `legacyDeviceId` into a keyed row; durable before it returns (security transition). */
   forkDeviceKey(
     legacyDeviceId: string,
     devicePublicKeyB64: string,
@@ -260,7 +242,7 @@ export class DeviceRegistry {
     return fork.entry
   }
 
-  /** Drops idle session-only rows; durable, since a removed row is a revocation. */
+  /** Removal revokes credentials, so pruning must persist durably. */
   pruneIdleEphemeralDevices(now: number, isLive: (deviceId: string) => boolean): string[] {
     const plan = planIdleEphemeralPrune(this.devices, now, isLive)
     if (plan.removed.length > 0) {
@@ -270,24 +252,19 @@ export class DeviceRegistry {
     return plan.removed
   }
 
-  /** The row an authenticated socket is still entitled to, or null once revoked or re-credentialed. */
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
     const device = this.getDevice(principal.deviceId)
     return device && isStillAuthenticated(device, principal) ? device : null
   }
 
   updateLastSeen(deviceId: string): void {
-    // Why: a failed write must not leave a scanned device never-scanned on disk, where rotation drops it.
+    // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     const seenAt = Date.now()
     this.replaceRow(deviceId, (device) => ({ ...device, lastSeenAt: seenAt }))
   }
 
-  /**
-   * Marks a device seen without blocking the caller on disk — the E2EE auth handshake runs this, and on
-   * Windows every save spawns PowerShell synchronously to reapply the registry's ACL.
-   * The first-ever sighting still persists inline: rotatePendingDevice drops entries that disk says were
-   * never scanned, so only that 0 -> non-zero transition is load-bearing.
-   */
+  /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
+   * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
   updateLastSeenDeferred(deviceId: string): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
@@ -304,17 +281,15 @@ export class DeviceRegistry {
       () => this.flushPendingLastSeen(),
       LAST_SEEN_FLUSH_DELAY_MS
     )
-    // Why: bookkeeping must never hold the process open.
     this.pendingLastSeenFlush.unref?.()
   }
 
-  /** Persists a deferred lastSeen refresh now; no-op when nothing is pending. */
   flushPendingLastSeen(): void {
     if (!this.pendingLastSeenFlush) {
       return
     }
     this.cancelPendingLastSeenFlush()
-    // Why: matches the async hardening path — a failed bookkeeping write must not take down the runtime.
+    // Failed bookkeeping must not terminate the runtime.
     this.saveOrLog({}, 'persist device lastSeen')
   }
 
@@ -339,13 +314,13 @@ export class DeviceRegistry {
     this.registryDoubtful = read.doubtful
     this.corruptFilePending = read.corruptFilePending
     this.devices = withoutEphemeralRows(read.devices)
-    // Why: a session-only browser's key died with the last host process; its row must not outlive it.
+    // Session-only browser keys died with the prior host; remove their registry rows.
     if (this.devices.length !== read.devices.length) {
       this.saveOrLog({ durable: true }, 'drop session-only devices after restart')
     }
   }
 
-  // Why: persist before the memory swap so a failed write never leaves memory claiming what disk lacks.
+  // Persist before memory swap so failed writes cannot diverge authorization state.
   private replaceRow(deviceId: string, update: (device: DeviceEntry) => DeviceEntry): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index === -1) {
@@ -371,12 +346,12 @@ export class DeviceRegistry {
     }
   }
 
-  // Why: durable (fsync'd) for security transitions such as a device-key fork.
+  // Security transitions such as key forks require fsync durability.
   private save(devices: DeviceEntry[], options: { durable?: boolean } = {}): void {
     this.assertReadable()
     const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
     write(this.registryPath, devices)
-    // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
+    // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
   }
 }

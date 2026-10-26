@@ -12,7 +12,11 @@ import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { noteAiVaultScanProgress } from './ai-vault-scan-progress'
+import {
+  noteAiVaultScanFileFound,
+  noteAiVaultScanWorkChanged,
+  openAiVaultScanSource
+} from './ai-vault-scan-progress'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
@@ -40,23 +44,30 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  // A scoped scan walks every file this agent has, not only the newest `limit`.
+  keepScopeFiles?: boolean
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
+  const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
   let pending: Promise<SessionFileObservation[]> | null = null
   const native = !isWslUncPath(args.rootDir)
+  const source = { close: (): void => undefined }
 
   function consume(observations: readonly SessionFileObservation[]): void {
     // A stat the cancel cut short is not an unreadable file; never record it.
     throwIfAiVaultScanCancelled(args.signal)
-    noteAiVaultScanProgress(args.signal)
     for (const observation of observations) {
       if ('issue' in observation) {
-        recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          ...observation.issue
+        })
         continue
       }
+      noteAiVaultScanFileFound(args.signal, args.agent, observation.file)
       if (observation.file.sidecar === 'unknown' && !refusedSidecar) {
         refusedSidecar = true
         recordSessionScanIssue(args.issues, {
@@ -67,8 +78,18 @@ export async function discoverFiles(args: {
       }
       try {
         const modifiedAt = new Date(observation.file.mtimeMs)
-        if (Number.isNaN(modifiedAt.getTime()) || files.wouldRetain(observation.file.mtimeMs)) {
-          files.add({ ...observation.file, modifiedAt: modifiedAt.toISOString() })
+        if (
+          Number.isNaN(modifiedAt.getTime()) ||
+          files.wouldRetain(observation.file.mtimeMs) ||
+          scopeFiles
+        ) {
+          const left = files.add({
+            ...observation.file,
+            modifiedAt: modifiedAt.toISOString()
+          })
+          if (left) {
+            scopeFiles?.push(left)
+          }
         }
       } catch (err) {
         recordSessionScanIssue(args.issues, {
@@ -78,6 +99,7 @@ export async function discoverFiles(args: {
         })
       }
     }
+    noteAiVaultScanWorkChanged(args.signal)
   }
 
   async function finishPending(): Promise<void> {
@@ -107,8 +129,7 @@ export async function discoverFiles(args: {
     const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
       withNativeDiscoverySlot(async () => {
         const files: SessionFileObservation[] = []
-        // Breaks rather than throws: `pending` is not awaited until the next
-        // batch, and `consume` reports the cancel when it is.
+        // Break without rejecting an unawaited batch; consume propagates cancellation when it is awaited.
         for (const path of group) {
           if (args.signal?.aborted) {
             break
@@ -119,6 +140,17 @@ export async function discoverFiles(args: {
       })
     )
     return observations.flat()
+  }
+
+  async function readDirectory(path: string): Promise<Dirent[]> {
+    const entries = native
+      ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
+      : await wslGatedReaddir(path, 'scan', args.signal)
+    // Report a source only after its root directory can be listed.
+    if (path === args.rootDir) {
+      source.close = openAiVaultScanSource(args.signal, args.agent)
+    }
+    return entries
   }
 
   try {
@@ -132,12 +164,7 @@ export async function discoverFiles(args: {
           filePredicate: args.filePredicate,
           directoryPredicate: args.directoryPredicate,
           signal: args.signal,
-          ...(native
-            ? {
-                readDirectory: (path: string) =>
-                  withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
-              }
-            : {})
+          readDirectory
         },
         native
           ? queueNativeFile
@@ -153,9 +180,7 @@ export async function discoverFiles(args: {
     }
   } catch (err) {
     throwIfAiVaultScanCancelled(args.signal)
-    // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
-    // stalled distro would otherwise reject the whole vault scan — including
-    // every healthy local agent. Contain it to this root.
+    // Contain WSL refusal to this root so Promise.all preserves healthy agents in the same scan.
     if (!(err instanceof WslTranscriptFsError)) {
       throw err
     }
@@ -165,8 +190,10 @@ export async function discoverFiles(args: {
       message: err.message
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
+  } finally {
+    source.close()
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest() }
+  return { agent: args.agent, rootDir: args.rootDir, files: files.newest(), scopeFiles }
 }
 
 async function observeSessionFile(
@@ -195,13 +222,7 @@ async function observeSessionFile(
   }
 }
 
-/**
- * A sibling that cannot be statted is not "no sibling": it must not take the
- * transcript down with it, and it must not read as absent either, or the parse
- * cache would treat a session enriched from a file nobody can see as current
- * forever. Only a genuinely missing path is `'none'`; every other failure —
- * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
- */
+/** Only missing sidecars are none; other stat failures stay unknown so cached enrichment can retry. */
 async function observeSessionSidecar(
   filePath: string | undefined,
   signal?: AbortSignal
@@ -211,7 +232,11 @@ async function observeSessionSidecar(
   }
   try {
     const fileStat = await wslGatedStat(filePath, 'scan', signal)
-    return { path: filePath, mtimeMs: fileStat.mtimeMs, sizeBytes: fileStat.size }
+    return {
+      path: filePath,
+      mtimeMs: fileStat.mtimeMs,
+      sizeBytes: fileStat.size
+    }
   } catch (error) {
     return isMissingSidecarError(error) ? 'none' : 'unknown'
   }
@@ -231,9 +256,9 @@ function isMissingSidecarError(error: unknown): boolean {
 export type SessionFileWalkOptions = {
   extensions: Set<string>
   filePredicate?: (path: string) => boolean
-  // Return false to skip descending into a directory; depth 0 is a child of
-  // rootDir, so pruned subtrees are never stat'd or parsed.
+  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
   directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
   signal?: AbortSignal
 }
@@ -269,21 +294,20 @@ export async function forEachSessionFile(
       : await wslGatedReaddir(dirPath, 'scan', options.signal)
   } catch (error) {
     options.signal?.throwIfAborted()
-    // Why: a gate refusal means the scan could not run, not that the tree is
-    // empty — swallowing it would misreport a stalled distro as "no transcript".
-    if (error instanceof WslTranscriptFsError) {
+    // Propagate gate refusal so stalled distros are not reported as empty trees.
+    if (
+      error instanceof WslTranscriptFsError ||
+      (options.strictErrors && !isMissingSidecarError(error))
+    ) {
       throw error
     }
     return
   }
-  noteAiVaultScanProgress(options.signal)
 
   for (const entry of entries) {
     options.signal?.throwIfAborted()
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      // Skip whole subtrees an agent never wants (e.g. subagent transcripts),
-      // avoiding the readdir cost of descending into them.
       if (options.directoryPredicate?.(entry.name, depth) ?? true) {
         await forEachSessionFile(fullPath, agent, issues, options, onFile, depth + 1)
       }

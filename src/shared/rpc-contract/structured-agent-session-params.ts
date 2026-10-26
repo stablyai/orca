@@ -22,7 +22,7 @@ export {
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
-import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
+import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isAgentSessionOptions } from '../agent-session-record'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -32,9 +32,9 @@ import {
 } from '../agent-session-question-answer'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
+  AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session-thread-goal-wire'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -69,8 +69,7 @@ export const ProviderHandle = z.discriminatedUnion('kind', [
     .strict()
 ])
 
-/** Any agent a host may register. The host refuses one it did not register; a client sends one
- *  beyond Claude and Codex only to a host advertising the registered-agents capability. */
+/** Host-registered agents; clients gate names beyond Claude/Codex on the registered-agents capability. */
 export const StructuredAgent = z.string().refine(isStructuredAgentId, 'Invalid agent')
 
 export const ExecutionHostId = z
@@ -97,8 +96,7 @@ export const AccountHome = z
   })
   .strict()
 
-/** Attaching by a client-supplied handle stays Claude/Codex: only their handles have a wire form, and
- *  every client creates other agents by intent, which the host resolves. */
+/** Only Claude/Codex handles have wire forms; other agents attach through host-resolved intent. */
 export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
@@ -111,12 +109,17 @@ export const AttachParams = z
   })
   .strict()
 
-/** An identity, and nothing the host would otherwise read off disk. A transcript path or account
- *  home here would let a client choose which file this host imports and which credential directory
- *  the provider child launches against; both are derived host-side from this id instead. */
+/** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
 export const ResumeSource = z
   .object({
-    providerSessionId: Identifier('Invalid provider session id')
+    providerSessionId: Identifier('Invalid provider session id'),
+    cliSource: z
+      .object({
+        workspaceId: Identifier('Invalid workspace id'),
+        paneKey: Identifier('Invalid pane key')
+      })
+      .strict()
+      .optional()
   })
   .strict()
 
@@ -133,13 +136,13 @@ export const SendParams = z
   .object({
     envelope: MutationEnvelope,
     retryUnknown: z.literal(true).optional(),
-    /** Queue the send as a host-held draft while the main agent is working. Strict object, so an
-     *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
-     *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
+    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v1.
+     * Operation fingerprint only, never body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    /** The composer's model and effort for the turn this send starts; the host records them on the
-     *  chat. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
+    /** Preserve composer options until dispatch; requires agent-session.send-options.v1. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
+    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
+    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
     body: SendBody
   })
   .strict()
@@ -150,8 +153,7 @@ export const CreateIntentParams = z
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
-    /** Strict payload: send only after the host advertises the create-tab-id capability. */
-    tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional(),
+    ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z
       .object({
@@ -194,8 +196,7 @@ export const CancelParams = z
     }
   })
 
-/** `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete`. Gated on
- *  `agent-session.queued-messages.v1`; an older host lacks the methods entirely. */
+/** Queued draft actions require agent-session.queued-messages.v1; older hosts lack these methods. */
 export const QueuedMessageActionParams = z
   .object({
     envelope: MutationEnvelope,
@@ -203,8 +204,7 @@ export const QueuedMessageActionParams = z
   })
   .strict()
 
-/** `agentSession.queuedMessagesResume`: ends the queue's pause (a Stop's, or a
- *  restart's) so the cards send again. Gated like the draft actions above. */
+/** Resume dispatch after Stop/restart pauses; gated like queued draft actions. */
 export const QueuedMessagesResumeParams = z.object({ envelope: MutationEnvelope }).strict()
 
 export const RespondParams = z
@@ -261,32 +261,32 @@ export const RespondToQuestionParams = z
     }
   })
 
-export const SetOptionParams = z
-  .object({
-    envelope: MutationEnvelope,
-    key: Identifier('Invalid option key'),
-    value: z.string().max(MAX_OPTION_LABEL)
-  })
-  .strict()
+export const SetOptionParams = z.strictObject({
+  envelope: MutationEnvelope,
+  key: Identifier('Invalid option key'),
+  value: z.string().max(MAX_OPTION_LABEL)
+})
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+// Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
+export const SleepWorkspaceParams = z
+  .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })
+  .strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
-/** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
 
-/** `sessionId` scopes the catalog to that session's pinned account; without a
- *  session record the host keys it by the account a new launch would pin.
- *  `worktree` names where a new chat runs, whose own config may replace the default.
- *  `waitForListing` holds the answer until the listing the host reported in progress lands; send
- *  it only after that report, because a host that predates it refuses the unknown key. */
+export const AvailabilityParams = z.strictObject({})
+
+/** Session pins the account; otherwise use the account/config a launch in worktree would select.
+ * Send waitForListing only after the host reports one in progress; old hosts refuse the key. */
 export const ModelCatalogParams = z.strictObject({
   agent: StructuredAgent,
   sessionId: SessionId.optional(),
   worktree: Identifier('Invalid worktree selector').optional(),
   waitForListing: z.boolean().optional(),
-  // Answer only from what the host has saved; never start a listing. Sent only to a host advertising
-  // the saved-only capability: an older one refuses the unknown key.
+  // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
   savedOnly: z.boolean().optional()
 })
 
@@ -294,10 +294,8 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
-    /** A /compact while the agent is working waits as a host-held card, like a queued send.
-     *  Strict object, so an older host refuses it: clients send it only when
-     *  `agent-session.queued-commands.v1` is advertised. A /clear never waits: its operation
-     *  fingerprints no `delivery`, so one sent with it is refused as a conflict. */
+    /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
+     * /clear never queues: delivery is outside its fingerprint, so including it conflicts. */
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()
@@ -321,23 +319,18 @@ export const ThreadGoalParams = z
   })
   .strict()
 
-/** One surface's claim on one session. The id names the surface, not the client: two chat views
- *  looking at the same session are two holders, and either leaving must not release
- *  the other's. */
+/** One holder per surface, not client: leaving one view must not release another view of the same session. */
 export const HoldParams = z
   .object({ sessionId: SessionId, holderId: Identifier('Invalid holder id') })
   .strict()
 
-/** A launch's offer to resume what the last teardown recorded as working; the set is the host's to
- *  derive, never a client's to assert. Listing takes nothing. Dismissing takes the sessions to
- *  forget, or nothing to forget them all; a client only ever names sessions the host itself listed,
- *  so an older host that rejects the key is never asked to. */
+/** Host-derived restart offers; dismiss listed session IDs, or all when absent.
+ * Clients only name sessions the host listed, avoiding unknown-key requests to older hosts. */
 export const RestartResumableParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
-/** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
- *  host re-derives eligibility, so an id a client invents is simply not in the set. */
+/** Absent selects the whole offered set; IDs narrow it. Host rechecks eligibility, excluding invented IDs. */
 export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
@@ -351,9 +344,7 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = z
-  .object({ sessionId: SessionId, cursor: JournalCursor.optional() })
-  .strict()
+export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

@@ -116,7 +116,6 @@ describe('repo-worktrees', () => {
     expect(result).toHaveLength(1)
   })
 
-  // Path-only callers must reach the probe-free listing, never the annotated one.
   it('delegates to the graph listing without sparse annotation', async () => {
     listWorktreeGraphMock.mockResolvedValue([
       { path: '/workspace/repo', head: 'abc', branch: '', isBare: false, isMainWorktree: true }
@@ -199,8 +198,6 @@ describe('repo-worktrees', () => {
     expect(listWorktreesStrictMock).not.toHaveBeenCalled()
   })
 
-  // #11163: a row may spell its owner only as `executionHostId`. Reading `connectionId` answers
-  // "local" for it and runs the listing against a same-named path on this machine.
   describe('rows that spell their owner only as executionHostId', () => {
     const sshOnlyRepo = {
       id: 'repo-1',
@@ -235,6 +232,27 @@ describe('repo-worktrees', () => {
         })
       ).rejects.toThrow(WorktreeCatalogUnavailableError)
       expect(listWorktreesMock).not.toHaveBeenCalled()
+    })
+
+    it('reports an unserved ssh host as unavailable from the graph listing, never as empty', async () => {
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toThrow(
+        'SSH connection "host-a" is not connected'
+      )
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toBeInstanceOf(
+        WorktreeCatalogUnavailableError
+      )
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
+
+    it('reports a runtime-owned row as unavailable from the graph listing, never as empty', async () => {
+      await expect(
+        listRepoWorktreeGraph({
+          ...sshOnlyRepo,
+          executionHostId: 'runtime:env-7',
+          connectionId: 'nested-target'
+        })
+      ).rejects.toThrow('host runtime:env-7 is not reachable from this process')
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
     })
   })
 

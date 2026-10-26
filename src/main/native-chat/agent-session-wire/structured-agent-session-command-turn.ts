@@ -1,10 +1,5 @@
-// A conversation command the user sent, such as `/compact`, carried out as a turn of its own.
-//
-// The command is an ordinary queued message until the delivery loop hands it over. There the loop
-// opens the command's turn and sends it; the provider's receipt resolves the message, as it does
-// any send. The provider child's journal translator ends the turn from the provider's own frames,
-// and a child that ends first is settled with it. The host writes a command's end only when the
-// provider never took it. While the turn runs it takes no input, so the loop hands nothing over.
+// Delivery opens command turns; provider receipts settle sends and translator frames end turns.
+// Running commands block input; the host ends refused commands or recovers exited children.
 
 import {
   agentSessionFailureFact,
@@ -26,7 +21,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
@@ -44,12 +39,15 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
+import {
+  contextStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 
 export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
-/** What the user sent for `/compact`: the text they typed, and the command it names. */
 export function structuredAgentSessionCompactBody(): AgentJournalMessageItem {
   return {
     kind: 'message',
@@ -64,14 +62,12 @@ type AwaitedSubmission = Pick<
   'clientMessageId' | 'dispatchState' | 'acceptedSequence'
 >
 
-/** Optional `submissions` as the dead-generation journal reads it. */
 export type StructuredAgentSessionAwaitedCommandJournal = {
   submissions?: () => readonly AwaitedSubmission[]
   itemBody: AgentSessionJournal['itemBody']
 }
 
-/** The command the oldest message still waiting on the provider names: a start that fails now
- *  fails that message first, so its next step is to run the command again. */
+/** Find the oldest awaited command so failed starts preserve the command for explicit retry. */
 export function structuredAgentSessionAwaitedCommand(
   journal: StructuredAgentSessionAwaitedCommandJournal
 ): AgentSessionConversationCommand | undefined {
@@ -90,11 +86,11 @@ export function structuredAgentSessionAwaitedCommand(
     : undefined
 }
 
-/** Whether the journal's running turn is a command's, which takes no input while it runs. */
+/** Command turns refuse input while their child runs. */
 export function structuredAgentSessionCommandRunning(
-  journal: Pick<AgentSessionJournal, 'activeTurnId'>
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>
 ): boolean {
-  const turnId = journal.activeTurnId()
+  const turnId = work.activeTurnId()
   return turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
 }
 
@@ -104,19 +100,16 @@ export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
 
 const STOP_NOTE_PREFIX = 'stop:'
 
-/** A Stop's note, keyed by the turn it stopped (or, with no turn, by its operation). */
 export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
   return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
 }
 
-/** Whether a journal row is a Stop's note. */
 export function isStructuredAgentSessionStopNote(itemId: string): boolean {
   const identity = parseAgentJournalItemKey(itemId)
   return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
 }
 
-/** Whether an earlier Stop already asked the running command `turnId` names to end. Read from the
- *  journal, so nothing is held that could outlive the command. */
+/** Read Stop from the journal so cached state cannot outlive the command. */
 export function structuredAgentSessionCommandWasStopped(
   journal: Pick<AgentSessionJournal, 'snapshot'>,
   turnId: string
@@ -138,22 +131,21 @@ export type StructuredAgentSessionCommandHandoverContext = {
   fence: number
   adapter: StructuredAgentSessionAdapter
   agents: StructuredAgentRegistry
-  /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
-  /** The session's child records, the same read the strip and conversation-command admission use. */
+  /** Recheck execution-host ownership at admission and handover. */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   childWork: () => readonly AgentChildWorkView[] | undefined
+  childWorkOpen: () => boolean
   now: () => number
 }
 
-/** Refuses the command, or opens its turn and sends it. */
 export async function handOverStructuredAgentSessionCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission,
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  // Provider frames already received decide whether a turn is running: each landed at its call.
   const blocked = commandBlocked(ctx, body)
   if (blocked) {
     const refused = {
@@ -165,11 +157,11 @@ export async function handOverStructuredAgentSessionCommand(
       })
     }
     if (submission.queuedMessageId === undefined) {
-      // The command RPC that sent it is still waiting, and its answer says why.
+      // Direct command RPC already has a waiting reader for its refusal.
       await ctx.journal.resolveDispatch({ clientMessageId, ...refused, fence: ctx.fence })
       return
     }
-    // A queued card's refusal has nobody waiting on it: its turn's one row says why.
+    // Queued commands need an explicit result row because no RPC waits on refusal.
     await refuseQueuedCommand(
       ctx,
       submission,
@@ -188,7 +180,7 @@ export async function handOverStructuredAgentSessionCommand(
       command: { clientMessageId, ...turn, running }
     })
   } catch (error) {
-    // Handed over only to a child that proved its start, so a throw is a lost reply: it may have run.
+    // Ready-child writes can lose replies after running; never infer non-delivery from throws.
     await settleUnsentCommand(ctx, clientMessageId, {
       state: 'unknown',
       reason: error instanceof Error ? error.message : String(error)
@@ -196,7 +188,6 @@ export async function handOverStructuredAgentSessionCommand(
     return
   }
   if (admission.state === 'rejected') {
-    // The provider refused the compaction itself: its row reads as the compaction failing.
     await settleUnsentCommand(
       ctx,
       clientMessageId,
@@ -204,12 +195,11 @@ export async function handOverStructuredAgentSessionCommand(
       agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
     )
   } else if (admission.state !== 'admitted') {
-    // An unknown write leaves the turn to the provider's end or the child's: it may have run.
+    // Unknown writes leave lifecycle settlement to provider frames or child exit.
     await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
   }
 }
 
-/** Hands the command over and opens its own turn. */
 async function openCommandTurn(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission
@@ -220,7 +210,8 @@ async function openCommandTurn(
     clientMessageId,
     state: 'pending',
     fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope()
+    // Join only current execution, never ended-generation turns.
+    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   })
   const startedAt = ctx.now()
   const running = agentJournalTurnBody({
@@ -238,8 +229,7 @@ async function openCommandTurn(
   return { turn, running }
 }
 
-/** Where the turn a handed-over submission runs in starts counting: its handover, so time spent
- *  held behind a command or a start is not counted as the agent's work. */
+/** Start work timing at handover, excluding waits behind commands/startup. */
 export function structuredAgentSessionHandoverOrigin(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission
@@ -250,16 +240,13 @@ export function structuredAgentSessionHandoverOrigin(
   return handedOver?.handedOverAt ?? submission.submittedAt
 }
 
-/** The command's end when the provider never took it: refused, or lost with the adapter's throw.
- *  The message's answer goes first, so a crash before the turn's end leaves a running turn, which
- *  the stale-turn sweep settles, never an ended turn whose message still reads as in flight. */
+/** Settle the send before its turn so crashes leave recoverable running work, never ended-but-in-flight sends. */
 async function settleUnsentCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   clientMessageId: string,
   unsent:
     | ({ state: 'rejected' } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason: string },
-  /** What the result row reports, when it is not the rejection's own fact. */
   rowFailure?: AgentSessionFailureFact
 ): Promise<void> {
   const turn = structuredAgentSessionCommandTurn(clientMessageId)
@@ -306,7 +293,6 @@ async function settleUnsentCommand(
   })
 }
 
-/** Why the command may not run now, as the fact its message is rejected with; null when it may. */
 function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
@@ -318,11 +304,16 @@ function commandBlocked(
   if (!record) {
     return agentSessionFailureFact('hostFault')
   }
-  // The declaration admits it, as it does the advertised command list; a client may send it anyway.
+  // Validate capability even if a client sends an unadvertised command.
   if (!ctx.agents.capabilities(record.provider)?.compact) {
     return agentSessionFailureFact('commandRefused')
   }
-  const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
+  const refusal = conversationCommandBlocked(
+    ctx,
+    record,
+    { views: ctx.childWork(), open: ctx.childWorkOpen() },
+    'handover'
+  )
   return refusal
     ? agentSessionFailureFact('commandRefused', { refusal: agentSessionRefusalReference(refusal) })
     : null

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
+import { DAEMON_V8_FLAGS, spawnDaemonChildProcess } from './daemon-launched-child-spawn'
 
 const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ spawnProcess: spawn }))
@@ -44,7 +44,8 @@ describe('daemon launch scope ownership', () => {
     expect(spawn).not.toHaveBeenCalled()
     expect(fork).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: expect.not.arrayContaining(['--fresh-daemon-scope'])
+        args: expect.not.arrayContaining(['--fresh-daemon-scope']),
+        execArgv: expect.arrayContaining([...DAEMON_V8_FLAGS])
       })
     )
   })
@@ -109,7 +110,11 @@ describe('daemon launch on the extracted AppImage copy', () => {
     const { program, args, env, stdio } = spawn.mock.calls[0][0]
     expect(program).toBe(scoped ? 'systemd-run' : extractedGeneration.nodePath)
     const node = args.indexOf(extractedGeneration.nodePath)
-    expect(args[node + 1]).toBe(extractedGeneration.entryPath)
+    // V8 flags must precede the entry, or Node hands them to the daemon script instead.
+    expect(args.slice(node + 1, node + 2 + DAEMON_V8_FLAGS.length)).toEqual([
+      ...DAEMON_V8_FLAGS,
+      extractedGeneration.entryPath
+    ])
     expect(args[args.indexOf('--entry-path') + 1]).toBe(extractedGeneration.identityPath)
     expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
     expect(stdio).toEqual(['ignore', 'ignore', 'pipe', 'ipc'])

@@ -16,28 +16,23 @@ import {
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { agentHookServer } from '../agent-hooks/server'
 import { nativeChatTranscriptPathOnExecutionHost } from '../native-chat/ssh-transcript-path'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
-// Re-export so existing test imports of `clearNativeChatTranscriptCache` from
-// this module keep working after the cache moved to transcript-read-cache.ts.
 export { clearNativeChatTranscriptCache }
 
 export type NativeChatReadSessionArgs = {
   agent: AgentType
   sessionId: string
-  /** How many of the most-recent turns to return. The renderer starts at the
-   *  default window and raises this to page in older history as it scrolls up. */
+  /** Recent-turn window; increase it to page backward. */
   limit?: number
-  /** Authoritative transcript path from the agent hook (providerSession), used to
-   *  locate the file when the session id no longer names it (recent Claude Code). */
+  /** Hook-authoritative path when session IDs no longer identify transcript filenames. */
   transcriptPath?: string
 }
 
-// Why: render and parse only the recent window so long transcripts do not stall
-// either the main process or the message list. Pagination raises this limit.
+// Bound parsing and rendering to the recent window; pagination raises the limit.
 
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
-  // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   return readNativeChatTranscriptTail({
     agent,
@@ -52,8 +47,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
 }
 
 export type NativeChatSubscribeArgs = {
-  /** Renderer-minted id, unique per webContents, echoed back on every emit so
-   *  the renderer can route appends to the right hook instance. */
+  /** Renderer ID unique within WebContents, echoed on updates to route each viewer. */
   subscriptionId: string
   agent: AgentType
   sessionId: string
@@ -71,8 +65,7 @@ export type NativeChatAppendedPayload = {
         hasMore: boolean
         error?: string
         lifecycle?: NativeChatTurnLifecycle
-        /** No transcript exists behind this window yet — render it, but do not
-         *  treat it as a settled read of the session's history. */
+        /** The current window has no transcript yet; do not treat it as settled history. */
         pending?: boolean
       }
     | {
@@ -98,8 +91,7 @@ type PendingSubscription = {
 
 // A renderer document owns its viewers; replacement, crash, or destruction releases them.
 const liveSubscriptions = new Map<number, Map<string, LiveSubscription>>()
-// Why: unsubscribe and renderer destruction must invalidate async watcher setup
-// before it can publish a late subscription into the live map.
+// Retire pending setup on unsubscribe/destruction before it can publish a late watcher.
 const pendingSubscriptions = new Map<number, Map<string, PendingSubscription>>()
 const senderLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
 
@@ -190,7 +182,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
   const { subscriptionId, agent, sessionId, transcriptPath } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  // Replace any prior subscription under the same id (session change/resubscribe).
   const pending = beginPendingSubscription(sender.id, subscriptionId)
   const rendererSignal = registerSenderCleanup(sender)
   const canPublish = (): boolean =>
@@ -209,8 +200,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       if (!canPublish()) {
         return
       }
-      // `pending` marks a window with no transcript behind it yet; clients that
-      // don't know the flag still stop spinning on the empty snapshot.
+      // Legacy clients ignore pending but still stop spinning on the empty snapshot.
       const payload: NativeChatAppendedPayload = {
         subscriptionId,
         frame: { type: 'snapshot', messages: [], hasMore: false, pending: true }
@@ -221,8 +211,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       if (!canPublish()) {
         return
       }
-      // Forward an initial-drain error so a watching client's first frame carries it
-      // instead of stranding the view at 'loading' when the read keeps throwing.
+      // Put initial drain errors on the first frame so clients cannot remain stuck loading.
       const payload: NativeChatAppendedPayload = {
         subscriptionId,
         frame: {
@@ -272,15 +261,13 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
     return
   }
 
-  // Why: unmount, destruction, or a newer same-id subscribe can invalidate setup
-  // while path resolution is pending; only the owning generation may publish its watcher.
+  // Publish only the generation still owning this subscription after async path resolution.
   const stillCurrent = takePendingSubscription(sender.id, subscriptionId, pending)
   if (!canPublish() || !stillCurrent) {
     subscription.unsubscribe()
     return
   }
   const bySubId = liveSubscriptions.get(sender.id) ?? new Map<string, LiveSubscription>()
-  // A concurrent subscribe with the same id beat us here; honor the latest.
   const existing = bySubId.get(subscriptionId)
   if (existing) {
     existing.subscription.unsubscribe()
@@ -335,5 +322,10 @@ export function registerNativeChatHandlers(): void {
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
+  })
+  // Failure output is local-only because paired hosts do not transmit agent output.
+  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
+    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })
 }

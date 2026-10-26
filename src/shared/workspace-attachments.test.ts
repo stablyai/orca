@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
 import {
   getWorkspaceAttachments,
-  normalizeWorkspaceAttachmentUpdate
+  normalizeWorkspaceAttachmentUpdate,
+  workspaceAttachmentReferenceLabel
 } from './workspace-attachments'
 import {
   getWorkspaceAttachmentKey,
@@ -10,10 +11,31 @@ import {
 } from './workspace-attachment-normalization'
 import { WorktreeSet } from './rpc-contract/worktree-params'
 import { FolderWorkspaceUpdate } from './rpc-contract/folder-workspace-params'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from './worktree/hosted-review-links'
 
 const pr = (number: number): WorkspaceAttachment => ({ provider: 'github', type: 'pr', number })
 
 describe('workspace attachments', () => {
+  it.each([
+    ['linkedPR', 'github', 'pr'],
+    ['linkedGitLabMR', 'gitlab', 'mr'],
+    ['linkedBitbucketPR', 'bitbucket', 'pr'],
+    ['linkedAzureDevOpsPR', 'azure-devops', 'pr'],
+    ['linkedGiteaPR', 'gitea', 'pr']
+  ] as const)('keeps legacy %s references when deselecting a review', (slot, provider, type) => {
+    const existing = { [slot]: 7, linkedIssue: 42 }
+    const result = {
+      ...existing,
+      ...normalizeWorkspaceAttachmentUpdate(existing, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES)
+    }
+    expect(result[slot]).toBeNull()
+    expect(result.linkedIssue).toBe(42)
+    expect(result.linkedItems).toEqual([
+      { provider: 'github', type: 'issue', number: 42 },
+      { provider, type, number: 7 }
+    ])
+  })
+
   it('reads old metadata and enriches matching collection entries without duplicate compatibility links', () => {
     const item = {
       ...pr(7),
@@ -361,5 +383,36 @@ describe('workspace attachments', () => {
     expect(result.linkedItems).toEqual([mr])
     expect(result.linkedPR).toBeNull()
     expect(result.linkedGitLabMR).toBeNull()
+  })
+})
+
+describe('workspaceAttachmentReferenceLabel', () => {
+  it('reads a reference as the desktop card and the phone details both show it', () => {
+    expect(workspaceAttachmentReferenceLabel({ provider: 'github', type: 'pr', number: 12 })).toBe(
+      'PR #12'
+    )
+    expect(workspaceAttachmentReferenceLabel({ provider: 'gitlab', type: 'mr', number: 3 })).toBe(
+      'MR !3'
+    )
+    expect(
+      workspaceAttachmentReferenceLabel({ provider: 'github', type: 'issue', number: 4 })
+    ).toBe('Issue #4')
+    expect(
+      workspaceAttachmentReferenceLabel({
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        jiraIdentifier: 'ORCA-4'
+      })
+    ).toBe('ORCA-4')
+    expect(
+      workspaceAttachmentReferenceLabel({ provider: 'linear', type: 'issue', number: 9 })
+    ).toBe('#9')
+    expect(
+      workspaceAttachmentReferenceLabel(
+        { provider: 'github', type: 'pr', number: 12 },
+        { pr: (n) => `Demande #${n}`, mr: String, issue: String }
+      )
+    ).toBe('Demande #12')
   })
 })

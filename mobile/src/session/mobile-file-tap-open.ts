@@ -7,6 +7,7 @@ import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
+import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type FileTapSessionTab = {
@@ -43,8 +44,7 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   }
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  /** Invoked when the tap cannot open anything (resolve miss, directory, or a
-   *  failed open). Omitted on surfaces that keep the historical silent miss. */
+  // Optional feedback; callers without it retain silent best-effort misses.
   onOpenFailed?: () => void
 }
 
@@ -146,11 +146,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   options.triggerOpenFeedback()
-  if (
-    resolvedWorktreeId !== options.worktreeId ||
-    options.line !== null ||
-    options.column !== null
-  ) {
+  const pushWorktreePreview = (): void =>
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
@@ -163,6 +159,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
+  if (
+    resolvedWorktreeId !== options.worktreeId ||
+    options.line !== null ||
+    options.column !== null
+  ) {
+    pushWorktreePreview()
     return
   }
   if (
@@ -178,6 +180,15 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
+  // Why: a host with no desktop window opens no editor tabs; the preview route reads the file through files.read.
+  if (isRendererUnavailableReply(openResponse)) {
+    // Not a failure: the user moved off the source tab during the call.
+    if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
+      return
+    }
+    pushWorktreePreview()
+    return
+  }
   const opened = fileTapOpenRun.interpret(openResponse)
   if (!opened.accepted) {
     reportOpenFailure(options)

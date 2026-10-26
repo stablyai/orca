@@ -1,13 +1,31 @@
 // @vitest-environment happy-dom
 
-// A message shown as not sent stays in the outbox and draws below newer turns, after their live
-// activity. It is in no turn: the newer turn's "Working for" clock and "Worked for" bar stay with
-// that turn, never under it.
+// Unsent outbox messages stay below newer turns and their activity, without owning a turn bar.
 
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -103,7 +121,6 @@ function submission(
   }
 }
 
-/** The drawn sequence of the prompts, bars and live activity line, top to bottom. */
 function drawn(container: HTMLElement): string[] {
   const out: string[] = []
   for (const element of container.querySelectorAll('*')) {

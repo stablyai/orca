@@ -205,3 +205,38 @@ it.each(['unknown', 'ready'] as const)(
     })
   }
 )
+
+it.each([
+  ['unauthorized', 'access-revoked'],
+  ['forbidden', 'access-revoked'],
+  ['protocol_version_mismatch', 'incompatible'],
+  ['method_not_found', 'incompatible']
+] as const)('labels a %s refusal as %s until verification leaves blocked', async (code, reason) => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValueOnce(runtimeHostStatusFailure(code, 'refused'))
+  await owner.refresh()
+  expect(owner.read()).toMatchObject({
+    verification: 'blocked',
+    blockedReason: reason
+  })
+  owner.connectionChanged('ready')
+  expect(owner.read().blockedReason).toBe(reason)
+  await owner.refresh({ reconnect: true })
+  expect(owner.read().verification).toBe('verified')
+  expect(owner.read()).not.toHaveProperty('blockedReason')
+})
+
+it('does not label a transient failure or a retired owner with a blocked reason', async () => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'offline'))
+  await owner.refresh()
+  expect(owner.read()).not.toHaveProperty('blockedReason')
+  owner.authenticationRejected()
+  expect(owner.read().blockedReason).toBe('access-revoked')
+  owner.dispose()
+  expect(owner.read()).toMatchObject({
+    verification: 'blocked',
+    retired: true
+  })
+  expect(owner.read()).not.toHaveProperty('blockedReason')
+})

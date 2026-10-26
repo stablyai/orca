@@ -1,12 +1,11 @@
-// Send-path behaviour when a launch-context draft is still parked on the agent's
-// TUI input line: the multi-line clear and its confirmation step.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendRuntimePtyInput = vi.fn()
 const sendRuntimePtyInputVerified = vi.fn()
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args),
+  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args)
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (...args: unknown[]) => sendRuntimePtyInputVerified(...args)
 }))
 
@@ -23,7 +22,10 @@ import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
 } from './native-chat-runtime-image-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 import {
   AGENT_TUI_CLEAR_INPUT_MAX,
   buildAgentTuiClearInputForText
@@ -59,7 +61,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
       clearInput,
       confirmCleared: () => true
     })
-    // Body must NOT ride out with the clear — the confirm happens in between.
+    // Wait for clear confirmation before writing the body.
     expect(writes()).toEqual([clearInput])
     vi.advanceTimersByTime(NATIVE_CHAT_CLEAR_CONFIRM_MS)
     expect(writes()).toEqual([clearInput, buildNativeChatPasteBytes('edited')])

@@ -16,6 +16,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -42,8 +43,7 @@ vi.mock('@/store', () => {
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
-// Real notice strings, so a copy of the wording here cannot outlive the string
-// users actually read, and a newly added export cannot go missing from the mock.
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,
@@ -52,7 +52,8 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
 vi.mock('./NativeChatComposerActions', () => ({
@@ -75,8 +76,7 @@ vi.mock('./NativeChatImageAttachmentPreview', () => ({
 }))
 
 class FileDragDataTransfer {
-  // Not 'none' and not 'copy': the browser picks a default we did not choose, so
-  // starting here is what makes an assertion on either verdict load-bearing.
+  // Seed a distinct browser default so assertions prove both copy and refusal verdicts were written.
   dropEffect = 'link'
   effectAllowed = 'copyMove'
   files: File[] = []
@@ -122,6 +122,7 @@ function ComposerProbe({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: `pane:${workspaceId}`,
     allowWithoutTarget: structured,
+    imageReferences: structured,
     caret,
     disabled,
     isComposing: imeEnterGesture.isComposing,
@@ -145,8 +146,7 @@ function ComposerProbe({
 
   return (
     <div onDrop={bubbledDrop}>
-      {/* The pane around the composer mounts these in production; here they sit
-          on a bare wrapper so the drop logic is exercised on its own. */}
+      {/* Mount pane drop handlers on a bare wrapper to isolate the attachment route. */}
       <div {...workspaceFileDropHandlers}>
         <NativeChatComposerField
           draftScopeKey={`pane:${workspaceId}`}
@@ -318,8 +318,7 @@ describe('native chat workspace file drops', () => {
     expect(screen.getByTestId('draft').textContent).toBe('')
   })
 
-  // A guarded composer must refuse visibly. It still claims the event, because
-  // the terminal surface behind it would otherwise paste the paths into the shell.
+  // Claim refused drops so the terminal behind the guarded composer cannot paste paths into a shell.
   it('refuses the drag outright while disabled instead of promising a copy', () => {
     render(<ComposerProbe disabled />)
     const hover = internalTransfer(['/repo/a.ts'])
@@ -333,8 +332,7 @@ describe('native chat workspace file drops', () => {
     expect(screen.getByTestId('draft').textContent).toBe('')
   })
 
-  // The relaxation that lets a runtime-owned path reach a runtime pane: the
-  // explorer lists that host's filesystem, so the agent can read what it drags.
+  // Explorer paths from the same runtime host are readable by its agent.
   it('accepts a same-host drop on a remote runtime target and refuses a foreign one', () => {
     testState.executionHostId = 'runtime:env-1'
     testState.ownerKind = 'remote'
@@ -385,8 +383,7 @@ describe('native chat workspace file drops', () => {
     expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
   })
 
-  // The queued check must ask which workspace this composer serves NOW. Comparing
-  // a captured id against itself would pass no matter where the pane ended up.
+  // Recheck current workspace after IME; comparing only captured identities would miss a pane retarget.
   it('rejects an IME-queued path when the pane changes workspace before settling', () => {
     const view = render(<ComposerProbe initialDraft="preedit" />)
     const input = editor()
@@ -439,7 +436,7 @@ describe('native chat workspace file drops', () => {
 
     const image = screen.getByText('/remote/repo/image.png')
     expect(image.getAttribute('data-connection-id')).toBe('ssh-1')
-    expect(screen.getByTestId('draft').textContent).toBe('')
+    expect(screen.getByTestId('draft').textContent).toMatch(/^\[Image\]\(orca-image:[\w-]+\) $/)
   })
 
   it('supports PTY-owned and folder-workspace paths with the same ownership gate', () => {

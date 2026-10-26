@@ -3,7 +3,7 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import {
   createMockStore,
   registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
   MAX_CLOSED_TERMINAL_TAB_TOMBSTONES,
@@ -60,8 +60,7 @@ describe('seeding an empty workspace reads close records', () => {
     expect(seeds({ [WT]: [] }, records)).toBe(true)
   })
 
-  // Known weakness until every membership shrink is a close: an older close plus an empty row
-  // written by something that is not a close still reads as emptied on purpose.
+  // Known gap: an older close plus a later non-close empty row still reads as deliberately emptied.
   it('a stale record from an earlier close suppresses the startup seed; activation reseeds', () => {
     const earlierClose = closedAt(Date.now() - 60_000)
     expect(seeds({ [WT]: [] }, earlierClose)).toBe(false)

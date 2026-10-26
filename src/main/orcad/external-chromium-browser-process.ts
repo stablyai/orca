@@ -1,14 +1,11 @@
 import { z } from 'zod'
-import type {
-  RuntimeBrowserCommandHost,
-  RuntimeBrowserCommands
-} from '../runtime/orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import { BrowserError } from '../browser/browser-error'
 import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
-export type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   externalChromiumCommandArguments,
@@ -46,6 +43,8 @@ export class ExternalChromiumBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
+      // Startup checks membership before resolving commands dynamically.
+      has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
         if (property === 'then') {
           return undefined

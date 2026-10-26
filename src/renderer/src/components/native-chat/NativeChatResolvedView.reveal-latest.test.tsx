@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useImperativeHandle } from 'react'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type { AskPrompt } from './native-chat-interactive-prompt'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import type * as InteractiveCardModule from './NativeChatInteractiveCard'
 
-// The transcript and composer are stubbed: the wire under test is which of this
-// pane's sends tell the transcript to bring the latest into view.
+// Stub transcript and composer to observe which pane sends request latest-message navigation.
 type ComposerStubProps = { onSubmitted?: () => void }
 const stubs = vi.hoisted(
   (): {
@@ -26,7 +26,8 @@ vi.mock('./NativeChatMessageList', () => ({
   NativeChatMessageList: (props: { ref?: React.Ref<NativeChatMessageListHandle> }) => {
     useImperativeHandle(props.ref, () => ({
       revealLatest: stubs.revealLatest,
-      revealFindMatch: () => {}
+      revealFindMatch: () => {},
+      messageCopyText: () => null
     }))
     return null
   }
@@ -45,12 +46,17 @@ vi.mock('./use-native-chat-interactive-send', () => ({
 vi.mock('./use-native-chat-interactive-prompt-card', () => ({
   useNativeChatInteractivePromptCard: () => ({ kind: 'question', prompt })
 }))
-vi.mock('./NativeChatInteractiveCard', () => ({
-  NativeChatInteractiveCard: (props: { send: NativeChatInteractiveSend }) => {
-    stubs.cardSend = props.send
-    return null
+vi.mock('./NativeChatInteractiveCard', async (importOriginal) => {
+  const original = await importOriginal<typeof InteractiveCardModule>()
+  return {
+    NativeChatInteractiveCard: (
+      props: React.ComponentProps<typeof original.NativeChatInteractiveCard>
+    ) => {
+      stubs.cardSend = props.send
+      return props.requiresTerminal ? <original.NativeChatInteractiveCard {...props} /> : null
+    }
   }
-}))
+})
 vi.mock('./NativeChatComposer', () => ({
   NativeChatComposer: (props: ComposerStubProps) => {
     stubs.composer = props
@@ -72,6 +78,39 @@ afterEach(() => {
 })
 
 describe('NativeChatResolvedView sends', () => {
+  it('opens the terminal for an OMP question instead of showing answer controls', () => {
+    stubs.session = {
+      messages: [],
+      status: 'ready',
+      sessionId: 'session-omp',
+      agent: 'omp',
+      hasMore: false,
+      loadingEarlier: false,
+      olderHistoryGeneration: 0,
+      loadEarlier: vi.fn(),
+      readPhase: 'ready'
+    }
+    const onSwitchToTerminal = vi.fn()
+    render(
+      <NativeChatResolvedView
+        paneKey="tab-omp:leaf-omp"
+        agent="omp"
+        sessionId="session-omp"
+        transcriptPath={null}
+        isVisible
+        isFocusedGroup={false}
+        targetPtyId="pty-omp"
+        terminalTabId="tab-omp"
+        ownsTabWideLaunchDraft={false}
+        onSwitchToTerminal={onSwitchToTerminal}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Answer in terminal' }))
+    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
+    expect(stubs.revealLatest).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
   it('brings the latest into view for a composer send and a prompt answer, not a Stop', () => {
     stubs.session = {
       messages: [
@@ -105,7 +144,6 @@ describe('NativeChatResolvedView sends', () => {
         ownsTabWideLaunchDraft={false}
       />
     )
-    // Anti-vacuous: opening the pane reveals nothing by itself.
     expect(stubs.revealLatest).not.toHaveBeenCalled()
 
     stubs.composer?.onSubmitted?.()

@@ -46,10 +46,10 @@ const LONG_POLL_CLIENT_GRACE_MS = 10_000
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
 export class RuntimeClient {
-  private readonly userDataPath: string
+  readonly userDataPath: string
   private readonly requestTimeoutMs: number
   private readonly remote: PairedRuntimeConnection | null
-  private readonly environmentSelector: string | null
+  readonly environmentSelector: string | null
   private readonly cliExecutable: string
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate
@@ -59,9 +59,7 @@ export class RuntimeClient {
   )
   private readonly runtimeSourceFence: RuntimeSourceFence
 
-  // Why: browser commands trigger first-time session init (agent-browser connect +
-  // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
-  // being so large that genuine hangs go unnoticed.
+  // Browser session cold starts can take 15–30 seconds; allow time for initialization.
   constructor(
     userDataPath = getDefaultUserDataPath(),
     requestTimeoutMs = 60_000,
@@ -165,7 +163,7 @@ export class RuntimeClient {
       return response
     }
     const metadata = readMetadata(this.userDataPath)
-    // Why outside recover(): a refusal here happens before anything is sent, so there is nothing to retry.
+    // Refusal precedes sending, so there is no request to recover.
     const expectedRuntimeSource = await this.runtimeSourceFence.check(metadata, method)
     let response
     try {
@@ -186,11 +184,7 @@ export class RuntimeClient {
     return response
   }
 
-  // Why: centralises the per-method timeout policy. Long-poll inner waiter
-  // budgets live in `params.timeoutMs`; widen the client-side socket timeout
-  // to `timeoutMs + grace` so it doesn't fire before the server has a chance
-  // to resolve. Without this, a 5 min wait would still die at the 60 s default.
-  // See design doc §3.1.
+  // Give server-side waits time to finish before the client transport times out.
   private resolveMethodTimeoutMs(method: string, params?: unknown): number {
     if (method === 'orchestration.workerStart') {
       const requestedValue = getTimeoutMsParam(params)
@@ -260,7 +254,7 @@ export class RuntimeClient {
       this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(
         timeoutMs
       ).catch((error: unknown) => {
-        // Why: a failed probe must not be cached, or a retry after a brief outage never reaches the app.
+        // Failed probes must be retried after transient outages.
         this.orchestrationContractCheck = null
         throw error
       })
@@ -288,8 +282,7 @@ export class RuntimeClient {
       return initial
     }
 
-    // Why: a blocked runtime can't open a window, so spawning the app would
-    // only hit the single-instance lock and exit — bail before launching.
+    // A blocked runtime cannot open a window; a second app would only hit its instance lock.
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }

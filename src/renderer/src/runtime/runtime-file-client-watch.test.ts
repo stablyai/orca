@@ -52,7 +52,7 @@ describe('runtime file client', () => {
       {
         selector: 'env-1',
         method: 'files.watch',
-        params: { worktree: 'id:wt-1' },
+        params: { worktree: 'id:wt-1', batchCadence: 'interval' },
         timeoutMs: 15_000
       },
       expect.any(Object)

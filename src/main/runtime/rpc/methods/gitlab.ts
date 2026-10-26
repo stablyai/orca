@@ -90,6 +90,12 @@ export const GITLAB_METHODS = [
     handler: async (params, { runtime }) => runtime.listGitLabRepoLabels(params.repo)
   }),
   defineMethod({
+    name: 'gitlab.listAssignableUsers',
+    permission: 'workspace',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.listGitLabRepoAssignableUsers(params.repo)
+  }),
+  defineMethod({
     name: 'gitlab.createIssue',
     permission: 'workspace',
     params: CreateIssue,
@@ -195,7 +201,13 @@ export const GITLAB_METHODS = [
     permission: 'workspace',
     params: WorkItemDetails,
     handler: async (params, { runtime }) =>
-      runtime.getGitLabRepoWorkItemDetails(params.repo, params.iid, params.type, params.projectRef)
+      runtime.getGitLabRepoWorkItemDetails(
+        params.repo,
+        params.iid,
+        params.type,
+        params.projectRef,
+        params.includeReviewDetails
+      )
   }),
   defineMethod({
     name: 'gitlab.workItemByPath',

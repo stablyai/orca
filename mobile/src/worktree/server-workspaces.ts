@@ -9,17 +9,14 @@ import { relayHostWorktreesRead } from './server-workspace-operations'
 import type { Worktree } from './workspace-list-types'
 import { areWorktreeListsEqual } from './worktree-list-snapshot'
 
-/** The desktop's servers and their rows, each stamped by the desktop with the server's host id. */
 export type ServerWorkspaces = { hosts: readonly MobileRelayHost[]; worktrees: readonly Worktree[] }
 
 export const NO_SERVER_WORKSPACES: ServerWorkspaces = { hosts: [], worktrees: [] }
 
-/** A server that needs an update reads as blocked, which the shared table labels "Update needed". */
 export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
   return host.relay === 'update-needed' ? 'blocked' : host.health
 }
 
-/** `desktop`'s per-host values with each server's read from its feed entry. */
 export function withServerHosts<Value>(
   desktop: ReadonlyMap<ExecutionHostId, Value>,
   hosts: readonly MobileRelayHost[],
@@ -70,13 +67,11 @@ async function fetchHostRows(
   }
 }
 
-/** One listing round: the desktop's servers, and per server its rows or null when unread. */
 export type FetchedServerWorkspaces = {
   hosts: readonly MobileRelayHost[]
   rows: readonly (readonly Worktree[] | null)[]
 }
 
-/** The servers' rows through the desktop's one listing path; null when it did not answer. */
 export async function fetchServerWorkspaces(
   client: RpcClient
 ): Promise<FetchedServerWorkspaces | null> {
@@ -87,10 +82,8 @@ export async function fetchServerWorkspaces(
   return { hosts, rows: await Promise.all(hosts.map((host) => fetchHostRows(client, host.hostId))) }
 }
 
-/**
- * A server whose rows were not read keeps those shown; one the desktop dropped loses its rows.
- * An unchanged poll returns `previous` itself, so the list does not rebuild every few seconds.
- */
+// Keep rows when their server read failed; drop them only when the desktop drops the server.
+// Preserve identity on unchanged polls so consumers avoid rebuilding.
 export function applyServerWorkspaces(
   previous: ServerWorkspaces,
   fetched: FetchedServerWorkspaces
@@ -99,7 +92,7 @@ export function applyServerWorkspaces(
     (host, index) =>
       fetched.rows[index] ?? previous.worktrees.filter((row) => row.hostId === host.hostId)
   )
-  // Why kept: screens key per-server clients on `hosts`, which rows changing must not rebuild.
+  // Keep hosts identity when only rows change; screens key their per-server clients on it.
   const hosts =
     JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts)
       ? previous.hosts

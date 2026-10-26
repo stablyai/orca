@@ -7,7 +7,7 @@ import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord,
   type OrcadStateSnapshot
-} from './orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 
 const PROTOCOL = { protocolVersion: 3, previousProtocolVersions: [1, 2] }
 
@@ -73,6 +73,22 @@ describe('planOrcadUpdate', () => {
       force: true
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+  })
+
+  it('passes only counted live terminals when forced past them, never an unknown census', () => {
+    const forced = (liveSessions: number | null) =>
+      planOrcadUpdate({
+        candidateDaemonProtocol: PROTOCOL,
+        record: record(),
+        candidateVersion: '0.3.0+cc01',
+        census: { liveSessions, startedSinceActivation: null, daemonProtocolVersion: 3 },
+        force: 'live-terminals'
+      })
+    expect(forced(null)).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    expect(forced(2)).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
   })
 
   it('carries the daemon across a forced update with live terminals', () => {
@@ -179,7 +195,6 @@ describe('assessOrcadRollback', () => {
     expect(safety).toMatchObject({ safety: 'lossy' })
   })
 
-  // The point past which rollback is unsafe: the first terminal created after activation.
   it('refuses once a terminal started after activation, because restoring would orphan it', () => {
     const safety = assessOrcadRollback({
       targetDaemonProtocol: PROTOCOL,

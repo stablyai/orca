@@ -1,8 +1,4 @@
-/**
- * A failed worker-start keeps the terminal it created (a pane the user typed into is theirs), and
- * `--retry-of` launches a new agent in a new terminal. Without releasing the failed attempt's
- * terminal on retry, every retry of a start that can never succeed left one more live agent.
- */
+/** Failed starts retain user-owned panes; retry-of must release the prior agent while launching in a new terminal, preventing one leaked agent per retry. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'

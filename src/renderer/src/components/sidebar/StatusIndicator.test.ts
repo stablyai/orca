@@ -36,8 +36,6 @@ describe('StatusIndicator', () => {
   it('renders working as a yellow spinner ring', () => {
     const markup = renderMarkup('working')
 
-    // The spinner's own classes and animation contract belong to AgentWorkingSpinner.test.tsx;
-    // this pins only that 'working' reaches for it.
     expect(markup).toContain('data-agent-spinner')
   })
 
@@ -47,7 +45,7 @@ describe('StatusIndicator', () => {
     expect(markup).toContain('data-state-indicator-tooltip="Monitoring background tasks"')
     expect(markup).not.toContain(' title=')
     expect(markup).toContain('lucide-activity')
-    expect(markup).toContain('text-yellow-500')
+    expect(markup).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
   })
 

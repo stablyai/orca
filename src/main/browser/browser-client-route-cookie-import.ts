@@ -2,9 +2,10 @@ import type { BrowserCookieImportResult } from '../../shared/browser-workspace-t
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
-  selectBrowserProfile,
-  type DetectedBrowser
-} from './browser-cookie-import'
+  selectBrowserProfile
+} from './cookies/browser-cookie-import'
+import type { DetectedBrowser } from './cookies/sources/browser-cookie-detection-types'
+
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
@@ -18,14 +19,7 @@ export type ClientRouteCookieImportRequest = {
   browserProfile?: string
 }
 
-/**
- * Imports desktop-browser cookies into the client-hosted route partition of a
- * paired server, or null when that server's pages are not client-hosted and the
- * caller should fall through to the server-side import RPC.
- *
- * The renderer names an environment and a browser session profile; main derives
- * and validates the partition, so no caller can address storage directly.
- */
+/** Main derives the destination partition; null delegates to the server-side import RPC. */
 export async function importCookiesIntoClientRoutePartition(
   request: ClientRouteCookieImportRequest
 ): Promise<BrowserCookieImportResult | null> {
@@ -48,8 +42,7 @@ export async function importCookiesIntoClientRoutePartition(
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
   const result = await importCookiesFromBrowser(browser.source, partition)
-  // Why: the import runs for seconds. A host replacement inside that window retargets the
-  // route, so reporting success here would badge a partition no page will ever read from.
+  // Re-pairing during import can change the destination; reject a stale success.
   const settled = settledRoutePartition(request)
   if (settled !== partition) {
     return {
@@ -63,9 +56,7 @@ export async function importCookiesIntoClientRoutePartition(
   if (!result.ok) {
     return result
   }
-  // Why: per-environment, not the local registry — the badge must describe the jar
-  // that received the cookies (this desktop's route partition for THIS server),
-  // never the local profile jar the import deliberately bypassed.
+  // Badge this desktop’s server-route jar, rather than the local profile jar.
   recordClientRouteCookieImportSource({
     environmentId: request.environmentId,
     profileId: request.browserProfileId,
@@ -78,7 +69,6 @@ export async function importCookiesIntoClientRoutePartition(
   return { ...result, profileId: request.browserProfileId }
 }
 
-/** Partition the route resolves to now, or null when the host no longer serves this environment. */
 function settledRoutePartition(request: ClientRouteCookieImportRequest): string | null {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
   if (!routeIdentity) {
@@ -105,6 +95,12 @@ function bindRoutePartition(
       authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
       executionHostIdentity: routeIdentity.executionHostIdentity
     },
+    compatibleIdentity: {
+      orcaProfileId: routeIdentity.orcaProfileId,
+      browserProfileId,
+      authorityConnectionIdentity: routeIdentity.pairingAuthorityConnectionIdentity,
+      executionHostIdentity: routeIdentity.executionHostIdentity
+    },
     legacyIdentity: {
       orcaProfileId: routeIdentity.orcaProfileId,
       browserProfileId,
@@ -115,7 +111,12 @@ function bindRoutePartition(
   })
   const persisted = bindings.get(derived.partition)
   if (persisted === null) {
-    bindings.set(derived.partition, derived.bindingFingerprint, routeIdentity.storageScope)
+    bindings.set(
+      derived.partition,
+      derived.bindingFingerprint,
+      routeIdentity.storageScope,
+      derived.aliasFingerprint
+    )
   } else if (persisted !== derived.bindingFingerprint) {
     throw new Error('browser_route_partition_binding_conflict')
   }
@@ -125,7 +126,7 @@ function bindRoutePartition(
 function resolveImportSource(
   request: ClientRouteCookieImportRequest
 ): { source: DetectedBrowser } | { ok: false; reason: string } {
-  // Why: browserProfile reaches a filesystem path, so reject traversal before use.
+  // Profile names become filesystem path segments.
   if (
     request.browserProfile &&
     (/[/\\]/.test(request.browserProfile) || request.browserProfile.includes('..'))

@@ -1,3 +1,6 @@
+import type { JiraQuickFilterState } from './jira/jira-quick-filters'
+import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
+import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
@@ -27,6 +30,8 @@ import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
 
 export type PersistedUIState = {
+  jiraSavedFilterState?: JiraSavedFilterState
+  jiraQuickFilterState?: JiraQuickFilterState
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
@@ -41,7 +46,7 @@ export type PersistedUIState = {
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
-  /** Project header ordering in `groupBy: 'repo'`, independent of `sortBy`: 'manual' uses persisted order + header drag, 'recent' by latest visible activity. */
+  /** Project-header order in repo grouping, independent of workspace sort: manual permits drag, recent follows visible activity. */
   projectOrderBy: ProjectOrderBy
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
@@ -78,7 +83,7 @@ export type PersistedUIState = {
   explorerDisplayRootByWorktree?: Record<string, string>
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
-  /** Agents-view host scope; deliberately separate from visibleWorkspaceHostIds so a monitoring surface never inherits nav filters silently. `null` = all hosts. */
+  /** Agents host scope stays separate from navigation filters; null means all hosts. */
   agentsVisibleHostIds?: VisibleWorkspaceHostIds
   /** Agents-view project filter; empty = all projects. Separate from filterRepoIds (workspace nav). */
   agentsFilterRepoIds?: string[]
@@ -107,7 +112,7 @@ export type PersistedUIState = {
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
   syncTaskStatusFromWorkspaceBoard?: boolean
-  /** One-shot migration flag for a short-lived build that persisted default statuses in reverse order; once stamped, ordering is never re-inferred from IDs/labels. */
+  /** Migrate reversed defaults once; never infer later user order from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
   /** One-shot repair flag for the exact default payload a short-lived build persisted in reverse workflow order. */
   _workspaceStatusesReorderedDefaultRepaired?: boolean
@@ -147,11 +152,11 @@ export type PersistedUIState = {
   notificationPermissionRequested?: boolean
   /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
-  /** Per-paneKey "row visited" timestamps that mute seen inline-agent rows; persisted because rows survive restart, else acked rows return bold. Renderer-owned via ui:set. */
+  /** Renderer ui:set acknowledgments by pane/turn timestamp; persist so seen rows stay read after restart. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
-  /** Per-paneKey "Clear completed" cutoffs hiding activity events stamped at or before the cutoff; persisted so cleared rows stay cleared across restart. Renderer-owned via ui:set. */
+  /** Renderer ui:set cutoffs hide events at/before the timestamp; persist so cleared rows stay hidden after restart. */
   activityClearedAtByPaneKey?: Record<string, number>
-  /** Per-paneKey turn stamps the user explicitly marked unread; persisted so a manual unread survives restart the way acks and cutoffs do. Renderer-owned via ui:set. */
+  /** Renderer ui:set explicit unread turn stamps survive restart alongside acknowledgments and cutoffs. */
   manuallyUnreadTurnsByPaneKey?: Record<string, number>
   /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
@@ -181,6 +186,8 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */
+  claudeDiffPanelNoticeSeen?: boolean
   /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */
   claudeAccountSignInNoticeSeen?: boolean
   /** URL for new browser tabs; null = blank tab. */
@@ -190,16 +197,17 @@ export type PersistedUIState = {
   browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
+  /** Side and size of DevTools docked in a browser pane; one choice for every page, like Chrome. */
+  browserDevToolsDock?: BrowserDevToolsDockLayout
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
-  /** Saved bounds for the pop-out dashboard window so it restores to its last
-   *  position/size. Independent of the main window's bounds. */
+  /** Dashboard popout bounds, independent of main-window bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
-  /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
+  /** Migrate legacy recent→smart once so later activity-based recent selections survive. */
   _sortBySmartMigrated?: boolean
-  /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */
+  /** Rollback field only: every load stamps it, so it cannot gate migration; use _inlineAgentsDefaultedForAllUsers. */
   _inlineAgentsDefaultedForExperiment?: boolean
   /** One-shot flag for the inline-agents default-on rollout; distinct from _inlineAgentsDefaultedForExperiment, which was stamped every load and is permanently dirty. */
   _inlineAgentsDefaultedForAllUsers?: boolean
@@ -209,9 +217,9 @@ export type PersistedUIState = {
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
   /** One-shot backfill flag for 'host', which became a toggleable property after earlier profiles were already stamped. */
   _hostWorktreeCardPropertyDefaulted?: boolean
-  /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
+  /** Agent total when the star countdown began or was deferred; preserved across app updates. */
   starNagBaselineAgents?: number | null
-  /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */
+  /** Legacy baseline version retained for older builds; no longer resets the countdown. */
   starNagAppVersion?: string | null
   /** Next agents-since-baseline threshold that fires the star-nag; starts at 35, doubles per dismissal without starring. */
   starNagNextThreshold?: number
@@ -219,7 +227,7 @@ export type PersistedUIState = {
   starNagCompleted?: boolean
   /** Timestamp until which nonterminal dismissals suppress threshold prompts (force-show bypasses for dev/testing). */
   starNagDeferredUntil?: number | null
-  /** App version that consumed the first value-moment ask; main-owned so remote/web clients can't spoof the once-per-version cap. */
+  /** Version that consumed the one-time value-moment ask; any saved version suppresses future attempts. Main-owned. */
   starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]

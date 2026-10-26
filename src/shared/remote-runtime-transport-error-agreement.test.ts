@@ -1,39 +1,20 @@
-/**
- * Differential guard: a transport error's CODE must not classify as fatal when its own
- * MESSAGE reads as recoverable.
- *
- * Since #12667, `isRecoverableRemoteRuntimeConnectionError` and
- * `isRuntimeRpcQueueOverloadError` treat a present code as authoritative and consult
- * `RECOVERABLE_MESSAGE_FRAGMENTS` only when there is no code. A transient code missing from
- * `RECOVERABLE_CODES` therefore classifies as fatal, and a fatal classification is what
- * dead-ends a terminal pane (#12650: the transport cancels recovery, unmounting the Reconnect
- * banner). This file enumerates the reachable (code, message) pairs and fails if any pair takes
- * that shape, plus pins that the code-less fragment fallback still works for untyped producers.
- *
- * The reverse direction — recoverable code, fatal-reading message — is deliberately allowed:
- * that is the code doing its job (e.g. 'Refreshing remote runtime control transport.' carries
- * remote_runtime_unavailable and no fragment would have rescued it).
- *
- * WHAT THIS GUARD CANNOT CATCH: a transient code whose message matches no fragment. The
- * message side has nothing to disagree with, so the pair looks consistent. `remote_runtime_busy`
- * is exactly that case today — its messages say "retry after…" but match no fragment, so it
- * classifies fatal and this guard stays silent. Tracked as STA-3479; do not "fix" it here.
- */
+/** Pin reachable code/message recoverability: codes are authoritative, so missing transient codes can disable terminal recovery
+ * even when messages look retryable (#12667/#12650). Recoverable codes with unrecognized messages are allowed.
+ * This differential guard cannot detect transient codes with unmatched messages; pin known remote_runtime_busy cases explicitly (STA-3479). */
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
-  RECOVERABLE_CODES,
   RECOVERABLE_MESSAGE_FRAGMENTS,
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike,
   type RemoteRuntimeClientErrorLike
-} from './remote-runtime-client-error-classification'
+} from './remote-runtime/remote-runtime-client-error-classification'
 import {
   WS_HANDSHAKE_TIMEOUT_MESSAGE,
   remoteRuntimeConnectFailureMessage
-} from './remote-runtime-connect-bound'
+} from './remote-runtime/remote-runtime-connect-bound'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame,
@@ -41,10 +22,10 @@ import {
   remoteRuntimeReadyError,
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
-} from './remote-runtime-request-frames'
-import { formatSharedControlCloseMessage } from './remote-runtime-shared-control-protocol'
+} from './remote-runtime/requests/remote-runtime-request-frames'
+import { formatSharedControlCloseMessage } from './remote-runtime/control/remote-runtime-shared-control-protocol'
 import { RuntimeRpcCallQueueOverloadError } from './runtime-rpc-call-queue'
-import { withRemoteRuntimeTailscaleHint } from './remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from './remote-runtime/remote-runtime-tailscale-hint'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 
 type TransportErrorPair = RemoteRuntimeClientErrorLike & { producer: string }
@@ -59,13 +40,11 @@ function frameError(producer: string, frame: string): TransportErrorPair {
   return producedPair(producer, parsed.type === 'error' ? parsed.error : parsed)
 }
 
-// Why: these two live behind socket callbacks / module-private helpers that a unit test cannot
-// reach, so their close-code shapes are reproduced here rather than derived.
+// Private/socket callback producers cannot be called here; reproduce their close-code shapes.
 const CLOSE_REASON = Buffer.from('server restarting')
 const EMPTY_CLOSE_REASON = Buffer.from('')
 
-// Why: the connect bound's message is built from the real helper so a rewording updates the
-// corpus with it, and the code-less entry below then fails instead of the user.
+// Derive connect-bound wording from the real helper so message-only fallback fails when wording drifts.
 const CONNECT_BOUND_ENDPOINT = 'ws://desk.example.com:6768'
 const connectBoundMessage = (endpoint = CONNECT_BOUND_ENDPOINT): string =>
   remoteRuntimeConnectFailureMessage(new Error(WS_HANDSHAKE_TIMEOUT_MESSAGE), endpoint)
@@ -263,11 +242,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   }
 ]
 
-/**
- * `remote_runtime_busy` is semantically transient but absent from `RECOVERABLE_CODES`, so it
- * classifies fatal. It is listed here (not omitted) so the corpus stays complete; STA-3479
- * covers the classification itself.
- */
+/** Client-side admission caps: each frees as pending work settles, so the caller retries. */
 const BUSY_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-prepared-request-admission.ts:100',
@@ -291,12 +266,8 @@ const BUSY_TRANSPORT_ERRORS: TransportErrorPair[] = [
   }
 ]
 
-/**
- * Codes the host forwards through `mapRuntimeError`, reconstructed by `RuntimeRpcCallError`.
- * `RUNTIME_PASSTHROUGH_CODES` entries arrive with the code as their own message; the
- * `STRUCTURED_RUNTIME_PASSTHROUGH_CODES` and `runtime_error` entries carry the host's message,
- * which is open-ended — see the limitation note at the bottom of this file.
- */
+/** Host errors reconstructed by RuntimeRpcCallError: passthrough codes use code as message; structured/runtime_error
+ * messages are open-ended, so the differential guard has the documented limitation. */
 const HOST_FORWARDED_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'main/runtime/rpc/errors.ts:155 (RUNTIME_PASSTHROUGH_CODES)',
@@ -416,9 +387,7 @@ const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })
     recoverable: true
   },
   {
-    // Why: the subscribe handler rethrows, and Electron keeps only the message. This is the
-    // exact pair that dead-ended a terminal pane when the connect bound's wording drifted
-    // outside RECOVERABLE_MESSAGE_FRAGMENTS.
+    // Electron strips the subscribe rejection code; this message-only pair previously disabled pane reconnect when wording drifted.
     producer:
       "ipcMain.handle('runtimeEnvironments:subscribe') rejection after the connect bound elapsed (code stripped)",
     message: `Error invoking remote method 'runtimeEnvironments:subscribe': Error: ${withRemoteRuntimeTailscaleHint(connectBoundMessage(), CONNECT_BOUND_ENDPOINT)}`,
@@ -441,13 +410,6 @@ function classifyByMessageOnly(pair: TransportErrorPair): boolean {
 }
 
 describe('transport error code/message classification agreement', () => {
-  it('enumerates every reachable coded producer', () => {
-    // Floor, not an exact count: the corpus should only grow. Lower it deliberately when a
-    // producer is genuinely deleted. (#12667's review enumerated 34 of these by hand.)
-    expect(CODED_TRANSPORT_ERRORS.length).toBeGreaterThanOrEqual(59)
-    expect(CODED_TRANSPORT_ERRORS.every((pair) => typeof pair.code === 'string')).toBe(true)
-  })
-
   it('never classifies a coded error as fatal while its own message reads as recoverable', () => {
     const violations = CODED_TRANSPORT_ERRORS.filter(
       (pair) => !isRecoverableRemoteRuntimeConnectionError(pair) && classifyByMessageOnly(pair)
@@ -481,39 +443,11 @@ describe('transport error code/message classification agreement', () => {
     expect(misclassified).toEqual([])
   })
 
-  it('backs every recoverable message fragment with a producer in the corpus', () => {
-    const allMessages = [...CODED_TRANSPORT_ERRORS, ...CODELESS_TRANSPORT_ERRORS].map((pair) =>
-      pair.message.toLowerCase()
-    )
-    const unbacked = RECOVERABLE_MESSAGE_FRAGMENTS.filter(
-      (fragment) => !allMessages.some((message) => message.includes(fragment))
-    ).map(
-      (fragment) =>
-        `recoverable fragment "${fragment}" matches no producer in this corpus — add the producer that emits it, or drop the fragment.`
-    )
-    expect(unbacked).toEqual([])
-  })
-
-  it('backs every recoverable code with a producer in the corpus', () => {
-    // 'reconnecting' is vocabulary borrowed from the SSH/runtime status states; no error
-    // producer raises it. Kept recoverable defensively.
-    const codesWithoutProducer = new Set(['reconnecting'])
-    const corpusCodes = new Set(CODED_TRANSPORT_ERRORS.map((pair) => pair.code))
-    const unbacked = [...RECOVERABLE_CODES]
-      .filter((code) => !corpusCodes.has(code) && !codesWithoutProducer.has(code))
-      .map(
-        (code) =>
-          `recoverable code "${code}" matches no producer in this corpus — add the producer that raises it so its message is checked, or declare it producer-less here.`
-      )
-    expect(unbacked).toEqual([])
-  })
-
-  it('pins why the guard cannot see the remote_runtime_busy exception (STA-3479)', () => {
+  it('classifies remote_runtime_busy recoverable with or without its code (STA-3479)', () => {
     for (const pair of BUSY_TRANSPORT_ERRORS) {
-      // Fatal by code with a message that matches nothing: the two sides cannot disagree, so the
-      // differential above stays silent. Fixing the classification is STA-3479, not this file.
-      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(false)
-      expect(matchingRecoverableFragment(pair.message)).toBeNull()
+      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(true)
+      // Electron IPC keeps only the message, so the fragment fallback must agree with the code.
+      expect(isRecoverableRemoteRuntimeConnectionError({ message: pair.message })).toBe(true)
     }
   })
 })

@@ -1,11 +1,5 @@
 name: ZCode read-only account contract
 on:
-  pull_request:
-    paths:
-      - 'src/main/zcode/**'
-      - 'src/shared/node-bounded-file-reader*'
-      - 'src/main/rate-limits/**'
-      - '.github/workflows/zcode-account-contract.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,24 +7,7 @@ concurrency:
   group: zcode-account-contract-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  credential-files:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macos-15, windows-2022]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: config/.bun-version
-      - name: Verify read-only credentials and account changes
-        run: pnpm test src/main/zcode/zcode-v2-plan-credentials.test.ts src/main/zcode/zcode-v2-personal-overlay-raw-json.test.ts src/main/rate-limits/service-zcode-usage.test.ts src/shared/node-bounded-file-reader-sync.test.ts
+  account-contract:
+    uses: ./.github/workflows/zcode-credential-contract.yml
+    with:
+      contract: account

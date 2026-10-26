@@ -32,6 +32,16 @@ const DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS = 100
 const ONBOARDING_FINAL_STEP = 3
 const ONBOARDING_FLOW_VERSION = 2
 
+function forceKillProcessTree(pid) {
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      process.kill(-pid, 'SIGKILL')
+    }
+  } catch {}
+}
+
 function parseArgs(argv) {
   const options = {
     warmupMs: DEFAULT_WARMUP_MS,
@@ -159,8 +169,7 @@ function buildAppIfNeeded(root, skipBuild) {
     throw new Error(`--skip-build requested, but ${mainPath} does not exist`)
   }
   console.log('[idle-cpu] building Electron app with electron-vite --mode e2e')
-  // Why through the wrapper: `npx` only resolves to an executable on POSIX; on Windows it is
-  // `npx.cmd`, which execFileSync cannot run, and the wrapper also verifies the boot graph.
+  // Wrapper avoids Windows npx.cmd exec failure and verifies boot graph.
   run(
     process.execPath,
     [path.join(root, 'config', 'scripts', 'run-electron-vite-build.mjs'), '--mode', 'e2e'],
@@ -307,8 +316,7 @@ async function main() {
   void ELECTRON_RUN_AS_NODE
   void _codexHome
   void _orcaCodexHome
-  // Why: real-home rollout work would both contaminate idle measurements and
-  // expose the developer Codex profile to this disposable Electron launch.
+  // Disable real-home rollout to isolate measurements and protect developer’s Codex profile.
   const isolatedHome = path.join(userDataDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
   const app = await electron.launch({
@@ -481,9 +489,17 @@ async function main() {
       )
     )
   } finally {
-    const launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
-      (proc) => proc.pid !== rootPid
-    )
+    let launchedProcesses = []
+    try {
+      launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
+        (proc) => proc.pid !== rootPid
+      )
+    } catch (error) {
+      // A failed or timed-out read must not skip the app close and fixture cleanup below.
+      console.error('idle CPU benchmark: could not list launched processes', error)
+      // Kill descendants while root still anchors tree if list failed; app.close alone leaves detached children over fixtures slated for removal.
+      forceKillProcessTree(rootPid)
+    }
     await app.close().catch(() => undefined)
     await sleep(250)
     terminateProcesses(launchedProcesses)

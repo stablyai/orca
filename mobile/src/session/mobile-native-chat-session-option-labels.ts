@@ -1,7 +1,3 @@
-// Mobile port of desktop's pill labeling
-// (src/renderer/src/components/native-chat/native-chat-session-option-labels.ts),
-// minus i18n — mobile renders plain strings throughout.
-
 import {
   isDefaultServiceTier,
   type SessionOptionDescriptor,
@@ -12,7 +8,6 @@ import {
 export function mobileSessionOptionDisabledReason(
   reason: SessionOptionDisabledReason | undefined
 ): string | null {
-  // Exhaustive over SessionOptionDisabledReason so new keys are a compile error.
   switch (reason) {
     case 'set-when-session-starts':
       return 'Set when the session starts.'
@@ -31,6 +26,9 @@ function selectedChoiceLabel(descriptor: SessionOptionDescriptor): string | null
   ) {
     return null
   }
+  if (descriptor.id === 'permissionMode' && descriptor.description) {
+    return descriptor.description
+  }
   const current = descriptor.kind.currentValue
   const choice: SessionOptionSelectChoice = descriptor.kind.choices.find(
     (candidate) => candidate.value === current
@@ -44,14 +42,12 @@ export function mobileModelPillLabel(descriptor: SessionOptionDescriptor): strin
 }
 
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
-  // A boolean always has a value, so the summary states it and lets the sheet's
-  // marker say whether anything confirmed it. Reading "Not set" here while the
-  // sheet showed the switch on made the two screens disagree.
+  // Show the boolean value consistently with its switch; the source marker separately expresses whether it is confirmed.
   if (descriptor.kind.type === 'boolean') {
     return descriptor.kind.currentValue ? 'On' : 'Off'
   }
   if (descriptor.valueSource === 'unknown') {
-    return 'Not set'
+    return descriptor.id === 'permissionMode' ? 'Permissions' : 'Not set'
   }
   return selectedChoiceLabel(descriptor) ?? 'Not set'
 }

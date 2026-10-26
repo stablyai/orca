@@ -9,7 +9,9 @@ import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import {
   findBrowserTabWorktreeId,
-  isBrowserWorkspaceOwnedByPairedServer
+  isBrowserWorkspaceOwnedByPairedServer,
+  isDesktopRenderedBrowserTab,
+  resolveRemoteCliBrowserWorkspace
 } from './browser-request-workspace-owner'
 
 function pairedServerWorkspaceError(): string {
@@ -19,9 +21,20 @@ function pairedServerWorkspaceError(): string {
   )
 }
 
-// Why owner, not the Active Server setting: these requests come from this desktop's own runtime,
-// which only names workspaces it runs, so focus on a paired server must not refuse them (#22275).
+// Route by proven workspace owner, not Active Server; this desktop’s runtime requests its own pages regardless of focus (#22275).
 export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onRequestRemoteCliBrowserScope((data) => {
+      let workspaceId: string | null = null
+      try {
+        workspaceId = resolveRemoteCliBrowserWorkspace(useAppStore.getState(), data)
+      } catch {
+        // Why: an owner this window cannot prove is a refusal, never a pass.
+        workspaceId = null
+      }
+      window.api.ui.replyRemoteCliBrowserScope({ requestId: data.requestId, workspaceId })
+    })
+  )
   unsubs.push(
     window.api.ui.onRequestTabCreate((data) => {
       try {
@@ -50,21 +63,22 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
             )
           : undefined
 
-        // Why: a user-initiated open (data.activate, e.g. mobile tapping an HTML path) foregrounds the tab so it lands in active-group order and publishes to mobile.
-        // Agent/automation opens stay in the background (activate:false) in the active browser group.
-        // A paired device's create is deliberately in that second class now: it must not move this host's
-        // view, so it groups with the other browser tabs rather than landing in the UI-active group.
+        // Foreground explicit user opens; agent/automation/paired-device background opens stay in the browser group without moving this host’s view.
         const workspace = store.createBrowserTab(worktreeId, data.url, {
           title: data.url,
           browserPageId: data.browserPageId,
           targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
+          // This runtime asks for desktop-rendered pages, including managed-SSH workspaces; explicit null prevents streaming another host’s page.
+          browserRuntimeEnvironmentId: null,
           activate: data.activate === true
         })
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
-        const browserPageId = pages[0]?.id ?? workspace.id
+        // A layout-owner build draws the page once main's frame lands: answer the id it was opened under.
+        const browserPageId =
+          data.browserPageId ?? pages[0]?.id ?? workspace.activePageId ?? workspace.id
         acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
         window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
       } catch (err) {
@@ -108,7 +122,7 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           })
           return
         }
-        // Why: a workspace may host several browser pages; profile switch must tear down all sibling webviews, not just the IPC's.
+        // Profile changes must tear down every sibling webview in the workspace.
         const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
         if (workspacePages.length > 0) {
           for (const page of workspacePages) {
@@ -182,15 +196,18 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           return
         }
         const closeWorktreeId = findBrowserTabWorktreeId(store, tabToClose)
-        if (closeWorktreeId && isBrowserWorkspaceOwnedByPairedServer(store, closeWorktreeId)) {
+        if (
+          closeWorktreeId &&
+          isBrowserWorkspaceOwnedByPairedServer(store, closeWorktreeId) &&
+          !isDesktopRenderedBrowserTab(store, tabToClose)
+        ) {
           window.api.ui.replyTabClose({
             requestId: data.requestId,
             error: pairedServerWorkspaceError()
           })
           return
         }
-        // Why: the bridge keys tabs by browserPageId, but closeBrowserTab expects a workspace id.
-        // Per the CLI's `tab close --page` contract, close only that page unless it is the last in its workspace.
+        // Resolve page IDs to workspace IDs for closeBrowserTab; page-close closes the workspace only for its last page.
         const isWorkspaceId = Object.values(store.browserTabsByWorktree)
           .flat()
           .some((ws) => ws.id === tabToClose)

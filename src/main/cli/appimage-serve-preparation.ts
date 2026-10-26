@@ -1,8 +1,4 @@
-/**
- * The first `AppImage serve` after an update extracts the AppImage before it registers the CLI.
- * That wait gets one deadline across the lock and every extraction attempt, progress on stderr,
- * and a fast refusal when the private cache cannot hold a runnable copy.
- */
+// Share one deadline across the registration lock and all first-serve extraction attempts.
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat, statfs, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

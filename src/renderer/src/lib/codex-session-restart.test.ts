@@ -38,10 +38,7 @@ function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
 
 describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
   it('waits for shell readiness before relaunching Codex after an account switch', () => {
-    // Why launchAgent is load-bearing: pty:spawn runs the managed-auth
-    // readiness gate and Codex launch prep only for launchAgent 'codex', so
-    // dropping it would let a restart respawn race the account handoff and
-    // record a launch account the pane does not actually read.
+    // launchAgent:codex enables managed-auth readiness/launch prep; omitting it can race handoff and record the wrong account.
     expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
       command: 'codex',
       startupCommandDelivery: 'shell-ready',
@@ -64,8 +61,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
     useAppStore.setState({
-      // Why: a prior test's remote-runtime selection must not silently move
-      // every later local pane out of the switch's lane.
+      // Reset remote selection so later local panes stay in their intended switch lane.
       settings: null as never,
       tabsByWorktree: {
         wt1: [
@@ -84,7 +80,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       ptyIdsByTabId: {
         'tab-1': ['pty-1']
       },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {},
       markCodexRestartNotices: useAppStore.getState().markCodexRestartNotices
     })
@@ -247,8 +243,7 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('leaves a Codex-launched pane alone while the user is inside their own program', async () => {
-    // Why: the switch path never consults the stale-pane registry, so an exited
-    // Codex tab now running a pager would lose the keystrokes needed to quit it.
+    // Without stale-registry checks, an exited Codex pane running a pager must remain free of keystroke-swallowing notices.
     setLaunchAgentOnFirstTab('codex')
     vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
       foregroundProcess: 'less',
@@ -329,7 +324,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     await markForFocusedHost({
       previousAccountLabel: ACCOUNT_B,
@@ -337,7 +332,7 @@ describe('markLiveCodexSessionsForRestart', () => {
     })
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('keeps a requested restart answered when the account switches again first', async () => {
@@ -350,20 +345,19 @@ describe('markLiveCodexSessionsForRestart', () => {
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
     await markForFocusedHost({
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: 'account-c@example.com'
     })
 
-    // Why: the queued restart relaunches under whatever account is selected when
-    // it runs, so a third switch must not reopen a prompt the user answered.
+    // Queued restarts use selection at execution time; later switches must not reopen an answered prompt.
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: 'account-c@example.com',
       restartRequested: true
     })
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({ 'pty-1': true })
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'codex' })
   })
 
   it('preserves the pane original account across repeated switches until restart', async () => {
@@ -441,13 +435,7 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 })
 
-/**
- * A restart notice blocks every keystroke in the pane it names, so raising one
- * on a pane the switch could not have touched takes a working terminal deaf.
- * A managed Codex account is scoped to one machine AND one runtime: a remote
- * spawn carries a connectionId, so no CODEX_HOME is ever injected into it, and
- * WSL selections live in their own per-distro slot.
- */
+// Restart notices swallow input; machine/runtime-scoped account changes must not mark foreign SSH/relay or sibling WSL panes.
 describe('markLiveCodexSessionsForRestart lane scoping', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   const runtimeEnvironmentCall = vi.fn()
@@ -480,7 +468,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         }))
       },
       ptyIdsByTabId: Object.fromEntries(panes.map((pane, index) => [`tab-${index}`, [pane.ptyId]])),
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
   }
@@ -492,8 +480,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
-    // Why: every pane in this block reads as a live Codex session, so any pane
-    // left uncarded was excluded by its lane and nothing else.
+    // Every pane has live Codex evidence, so exclusions prove lane filtering.
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -611,9 +598,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     })
   })
 
-  // Why these two: a Windows validation saw a WSL pane escape a host switch, but
-  // only because its foreground read as `wsl.exe` and failed the Codex test. Pin
-  // the lane instead — a WSL pane whose foreground IS codex must escape too.
+  // Test a WSL pane whose foreground is Codex so lane exclusion cannot accidentally rely on wsl.exe failing identity checks.
   it('leaves a WSL Codex pane alone on a host switch even when its foreground is codex', async () => {
     seedPanes([{ ptyId: 'pty-wsl' }], { wt1: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' })
 
@@ -663,8 +648,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
       target: { runtime: 'host' }
     })
 
-    // Why: that mutation was RPC'd to env-1's own roster, so env-1's panes are
-    // the stale ones and the local shell is untouched — the mirror of the bug.
+    // An RPC mutation affects env-1’s roster, leaving local panes untouched.
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
       'remote:env-1@@term-1': {
         previousAccountLabel: ACCOUNT_A,
@@ -674,16 +658,10 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
   })
 
-  /**
-   * Main writes the lane from the shell, cwd and distro the spawn resolved, so
-   * it is exact where re-deriving from current state can only approximate. Four
-   * review rounds each found another divergence in that derivation; these pin
-   * the record beating it in both directions.
-   */
+  // Main records the resolved spawn lane; preference-based derivation can drift in either direction.
   describe('recorded launch lanes', () => {
     it('spares a pane the record puts in another lane, and never inspects it', async () => {
-      // Derivation says `host`; the pane really launched under WSL. Carding it
-      // would take a working terminal deaf — this is the bug class in one test.
+      // Recorded WSL must override derived host or a healthy terminal would lose input.
       seedPanes([{ ptyId: 'pty-1' }])
       vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue({
         'pty-1': 'wsl:Ubuntu'
@@ -700,8 +678,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     })
 
     it('cards a pane the record puts in the switched lane against the derivation', async () => {
-      // The mirror: the user changed a runtime preference after this WSL-looking
-      // pane spawned on the host, and re-derivation would now miss its notice.
+      // Recorded host must override a now-WSL preference or its restart notice would be missed.
       seedPanes([{ ptyId: 'pty-1' }], { wt1: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' })
       vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue({
         'pty-1': 'host'
@@ -791,8 +768,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
       })
     })
 
-    // THE regression check: over-filtering silently kills the feature and reads
-    // as a pass. A genuine local host pane must be carded on every fallback path.
+    // Every fallback must still mark a genuine local host pane; blanket exclusion would silently disable the feature.
     it.each([
       ['no record exists for the pane', () => ({ 'pty-other': 'wsl:Ubuntu' })],
       ['the lookup rejects', null],
@@ -836,8 +812,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         target: { runtime: 'host' }
       })
 
-      // Why: main only records daemon host spawns, so a foreign id is a certain
-      // miss — and one batched call, not one per pane.
+      // Main records only daemon host spawns; skip foreign IDs and batch the remaining lookup.
       expect(window.api.codexAccounts.listRecordedPaneLanes).toHaveBeenCalledTimes(1)
       expect(window.api.codexAccounts.listRecordedPaneLanes).toHaveBeenCalledWith({
         ptyIds: ['pty-1']
@@ -867,7 +842,7 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     ;(globalThis as { window: typeof window }).window = {

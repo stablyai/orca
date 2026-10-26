@@ -11,8 +11,14 @@ describe('pinned transcript rows', () => {
   })
 
   it('pins a row a reveal is aimed at, wherever it sits', () => {
-    expect([...nativeChatPinnedRowIndexes({ count: 40, revealIndex: 3 })].sort((a, b) => a - b)) //
-      .toEqual([3, 39])
+    expect(
+      [...nativeChatPinnedRowIndexes({ count: 40, revealIndex: 3 })].sort((a, b) => a - b)
+    ).toEqual([3, 39])
+  })
+
+  it("pins the new-rows marker's row alongside a reveal, not in its place", () => {
+    const pinned = nativeChatPinnedRowIndexes({ count: 40, revealIndex: 3, newRowsMarkerIndex: 20 })
+    expect([...pinned].sort((a, b) => a - b)).toEqual([3, 20, 39])
   })
 
   it('ignores a reveal target that is no longer in the transcript', () => {

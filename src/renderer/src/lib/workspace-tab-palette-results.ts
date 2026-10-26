@@ -1,4 +1,4 @@
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -158,8 +158,7 @@ function matchEntry(
 ): WorkspaceTabPaletteSearchResult | null {
   const unrestrictedMatch = matchPaletteTabDocument(entry.document, query)
   if (!unrestrictedMatch) {
-    // Why kept separate: agent text is not part of the structured field set, so it
-    // never contributes to token coverage — it only recovers a row nothing else found.
+    // Agent-text fallback only recovers otherwise missing rows; it never contributes structured token coverage.
     const snippet = matchWorkspaceTabAgentSnippet(entry.agentMetadata, query)
     if (!snippet) {
       return null
@@ -203,8 +202,7 @@ function matchEntry(
     repoRanges: match.repoRanges,
     worktreeRanges: match.worktreeRanges,
     branchRanges: match.branchRanges,
-    // Ranges are into the alias string, not the row: the content icon explains the
-    // hit, so nothing on the row is highlighted from them.
+    // Alias ranges index search-only text; content icons explain hits without row highlighting.
     typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
     typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
       text: (entry.typeSearchAliases ?? [])[typeAlias.index] ?? '',

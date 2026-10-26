@@ -10,6 +10,8 @@ import {
 } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
+import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
   resolveAvailableSmartModes,
@@ -31,8 +33,7 @@ import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-so
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 
-// Why: match MobileSearchField — native autoFocus alone often fails to raise
-// the soft keyboard when the drawer is mid-present animation.
+// Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
 
 type Props = {
@@ -43,10 +44,14 @@ type Props = {
   repoId: string | null
   repos: readonly PasteRepoCandidate[]
   linearWorkspaceId?: string | null
+  jiraSiteId?: JiraSiteSelection | null
+  jiraSites?: readonly JiraSite[]
   sshReady: boolean
   onRepoChange: (repoId: string) => void
   onClose: () => void
 }
+
+const NO_JIRA_SITES: readonly JiraSite[] = []
 
 export function SmartWorkspaceSourceDrawer({
   visible,
@@ -56,6 +61,8 @@ export function SmartWorkspaceSourceDrawer({
   repoId,
   repos,
   linearWorkspaceId,
+  jiraSiteId,
+  jiraSites = NO_JIRA_SITES,
   sshReady,
   onRepoChange,
   onClose
@@ -64,21 +71,17 @@ export function SmartWorkspaceSourceDrawer({
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const inputRef = useRef<TextInput>(null)
-  // Why: read latest availability inside the open effect without making it a
-  // reactive dep (the object is recreated each render), so re-seeding happens
-  // only on open, not on every availability recompute.
+  // Read latest availability without reactive dependency so recreated object reseeds only on open.
   const availabilityRef = useRef(availability)
   availabilityRef.current = availability
 
-  // Reset to the default mode each time the drawer opens.
   useEffect(() => {
     if (visible) {
       setMode(resolveDefaultSmartMode(availabilityRef.current))
     }
   }, [visible])
 
-  // Why: focus after open interactions settle so the keyboard appears and the
-  // caret lands in the docked field (same value as the form via composer.name).
+  // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {
     if (!visible) {
       return
@@ -97,12 +100,14 @@ export function SmartWorkspaceSourceDrawer({
     }
   }, [visible])
 
-  // Snap the chosen mode back into the available set if availability changes.
   const effectiveMode = availableModes.includes(mode) ? mode : (availableModes[0] ?? 'text')
 
-  // Linear searches without a repo; every other provider/branch search needs a
-  // connected repo-backed target.
-  const searchEnabled = visible && (effectiveMode === 'linear' || sshReady)
+  // Keep pasted Jira URLs reachable in Smart mode without repo connection; resolving one issue does not touch repo.
+  const jiraUrlIntent =
+    availability.jiraAvailable && isBlockingJiraUrlIntent(effectiveMode, composer.name)
+  // Only Linear/Jira search works without repo; other provider/branch searches need connected repo-backed target.
+  const searchEnabled =
+    visible && (effectiveMode === 'linear' || effectiveMode === 'jira' || jiraUrlIntent || sshReady)
 
   const {
     rows,
@@ -121,8 +126,11 @@ export function SmartWorkspaceSourceDrawer({
     githubAvailable: availability.githubAvailable,
     gitlabAvailable: availability.gitlabAvailable,
     linearAvailable: availability.linearAvailable,
+    jiraAvailable: availability.jiraAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    jiraSiteId,
+    jiraSites,
     repos
   })
 
@@ -145,6 +153,9 @@ export function SmartWorkspaceSourceDrawer({
         break
       case 'linear':
         composer.handleSmartLinearIssueSelect(row.issue)
+        break
+      case 'jira':
+        composer.handleSmartJiraIssueSelect(row.issue)
         break
     }
     onClose()
@@ -187,13 +198,10 @@ export function SmartWorkspaceSourceDrawer({
       dragContentToDismiss={false}
       contentScrollable={false}
       fillAvailable
-      // Why: sit above the pinned create form so the outer content-sized sheet
-      // stays underneath and is revealed at its original height on dismiss.
+      // Layer above pinned create form so dismiss reveals outer sheet at original height.
       zIndex={1100}
     >
-      {/* Why: column with results flex:1 + dock flex-shrink:0 at the end.
-          Fill sheet height + marginBottom place this column on the keyboard
-          top; dock must stay a non-flex sibling so FlatList cannot clip it. */}
+      {/* Fill column ends at keyboard top; non-flex dock stays beside flex results so FlatList cannot clip input. */}
       <View style={styles.root}>
         <View style={styles.header}>
           <Text style={styles.title}>Name or &apos;Create From&apos;</Text>
@@ -225,7 +233,11 @@ export function SmartWorkspaceSourceDrawer({
             </View>
           ) : null}
 
-          {!sshReady && effectiveMode !== 'text' && effectiveMode !== 'linear' ? (
+          {!sshReady &&
+          effectiveMode !== 'text' &&
+          effectiveMode !== 'linear' &&
+          effectiveMode !== 'jira' &&
+          !jiraUrlIntent ? (
             <Text style={styles.notice}>Connect the repository to search sources.</Text>
           ) : needsGitHubRemote ? (
             <Text style={styles.notice}>

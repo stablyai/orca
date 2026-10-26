@@ -33,7 +33,6 @@ const SESSION_GRANTS = [
   'native.audio.stop'
 ]
 
-/** The desktop's list as this branch writes it, trimmed to one route of each grant shape. */
 function desktopRoutes(declares: boolean): MobileWebPageRoute[] {
   return [
     {
@@ -61,7 +60,6 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
   const opened = run(
     createMobileWebShellSession(pathname),
     { type: 'layout-changed', wide: true },
-    // No bundle capability is a desktop that serves no page at all.
     { type: 'gates-changed', gates: routes === null ? gates({ hostCapabilities: [] }) : gates() }
   )
   if (routes === null) {
@@ -75,10 +73,10 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
 }
 
 describe('the page declaring it can own the host area', () => {
-  it('is a manifest field the desktop may write and an old phone reads past', () => {
+  it('accepts a true ownership declaration from the desktop and refuses false', () => {
     const [host] = desktopRoutes(true)
     expect(MobileWebBundleRouteSchema.safeParse(host).success).toBe(true)
-    // `true` only: a desktop writing `false` is writing a field with no meaning.
+    // Only true declares ownership; false must be rejected.
     expect(MobileWebBundleRouteSchema.safeParse({ ...host, canOwnHostArea: false }).success).toBe(
       false
     )
@@ -110,7 +108,6 @@ describe('the wide host-area session', () => {
     expect([...view.routeGrants].sort()).toEqual(
       [...SESSION_GRANTS, 'externalNavigation', 'native.storage.read'].sort()
     )
-    // Every pair the page compares a hop against is covered, which is what keeps it in the page.
     for (const pair of view.pageRouteGrants) {
       expect(pair.grants.every((grant) => view.routeGrants.includes(grant))).toBe(true)
     }
@@ -131,11 +128,16 @@ describe('the wide host-area session', () => {
     })
   })
 
-  it('stays native for no page and for a page without the declaration, host route or detail', () => {
+  it('walls the desktop for no page and for a page without the declaration, host route or detail', () => {
     for (const pathname of [HOST_ROUTE, '/h/host-1/session/wt-1']) {
-      for (const routes of [null, desktopRoutes(false)]) {
-        expect(wideStateFor(routes, pathname).state.kind).toBe('native-route')
-      }
+      expect(wideStateFor(null, pathname).state).toEqual({
+        kind: 'wall',
+        verdict: { kind: 'blocked', reason: 'bundle-unavailable' }
+      })
+      expect(wideStateFor(desktopRoutes(false), pathname).state).toEqual({
+        kind: 'wall',
+        verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+      })
     }
   })
 

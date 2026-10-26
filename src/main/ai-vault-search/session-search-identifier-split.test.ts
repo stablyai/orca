@@ -11,7 +11,6 @@ it('splits a camel-case symbol into its pieces and keeps the whole', () => {
 })
 
 it('splits a path into its segments and extension', () => {
-  // The whole path already tokenizes on its own; only the pieces need shadowing.
   expect(identifierShadowText('src/main/foo-bar.ts')).toBe('src main foo bar ts')
 })
 

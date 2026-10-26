@@ -1,8 +1,4 @@
-// How a durable session record becomes an ACP agent launch, on the machine this runtime runs on.
-//
-// Every input is read back from the record the store made durable, never from the call that
-// triggered the acquire: the working directory, the account home, and the provider session a
-// resume names are the ones this session proved.
+// Launch from durable record values for the working directory, pinned account and resume session.
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
@@ -14,12 +10,22 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
+  resolveAgainAfterRefreshOnMissingProgram,
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
-import { probeAgentCliVersion } from '../agent-cli-version-probe'
+import {
+  checkAgentCliVersion,
+  type AgentCliVersionCheck,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
+import {
+  copyBesidePinnedMembers,
+  resolveInstalledRuntimeRelease
+} from '../node-runtime/managed-runtime-release'
+import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
@@ -30,7 +36,8 @@ import {
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {
-  NATIVE_CHAT_VISUALS_DIR_ENV,
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
@@ -42,50 +49,46 @@ export type AcpStructuredLaunch = {
   command: string
   args: string[]
   cwd: string
-  /** The child's sealed environment; a read that starts no child gets the agent's own. */
+  /** Sealed for spawns; recovery reads use the unsealed agent environment. */
   env: Record<string, string>
-  /** Keys the child must not inherit from this process's own environment. */
   envToDelete: string[]
   fullAccess: boolean
-  /** The provider session to load; null starts a new one. */
   resume: {
     sessionId: string
-    /** The chain key of the session to load, which a fresh session names if it takes over. */
     key: string
-    /** Only a session this chat created and never exchanged a turn on may be one the agent never
-     *  saved, and so be superseded. Read only when the agent cannot reopen it. */
+    /** A chat-created session with no exchanged turn may never have been saved. */
     mayBeUnsaved: () => boolean
-    /** Keys of the conversations the chain says the agent lost whose warning row the chat does not
-     *  hold, as when the attach that would have written it failed. Read once the start succeeds. */
+    /** Lost conversations whose warning rows are missing; read after startup succeeds. */
     unannouncedLosses: () => string[]
   } | null
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  /** The chat's journal as it stands, read without opening it; null when it has none. */
+  /** Reads without opening the journal. */
   readJournal: (sessionId: string) => JournalLoad | null
-  /** The Agent Permissions setting's bypass posture for this agent, re-read per acquisition. */
-  resolveFullAccess?: (agent: string) => boolean
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
-  /** The environment the child process inherits at spawn; this process's own by default. */
   inheritedEnv?: NodeJS.ProcessEnv
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
+  dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
-/** What a launch's binary and environment are read from; a catalog probe reads the same. */
 export type AcpLaunchInvocationDeps = {
-  /** The shared base env; re-read per acquisition. */
+  /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
-  /** The user's per-agent environment overlay from settings. */
   resolveLaunchEnv?: (agent: string) => Record<string, string>
-  /** The user's per-agent Command setting, re-read per acquisition; none runs the stock binary. */
+  /** Reread per acquisition; absent uses the stock command. */
   resolveCommandSettings?: () => StructuredAgentCommandSettings
-} & Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'homePath' | 'inheritedEnv'>
+  /** Optional environment refresh after a missing-program lookup. */
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Resolves relative PATH entries against the launch directory. */
+  resolveWorkingDirectory?: () => Promise<string> | string
+} & Pick<
+  AcpStructuredLaunchPartDeps,
+  'resolveCommand' | 'homePath' | 'inheritedEnv' | 'dataDirectory'
+>
 
-/** The binary a launch with `env` spawns: the user's Command setting when set, else the stock
- *  binary from PATH, then the agent's own install directories. A create's version check resolves
- *  through here too, so it asks about the same file. */
+/** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
 export function resolveAcpLaunchCommand(
   spec: AcpLaunchSpec,
   env: Readonly<Record<string, string>>,
@@ -93,59 +96,68 @@ export function resolveAcpLaunchCommand(
     commandSettings?: StructuredAgentCommandSettings
     resolveCommand?: typeof resolveCliCommand
     homePath?: string
-  } = {}
+    dataDirectory: string | null
+  }
 ): string {
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
     .join(delimiter)
-  return resolveStructuredAgentCommand(
-    spec.agent,
-    options.commandSettings ?? {},
-    { pathEnv, homePath },
-    {
-      command: spec.command,
-      ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
-    }
-  )
+  const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
+  const resolve = (searchPath: string) =>
+    resolveStructuredAgentCommand(
+      spec.agent,
+      settings,
+      { pathEnv: searchPath, homePath },
+      {
+        command: spec.command,
+        ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
+      }
+    )
+  const { managedRuntime } = spec
+  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, spec.agent)) {
+    return resolve(pathEnv)
+  }
+  const pin = managedRuntime.pin()
+  const root = options.dataDirectory && managedRuntime.root(options.dataDirectory)
+  const release = root ? resolveInstalledRuntimeRelease(root, pin).release : null
+  if (release) {
+    return resolve(release.folder)
+  }
+  const found = resolve(pathEnv)
+  return (found !== spec.command && copyBesidePinnedMembers(found, pin)) || spec.command
 }
 
-/** Whether `command` is a release the spec runs a structured chat on (true when it names none),
- *  and the version it printed. Asked only when the spec names releases or `wantVersion`. */
-async function probeAcpLaunchVersion(
+export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: { command: string; cwd: string; env: Record<string, string> },
   wantVersion: boolean,
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<{ supported: boolean; version: string | null }> {
-  const { supportsVersion } = spec
-  if (!supportsVersion && !wantVersion) {
-    return { supported: true, version: null }
+  read?: AgentCliVersionReader
+): Promise<AgentCliVersionCheck> {
+  if (!spec.minimumVersions && !wantVersion) {
+    return { status: 'unknown', version: null }
   }
-  const seen: { version: string | null } = { version: null }
-  const answered = await probe(
+  return checkAgentCliVersion(
     { program: launch.command, cwd: launch.cwd, env: launch.env },
-    (version) => {
-      seen.version = version
-      return supportsVersion?.(version) ?? true
-    }
+    spec.minimumVersions ?? [],
+    read
   )
-  // Without named releases a failed probe costs only what needed the version.
-  return { supported: answered || !supportsVersion, version: answered ? seen.version : null }
 }
 
-/** Whether `command` is a release the spec runs a structured chat on; true when it names none. */
-export async function acpLaunchVersionSupported(
+/** Resolve chats and probes consistently; optionally refresh once after a missing-program lookup. */
+export function resolveAcpLaunchInvocation(
   spec: AcpLaunchSpec,
-  launch: { command: string; cwd: string; env: Record<string, string> },
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<boolean> {
-  return (await probeAcpLaunchVersion(spec, launch, false, probe)).supported
+  accountHome: AgentSessionAccountHome,
+  deps: AcpLaunchInvocationDeps
+): Promise<{ command: string; env: Record<string, string>; envToDelete: string[] }> {
+  return resolveAgainAfterRefreshOnMissingProgram(
+    () => readAcpLaunchInvocation(spec, accountHome, deps),
+    deps.refreshEnvironmentAfterMiss,
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+  )
 }
 
-/** The binary and environment any child of this agent runs under for `accountHome`: a session's
- *  launch and a catalog probe both resolve here, so neither can reach another account or install. */
-export async function resolveAcpLaunchInvocation(
+async function readAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
@@ -164,8 +176,6 @@ export async function resolveAcpLaunchInvocation(
   return { command, env, envToDelete }
 }
 
-/** An ACP agent's part of a launch: its binary under the pinned account, the release check, the
- *  visuals skill, its arguments and the provider session to reattach. */
 export function acpStructuredLaunchPart(
   spec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
@@ -179,24 +189,25 @@ export function acpStructuredLaunchPart(
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
+        refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+        resolveWorkingDirectory: basis.launchDirectory,
         ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
         ...(deps.homePath ? { homePath: deps.homePath } : {}),
-        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {})
+        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
+        dataDirectory: deps.dataDirectory
       }
     )
     const cwd = await basis.launchDirectory()
     const visuals = spec.visualsSkill ? await basis.visuals() : null
-    // Again at every launch: the binary on PATH may have changed since the chat was created.
-    const launchVersion = await probeAcpLaunchVersion(
+    // PATH may have changed since chat creation.
+    const launchVersion = await checkAcpLaunchVersion(
       spec,
       { command, cwd, env },
       visuals !== null,
       deps.probeVersion
     )
-    if (!launchVersion.supported) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
+    if (launchVersion.status === 'tooOld') {
+      throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const skill = visuals
       ? await loadAcpVisualsSkill(spec, deps, {
@@ -208,7 +219,7 @@ export function acpStructuredLaunchPart(
           inherited: deps.inheritedEnv ?? process.env
         })
       : null
-    const fullAccess = deps.resolveFullAccess?.(spec.agent) ?? false
+    const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       launch: {
@@ -232,15 +243,15 @@ export function acpStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...STRUCTURED_CHILD_ENV_TO_DELETE,
         ...envToDelete,
-        // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
-        ...(skill ? [] : [NATIVE_CHAT_VISUALS_DIR_ENV])
+        // An inherited scratch directory belongs to a different chat.
+        ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
     }
   }
 }
 
-/** Proof the chat holds no turn of provider session `nativeId`; a journal that does not read whole,
- *  or does not read at all, proves nothing. */
+/** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */
 function nothingExchangedOn(
   readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
@@ -267,8 +278,7 @@ function nothingExchangedOn(
   return true
 }
 
-/** Derived on every start, never stored: a row an attach failure dropped is written by the next
- *  start that succeeds. A journal that does not read whole proves nothing, so none is written. */
+/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
 function unannouncedLosses(
   readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
@@ -301,6 +311,6 @@ function unannouncedLosses(
       written.add(spelled)
     }
   }
-  // Any session's row counts: one an unused replacement wrote stays when the agent supersedes it.
+  // Warnings survive even if the replacement session that wrote them is superseded.
   return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

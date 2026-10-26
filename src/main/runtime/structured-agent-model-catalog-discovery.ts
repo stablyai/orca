@@ -1,9 +1,11 @@
-// Each registered agent's catalog probe, built from the SAME resolvers its session launches use:
-// a probe under another binary or env could list models the user's sessions cannot see.
+// Use session launch resolvers, including missing-program env refresh, for probes so catalogs match the binary/account sessions actually use.
 
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
-import { createClaudeModelCatalogProbe } from '../claude/claude-model-catalog-probe'
+import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../acp/acp-launch-specs'
+import {
+  createClaudeModelCatalogProbe,
+  type ClaudeModelCatalogProbeDeps
+} from '../claude/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
@@ -27,28 +29,45 @@ export function codexModelCatalogDiscovery({
     listingNamesConfiguredModel: true,
     probe: createCodexModelCatalogProbe({
       resolveAccountKind: deps.resolveCodexAccountKind,
+      ...(deps.runCodexCatalogSession ? { runSession: deps.runCodexCatalogSession } : {}),
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {}),
-      resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
+      resolveEnvironment: environment.resolveBaseEnvironment,
+      resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
+      resolveEnv: () => deps.resolveAgentLaunchEnv?.('codex') ?? {},
+      refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
     })
   }
 }
 
-export function claudeModelCatalogDiscovery({
+/** What every sessionless Claude listing (models, `/` commands) resolves its binary and env from. */
+export function claudeListingDeps({
   deps,
   environment
-}: StructuredAgentModelCatalogContext): AgentModelCatalogDiscovery {
+}: StructuredAgentModelCatalogContext): ClaudeModelCatalogProbeDeps {
+  return {
+    resolveInheritedEnv: environment.resolveBaseEnvironment,
+    resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
+    refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
+    resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
+    ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
+    ...claudeLaunchEnvOverlay(deps)
+  }
+}
+
+export function claudeModelCatalogDiscovery(
+  context: StructuredAgentModelCatalogContext
+): AgentModelCatalogDiscovery {
   return {
     kind: 'probe',
     // Claude's settings or env can pick a model other than the one its listing recommends.
     listingNamesConfiguredModel: false,
     probe: createClaudeModelCatalogProbe({
-      resolveInheritedEnv: environment.resolveBaseEnvironment,
-      resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
-      ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
-      ...claudeLaunchEnvOverlay(deps)
+      ...claudeListingDeps(context),
+      resolveLaunchArgs: () => context.deps.resolveLaunchArgs('claude')
     })
   }
 }
@@ -64,8 +83,11 @@ export function acpModelCatalogDiscovery(
   return {
     kind: 'probe',
     listingNamesConfiguredModel: discovery.listingNamesConfiguredModel,
+    ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
+      refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
+      dataDirectory: deps.stateDirectory,
       ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
       ...(deps.resolveAgentCommandSettings
         ? { resolveCommandSettings: deps.resolveAgentCommandSettings }

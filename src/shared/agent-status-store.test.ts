@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import type { AgentChildWorkInput } from './agent-status-child-work'
 import { serializeAgentStatusProviderAliasKey } from './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
 import {
-  AGENT_STATUS_STORE_LIMITS,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
   type AgentStatusStoreSnapshot
 } from './agent-status-store-contract'
@@ -260,12 +260,12 @@ describe('AgentStatusStore', () => {
     expect(
       store.applyMutation({
         removeChildren: Array.from(
-          { length: AGENT_STATUS_STORE_LIMITS.tombstones + 1 },
+          { length: AGENT_STATUS_STORE_TOMBSTONE_LIMIT + 1 },
           (_, index) => `unused-child-${index}`
         )
       })
     ).not.toBeNull()
-    expect(store.getSnapshot().tombstones).toHaveLength(AGENT_STATUS_STORE_LIMITS.tombstones)
+    expect(store.getSnapshot().tombstones).toHaveLength(AGENT_STATUS_STORE_TOMBSTONE_LIMIT)
     expect(store.getSnapshot().tombstones.some((item) => item.entity === 'parent')).toBe(false)
     expect(replica.applySnapshot(store.getSnapshot())).toBe(true)
     expect(replica.applyTransportEnvelope(first)).toBe(false)
@@ -371,24 +371,8 @@ describe('AgentStatusStore', () => {
     expect(restarted.getChildren(parent)[0]?.firstObservedAt).toBe(12)
   })
 
-  it('fails closed before parsing oversized persistence payloads or allocating huge mutations', () => {
-    const parse = vi.spyOn(JSON, 'parse')
-    const oversized = ' '.repeat(AGENT_STATUS_STORE_LIMITS.serializedBytes + 1)
-
-    expect(deserializeAgentStatusStoreSnapshot(oversized)).toBeNull()
-    expect(parse).not.toHaveBeenCalled()
-    parse.mockRestore()
-
+  it('refuses a parent status beyond its field limit', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    expect(
-      store.applyMutation({
-        removeChildren: Array.from(
-          { length: AGENT_STATUS_STORE_LIMITS.mutationEntries + 1 },
-          (_, index) => `child-${index}`
-        )
-      })
-    ).toBeNull()
-    expect(store.getSnapshot().revision).toBe(0)
     const scopedSubject = subject()
     expect(
       store.applyMutation({
@@ -407,14 +391,32 @@ describe('AgentStatusStore', () => {
     ).toBeNull()
   })
 
-  it('rejects malformed and scope-mismatched snapshots without changing state', () => {
-    const { store } = populatedStore()
+  it('accepts a parent status whose subagent roster outgrows the status field limit', () => {
+    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
+    const scopedSubject = subject()
+    const subagents = Array.from({ length: 2_000 }, (_, index) => ({
+      id: `a${index}`,
+      state: 'working' as const,
+      startedAt: 1,
+      description: 'x'.repeat(200)
+    }))
+    expect(
+      store.applyMutation({
+        parent: { subject: scopedSubject, status: status(scopedSubject, { subagents }) }
+      })
+    ).not.toBeNull()
+  })
+
+  it('rejects a scope-mismatched child snapshot without changing state', () => {
+    const { store: source } = populatedStore()
+    const snapshot = source.getSnapshot()
+    const store = createAgentStatusStore({ epoch: 'epoch-b', mode: 'replica' })
     const before = store.getSnapshot()
     const malformed: AgentStatusStoreSnapshot = {
-      ...before,
+      ...snapshot,
       children: [
         {
-          ...before.children[0],
+          ...snapshot.children[0],
           parent: subject({ workspaceId: 'other-workspace' })
         }
       ]

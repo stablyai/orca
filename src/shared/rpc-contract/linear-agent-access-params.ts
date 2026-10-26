@@ -97,6 +97,21 @@ export const LinearIssueAddComment = LinearWriteTarget.extend({
   writeId: OptionalString
 })
 
+const LinearCommentWorkspace = OptionalString.refine((value) => value !== 'all', {
+  message: '--workspace all is not valid for Linear writes'
+})
+
+export const LinearCommentEdit = z.object({
+  commentId: requiredString('Missing comment id'),
+  body: requiredString('Missing comment body'),
+  workspaceId: LinearCommentWorkspace
+})
+
+export const LinearCommentDelete = z.object({
+  commentId: requiredString('Missing comment id'),
+  workspaceId: LinearCommentWorkspace
+})
+
 export const LinearIssueRelationWrite = LinearWriteTarget.extend({
   relatedInput: requiredString('Missing related issue'),
   relationship: z.enum(['blocks', 'blockedBy', 'relatedTo', 'duplicateOf']),

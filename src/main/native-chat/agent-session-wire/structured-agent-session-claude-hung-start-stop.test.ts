@@ -1,6 +1,4 @@
-// A Claude CLI that never answers initialize is handed nothing: the host accepts the chat's message
-// at once and holds it until the start proves itself, and the chat's Stop still ends the start. On
-// the shipping adapter and host, against a CLI that echoes nothing.
+// A CLI stuck in initialize receives no sends; acceptance and Stop must remain responsive.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -38,13 +36,11 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let claude: ReturnType<typeof fakeClaude>
-/** Answers initialize, which the CLI otherwise never does; it echoes nothing either way. */
 let answerInitialize: () => void = () => {}
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-hung-start-stop-'))
   resetHostTestOperationIds()
-  // Alive, and silent: no initialize answer, no start frame, no echo of what it is sent.
   claude = fakeClaude({ initProof: 'none', replayUuid: null })
   const openConnection = claude.openConnection
   adapter = new ClaudeStructuredSessionAdapter({
@@ -121,7 +117,6 @@ function envelope(
   }
 }
 
-/** The one rule every session list's Working and the chat's own Stop read. */
 async function readsWorking(): Promise<boolean> {
   const snapshot = await host.journalSnapshot(SESSION)
   return isStructuredAgentSessionMainAgentWorking(
@@ -131,13 +126,23 @@ async function readsWorking(): Promise<boolean> {
   )
 }
 
-/** Whether the CLI was written `hello`, once the delivery loop has settled what it does with it. */
-async function helloWritten(): Promise<boolean> {
-  await vi.waitFor(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  return claude.connections[0]!.sent.some((message) => JSON.stringify(message).includes('hello'))
+async function expectHeld(id: string): Promise<void> {
+  expect(await submission(id)).toMatchObject({ dispatchState: 'pending' })
+  expect((await submission(id))?.handedOverAt).toBeUndefined()
+  expect(claude.connections[0]!.sent).toEqual([])
 }
+
+it('ends empty initialization without a cancellation request row', async () => {
+  expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
+  expect(
+    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
+  expect(
+    (await host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+  ).toEqual([])
+  expect(claude.connections[0]!.closeCount).toBeGreaterThan(0)
+})
 
 it('holds the message from a start that never answers, and a Stop ends it: stopped, nothing working', async () => {
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
@@ -149,8 +154,7 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
   const id = sent.value.clientMessageId
   const [connection] = claude.connections
 
-  // Accepted, and held while initialize is still unanswered.
-  expect(await helloWritten()).toBe(false)
+  await expectHeld(id)
   expect(connection!.calls).toEqual([{ subtype: 'initialize' }])
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
   expect(await readsWorking()).toBe(true)
@@ -158,9 +162,13 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
   const stopped = await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
 
   expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(
+    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+      item.body.kind === 'status' ? [item.body.text] : []
+    )
+  ).toEqual(['Cancellation requested.'])
   await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
   expect(connection!.closeCount).toBeGreaterThan(0)
-  // Withdrawn, not in doubt: it was never handed over.
   await vi.waitFor(async () =>
     expect(
       (await host.journalSnapshot(SESSION)).submissions.find(
@@ -173,7 +181,6 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
 
 async function sendHello(written: boolean): Promise<string> {
   const body = hostTestMessage('hello')
-  // A person's send, which a close keeps as a held card.
   const sent = await host.send(CALLER, {
     envelope: envelope('agentSession.send', { body }),
     body,
@@ -182,7 +189,9 @@ async function sendHello(written: boolean): Promise<string> {
   if (!sent.ok) {
     throw new Error('send refused')
   }
-  await vi.waitFor(async () => expect(await helloWritten()).toBe(written))
+  await (written
+    ? vi.waitFor(() => expect(claude.connections[0]!.sent).toHaveLength(1))
+    : expectHeld(sent.value.clientMessageId))
   return sent.value.clientMessageId
 }
 
@@ -192,8 +201,6 @@ async function submission(id: string) {
   )
 }
 
-// A CLI that never answered initialize was handed nothing: a close settles the held message as it
-// does any queued send, keeping the person's words as a held card.
 it.each(['user-close', 'evict'] as const)(
   'keeps a message held behind a start that never answered as a held card when a %s ends it',
   async (cause) => {
@@ -211,11 +218,9 @@ it.each(['user-close', 'evict'] as const)(
   }
 )
 
-// Once it answered, the CLI may have taken the message without echoing it yet: a close leaves it in
-// doubt, as for any running child.
 it('leaves a message in doubt when the start answered and the chat closes before the echo', async () => {
   answerInitialize()
-  await adapter['sessions'].get(SESSION)?.startup.settled
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   const id = await sendHello(true)
 
   await host.close(SESSION, 'user-close')

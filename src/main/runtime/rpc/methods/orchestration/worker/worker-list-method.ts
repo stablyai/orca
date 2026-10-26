@@ -22,7 +22,7 @@ import {
 } from './worker-list-snapshot-store'
 import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
 import { chatAssigneeObserver } from './session-worker-observation'
-import { exposeWorkerTerminalResource } from './worker-release-completion'
+import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import {
   WORKER_TERMINAL_LIST_STATES,
   WorkerListParams
@@ -219,9 +219,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
   }
-  // Total and counts must come out of one row set. A pinned filtered cursor's row set is its
-  // membership; deriving the total from that and the counts from a live scan of the extent
-  // reported a total no count could reach once a pinned row left the filter.
+  // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
   const inventory =
     pinnedCount !== undefined && params.terminalState
@@ -278,8 +276,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,
       resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null,
-      // Why: `projection.resource` restated id/ownerDispatchId/releaseState/terminalState
-      // that the row already carries; only the derived ownership classification is new.
+      // Emit only derived ownership; resource identity/release fields already live on the row.
       projection: {
         ...projection,
         resource:
@@ -298,7 +295,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
     workers,
     counts,
     page: fleet.page,
-    // `page.hasMore` alone reads as complete to a caller that scans rows; say the page truncated.
+    // Mark truncation explicitly; hasMore alone can look complete to row-scanning clients.
     ...(hasMore
       ? {
           warnings: [

@@ -1,14 +1,17 @@
-import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection'
+import { readRecord } from './codex-item-field-readers'
+import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { CODEX_RECEIPT_TIMED_METHODS } from './codex-structured-session-state'
+import { codexThreadIsActive, readCodexThreadId } from './codex-structured-thread-facts'
 
 /** Stamp provider receipt before pre-publication buffering or retry. */
 export function codexAcquisitionNotificationHandler(input: {
   acquisition: CodexAcquisitionWindow
   sessionId: string
   dispatchEchoes: CodexDispatchEchoes
+  primaryThreadId: () => string | null
   notificationRetries: CodexStructuredNotificationRetry
   deliver: (
     acquisition: CodexAcquisitionWindow,
@@ -22,6 +25,20 @@ export function codexAcquisitionNotificationHandler(input: {
     const observedAt = CODEX_RECEIPT_TIMED_METHODS.has(method) ? input.now() : undefined
     const dispatchSequenceAtReceipt =
       method === 'turn/started' ? input.dispatchEchoes.latestSequence() : undefined
+    // Stamp status on receipt so buffering cannot reorder it relative to replies.
+    const threadId = readCodexThreadId(params)
+    if (method === 'thread/status/changed' && threadId && threadId === input.primaryThreadId()) {
+      input.dispatchEchoes.observeStatus(codexThreadIsActive(params))
+    }
+    if (method === 'thread/settings/updated' && threadId && threadId === input.primaryThreadId()) {
+      const settings = readRecord(readRecord(params).threadSettings)
+      if (
+        typeof settings.model === 'string' &&
+        (typeof settings.effort === 'string' || settings.effort === null)
+      ) {
+        input.acquisition.appliedSettings.observe(settings)
+      }
+    }
     input.deliver(
       input.acquisition,
       input.sessionId,

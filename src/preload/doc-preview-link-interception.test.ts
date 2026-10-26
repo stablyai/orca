@@ -12,7 +12,6 @@ const PREVIEW_GRANT_ID = 'a'.repeat(32)
 
 let report: ReturnType<typeof vi.fn<(url: string) => void>>
 
-/** The URL the guest is actually on, which is what decides whether an href is a pure fragment. */
 function documentUrl(): string {
   return window.location.href
 }
@@ -22,11 +21,7 @@ function loadPreviewDocument(body: string): void {
   report = vi.fn<(url: string) => void>()
 }
 
-/**
- * An SVG anchor around a hit target, built rather than parsed: the href is an SVGAnimatedString
- * carrying the raw attribute, which is what a plain string read misses and the environment does
- * not model.
- */
+// happy-dom does not model SVGAnimatedString hrefs.
 function loadSvgAnchorDocument(href: string): void {
   loadPreviewDocument('<div id="host"></div>')
   const svgNamespace = 'http://www.w3.org/2000/svg'
@@ -41,10 +36,6 @@ function loadSvgAnchorDocument(href: string): void {
   document.getElementById('host')!.appendChild(svg)
 }
 
-/**
- * Dispatches through the same capture-phase listener the preload installs, but registered for one
- * press only — a document-level listener left behind would answer every later test's clicks too.
- */
 function dispatch(selector: string, event: MouseEvent): MouseEvent {
   const onClick = (candidate: Event): void => handleDocPreviewLinkClick(candidate, report)
   const onAuxClick = (candidate: Event): void =>
@@ -60,7 +51,6 @@ function dispatch(selector: string, event: MouseEvent): MouseEvent {
   return event
 }
 
-/** Chromium's own press. Nothing a document can dispatch carries this. */
 function pressTrusted(selector: string, init: MouseEventInit = {}): MouseEvent {
   const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
   Object.defineProperty(event, 'isTrusted', { configurable: true, value: true })
@@ -68,8 +58,6 @@ function pressTrusted(selector: string, init: MouseEventInit = {}): MouseEvent {
 }
 
 beforeEach(() => {
-  // Why: the module decides "sibling document" and "pure fragment" against the URL the guest is
-  // really on, which in a preview is always the preview scheme.
   ;(window as never as { happyDOM: { setURL: (url: string) => void } }).happyDOM.setURL(
     `orca-preview://${PREVIEW_GRANT_ID}/index.html`
   )
@@ -82,25 +70,38 @@ describe('doc preview link interception', () => {
   })
 
   it('listens for both press kinds in the capture phase, so the document cannot consume them first', () => {
-    // Why not let it register: a document-level listener would survive into every later press here.
-    const addEventListener = vi.spyOn(document, 'addEventListener').mockImplementation(() => {})
+    loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
+    const addEventListener = vi.spyOn(document, 'addEventListener')
+    try {
+      installDocPreviewLinkInterception(report)
+      expect(addEventListener.mock.calls.map(([type, , options]) => [type, options])).toEqual([
+        ['click', true],
+        ['auxclick', true]
+      ])
+      const link = document.querySelector('#external')!
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+      Object.defineProperty(click, 'isTrusted', { configurable: true, value: true })
+      link.dispatchEvent(click)
+      expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
+      expect(click.defaultPrevented).toBe(true)
 
-    installDocPreviewLinkInterception(vi.fn())
-
-    expect(addEventListener.mock.calls.map(([type, , options]) => [type, options])).toEqual([
-      ['click', true],
-      ['auxclick', true]
-    ])
+      const middleClick = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
+      Object.defineProperty(middleClick, 'isTrusted', { configurable: true, value: true })
+      link.dispatchEvent(middleClick)
+      expect(middleClick.defaultPrevented).toBe(true)
+      expect(report).toHaveBeenCalledOnce()
+    } finally {
+      for (const [type, listener, options] of addEventListener.mock.calls) {
+        document.removeEventListener(type, listener, options)
+      }
+    }
   })
 
-  // Why the headline: this is the whole point of the design. A document that can read its grant
-  // must not be able to hand it to a browser tab by synthesizing the reader's click.
   it('routes nothing for a click the document dispatched itself', () => {
     loadPreviewDocument('<a id="external" href="https://attacker.test/?d=secret">go</a>')
 
     const scripted = new MouseEvent('click', { bubbles: true, cancelable: true })
-    // Why set it: this is what Chromium stamps on anything a document dispatches, and the test
-    // environment leaves the property off entirely.
+    // happy-dom omits the isTrusted value Chromium sets for synthetic clicks.
     Object.defineProperty(scripted, 'isTrusted', { configurable: true, value: false })
 
     const event = dispatch('#external', scripted)
@@ -127,8 +128,6 @@ describe('doc preview link interception', () => {
     expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
   })
 
-  // Why: an SVG anchor's href is an SVGAnimatedString, so reading it as a string finds nothing and
-  // the link would fall through to the guest's navigation guard and die there.
   it('reports an SVG anchor by its animated href', () => {
     loadSvgAnchorDocument('https://example.com/chart')
 
@@ -137,9 +136,6 @@ describe('doc preview link interception', () => {
     expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/chart')
   })
 
-  // Why these three: baseVal is the raw attribute, so an unresolved read sends a relative sibling
-  // out to a browser tab, drops SVG fragment links on the floor, and turns a rooted path into a
-  // file URL the guest refuses — each one a divergence from the identical HTML anchor.
   it('leaves a relative SVG link to the guest, the same as the HTML anchor beside it', () => {
     loadSvgAnchorDocument('guide.html')
 

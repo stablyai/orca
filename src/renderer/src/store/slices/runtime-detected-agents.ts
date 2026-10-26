@@ -1,5 +1,3 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   callRuntimeRpc,
@@ -16,12 +14,9 @@ import {
   getRuntimeAgentInventoryKey
 } from './runtime-agent-inventory-key'
 
-// Why: remote runtime hosts are not SSH connections, but their launch surfaces
-// (tab bar, quick launch, Settings → Agents under an Active Server) still have
-// to probe the host where the workspace actually runs.
-// Records are keyed by getRuntimeAgentInventoryKey: the environment alone for
-// the host-default list, or environment + workspace for a workspace's list.
+// Probe where the workspace runs; inventory keys distinguish host defaults from workspace-scoped results.
 export type RuntimeDetectedAgentsSlice = {
+  runtimeAgentInventoryOutcome: (key: string) => 'pending' | 'successful' | 'failed'
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
@@ -31,23 +26,19 @@ export type RuntimeDetectedAgentsSlice = {
     environmentId: string,
     worktreeId?: string | null
   ) => Promise<TuiAgent[]>
-  /** Forces a re-detect on the runtime host via `preflight.refreshAgents`
-   *  (login-shell PATH re-read), falling back to `preflight.detectAgents` for
-   *  servers that predate the refresh RPC. */
+  /** Refresh login-shell PATH; fall back to detectAgents only for servers predating refreshAgents. */
   refreshRuntimeDetectedAgents: (
     environmentId: string,
     worktreeId?: string | null
   ) => Promise<TuiAgent[]>
   clearRuntimeDetectedAgents: (environmentId: string) => void
-  /** Drops runtime detected-agent caches for environments not in the kept set.
-   *  Wired into setRuntimeEnvironments so removed environments don't leak their
-   *  detected-agent entries for the renderer session. */
+  /** Prune removed environments’ inventories via setRuntimeEnvironments. */
   retainRuntimeDetectedAgents: (environmentIds: Iterable<string>) => void
 }
 
-// Why: these are module-scoped (not in the store) so we can deduplicate
-// concurrent callers without storing a Promise in Zustand state.
+// Keep deduplicated promises outside serializable Zustand state.
 const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const latestOutcome = new Map<string, 'pending' | 'successful' | 'failed'>()
 const runtimeRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
@@ -67,11 +58,7 @@ type NestedSshAgentDetection<T> = {
   call: (params: { connectionId: string }) => Promise<T>
 }
 
-/**
- * Sends `preflight.detectAgents` / `refreshAgents` scoped to a workspace. A host without the
- * workspace-scoped capability can only answer its own default, which is the workspace's list only
- * on a known non-Windows host. The host default goes out synchronously, as it always has.
- */
+/** Old hosts can supply workspace agents via host defaults only on known non-Windows platforms; host-default requests remain synchronous. */
 export function callRuntimeAgentDetection<T>(
   environmentId: string,
   worktreeId: string | null | undefined,
@@ -129,12 +116,20 @@ function withoutKeys<T>(record: Record<string, T>, drop: (key: string) => boolea
   return changed ? next : record
 }
 
-export const createRuntimeDetectedAgentsSlice: StateCreator<
-  AppState,
-  [],
-  [],
-  RuntimeDetectedAgentsSlice
-> = (set, get) => {
+export type RuntimeDetectedAgentsStoreState = RuntimeDetectedAgentsSlice &
+  Parameters<typeof getConnectionIdFromState>[0]
+
+export type RuntimeDetectedAgentsStoreSetState = (
+  partial:
+    | Partial<RuntimeDetectedAgentsStoreState>
+    | ((state: RuntimeDetectedAgentsStoreState) => Partial<RuntimeDetectedAgentsStoreState>)
+) => void
+
+export const createRuntimeDetectedAgentsSlice: (
+  set: RuntimeDetectedAgentsStoreSetState,
+  get: () => RuntimeDetectedAgentsStoreState,
+  store?: unknown
+) => RuntimeDetectedAgentsSlice = (set, get) => {
   // Drops every workspace's inventory for the environments `drop` selects.
   const dropEnvironments = (drop: (environmentId: string) => boolean): void => {
     const dropKey = (key: string) => drop(getRuntimeAgentInventoryEnvironmentId(key))
@@ -145,6 +140,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         }
       }
     }
+    ;[...latestOutcome.keys()].filter(dropKey).forEach((key) => latestOutcome.delete(key))
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
@@ -184,6 +180,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
 
   // Commits a settled detection; an old host commits an empty list, never its default.
   const commitDetection = (key: string, agents: TuiAgent[], needsServerUpdate: boolean): void => {
+    latestOutcome.set(key, 'successful')
     set((s) => ({
       runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: agents },
       isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
@@ -195,6 +192,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
   }
 
   return {
+    runtimeAgentInventoryOutcome: (key) => latestOutcome.get(key) ?? 'pending',
     runtimeDetectedAgentIds: {},
     isDetectingRuntimeAgents: {},
     isRefreshingRuntimeAgents: {},
@@ -207,9 +205,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         return inflightRefresh
       }
       const existing = get().runtimeDetectedAgentIds[key]
-      // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
-      // must not be treated as cached — re-detect so a later install / PATH fix is
-      // picked up without a reconnect. Non-empty results still short-circuit.
+      // Retry empty results so installs/PATH fixes appear without reconnect; nonempty results remain cached.
       if (existing?.length) {
         return Promise.resolve(existing)
       }
@@ -218,6 +214,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         return inflight
       }
 
+      latestOutcome.set(key, 'pending')
       set((s) => ({
         isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: true }
       }))
@@ -231,24 +228,21 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
-          // Why: skip committing if the environment was removed (retained out) or
-          // re-paired while the detect was in flight — otherwise it re-adds a stale
-          // entry that retainRuntimeDetectedAgents or clearRuntimeDetectedAgents just pruned.
+          // Removed or re-paired environments must not regain stale entries from in-flight detection.
           if (runtimeDetectPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }
           return typed
         })
         .catch((error: unknown): TuiAgent[] => {
-          // Why: a remote runtime may be disconnected or version-incompatible.
-          // Keep the menu retryable instead of pinning a failed probe forever.
-          // Same in-flight guard as the .then() above.
+          // Disconnected/incompatible probes stay retryable; ignore results detached by removal or re-pair.
           if (runtimeDetectPromises.get(key) !== pending) {
             return []
           }
           if (error instanceof RuntimeAgentDetectionNeedsServerUpdateError) {
             commitDetection(key, [], true)
           } else {
+            latestOutcome.set(key, 'failed')
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false }
             }))
@@ -272,9 +266,9 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         return inflight
       }
 
-      // Why: a refresh is newer and authoritative; detach an older detect so its
-      // late result cannot overwrite the freshly hydrated PATH result.
+      // New PATH refresh supersedes older detects; their late results must not overwrite it.
       runtimeDetectPromises.delete(key)
+      latestOutcome.set(key, 'pending')
       set((s) => ({
         isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: true }
       }))
@@ -291,15 +285,13 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
               if (!isRuntimeMethodNotFoundError(error)) {
                 throw error
               }
-              // Why: only older servers need the fallback; retrying disconnects and
-              // runtime failures doubles remote work without any chance of recovery.
+              // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
               return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
             }),
         nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
-          // Why: same guard as ensureRuntimeDetectedAgents — if the environment
-          // was retained out or re-paired mid-refresh, don't re-add a pruned entry.
+          // Ignore refreshes detached by environment removal or re-pair.
           if (runtimeRefreshPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }
@@ -313,9 +305,9 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
             commitDetection(key, [], true)
             return []
           }
-          // Why: a disconnected runtime must keep Refresh retryable and must not
-          // wipe the last known agent list.
+          // Disconnects keep Refresh retryable and preserve the last agent list.
           if (runtimeRefreshPromises.get(key) === pending) {
+            latestOutcome.set(key, 'failed')
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
               isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: false }

@@ -10,13 +10,15 @@ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
-  type NativeChatContextMenuActions
+  type NativeChatContextMenuActions,
+  type NativeChatContextMenuTargetArgs
 } from './use-native-chat-context-menu'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 
 export function useStructuredNativeChatPaneCommands({
   tabId,
+  ownerWorktreeId,
   groupId,
   isVisible,
   rootRef,
@@ -24,9 +26,11 @@ export function useStructuredNativeChatPaneCommands({
   questionAnswerInputRef,
   terminalPaneActions,
   sessionId,
-  target
+  target,
+  ...menuTargets
 }: {
   tabId: string
+  ownerWorktreeId: string | null
   groupId?: string
   isVisible: boolean
   rootRef: RefObject<HTMLDivElement | null>
@@ -35,7 +39,7 @@ export function useStructuredNativeChatPaneCommands({
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
   sessionId: string
   target: RuntimeClientTarget
-}) {
+} & NativeChatContextMenuTargetArgs) {
   const keybindings = useAppStore((state) => state.keybindings)
   const resolveOrcaSessionId = useMemo(
     () =>
@@ -50,6 +54,7 @@ export function useStructuredNativeChatPaneCommands({
     questionAnswerInputRef
   })
   const contextMenu = useNativeChatContextMenu({
+    ...menuTargets,
     rootRef,
     actions: {
       ...emptyNativeChatContextMenuActions,
@@ -64,16 +69,9 @@ export function useStructuredNativeChatPaneCommands({
       right: formatShortcutLabel('terminal.splitRight', keybindings),
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
-    workspaceLayout:
-      groupId && terminalPaneActions === undefined
-        ? {
-            unifiedTabId: tabId,
-            groupId,
-            shortcutLabels: {
-              right: formatShortcutLabel('terminal.splitRight', keybindings),
-              down: formatShortcutLabel('terminal.splitDown', keybindings)
-            }
-          }
+    chatPane:
+      ownerWorktreeId && groupId && terminalPaneActions === undefined
+        ? { tabId, worktreeId: ownerWorktreeId, groupId }
         : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(

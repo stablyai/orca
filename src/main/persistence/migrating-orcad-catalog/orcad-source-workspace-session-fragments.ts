@@ -1,4 +1,4 @@
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { mergeWorkspaceSessions } from '../../orca-profiles/profile-project-session-state'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
@@ -15,30 +15,40 @@ export function sessionPartitions(
     [localHostId, withRequiredWorkspaceSessionMaps(state.workspaceSession)],
     ...Object.entries(state.workspaceSessionsByHostId ?? {}).flatMap(
       ([hostId, session]): [string, WorkspaceSessionState][] =>
-        // A partition written before its maps were filled in on write still loads without them.
+        // Older sparse partitions may omit required maps.
         session ? [[hostId, withRequiredWorkspaceSessionMaps(session)]] : []
     )
   ]
 }
 
-/**
- * Null when two partitions disagree about the same worktree. The same marker in both (a renderer
- * snapshot can copy one into the local and the host partition) is not a disagreement.
- */
+export type MergedSessionFragments = {
+  session: WorkspaceSessionState | null
+  conflicts: string[]
+}
+
+/** Conflicting populated rows refuse; matching or empty copies provide no conflicting evidence. */
 export function mergeSessionFragments(
-  fragments: WorkspaceSessionState[]
-): WorkspaceSessionState | null {
+  fragments: WorkspaceSessionState[],
+  /** Closed-tab evidence outranks populated rows that still list the tab. */
+  closedTabIds: ReadonlySet<string>
+): MergedSessionFragments {
   const ownerKeys = new Set<string>()
   const entityKeys = new Set<string>()
   const keyedValues = new Map<string, string>()
   let merged: WorkspaceSessionState | undefined
-  for (const fragment of fragments) {
+  const populated = populatedOwnerRows(fragments, closedTabIds)
+  for (const fragment of fragments.map((entry) =>
+    withoutEmptyRowsFilledElsewhere(entry, populated)
+  )) {
     const owners = collectSessionOwnerKeys(fragment)
-    if (
-      [...owners].some((key) => ownerKeys.has(key) && !agreesOnOwner(fragment, key, keyedValues)) ||
-      hasDuplicates(entityKeys, collectSessionEntityKeys(fragment))
-    ) {
-      return null
+    const conflicts = [...owners].filter(
+      (key) => ownerKeys.has(key) && !agreesOnOwner(fragment, key, keyedValues)
+    )
+    if (conflicts.length > 0) {
+      return { session: null, conflicts }
+    }
+    if (hasDuplicates(entityKeys, collectSessionEntityKeys(fragment))) {
+      return { session: null, conflicts: [...owners] }
     }
     owners.forEach((key) => ownerKeys.add(key))
     for (const field of OWNER_KEYED_FIELDS) {
@@ -48,7 +58,56 @@ export function mergeSessionFragments(
     }
     merged = mergeWorkspaceSessions(merged, fragment)
   }
-  return merged ?? null
+  return merged ? { session: merged, conflicts: [] } : { session: null, conflicts: [] }
+}
+
+function populatedOwnerRows(
+  fragments: readonly WorkspaceSessionState[],
+  closedTabIds: ReadonlySet<string>
+): Set<string> {
+  const populated = new Set<string>()
+  for (const fragment of fragments) {
+    for (const field of OWNER_KEYED_FIELDS) {
+      for (const [key, value] of Object.entries(fragment[field] ?? {})) {
+        const reopensClosedTab =
+          field === 'tabsByWorktree' &&
+          (fragment.tabsByWorktree[key] ?? []).some((tab) => closedTabIds.has(tab.id))
+        if (!isEmptyRow(value) && !reopensClosedTab) {
+          populated.add(`${field}\0${key}`)
+        }
+      }
+    }
+  }
+  return populated
+}
+
+function withoutEmptyRowsFilledElsewhere(
+  fragment: WorkspaceSessionState,
+  populated: ReadonlySet<string>
+): WorkspaceSessionState {
+  let next: WorkspaceSessionState | undefined
+  for (const field of OWNER_KEYED_FIELDS) {
+    for (const [key, value] of Object.entries(fragment[field] ?? {})) {
+      if (isEmptyRow(value) && populated.has(`${field}\0${key}`)) {
+        next ??= structuredClone(fragment)
+        const rows: unknown = next[field]
+        if (rows && typeof rows === 'object') {
+          Reflect.deleteProperty(rows, key)
+        }
+      }
+    }
+  }
+  return next ?? fragment
+}
+
+function isEmptyRow(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0
+  }
+  return typeof value === 'object' && Object.keys(value).length === 0
 }
 
 const OWNER_KEYED_FIELDS = [
@@ -66,7 +125,7 @@ function agreesOnOwner(
   keyedValues: ReadonlyMap<string, string>
 ): boolean {
   return OWNER_KEYED_FIELDS.every((field) => {
-    // A fence, not a choice: mergeWorkspaceSessions keeps the highest revision.
+    // Revisions are fences, so mergeWorkspaceSessions takes the highest.
     if (field === 'terminalTopologyRevisionByRepoId') {
       return true
     }

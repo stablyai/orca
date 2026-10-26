@@ -1,20 +1,19 @@
-/**
- * The one place a row or event from an endpoint gets its owner stamped. A row a paired server
- * returns is owned by that server (`runtime:E`); a row this app returns keeps the host it names.
- * Per-kind arms differ only in which fields carry that owner.
- */
+// Stamp endpoint ownership once: paired server rows use runtime:E, local-app rows retain their named hosts; per-kind arms select owner fields.
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import {
-  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { normalizeProjectHostSetupRow } from '../../../shared/project-catalog-row-normalization'
+import {
+  adoptEndpointProjectHostSetup,
+  adoptEndpointRepo
+} from '../../../shared/endpoint-catalog-adoption'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
 import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
 
 export type FetchedRepo = { kind: 'repo'; row: Repo }
@@ -30,6 +29,7 @@ type WorktreeEventRow = {
   repoId: string
   renamed?: { oldWorktreeId: string; newWorktreeId: string }
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
 }
 /** A worktree change or activation an endpoint pushed; the endpoint is its only owner fact. */
 export type EndpointWorktreeEvent = { kind: 'worktreeEvent'; row: WorktreeEventRow }
@@ -81,11 +81,11 @@ export function adoptFromEndpoint(
 ): Repo | ProjectGroup | ProjectHostSetup | FolderWorkspace | OwnedWorktreeEvent | ExecutionHostId {
   switch (fetched.kind) {
     case 'repo':
-      return adoptRepo(target, fetched.row)
+      return adoptEndpointRepo(target, fetched.row)
     case 'projectGroup':
       return adoptProjectGroup(target, fetched.row)
     case 'projectHostSetup':
-      return adoptProjectHostSetup(target, fetched.row)
+      return adoptEndpointProjectHostSetup(target, fetched.row)
     case 'folderWorkspace':
       return {
         ...fetched.row,
@@ -95,8 +95,7 @@ export function adoptFromEndpoint(
             : fetched.resolveOwnHostId(fetched.row)
       }
     case 'worktreeEvent':
-      // Why: this app's own events can name any repo in its catalog (local or direct SSH), so they
-      // pin the refresh to this app instead of to one host.
+      // Local-app events span local/direct-SSH repos; pin refresh to this app, not a single host.
       return target.kind === 'environment'
         ? { ...fetched.row, executionHostId: getRuntimeTargetHostId(target) }
         : { ...fetched.row, forceLocalOwner: true }
@@ -110,17 +109,6 @@ export function adoptFromEndpoint(
   }
 }
 
-function adoptRepo(target: RuntimeClientTarget, repo: Repo): Repo {
-  if (target.kind === 'environment') {
-    // `connectionId` survives: on a server's row it names that server's nested SSH target.
-    return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
-  }
-  if (repo.connectionId) {
-    return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
-  }
-  return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
-}
-
 function adoptProjectGroup(target: RuntimeClientTarget, projectGroup: ProjectGroup): ProjectGroup {
   if (target.kind === 'environment') {
     return { ...projectGroup, executionHostId: getRuntimeTargetHostId(target) }
@@ -129,26 +117,4 @@ function adoptProjectGroup(target: RuntimeClientTarget, projectGroup: ProjectGro
     return { ...projectGroup, executionHostId: toSshExecutionHostId(projectGroup.connectionId) }
   }
   return { ...projectGroup, executionHostId: LOCAL_EXECUTION_HOST_ID }
-}
-
-function adoptProjectHostSetup(
-  target: RuntimeClientTarget,
-  setup: ProjectHostSetup
-): ProjectHostSetup {
-  // Why here: every setup row crossing IPC or RPC into the renderer passes through this
-  // adoption step, so it is where the declared field types stop being aspirational.
-  const adopted = normalizeProjectHostSetupRow(setup)
-  if (target.kind !== 'environment') {
-    return adopted
-  }
-  const hostId = getRuntimeTargetHostId(target)
-  const executionHostId = adopted.executionHostId ?? adopted.hostId
-  return {
-    ...adopted,
-    hostId,
-    executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
-    runtimeOwnerEnvironmentId: target.environmentId,
-    // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
-    connectionId: null
-  }
 }

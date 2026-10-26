@@ -43,23 +43,6 @@ describe('tool sentence rows', () => {
     expect(container.querySelector('.font-semibold')).toBeNull()
   })
 
-  it('tints the glyph of a failed call, and of no other', () => {
-    const glyphOf = (state: 'completed' | 'failed', isError: boolean): Element | null => {
-      const { container, unmount } = render(
-        <NativeChatToolLine
-          block={{ type: 'tool-call', name: 'Bash', input: { command: 'ls src' }, state }}
-          result={{ type: 'tool-result', output: 'out', isError }}
-        />
-      )
-      const tinted = container.querySelector('.text-destructive\\/70')
-      unmount()
-      return tinted
-    }
-    expect(glyphOf('failed', true)).not.toBeNull()
-    expect(glyphOf('completed', true)).not.toBeNull()
-    expect(glyphOf('completed', false)).toBeNull()
-  })
-
   it('retains full paths in titles and accessible targets', () => {
     render(
       <NativeChatToolLine

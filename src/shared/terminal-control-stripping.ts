@@ -40,8 +40,7 @@ export function stripTerminalControl(data: string): string {
         let tailOutput = ''
         for (let tailIndex = runStart; tailIndex < withoutAnsi.length; tailIndex += 1) {
           const tailCode = withoutAnsi.charCodeAt(tailIndex)
-          // Inlined isStrippedTerminalControl: this tail runs per code unit on the shape that
-          // already lost to the call overhead. Keep the two copies in sync.
+          // Inline this hot-path predicate to avoid per-code-unit calls; keep it in sync with isStrippedTerminalControl.
           if (
             (tailCode <= 0x1f && tailCode !== 0x0a && tailCode !== 0x0d) ||
             (tailCode >= 0x7f && tailCode <= 0x9f)

@@ -1,178 +1,97 @@
-import { z } from 'zod'
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
-import { pickerExecutionHosts } from '../../../shared/managed-orcad-execution-host'
 import type {
-  MobileRelayHost,
-  MobileRelayHostRelay,
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
   MobileRelayServerWorktreeRow
 } from '../../../shared/mobile-relay-hosts-contract'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type {
-  MobileDesktopRelayHostListing,
-  MobileDesktopRelayHosts
-} from './mobile-desktop-relay-hosts'
+import {
+  getPairedDeviceIdsByEnvironment,
+  isWorkspaceOwnedBySomeoneElse
+} from '../../../shared/workspace-creator-visibility'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session-tab-activity'
+import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
+import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
 
-// Why the phone's own full-catalog limit: the server's default page is 200 and nothing pages on.
-const SERVER_WORKTREE_LIMIT = 10_000
-// Why well under the phone's 30s request timeout: a hung server must answer with its last rows.
-const SERVER_FETCH_TIMEOUT_MS = 5_000
-
-const WorktreePsReplySchema = z.object({ worktrees: z.array(z.looseObject({})) })
-
-type CachedServerWorktrees = {
-  fence: string
-  worktrees: MobileRelayServerWorktreeRow[]
+/** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
+export type ServerWorktreeRows = {
+  sync: () => void
+  /** Fetch now or join the in-flight fetch. */
+  refresh: (environmentId: string) => Promise<void>
+  /** Last-fetched rows under this pairing; null before a successful fetch. */
+  rows: (environmentId: string, fence: string) => readonly MobileRelayServerWorktreeRow[] | null
 }
 
-type DescribedHost = MobileRelayHost & {
-  environmentId: string
-  identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
-}
-
-/**
- * The configured servers the desktop shows, for the phone: health from the desktop's own status
- * (the sidebar's mapping), and each server's workspace list as the desktop itself last fetched it,
- * so a server that is offline or too old to relay to still lists. Replies relayed to a phone are
- * never read here.
- */
+/** Desktop-known health and workspace rows remain listable for offline/old servers; never inspect relayed replies. */
 export class MobileRelayHostCatalog {
-  private readonly cached = new Map<string, CachedServerWorktrees>()
-  // Keyed by server identity, so a poll after a re-pair never joins the old server's fetch.
-  private readonly refreshing = new Map<string, Promise<void>>()
-
   constructor(
     private readonly options: {
       hosts: MobileDesktopRelayHosts
+      serverRows: ServerWorktreeRows
       hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
+      getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null
     }
   ) {}
 
   list(): MobileRelayHostsListResult {
     return {
-      hosts: this.describe().map(({ hostId, label, health, relay }) => ({
-        hostId,
-        label,
-        health,
-        relay
-      }))
+      hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
+        ({ hostId, label, health, relay }) => ({ hostId, label, health, relay })
+      )
     }
   }
 
   async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
+    // Re-pairing since status publication must fetch under the new identity.
+    this.options.serverRows.sync()
     const host =
       parsed?.kind === 'runtime'
-        ? this.describe().find((entry) => entry.environmentId === parsed.environmentId)
+        ? describeRelayHosts(this.options.hosts).find(
+            (entry) => entry.environmentId === parsed.environmentId
+          )
         : undefined
     if (!host) {
       return { worktrees: null }
     }
     if (host.health === 'available') {
-      await withinFetchBound(this.refresh(host))
+      await withinFetchBound(this.options.serverRows.refresh(host.environmentId))
     }
-    const cached = this.cached.get(host.environmentId)
-    const current = this.options.hosts
-      .list()
-      .environments.find((environment) => environment.id === host.environmentId)
-    // Why the identity read after the fetch: one answered after a re-pair stored the old server's rows.
-    if (!cached || !current || cached.fence !== fenceOf(current)) {
+    const { environments, statusByEnvironmentId } = this.options.hosts.list()
+    const current = environments.find((environment) => environment.id === host.environmentId)
+    // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
+    const rows = current
+      ? this.options.serverRows.rows(host.environmentId, relayHostFence(current))
+      : null
+    if (!current || !rows) {
       return { worktrees: null }
     }
-    // Why: the desktop asks with background-removal support; a phone asking itself never sees these rows.
-    return { worktrees: cached.worktrees.filter((row) => row.removing !== true) }
-  }
-
-  private describe(): DescribedHost[] {
-    const { environments, statusByEnvironmentId, sshTargetLabels, sshConnectionStates } =
-      this.options.hosts.list()
-    const identities = new Map(environments.map((environment) => [environment.id, environment]))
-    // Why lazily, not on retirement: a disconnected server keeps its rows; only a removed one loses them.
-    for (const environmentId of this.cached.keys()) {
-      if (!identities.has(environmentId)) {
-        this.cached.delete(environmentId)
-      }
-    }
-    // Why the desktop's picker rows: a managed server folds into its SSH host as the sidebar shows it.
-    return pickerExecutionHosts(
-      buildExecutionHostRegistry({
-        repos: [],
-        settings: null,
-        hostSource: 'configured-only',
-        sshTargetLabels,
-        sshConnectionStates,
-        runtimeEnvironments: environments,
-        runtimeStatusByEnvironmentId: statusByEnvironmentId,
-        hostLabelOverrides: this.options.hostLabelOverrides()
-      })
-    ).flatMap((entry) => {
-      const parsed = parseExecutionHostId(entry.id)
-      const identity = parsed?.kind === 'runtime' ? identities.get(parsed.environmentId) : undefined
-      if (parsed?.kind !== 'runtime' || !identity) {
-        return []
-      }
-      const answer = lastVerifiedRuntimeStatus(statusByEnvironmentId.get(parsed.environmentId))
-      return [
-        {
-          hostId: parsed.id,
-          environmentId: parsed.environmentId,
-          identity: { pairingRevision: identity.pairingRevision, runtimeId: identity.runtimeId },
-          label: entry.label,
-          health: entry.health,
-          relay: relayVerdict(entry.health, answer)
-        }
-      ]
-    })
-  }
-
-  private refresh(host: DescribedHost): Promise<void> {
-    const key = `${host.environmentId}\0${fenceOf(host.identity)}`
-    const inFlight = this.refreshing.get(key)
-    if (inFlight) {
-      return inFlight
-    }
-    const refresh = this.fetchAsDesktop(host).finally(() => this.refreshing.delete(key))
-    this.refreshing.set(key, refresh)
-    return refresh
-  }
-
-  private async fetchAsDesktop(host: DescribedHost): Promise<void> {
-    try {
-      const response = await this.options.hosts.call(
-        host,
-        'worktree.ps',
-        { limit: SERVER_WORKTREE_LIMIT, supportsWorktreeVisibilitySourceDefaults: true },
-        // Why the transport bound too: it ends the hung call, so the next poll fetches afresh instead of joining it.
-        { timeoutMs: SERVER_FETCH_TIMEOUT_MS, expected: host.identity }
-      )
-      const reply = response.ok ? WorktreePsReplySchema.safeParse(response.result) : null
-      if (!reply?.success) {
-        return
-      }
-      this.cached.set(host.environmentId, {
-        // Why the identity taken before the fetch: the call's own check cannot see a re-pair after dispatch.
-        fence: fenceOf(host.identity),
-        worktrees: stampServerWorktreeRows(host.environmentId, reply.data.worktrees)
-      })
-    } catch {
-      // An unreachable server keeps its last rows.
+    const desktopDeviceIds = getPairedDeviceIdsByEnvironment([current], statusByEnvironmentId)
+    const sessionActivity = new Set(
+      [
+        ...getWorkspaceSessionTabActivityIds(
+          this.options.getWorkspaceSession(toRuntimeExecutionHostId(host.environmentId))
+        )
+      ].map(worktreeIdentityKey)
+    )
+    // Only desktop reads request background-removal support.
+    return {
+      worktrees: rows
+        .filter((row) => row.removing !== true)
+        .map((row) =>
+          stampDesktopSidebarView(row, host.environmentId, desktopDeviceIds, sessionActivity)
+        )
     }
   }
 }
 
-function fenceOf(identity: DescribedHost['identity']): string {
-  return `${identity.pairingRevision}\0${identity.runtimeId}`
-}
-
-/** Settles once the bound passes; the call's own timeout starts only after the desktop's per-server queue. */
+/** Bound waiting even while the call sits in the desktop queue, before its own timeout starts. */
 async function withinFetchBound(refresh: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const bound = new Promise<void>((resolve) => {
@@ -185,28 +104,25 @@ async function withinFetchBound(refresh: Promise<void>): Promise<void> {
   }
 }
 
-function relayVerdict(
-  health: MobileRelayHost['health'],
-  answer: RuntimeStatus | null
-): MobileRelayHostRelay {
-  if (!answer) {
-    return 'unavailable'
-  }
-  // Why: a build's capabilities do not expire, so an old server stays update-needed while offline.
-  if (!(answer.capabilities ?? []).includes(DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY)) {
-    return 'update-needed'
-  }
-  return health === 'available' ? 'ready' : 'unavailable'
-}
-
-/**
- * A server's rows name hosts relative to that server (`local`, its own `ssh:` targets). Like the
- * desktop sidebar, the phone shows every one of them under the server, so all become its host id.
- */
-function stampServerWorktreeRows<Row extends { hostId?: string }>(
+/** Stamp desktop-only knowledge: mark other-client rows without dropping them, and include browser/chat activity. */
+function stampDesktopSidebarView(
+  row: MobileRelayServerWorktreeRow,
   environmentId: string,
-  rows: readonly Row[]
-): (Row & { hostId: `runtime:${string}` })[] {
-  const hostId = toRuntimeExecutionHostId(environmentId)
-  return rows.map((row) => ({ ...row, hostId }))
+  desktopDeviceIds: ReadonlyMap<string, string>,
+  sessionActivity: ReadonlySet<string>
+): MobileRelayServerWorktreeRow {
+  const otherClient = isWorkspaceOwnedBySomeoneElse(
+    { creatorProvenance: row.creatorProvenance, runtimeOwnerEnvironmentId: environmentId },
+    desktopDeviceIds
+  )
+  const active =
+    typeof row.worktreeId === 'string' && sessionActivity.has(worktreeIdentityKey(row.worktreeId))
+  if (!otherClient && !active) {
+    return row
+  }
+  return {
+    ...row,
+    ...(otherClient ? { desktopOtherClient: true } : {}),
+    ...(active ? { hasHostSidebarActivity: true } : {})
+  }
 }

@@ -17,6 +17,7 @@ import {
   store,
   withPlatform
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('tui-idle times out when PTY data has no agent OSC title transitions', async () => {
@@ -87,7 +88,6 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    // Simulate agent starting work (braille spinner = working)
     runtime.onPtyData('pty-1', '\x1b]0;\u280b Working on task\x07output\n', 100)
 
     const [terminal] = (await runtime.listTerminals()).terminals
@@ -96,7 +96,6 @@ describe('OrcaRuntimeService', () => {
       timeoutMs: 5_000
     })
 
-    // Simulate agent finishing (✳ = Claude Code idle)
     runtime.onPtyData('pty-1', '\x1b]0;\u2733 Task complete\x07done\n', 200)
 
     const result = await waitPromise
@@ -144,6 +143,7 @@ describe('OrcaRuntimeService', () => {
           branch: 'feature/foo',
           isArchived: false,
           isMainWorktree: false,
+          defaultBranch: false,
           hasHostSidebarActivity: true,
           parentWorktreeId: null,
           childWorktreeIds: [],
@@ -170,7 +170,6 @@ describe('OrcaRuntimeService', () => {
           agents: []
         }
       ],
-      // Why: the summary now names the hosts it covered; an absent scope would read as absolute.
       hostScope: { hostIds: ['local'], omittedHostIds: [] },
       totalCount: 1,
       truncated: false
@@ -178,7 +177,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reads the linked-PR state from the renderer repoId-keyed GitHub cache', async () => {
-    // Regression: renderer keys the PR cache by repoId::branch; reading by path::branch missed every entry (muted mobile badge).
+    // Renderer PR cache keys use repoId::branch; path::branch lost mobile badges.
     const runtimeStore = {
       ...store,
       getGitHubCache: () => ({
@@ -221,7 +220,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('emits only instance- and boundary-validated lineage parents in mobile summaries', async () => {
-    // Regression: shipped mobile clients trust parentWorktreeId blindly, so worktree.ps must not emit stale same-path lineage.
+    // Shipped phones trust parentWorktreeId; never emit lineage from replaced same-path checkouts.
     const parentPath = join(tmpdir(), 'worktree-parent')
     const validChildPath = join(tmpdir(), 'worktree-child-valid')
     const staleChildPath = join(tmpdir(), 'worktree-child-stale')
@@ -241,7 +240,6 @@ describe('OrcaRuntimeService', () => {
         hostId: 'local',
         projectId: 'project-a'
       }),
-      // The stale child path was reused by a replacement checkout.
       [staleChildId]: makeWorktreeMeta({ instanceId: 'replacement-instance' }),
       [crossHostChildId]: makeWorktreeMeta({
         instanceId: 'cross-host-child-instance',
@@ -267,7 +265,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
@@ -371,7 +369,7 @@ describe('OrcaRuntimeService', () => {
 
       await runtime.getWorktreePs()
 
-      // Why: the cache already owns the batch-resolved platforms; newly persisted repos must not trigger another scan.
+      // Cache owns batch-resolved platforms; newly persisted repos must not trigger rescans.
       expect(getProjects).not.toHaveBeenCalled()
       expect(getSettings).toHaveBeenCalledTimes(1)
     })
@@ -414,7 +412,7 @@ describe('OrcaRuntimeService', () => {
       staleScan.resolve(MOCK_GIT_WORKTREES)
       const staleResult = await stalePoll
 
-      // Why: invalidation can let a newer scan finish first; each result keeps the platform map from its own generation.
+      // Concurrent scans retain the platform map from their own generation even when they finish out of order.
       expect(staleResult.worktrees[0]).toMatchObject({ terminalPlatform: 'linux' })
       expect(freshPoll.worktrees[0]).toMatchObject({ terminalPlatform: 'win32' })
     })

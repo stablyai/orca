@@ -122,16 +122,11 @@ describe('deferred split pane handoff', () => {
     expect(claimDeferredSplitPaneHandoff(key)).toBeNull()
   })
 
-  it('clears or discards only the current owner', () => {
+  it('clears the current owner', () => {
     const clearedKey = makePaneKey('tab-clear', LEAF_1)
     const cleared = beginDeferredSplitPaneHandoff(clearedKey, Promise.resolve('/clear'))
     clearDeferredSplitPaneHandoff(cleared)
     expect(claimDeferredSplitPaneHandoff(clearedKey)).toBeNull()
-
-    const discardedKey = makePaneKey('tab-discard', LEAF_1)
-    const discarded = beginDeferredSplitPaneHandoff(discardedKey, Promise.resolve('/discard'))
-    clearDeferredSplitPaneHandoff(discarded)
-    expect(claimDeferredSplitPaneHandoff(discardedKey)).toBeNull()
   })
 
   it('drops a stale record when an authoritative restored PTY wins the key', () => {

@@ -11,8 +11,10 @@ import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
 import { basename } from '@/lib/path'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-types'
 
 /** The host a grant reads from, spelled as the editor's route for that host. */
 export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {
@@ -27,22 +29,26 @@ export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtif
       }
 }
 
-function docPreviewGrantReadContext(owner: DocPreviewGrantOwner): RuntimeFileOperationArgs {
+function readDocPreviewGrantFile(
+  owner: DocPreviewGrantOwner,
+  filePath: string
+): Promise<RuntimeFilePreviewResult> {
   if (owner.kind === 'ssh') {
     // Why the connection id is kept: dropping it would read this path on this machine.
-    return {
-      target: { kind: 'local' },
-      worktreeId: null,
-      worktreePath: null,
-      connectionId: owner.connectionId
-    }
+    const context = { target: { kind: 'local' as const }, worktreeId: null, worktreePath: null }
+    return readRuntimeFilePreview({ ...context, connectionId: owner.connectionId }, filePath)
   }
-  return {
-    target: { kind: 'environment', environmentId: owner.environmentId },
-    // A selector passes through toRuntimeWorktreeSelector unchanged.
-    worktreeId: owner.worktreeSelector,
-    worktreePath: owner.worktreeRoot
+  // The grant's own selector and root, which may be a chat's scratch folder rather than a workspace.
+  const relativePath = relativePathInsideRoot(owner.worktreeRoot, filePath)
+  if (!relativePath) {
+    throw new Error('outside_grant_root')
   }
+  return callRuntimeRpc<RuntimeFilePreviewResult>(
+    { kind: 'environment', environmentId: owner.environmentId },
+    'files.readPreview',
+    { worktree: owner.worktreeSelector, relativePath },
+    { timeoutMs: 15_000 }
+  )
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
@@ -51,9 +57,9 @@ export async function readDocPreviewArtifactRequest(
   filePath: string,
   sourceKey: string
 ): Promise<ArtifactWriteRequest> {
-  let result: Awaited<ReturnType<typeof readRuntimeFilePreview>>
+  let result: RuntimeFilePreviewResult
   try {
-    result = await readRuntimeFilePreview(docPreviewGrantReadContext(location.owner), filePath)
+    result = await readDocPreviewGrantFile(location.owner, filePath)
   } catch {
     throw new ArtifactPublishPreparationError('unreadable')
   }

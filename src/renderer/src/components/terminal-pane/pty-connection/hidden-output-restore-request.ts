@@ -1,3 +1,4 @@
+import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
 import { useAppStore } from '@/store'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
@@ -82,8 +83,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
                   session.hiddenOutputRestorePendingChunks.length === 0) ||
                 !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
               ) {
-                // Why report false: nothing replayed here, so the scheduler can spend
-                // this frame on the next queued pane instead of on a hidden/stale one.
+                // Return false when nothing replayed so the scheduler can use this frame for another pane.
                 return false
               }
               return session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true }) === true
@@ -112,8 +112,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           if (session.hiddenOutputRestorePtyId === currentPtyId) {
             session.clearHiddenOutputRestoreState()
           }
-          // Remote-only path: the transport swapped PTYs mid-restore, which is a
-          // stream change, not proof the hidden bytes are unrecoverable.
+          // Mid-restore remote PTY swaps change streams; they do not prove hidden-byte loss.
           if (
             !session.rearmRemoteHiddenOutputRestoreInsteadOfWarning(
               currentPtyId,
@@ -131,6 +130,8 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           return
         }
         const restoreGeneration = session.hiddenOutputRestoreGeneration
+        // Captured before the fetch: the snapshot can only cover drops main reported by now.
+        const coveredDropEpisode: number | null = session.hiddenOutputRestoreLatestDropEpisode
         session.hiddenOutputRestoreNeeded = false
         let snapshotResult: HiddenOutputSnapshotResult
         try {
@@ -170,9 +171,11 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
               HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS
           }
           if (budgetExhausted) {
-            session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
-              rearmRemote: false
-            })
+            if (!session.deferHiddenOutputRestoreLossToReveal()) {
+              session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+                rearmRemote: false
+              })
+            }
             return
           }
           session.hiddenOutputRestoreNeeded = true
@@ -182,9 +185,11 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           return
         }
         if (snapshotResult.kind === 'permanently-unavailable') {
-          session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
-            rearmRemote: false
-          })
+          if (!session.deferHiddenOutputRestoreLossToReveal()) {
+            session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+              rearmRemote: false
+            })
+          }
           return
         }
         if (snapshotResult.kind === 'unknown-legacy-host') {
@@ -219,9 +224,8 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           snapshot,
           restoredSnapshotPaintsPrintableContent(snapshot)
         )
-        session.hiddenOutputRestoreReplayingSnapshot = null
-        const needsFreshSnapshot = session.hiddenOutputRestoreFreshSnapshotNeeded
-        session.hiddenOutputRestoreFreshSnapshotNeeded = false
+        session.ackHiddenOutputRestoreApplied(currentPtyId, coveredDropEpisode)
+        const needsFreshSnapshot = unhideCoverage.consumeSnapshotRequirement(session, snapshot.seq)
         const drainOutcome = session.drainPendingLiveChunksAfterSnapshot(snapshot.seq)
         if (drainOutcome === 'drained' && !needsFreshSnapshot) {
           session.hiddenOutputRestoreNeeded = false
@@ -260,12 +264,11 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
     const hiddenOutputRestoreTask = session.hiddenOutputRestoreInFlight
     let trackedHiddenOutputRestore: Promise<void>
     trackedHiddenOutputRestore = hiddenOutputRestoreTask.finally(() => {
+      unhideCoverage.repairUnhandledMarker(session, trackedHiddenOutputRestore, ptyId)
       if (session.hiddenOutputRestoreInFlight === trackedHiddenOutputRestore) {
         session.hiddenOutputRestoreInFlight = null
       }
-      // Why: after dispose the task body exits immediately, so re-arming here
-      // resolves instantly and re-enters this handler — an unbounded promise
-      // chain that eats the heap. The pane is gone; there is nothing to restore.
+      // Never re-arm disposed tasks from finally; their immediate exit would create a heap-exhausting promise loop.
       if (session.disposed) {
         return
       }

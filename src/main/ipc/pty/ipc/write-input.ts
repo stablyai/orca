@@ -32,7 +32,6 @@ export type PtyWritePayload = {
   id: string
   data: string
   inputKind: TerminalInputKind
-  /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
@@ -169,8 +168,7 @@ export function createPtyWriteInput(deps: {
         }
         wroteChunk = true
         if (!nextChunk.done) {
-          // setImmediate, not setTimeout(0): the yield exists to let abort/data callbacks run
-          // between chunks, and a clamped timer tick per 16 KiB is pure latency.
+          // Yield through the check phase for abort/data callbacks without a clamped timer tick per 16 KiB.
           await new Promise((resolve) => setImmediate(resolve))
         }
         chunk = nextChunk
@@ -231,7 +229,7 @@ export function createPtyWriteInput(deps: {
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
+    // Enforce phone-owned input in main too; renderer presence state lags by one IPC hop (docs/mobile-presence-lock.md).
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
@@ -266,7 +264,7 @@ export function createPtyWriteInput(deps: {
     if (args.requireWriteSettlement === true) {
       return writePtyInputSettled(args)
     }
-    // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
+    // Only local ownership can acknowledge delivery; SSH relay writes remain fire-and-forget.
     if (ptyOwnership.get(args.id) !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }

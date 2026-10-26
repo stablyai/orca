@@ -1,5 +1,5 @@
-import { getCellHeight } from './fit-scale'
-import { getTotalScale, updateScrollIndicator } from './viewport-transform'
+import { getCellHeight, getTotalScale } from './cell-metrics'
+import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 
@@ -43,21 +43,14 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
     const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
       scope.term.scrollLines(applied)
-      // Why: xterm's renderer is row-based. Buffer touch pixels and only
-      // commit whole rows so TUI canvas layers do not shimmer between
-      // fractional transforms and xterm repaints.
+      // Moving a whole row counts as scroll even within tap slop.
+      scope.tapCandidate = null
+      // Commit whole rows so fractional transforms cannot shimmer against xterm’s row-based repaint.
       scope.smoothScrollOffsetY += applied * effectiveCellH
     }
     if (applied !== lines) {
       scope.smoothScrollOffsetY = 0
     }
-  }
-  const limit = effectiveCellH - 1
-  if (scope.smoothScrollOffsetY > limit) {
-    scope.smoothScrollOffsetY = limit
-  }
-  if (scope.smoothScrollOffsetY < -limit) {
-    scope.smoothScrollOffsetY = -limit
   }
   updateScrollIndicator(scope, true)
   return true
@@ -75,9 +68,7 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
   if (scope.normalScrollFrameId !== null) {
     return true
   }
-  // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
-  // deltas into one xterm row-scroll per frame instead of repainting from
-  // the input event stream.
+  // Coalesce touchmove deltas to one row scroll per frame to bound dense-terminal repaints.
   scope.normalScrollFrameId = scheduleDocumentFrame(scope, function () {
     scope.normalScrollFrameId = null
     const delta = scope.pendingNormalScrollDeltaY
@@ -87,6 +78,14 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
     }
   })
   return true
+}
+
+export function queuedNormalBufferScrollReachesRow(scope: TerminalDocumentScope) {
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
+  return (
+    effectiveCellH > 0 &&
+    Math.abs(scope.smoothScrollOffsetY - scope.pendingNormalScrollDeltaY) >= effectiveCellH
+  )
 }
 
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
@@ -102,7 +101,6 @@ export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
   updateScrollIndicator(scope, false)
 }
 
-/** Ruling 21: the smooth-scroll frame, which would otherwise scroll the next mount's buffer. */
 export function stopNormalBufferSmoothScroll(scope: TerminalDocumentScope) {
   resetSmoothScrollOffset(scope)
 }

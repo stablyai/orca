@@ -28,9 +28,7 @@ export type GitHubClientMocks = {
   releaseMock: Mock
 }
 
-// Why: every client suite registers its own `vi.mock` factories (hoisting is
-// per-file), so the mock set and the factory bodies live here and the test file
-// only wires them together.
+// Vitest hoists per file; suites register these shared factories locally.
 export function createGitHubClientMocks(): GitHubClientMocks {
   return {
     execFileAsyncMock: vi.fn(),
@@ -129,6 +127,19 @@ export function gitRunnerModuleMock(mocks: GitHubClientMocks): GitRunnerModuleMo
   }
 }
 
+export type LocalGitObjectQuarantineModuleMock = {
+  createLocalGitObjectQuarantine: () => {
+    run: <T>(command: (env: undefined) => Promise<T>) => Promise<T>
+  }
+}
+
+// Isolate scripted Git queues from quarantine's additional common-dir probe.
+export function localGitObjectQuarantineModuleMock(): LocalGitObjectQuarantineModuleMock {
+  return {
+    createLocalGitObjectQuarantine: () => ({ run: (command) => command(undefined) })
+  }
+}
+
 export type LocalGitConfigSignatureModuleMock = {
   readLocalGitConfigSignature: Mock
 }
@@ -162,9 +173,7 @@ export function rateLimitModuleMock(mocks: GitHubClientMocks): RateLimitModuleMo
     getRateLimit: mocks.getRateLimitMock,
     rateLimitGuard: mocks.rateLimitGuardMock,
     noteRateLimitSpend: mocks.noteRateLimitSpendMock,
-    // Why: the repository-scoped guards share the same bucket-keyed budget as the
-    // legacy ones, so delegate to the existing mocks to keep per-bucket blocking
-    // and spend assertions working unchanged.
+    // Keep repository guards on the same bucket fixtures as the legacy entry points.
     repositoryRateLimitGuard: (_repository: unknown, bucket: string) =>
       mocks.rateLimitGuardMock(bucket),
     noteRepositoryRateLimitSpend: (_repository: unknown, bucket: string) =>
@@ -179,9 +188,7 @@ export function githubApiRepositoryModuleMock(
 ): typeof GithubApiRepositoryModule {
   return {
     ...actual,
-    // Why: these suites inject repo identities through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks so per-test setups
-    // keep driving resolution without real enterprise probes.
+    // Resolve hosted seams through the suite's repository fixtures, avoiding real Enterprise probes.
     resolveGitHubApiRepositoryCandidates: (
       repoPath: string,
       connectionId?: string | null,
@@ -197,8 +204,7 @@ export function githubApiRepositoryModuleMock(
       connectionId?: string | null,
       localGitOptions?: unknown
     ) => {
-      // Prefer the remote-specific mock (production origin path); fall back for
-      // suites that only configure getOwnerRepo.
+      // Prefer explicit-origin fixtures; older suites define only getOwnerRepo.
       const fromRemote = await mocks.getOwnerRepoForRemoteMock(
         repoPath,
         'origin',
@@ -207,12 +213,10 @@ export function githubApiRepositoryModuleMock(
       )
       const slug =
         fromRemote ?? (await mocks.getOwnerRepoMock(repoPath, connectionId, localGitOptions))
-      // Mirror production: dotcom origin slugs come back pinned to github.com.
       return slug ? { host: 'github.com', ...slug } : slug
     },
     getIssueGitHubApiRepository: async (repoPath: string, connectionId?: string | null) => {
       const slug = await mocks.getIssueOwnerRepoMock(repoPath, connectionId)
-      // Mirror production: issue slugs come back host-qualified to github.com.
       return slug ? { host: 'github.com', ...slug } : slug
     },
     resolveIssueGitHubApiRepositorySource: async (

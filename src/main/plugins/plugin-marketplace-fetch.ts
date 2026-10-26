@@ -17,8 +17,7 @@ export type PluginMarketplaceFetchResult = {
   marketplace: PluginMarketplace
 }
 
-/** Fetches a marketplace through system Git so private repositories use the
- * same SSH agent and credential helpers as every other Orca Git operation. */
+/** System Git retains private-repo SSH agent and credential-helper support. */
 export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource
 ): Promise<PluginMarketplaceFetchResult> {
@@ -40,24 +39,32 @@ export async function fetchPluginMarketplace(
 export async function readPluginMarketplaceIndex(
   rootDirectory: string
 ): Promise<PluginMarketplace> {
-  const path = join(rootDirectory, PLUGIN_MARKETPLACE_FILENAME)
+  const raw = await readMarketplaceJson(rootDirectory, PLUGIN_MARKETPLACE_FILENAME)
+  return parseMarketplaceFile(PLUGIN_MARKETPLACE_FILENAME, () => pluginMarketplaceSchema.parse(raw))
+}
+
+async function readMarketplaceJson(rootDirectory: string, filename: string): Promise<unknown> {
   const chunks: Buffer[] = []
   let totalBytes = 0
-  for await (const chunk of createReadStream(path)) {
+  for await (const chunk of createReadStream(join(rootDirectory, filename))) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     totalBytes += bytes.byteLength
     if (totalBytes > MARKETPLACE_INDEX_MAX_BYTES) {
-      throw new Error(`${PLUGIN_MARKETPLACE_FILENAME} exceeds its size limit`)
+      throw new Error(`${filename} exceeds its size limit`)
     }
     chunks.push(bytes)
   }
+  return parseMarketplaceFile(filename, () =>
+    JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf8'))
+  )
+}
+
+function parseMarketplaceFile<T>(filename: string, parse: () => T): T {
   try {
-    return pluginMarketplaceSchema.parse(
-      JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf8'))
-    )
+    return parse()
   } catch (error) {
     throw new Error(
-      `invalid ${PLUGIN_MARKETPLACE_FILENAME}: ${error instanceof Error ? error.message : String(error)}`
+      `invalid ${filename}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
 }

@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 
 /** Each WSL host's connection status as main's liveness owner publishes it, by environment id. */
 export type WslHostsSlice = {
@@ -18,12 +19,7 @@ export const createWslHostsSlice: StateCreator<AppState, [], [], WslHostsSlice> 
   applyWslHostStatus: (status) =>
     set((state) => {
       const current = state.wslHostStatuses[status.environmentId]
-      if (
-        current &&
-        current.state === status.state &&
-        current.detail === status.detail &&
-        current.distro === status.distro
-      ) {
+      if (persistedUIValuesEqual(current, status)) {
         return state
       }
       return { wslHostStatuses: { ...state.wslHostStatuses, [status.environmentId]: status } }

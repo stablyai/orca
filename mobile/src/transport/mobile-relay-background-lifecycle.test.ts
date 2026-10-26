@@ -41,6 +41,34 @@ describe('mobile Relay background lifecycle', () => {
     supervisor.stop()
   })
 
+  it('probes a retained relay once when the app really returns from the background', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const session = new FakeRelaySession('connected')
+    const deps = dependencies({
+      openDirect: vi.fn(() => new FakeSession('disconnected')),
+      openRelay: vi.fn(() => session)
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+    expect(logical.getActivePath()).toBe('relay')
+
+    // A foreground nudge (iOS inactive→active, manual reconnect) is not a background return.
+    supervisor.nudge('app-resume')
+    expect(session.probeAfterBackground).not.toHaveBeenCalled()
+
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(5_000)
+    supervisor.setForeground(true)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+
+    // Past the grace the relay is already released, so there is nothing to probe.
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
+    supervisor.setForeground(true)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    supervisor.stop()
+  })
+
   it('releases a retained relay after 30 seconds and recovers only on foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
@@ -131,13 +159,16 @@ describe('mobile Relay background lifecycle', () => {
     expect(logical.getState()).toBe('connected')
 
     supervisor.setForeground(true)
-    await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledTimes(2))
+    expect(logical.migrateTo).toHaveBeenCalledTimes(2)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('relay')
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })
 
   it('arms lease rotation when confirmation persistence finishes during the grace', async () => {
-    let finishWrite: (() => void) | null = null
+    let finishWrite: (() => void) | undefined
     const writeStarted = new Promise<void>((resolve) => {
       finishWrite = resolve
     })
@@ -156,9 +187,14 @@ describe('mobile Relay background lifecycle', () => {
     finishWrite?.()
     await starting
     supervisor.setForeground(true)
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(openRelay).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
 
-    await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledTimes(2))
+    expect(logical.migrateTo).toHaveBeenCalledTimes(2)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('relay')
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })

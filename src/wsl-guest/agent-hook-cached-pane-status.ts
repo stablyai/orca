@@ -1,24 +1,36 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import type { ClaudeSettledRequest } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 
-export type CachedPaneEnvelopeMeta = { source: AgentHookSource; env?: string; version?: string }
+export type CachedPaneEnvelopeMeta = {
+  source: AgentHookSource
+  env?: string
+  version?: string
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
+}
 
 export type CachedPaneReplaySelection = {
   event: AgentHookEventPayload
   meta: CachedPaneEnvelopeMeta
 }
 
-/**
- * Chooses which cached pane statuses a reconnecting client may be re-told about, and drops the rest.
- *
- * Two panes are refused, for opposite reasons:
- * - a pane whose surface has been retired — the tab is gone, so replaying its status would hand the
- *   client a live agent pane nobody owns, which is what drives an auto-resume onto a transcript an
- *   orphaned agent is still writing;
- * - a pane whose envelope metadata is missing — the status cache and the metadata map are populated
- *   and cleared in lockstep, so a key present in one and not the other is drift. Skip rather than
- *   guess a source that mis-tags the replay downstream.
- */
+/** The cached row as a replay; ended Claude requests ride beside it so older receivers see one status. */
+export function buildCachedPaneReplayEnvelope({
+  event,
+  meta
+}: CachedPaneReplaySelection): AgentHookRelayEnvelope {
+  const envelope = buildRelayHookEnvelope(event, meta.source, meta.env, meta.version, {
+    isReplay: true
+  })
+  // Why not on a wait: a replayed wait replaces any held one, so the evidence would be unused.
+  return meta.claudeSettledRequests && event.payload.state !== 'waiting'
+    ? { ...envelope, claudeSettledRequests: meta.claudeSettledRequests }
+    : envelope
+}
+
+// Skip retired pane surfaces to prevent ghost status and auto-resume onto an orphan’s live transcript.
+// Missing envelope metadata means cache drift; never guess replay provenance.
 export function selectReplayableCachedPanes(input: {
   cachedByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   metaByPaneKey: ReadonlyMap<string, CachedPaneEnvelopeMeta>

@@ -1,25 +1,5 @@
-/**
- * Paired remote server: a revealed remote terminal must stay interactive
- * without a tab flip.
- *
- * Topology: headed Orca desktop host (remote server) + a separate paired Orca
- * desktop client — the "connect to Windows 2, open an old workspace" shape.
- *
- * Oracle (the reported symptom verbatim): type into the revealed pane and see
- * the echo paint live. "Paints only after switching to another terminal and
- * back" is the failure, so each scenario records both.
- *
- * The decoy tabs are load-bearing, not scenery. Pre-fix, handleClose never runs,
- * so closeIfIdle is the only remaining release path and it needs zero streams —
- * a sibling stream is what keeps the wedged multiplexer alive and the pre-fix
- * state red. Each scenario asserts its flip decoy is still mounted at the reveal
- * so that invariant cannot quietly lapse and turn this green.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Reveal a hidden/parked terminal on a paired desktop and require live input/echo without a tab flip.
+// Use a desktop host and client; keep an asserted sibling stream alive so closeIfIdle cannot release the old wedged multiplexer.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -37,7 +17,7 @@ import {
 } from './helpers/paired-electron-client'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const LIVE_PAINT_BUDGET_MS = 12_000
@@ -147,7 +127,7 @@ async function createHostTerminal(
     hostTabId,
     sinkPath,
     terminal: result.tab.terminal,
-    webTabId: toWebTerminalSurfaceTabId(hostTabId, { environmentId, worktreeId })
+    webTabId: toWebTerminalSurfaceTabId(hostTabId)
   }
 }
 
@@ -207,8 +187,7 @@ async function readFittedPaneGrid(
   }, webTabId)
 }
 
-/** Reads the target tab's own buffer. `getTerminalContent` resolves whatever
- *  tab the store thinks is active, which hides per-tab reveal failures. */
+// Read this tab’s buffer; active-tab lookup can hide reveal failures.
 async function readPaneContent(page: Page, webTabId: string): Promise<string> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
@@ -277,9 +256,7 @@ type ScenarioResult = {
   diagnostics: unknown
 }
 
-/** Types a unique marker into the revealed pane and records whether the host
- *  received it, whether it painted live, and (if not) whether the reported
- *  tab-flip workaround reveals it. */
+// Record host input receipt, live client echo and, on failure, the tab-flip workaround.
 async function probeInteractivity(
   page: Page,
   worktreeId: string,
@@ -358,8 +335,7 @@ async function probeInteractivity(
   }
 }
 
-/** The wedged-multiplexer repro needs a sibling stream alive at reveal time
- *  (see the header), and S1 additionally needs its target never to have parked. */
+// Require a sibling stream at reveal; S1 also requires its target never parked.
 async function expectStillMounted(page: Page, webTabId: string, label: string): Promise<void> {
   expect(
     await page.evaluate((id) => window.__paneManagers?.has(id) ?? false, webTabId),
@@ -397,8 +373,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
 }, testInfo) => {
   test.setTimeout(600_000)
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-  // Why: the paired client inherits this from the launching process; a reused
-  // Playwright worker would otherwise leak the shortened delay into later specs.
+  // Restore the inherited parking delay so reused workers cannot leak it to later specs.
   const previousParkDelay = process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
   process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
   const client = await launchPairedElectronClient(offer, testInfo, 'parked-reveal')
@@ -501,8 +476,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
       )
     }
 
-    // S3 — cold-parked tab whose runtime connection dropped and came back
-    // while parked (the "returned after a while" report).
+    // S3: reconnect the runtime while the target remains cold-parked.
     {
       const { target, decoys } = await seedScenario(client, worktreeId)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))

@@ -1,22 +1,20 @@
 import { posix as posixPath } from 'node:path'
-import { shellEscape } from './ssh-connection-utils'
-import { powerShellLiteral } from './ssh-remote-powershell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 
-/** The host-Node floor for the npm path. */
-export const MIN_HOST_NODE_MAJOR = 18
+const MIN_HOST_NODE_MAJOR = 18
 const NODE_VERSION_MARKER = '__ORCA_NODE_VERSION__'
 const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 
 export function buildPosixNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const node = shellEscape(nodePath)
+  const node = quotePosixShell(nodePath)
   return [
     `printf '%s\\n' '${NODE_VERSION_MARKER}'`,
     `${node} --version`,
     `printf '%s\\n' '${NPM_VERSION_MARKER}'`,
-    // Why: deploy prepends nodeBinDir before running bare npm; requiring a
-    // colocated executable rejects valid split layouts (#9165).
-    `PATH=${shellEscape(nodeBinDir)}:$PATH npm --version`
+    // Match deploy's prepended PATH and bare npm; valid split Node/npm layouts need no colocation (#9165).
+    `PATH=${quotePosixShell(nodeBinDir)}:$PATH npm --version`
   ].join(' && ')
 }
 
@@ -24,8 +22,7 @@ export function buildWindowsNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
   const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return [
-    // Why: mirror deploy's PATH-prepend + bare npm resolution so split
-    // Node/npm layouts are not rejected solely for lacking npm.cmd (#9165).
+    // Mirror deploy PATH resolution so split Windows layouts need no colocated npm.cmd (#9165).
     `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,
     `Write-Output ${powerShellLiteral(NODE_VERSION_MARKER)}`,
     `& ${powerShellLiteral(nodePath)} --version`,
@@ -43,8 +40,7 @@ export function nodeToolchainVersionsMeetRequirements(versionOutput: string): bo
     return nodeMajor !== null && nodeMajor >= MIN_HOST_NODE_MAJOR && npmMajor !== null
   }
 
-  // Why: existing proxy integrations and tests may return only the Node
-  // version even though production probes now emit both version markers.
+  // Retain compatibility with proxy/test answers that report only Node version.
   const legacyMatch = versionOutput.trim().match(/^v?(\d+)/)
   return legacyMatch ? Number.parseInt(legacyMatch[1]!, 10) >= MIN_HOST_NODE_MAJOR : false
 }

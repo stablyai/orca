@@ -1,7 +1,12 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  getNativeChatAgentProfile,
+  readsSkillSource,
+  type NativeChatAgentProfile
+} from '../../../shared/native-chat-agent-profiles'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
 
@@ -30,11 +35,12 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   )
 }
 
-// Why: `native-chat-agent-profiles.ts` carries the same rule as `skillSourceOwner`;
-// keep the two in step when an agent starts reading another agent's roots.
-function getSkillSourceOwnerForAgent(agent: TuiAgent): AgentType {
-  // Why: both launch Claude Code and therefore consume Claude-owned skill roots.
-  return agent === 'claude-agent-teams' || agent === 'openclaude' ? 'claude' : agent
+// Chat-profile agents read chat roots; others read their own, while Claude Agent Teams uses Claude Code’s roots.
+function skillReaderForAgent(
+  agent: TuiAgent
+): Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'> {
+  const owner: AgentType = agent === 'claude-agent-teams' ? 'claude' : agent
+  return getNativeChatAgentProfile(agent) ?? { skillSourceOwner: owner }
 }
 
 /** `skills` and `sources` must come from the same discovery scan. */
@@ -43,7 +49,7 @@ export function agentHasOrchestrationSkill(
   skills: readonly DiscoveredSkill[],
   sources: readonly SkillDiscoverySource[]
 ): boolean {
-  const owner = getSkillSourceOwnerForAgent(agent)
+  const reader = skillReaderForAgent(agent)
   return skills.some((skill) => {
     if (!isOrchestrationSkill(skill)) {
       return false
@@ -51,14 +57,12 @@ export function agentHasOrchestrationSkill(
     // Why: dedup keeps one row, so the roots it absorbed still have to be classified.
     const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
     return rootPaths.some((rootPath) =>
-      // Why: one path can carry several sources — a workspace whose cwd is the
-      // home dir scans `~/.claude/skills` as both a home and a repo root. Keying
-      // by path would let the repo duplicate shadow the owning home root.
+      // One path can be home and repo simultaneously; keying only by path lets a repo duplicate shadow its owning home root.
       sources.some(
         (source) =>
           source.path === rootPath &&
           source.sourceKind !== 'repo' &&
-          (source.owner === null || source.owner === owner)
+          readsSkillSource(reader, source)
       )
     )
   })

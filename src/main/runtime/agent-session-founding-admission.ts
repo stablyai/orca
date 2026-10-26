@@ -1,4 +1,8 @@
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  AgentSessionRefusalError,
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session-wire-refusals'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {
@@ -9,11 +13,11 @@ import {
   validateAgentSessionReservationInput,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
-} from './agent-session-reservation-admission'
+} from './agent-session/ownership/agent-session-reservation-admission'
 import type { AgentSessionStoreState } from './agent-session-store-state'
-import { setAgentSessionTabVisibility } from './agent-session-tab-table'
+import { setAgentSessionTabVisibility } from './agent-session/agent-session-tab-table'
 
-/** The same create admission as a reservation, with no obligation to acquire an owner. */
+/** Use create admission without requiring owner acquisition. */
 export function commitAgentSessionFounding(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
@@ -41,7 +45,17 @@ export function commitAgentSessionFounding(
   if (state.records.has(request.sessionId)) {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
-  assertAdoptedConversationUnowned(state, request)
+  try {
+    assertAdoptedConversationUnowned(state, request)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      throw new AgentSessionRefusalError({
+        ...error.refusal,
+        createAttemptRefusedBeforeCommit: true
+      })
+    }
+    throw error
+  }
   assertReservedTabUnheld(state, request)
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink

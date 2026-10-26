@@ -13,12 +13,52 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
 
+function workRow(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
+
 describe('useMobileNativeChatTurnDisclosure', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  it('shows unresolved history without an independent bar or unanchored live work', () => {
+    const messages = [userMessage('follow-up')]
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'follow-up',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: messages[0]!.blocks },
+        turnScope: { kind: 'unknown' }
+      }
+    ]
+    act(() => {
+      renderer = create(
+        createElement(Harness, {
+          messages,
+          enabled: true,
+          isWorking: true,
+          turnJournal: { items, submissions: [] }
+        })
+      )
+    })
+    const disclosure = renderer!.root.findByType(Result).props.disclosure
+    const row = disclosure.resolveRow(0, messages[0])
+    expect(disclosure.listMessages).toEqual(messages)
+    expect(row.turnKey).toBeUndefined()
+    expect(row.turnStatus).toBeNull()
+    expect(row.activeTurnIsWorking).toBe(false)
   })
 
   it('does not scan bridge-lane transcripts', () => {
@@ -57,7 +97,8 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           blocks: [{ type: 'text', text: 'go' }],
           timestamp: null,
           source: 'transcript'
-        }
+        },
+        workRow('a1')
       ]
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
@@ -76,8 +117,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       })
       const second = renderer!.root.findByType(Result).props.disclosure.resolveRow(0, refreshed[0])
 
-      // The row carries the key; the handler itself lives on the hook and stays
-      // stable for the scope, so a re-render never disturbs a row's memo.
+      // Keep one scoped handler so rerendering cannot invalidate each row’s memo.
       expect(first.turnKey).toBe('u1')
       expect(second.turnKey).toBe('u1')
       const firstHandler = renderer!.root.findByType(Result).props.disclosure.onToggleTurn
@@ -97,11 +137,10 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(1_000)
-      const messages = [userMessage('u1')]
+      const messages = [userMessage('u1'), workRow('a1')]
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
       })
-      // Locally this turn ran 5s; the host says 3m 17s and the host wins.
       vi.setSystemTime(6_000)
       const settledTurns = new Map([['u1', { startedAt: 500, workedSeconds: 197 }]])
       act(() => {
@@ -138,7 +177,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       })
       vi.setSystemTime(6_000)
       seen.length = 0
-      // No host duration for this turn: the settle is stamped locally, one pass later.
       act(() => {
         renderer?.update(createElement(Recorder, { isWorking: false }))
       })
@@ -247,7 +285,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         vi.setSystemTime(10_000)
         const t1 = { kind: 'turn', turnItemId: 't1' } as const
         const thread = { kind: 'thread' } as const
-        // B was handed over while A's turn runs, so the host scopes it to that turn.
         const whileA = [
           user('A', 1, thread),
           turn('t1', 2, 'running', 'A', thread),
@@ -269,7 +306,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           true
         ])
 
-        // B's own turn opens: A takes the host's settled duration, B counts from A's end.
         const whileB = [
           user('A', 1, thread),
           turn('t1', 2, 'interrupted', 'A', thread),
@@ -297,8 +333,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     it("a queued card's Steer joins the running turn: no bar of its own, and live with it", () => {
       const t1 = { kind: 'turn', turnItemId: 't1' } as const
       const thread = { kind: 'thread' } as const
-      // Steer hands the draft over under a fresh submission id while A's turn runs, so the host
-      // scopes the row to that turn; the submission names the card it came from.
+      // Steer uses a fresh submission id while retaining the queued card’s identity and the running turn’s scope.
       const steerId = agentJournalSubmissionKey('hand-off-1')
       const steered = [userMessage('A'), tool, userMessage(steerId)]
       render({
@@ -350,7 +385,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         let [rowA, rowTool, rowB] = rows()
         expect(rowA.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: null })
         expect(rowB.turnStatus).toBeNull()
-        // Liveness follows the owning turn: A's tool row stays live while B waits.
         expect(rowTool.activeTurnIsWorking).toBe(true)
         expect(rowB.activeTurnIsWorking).toBe(false)
 
@@ -377,6 +411,19 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     })
   })
 
+  it('keeps a long message of yours open per message, so a recycled row reopens it', () => {
+    const messages = [userMessage('u1'), userMessage('u2')]
+    act(() => {
+      renderer = create(createElement(Harness, { messages, enabled: false }))
+    })
+    const before = renderer!.root.findByType(Result).props.disclosure
+    expect(before.resolveRow(0, messages[0]).userMessageOpen).toBe(false)
+    act(() => before.resolveRow(0, messages[0]).onToggleUserMessage('u1'))
+    const after = renderer!.root.findByType(Result).props.disclosure
+    expect(after.resolveRow(0, messages[0]).userMessageOpen).toBe(true)
+    expect(after.resolveRow(1, messages[1]).userMessageOpen).toBe(false)
+  })
+
   it('keeps at most the latest 128 turns expanded', () => {
     vi.useFakeTimers()
     try {
@@ -396,8 +443,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           renderer?.update(createElement(Harness, { messages, enabled: true, isWorking: false }))
         })
         const disclosureNow = renderer!.root.findByType(Result).props.disclosure
-        const row = disclosureNow.resolveRow(index, messages[index])
-        act(() => disclosureNow.onToggleTurn(row.turnKey))
+        act(() => disclosureNow.onToggleTurn(`u${index}`))
       }
 
       const disclosure = renderer!.root.findByType(Result).props.disclosure
@@ -456,7 +502,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
   })
 
   it('draws the live bar on a turn whose record and opening message are not loaded', () => {
-    // The newest rows of a long turn; its record is above the page, named only by the host.
     const items: AgentJournalRenderItem[] = ['a300', 'a301'].map((itemId, index) => ({
       itemId,
       revision: 0,
@@ -494,7 +539,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     expect(hosted[0]?.turnStatus).toMatchObject({ startedAt: 1_000 })
     expect(hosted.map((row) => row.activeTurnIsWorking)).toEqual([true, true])
 
-    // From the loaded rows alone, nothing names the turn, so no bar draws.
     expect(rowsWith(undefined).map((row) => row.turnStatus)).toEqual([null, null])
   })
 })
@@ -540,13 +584,11 @@ describe('the open reasoning block the live line discloses', () => {
     act(() => latest().onToggleReasoning('reasoning:r-1'))
     expect(latest().liveLine.reasoningExpanded).toBe(true)
 
-    // Closed while the turn works on: the line discloses nothing, and the row draws open.
     show([prompt, block('r-1', 'completed')], { thinking: false })
     expect(latest().liveLine).toMatchObject({ reasoning: null })
     const row = latest().resolveRow(1, block('r-1', 'completed'))
     expect(row).toMatchObject({ reasoningIsLive: false, reasoningExpanded: true })
 
-    // The next block starts collapsed.
     show([prompt, block('r-1', 'completed'), block('r-2', 'running')], { thinking: true })
     expect(latest().liveLine).toMatchObject({
       reasoning: { message: { id: 'r-2' } },

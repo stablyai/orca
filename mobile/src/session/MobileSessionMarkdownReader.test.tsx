@@ -29,6 +29,7 @@ const doc: MarkdownDocState = {
 describe('live session markdown reader copy', () => {
   let renderer: ReactTestRenderer | undefined
   const onCopy = vi.fn(),
+    onCopyPath = vi.fn(),
     onSave = vi.fn(),
     onDiscard = vi.fn(),
     onRefresh = vi.fn()
@@ -39,6 +40,7 @@ describe('live session markdown reader copy', () => {
           documentId: 'doc',
           doc: value,
           onCopy,
+          onCopyPath,
           onSave,
           onDiscard,
           onRefresh,
@@ -56,18 +58,29 @@ describe('live session markdown reader copy', () => {
     ['editable', {}],
     ['dirty', { isDirty: true, localContent: '# Unsaved' }],
     ['read-only', { editable: false }],
-    ['saving', { isDirty: true, saving: true }]
+    ['saving', { isDirty: true, saving: true }],
+    ['truncated', { truncated: true }]
   ] as const)(
-    'offers Copy on a ready %s document without saving or discarding',
+    'offers adjacent source and path copy actions on a ready %s document',
     (_name, fields) => {
       render({ ...doc, ...fields })
       const copy = buttons().find(
-        (node) => node.props.accessibilityLabel === 'Copy Markdown source'
+        (node) =>
+          node.props.accessibilityLabel ===
+          ('truncated' in fields ? 'Copy loaded Markdown source' : 'Copy Markdown source')
       )
       expect(copy).toBeDefined()
+      expect(buttons()[0]).toBe(copy)
       expect(copy?.props.accessibilityRole).toBe('button')
       expect(copy?.props.disabled).not.toBe(true)
       act(() => copy?.props.onPress())
+      expect(onCopy).toHaveBeenCalledOnce()
+      const pathCopy = buttons()[1]!
+      expect(pathCopy.props.accessibilityLabel).toBe('Copy Markdown path')
+      expect(pathCopy.props.accessibilityRole).toBe('button')
+      expect(pathCopy.props.disabled).not.toBe(true)
+      act(() => pathCopy.props.onPress())
+      expect(onCopyPath).toHaveBeenCalledOnce()
       expect(onCopy).toHaveBeenCalledOnce()
       expect(onSave).not.toHaveBeenCalled()
       expect(onDiscard).not.toHaveBeenCalled()
@@ -83,6 +96,7 @@ describe('live session markdown reader copy', () => {
           documentId: 'doc',
           doc: { status: 'error', message: 'Unavailable' },
           onCopy,
+          onCopyPath,
           onSave,
           onDiscard,
           onRefresh,
@@ -95,5 +109,6 @@ describe('live session markdown reader copy', () => {
     act(() => buttons()[0]!.props.onPress())
     expect(onRefresh).toHaveBeenCalledOnce()
     expect(onCopy).not.toHaveBeenCalled()
+    expect(onCopyPath).not.toHaveBeenCalled()
   })
 })

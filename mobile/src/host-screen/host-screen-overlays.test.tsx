@@ -12,7 +12,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', Moon: 'Moon' }))
+vi.mock('lucide-react-native', () => ({ Moon: 'Moon', Pin: 'Pin', PinOff: 'PinOff' }))
 vi.mock('../agent-history/worktree-navigation-actions', () => ({
   buildWorktreeNavigationActions: () => []
 }))
@@ -22,11 +22,13 @@ vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))
 vi.mock('../components/NewWorktreeModalController', () => ({
   NewWorktreeModalController: 'NewWorktreeModalController'
 }))
-vi.mock('../components/PickerModal', () => ({ PickerModal: 'PickerModal' }))
+vi.mock('./workspace-options-sheet', () => ({ WorkspaceOptionsSheet: 'WorkspaceOptionsSheet' }))
+vi.mock('./workspace-details-sheet', () => ({ WorkspaceDetailsSheet: 'WorkspaceDetailsSheet' }))
 
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { Worktree } from '../worktree/workspace-list-types'
+import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 import { HostScreenOverlays } from './host-screen-overlays'
 
 let renderer: ReactTestRenderer | null = null
@@ -36,8 +38,7 @@ afterEach(() => {
   renderer = null
 })
 
-/** The long-press sheet's action labels for `row`. */
-async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
+async function renderSheet(row: Partial<Worktree>) {
   const controller = {
     actions: {},
     catalog: {},
@@ -46,13 +47,11 @@ async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
     existingWorktreePaths: [],
     hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
     hostId: 'host-1',
-    sectionsResult: { uniqueRepos: [] },
-    settings: { activeFilterCount: 0 },
-    showNewWorktree: false,
+    settings: {},
     state: {
       actionTarget: { worktreeId: 'wt', repo: 'orca', branch: 'main', ...row },
       confirmDelete: null,
-      filters: { filterRepoIds: new Set() },
+      view: INITIAL_MOBILE_VIEW,
       hostLabelById: new Map(),
       pinnedIds: new Set()
     }
@@ -65,7 +64,14 @@ async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
       })
     )
   })
-  const sheet = renderer!.root.find((node) => String(node.type) === 'ActionSheetContent')
+  return {
+    sheet: renderer!.root.find((node) => String(node.type) === 'ActionSheetContent'),
+    details: renderer!.root.find((node) => String(node.type) === 'WorkspaceDetailsSheet')
+  }
+}
+
+async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
+  const { sheet } = await renderSheet(row)
   return sheet.props.actions.map((action: { label: string }) => action.label)
 }
 

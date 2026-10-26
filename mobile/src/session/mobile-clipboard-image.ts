@@ -1,3 +1,5 @@
+import { isWindowsAbsolutePathLike } from '../../../src/shared/cross-platform-path'
+import { formatImageDropPasteText } from '../../../src/shared/image-path-paste'
 import { formatAgentImagePath } from '../../../src/shared/agent-image-paste'
 import {
   computeMobileClipboardImageDownscale,
@@ -15,7 +17,6 @@ import {
 } from './mobile-clipboard-image-operations'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
-/** Re-exported so the upload path's own importers keep one name for each. */
 export { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS, computeMobileClipboardImageDownscale }
 export type { MobileClipboardImageResizer }
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
@@ -41,12 +42,7 @@ export type MobileClipboardImage = {
   size: { width: number; height: number }
 }
 
-/**
- * Downscales an oversized clipboard image until its base64 fits the upload budget,
- * delegating the actual raster resize to the injected `resize`. Returns the
- * upload-ready base64; if it still overflows after the bounded retries the
- * downstream size check rejects it with the same "too large" error as before.
- */
+// Retry bounded downscales; any remaining overflow reaches the existing too-large check.
 export async function prepareMobileClipboardImageBase64(
   image: MobileClipboardImage,
   resize: MobileClipboardImageResizer,
@@ -106,8 +102,7 @@ async function uploadMobileClipboardImageTransaction(
     connectionId
   })
 
-  // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
-  // image then goes over the single-frame method — no acceptance policy carries the code.
+  // Read method_not_found before interpretation to allow a small image’s legacy single-frame fallback.
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
@@ -120,9 +115,6 @@ async function uploadMobileClipboardImageTransaction(
     throw new Error(startResponse.error.message)
   }
 
-  // The slot comes off the checked reader now, not off a cast of the raw result. A success
-  // carrying no `uploadId` used to throw a V8 destructuring TypeError whose message the composer
-  // showed verbatim; it is an incompatible reply named by its method instead.
   const { uploadId } = clipboardImageUploadStart.interpret(startResponse)
   try {
     for (
@@ -156,5 +148,25 @@ export function buildMobileImagePastePayload(filePath: string, agent?: string | 
   // Why: generated image paths are paste payloads, not ordinary typed input.
   // Bracket the path even when it is one line so agents receive it atomically
   // and stale terminal paste state cannot turn it into shell commands.
-  return `\x1b[200~${formatAgentImagePath(agent, filePath).split('\x1b').join('\u241b')}\x1b[201~`
+  return bracketMobileImagePaste(formatAgentImagePath(agent, filePath))
+}
+
+// Match desktop terminal paste when no agent identity is available yet.
+export function buildMobileTerminalImagePastePayload(
+  filePath: string,
+  agent?: string | null
+): string {
+  const id = agent?.trim()
+  if (!id || id === 'unknown' || id === 'codex') {
+    const pasted = formatImageDropPasteText(
+      filePath,
+      isWindowsAbsolutePathLike(filePath) ? 'windows' : 'posix'
+    )
+    return bracketMobileImagePaste(pasted ?? filePath)
+  }
+  return buildMobileImagePastePayload(filePath, id)
+}
+
+function bracketMobileImagePaste(pasted: string): string {
+  return `\x1b[200~${pasted.split('\x1b').join('\u241b')}\x1b[201~`
 }

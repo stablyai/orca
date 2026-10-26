@@ -58,11 +58,11 @@ describe('independent paired runtime SSH access persistence', () => {
     })
   }
 
-  function link(expectedEnvironment = seed()) {
+  function link(expectedEnvironment = seed(), verifiedRuntimeId = 'host-runtime') {
     return linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, {
       expectedEnvironment: prepare(expectedEnvironment),
       requestId: 'link-request',
-      verifiedRuntimeId: 'host-runtime',
+      verifiedRuntimeId,
       verifiedConnection: pairedRuntimeConnectionFromOffer(verifiedPairing),
       tunnel,
       now: 90
@@ -103,6 +103,67 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(unlinked.sshAccess).toBeUndefined()
     expect(unlinked.connectionDependency).toBeUndefined()
     expect(listEnvironments(userDataPath)).toEqual([unlinked])
+  })
+
+  it('keeps SSH access across a server restart and relinks after an unlink (#32957)', () => {
+    const linked = link()
+    markEnvironmentUsed(userDataPath, linked.id, { runtimeId: 'restarted-runtime' })
+    const restarted = listEnvironments(userDataPath)[0]!
+    expect(restarted.runtimeId).toBe('restarted-runtime')
+    expect(restarted.sshAccess).toEqual(linked.sshAccess)
+    expect(getPreferredPairingOffer(restarted)).toEqual(verifiedPairing)
+
+    const unlinked = unlink(restarted)
+    markEnvironmentUsed(userDataPath, unlinked.id, { runtimeId: 'restarted-again' })
+    const relinked = link(listEnvironments(userDataPath)[0], 'restarted-again')
+    expect(relinked.sshAccess?.requestId).toBe('link-request')
+    expect(listEnvironments(userDataPath)).toEqual([relinked])
+  })
+
+  it('lets an unlink or a lost-completion retry read before a server restart still finish', () => {
+    const prepared = prepare()
+    const args = {
+      expectedEnvironment: prepared,
+      requestId: 'link-request',
+      verifiedRuntimeId: 'host-runtime',
+      verifiedConnection: pairedRuntimeConnectionFromOffer(verifiedPairing),
+      tunnel
+    }
+    const linked = linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, args)
+    markEnvironmentUsed(userDataPath, linked.id, { runtimeId: 'restarted-runtime' })
+    expect(linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, args).sshAccess).toEqual(
+      linked.sshAccess
+    )
+
+    const unlinking = prepareRuntimeEnvironmentSshAccessUnlink(userDataPath, {
+      expectedEnvironment: linked,
+      requestId: 'unlink-request'
+    })
+    markEnvironmentUsed(userDataPath, linked.id, { runtimeId: 'restarted-again' })
+    const unlinked = completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
+      expectedEnvironment: unlinking,
+      requestId: 'unlink-request'
+    })
+    expect(unlinked.sshAccess).toBeUndefined()
+    expect(unlinked.pendingSshAccessOperation).toBeUndefined()
+  })
+
+  it('still refuses a new paired device on a linked server, and a new runtime during a link', () => {
+    const linked = link()
+    expect(() =>
+      markEnvironmentUsed(userDataPath, linked.id, {
+        runtimeId: 'restarted-runtime',
+        pairedDeviceId: 'another-client',
+        pairingDeviceToken: pairing.deviceToken
+      })
+    ).toThrow('cannot change')
+    expect(listEnvironments(userDataPath)).toEqual([linked])
+
+    const pending = prepare(unlink(linked))
+    expect(() =>
+      markEnvironmentUsed(userDataPath, pending.id, { runtimeId: 'restarted-runtime' })
+    ).toThrow('cannot change')
+    expect(listEnvironments(userDataPath)).toEqual([pending])
   })
 
   it('refuses a link whose verification raced with re-pairing', () => {
@@ -174,9 +235,13 @@ describe('independent paired runtime SSH access persistence', () => {
 
   it('refuses a second registration of the same execution runtime', () => {
     const original = seed()
+    // Why another key: one key is one server, which the store would refresh instead of adding.
     const duplicate = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Duplicate host',
-      pairingCode: encodePairingOffer(pairing)
+      pairingCode: encodePairingOffer({
+        ...pairing,
+        publicKeyB64: Buffer.alloc(32, 2).toString('base64')
+      })
     })
     markEnvironmentUsed(userDataPath, duplicate.id, { runtimeId: 'host-runtime' })
     const before = listEnvironments(userDataPath)
@@ -220,12 +285,12 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(prepare(original)).toEqual(prepared)
     expect(prepare(prepared)).toEqual(prepared)
     expect(() => prepare(prepared, 'other-request')).toThrow('Another SSH access')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     expect(() =>
       updateEnvironmentFromPairingCode(userDataPath, prepared.id, {
         pairingCode: encodePairingOffer(pairing)
       })
-    ).toThrow('Unlink')
+    ).toThrow('Retry or cancel it')
     expect(() =>
       markEnvironmentUsed(userDataPath, prepared.id, { runtimeId: 'different-runtime' })
     ).toThrow('cannot change')
@@ -288,7 +353,7 @@ describe('independent paired runtime SSH access persistence', () => {
         requestId: 'stale-request'
       })
     ).toThrow('pending unlink intent')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     const finished = completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
       expectedEnvironment: prepared,
       requestId: 'release-request'

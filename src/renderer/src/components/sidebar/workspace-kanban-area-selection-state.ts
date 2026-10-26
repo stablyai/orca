@@ -44,7 +44,6 @@ export function shouldCommitWorkspaceKanbanAreaSelection({
   additive: boolean
   started: boolean
 }): boolean {
-  // Why: a plain click on empty board space is the user's "click off" gesture;
-  // modifier-clicking empty space should not accidentally drop a selected batch.
+  // Plain empty-space clicks clear selection; modifier clicks preserve the selected batch.
   return started || !additive
 }

@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws'
 import type { WsOutboundBackpressureQueue } from '../../../shared/ws-outbound-backpressure-queue'
 import { createLegacyMobileE2EEReplyQueue } from './mobile-e2ee-outbound-admission'
-import { encryptBytes } from './e2ee-crypto'
+import { encryptBytes } from '../../../shared/e2ee-crypto'
 import {
   createDesktopMobileE2EEV2OutboundQueue,
   desktopMobileE2EEV2OutboundItemBytes,

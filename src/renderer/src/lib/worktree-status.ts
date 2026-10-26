@@ -1,7 +1,7 @@
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../shared/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
 import type {
@@ -155,9 +155,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
     return true
   }
-  // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
-  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
-  // fallback (#9647) so the dot and the sidebar row agree.
+  // Spinner proves activity, not provider (Claude titles lack it, #9040); use launch identity like sidebar rows (#9647).
   return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
 }
 
@@ -211,8 +209,7 @@ export function resolveWorktreeStatus(args: {
   if (heuristic === 'permission') {
     return 'permission'
   }
-  // Why: a failure is news, so it outranks live work (a failed main agent's subagents may still
-  // run); only a pending question comes first.
+  // Failure outranks live work, including surviving subagents; only a pending question comes first.
   if (args.hasFailed) {
     return 'failed'
   }

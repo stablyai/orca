@@ -1,3 +1,4 @@
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 import type {
   StagedStructuredLaunchPrompt,
@@ -12,18 +13,22 @@ import type { AgentLaunchRequestId } from './agent-launch-request-id'
 export type StructuredAgentLaunchOptions = {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
+  /** Background launches never ask host publication to select their tab. */
+  activate?: boolean
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
-  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
-   *  identity, not a preference — see `launchIdentity`. */
+  // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
+  /** Final admission of a source-bound action, immediately before its first create is sent. */
+  beforeCreate?: () => boolean
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
 export type StructuredLaunchCaller = {

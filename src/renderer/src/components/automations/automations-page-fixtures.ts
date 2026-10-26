@@ -1,11 +1,4 @@
-/**
- * Fixtures for the automations page characterization tests.
- *
- * The automation defaults are deliberately the *runnable* shape — a local record
- * whose repo has no SSH connection — so Run Now reaches its handler instead of
- * being refused by the availability gate. Tests that need an unrunnable record
- * override the fields they care about.
- */
+/** Default to runnable local records so Run Now reaches its handler; cases needing refusal override the relevant fields. */
 
 import type {
   Automation,
@@ -121,9 +114,9 @@ export function makeExternalManager(
   overrides: Partial<ExternalAutomationManager> = {}
 ): ExternalAutomationManager {
   return {
-    id: 'hermes:local',
-    provider: 'hermes',
-    label: 'Hermes',
+    id: 'openclaw:local',
+    provider: 'openclaw',
+    label: 'OpenClaw',
     targetLabel: 'This computer',
     target: { type: 'local' },
     status: 'available',
@@ -132,9 +125,9 @@ export function makeExternalManager(
     jobs: [
       {
         id: 'job-1',
-        managerId: 'hermes:local',
-        provider: 'hermes',
-        name: 'Hermes job',
+        managerId: 'openclaw:local',
+        provider: 'openclaw',
+        name: 'OpenClaw job',
         schedule: 'Daily at 09:00',
         rawSchedule: '0 9 * * *',
         enabled: true,
@@ -163,7 +156,7 @@ export function makeExternalAutomationScope(
       authority: { kind: 'desktop' },
       selector: { kind: 'self' }
     },
-    provider: 'hermes',
+    provider: 'openclaw',
     ...overrides
   }
 }
@@ -257,8 +250,7 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       removedSshTargetLabels: new Map(),
-      // Hydrated with no targets: the desktop authority has looked and has none,
-      // so the catalog projects Desktop + Self and nothing else.
+      // Hydrated absence proves no desktop SSH targets; the catalog should project only Self.
       sshTargetsHydrated: true,
       sshStateByEnvironment: new Map(),
       runtimeEnvironments: [],

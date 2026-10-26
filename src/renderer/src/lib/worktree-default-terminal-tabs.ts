@@ -3,6 +3,9 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { useAppStore } from '@/store'
+import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
@@ -28,6 +31,10 @@ export function applyDefaultTerminalTabs(
     return null
   }
   store.markDefaultTerminalTabsApplied(worktreeId)
+  // Main also records the mark, preserving it with zero templates or a crash before first spawn.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && defaultTabs.tabs.length === 0) {
+    recordLayoutApply(useAppStore.getState(), worktreeId, { type: 'setDefaultTabsApplied' })
+  }
   if (defaultTabs.tabs.length === 0) {
     return null
   }
@@ -41,14 +48,24 @@ export function applyDefaultTerminalTabs(
         : isStartupTab && startup?.telemetry
           ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
           : undefined
+    const templateCommand = template.command?.trim()
+    const pendingStartup = isStartupTab
+      ? startup
+      : templateCommand && defaultTabs.runCommands
+        ? { command: templateCommand }
+        : undefined
     const tab = store.createTab(worktreeId, undefined, undefined, {
       pendingActivationSpawn: true,
       recordInteraction: false,
       ...(launchAgent ? { launchAgent } : {}),
-      ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
+      ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
+      ...(pendingStartup ? { pendingStartup } : {})
     })
     if (index === 0) {
       firstTabId = tab.id
+    }
+    if (isStartupTab && launchAgent) {
+      seedNativeChatAppliedSessionOptions(tab.id, launchAgent, startup.sessionOptions)
     }
     if (template.title) {
       store.setTabCustomTitle(tab.id, template.title, { recordInteraction: false })
@@ -56,28 +73,17 @@ export function applyDefaultTerminalTabs(
     if (template.color) {
       store.setTabColor(tab.id, template.color)
     }
-    const templateCommand = template.command?.trim()
-    if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
-      store.queueTabStartupCommand(tab.id, { command: templateCommand })
-    }
   }
 
+  // Send after tab creation so main persists the mark behind their rows.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    recordLayoutApply(useAppStore.getState(), worktreeId, { type: 'setDefaultTabsApplied' })
+  }
   if (!firstTabId) {
     return null
   }
   if (opts?.activateCreatedTabs !== false) {
     store.setActiveTab(firstTabId)
-  }
-  if (startup) {
-    const startupAgent =
-      startup.launchAgent ??
-      (startup.telemetry
-        ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
-        : undefined)
-    if (startupAgent) {
-      seedNativeChatAppliedSessionOptions(firstTabId, startupAgent, startup.sessionOptions)
-    }
-    store.queueTabStartupCommand(firstTabId, startup)
   }
   queueSetupAndIssueCommands(
     store,

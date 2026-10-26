@@ -22,7 +22,7 @@ import {
   type ActivateMarkdownLink
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
-import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
+import { staleViewEditEpoch } from './editor-stale-view-edit'
 import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
@@ -73,12 +73,16 @@ export type EditorConfigParams = {
   handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   cancelAutoFocusRef: MutableRefObject<(() => void) | null>
+  fileId: string
   serializeTimerRef: MutableRefObject<number | null>
+  /** Discard epoch when the pending serialization began. */
+  pendingEditEpochRef: MutableRefObject<number>
   isInitializingRef: MutableRefObject<boolean>
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   markdownCommentsRef: MutableRefObject<DiffComment[]>
   markdownSourceLineOffsetRef: MutableRefObject<number>
-  flushPendingSerialization: () => void
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   syncAnnotationTarget: (editor: Editor) => void
@@ -111,8 +115,6 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     lastCommittedMarkdownRef,
     originalSourceRef,
     baseCanonicalRef,
-    reconcileRoundTripRef,
-    onContentChangeRef,
     onDirtyStateHintRef,
     onOpenDocLinkRef,
     typedEmptyOrderedListMarkerRef,
@@ -201,9 +203,6 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
         return false
       },
-      // Why: KeyHandlerContext is a typed subset of EditorConfigParams, so the
-      // spread stays type-checked while new context fields avoid re-listing
-      // every ref here.
       handleKeyDown: createRichMarkdownKeyHandler({
         ...params,
         linkBubbleOwnerId: codec.transport.key,
@@ -228,14 +227,10 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
-      // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
-      // source paragraphs stay one paragraph and reflow via CSS instead of being
-      // split on load.
+      // Repair empty lists while keeping hard-wrapped prose in one paragraph for CSS reflow.
       normalizeEmptyListItems(nextEditor)
       lastCommittedMarkdownRef.current = content
-      // Why: seed the source-preserving reconciliation baseline — the raw loaded
-      // bytes and their canonical serialization — so the first edit patches onto
-      // the original style instead of re-canonicalizing the whole file.
+      // Seed raw/canonical reconciliation so the first edit preserves source style instead of canonicalizing the whole file.
       originalSourceRef.current = content
       baseCanonicalRef.current = nextEditor.getMarkdown()
       isInitializingRef.current = false
@@ -266,22 +261,11 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       onDirtyStateHintRef.current(true)
       if (serializeTimerRef.current !== null) {
         window.clearTimeout(serializeTimerRef.current)
+      } else {
+        params.pendingEditEpochRef.current = staleViewEditEpoch(params.fileId)
       }
       serializeTimerRef.current = window.setTimeout(() => {
-        serializeTimerRef.current = null
-        try {
-          const { markdown, didSerialize } = commitRichMarkdownSerialization(
-            nextEditor,
-            { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
-            reconcileRoundTripRef.current
-          )
-          if (didSerialize) {
-            onContentChangeRef.current(markdown)
-          }
-        } catch (error) {
-          // Why: teardown and reconcile failures are handled above; other failures must stay observable.
-          console.error('[editor] rich markdown serialize (debounced) failed', error)
-        }
+        params.flushPendingSerialization()
       }, 300)
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {

@@ -39,8 +39,7 @@ export const bottomDrawerStyles = StyleSheet.create({
     })
   },
   drawerFill: {
-    // Why: flex children (results + dock) need a column height budget; without
-    // this, fill height alone still leaves staticContent height content-sized.
+    // Give flex results/dock a height budget; fill height alone leaves staticContent content-sized.
     overflow: 'hidden',
     flexDirection: 'column'
   },
@@ -62,6 +61,11 @@ export const bottomDrawerStyles = StyleSheet.create({
   },
   staticContentFill: {
     flex: 1
+  },
+  // Lets the drag wrapper give up height to the sheet's max, so its ScrollView scrolls.
+  scrollFrame: {
+    flexShrink: 1,
+    minHeight: 0
   },
   bottomExtension: {
     position: 'absolute',

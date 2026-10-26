@@ -1,5 +1,6 @@
-import { getStoredRepoSshConnectionId } from '../repo-execution-host'
+import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
+import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
 import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
@@ -7,7 +8,7 @@ import {
   getDefaultTabCommandTrustContent,
   getEffectiveSetupRunPolicy
 } from '../effective-hook-config'
-import { isENOENT } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
@@ -21,7 +22,7 @@ export class RuntimeRepositoryHooksCommands {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const connectionId = getStoredRepoSshConnectionId(repo)
+    const connectionId = getRepoDialableSshTargetId(repo)
     // Why: an `ssh:` repo is not served here; it reports no hooks file.
     if (connectionId) {
       return {
@@ -48,7 +49,7 @@ export class RuntimeRepositoryHooksCommands {
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    const connectionId = getStoredRepoSshConnectionId(repo)
+    const connectionId = getRepoDialableSshTargetId(repo)
     if (connectionId) {
       return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
@@ -68,8 +69,8 @@ export class RuntimeRepositoryHooksCommands {
       return []
     }
     return inspectSetupScriptImportCandidates(async (relativePath) => {
-      const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (getStoredRepoSshConnectionId(repo)) {
+      const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
+      if (getRepoDialableSshTargetId(repo)) {
         return null
       }
       try {
