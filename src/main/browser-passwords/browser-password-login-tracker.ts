@@ -46,9 +46,6 @@ function isSameForm(
   form: BrowserPasswordFormSummary,
   capture: BrowserPasswordGuestCapture
 ): boolean {
-  if (form.kind !== capture.kind) {
-    return false
-  }
   if (form.formSignature === capture.formSignature) {
     return true
   }
@@ -77,6 +74,11 @@ export class BrowserPasswordLoginTracker {
   typed(origin: string, capture: BrowserPasswordGuestCapture): void {
     if (hasSecret(capture)) {
       this.pendingCapture = { origin, capture }
+    } else if (
+      this.pendingCapture?.origin === origin &&
+      this.pendingCapture.capture.formSignature === capture.formSignature
+    ) {
+      this.pendingCapture = null
     }
   }
 
@@ -96,7 +98,7 @@ export class BrowserPasswordLoginTracker {
   }
 
   navigationStarted(rendererInitiated: boolean): void {
-    if (this.attempt?.stage === 'submitted') {
+    if (this.attempt && (this.attempt.stage === 'submitted' || rendererInitiated)) {
       this.attempt.stage = 'navigating'
       this.cancelTimer()
       return
@@ -156,6 +158,7 @@ export class BrowserPasswordLoginTracker {
     stage: Attempt['stage']
   ): void {
     this.cancelTimer()
+    this.pendingCapture = null
     this.attempt = { origin, capture, stage, cancelTimer: null }
   }
 
@@ -183,8 +186,13 @@ export class BrowserPasswordLoginTracker {
     this.options.onLoginSucceeded({ origin: attempt.origin, capture: attempt.capture, username })
   }
 
+  navigationFailed(): void {
+    this.dropAttempt()
+  }
+
   private dropAttempt(): void {
     this.cancelTimer()
+    this.pendingCapture = null
     this.attempt = null
   }
 

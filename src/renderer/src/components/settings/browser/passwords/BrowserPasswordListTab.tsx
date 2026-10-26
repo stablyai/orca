@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,13 @@ export function BrowserPasswordListTab({
 }): React.JSX.Element {
   const api = window.api.browserPasswords
   const [filter, setFilter] = useState('')
+  const editRequest = useRef(0)
+  useEffect(
+    () => () => {
+      editRequest.current += 1
+    },
+    []
+  )
 
   const visibleEntries = useMemo(() => {
     const query = filter.trim().toLowerCase()
@@ -46,7 +53,11 @@ export function BrowserPasswordListTab({
 
   // Why Touch ID before the form opens: the edit form shows the saved password.
   const edit = async (entry: BrowserPasswordEntrySummary): Promise<void> => {
+    const request = ++editRequest.current
     const details = await api.getEntryDetails({ browserProfileId, entryId: entry.id })
+    if (request !== editRequest.current) {
+      return
+    }
     if (!details.ok) {
       if (details.reason === 'auth-failed') {
         authFailedToast()
@@ -98,7 +109,14 @@ export function BrowserPasswordListTab({
           placeholder={translate('settings.browser.passwords.search', 'Search passwords')}
           className="flex-1"
         />
-        <Button type="button" variant="outline" onClick={() => onOpenForm({ mode: 'add' })}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            editRequest.current += 1
+            onOpenForm({ mode: 'add' })
+          }}
+        >
           <Plus />
           {translate('settings.browser.passwords.add', 'Add')}
         </Button>

@@ -59,14 +59,22 @@ export function createBrowserPasswordFocusTracker(
     context.port.send(PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS.fieldFocused, payload)
   }
 
-  const clear = (): void => {
+  const clear = (reason?: 'focusout'): void => {
     if (!focused) {
       return
     }
-    const payload: BrowserPasswordGuestFieldBlurred = { fieldToken: focused.fieldToken }
-    focused = null
-    window.removeEventListener('scroll', onViewportChange, VIEWPORT_LISTENER_OPTIONS)
-    window.removeEventListener('resize', onViewportChange, VIEWPORT_LISTENER_OPTIONS)
+    const payload: BrowserPasswordGuestFieldBlurred = {
+      fieldToken: focused.fieldToken,
+      ...(reason ? { reason } : {})
+    }
+    if (reason === 'focusout') {
+      // Keep viewport invalidation for Orca's picker, but never republish this blurred field.
+      focused.focusedAt = Number.NEGATIVE_INFINITY
+    } else {
+      focused = null
+      window.removeEventListener('scroll', onViewportChange, VIEWPORT_LISTENER_OPTIONS)
+      window.removeEventListener('resize', onViewportChange, VIEWPORT_LISTENER_OPTIONS)
+    }
     context.port.send(PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS.fieldBlurred, payload)
   }
 
@@ -109,7 +117,7 @@ export function createBrowserPasswordFocusTracker(
     onFocusOut(event) {
       // Why no trust check: hiding the dropdown is always safe, whoever asks.
       if (!context.isMuted() && focused && inputFromEvent(event) === focused.input) {
-        clear()
+        clear('focusout')
       }
     },
     clear

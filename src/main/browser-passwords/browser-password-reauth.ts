@@ -1,4 +1,5 @@
 import { systemPreferences } from 'electron'
+import { browserPasswordSettings } from './browser-password-vault-access'
 import type { BrowserPasswordReauthMethod } from '../../shared/browser-passwords-types'
 
 // Chrome and Firefox both keep a successful check for five minutes.
@@ -39,4 +40,11 @@ export async function confirmBrowserPasswordOwner(
 /** Test seam: forget the last successful check. */
 export function resetBrowserPasswordReauthForTests(): void {
   lastReauthAt = null
+}
+
+export async function confirmBrowserPasswordFill(): Promise<boolean> {
+  return (
+    !browserPasswordSettings().fillRequiresReauth ||
+    confirmBrowserPasswordOwner('fill a saved password', { always: true })
+  )
 }

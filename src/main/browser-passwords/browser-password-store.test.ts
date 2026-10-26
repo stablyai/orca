@@ -302,6 +302,11 @@ describe('BrowserPasswordStore', () => {
     store.add({ origin: 'https://a.test', username: 'u', password: 'p' })
     expect(store.deleteFile()).toEqual({ ok: true, value: true })
     expect(existsSync(filePath)).toBe(false)
-    expect(store.list()).toEqual({ ok: true, value: [] })
+    expect(store.list()).toMatchObject({ ok: false, reason: 'unavailable' })
+    expect(
+      store.importRows([{ origin: 'https://late.test', username: 'u', password: 'p' }])
+    ).toMatchObject({ ok: false, reason: 'unavailable' })
+    expect(existsSync(filePath)).toBe(false)
+    expect(newStore().list()).toEqual({ ok: true, value: [] })
   })
 })

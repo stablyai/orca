@@ -263,3 +263,35 @@ export function removeBrowserPasswordVaultFile(filePath: string): BrowserPasswor
     return browserPasswordsUnavailable(`Could not delete saved passwords: ${String(error)}`)
   }
 }
+
+export type BrowserPasswordEntryChange = Partial<BrowserPasswordEntrySummary> & {
+  sealedPassword?: string
+  /** null removes the note. */
+  sealedNote?: string | null
+}
+
+export function changeBrowserPasswordVaultEntry(
+  state: BrowserPasswordVaultState,
+  entry: BrowserPasswordEntrySummary,
+  change: BrowserPasswordEntryChange
+): { state: BrowserPasswordVaultState; entry: BrowserPasswordEntrySummary } {
+  const id = entry.id
+  const { sealedPassword, sealedNote, ...fields } = change
+  const updated = { ...entry, ...fields }
+  const notes = { ...state.notes }
+  if (sealedNote === null) {
+    delete notes[id]
+  } else if (sealedNote !== undefined) {
+    notes[id] = sealedNote
+  }
+  const next = {
+    notes,
+    index: {
+      ...state.index,
+      entries: state.index.entries.map((entry) => (entry.id === id ? updated : entry))
+    },
+    passwords:
+      sealedPassword === undefined ? state.passwords : { ...state.passwords, [id]: sealedPassword }
+  }
+  return { state: next, entry: updated }
+}

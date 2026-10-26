@@ -39,6 +39,17 @@ describe('deleteBrowserPasswordVault', () => {
     expect(getBrowserPasswordVault('default').list()).toEqual({ ok: true, value: [] })
   })
 
+  it('deletes the captured vault after an Orca profile switch without touching its replacement', () => {
+    const original = getBrowserPasswordVault('default')
+    original.add({ origin: 'https://a.test', username: 'original', password: 'p' })
+    configureBrowserPasswordVaults(join(dir, 'other-profile'))
+    const replacement = getBrowserPasswordVault('default')
+    replacement.add({ origin: 'https://b.test', username: 'replacement', password: 'p' })
+    expect(deleteBrowserPasswordVault(original).ok).toBe(true)
+    expect(existsSync(join(dir, 'browser-passwords', 'default.json'))).toBe(false)
+    expect(replacement.list()).toMatchObject({ ok: true, value: [{ username: 'replacement' }] })
+  })
+
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'reports a failed delete and keeps serving the passwords that are still on disk',
     () => {

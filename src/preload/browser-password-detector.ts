@@ -78,6 +78,7 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
     if (!input) {
       return
     }
+    observeShadowRoots(input)
     trackedValues.set(input, input.value)
     if (typedInput && typedInput !== input && formRootOf(typedInput) !== formRootOf(input)) {
       flushTyped()
@@ -164,6 +165,14 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
     focus.clear()
   }
 
+  const onFocusIn = (event: Event): void => {
+    const input = event.isTrusted ? inputFromEvent(event) : null
+    if (input) {
+      observeShadowRoots(input)
+    }
+    focus.onFocusIn(event)
+  }
+
   scanner.notePasswordInputs(document.querySelectorAll('input'))
   observer.observe(document, OBSERVER_OPTIONS)
   observeShadowRoots(document)
@@ -172,7 +181,7 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
   document.addEventListener('submit', submits.onSubmit, true)
   document.addEventListener('keydown', submits.onKeyDown, true)
   document.addEventListener('click', submits.onClick, true)
-  document.addEventListener('focusin', focus.onFocusIn, true)
+  document.addEventListener('focusin', onFocusIn, true)
   document.addEventListener('focusout', focus.onFocusOut, true)
   domCheckTimer = setTimeout(runDomCheck, DOM_CHECK_DELAY_MS)
 
@@ -182,7 +191,7 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
     document.removeEventListener('submit', submits.onSubmit, true)
     document.removeEventListener('keydown', submits.onKeyDown, true)
     document.removeEventListener('click', submits.onClick, true)
-    document.removeEventListener('focusin', focus.onFocusIn, true)
+    document.removeEventListener('focusin', onFocusIn, true)
     document.removeEventListener('focusout', focus.onFocusOut, true)
     for (const timer of [typedTimer, domCheckTimer]) {
       if (timer !== null) {

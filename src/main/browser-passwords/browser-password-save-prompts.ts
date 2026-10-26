@@ -7,7 +7,6 @@ import { browserManager } from '../browser/browser-manager'
 import type { BrowserPasswordSucceededLogin } from './browser-password-login-tracker'
 import { decideBrowserPasswordSave } from './browser-password-save-decision'
 import type { BrowserPasswordStore } from './browser-password-store'
-import { browserPasswordVaultFor } from './browser-password-vault-access'
 
 export const BROWSER_PASSWORDS_RENDERER_EVENTS = {
   savePrompt: 'browserPasswords:savePrompt',
@@ -19,7 +18,7 @@ export const BROWSER_PASSWORDS_RENDERER_EVENTS = {
 type PendingPrompt = {
   prompt: BrowserPasswordSavePrompt
   guestId: number
-  browserProfileId: string
+  vault: BrowserPasswordStore
   password: string
   existingEntryId: string | null
   expireTimer: NodeJS.Timeout
@@ -84,7 +83,7 @@ export function offerBrowserPasswordSave(input: {
   prompts.set(prompt.promptId, {
     prompt,
     guestId: input.guestId,
-    browserProfileId: input.browserProfileId,
+    vault,
     password: decision.password,
     existingEntryId: decision.kind === 'update' ? decision.entryId : null,
     expireTimer: setTimeout(() => closePrompt(prompt.promptId), SAVE_PROMPT_TTL_MS)
@@ -124,7 +123,7 @@ export function respondToBrowserPasswordSavePrompt(
   if (response.action === 'dismiss') {
     return true
   }
-  const vault = browserPasswordVaultFor(pending.browserProfileId)
+  const { vault } = pending
   if (response.action === 'never') {
     return vault.addNever(pending.prompt.origin).ok
   }

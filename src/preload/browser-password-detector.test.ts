@@ -158,6 +158,7 @@ afterEach(() => {
   }
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -381,15 +382,31 @@ describe('browser password detector', () => {
     })
 
     el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
-    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([{ fieldToken }])
+    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([{ fieldToken, reason: 'focusout' }])
 
     focusIn(el('#email'))
     expect(sentOn(CHANNEL.fieldFocused).at(-1)).toMatchObject({ role: 'username' })
     await vi.advanceTimersByTimeAsync(300)
     window.dispatchEvent(new Event('scroll'))
-    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(2)
+    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(3)
     window.dispatchEvent(new Event('scroll'))
-    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(2)
+    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(3)
+  })
+
+  it('keeps viewport invalidation alive after a picker focus transfer', async () => {
+    load(LOGIN_FORM)
+    install()
+    enable()
+    focusIn(el('#pw'))
+    const fieldToken = readString(sentOn(CHANNEL.fieldFocused).at(-1), 'fieldToken')
+    el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
+    await vi.advanceTimersByTimeAsync(100)
+    window.dispatchEvent(new Event('resize'))
+    expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(1)
+    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([
+      { fieldToken, reason: 'focusout' },
+      { fieldToken }
+    ])
   })
 
   it('keeps a show-password toggle classified as a password', async () => {
@@ -419,6 +436,48 @@ describe('browser password detector', () => {
     focusIn(pw)
 
     expect(sentOn(CHANNEL.fieldFocused)).toEqual([expect.objectContaining({ role: 'password' })])
+  })
+
+  it('detects and captures credentials when HTTP crypto has no randomUUID', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
+    load(LOGIN_FORM)
+    install()
+    enable()
+    focusIn(el('#pw'))
+    typeInto(el('#pw'), 'http-password')
+    await vi.advanceTimersByTimeAsync(600)
+    expect(sentOn(CHANNEL.fieldFocused)).toEqual([expect.objectContaining({ role: 'password' })])
+    expect(sentOn(CHANNEL.typed)).toEqual([expect.objectContaining({ password: 'http-password' })])
+  })
+
+  it('discovers late nested shadow roots on interaction and observes later type changes', async () => {
+    load('<div id="host"></div>')
+    install()
+    enable()
+    await vi.advanceTimersByTimeAsync(600)
+    const shadow = el<HTMLDivElement>('#host').attachShadow({ mode: 'open' })
+    shadow.innerHTML = '<div id="nested"></div>'
+    const nestedHost = shadow.querySelector('#nested')
+    if (!(nestedHost instanceof HTMLElement)) {
+      throw new Error('missing nested host')
+    }
+    const nested = nestedHost.attachShadow({ mode: 'open' })
+    nested.innerHTML = '<form><input name="user"><input type="password" name="password"></form>'
+    const pw = nested.querySelector('input[type="password"]')
+    if (!(pw instanceof HTMLInputElement)) {
+      throw new Error('missing password')
+    }
+    focusIn(pw)
+    typeInto(pw, 'shadow-password')
+    await vi.advanceTimersByTimeAsync(600)
+    expect(sentOn(CHANNEL.fieldFocused)).toEqual([expect.objectContaining({ role: 'password' })])
+    expect(sentOn(CHANNEL.typed)).toEqual([
+      expect.objectContaining({ password: 'shadow-password' })
+    ])
+    pw.type = 'text'
+    await vi.advanceTimersByTimeAsync(600)
+    focusIn(pw)
+    expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(2)
   })
 
   describe('fill', () => {

@@ -15,6 +15,9 @@ import {
 } from './browser-password-origin'
 import {
   browserPasswordProtectionFailure,
+  changeBrowserPasswordVaultEntry,
+  type BrowserPasswordEntryChange,
+  browserPasswordsUnavailable,
   readBrowserPasswordVault,
   removeBrowserPasswordVaultFile,
   sealBrowserVaultValue,
@@ -32,12 +35,6 @@ export type BrowserPasswordAddResult = {
   created: boolean
 }
 
-type EntryChange = Partial<BrowserPasswordEntrySummary> & {
-  sealedPassword?: string
-  /** null removes the note. */
-  sealedNote?: string | null
-}
-
 /**
  * One browser profile's saved logins. Fails closed like plugin-secrets-store: with no real
  * protection, or a vault it cannot read or unseal, every operation reports unavailable and the
@@ -46,6 +43,7 @@ type EntryChange = Partial<BrowserPasswordEntrySummary> & {
 export class BrowserPasswordStore {
   private readonly filePath: string
   private readonly now: () => number
+  private retired = false
   private cache: BrowserPasswordVaultState | null = null
 
   constructor(filePath: string, options: { now?: () => number } = {}) {
@@ -54,6 +52,9 @@ export class BrowserPasswordStore {
   }
 
   private load(): BrowserPasswordStoreResult<BrowserPasswordVaultState> {
+    if (this.retired) {
+      return browserPasswordsUnavailable('This password vault was deleted.')
+    }
     // Checked every call: protection can be lost after the cache was filled.
     const failure = browserPasswordProtectionFailure()
     if (failure) {
@@ -83,7 +84,7 @@ export class BrowserPasswordStore {
     change: (
       entry: BrowserPasswordEntrySummary,
       state: BrowserPasswordVaultState
-    ) => BrowserPasswordStoreResult<EntryChange>
+    ) => BrowserPasswordStoreResult<BrowserPasswordEntryChange>
   ): BrowserPasswordStoreResult<BrowserPasswordEntrySummary> {
     const loaded = this.load()
     if (!loaded.ok) {
@@ -98,25 +99,12 @@ export class BrowserPasswordStore {
     if (!changed.ok) {
       return changed
     }
-    const { sealedPassword, sealedNote, ...fields } = changed.value
-    const updated = { ...current, ...fields }
-    const notes = { ...state.notes }
-    if (sealedNote === null) {
-      delete notes[id]
-    } else if (sealedNote !== undefined) {
-      notes[id] = sealedNote
-    }
-    const saved = this.save({
-      notes,
-      index: {
-        ...state.index,
-        entries: state.index.entries.map((entry) => (entry.id === id ? updated : entry))
-      },
-      passwords:
-        sealedPassword === undefined
-          ? state.passwords
-          : { ...state.passwords, [id]: sealedPassword }
-    })
+    const { state: next, entry: updated } = changeBrowserPasswordVaultEntry(
+      state,
+      current,
+      changed.value
+    )
+    const saved = this.save(next)
     return saved.ok ? { ok: true, value: updated } : saved
   }
 
@@ -326,9 +314,13 @@ export class BrowserPasswordStore {
 
   /** For profile deletion: removes the vault whatever state it is in. */
   deleteFile(): BrowserPasswordStoreResult<true> {
+    if (this.retired) {
+      return browserPasswordsUnavailable('This password vault was deleted.')
+    }
     const removed = removeBrowserPasswordVaultFile(this.filePath)
     if (removed.ok) {
       this.cache = null
+      this.retired = true
     }
     return removed
   }

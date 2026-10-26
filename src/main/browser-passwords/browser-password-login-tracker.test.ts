@@ -54,6 +54,73 @@ function setup(): {
 }
 
 describe('BrowserPasswordLoginTracker', () => {
+  it.each(['returned-form', 'http-error', 'timeout'])(
+    'does not revive a rejected %s attempt on a later page navigation',
+    (failure) => {
+      const { tracker, succeeded, runTimers } = setup()
+      tracker.typed(ORIGIN, capture())
+      tracker.submitted(ORIGIN, capture())
+      if (failure === 'timeout') {
+        runTimers()
+      } else {
+        tracker.navigationStarted(true)
+        tracker.navigated(failure === 'http-error' ? 401 : 200)
+        tracker.documentReady()
+        if (failure === 'returned-form') {
+          tracker.pageForms([capture()])
+        }
+      }
+      tracker.navigationStarted(true)
+      tracker.navigated(200)
+      tracker.documentReady()
+      runTimers()
+      expect(succeeded).toEqual([])
+    }
+  )
+
+  it('forgets a provisional password when its field is erased', () => {
+    const { tracker, succeeded, runTimers } = setup()
+    tracker.typed(ORIGIN, capture())
+    tracker.typed(ORIGIN, capture({ password: null }))
+    tracker.navigationStarted(true)
+    tracker.navigated(200)
+    tracker.documentReady()
+    runTimers()
+    expect(succeeded).toEqual([])
+  })
+
+  it.each(['password', null])(
+    'recognizes a returned form when inferred kind changes with field name %j',
+    (passwordFieldName) => {
+      const { tracker, succeeded, runTimers } = setup()
+      tracker.submitted(ORIGIN, capture({ kind: 'signup', passwordFieldName }))
+      tracker.navigationStarted(true)
+      tracker.navigated(200)
+      tracker.documentReady()
+      tracker.pageForms([
+        { ...capture({ passwordFieldName }), formSignature: 'new-document', kind: 'change' }
+      ])
+      runTimers()
+      expect(succeeded).toEqual([])
+    }
+  )
+
+  it('keeps a valid attempt through an intermediate script redirect', () => {
+    const { tracker, succeeded, advance } = setup()
+    tracker.submitted(ORIGIN, capture())
+    tracker.navigationStarted(true)
+    tracker.navigated(200)
+    tracker.documentReady()
+    advance(2000)
+    tracker.navigationStarted(true)
+    advance(1000)
+    expect(succeeded).toEqual([])
+    tracker.navigated(200)
+    tracker.documentReady()
+    advance(2500)
+    expect(succeeded).toHaveLength(1)
+  })
+
   it('offers a classic form POST once the next page settles without the form', () => {
     const { tracker, succeeded, runTimers } = setup()
     tracker.typed(ORIGIN, capture())

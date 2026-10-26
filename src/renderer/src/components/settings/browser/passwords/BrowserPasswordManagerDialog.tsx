@@ -37,13 +37,7 @@ type VaultView = {
 
 const EMPTY_VIEW: VaultView = { status: null, entries: [], neverOrigins: [] }
 
-export function BrowserPasswordManagerDialog({
-  open,
-  onOpenChange,
-  profiles,
-  settings,
-  updateSettings
-}: {
+type BrowserPasswordManagerDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   profiles: BrowserSessionProfile[]
@@ -52,17 +46,56 @@ export function BrowserPasswordManagerDialog({
     'browserPasswordsOfferToSave' | 'browserPasswordsFillRequiresReauth'
   >
   updateSettings: (updates: Partial<GlobalSettings>) => void
-}): React.JSX.Element {
-  const api = window.api.browserPasswords
-  const confirm = useConfirmationDialog()
+}
+
+export function BrowserPasswordManagerDialog({
+  open,
+  onOpenChange,
+  profiles,
+  settings,
+  updateSettings
+}: BrowserPasswordManagerDialogProps): React.JSX.Element {
   const [profileId, setProfileId] = useState('default')
-  // Why keyed by profile: an import or refresh that finishes after a profile switch updates only its own profile.
-  const [views, setViews] = useState<Record<string, VaultView>>({})
-  const [form, setForm] = useState<BrowserPasswordEntryFormStart | null>(null)
   const browserProfileId = profiles.some((profile) => profile.id === profileId)
     ? profileId
     : 'default'
-  const view = views[browserProfileId] ?? EMPTY_VIEW
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent surface="security" scrollable className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {translate('settings.browser.passwords.manageTitle', 'Manage passwords')}
+          </DialogTitle>
+        </DialogHeader>
+        {open ? (
+          <BrowserPasswordManagerProfile
+            key={browserProfileId}
+            browserProfileId={browserProfileId}
+            profiles={profiles}
+            settings={settings}
+            updateSettings={updateSettings}
+            onProfileChange={setProfileId}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function BrowserPasswordManagerProfile({
+  browserProfileId,
+  profiles,
+  settings,
+  updateSettings,
+  onProfileChange
+}: Omit<BrowserPasswordManagerDialogProps, 'open' | 'onOpenChange'> & {
+  browserProfileId: string
+  onProfileChange: (id: string) => void
+}): React.JSX.Element {
+  const api = window.api.browserPasswords
+  const confirm = useConfirmationDialog()
+  const [view, setView] = useState<VaultView>(EMPTY_VIEW)
+  const [form, setForm] = useState<BrowserPasswordEntryFormStart | null>(null)
 
   const refresh = useCallback(async () => {
     const [status, entries, neverOrigins] = await Promise.all([
@@ -70,17 +103,12 @@ export function BrowserPasswordManagerDialog({
       api.list({ browserProfileId }),
       api.listNever({ browserProfileId })
     ])
-    setViews((current) => ({
-      ...current,
-      [browserProfileId]: { status, entries: entries ?? [], neverOrigins: neverOrigins ?? [] }
-    }))
+    setView({ status, entries: entries ?? [], neverOrigins: neverOrigins ?? [] })
   }, [api, browserProfileId])
 
   useEffect(() => {
-    if (open) {
-      void refresh()
-    }
-  }, [open, refresh])
+    void refresh()
+  }, [refresh])
 
   const runImport = async (run: () => Promise<BrowserPasswordImportResult>): Promise<void> => {
     toastBrowserPasswordImportResult(await run())
@@ -113,88 +141,75 @@ export function BrowserPasswordManagerDialog({
     view.status && !view.status.availability.available ? view.status.availability.reason : null
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setForm(null)
-        onOpenChange(next)
-      }}
-    >
-      <DialogContent surface="security" scrollable className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {translate('settings.browser.passwords.manageTitle', 'Manage passwords')}
-          </DialogTitle>
-        </DialogHeader>
-        {unavailableReason ? (
-          <p className="text-sm text-muted-foreground">
-            {translate(
-              'settings.browser.passwords.unavailable',
-              'Saved passwords are off on this computer: {{reason}}',
-              { reason: unavailableReason }
-            )}
-          </p>
-        ) : form ? (
-          <BrowserPasswordEntryForm
-            key={form.mode === 'edit' ? form.entryId : 'add'}
-            browserProfileId={browserProfileId}
-            start={form}
-            onDone={(saved) => {
-              setForm(null)
-              if (saved) {
-                void refresh()
-              }
-            }}
-          />
-        ) : (
-          <Tabs defaultValue="passwords">
-            <div className="flex items-center justify-between gap-3">
-              <TabsList>
-                <TabsTrigger value="passwords">
-                  {translate('settings.browser.passwords.tabPasswords', 'Passwords')}
-                </TabsTrigger>
-                <TabsTrigger value="advanced">
-                  {translate('settings.browser.passwords.tabAdvanced', 'Advanced')}
-                </TabsTrigger>
-              </TabsList>
-              {profiles.length > 1 ? (
-                <Select value={browserProfileId} onValueChange={setProfileId}>
-                  <SelectTrigger size="sm" className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-            </div>
-            <TabsContent value="passwords">
-              <BrowserPasswordListTab
-                browserProfileId={browserProfileId}
-                entries={view.entries}
-                neverOrigins={view.neverOrigins}
-                onChanged={() => void refresh()}
-                onOpenForm={setForm}
-                onImportCsv={importCsv}
-              />
-            </TabsContent>
-            <TabsContent value="advanced">
-              <BrowserPasswordAdvancedTab
-                settings={settings}
-                updateSettings={updateSettings}
-                status={view.status}
-                onImportCsv={importCsv}
-                onImportBrowser={importBrowser}
-                onDeleteAll={() => void deleteAll()}
-              />
-            </TabsContent>
-          </Tabs>
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      {unavailableReason ? (
+        <p className="text-sm text-muted-foreground">
+          {translate(
+            'settings.browser.passwords.unavailable',
+            'Saved passwords are off on this computer: {{reason}}',
+            { reason: unavailableReason }
+          )}
+        </p>
+      ) : form ? (
+        <BrowserPasswordEntryForm
+          key={form.mode === 'edit' ? form.entryId : 'add'}
+          browserProfileId={browserProfileId}
+          start={form}
+          onDone={(saved) => {
+            setForm(null)
+            if (saved) {
+              void refresh()
+            }
+          }}
+        />
+      ) : (
+        <Tabs defaultValue="passwords">
+          <div className="flex items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="passwords">
+                {translate('settings.browser.passwords.tabPasswords', 'Passwords')}
+              </TabsTrigger>
+              <TabsTrigger value="advanced">
+                {translate('settings.browser.passwords.tabAdvanced', 'Advanced')}
+              </TabsTrigger>
+            </TabsList>
+            {profiles.length > 1 ? (
+              <Select value={browserProfileId} onValueChange={onProfileChange}>
+                <SelectTrigger size="sm" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+          </div>
+          <TabsContent value="passwords">
+            <BrowserPasswordListTab
+              browserProfileId={browserProfileId}
+              entries={view.entries}
+              neverOrigins={view.neverOrigins}
+              onChanged={() => void refresh()}
+              onOpenForm={setForm}
+              onImportCsv={importCsv}
+            />
+          </TabsContent>
+          <TabsContent value="advanced">
+            <BrowserPasswordAdvancedTab
+              settings={settings}
+              updateSettings={updateSettings}
+              status={view.status}
+              onImportCsv={importCsv}
+              onImportBrowser={importBrowser}
+              onDeleteAll={() => void deleteAll()}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
+    </>
   )
 }

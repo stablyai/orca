@@ -24,13 +24,15 @@ function hostOf(origin: string): string {
 
 /** Key icon beside the address bar, opening Orca's offer to save or update a login that worked. */
 export function BrowserPasswordSaveButton({
-  browserPageId
+  browserPageId,
+  isActive
 }: {
   browserPageId: string
+  isActive: boolean
 }): React.JSX.Element | null {
   const { savePrompt } = useBrowserPasswordPageState(browserPageId)
   // Why keyed: each offer starts open with its own username, without syncing props into state.
-  return savePrompt ? (
+  return isActive && savePrompt ? (
     <BrowserPasswordSavePopover
       key={savePrompt.promptId}
       browserPageId={browserPageId}

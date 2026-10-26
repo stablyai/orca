@@ -35,10 +35,14 @@ export function getBrowserPasswordVault(browserProfileId: string): BrowserPasswo
 
 /** Deletes a profile's saved logins; the cached store goes only once the file is really gone. */
 export function deleteBrowserPasswordVault(
-  browserProfileId: string
+  target: string | BrowserPasswordStore
 ): BrowserPasswordStoreResult<true> {
-  const filePath = vaultFilePath(browserProfileId)
-  const deleted = (vaults.get(filePath) ?? new BrowserPasswordStore(filePath)).deleteFile()
+  const vault = typeof target === 'string' ? getBrowserPasswordVault(target) : target
+  const filePath = [...vaults].find(([, stored]) => stored === vault)?.[0]
+  if (!filePath) {
+    return { ok: false, reason: 'unavailable', message: 'This password vault was deleted.' }
+  }
+  const deleted = vault.deleteFile()
   if (deleted.ok) {
     vaults.delete(filePath)
   }

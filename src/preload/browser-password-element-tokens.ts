@@ -1,3 +1,5 @@
+import { createNonSecureContextUuid } from '../shared/non-secure-context-uuid'
+
 /**
  * Random per-document handles for page objects. Kept in the isolated world, never written onto
  * the element, so page script can neither read nor forge them.
@@ -32,7 +34,7 @@ export function createBrowserPasswordElementTokens<
       if (targetByToken.size >= PRUNE_THRESHOLD) {
         prune()
       }
-      const token = crypto.randomUUID()
+      const token = createNonSecureContextUuid()
       tokenByTarget.set(target, token)
       targetByToken.set(token, new WeakRef(target))
       return token

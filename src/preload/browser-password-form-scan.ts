@@ -160,6 +160,17 @@ export function createBrowserPasswordFormScanner(
         }
       }
     }
+    for (
+      let root = node.getRootNode();
+      root instanceof ShadowRoot;
+      root = root.host.getRootNode()
+    ) {
+      if (!shadowRoots.has(root)) {
+        shadowRoots.add(root)
+        found.push(root)
+        visit(root)
+      }
+    }
     visit(node)
     return found
   }
@@ -183,7 +194,6 @@ export function createBrowserPasswordFormScanner(
         }
         const shadow = current instanceof Element ? current.shadowRoot : null
         if (shadow) {
-          shadowRoots.add(shadow)
           visit(shadow)
         }
       }

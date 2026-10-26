@@ -44,9 +44,16 @@ function install(): void {
       }
     }
   })
-  api.onFieldFocus((event) =>
-    update(event.browserPageId, { focusedField: event, focusedFieldShownAt: performance.now() })
-  )
+  api.onFieldFocus((event) => {
+    const current = pages.get(event.browserPageId)
+    update(event.browserPageId, {
+      focusedField: event,
+      focusedFieldShownAt:
+        current?.focusedField?.fieldToken === event.fieldToken
+          ? current.focusedFieldShownAt
+          : performance.now()
+    })
+  })
   api.onFieldBlur((event) => {
     if (pages.get(event.browserPageId)?.focusedField?.fieldToken === event.fieldToken) {
       update(event.browserPageId, { focusedField: null })

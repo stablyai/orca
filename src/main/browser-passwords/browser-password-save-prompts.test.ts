@@ -82,6 +82,15 @@ describe('offerBrowserPasswordSave', () => {
     expect(entries.ok && entries.value.map((entry) => entry.username)).toEqual(['ada'])
   })
 
+  it('does not let a pending offer recreate a deleted vault', () => {
+    offer('pw-1')
+    const promptId = lastPrompt().promptId
+    expect(store.deleteFile().ok).toBe(true)
+    store = new BrowserPasswordStore(join(dir, 'vault.json'))
+    expect(respondToBrowserPasswordSavePrompt({ promptId, action: 'save' })).toBe(false)
+    expect(store.list()).toEqual({ ok: true, value: [] })
+  })
+
   it('stays quiet on a site the user said never to save for', () => {
     store.addNever(ORIGIN)
     offer('pw-1')

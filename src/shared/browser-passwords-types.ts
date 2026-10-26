@@ -90,7 +90,7 @@ export type BrowserPasswordGuestFieldFocused = {
   viewportWidth: number
 }
 
-export type BrowserPasswordGuestFieldBlurred = { fieldToken: string }
+export type BrowserPasswordGuestFieldBlurred = { fieldToken: string; reason?: 'focusout' }
 
 export type BrowserPasswordFillRequest = {
   requestId: string
@@ -135,6 +135,7 @@ export type BrowserPasswordFieldFocusEvent = {
   rect: BrowserPasswordGuestRect
   viewportWidth: number
   suggestions: BrowserPasswordSuggestion[]
+  keyboardSelection?: boolean
 }
 
 export type BrowserPasswordFieldBlurEvent = {

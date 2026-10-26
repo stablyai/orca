@@ -151,7 +151,7 @@ export function registerBrowserPasswordsEntryHandlers(): void {
       if (!(await confirmBrowserPasswordOwner('delete all saved passwords', { always: true }))) {
         return false
       }
-      return deleteBrowserPasswordVault(request.browserProfileId).ok
+      return deleteBrowserPasswordVault(request.vault).ok
     }
   )
 

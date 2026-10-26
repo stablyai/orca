@@ -1,6 +1,13 @@
-import type { MutableRefObject, RefObject } from 'react'
+import { useCallback, useEffect, useState, type MutableRefObject, type RefObject } from 'react'
 import { KeyRound } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+  CommandGroup
+} from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import type {
   BrowserPasswordFieldFocusEvent,
@@ -44,15 +51,22 @@ function anchorStyle(
 /** Orca-drawn list of saved logins for the focused field; the page can neither see nor click it. */
 export function BrowserPasswordFillDropdown({
   browserPageId,
+  isActive,
   containerRef,
   webviewRef
 }: {
   browserPageId: string
+  isActive: boolean
   containerRef: RefObject<HTMLDivElement | null>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
 }): React.JSX.Element | null {
   const { focusedField, focusedFieldShownAt } = useBrowserPasswordPageState(browserPageId)
-  if (!focusedField || focusedField.suggestions.length === 0) {
+  useEffect(() => {
+    if (!isActive && focusedField) {
+      clearBrowserPasswordFocusedField(browserPageId)
+    }
+  }, [browserPageId, isActive, focusedField])
+  if (!isActive || !focusedField || focusedField.suggestions.length === 0) {
     return null
   }
   const style = anchorStyle(focusedField, containerRef.current, webviewRef.current)
@@ -66,6 +80,7 @@ export function BrowserPasswordFillDropdown({
       field={focusedField}
       shownAt={focusedFieldShownAt}
       anchor={style}
+      onEscape={() => webviewRef.current?.focus()}
     />
   )
 }
@@ -74,13 +89,24 @@ function BrowserPasswordFillList({
   browserPageId,
   field,
   shownAt,
-  anchor
+  anchor,
+  onEscape
 }: {
   browserPageId: string
   field: BrowserPasswordFieldFocusEvent
   shownAt: number
   anchor: React.CSSProperties
+  onEscape: () => void
 }): React.JSX.Element {
+  const [selectedEntryId, setSelectedEntryId] = useState(field.suggestions[0]?.entryId ?? '')
+  const focusPicker = useCallback(
+    (node: HTMLInputElement | null) => {
+      if (field.keyboardSelection) {
+        node?.focus()
+      }
+    },
+    [field.keyboardSelection]
+  )
   const exact = field.suggestions.filter((suggestion) => suggestion.exactOrigin)
   const sameSite = field.suggestions.filter((suggestion) => !suggestion.exactOrigin)
 
@@ -97,17 +123,12 @@ function BrowserPasswordFillList({
   }
 
   const renderRow = (suggestion: BrowserPasswordSuggestion): React.JSX.Element => (
-    <button
+    <CommandItem
       key={suggestion.entryId}
-      type="button"
-      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      // Why on press: pressing here blurs the page's field, which closes this list before a click lands.
-      onMouseDown={(event) => {
-        event.preventDefault()
-        if (event.button === 0) {
-          choose(suggestion)
-        }
-      }}
+      value={suggestion.entryId}
+      selection="palette"
+      onMouseDown={(event) => event.preventDefault()}
+      onSelect={() => choose(suggestion)}
     >
       <KeyRound className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">
@@ -120,7 +141,7 @@ function BrowserPasswordFillList({
           </span>
         )}
       </span>
-    </button>
+    </CommandItem>
   )
 
   return (
@@ -133,24 +154,42 @@ function BrowserPasswordFillList({
         side="bottom"
         sideOffset={4}
         className="w-72"
-        // Why: focus must stay in the page's field, or the list would close itself.
+        onEscapeKeyDown={onEscape}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="p-1">
-          <div className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
-            {translate('browser.passwords.fill.title', 'Saved logins')}
-          </div>
-          {exact.map(renderRow)}
-          {sameSite.length > 0 ? (
-            <>
-              <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">
-                {translate('browser.passwords.fill.otherLogins', 'Other logins on this site')}
-              </div>
-              {sameSite.map(renderRow)}
-            </>
-          ) : null}
-        </div>
+        <Command
+          label={translate('browser.passwords.fill.title', 'Saved logins')}
+          shouldFilter={false}
+          value={selectedEntryId}
+          onValueChange={setSelectedEntryId}
+          onKeyDown={(event) => {
+            if (event.key === ' ') {
+              event.preventDefault()
+              const selected = field.suggestions.find((entry) => entry.entryId === selectedEntryId)
+              if (selected) {
+                choose(selected)
+              }
+            }
+          }}
+        >
+          <CommandInput ref={focusPicker} readOnly wrapperClassName="sr-only" />
+          <CommandList>
+            <CommandGroup heading={translate('browser.passwords.fill.title', 'Saved logins')}>
+              {exact.map(renderRow)}
+            </CommandGroup>
+            {sameSite.length > 0 ? (
+              <CommandGroup
+                heading={translate(
+                  'browser.passwords.fill.otherLogins',
+                  'Other logins on this site'
+                )}
+              >
+                {sameSite.map(renderRow)}
+              </CommandGroup>
+            ) : null}
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   )

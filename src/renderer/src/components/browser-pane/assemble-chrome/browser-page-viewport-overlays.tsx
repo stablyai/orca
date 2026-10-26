@@ -34,6 +34,7 @@ import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page
 
 export function BrowserPageViewportOverlays({
   markup,
+  isActive,
   feedbackBadgeRef,
   findOpen,
   setFindOpen,
@@ -58,6 +59,7 @@ export function BrowserPageViewportOverlays({
   grabAnnotations
 }: {
   markup: MarkupModeController
+  isActive: boolean
   feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
@@ -100,6 +102,7 @@ export function BrowserPageViewportOverlays({
       />
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       <BrowserPasswordFillDropdown
+        isActive={isActive}
         browserPageId={browserTab.id}
         containerRef={containerRef}
         webviewRef={webviewRef}

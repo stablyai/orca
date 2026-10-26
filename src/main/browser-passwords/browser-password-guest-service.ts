@@ -1,4 +1,8 @@
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import {
+  attachBrowserPasswordPickerKeyboard,
+  type BrowserPasswordPickerState
+} from './browser-password-picker-keyboard'
 import { randomUUID } from 'node:crypto'
 import {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
@@ -19,7 +23,7 @@ import {
   closeBrowserPasswordSavePromptsForGuest,
   offerBrowserPasswordSave
 } from './browser-password-save-prompts'
-import { confirmBrowserPasswordOwner } from './browser-password-reauth'
+import { confirmBrowserPasswordFill } from './browser-password-reauth'
 import {
   browserPasswordSettings,
   browserPasswordVaultForGuest as vaultForGuest,
@@ -35,10 +39,9 @@ import {
   readBrowserPasswordToken
 } from './browser-password-guest-payloads'
 
-type GuestState = {
+type GuestState = BrowserPasswordPickerState & {
   guest: WebContents
   tracker: BrowserPasswordLoginTracker
-  focusedFieldToken: string | null
 }
 
 type PendingFill = {
@@ -77,10 +80,12 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
       },
       now: Date.now
     }),
-    focusedFieldToken: null
+    focusedField: null,
+    pickerFocusTransfer: false
   }
   guests.set(guest.id, state)
 
+  attachBrowserPasswordPickerKeyboard(guest, state)
   guest.on('dom-ready', () => {
     state.tracker.documentReady()
     if (vaultForGuest(guest)) {
@@ -94,6 +99,11 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
     clearFocus(state)
     // Address-bar, back/forward and Orca reloads carry no initiating frame; page navigations do.
     state.tracker.navigationStarted(details.initiator != null)
+  })
+  guest.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
+    if (isMainFrame) {
+      state.tracker.navigationFailed()
+    }
   })
   guest.on('did-navigate', (_event, _url, httpResponseCode) => {
     state.tracker.navigated(httpResponseCode)
@@ -178,7 +188,14 @@ function installGuestHandlers(): void {
   ipcMain.on(channels.fieldBlurred, (event, payload: unknown) => {
     const context = guestMessageContext(event)
     const fieldToken = readBrowserPasswordToken(payload, 'fieldToken')
-    if (context && fieldToken && context.state.focusedFieldToken === fieldToken) {
+    if (context && fieldToken && context.state.focusedField?.fieldToken === fieldToken) {
+      if (
+        context.state.pickerFocusTransfer &&
+        readBrowserPasswordToken(payload, 'reason') === 'focusout'
+      ) {
+        context.state.pickerFocusTransfer = false
+        return
+      }
       clearFocus(context.state)
     }
   })
@@ -224,7 +241,6 @@ function showSuggestions(
   if (!context) {
     return
   }
-  state.focusedFieldToken = focused.fieldToken
   const payload: BrowserPasswordFieldFocusEvent = {
     browserPageId: context.browserPageId,
     fieldToken: focused.fieldToken,
@@ -233,15 +249,18 @@ function showSuggestions(
     viewportWidth: focused.viewportWidth,
     suggestions
   }
+  state.focusedField = payload
+  state.pickerFocusTransfer = false
   context.renderer.send(BROWSER_PASSWORDS_RENDERER_EVENTS.fieldFocus, payload)
 }
 
 function clearFocus(state: GuestState): void {
-  const fieldToken = state.focusedFieldToken
+  const fieldToken = state.focusedField?.fieldToken
   if (!fieldToken) {
     return
   }
-  state.focusedFieldToken = null
+  state.focusedField = null
+  state.pickerFocusTransfer = false
   const context = browserManager.getRendererContextForGuest(state.guest.id)
   if (context) {
     const payload: BrowserPasswordFieldBlurEvent = {
@@ -270,11 +289,7 @@ export async function fillBrowserPassword(input: {
   const entry = matches?.ok
     ? [...matches.value.exact, ...matches.value.sameSite].find((item) => item.id === input.entryId)
     : undefined
-  if (
-    entry &&
-    browserPasswordSettings().fillRequiresReauth &&
-    !(await confirmBrowserPasswordOwner('fill a saved password', { always: true }))
-  ) {
+  if (entry && !(await confirmBrowserPasswordFill())) {
     return { ok: false, reason: 'unavailable' }
   }
   const password = entry ? target.vault.getPassword(entry.id) : null
