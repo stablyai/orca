@@ -212,6 +212,10 @@ export function openEscapeContinuationLength(statePrefix: string, chunk: string)
           return chunk.charCodeAt(i + 1) === 0x5c ? i + 2 : i
         }
         break
+      // Unreachable from a statePrefix (both map to 'esc'); an ESC inside a string either finishes ST or starts a kept sequence.
+      case 'oscEsc':
+      case 'stringEsc':
+        return code === 0x5c ? i + 1 : i
     }
   }
   return state === 'ground' ? chunk.length : -1
