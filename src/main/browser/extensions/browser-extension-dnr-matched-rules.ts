@@ -8,6 +8,7 @@ export type DnrMatchedRuleInfo = {
 }
 
 type TabRecord = { actionCount: number; rules: DnrMatchedRuleInfo[] }
+type NavigationMatch = { action: DnrRequestAction; timeStamp: number; keepsRules: boolean }
 
 export type DnrMatchedRulesPolicy = {
   /** Only extensions that can read matches (feedback or activeTab) keep them. */
@@ -29,25 +30,36 @@ const NO_TAB = -1
  */
 export class DnrMatchedRules {
   private readonly byExtension = new Map<string, Map<number, TabRecord>>()
-  private readonly pendingNavigation = new Map<number, DnrRequestAction[]>()
+  private readonly pendingNavigation = new Map<number, Map<number, NavigationMatch[]>>()
 
   constructor(private readonly policy: DnrMatchedRulesPolicy) {}
 
-  record(action: DnrRequestAction, tabId: number, isNavigation: boolean): void {
-    if (isNavigation && tabId !== NO_TAB) {
-      const pending = this.pendingNavigation.get(tabId) ?? []
-      pending.push(action)
-      this.pendingNavigation.set(tabId, pending)
+  record(action: DnrRequestAction, tabId: number, navigationRequestId: number | null): void {
+    if (navigationRequestId !== null && tabId !== NO_TAB) {
+      const byRequest = this.pendingNavigation.get(tabId) ?? new Map()
+      const pending = byRequest.get(navigationRequestId) ?? []
+      pending.push({
+        action,
+        timeStamp: Date.now(),
+        keepsRules: this.policy.keepsRules(action.rule.extensionId)
+      })
+      byRequest.set(navigationRequestId, pending)
+      this.pendingNavigation.set(tabId, byRequest)
       return
     }
     this.apply(action, tabId, Date.now())
   }
 
-  private apply(action: DnrRequestAction, tabId: number, timeStamp: number): void {
+  private apply(
+    action: DnrRequestAction,
+    tabId: number,
+    timeStamp: number,
+    keepsRules = true
+  ): void {
     const { extensionId } = action.rule
     // Why count even when hidden: turning the badge on shows what the page already matched.
     const counts = action.type !== 'allow' && action.type !== 'allowAllRequests' && tabId !== NO_TAB
-    const keeps = this.policy.keepsRules(extensionId)
+    const keeps = keepsRules && this.policy.keepsRules(extensionId)
     if (!counts && !keeps) {
       return
     }
@@ -106,11 +118,32 @@ export class DnrMatchedRules {
   /** The tab's main frame committed: drop the old document's record, keep the navigation's. */
   commitNavigation(tabId: number): void {
     this.resetTab(tabId)
-    const pending = this.pendingNavigation.get(tabId) ?? []
+    const pending = this.pendingNavigation.get(tabId)
     this.pendingNavigation.delete(tabId)
-    const now = Date.now()
-    for (const action of pending) {
-      this.apply(action, tabId, now)
+    for (const matches of pending?.values() ?? []) {
+      for (const { action, timeStamp, keepsRules } of matches) {
+        this.apply(action, tabId, timeStamp, keepsRules)
+      }
+    }
+  }
+
+  /** A blocked or failed navigation leaves the current document in place. */
+  finishNavigation(tabId: number, requestId: number): void {
+    const byRequest = this.pendingNavigation.get(tabId)
+    const pending = byRequest?.get(requestId) ?? []
+    byRequest?.delete(requestId)
+    if (byRequest?.size === 0) {
+      this.pendingNavigation.delete(tabId)
+    }
+    for (const { action, timeStamp, keepsRules } of pending) {
+      this.apply(action, tabId, timeStamp, keepsRules)
+    }
+  }
+
+  /** Loading ended without a commit, including a 204 response or a download. */
+  finishNavigations(tabId: number): void {
+    for (const requestId of this.pendingNavigation.get(tabId)?.keys() ?? []) {
+      this.finishNavigation(tabId, requestId)
     }
   }
 
@@ -125,13 +158,35 @@ export class DnrMatchedRules {
     this.pendingNavigation.delete(tabId)
   }
 
+  forgetMatches(extensionId: string): void {
+    for (const byRequest of this.pendingNavigation.values()) {
+      for (const matches of byRequest.values()) {
+        for (const match of matches) {
+          if (match.action.rule.extensionId === extensionId) {
+            match.keepsRules = false
+          }
+        }
+      }
+    }
+    for (const record of this.byExtension.get(extensionId)?.values() ?? []) {
+      record.rules = []
+    }
+  }
+
   forgetExtension(extensionId: string): void {
     this.byExtension.delete(extensionId)
-    for (const [tabId, pending] of this.pendingNavigation) {
-      this.pendingNavigation.set(
-        tabId,
-        pending.filter((action) => action.rule.extensionId !== extensionId)
-      )
+    for (const [tabId, byRequest] of this.pendingNavigation) {
+      for (const [requestId, matches] of byRequest) {
+        const retained = matches.filter(({ action }) => action.rule.extensionId !== extensionId)
+        if (retained.length > 0) {
+          byRequest.set(requestId, retained)
+        } else {
+          byRequest.delete(requestId)
+        }
+      }
+      if (byRequest.size === 0) {
+        this.pendingNavigation.delete(tabId)
+      }
     }
   }
 

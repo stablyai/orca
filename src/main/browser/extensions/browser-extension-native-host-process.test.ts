@@ -1,12 +1,20 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { once } from 'node:events'
+import { build } from 'esbuild'
+import { spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   killAllNativeHosts,
   startNativeHost,
   type NativeHostConnection
 } from './browser-extension-native-host-process'
+
+vi.mock('../../forked-child-entry-path', () => ({
+  getForkedChildEntryPath: (fileName: string) => join(root, fileName)
+}))
 
 vi.setConfig({ testTimeout: 20_000 })
 
@@ -43,6 +51,26 @@ const NOISY = `${FRAMING} process.stderr.write('e'.repeat(10000)); setInterval((
 
 const root = mkdtempSync(join(tmpdir(), 'orca-native-host-'))
 let pidFiles = 0
+
+beforeAll(async () => {
+  if (process.platform === 'win32') {
+    symlinkSync(join(process.cwd(), 'node_modules'), join(root, 'node_modules'), 'junction')
+    await build({
+      entryPoints: [
+        join(
+          process.cwd(),
+          'src/main/browser/extensions/browser-extension-native-host-supervisor-entry.ts'
+        )
+      ],
+      outfile: join(root, 'browser-extension-native-host-supervisor-entry.js'),
+      bundle: true,
+      packages: 'external',
+      platform: 'node',
+      format: 'cjs',
+      nodePaths: [join(process.cwd(), 'node_modules')]
+    })
+  }
+})
 
 afterAll(() => {
   killAllNativeHosts()
@@ -116,6 +144,101 @@ describe('native host process', () => {
     await expect.poll(() => isRunning(pid), { timeout: 8000 }).toBe(false)
     // Closing from Orca's side never reports back to the extension.
     expect(host.closes).toEqual([])
+  })
+
+  it('kills helpers when their host exits after the channel closes', async () => {
+    const host = await start(`${FRAMING}
+      const helper = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+      send({ helperPid: helper.pid });
+      process.stdin.resume();
+      process.stdin.on('end', () => process.exit(0));
+    `)
+    await expect.poll(() => host.messages.length).toBe(1)
+    const helperPid = JSON.parse(host.messages[0]).helperPid
+    const rootPid = await host.pid()
+    try {
+      host.connection.close()
+      await expect.poll(() => isRunning(rootPid)).toBe(false)
+      await expect.poll(() => isRunning(helperPid), { timeout: 8000 }).toBe(false)
+    } finally {
+      try {
+        process.kill(helperPid, 'SIGKILL')
+      } catch {}
+    }
+  })
+
+  it('waits for the Windows supervisor to start the host before exposing its connection', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const children: PipedChildProcess[] = []
+    const messages: string[] = []
+    let resolved = false
+    try {
+      const connectionPromise = startNativeHost(
+        { name: 'supervised', program: process.execPath, args: [] },
+        { onMessage: (json) => messages.push(json), onClose: () => {} },
+        (spec) => {
+          const child = spawnProcess({
+            ...spec,
+            program: process.execPath,
+            args: [
+              '-e',
+              `process.stdin.pipe(process.stdout); process.on('message', (type) => process.send({ type }));`
+            ],
+            stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+          })
+          children.push(child)
+          return child
+        }
+      ).then((connection) => {
+        resolved = true
+        return connection
+      })
+      const [child] = children
+      await once(child, 'spawn')
+      const ping = once(child, 'message')
+      child.send('ping')
+      await ping
+      expect(resolved).toBe(false)
+      child.send('ready')
+      const connection = await connectionPromise
+      connection.send(JSON.stringify({ ready: true }))
+      await expect.poll(() => messages).toEqual(['{"ready":true}'])
+      connection.close()
+    } finally {
+      for (const child of children) {
+        child.kill('SIGKILL')
+      }
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('reports a Windows supervisor startup failure without opening a native channel', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const closes: string[] = []
+    try {
+      await expect(
+        startNativeHost(
+          { name: 'unowned', program: process.execPath, args: [] },
+          { onMessage: () => {}, onClose: (error) => closes.push(error) },
+          (spec) =>
+            spawnProcess({
+              ...spec,
+              program: process.execPath,
+              args: ['-e', `process.send({type:'error'}, () => process.exit(1));`],
+              stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+            })
+        )
+      ).rejects.toThrow('Failed to start native messaging host.')
+      expect(closes).toEqual([])
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('treats a message over 1 MB as a communication error and kills the host', async () => {

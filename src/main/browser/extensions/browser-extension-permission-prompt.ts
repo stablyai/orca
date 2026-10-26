@@ -12,21 +12,27 @@ import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
 export async function askToGrantBrowserExtensionPermissions(
   browserProfileId: string,
   extension: Electron.Extension,
-  add: BrowserExtensionPermissionSet
+  add: BrowserExtensionPermissionSet,
+  signal?: AbortSignal
 ): Promise<boolean> {
   const window = getBrowserExtensionMainWindow()
   if (!window || window.isDestroyed()) {
     return false
   }
   const installed = getBrowserExtensionInstallStore().get(extension.id)
-  return requestBrowserExtensionInstallPrompt(window.webContents, {
-    kind: 'permissions',
-    name: installed?.name ?? extension.name,
-    iconDataUrl: installed
-      ? await readBrowserExtensionIconDataUrl(installed.path, installed.iconPath)
-      : null,
-    permissions: add.permissions,
-    hostPermissions: add.origins,
-    profileLabel: browserSessionRegistry.getProfile(browserProfileId)?.label ?? null
-  })
+  return requestBrowserExtensionInstallPrompt(
+    window.webContents,
+    {
+      kind: 'permissions',
+      name: installed?.name ?? extension.name,
+      iconDataUrl: installed
+        ? await readBrowserExtensionIconDataUrl(installed.path, installed.iconPath)
+        : null,
+      permissions: add.permissions,
+      hostPermissions: add.origins,
+      profileLabel: browserSessionRegistry.getProfile(browserProfileId)?.label ?? null
+    },
+    undefined,
+    signal
+  )
 }

@@ -9,6 +9,8 @@ export type InstalledBrowserExtension = {
   /** Store installs: `<userData>/browser-extensions/<id>/<version>`; unpacked: the user's folder (loaded from Orca's copy). */
   path: string
   source: BrowserExtensionSource
+  /** Stable install/update precedence; absent on records written by older versions. */
+  installTime?: number
   /** Relative to `path`. */
   iconPath: string | null
   permissions: string[]

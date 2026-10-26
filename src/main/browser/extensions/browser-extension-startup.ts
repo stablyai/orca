@@ -1,4 +1,6 @@
+import { removeRetiredBrowserExtensionProfileStorage } from './browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
+import { isBrowserExtensionNativePage } from './browser-extension-native-page'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
@@ -18,7 +20,7 @@ import { registerBrowserExtensionNamespaces } from './register-browser-extension
 import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
-import { observeBrowserExtensionDnrContents } from './browser-extension-dnr-session'
+import { observeBrowserExtensionDnrContents } from './browser-extension-dnr-contents'
 import { installBrowserExtensionSessionServices } from './browser-extension-session-services'
 import { installBrowserExtensionToolbarNotifications } from './browser-extension-toolbar'
 import { installChromeWebStoreBridgeHost } from './browser-extension-webstore-bridge-host'
@@ -43,6 +45,9 @@ export function initializeBrowserExtensionSupport(options: {
   /** The saved workspace session, which names browser pages not loaded yet (discarded tabs). */
   savedBrowserTabs?: SavedBrowserTabsSource
 }): void {
+  void removeRetiredBrowserExtensionProfileStorage().catch((error: unknown) => {
+    console.warn('[browser-extensions] Could not remove retired profile storage:', error)
+  })
   savedBrowserTabs = options.savedBrowserTabs ?? null
   setBrowserExtensionSupportEnabled(options.enabled)
   if (options.enabled) {
@@ -105,7 +110,13 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
-  app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
+  app.on('web-contents-created', (_event, contents) => {
+    queueMicrotask(() => {
+      if (!contents.isDestroyed()) {
+        observeExtensionContents(contents)
+      }
+    })
+  })
 }
 
 const observedContents = new WeakSet<Electron.WebContents>()
@@ -115,6 +126,7 @@ function observeExtensionContents(contents: Electron.WebContents): void {
   const type = contents.getType()
   if (
     (type !== 'webview' && type !== 'window') ||
+    isBrowserExtensionNativePage(contents) ||
     observedContents.has(contents) ||
     !getBrowserExtensionProfileIdForSession(contents.session)
   ) {

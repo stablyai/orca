@@ -61,6 +61,26 @@ describe('BrowserExtensionInstallStore', () => {
     expect(store.list()).toEqual([])
   })
 
+  it('persists monotonic install precedence, including legacy records and explicit same-version updates', async () => {
+    writeFileSync(
+      join(root, 'installed.json'),
+      JSON.stringify([record({ id: STORE_ID }), record({ id: UNPACKED_ID })])
+    )
+    const store = new BrowserExtensionInstallStore(root)
+    const older = store.get(STORE_ID)?.installTime
+    const newer = store.get(UNPACKED_ID)?.installTime
+    expect(older).toBeLessThan(newer ?? 0)
+    expect(new BrowserExtensionInstallStore(root).get(STORE_ID)?.installTime).toBe(older)
+    store.save(record({ id: STORE_ID }))
+    expect(store.get(STORE_ID)?.installTime).toBe(older)
+    store.save(record({ id: STORE_ID }), true)
+    expect(store.get(STORE_ID)?.installTime).toBeGreaterThan(newer ?? 0)
+    const updated = store.get(STORE_ID)?.installTime
+    await store.remove(STORE_ID)
+    store.save(record({ id: STORE_ID }))
+    expect(store.get(STORE_ID)?.installTime).toBeGreaterThanOrEqual(updated ?? 0)
+  })
+
   it('refuses install directories that could escape the root', () => {
     const store = new BrowserExtensionInstallStore(root)
     expect(() => store.installDirectory('../evil', '1.0')).toThrow()

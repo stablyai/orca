@@ -24,7 +24,7 @@ function transform(url: string, spec: DnrUrlTransform): string | null {
 }
 
 describe('transformDnrUrl', () => {
-  it.each<[string, DnrUrlTransform, string]>([
+  it.each<[string, DnrUrlTransform, string | null]>([
     [
       'http://a.com/path?x=1#f',
       { scheme: 'https', host: 'b.com', port: '8443' },
@@ -37,6 +37,13 @@ describe('transformDnrUrl', () => {
     ['http://a.com/p?x=1', { query: '?' }, 'http://a.com/p?'],
     ['http://a.com/p#f', { fragment: '#g' }, 'http://a.com/p#g'],
     ['http://a.com/p', { username: 'u', password: 'p' }, 'http://u:p@a.com/p'],
+    ['https://a.com/p?keep=1#old', { path: '/a?b#c' }, 'https://a.com/a%3Fb%23c?keep=1#old'],
+    ['https://a.com/p#old', { query: '?x=#new' }, 'https://a.com/p?x=%23new#old'],
+    ['https://a.com/p', { username: 'u@attacker.test/' }, 'https://u%40attacker.test%2F@a.com/p'],
+    ['https://a.com/p', { password: 'p:@/?#' }, 'https://:p%3A%40%2F%3F%23@a.com/p'],
+    ['https://a.com/p', { host: 'good.test/path' }, null],
+    ['https://a.com/p', { host: 'good.test:8443' }, null],
+    ['https://a.com/p', { host: '[::1]', port: '+8443' }, 'https://[::1]:8443/p'],
     ['http://a.com/p', { scheme: 'chrome-extension', host: 'abc' }, 'chrome-extension://abc/p']
   ])('%s with %j → %s', (url, spec, expected) => {
     expect(transform(url, spec)).toBe(expected)

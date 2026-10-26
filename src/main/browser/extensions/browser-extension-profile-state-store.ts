@@ -23,6 +23,7 @@ const contextMenuItemSchema = z.object({
 const privacySettingSchema = z.object({ value: z.unknown(), setAt: z.number() })
 
 const extensionStateSchema = z.object({
+  removalGeneration: z.number().int().nonnegative().default(0),
   grantedPermissions: z.array(z.string()).default([]),
   grantedOrigins: z.array(z.string()).default([]),
   contextMenus: z.array(contextMenuItemSchema).default([]),
@@ -83,6 +84,14 @@ export class BrowserExtensionProfileStateStore {
       delete byExtension[extensionId]
     }
     this.schedulePersist()
+  }
+
+  forgetProfileExtension(profileId: string, extensionId: string): void {
+    const byExtension = this.load()[profileId]
+    if (byExtension && extensionId in byExtension) {
+      delete byExtension[extensionId]
+      this.schedulePersist()
+    }
   }
 
   /** Drops one profile's state of every extension not in `extensionIds`. */

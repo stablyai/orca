@@ -1,3 +1,4 @@
+import { browserSessionRegistry } from '../browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../shared/browser-extension-url'
 import { browserManager } from '../browser-manager'
@@ -64,6 +65,24 @@ export function installBrowserExtensionSessionServices(): void {
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
         })
+      }
+    },
+    uninstalled: (profileId, extensionIds) => {
+      const removeIds = (byProfile: Record<string, string[]>) => ({
+        ...byProfile,
+        [profileId]: (byProfile[profileId] ?? []).filter((id) => !extensionIds.has(id))
+      })
+      if (extensionIds.size > 0) {
+        browserSessionRegistry.updateEnabledExtensionIds(removeIds)
+        browserSessionRegistry.updatePinnedExtensionIds(removeIds)
+        if (
+          [
+            ...browserSessionRegistry.getEnabledExtensionIds(profileId),
+            ...browserSessionRegistry.getPinnedExtensionIds(profileId)
+          ].some((id) => extensionIds.has(id))
+        ) {
+          throw new Error('Could not remove stale browser extension enablement')
+        }
       }
     },
     detached: stopObservingBrowserExtensionWebRequests,

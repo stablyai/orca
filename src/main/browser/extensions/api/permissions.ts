@@ -22,9 +22,16 @@ import {
 } from '../browser-extension-permission-grants'
 import { askToGrantBrowserExtensionPermissions } from '../browser-extension-permission-prompt'
 import { getBrowserExtensionProfileStateStore } from '../browser-extension-profile-state-store'
+import { getHostSessionState } from '../browser-extension-contexts'
+import { getBrowserExtensionContextSignal } from '../browser-extension-context-lifetime'
+import { getDnrSessionRuntime } from '../browser-extension-dnr-session'
+import { observeBrowserExtensionWebRequests } from '../browser-extension-web-request'
 
 const USER_GESTURE_WINDOW_MS = 5_000
-const recentGestures = new Map<string, number>()
+const recentGestures = new WeakMap<
+  Electron.Session,
+  Map<string, { at: number; signal: AbortSignal }>
+>()
 const pendingRequests = new Set<string>()
 
 const permissionsSchema = z
@@ -44,19 +51,29 @@ export function noteBrowserExtensionUserGesture(
   session: Electron.Session,
   extensionId: string
 ): void {
-  const profileId = getBrowserExtensionProfileIdForSession(session)
-  if (profileId) {
-    recentGestures.set(gestureKey(profileId, extensionId), Date.now())
+  const state = getHostSessionState(session)
+  if (!state) {
+    return
   }
+  const signal = getBrowserExtensionContextSignal(state, extensionId)
+  let gestures = recentGestures.get(session)
+  if (!gestures) {
+    gestures = new Map()
+    recentGestures.set(session, gestures)
+  }
+  gestures.set(extensionId, { at: Date.now(), signal })
 }
 
-// Why extension pages pass: their calls follow a click in Orca-hosted UI (popup, options page).
 export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
-  if (caller.webContents) {
+  if (caller.userGesture === true) {
     return true
   }
-  const at = recentGestures.get(gestureKey(caller.browserProfileId, caller.extension.id))
-  return at !== undefined && Date.now() - at <= USER_GESTURE_WINDOW_MS
+  const gesture = recentGestures.get(caller.session)?.get(caller.extension.id)
+  return (
+    gesture !== undefined &&
+    !gesture.signal.aborted &&
+    Date.now() - gesture.at <= USER_GESTURE_WINDOW_MS
+  )
 }
 
 function readGrants(profileId: string, extensionId: string) {
@@ -114,19 +131,29 @@ async function request(
   if (pendingRequests.has(key)) {
     throw new BrowserExtensionApiError('A permissions request is already pending')
   }
+  const state = getHostSessionState(caller.session)
+  if (!state) {
+    return false
+  }
+  const signal = getBrowserExtensionContextSignal(state, extension.id)
   pendingRequests.add(key)
   try {
     const accepted = await askToGrantBrowserExtensionPermissions(
       browserProfileId,
       extension,
-      plan.add
+      plan.add,
+      signal
     )
-    if (!accepted) {
+    if (!accepted || signal.aborted) {
       return false
     }
     getBrowserExtensionProfileStateStore().update(browserProfileId, extension.id, (state) =>
       withGrantedPermissions(state, plan.add)
     )
+    if (plan.add.permissions.includes('webRequest')) {
+      observeBrowserExtensionWebRequests(caller.session)
+    }
+    await getDnrSessionRuntime(caller.session)?.reconcilePermissions(extension)
     emitChange(caller, 'onAdded', plan.add)
     return true
   } finally {
@@ -134,10 +161,10 @@ async function request(
   }
 }
 
-function remove(
+async function remove(
   caller: BrowserExtensionCaller,
   wanted: Partial<BrowserExtensionPermissionSet>
-): boolean {
+): Promise<boolean> {
   const { extension, browserProfileId } = caller
   const plan = planBrowserExtensionPermissionRemoval(
     extension.manifest,
@@ -150,6 +177,7 @@ function remove(
   getBrowserExtensionProfileStateStore().update(browserProfileId, extension.id, (state) =>
     withoutGrantedPermissions(state, plan.removed)
   )
+  await getDnrSessionRuntime(caller.session)?.reconcilePermissions(extension)
   emitChange(caller, 'onRemoved', plan.removed)
   return true
 }

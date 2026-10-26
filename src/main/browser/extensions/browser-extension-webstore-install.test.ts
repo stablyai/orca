@@ -20,10 +20,16 @@ const state = vi.hoisted(() => {
   }
 })
 
-vi.mock('electron', () => ({ app: { getPath: () => state.userData } }))
+vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
+vi.mock('./api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
+vi.mock('./browser-extension-webstore-updater', () => ({
+  reviewHeldBrowserExtensionUpdate: vi.fn()
+}))
+vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
 vi.mock('../browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
+    getProfile: (id: string) => ({ id }),
     getEnabledExtensionIds: (profileId: string) => state.enabled[profileId] ?? [],
     updateEnabledExtensionIds: (
       update: (value: Record<string, string[]>) => Record<string, string[]>
@@ -111,6 +117,35 @@ describe('store installs', () => {
     expect(existsSync(first.path)).toBe(false)
     expect(readdirSync(root())).toEqual(['1.1.0'])
     expect(store().get(extensionId)?.version).toBe('1.1.0')
+  })
+
+  it('never deletes a version while another profile is still enabling it', async () => {
+    const first = await installVersion('1.0.0')
+    const staged = await install.stageWebStoreExtension(crx('1.1.0'))
+    const { setBrowserExtensionEnabled } = await import('./browser-extension-management')
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    state.load.mockImplementation(async (profileId) => {
+      if (profileId === 'work') {
+        await gate
+      }
+      return {}
+    })
+    const enabling = setBrowserExtensionEnabled('work', extensionId, true)
+    await vi.waitFor(() => expect(state.load).toHaveBeenCalledWith('work', first))
+    try {
+      await expect(
+        install.withBrowserExtensionLock(extensionId, () =>
+          install.commitStagedWebStoreExtension(staged, null)
+        )
+      ).rejects.toThrow('already being installed')
+      expect(existsSync(first.path)).toBe(true)
+      expect(store().get(extensionId)?.version).toBe('1.0.0')
+    } finally {
+      release()
+      expect(await enabling).toEqual({ ok: true })
+      await install.discardStagedWebStoreExtension(staged)
+    }
   })
 
   it('keeps the old version when the new one fails to load', async () => {

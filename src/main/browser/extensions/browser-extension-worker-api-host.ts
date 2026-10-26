@@ -12,6 +12,7 @@ import {
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 import {
   ensureWorkerContext,
+  getHostSessionState,
   type HostSessionState,
   type WorkerContext
 } from './browser-extension-contexts'
@@ -20,6 +21,7 @@ import {
   detachWorkerEventStream,
   type WorkerEventStream
 } from './browser-extension-worker-event-stream'
+import { getBrowserExtensionContextSignal } from './browser-extension-context-lifetime'
 import { handleBrowserExtensionApiRequest } from './browser-extension-api-request'
 
 /**
@@ -131,7 +133,11 @@ export async function handleBrowserExtensionWorkerRequest(
   if (!extension) {
     return refuse(403)
   }
+  const lifetime = getBrowserExtensionContextSignal(state, extension.id)
   const text = await readBoundedText(request)
+  if (lifetime.aborted || getHostSessionState(sess) !== state) {
+    return refuse(403)
+  }
   if (text === null) {
     return refuse(413)
   }

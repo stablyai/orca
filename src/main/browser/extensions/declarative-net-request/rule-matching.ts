@@ -8,29 +8,32 @@ import type { DnrRequestContext } from './request-context'
 
 /** base::MatchPattern: '*' is any run, '?' is zero or one character, '\' escapes. */
 function matchPattern(text: string, pattern: string): boolean {
-  const memo = new Map<number, boolean>()
-  const match = (t: number, p: number): boolean => {
-    const key = t * (pattern.length + 1) + p
-    const cached = memo.get(key)
-    if (cached !== undefined) {
-      return cached
-    }
-    let result: boolean
-    if (p === pattern.length) {
-      result = t === text.length
-    } else if (pattern[p] === '*') {
-      result = match(t, p + 1) || (t < text.length && match(t + 1, p))
-    } else if (pattern[p] === '?') {
-      result = match(t, p + 1) || (t < text.length && match(t + 1, p + 1))
-    } else {
-      const escaped = pattern[p] === '\\' && p + 1 < pattern.length
-      const want = escaped ? pattern[p + 1] : pattern[p]
-      result = t < text.length && text[t] === want && match(t + 1, p + (escaped ? 2 : 1))
-    }
-    memo.set(key, result)
-    return result
+  let previous = new Uint8Array(pattern.length + 1)
+  let current = new Uint8Array(pattern.length + 1)
+  previous[0] = 1
+  for (let p = 0; p < pattern.length && (pattern[p] === '*' || pattern[p] === '?'); p++) {
+    previous[p + 1] = 1
   }
-  return match(0, 0)
+  for (let t = 0; t < text.length; t++) {
+    current.fill(0)
+    for (let p = 0; p < pattern.length; p++) {
+      if (pattern[p] === '*') {
+        current[p + 1] = current[p] || previous[p + 1]
+      } else if (pattern[p] === '?') {
+        current[p + 1] = current[p] || previous[p]
+      } else {
+        const escaped = pattern[p] === '\\' && p + 1 < pattern.length
+        const want = escaped ? pattern[p + 1] : pattern[p]
+        const next = p + (escaped ? 2 : 1)
+        current[next] = previous[p] && text[t] === want ? 1 : 0
+        p = next - 1
+      }
+    }
+    const swap = previous
+    previous = current
+    current = swap
+  }
+  return previous[pattern.length] === 1
 }
 
 /** MatchesHeaderConditions: true when any condition is met. */

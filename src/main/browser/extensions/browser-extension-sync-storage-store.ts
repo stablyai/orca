@@ -75,6 +75,12 @@ export class BrowserExtensionSyncStorageStore {
     }
   }
 
+  forgetProfileExtension(profileId: string, extensionId: string): void {
+    this.cache.get(profileId)?.delete(extensionId)
+    this.dirty.get(profileId)?.delete(extensionId)
+    rmSync(join(this.profileDirectory(profileId), this.fileName(extensionId)), { force: true })
+  }
+
   /** Drops one profile's items of every extension not in `extensionIds`. */
   forgetExtensionsExcept(profileId: string, extensionIds: ReadonlySet<string>): void {
     const cached = this.cache.get(profileId)
@@ -110,14 +116,15 @@ export class BrowserExtensionSyncStorageStore {
       this.timer = null
     }
     for (const [profileId, extensionIds] of this.dirty) {
-      this.dirty.delete(profileId)
       const directory = this.profileDirectory(profileId)
       mkdirSync(directory, { recursive: true })
       for (const extensionId of extensionIds) {
         const target = join(directory, this.fileName(extensionId))
         const items = this.cache.get(profileId)?.get(extensionId) ?? {}
         writeFileDurableSync(durableWriteTempPath(target), target, JSON.stringify(items))
+        extensionIds.delete(extensionId)
       }
+      this.dirty.delete(profileId)
     }
   }
 

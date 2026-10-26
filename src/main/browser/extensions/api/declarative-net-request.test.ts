@@ -11,6 +11,9 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() },
   webFrameMain: { fromId: vi.fn() }
 }))
+vi.mock('../browser-extension-permission-prompt', () => ({
+  askToGrantBrowserExtensionPermissions: async () => true
+}))
 vi.mock('../browser-extension-tab-model', () => ({
   resolveBrowserExtensionTab: (id: number) =>
     mocks.tabs.has(id) ? { contents: { id, session: currentSession } } : null
@@ -29,6 +32,10 @@ const { DNR_API_CONSTANTS } = await import('../browser-extension-dnr-limits')
 const { BROWSER_EXTENSION_API_SURFACE } =
   await import('../../../../preload/browser-extension-api-surface')
 
+const { registerPermissionsNamespace } = await import('./permissions')
+const { ensureHostSessionState } = await import('../browser-extension-contexts')
+const { getBrowserExtensionInstallStore } = await import('../browser-extension-install-store')
+registerPermissionsNamespace()
 registerDeclarativeNetRequestNamespace()
 
 const ID = 'd'.repeat(32)
@@ -75,7 +82,7 @@ async function launch(ext = extension()) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime touches only these session members.
   const session = {
     extensions: { on: vi.fn(), getAllExtensions: () => [ext] },
-    webRequest: { onHeadersReceived: vi.fn() }
+    webRequest: { onHeadersReceived: vi.fn(), onCompleted: vi.fn(), onErrorOccurred: vi.fn() }
   } as unknown as Electron.Session
   currentSession = session
   attachBrowserExtensionDnr(session, PROFILE, [])
@@ -221,5 +228,111 @@ describe('chrome.declarativeNetRequest', () => {
     await expect(feedback.call('getMatchedRules', { tabId: 404 })).rejects.toThrow(
       'No tab with id: 404.'
     )
+  })
+})
+
+describe('live DNR permission changes and precedence', () => {
+  it('activates optional authority immediately and preserves session rules across feedback changes', async () => {
+    const ext = extension()
+    ext.manifest.permissions = []
+    ext.manifest.optional_permissions = [
+      'declarativeNetRequestWithHostAccess',
+      'declarativeNetRequestFeedback'
+    ]
+    const { session, call, blocks } = await launch(ext)
+    ensureHostSessionState(session, PROFILE)
+    const caller = { extension: ext, session, browserProfileId: PROFILE, userGesture: true }
+    const permission = (method: string, permissions: string[]) =>
+      registry
+        .getBrowserExtensionNamespace('permissions')
+        ?.methods[method].invoke(caller, [{ permissions }])
+    expect(blocks('https://a.example/file')).toBe(false)
+    await expect(permission('request', ['declarativeNetRequestWithHostAccess'])).resolves.toBe(true)
+    expect(blocks('https://a.example/file')).toBe(true)
+    await call('updateSessionRules', { addRules: [block(21, '||session.example^')] })
+    await permission('request', ['declarativeNetRequestFeedback'])
+    expect(blocks('https://session.example/file')).toBe(true)
+    expect(await call('getSessionRules')).toEqual([block(21, '||session.example^')])
+    const runtime = getDnrSessionRuntime(session)
+    expect(runtime?.matched.matchedRules(ID, {})).not.toEqual([])
+    await permission('remove', ['declarativeNetRequestFeedback'])
+    expect(runtime?.matched.matchedRules(ID, {})).toEqual([])
+    expect(blocks('https://session.example/file')).toBe(true)
+    await permission('remove', ['declarativeNetRequestWithHostAccess'])
+    expect(blocks('https://a.example/file')).toBe(false)
+    expect(blocks('https://session.example/file')).toBe(false)
+  })
+
+  it('keeps install precedence when an older extension reloads or another profile loads in reverse order', async () => {
+    const store = getBrowserExtensionInstallStore()
+    const make = (id: string, target: string): Electron.Extension => {
+      const path = mkdtempSync(join(tmpdir(), 'orca-dnr-precedence-'))
+      writeFileSync(
+        join(path, 'rules.json'),
+        JSON.stringify([
+          {
+            id: 1,
+            condition: { urlFilter: '|https://tie.example/' },
+            action: { type: 'redirect', redirect: { url: target } }
+          }
+        ])
+      )
+      store.save({
+        id,
+        name: id,
+        version: '1',
+        path,
+        source: 'unpacked',
+        iconPath: null,
+        permissions: ['declarativeNetRequest'],
+        hostPermissions: ['<all_urls>'],
+        optionsPage: null
+      })
+      return {
+        id,
+        name: id,
+        version: '1',
+        path,
+        url: '',
+        manifest: {
+          permissions: ['declarativeNetRequest'],
+          host_permissions: ['<all_urls>'],
+          declarative_net_request: {
+            rule_resources: [{ id: 'rules', enabled: true, path: 'rules.json' }]
+          }
+        }
+      }
+    }
+    const older = make('a'.repeat(32), 'https://older.example/')
+    const newer = make('b'.repeat(32), 'https://newer.example/')
+    const first = await launch(older)
+    const runtime = getDnrSessionRuntime(first.session)
+    if (!runtime) {
+      throw new Error('Missing DNR runtime')
+    }
+    await runtime.addExtension(newer)
+    const winner = (owner: typeof runtime) =>
+      owner.engine.evaluateBeforeRequest(
+        {
+          url: 'https://tie.example/file',
+          method: 'GET',
+          type: 'script',
+          initiator: null,
+          tabId: TAB
+        },
+        { allowByExtension: new Map(), actions: [] },
+        { hostAccess: () => 'allowed' }
+      ).actions[0]?.redirectUrl
+    expect(winner(runtime)).toBe('https://newer.example/')
+    runtime.removeExtension(older.id)
+    await runtime.addExtension(older)
+    expect(winner(runtime)).toBe('https://newer.example/')
+    const second = await launch(newer)
+    const reversed = getDnrSessionRuntime(second.session)
+    if (!reversed) {
+      throw new Error('Missing DNR runtime')
+    }
+    await reversed.addExtension(older)
+    expect(winner(reversed)).toBe('https://newer.example/')
   })
 })

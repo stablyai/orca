@@ -37,6 +37,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
 
 // Plain-Node processes and CLI modules cannot load Electron's API.
 const PLAIN_NODE_ENTRY_NAMES = [
+  'browser-extension-native-host-supervisor-entry',
   'daemon-entry',
   'parcel-watcher-process-entry',
   'session-scanner-service-entry',

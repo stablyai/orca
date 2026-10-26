@@ -209,7 +209,7 @@ function queryAndFragment(href: string): { query: string | null; fragment: strin
   }
 }
 
-/** GURL::ReplaceComponents stand-in: rebuild the URL from parts and re-canonicalise. */
+/** GURL::ReplaceComponents stand-in: canonicalise each component independently. */
 export function transformDnrUrl(requestUrl: string, transform: DnrUrlTransformSpec): string | null {
   const url = parsedUrl(requestUrl)
   if (url === null) {
@@ -224,16 +224,23 @@ export function transformDnrUrl(requestUrl: string, transform: DnrUrlTransformSp
     }
   }
   const fragment = applyComponent(original.fragment, transform.fragment)
-  const username = transform.username ?? url.username
-  const password = transform.password ?? url.password
-  const userinfo = username || password ? `${username}${password ? `:${password}` : ''}@` : ''
+  const host = transform.host ?? url.hostname
+  if (/[/\\?#@\s]/.test(host)) {
+    return null
+  }
+  const scheme = transform.scheme ?? url.protocol.slice(0, -1)
+  const result = parsedUrl(`${scheme}://${host}/`)
+  if (!result || result.port || (host.includes(':') && !/^\[[^\]]+\]$/.test(host))) {
+    return null
+  }
   const port = applyComponent(url.port, transform.port) ?? ''
-  const path = applyComponent(url.pathname, transform.path) ?? ''
-  const rebuilt =
-    `${transform.scheme ?? url.protocol.slice(0, -1)}://${userinfo}${transform.host ?? url.hostname}` +
-    `${port ? `:${port}` : ''}${path === '' || path.startsWith('/') ? path : `/${path}`}` +
-    `${query === null ? '' : `?${query}`}${fragment === null ? '' : `#${fragment}`}`
-  return parsedUrl(rebuilt)?.href ?? null
+  result.port = port ? String(Number(port)) : ''
+  result.username = transform.username ?? url.username
+  result.password = transform.password ?? url.password
+  result.pathname = applyComponent(url.pathname, transform.path) ?? ''
+  result.search = query === null ? '' : `?${query}`
+  result.hash = fragment === null ? '' : `#${fragment}`
+  return result.href
 }
 
 /** CreateUpgradeAction: only http and ftp upgrade; anything else yields no action. */

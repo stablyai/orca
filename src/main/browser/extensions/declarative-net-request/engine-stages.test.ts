@@ -234,6 +234,27 @@ describe('header application rules', () => {
 })
 
 describe('headers-received stage', () => {
+  it.each([
+    ['a?b', 'ab', true],
+    ['a?b', 'acb', true],
+    ['a?b', 'accb', false],
+    ['a\\?b', 'a?b', true],
+    ['a\\*b', 'a*b', true],
+    ['a\\*b', 'axb', false],
+    ['x\\', 'x\\', true],
+    ['*a?b*', 'aaaabbb', true]
+  ])('matches response value %s against %s as %s', (pattern, value, matches) => {
+    const engine = engineWith({
+      [OLD]: [{ condition: { responseHeaders: [{ header: 'x-value', values: [pattern] }] } }]
+    })
+    const result = engine.evaluateHeadersReceived(
+      request('https://site.example/'),
+      { 'X-Value': [value] },
+      createDnrRequestState()
+    )
+    expect(result.actions[0]?.type === 'block').toBe(matches)
+  })
+
   it('matches response-header conditions only once headers arrive', () => {
     const engine = engineWith({
       [OLD]: [

@@ -11,6 +11,7 @@ import {
 import type { DnrRequestInfo, DnrResponseHeaders } from './declarative-net-request/request-context'
 import type { DnrRequestAction } from './declarative-net-request/ruleset-matcher'
 import { getDnrSessionRuntime, type DnrSessionRuntime } from './browser-extension-dnr-session'
+import { extensionHasPermission } from './browser-extension-namespace-registry'
 import { chromeResourceType, isRequestHiddenFromExtensions } from './browser-extension-web-request'
 
 type RequestDetails = {
@@ -84,11 +85,12 @@ const recordedActions = new WeakSet<DnrRequestAction>()
 function recordMatch(
   runtime: DnrSessionRuntime,
   action: DnrRequestAction,
-  info: DnrRequestInfo
+  info: DnrRequestInfo,
+  requestId: number
 ): void {
   if (!recordedActions.has(action)) {
     recordedActions.add(action)
-    runtime.matched.record(action, info.tabId, info.type === 'main_frame')
+    runtime.matched.record(action, info.tabId, info.type === 'main_frame' ? requestId : null)
   }
 }
 
@@ -129,20 +131,46 @@ function decideBeforeRequest(
   switch (action?.type) {
     case 'block':
     case 'collapse':
-      recordMatch(runtime, action, info)
+      recordMatch(runtime, action, info, details.id)
+      runtime.matched.finishNavigation(info.tabId, details.id)
       return { cancel: true }
     case 'redirect':
     case 'upgradeScheme':
-      recordMatch(runtime, action, info)
+      recordMatch(runtime, action, info, details.id)
       return action.redirectUrl ? { redirectURL: action.redirectUrl } : null
     case 'allow':
     case 'allowAllRequests':
-      recordMatch(runtime, action, info)
+      recordMatch(runtime, action, info, details.id)
       return null
     case 'modifyHeaders':
     case undefined:
       return null
   }
+}
+
+function discardUnauthorizedActions(
+  runtime: DnrSessionRuntime,
+  state: DnrRequestState,
+  info: DnrRequestInfo
+): void {
+  const allowed = new Map<string, boolean>()
+  for (const extensionId of new Set([
+    ...state.allowByExtension.keys(),
+    ...state.actions.map((action) => action.rule.extensionId)
+  ])) {
+    const entry = runtime.extensions.get(extensionId)
+    const hasHostAccess =
+      entry?.hostAccess.access(info.url, info.initiator, info.tabId, info.type) === 'allowed'
+    allowed.set(extensionId, hasHostAccess)
+    if (
+      !entry ||
+      (!hasHostAccess &&
+        !extensionHasPermission(entry.rules.extension, 'declarativeNetRequest', runtime.session))
+    ) {
+      state.allowByExtension.delete(extensionId)
+    }
+  }
+  state.actions = state.actions.filter((action) => allowed.get(action.rule.extensionId) === true)
 }
 
 function decideRequestHeaders(
@@ -153,13 +181,16 @@ function decideRequestHeaders(
   const state = runtime.evaluatesResponses
     ? runtime.requestState(details.id)
     : runtime.takeRequestState(details.id)
+  const info = requestInfo(runtime, details)
+  if (state) {
+    discardUnauthorizedActions(runtime, state, info)
+  }
   if (!state?.actions.some((action) => action.requestHeaders?.length)) {
     return headers
   }
   const modified = applyDnrRequestHeaderActions(headers, state.actions)
-  const info = requestInfo(runtime, details)
   for (const action of modified.appliedActions) {
-    recordMatch(runtime, action, info)
+    recordMatch(runtime, action, info, details.id)
   }
   return modified.headers
 }
@@ -173,6 +204,7 @@ function decideHeadersReceived(
   const info = requestInfo(runtime, details)
   noteNavigation(runtime, details, info, responseHeaders)
   const state = stored ?? createDnrRequestState()
+  discardUnauthorizedActions(runtime, state, info)
   if (runtime.evaluatesResponseConditions) {
     const evaluation = runtime.engine.evaluateHeadersReceived(
       info,
@@ -184,11 +216,12 @@ function decideHeadersReceived(
     switch (action?.type) {
       case 'block':
       case 'collapse':
-        recordMatch(runtime, action, info)
+        recordMatch(runtime, action, info, details.id)
+        runtime.matched.finishNavigation(info.tabId, details.id)
         return { cancel: true }
       case 'redirect':
       case 'upgradeScheme': {
-        recordMatch(runtime, action, info)
+        recordMatch(runtime, action, info, details.id)
         if (!action.redirectUrl) {
           return null
         }
@@ -204,7 +237,7 @@ function decideHeadersReceived(
       case 'allow':
       case 'allowAllRequests':
         if (evaluation.reportAllowMatch) {
-          recordMatch(runtime, action, info)
+          recordMatch(runtime, action, info, details.id)
         }
         break
       case 'modifyHeaders':
@@ -220,7 +253,7 @@ function decideHeadersReceived(
     return null
   }
   for (const action of modified.appliedActions) {
-    recordMatch(runtime, action, info)
+    recordMatch(runtime, action, info, details.id)
   }
   return { responseHeaders: modified.headers }
 }
@@ -248,5 +281,18 @@ export const browserExtensionDnrRequestDecider: BrowserSessionRequestDecider = {
     return runtime?.evaluatesResponses && !isRequestHiddenFromExtensions(details)
       ? decideHeadersReceived(runtime, details)
       : null
+  },
+  requestFinished: (session, event, details) => {
+    const runtime = getDnrSessionRuntime(session)
+    if (!runtime) {
+      return
+    }
+    runtime.takeRequestState(details.id)
+    if (event === 'onErrorOccurred' && details.resourceType === 'mainFrame') {
+      runtime.matched.finishNavigation(runtime.frames.tabIdFor(details.webContentsId), details.id)
+    }
+  },
+  requestLifecycleStopped: (session) => {
+    getDnrSessionRuntime(session)?.clearPendingRequests()
   }
 }

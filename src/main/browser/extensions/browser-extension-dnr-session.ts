@@ -1,5 +1,7 @@
-import { webFrameMain } from 'electron'
-import { installBrowserSessionHeadersReceived } from '../browser-session-request-decisions'
+import {
+  installBrowserSessionHeadersReceived,
+  installBrowserSessionRequestLifecycle
+} from '../browser-session-request-decisions'
 import { DnrEngine } from './declarative-net-request/engine'
 import type { DnrRequestState } from './declarative-net-request/engine'
 import {
@@ -18,8 +20,6 @@ import { resolveBrowserExtensionTab } from './browser-extension-tab-model'
 
 // Chrome holds requests until rulesets load; a ruleset that never finishes must not stall pages.
 const LOAD_HOLD_LIMIT_MS = 5_000
-// Why a bound: a request's state normally ends at onHeadersReceived; cache hits and failures skip it.
-const MAX_PENDING_REQUEST_STATES = 2000
 
 export type DnrSessionExtension = {
   rules: DnrExtensionRules
@@ -63,7 +63,6 @@ export class DnrSessionRuntime {
   private loadHold: Promise<void> | null = null
   /** Until the profile's startup loads finish, requests wait for extensions not loaded yet. */
   private startupLoad: (() => Promise<void>) | null = null
-  private lastInstallTime = 0
 
   constructor(
     readonly session: Electron.Session,
@@ -87,8 +86,6 @@ export class DnrSessionRuntime {
 
   addExtension(extension: Electron.Extension): Promise<void> {
     this.removeExtension(extension.id)
-    // Why monotonic: later loads win cross-extension ties, as later installs do in Chrome.
-    this.lastInstallTime = Math.max(Date.now(), this.lastInstallTime + 1)
     const withHostAccessOnly = !extensionHasPermission(
       extension,
       'declarativeNetRequest',
@@ -102,7 +99,7 @@ export class DnrSessionRuntime {
         changed: () => this.refresh()
       },
       extension,
-      this.lastInstallTime,
+      getBrowserExtensionInstallStore().get(extension.id)?.installTime ?? 0,
       withHostAccessOnly
     )
     this.extensions.set(extension.id, {
@@ -123,12 +120,38 @@ export class DnrSessionRuntime {
     return load
   }
 
+  reconcilePermissions(extension: Electron.Extension): Promise<void> {
+    if (!usesDeclarativeNetRequest(extension, this.session)) {
+      this.removeExtension(extension.id)
+      return Promise.resolve()
+    }
+    const entry = this.extensions.get(extension.id)
+    if (!entry) {
+      return this.addExtension(extension)
+    }
+    this.engine.setHostPermissionsAlwaysRequired(
+      extension.id,
+      !extensionHasPermission(extension, 'declarativeNetRequest', this.session)
+    )
+    entry.keepsMatchedRules = ['declarativeNetRequestFeedback', 'activeTab'].some((permission) =>
+      extensionHasPermission(extension, permission, this.session)
+    )
+    if (!entry.keepsMatchedRules) {
+      this.matched.forgetMatches(extension.id)
+    }
+    return this.whenRulesLoaded()
+  }
+
   removeExtension(extensionId: string): void {
     const entry = this.extensions.get(extensionId)
     if (!entry) {
       return
     }
     this.extensions.delete(extensionId)
+    for (const state of this.requestStates.values()) {
+      state.actions = state.actions.filter((action) => action.rule.extensionId !== extensionId)
+      state.allowByExtension.delete(extensionId)
+    }
     entry.rules.unload()
     this.matched.forgetExtension(extensionId)
   }
@@ -170,6 +193,9 @@ export class DnrSessionRuntime {
     if (this.evaluatesResponses) {
       installBrowserSessionHeadersReceived(this.session)
     }
+    if (this.evaluatesRequests || this.evaluatesResponses) {
+      installBrowserSessionRequestLifecycle(this.session)
+    }
   }
 
   /** GetStaticRuleLimit: the guaranteed minimum plus what other extensions leave of the pool. */
@@ -185,14 +211,7 @@ export class DnrSessionRuntime {
   }
 
   keepRequestState(requestId: number, state: DnrRequestState): void {
-    this.requestStates.delete(requestId)
     this.requestStates.set(requestId, state)
-    if (this.requestStates.size > MAX_PENDING_REQUEST_STATES) {
-      const oldest = this.requestStates.keys().next()
-      if (!oldest.done) {
-        this.requestStates.delete(oldest.value)
-      }
-    }
   }
 
   requestState(requestId: number): DnrRequestState | undefined {
@@ -203,6 +222,10 @@ export class DnrSessionRuntime {
     const state = this.requestStates.get(requestId)
     this.requestStates.delete(requestId)
     return state
+  }
+
+  clearPendingRequests(): void {
+    this.requestStates.clear()
   }
 
   /** setExtensionActionOptions displayActionCountAsBadgeText. */
@@ -272,25 +295,4 @@ export function attachBrowserExtensionDnr(
 /** Startup waits for an extension's rules with its other restored state. */
 export function whenBrowserExtensionDnrLoaded(session: Electron.Session): Promise<void> {
   return runtimes.get(session)?.whenRulesLoaded() ?? Promise.resolve()
-}
-
-/** Frame commits and lifetime of one tab (or popout) webContents in an extension session. */
-export function observeBrowserExtensionDnrContents(contents: Electron.WebContents): void {
-  const { id, session } = contents
-  contents.on(
-    'did-frame-navigate',
-    (_event, url, _code, _status, _isMainFrame, processId, routingId) => {
-      const runtime = runtimes.get(session)
-      const frame = runtime ? webFrameMain.fromId(processId, routingId) : undefined
-      if (runtime && frame && !frame.isDestroyed()) {
-        runtime.frames.commit(runtime.inUse ? runtime.engine : null, id, frame, url)
-      }
-    }
-  )
-  // Why after tabs-lifecycle's handler: that one resets the tab's badge for the new document.
-  contents.on('did-navigate', () => runtimes.get(session)?.matched.commitNavigation(id))
-  contents.once('destroyed', () => {
-    runtimes.get(session)?.frames.forgetContents(id)
-    runtimes.get(session)?.matched.forgetTab(id)
-  })
 }

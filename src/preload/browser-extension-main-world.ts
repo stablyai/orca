@@ -59,8 +59,7 @@ export function installBrowserExtensionApis(
   const readManifest = (): ApiObject => {
     try {
       const getManifest = runtime()?.getManifest
-      const manifest: unknown =
-        typeof getManifest === 'function' ? getManifest.call(runtime()) : null
+      const manifest: unknown = isCallable(getManifest) ? getManifest.call(runtime()) : null
       return isObject(manifest) ? manifest : {}
     } catch {
       return {}
@@ -179,23 +178,18 @@ export function installBrowserExtensionApis(
       const run = async (): Promise<unknown> => {
         let callArgs = args
         if (nativeOptions && isCallable(nativeFn)) {
-          const omit = nativeOptions.omitKeys ?? []
+          const { omitKeys: omit = [], nullOnError } = nativeOptions
           const nativeArgs = args.map((arg, index) =>
             index === 0 && isObject(arg) && omit.length > 0
               ? Object.fromEntries(Object.entries(arg).filter(([key]) => !omit.includes(key)))
               : arg
           )
           const nativeCall = callNative(nativeOwner, nativeFn, nativeArgs)
-          const nativeResult = await (nativeOptions.nullOnError
-            ? nativeCall.catch(() => null)
-            : nativeCall)
+          const nativeResult = await (nullOnError ? nativeCall.catch(() => null) : nativeCall)
           callArgs = [...args, nativeResult]
         }
-        const reply = await bridge.call(
-          namespace,
-          name,
-          callArgs.map((arg) => toTransferable(arg))
-        )
+        const transferArgs = callArgs.map((arg) => toTransferable(arg))
+        const reply = await bridge.call(namespace, name, transferArgs)
         if (!reply.ok) {
           throw new Error(reply.error)
         }
@@ -288,12 +282,10 @@ export function installBrowserExtensionApis(
     const existing = chromeApi[namespace]
     const target: ApiObject = isObject(existing) ? existing : {}
     const members: [string, unknown][] = []
-    for (const [name, method] of Object.entries(spec.methods)) {
+    for (const [name, { native, returnsCreatedId }] of Object.entries(spec.methods)) {
       const { parent, leaf } = lookupPath(target, name)
-      members.push([
-        name,
-        makeMethod(namespace, name, method.native, parent, parent[leaf], method.returnsCreatedId)
-      ])
+      const fn = makeMethod(namespace, name, native, parent, parent[leaf], returnsCreatedId)
+      members.push([name, fn])
     }
     for (const name of spec.events) {
       members.push([name, makeEvent(namespace, name)])

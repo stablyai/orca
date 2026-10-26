@@ -12,6 +12,8 @@ export type BrowserExtensionCaller = {
   /** Set for extension pages (tabs, popouts, popups). */
   webContents?: Electron.WebContents
   frame?: Electron.WebFrameMain
+  /** Captured by the isolated preload when the page invokes the bridge. */
+  userGesture?: boolean
   /** Set for calls from Orca's worker shim (the extension's service worker). */
   fromWorker?: boolean
 }

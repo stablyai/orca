@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,6 +29,19 @@ describe('BrowserExtensionSyncStorageStore', () => {
     expect(reopened.read('default', EXTENSION)).toEqual({ theme: { dark: true }, list: [1, 'two'] })
     expect(reopened.read('work', EXTENSION)).toEqual({ theme: 'light' })
     expect(reopened.read('default', OTHER)).toEqual({})
+  })
+
+  it('retries acknowledged writes after a failed flush', () => {
+    const store = new BrowserExtensionSyncStorageStore(root)
+    store.write('default', EXTENSION, { token: 'saved after recovery' })
+    writeFileSync(join(root, 'sync-storage'), 'blocks the storage directory')
+    expect(() => store.flush()).toThrow()
+    rmSync(join(root, 'sync-storage'))
+
+    store.flush()
+    expect(new BrowserExtensionSyncStorageStore(root).read('default', EXTENSION)).toEqual({
+      token: 'saved after recovery'
+    })
   })
 
   it('forgets a removed extension in every profile and a deleted profile entirely', () => {

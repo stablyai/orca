@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { noteBrowserExtensionUserGesture } from './api/permissions'
 import type { BrowserExtensionActionResult } from '../../../shared/browser-extension-types'
 import {
   BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL,
@@ -189,6 +190,7 @@ export function activateBrowserExtensionAction(args: {
       return { ok: true }
     }
     if (!args.popupOnly) {
+      noteBrowserExtensionUserGesture(page.session, extension.id)
       grantBrowserExtensionActiveTab(extension, page.contents.id)
     }
     if (details.popup !== '') {

@@ -28,7 +28,7 @@ export class DnrExtensionMatcher {
   constructor(
     readonly extensionId: string,
     readonly installTime: number,
-    readonly hostPermissionsAlwaysRequired: boolean
+    public hostPermissionsAlwaysRequired: boolean
   ) {}
 
   /** Replaces (or with null removes) the ruleset stored under `key`; returns the old one. */

@@ -6,6 +6,7 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
+import { getForkedChildEntryPath } from '../../forked-child-entry-path'
 import { NATIVE_HOST_ERRORS } from './browser-extension-native-host-errors'
 import {
   createNativeHostMessageReader,
@@ -14,6 +15,7 @@ import {
 
 /** Chrome's EnsureProcessTerminated: a host gets this long after its stdin closes, then is killed. */
 const CLOSE_GRACE_MS = 2_000
+const START_TIMEOUT_MS = 15_000
 const STDERR_LOG_BUDGET_BYTES = 4 * 1024
 
 export type NativeHostLaunch = {
@@ -42,7 +44,11 @@ const liveHosts = new Set<PipedChildProcess>()
 /** Quit: kill every host now; a pending grace timer would never fire. */
 export function killAllNativeHosts(): void {
   for (const child of liveHosts) {
-    void signalProcessTree(child, 'SIGKILL')
+    if (process.platform === 'win32') {
+      child.kill('SIGKILL')
+    } else {
+      void signalProcessTree(child, 'SIGKILL')
+    }
   }
   liveHosts.clear()
 }
@@ -70,15 +76,30 @@ export function startNativeHost(
 ): Promise<NativeHostConnection> {
   return new Promise((resolve, reject) => {
     let child: PipedChildProcess
+    const supervised = process.platform === 'win32'
     try {
-      child = spawn({
-        program: launch.program,
-        args: launch.args,
-        cwd: dirname(launch.program),
-        stdio: 'pipe',
-        // Why: its own POSIX group lets close() kill helpers the host started too.
-        detached: process.platform !== 'win32'
-      })
+      child = spawn(
+        supervised
+          ? {
+              program: process.execPath,
+              args: [
+                getForkedChildEntryPath('browser-extension-native-host-supervisor-entry.js'),
+                process.env.ELECTRON_RUN_AS_NODE ?? '',
+                launch.program,
+                ...launch.args
+              ],
+              cwd: dirname(launch.program),
+              env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+              stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+            }
+          : {
+              program: launch.program,
+              args: launch.args,
+              cwd: dirname(launch.program),
+              stdio: 'pipe',
+              detached: true
+            }
+      )
     } catch (error) {
       console.warn(`[browser-extensions] Could not start native host ${launch.name}:`, error)
       reject(new Error(NATIVE_HOST_ERRORS.failedToStart))
@@ -87,27 +108,70 @@ export function startNativeHost(
     let spawned = false
     let closed = false
     let killTimer: NodeJS.Timeout | undefined
+    let terminating = false
+    let ready = false
+    let pendingClose: string | undefined
+    let startTimer: NodeJS.Timeout | undefined
+
+    const terminate = (): void => {
+      clearTimeout(killTimer)
+      if (terminating) {
+        return
+      }
+      terminating = true
+      if (supervised) {
+        child.kill('SIGKILL')
+        liveHosts.delete(child)
+      } else {
+        void forceTerminateProcessTree(child).finally(() => liveHosts.delete(child))
+      }
+    }
 
     const release = (): void => {
       child.stdin.destroy()
       child.stdout.destroy()
-      if (!spawned || childProcessHasExited(child)) {
+      if (!spawned) {
         return
       }
-      killTimer = setTimeout(() => {
-        if (!childProcessHasExited(child)) {
-          void forceTerminateProcessTree(child)
-        }
-      }, CLOSE_GRACE_MS)
+      if (childProcessHasExited(child)) {
+        terminate()
+        return
+      }
+      killTimer = setTimeout(terminate, CLOSE_GRACE_MS)
       killTimer.unref()
     }
     const closeChannel = (error: string): void => {
       if (closed) {
         return
       }
+      if (!ready) {
+        pendingClose = error
+        return
+      }
       closed = true
       release()
       handlers.onClose(error)
+    }
+    const failStartup = (): void => {
+      if (ready || closed) {
+        return
+      }
+      closed = true
+      clearTimeout(startTimer)
+      release()
+      terminate()
+      reject(new Error(NATIVE_HOST_ERRORS.failedToStart))
+    }
+    const announceReady = (): void => {
+      if (ready || closed) {
+        return
+      }
+      ready = true
+      clearTimeout(startTimer)
+      resolve(connection)
+      if (pendingClose) {
+        closeChannel(pendingClose)
+      }
     }
     const reader = createNativeHostMessageReader(handlers.onMessage, (reason) => {
       console.warn(`[browser-extensions] Native host ${launch.name} sent a bad ${reason}`)
@@ -132,21 +196,34 @@ export function startNativeHost(
       if (!childProcessHasExited(child)) {
         liveHosts.add(child)
       }
-      resolve(connection)
+      if (!supervised) {
+        announceReady()
+      }
     })
     child.once('error', (error) => {
-      if (spawned) {
-        closeChannel(NATIVE_HOST_ERRORS.io)
+      if (!ready) {
+        console.warn(`[browser-extensions] Could not start native host ${launch.name}:`, error)
+        failStartup()
         return
       }
-      closed = true
-      console.warn(`[browser-extensions] Could not start native host ${launch.name}:`, error)
-      reject(new Error(NATIVE_HOST_ERRORS.failedToStart))
+      closeChannel(NATIVE_HOST_ERRORS.io)
     })
-    child.once('exit', () => {
-      clearTimeout(killTimer)
-      liveHosts.delete(child)
-    })
+    child.once('exit', terminate)
+    if (supervised) {
+      startTimer = setTimeout(failStartup, START_TIMEOUT_MS)
+      startTimer.unref()
+      child.on('message', (message: unknown) => {
+        if (typeof message !== 'object' || message === null || !('type' in message)) {
+          return
+        }
+        if (message.type === 'ready') {
+          announceReady()
+        } else if (message.type === 'error') {
+          failStartup()
+        }
+      })
+      child.once('close', failStartup)
+    }
     child.stdout.on('data', (chunk: Buffer) => {
       if (!closed) {
         reader.push(chunk)

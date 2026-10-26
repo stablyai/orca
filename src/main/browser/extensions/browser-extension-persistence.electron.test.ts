@@ -32,7 +32,7 @@ chrome.storage.local.get('setup').then(async ({ setup }) => {
   await chrome.storage.local.set({ setup: true });
   const registered = (await chrome.scripting.getRegisteredContentScripts()).map((s) => s.id);
   console.log('ORCA_EXT_SETUP ' + JSON.stringify({ registered }));
-});
+}).catch((error) => console.log('ORCA_EXT_ERROR ' + String(error)));
 `
 
 type FixtureStatus = {

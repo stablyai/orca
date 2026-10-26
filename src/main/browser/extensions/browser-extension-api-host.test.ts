@@ -1,8 +1,16 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 const mocks = vi.hoisted(() => ({
-  handlers: new Map<string, (event: unknown, request: unknown) => Promise<unknown>>(),
+  userData: '',
+  prompt: vi.fn<() => Promise<boolean>>(),
+  handlers: new Map<
+    string,
+    (event: unknown, request: unknown, userGesture?: boolean) => Promise<unknown>
+  >(),
   frames: new Map<
     string,
     { url: string; isDestroyed: () => boolean; send: ReturnType<typeof vi.fn> }
@@ -10,14 +18,16 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { on: vi.fn(), getPath: () => '' },
+  app: { on: vi.fn(), getPath: () => mocks.userData },
   BrowserWindow: vi.fn(),
   session: { fromPartition: vi.fn() },
   webContents: { fromId: vi.fn() },
   ipcMain: {
     removeHandler: (channel: string) => mocks.handlers.delete(channel),
-    handle: (channel: string, handler: (event: unknown, request: unknown) => Promise<unknown>) =>
-      mocks.handlers.set(channel, handler)
+    handle: (
+      channel: string,
+      handler: (event: unknown, request: unknown, userGesture?: boolean) => Promise<unknown>
+    ) => mocks.handlers.set(channel, handler)
   },
   webFrameMain: {
     fromId: (processId: number, routingId: number) => mocks.frames.get(`${processId}:${routingId}`)
@@ -32,6 +42,11 @@ vi.mock('../../runtime/browser/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 
+vi.mock('./browser-extension-permission-prompt', () => ({
+  askToGrantBrowserExtensionPermissions: mocks.prompt
+}))
+mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-api-host-'))
+
 const { BROWSER_EXTENSION_EVENT_CHANNEL, BROWSER_EXTENSION_INVOKE_CHANNEL } =
   await import('../../../shared/browser-extension-channels')
 const surface = await import('../../../preload/browser-extension-api-surface')
@@ -43,7 +58,7 @@ const { registerBrowserExtensionNamespaces } =
 const EXTENSION_ID = 'a'.repeat(32)
 const OTHER_ID = 'b'.repeat(32)
 
-function makeExtension(id: string, permissions: string[]) {
+function makeExtension(id: string, permissions: string[]): Electron.Extension {
   return { id, name: id, version: '1', path: '', url: '', manifest: { permissions } }
 }
 
@@ -71,12 +86,12 @@ function frameEvent(url: string, sess: unknown = extensionSession, processId = 4
   }
 }
 
-function invoke(event: unknown, request: unknown): Promise<unknown> {
+function invoke(event: unknown, request: unknown, userGesture?: boolean): Promise<unknown> {
   const handler = mocks.handlers.get(BROWSER_EXTENSION_INVOKE_CHANNEL)
   if (!handler) {
     throw new Error('host not installed')
   }
-  return handler(event, request)
+  return handler(event, request, userGesture)
 }
 
 beforeAll(() => {
@@ -122,6 +137,27 @@ describe('preload API surface', () => {
 })
 
 describe('extension API host', () => {
+  it('accepts only isolated-preload activation and ignores an extension-supplied gesture', async () => {
+    const id = 'd'.repeat(32)
+    extensions.set(id, {
+      ...makeExtension(id, []),
+      manifest: { optional_permissions: ['privacy'] }
+    })
+    const { event } = frameEvent(`chrome-extension://${id}/page.html`)
+    const request = {
+      type: 'call',
+      namespace: 'permissions',
+      method: 'request',
+      args: [{ permissions: ['privacy'] }]
+    }
+    const denied = { ok: false, error: 'This function must be called during a user gesture' }
+    await expect(invoke(event, request)).resolves.toEqual(denied)
+    await expect(invoke(event, { ...request, userGesture: true })).resolves.toEqual(denied)
+    expect(mocks.prompt).not.toHaveBeenCalled()
+    mocks.prompt.mockResolvedValueOnce(true)
+    await expect(invoke(event, request, true)).resolves.toEqual({ ok: true, value: true })
+  })
+
   it('takes the caller from the sender frame and returns the handler result', async () => {
     const { event } = frameEvent(`chrome-extension://${EXTENSION_ID}/popup.html`)
     await expect(

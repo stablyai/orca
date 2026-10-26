@@ -81,6 +81,13 @@ export class DnrEngine {
     this.reorder()
   }
 
+  setHostPermissionsAlwaysRequired(extensionId: string, required: boolean): void {
+    const matcher = this.extensions.get(extensionId)
+    if (matcher) {
+      matcher.hostPermissionsAlwaysRequired = required
+    }
+  }
+
   removeExtension(extensionId: string): void {
     for (const matcher of this.extensions.get(extensionId)?.detachAll() ?? []) {
       this.postings.remove(matcher.index)

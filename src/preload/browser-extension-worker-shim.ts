@@ -10,7 +10,6 @@ import {
   createContentScriptSyncForward,
   installContentScriptRelayFilter
 } from './browser-extension-content-script-relay'
-import { restorePersistedContentScripts } from './browser-extension-content-script-restore'
 import {
   installBrowserExtensionDocumentTargets,
   PRELOAD_FIRST_DISCARDED_TAB_ID
@@ -206,4 +205,3 @@ installContentScriptRelayFilter(
     createContentScriptSyncForward() ?? undefined
   ) ?? undefined
 )
-void restorePersistedContentScripts(invoke, globalThis)

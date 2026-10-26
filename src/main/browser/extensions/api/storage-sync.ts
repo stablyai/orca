@@ -137,13 +137,13 @@ function set(caller: BrowserExtensionCaller, input: BrowserExtensionSyncItems): 
       throw quotaError('QUOTA_BYTES_PER_ITEM')
     }
     total += size - bytesInUse(next, [key])
-    if (total > STORAGE_SYNC_QUOTAS.QUOTA_BYTES) {
-      throw quotaError('QUOTA_BYTES')
-    }
     next[key] = value
-    if (Object.keys(next).length > STORAGE_SYNC_QUOTAS.MAX_ITEMS) {
-      throw quotaError('MAX_ITEMS')
-    }
+  }
+  if (total > STORAGE_SYNC_QUOTAS.QUOTA_BYTES) {
+    throw quotaError('QUOTA_BYTES')
+  }
+  if (Object.keys(next).length > STORAGE_SYNC_QUOTAS.MAX_ITEMS) {
+    throw quotaError('MAX_ITEMS')
   }
   return commit(caller, current, next, Object.keys(input))
 }

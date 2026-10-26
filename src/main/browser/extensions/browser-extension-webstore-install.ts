@@ -169,7 +169,7 @@ export async function commitStagedWebStoreExtension(
     await rename(staged.directory, target)
   }
   const { summary } = staged
-  const record: InstalledBrowserExtension = {
+  const record = store.save({
     id: extensionId,
     name: summary.name,
     version: staged.version,
@@ -179,9 +179,8 @@ export async function commitStagedWebStoreExtension(
     permissions: summary.permissions,
     hostPermissions: summary.hostPermissions,
     optionsPage: summary.optionsPage
-  }
+  })
   const replaced = previous && previous.path !== target ? previous : null
-  store.save(record)
   try {
     if (replaced) {
       await reloadBrowserExtensionWhereEnabled(record)

@@ -68,7 +68,16 @@ export async function handleBrowserExtensionApiRequest(
     if (!namespace) {
       throw new BrowserExtensionApiError(`chrome.${request.namespace} is not available`)
     }
-    requirePermission(caller, namespace.permission)
+    const optional: unknown = caller.extension.manifest.optional_permissions
+    const optionalListener =
+      request.type === 'listen' &&
+      Array.isArray(optional) &&
+      [namespace.permission]
+        .flat()
+        .some((permission) => permission !== undefined && optional.includes(permission))
+    if (!optionalListener) {
+      requirePermission(caller, namespace.permission)
+    }
     if (request.type === 'listen') {
       if (!namespace.events.includes(request.event)) {
         throw new BrowserExtensionApiError(`Unknown event ${request.namespace}.${request.event}`)
@@ -79,7 +88,11 @@ export async function handleBrowserExtensionApiRequest(
         if (request.active) {
           context.events.add(key)
           setListenerFilters(context.filters, key, request.filters)
-          flushWorkerQueue(context, key)
+          if (
+            extensionHasNamespacePermission(caller.extension, namespace.permission, caller.session)
+          ) {
+            flushWorkerQueue(context, key)
+          }
         } else {
           context.events.delete(key)
           setListenerFilters(context.filters, key, undefined)

@@ -58,7 +58,8 @@ async function invoke(request: unknown): Promise<BrowserExtensionInvokeReply> {
   try {
     const reply: BrowserExtensionInvokeReply = await ipcRenderer.invoke(
       PRELOAD_BROWSER_EXTENSION_INVOKE_CHANNEL,
-      request
+      request,
+      navigator.userActivation.isActive
     )
     return reply
   } catch {
@@ -132,7 +133,10 @@ function readOrigin(href: string): string | null {
 if (process.contextIsolated) {
   const href = readContextHref()
   if (href.startsWith('chrome-extension://')) {
-    installExtensionContextApis()
+    // A document marker survives Chromium reusing an existing extension renderer process.
+    if (!href.endsWith('/manifest.json?orca-native-page=1')) {
+      installExtensionContextApis()
+    }
   } else if (process.isMainFrame && readOrigin(href) === CHROME_WEB_STORE_ORIGIN) {
     installChromeWebStoreBridge()
   }

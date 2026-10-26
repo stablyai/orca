@@ -45,6 +45,7 @@ app.focus = () => {
   presentationCalls.push('app.focus')
 }
 applyBackgroundActivationPolicy()
+app.on('window-all-closed', () => {})
 
 const status: Record<string, unknown> = { presentationCalls }
 
@@ -63,6 +64,10 @@ process.on('uncaughtException', fail)
 process.on('unhandledRejection', fail)
 
 function capture(message: string): void {
+  if (message.startsWith('ORCA_EXT_ERROR ')) {
+    fail(message)
+    return
+  }
   for (const [prefix, key] of [
     ['ORCA_EXT_SETUP ', 'setup'],
     ['ORCA_EXT_WEBREQUEST ', 'webRequest'],

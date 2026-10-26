@@ -1,7 +1,9 @@
 import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser-extension-webstore'
 import {
   installBrowserSessionHeadersReceived,
-  removeBrowserSessionHeadersReceived
+  installBrowserSessionRequestLifecycle,
+  removeBrowserSessionHeadersReceived,
+  removeBrowserSessionRequestLifecycle
 } from '../browser-session-request-decisions'
 import {
   setBrowserSessionWebRequestObserver,
@@ -269,8 +271,7 @@ function observeRemainingEvents(session: Electron.Session): void {
   webRequest.onBeforeRedirect(OBSERVE_ALL, (details) =>
     forward(session, 'onBeforeRedirect', details)
   )
-  webRequest.onCompleted(OBSERVE_ALL, (details) => forward(session, 'onCompleted', details))
-  webRequest.onErrorOccurred(OBSERVE_ALL, (details) => forward(session, 'onErrorOccurred', details))
+  installBrowserSessionRequestLifecycle(session)
 }
 
 export function observeBrowserExtensionWebRequests(session: Electron.Session): void {
@@ -289,6 +290,7 @@ export function observeBrowserExtensionWebRequests(session: Electron.Session): v
 /** Extensions turned off: hand the session's request path back to Orca's own handlers alone. */
 export function stopObservingBrowserExtensionWebRequests(session: Electron.Session): void {
   removeBrowserSessionHeadersReceived(session)
+  removeBrowserSessionRequestLifecycle(session)
   if (!observedSessions.delete(session)) {
     return
   }
@@ -296,8 +298,6 @@ export function stopObservingBrowserExtensionWebRequests(session: Electron.Sessi
   webRequest.onSendHeaders(null)
   webRequest.onResponseStarted(null)
   webRequest.onBeforeRedirect(null)
-  webRequest.onCompleted(null)
-  webRequest.onErrorOccurred(null)
 }
 
 export function installBrowserExtensionWebRequestForwarding(): void {

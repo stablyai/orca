@@ -48,12 +48,15 @@ if (!root.__orcaContentScriptApi && root.chrome) {
   installBrowserExtensionInertApis('content-script')
   const runtime = root.chrome.runtime
   const sendMessage = runtime?.sendMessage
-  if (runtime && typeof sendMessage === 'function' && hasServiceWorker(runtime)) {
-    const bridge = createContentScriptRelayBridge(
-      (message) => Promise.resolve(sendMessage.call(runtime, message)),
-      runtime
-    )
-    installContentScriptRelayFilter()
+  const bridge =
+    runtime && typeof sendMessage === 'function' && hasServiceWorker(runtime)
+      ? createContentScriptRelayBridge(
+          (message) => Promise.resolve(sendMessage.call(runtime, message)),
+          runtime
+        )
+      : null
+  installContentScriptRelayFilter()
+  if (bridge) {
     installBrowserExtensionStorageSync(bridge, PRELOAD_STORAGE_SYNC_CONSTANTS)
   }
 }

@@ -88,21 +88,26 @@ export function setBrowserExtensionEnabled(
   enabled: boolean
 ): Promise<BrowserExtensionActionResult> {
   return settle(async () => {
-    const installed = getBrowserExtensionInstallStore().get(extensionId)
-    if (!installed) {
-      throw new Error('Extension is not installed')
-    }
     if (!browserSessionRegistry.getProfile(browserProfileId)) {
       throw new Error('Browser profile not found')
     }
-    if (enabled) {
-      await loadBrowserExtensionIntoProfile(browserProfileId, installed)
-    } else {
+    if (!enabled) {
       unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+        withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
+      )
+      return
     }
-    browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-      withExtensionEnabled(byProfile, browserProfileId, extensionId, enabled)
-    )
+    await withBrowserExtensionLock(extensionId, async () => {
+      const installed = getBrowserExtensionInstallStore().get(extensionId)
+      if (!installed) {
+        throw new Error('Extension is not installed')
+      }
+      await loadBrowserExtensionIntoProfile(browserProfileId, installed)
+      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+        withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
+      )
+    })
   })
 }
 
@@ -172,7 +177,7 @@ export function reloadUnpackedBrowserExtension(
         hostPermissions: summary.hostPermissions,
         optionsPage: summary.optionsPage
       }
-      store.save(record)
+      store.save(record, true)
       await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
     })
   )
@@ -197,24 +202,37 @@ export function addUnpackedBrowserExtension(
       if (existing?.source === 'webstore') {
         throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
       }
-      // Why refresh only a new one: another profile may be running the copy (Reload re-copies it).
-      const loaded = await loadBrowserExtensionFolderIntoProfile(
-        browserProfileId,
-        extensionId,
-        directory,
-        { refresh: existing === null }
-      )
-      store.save({
-        id: loaded.id,
+      const record: InstalledBrowserExtension = {
+        id: extensionId,
         name: summary.name,
-        version: loaded.version,
+        version: summary.version,
         path: directory,
         source: 'unpacked',
         iconPath: summary.iconPath,
         permissions: summary.permissions,
         hostPermissions: summary.hostPermissions,
         optionsPage: summary.optionsPage
-      })
+      }
+      // Native load emits extension-loaded; precedence must already be durable then.
+      if (!existing) {
+        store.save(record)
+      }
+      let loaded: Electron.Extension
+      try {
+        loaded = await loadBrowserExtensionFolderIntoProfile(
+          browserProfileId,
+          extensionId,
+          directory,
+          { refresh: existing === null }
+        )
+      } catch (error) {
+        if (!existing) {
+          unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+          await store.remove(extensionId)
+        }
+        throw error
+      }
+      store.save({ ...record, version: loaded.version })
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )

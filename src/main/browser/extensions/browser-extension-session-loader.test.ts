@@ -1,5 +1,5 @@
 import type * as NodeFs from 'node:fs'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,14 +15,17 @@ const mocks = vi.hoisted(() => {
   const registrationListeners = new Set<(event: unknown, details: { scope: string }) => void>()
   /** Holds prepareBrowserExtensionDirectory until released, to land a load late. */
   const prepareGate: { held: Promise<void> | null } = { held: null }
+  const storage: { path: string | null } = { path: null }
   return {
     userData: '',
+    storage,
     prepareGate,
     prepareCalls: 0,
     prepared,
     loaded,
     registrationListeners,
     emitWorkerStart: vi.fn(),
+    uninstalled: vi.fn(),
     session: {
       serviceWorkers: {
         on: (_name: string, listener: (event: unknown, details: { scope: string }) => void) =>
@@ -34,7 +37,7 @@ const mocks = vi.hoisted(() => {
       },
       registerPreloadScript: vi.fn(),
       unregisterPreloadScript: vi.fn(),
-      getStoragePath: () => null,
+      getStoragePath: () => mocks.storage.path,
       clearStorageData: vi.fn(async () => {}),
       extensions: {
         getExtension: (id: string) => loaded.get(id) ?? null,
@@ -56,7 +59,19 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   app: { on: vi.fn(), getPath: () => mocks.userData },
-  session: { fromPartition: () => mocks.session }
+  session: {
+    fromPartition: (partition: string) =>
+      partition === 'persist:orca-browser-retired'
+        ? {
+            ...mocks.session,
+            extensions: {
+              ...mocks.session.extensions,
+              getExtension: () => null,
+              getAllExtensions: () => []
+            }
+          }
+        : mocks.session
+  }
 }))
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFs>()),
@@ -322,6 +337,25 @@ describe('profile changes while startup loads are in flight', () => {
     expect(getBrowserExtensionProfileStateStore().readProfile('default')).toEqual({})
   })
 
+  it('profile delete clears native extension settings even when extensions never attached', async () => {
+    setBrowserExtensionSupportEnabled(false)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-deleted-profile-'))
+    const folder = join(partition, 'Local Extension Settings', ID)
+    mkdirSync(folder, { recursive: true })
+    mocks.storage.path = partition
+    try {
+      await loader.detachBrowserExtensionsFromProfileSession({
+        ...profile,
+        id: 'retired',
+        partition: 'persist:orca-browser-retired'
+      })
+      expect((await vi.importActual<typeof NodeFs>('node:fs')).existsSync(folder)).toBe(false)
+    } finally {
+      mocks.storage.path = null
+    }
+  })
+
   it('profile delete purges saved data even when extensions never attached to it', async () => {
     setBrowserExtensionSupportEnabled(false)
     await loader.detachBrowserExtensionsFromAllProfileSessions()
@@ -329,4 +363,39 @@ describe('profile changes while startup loads are in flight', () => {
     await loader.detachBrowserExtensionsFromProfileSession({ ...profile, id: 'work' })
     expect(getBrowserExtensionSyncStorageStore().read('work', ID)).toEqual({})
   })
+})
+
+it('does not restore stale enablement after uninstall and reinstall in another Orca profile', async () => {
+  setBrowserExtensionSupportEnabled(true)
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
+  loader.setBrowserExtensionSessionHooks({
+    attached: () => {},
+    detached: () => {},
+    loaded: async () => {},
+    uninstalled: mocks.uninstalled
+  })
+  const store = getBrowserExtensionInstallStore()
+  store.save(installed)
+  await store.remove(ID)
+  store.save(installed)
+  mocks.session.extensions.loadExtension.mockClear()
+  loader.attachBrowserExtensionsToProfileSession(
+    {
+      id: 'inactive-profile',
+      scope: 'isolated',
+      partition: 'persist:orca-browser-inactive',
+      label: 'Inactive',
+      source: null
+    },
+    [ID]
+  )
+  await loader.whenBrowserExtensionProfileLoaded('inactive-profile')
+  expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
+  expect(mocks.uninstalled).toHaveBeenCalledWith('inactive-profile', new Set([ID]))
+
+  await expect(
+    loader.loadBrowserExtensionIntoProfile('inactive-profile', installed)
+  ).rejects.toThrow('Restart Orca')
+  expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
 })

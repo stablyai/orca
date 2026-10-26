@@ -5,6 +5,7 @@ import {
   isChromeWebStoreUrl
 } from '../../../shared/browser-extension-webstore'
 import { getBrowserExtensionProfileIdForSession } from './browser-extension-api-host'
+import { browserSessionRegistry } from '../browser-session-registry'
 
 /** The subset of chrome.management.ExtensionInfo the store page reads. */
 export function toChromeWebStoreExtensionInfo(
@@ -24,12 +25,20 @@ export function toChromeWebStoreExtensionInfo(
 }
 
 /** Why store tabs only: the installed list is a fingerprint, so no other origin ever receives it. */
-function sendToChromeWebStorePages(event: 'onInstalled' | 'onUninstalled', args: unknown[]): void {
+function sendToChromeWebStorePages(
+  event: 'onInstalled' | 'onUninstalled',
+  args: unknown[],
+  enabledExtensionId?: string
+): void {
   for (const contents of webContents.getAllWebContents()) {
+    if (contents.isDestroyed() || contents.getType() !== 'webview') {
+      continue
+    }
+    const profileId = getBrowserExtensionProfileIdForSession(contents.session)
     if (
-      contents.isDestroyed() ||
-      contents.getType() !== 'webview' ||
-      !getBrowserExtensionProfileIdForSession(contents.session)
+      !profileId ||
+      (enabledExtensionId &&
+        !browserSessionRegistry.getEnabledExtensionIds(profileId).includes(enabledExtensionId))
     ) {
       continue
     }
@@ -47,7 +56,7 @@ function sendToChromeWebStorePages(event: 'onInstalled' | 'onUninstalled', args:
 
 /** The store page re-reads its button state only on these events. */
 export function notifyChromeWebStoreInstalled(extension: InstalledBrowserExtension): void {
-  sendToChromeWebStorePages('onInstalled', [toChromeWebStoreExtensionInfo(extension)])
+  sendToChromeWebStorePages('onInstalled', [toChromeWebStoreExtensionInfo(extension)], extension.id)
 }
 
 export function notifyChromeWebStoreUninstalled(extensionId: string): void {

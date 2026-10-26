@@ -21,7 +21,8 @@ function install(answer?: BrowserExtensionStorageSyncRelay) {
     addListener: (listener: Listener) => listeners.add(listener),
     removeListener: (listener: Listener) => listeners.delete(listener)
   }
-  const chrome = { runtime: { id: 'ext', onMessage } }
+  const sendMessage = vi.fn(async (_message: unknown) => true)
+  const chrome = { runtime: { id: 'ext', onMessage, sendMessage } }
   const browser = { runtime: { id: 'ext', onMessage } }
   const realm = { chrome, browser }
   runInNewContext(`(${installContentScriptRelayFilter.toString()})(answer)`, {
@@ -40,13 +41,41 @@ function install(answer?: BrowserExtensionStorageSyncRelay) {
         setTimeout(() => resolve('no reply'), 0)
       }
     })
-  return { chrome, browser, listeners, dispatch }
+  return { chrome, browser, listeners, dispatch, sendMessage }
 }
 
 const fromContentScript = { id: 'ext', tab: { id: 7 } }
 const relayed = { [CONTENT_SCRIPT_RELAY_KEY]: { method: 'get', args: ['theme'] } }
 
 describe('content script relay', () => {
+  it('probes native document identity without exposing packets or adding receiving-end listeners', async () => {
+    const receiver = install()
+    const seen = vi.fn()
+    const second = vi.fn()
+    expect(receiver.listeners.size).toBe(0)
+    receiver.chrome.runtime.onMessage.addListener(seen)
+    receiver.chrome.runtime.onMessage.addListener(second)
+
+    await expect(
+      receiver.dispatch({ orcaDocumentTargetProbe: { token: 'private-probe' } }, { id: 'ext' })
+    ).resolves.toBe(true)
+
+    expect(receiver.sendMessage).toHaveBeenCalledExactlyOnceWith({
+      orcaDocumentTargetProbe: { token: 'private-probe', response: true }
+    })
+    expect(seen).not.toHaveBeenCalled()
+    expect(second).not.toHaveBeenCalled()
+    expect(receiver.listeners.size).toBe(2)
+    await receiver.dispatch(
+      { orcaDocumentTargetProbe: { token: 'private-probe', response: true } },
+      fromContentScript
+    )
+    expect(seen).not.toHaveBeenCalled()
+    receiver.chrome.runtime.onMessage.removeListener(seen)
+    receiver.chrome.runtime.onMessage.removeListener(second)
+    expect(receiver.listeners.size).toBe(0)
+  })
+
   it('answers a content script’s relayed call in the worker and hides it from the extension', async () => {
     const answer = vi.fn(async () => ({ ok: true as const, value: { theme: 'dark' } }))
     const worker = install(answer)

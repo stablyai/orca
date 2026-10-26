@@ -1,3 +1,4 @@
+import { forgetBrowserExtensionContextLifetime } from './browser-extension-context-lifetime'
 import { webFrameMain } from 'electron'
 import {
   BROWSER_EXTENSION_EVENT_CHANNEL,
@@ -71,6 +72,7 @@ export function ensureHostSessionState(
 }
 
 export function forgetHostSession(sess: Electron.Session): void {
+  forgetBrowserExtensionContextLifetime(stateBySession.get(sess))
   for (const context of stateBySession.get(sess)?.workers.values() ?? []) {
     detachWorkerEventStream(context)
   }
@@ -82,6 +84,7 @@ export function forgetExtensionContexts(sess: Electron.Session, extensionId: str
   if (!state) {
     return
   }
+  forgetBrowserExtensionContextLifetime(state, extensionId)
   const worker = state.workers.get(extensionId)
   if (worker) {
     detachWorkerEventStream(worker)

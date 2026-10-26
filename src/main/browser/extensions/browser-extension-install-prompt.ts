@@ -24,9 +24,10 @@ const pendingPrompts = new Map<string, PendingPrompt>()
 export function requestBrowserExtensionInstallPrompt(
   renderer: Electron.WebContents,
   prompt: Omit<BrowserExtensionInstallPromptRequest, 'requestId'>,
-  guest?: Electron.WebContents
+  guest?: Electron.WebContents,
+  signal?: AbortSignal
 ): Promise<boolean> {
-  if (renderer.isDestroyed() || guest?.isDestroyed()) {
+  if (renderer.isDestroyed() || guest?.isDestroyed() || signal?.aborted) {
     return Promise.resolve(false)
   }
   const requestId = randomUUID()
@@ -42,6 +43,7 @@ export function requestBrowserExtensionInstallPrompt(
       settled = true
       clearTimeout(timer)
       pendingPrompts.delete(requestId)
+      signal?.removeEventListener('abort', decline)
       for (const contents of watched) {
         contents.removeListener('destroyed', decline)
         contents.removeListener('render-process-gone', decline)
@@ -57,6 +59,7 @@ export function requestBrowserExtensionInstallPrompt(
       resolve(accepted)
     }
     pendingPrompts.set(requestId, { renderer, settle })
+    signal?.addEventListener('abort', decline, { once: true })
     for (const contents of watched) {
       contents.once('destroyed', decline)
       contents.once('render-process-gone', decline)

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,11 +6,15 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   userData: '',
-  handlers: new Map<string, (event: unknown, request: unknown) => Promise<unknown>>(),
+  handlers: new Map<
+    string,
+    (event: unknown, request: unknown, userGesture?: boolean) => Promise<unknown>
+  >(),
   frames: new Map<
     string,
     { url: string; isDestroyed: () => boolean; send: ReturnType<typeof vi.fn> }
   >(),
+  contents: new Map<number, unknown>(),
   prompt: vi.fn<() => Promise<boolean>>()
 }))
 
@@ -18,18 +23,23 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
   Notification: { isSupported: () => false },
   session: { fromPartition: vi.fn() },
-  webContents: { fromId: vi.fn() },
+  webContents: { fromId: (id: number) => mocks.contents.get(id) },
   ipcMain: {
     removeHandler: (channel: string) => mocks.handlers.delete(channel),
-    handle: (channel: string, handler: (event: unknown, request: unknown) => Promise<unknown>) =>
-      mocks.handlers.set(channel, handler)
+    handle: (
+      channel: string,
+      handler: (event: unknown, request: unknown, userGesture?: boolean) => Promise<unknown>
+    ) => mocks.handlers.set(channel, handler)
   },
   webFrameMain: {
     fromId: (processId: number, routingId: number) => mocks.frames.get(`${processId}:${routingId}`)
   }
 }))
 vi.mock('../browser-manager', () => ({
-  browserManager: { getWebContentsIdByTabId: () => new Map() }
+  browserManager: {
+    getWebContentsIdByTabId: () => new Map(),
+    getGuestWebContentsId: (id: string) => (id === 'gesture-page' ? 700 : null)
+  }
 }))
 vi.mock('../../ipc/browser-tab-registration-wait', () => ({ waitForTabRegistration: vi.fn() }))
 vi.mock('../../runtime/browser/browser-tab-renderer-create', () => ({
@@ -51,7 +61,6 @@ const host = await import('./browser-extension-api-host')
 const { registerBrowserExtensionNamespaces } =
   await import('./register-browser-extension-namespaces')
 const { noteBrowserExtensionUserGesture } = await import('./api/permissions')
-const { restoreBrowserExtensionContentScripts } = await import('./api/scripting')
 const { getBrowserExtensionProfileStateStore } =
   await import('./browser-extension-profile-state-store')
 const menuHost = await import('./browser-extension-context-menu-host')
@@ -59,6 +68,7 @@ const webRequest = await import('./browser-extension-web-request')
 const { setBrowserExtensionSupportEnabled } = await import('./browser-extension-support')
 const contexts = await import('./browser-extension-contexts')
 const { attachWorkerEventStream } = await import('./browser-extension-worker-event-stream')
+const { handleBrowserExtensionApiRequest } = await import('./browser-extension-api-request')
 const { PRELOAD_STORAGE_RELAY_NAMESPACE } =
   await import('../../../preload/browser-extension-storage-relay')
 const { PRELOAD_STORAGE_SYNC_NAMESPACE } =
@@ -118,12 +128,21 @@ const cookies = {
 }
 const extensionSession = {
   cookies,
-  protocol: { handle: vi.fn(), unhandle: vi.fn() },
-  extensions: {
-    getExtension: (id: string) => extensions.get(id) ?? null,
-    getAllExtensions: () => [...extensions.values()],
-    on: vi.fn()
+  webRequest: {
+    onSendHeaders: vi.fn(),
+    onHeadersReceived: vi.fn(),
+    onResponseStarted: vi.fn(),
+    onBeforeRedirect: vi.fn(),
+    onErrorOccurred: vi.fn(),
+    onCompleted: vi.fn(
+      (_filter: unknown, callback: (details: Record<string, unknown>) => void) => callback
+    )
   },
+  protocol: { handle: vi.fn(), unhandle: vi.fn() },
+  extensions: Object.assign(new EventEmitter(), {
+    getExtension: (id: string) => extensions.get(id) ?? null,
+    getAllExtensions: () => [...extensions.values()]
+  }),
   serviceWorkers: {
     on: vi.fn(),
     getAllRunning: () => ({}),
@@ -145,7 +164,7 @@ function caller(extensionId: string, kind: 'worker' | 'page' = 'worker') {
     ...(kind === 'worker'
       ? { fromWorker: true }
       : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only its presence marks a page caller.
-        { webContents: {} as Electron.WebContents })
+        { webContents: {} as Electron.WebContents, userGesture: true })
   }
 }
 
@@ -168,15 +187,161 @@ let nextRoutingId = 1
 beforeAll(() => {
   setBrowserExtensionSupportEnabled(true)
   registerBrowserExtensionNamespaces()
+  webRequest.installBrowserExtensionWebRequestForwarding()
   host.installBrowserExtensionApiHost()
   host.attachBrowserExtensionApiHostToSession(session, 'default')
 })
 
 beforeEach(() => {
+  host.attachBrowserExtensionApiHostToSession(session, 'default')
   mocks.prompt.mockReset()
 })
 
 describe('permissions.request', () => {
+  it.each(['extension unload', 'profile deletion'] as const)(
+    'does not recreate grants when accepted after %s',
+    async (reason) => {
+      const extensionId = (reason === 'extension unload' ? 'd' : 'e').repeat(32)
+      extensions.set(extensionId, makeExtension(extensionId, { optional_permissions: ['privacy'] }))
+      let answer: (accepted: boolean) => void = () => {}
+      mocks.prompt.mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve
+        })
+      )
+      const pending = call(
+        extensionId,
+        'permissions',
+        'request',
+        [{ permissions: ['privacy'] }],
+        'page'
+      )
+      const store = getBrowserExtensionProfileStateStore()
+      if (reason === 'extension unload') {
+        extensionSession.extensions.emit('extension-unloaded', {}, extensions.get(extensionId))
+        store.forgetExtension(extensionId)
+      } else {
+        host.forgetBrowserExtensionContexts(session)
+        store.forgetProfile('default')
+      }
+      answer(true)
+      await expect(pending).resolves.toBe(false)
+      expect(store.readProfile('default')).not.toHaveProperty(extensionId)
+      host.attachBrowserExtensionApiHostToSession(session, 'default')
+    }
+  )
+
+  it('delivers a previously registered optional event only while permission is granted', async () => {
+    const extensionId = 'f'.repeat(32)
+    extensions.set(extensionId, makeExtension(extensionId, { optional_permissions: ['privacy'] }))
+    const event = 'services.passwordSavingEnabled.onChange'
+    const frame = await listenFrame(extensionId, 'privacy', event)
+    const state = contexts.getHostSessionState(session)
+    if (!state) {
+      throw new Error('Session not attached')
+    }
+    const worker = contexts.ensureWorkerContext(
+      state,
+      extensionId,
+      `chrome-extension://${extensionId}/`
+    )
+    const listen = () =>
+      handleBrowserExtensionApiRequest(
+        caller(extensionId),
+        state,
+        { type: 'listen', namespace: 'privacy', event, active: true },
+        { kind: 'worker', context: worker }
+      )
+    await expect(listen()).resolves.toEqual({ ok: true, value: undefined })
+    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: false }])
+    expect(frame.payloads()).toEqual([])
+    mocks.prompt.mockResolvedValueOnce(true)
+    await call(extensionId, 'permissions', 'request', [{ permissions: ['privacy'] }], 'page')
+    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: false }])
+    expect(frame.payloads()).toEqual([[{ value: false }]])
+    expect(worker.queue).toHaveLength(1)
+    await call(extensionId, 'permissions', 'remove', [{ permissions: ['privacy'] }])
+    const send = vi.fn()
+    attachWorkerEventStream(worker, { send, close() {} })
+    await expect(listen()).resolves.toEqual({ ok: true, value: undefined })
+    expect(send).not.toHaveBeenCalled()
+    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: true }])
+    expect(frame.payloads()).toEqual([[{ value: false }]])
+  })
+
+  it('permits a worker permission request from its toolbar onClicked handler', async () => {
+    const extensionId = 'g'.repeat(32)
+    extensions.set(
+      extensionId,
+      makeExtension(extensionId, { action: {}, optional_permissions: ['privacy'] })
+    )
+    mocks.contents.set(700, {
+      id: 700,
+      session,
+      isDestroyed: () => false,
+      getType: () => 'webview'
+    })
+    const state = contexts.getHostSessionState(session)
+    if (!state) {
+      throw new Error('Session not attached')
+    }
+    const worker = contexts.ensureWorkerContext(
+      state,
+      extensionId,
+      `chrome-extension://${extensionId}/`
+    )
+    worker.events.add(contexts.eventKey('action', 'onClicked'))
+    let request: Promise<unknown> | undefined
+    attachWorkerEventStream(worker, {
+      send: () => {
+        request = call(extensionId, 'permissions', 'request', [{ permissions: ['privacy'] }])
+      },
+      close() {}
+    })
+    const { activateBrowserExtensionAction } = await import('./browser-extension-toolbar')
+    mocks.prompt.mockResolvedValueOnce(true)
+    expect(
+      activateBrowserExtensionAction({
+        browserPageId: 'gesture-page',
+        extensionId,
+        anchor: { x: 0, y: 0, width: 20, height: 20 },
+        popupOnly: false
+      })
+    ).toEqual({ ok: true })
+    expect(request).toBeDefined()
+    await expect(request).resolves.toBe(true)
+    mocks.contents.delete(700)
+  })
+
+  it('begins delivering network events when optional webRequest permission is granted', async () => {
+    const extensionId = 'h'.repeat(32)
+    extensions.set(
+      extensionId,
+      makeExtension(extensionId, {
+        optional_permissions: ['webRequest'],
+        host_permissions: ['https://*/*']
+      })
+    )
+    const frame = await listenFrame(extensionId, 'webRequest', 'onCompleted')
+    webRequest.observeBrowserExtensionWebRequests(session)
+    expect(extensionSession.webRequest.onCompleted).not.toHaveBeenCalled()
+    mocks.prompt.mockResolvedValueOnce(true)
+    await call(extensionId, 'permissions', 'request', [{ permissions: ['webRequest'] }], 'page')
+    const completed = extensionSession.webRequest.onCompleted.mock.calls.at(-1)?.[1]
+    expect(completed).toBeDefined()
+    completed?.({
+      id: 9,
+      url: 'https://site.test/image.png',
+      method: 'GET',
+      resourceType: 'image',
+      timestamp: 1,
+      initiatorOrigin: 'https://site.test'
+    })
+    expect(frame.payloads()).toEqual([
+      [expect.objectContaining({ url: 'https://site.test/image.png', type: 'image' })]
+    ])
+  })
+
   it('needs a user gesture in a worker, then prompts, persists the grant and fires onAdded', async () => {
     const frame = await listenFrame(VAULT, 'permissions', 'onAdded')
     await expect(
@@ -289,55 +454,6 @@ describe('action icons', () => {
         48: 'https://example.com/icon.png'
       }
     })
-  })
-})
-
-describe('persistAcrossSessions content scripts', () => {
-  it('serves the restore namespace the preload calls, outside the extension-visible surface', async () => {
-    const { PRELOAD_CONTENT_SCRIPT_RESTORE_NAMESPACE } =
-      await import('../../../preload/browser-extension-content-script-restore')
-    const { BROWSER_EXTENSION_API_SURFACE } =
-      await import('../../../preload/browser-extension-api-surface')
-    expect(
-      registry.getBrowserExtensionNamespace(PRELOAD_CONTENT_SCRIPT_RESTORE_NAMESPACE)
-    ).not.toBeNull()
-    expect(BROWSER_EXTENSION_API_SURFACE).not.toHaveProperty(
-      PRELOAD_CONTENT_SCRIPT_RESTORE_NAMESPACE
-    )
-  })
-
-  it('records persisted registrations and hands them to the worker once per session', async () => {
-    await call(VAULT, 'scripting', 'registerContentScripts', [
-      [
-        { id: 'keep', matches: ['https://*/*'], js: ['fill.js'] },
-        { id: 'session-only', matches: ['https://*/*'], js: ['x.js'], persistAcrossSessions: false }
-      ],
-      undefined
-    ])
-    await call(VAULT, 'scripting', 'updateContentScripts', [
-      [{ id: 'keep', runAt: 'document_start' }],
-      undefined
-    ])
-    expect(getBrowserExtensionProfileStateStore().read('default', VAULT).contentScripts).toEqual([
-      { id: 'keep', matches: ['https://*/*'], js: ['fill.js'], runAt: 'document_start' }
-    ])
-
-    // Startup waits until the worker restored them.
-    const extension = caller(VAULT).extension
-    const restored = restoreBrowserExtensionContentScripts(session, 'default', extension, 10_000)
-    expect(startWorkerForScope).toHaveBeenCalledWith(`chrome-extension://${VAULT}/`)
-    await expect(call(VAULT, 'orcaContentScriptRestore', 'take', [])).resolves.toEqual([
-      { id: 'keep', matches: ['https://*/*'], js: ['fill.js'], runAt: 'document_start' }
-    ])
-    await expect(call(VAULT, 'orcaContentScriptRestore', 'take', [])).resolves.toEqual([])
-    await call(VAULT, 'orcaContentScriptRestore', 'done', [0])
-    await expect(restored).resolves.toBeUndefined()
-    await expect(call(VAULT, 'orcaContentScriptRestore', 'take', [], 'page')).rejects.toThrow(
-      'Only the extension worker restores scripts'
-    )
-
-    await call(VAULT, 'scripting', 'unregisterContentScripts', [undefined])
-    expect(getBrowserExtensionProfileStateStore().read('default', VAULT).contentScripts).toEqual([])
   })
 })
 
@@ -603,6 +719,10 @@ describe('storage.sync', () => {
     return { changes: () => send.mock.calls.map(([payload]) => payload.args) }
   }
 
+  beforeEach(async () => {
+    await sync('clear', [])
+  })
+
   it('reads with every Chrome key form and keeps values as JSON', async () => {
     await sync('set', [{ theme: { dark: true }, size: 3, when: new Date(0), fn: () => 1 }])
     await expect(sync('get', [null])).resolves.toEqual({
@@ -658,6 +778,17 @@ describe('storage.sync', () => {
     await sync('set', [{ mine: true }])
     await expect(sync('get', [null], { extensionId: OTHER })).resolves.toEqual({})
     await expect(sync('get', [null], { profile: 'work' })).resolves.toEqual({})
+    await sync('clear', [])
+  })
+
+  it('validates an atomic batch against its final size regardless of key order', async () => {
+    const initial = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [`key${index}`, 'x'.repeat(8000)])
+    )
+    await sync('set', [initial])
+    await expect(sync('set', [{ newKey: 'y'.repeat(8000), key0: 'short' }])).resolves.toBeDefined()
+    await expect(sync('getBytesInUse', [])).resolves.toBe(96087)
+    await expect(sync('get', ['key0'])).resolves.toEqual({ key0: 'short' })
     await sync('clear', [])
   })
 

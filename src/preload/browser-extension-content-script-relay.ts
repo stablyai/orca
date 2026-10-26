@@ -30,10 +30,12 @@ const isApiObject = (value: unknown): value is ApiObject =>
  */
 export function installContentScriptRelayFilter(answer?: BrowserExtensionStorageSyncRelay): void {
   const key = 'orcaContentScriptRelay'
+  const probeKey = 'orcaDocumentTargetProbe'
   const isObject = (value: unknown): value is ApiObject =>
     value !== null && typeof value === 'object'
   const isCallable = (value: unknown): value is ExtensionCallable => typeof value === 'function'
-  const isRelayed = (message: unknown): boolean => isObject(message) && key in message
+  const isRelayed = (message: unknown): boolean =>
+    isObject(message) && (key in message || probeKey in message)
   const root: { chrome?: unknown; browser?: unknown } = globalThis
   const chromeApi = root.chrome
   const runtime = isObject(chromeApi) ? chromeApi.runtime : null
@@ -52,8 +54,31 @@ export function installContentScriptRelayFilter(answer?: BrowserExtensionStorage
       if (!isCallable(callback) || wrapped.has(callback)) {
         return
       }
-      const listener: ExtensionCallable = (message, ...rest) =>
-        isRelayed(message) ? undefined : callback(message, ...rest)
+      const listener: ExtensionCallable = (message, ...rest) => {
+        const probe = isObject(message) ? message[probeKey] : null
+        const [sender, respond] = rest
+        if (
+          isObject(probe) &&
+          typeof probe.token === 'string' &&
+          probe.response !== true &&
+          isObject(sender) &&
+          sender.id === runtime.id &&
+          wrapped.keys().next().value === callback &&
+          isCallable(runtime.sendMessage) &&
+          isCallable(respond)
+        ) {
+          Promise.resolve(
+            runtime.sendMessage({
+              [probeKey]: { token: probe.token, response: true }
+            })
+          ).then(
+            () => respond(true),
+            () => respond(false)
+          )
+          return true
+        }
+        return isRelayed(message) ? undefined : callback(message, ...rest)
+      }
       wrapped.set(callback, listener)
       call('addListener', listener)
     },

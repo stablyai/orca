@@ -1,4 +1,7 @@
-import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
+import {
+  reportBrowserSessionWebRequest,
+  type ObservedWebRequestDetails
+} from './browser-session-web-request-observer'
 
 /**
  * Electron allows one session.webRequest listener per event, so request decisions owned by other
@@ -22,6 +25,12 @@ export type BrowserSessionRequestDecider = {
     session: Electron.Session,
     details: Electron.OnHeadersReceivedListenerDetails
   ) => Electron.HeadersReceivedResponse | null
+  requestFinished?: (
+    session: Electron.Session,
+    event: 'onCompleted' | 'onErrorOccurred',
+    details: ObservedWebRequestDetails
+  ) => void
+  requestLifecycleStopped?: (session: Electron.Session) => void
 }
 
 let decider: BrowserSessionRequestDecider | null = null
@@ -107,6 +116,37 @@ export function decideBrowserSessionRequestHeaders(
 }
 
 const headersReceivedSessions = new WeakSet<Electron.Session>()
+const requestLifecycleSessions = new WeakSet<Electron.Session>()
+
+/** Shared completion handlers also release enforcement state for cache hits and failed requests. */
+export function installBrowserSessionRequestLifecycle(session: Electron.Session): void {
+  if (requestLifecycleSessions.has(session)) {
+    return
+  }
+  requestLifecycleSessions.add(session)
+  const finished = (
+    event: 'onCompleted' | 'onErrorOccurred',
+    details: ObservedWebRequestDetails
+  ): void => {
+    reportBrowserSessionWebRequest(session, event, details)
+    try {
+      decider?.requestFinished?.(session, event, details)
+    } catch (error) {
+      warn(event, error)
+    }
+  }
+  const filter = { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
+  session.webRequest.onCompleted(filter, (details) => finished('onCompleted', details))
+  session.webRequest.onErrorOccurred(filter, (details) => finished('onErrorOccurred', details))
+}
+
+export function removeBrowserSessionRequestLifecycle(session: Electron.Session): void {
+  if (requestLifecycleSessions.delete(session)) {
+    session.webRequest.onCompleted(null)
+    session.webRequest.onErrorOccurred(null)
+    decider?.requestLifecycleStopped?.(session)
+  }
+}
 
 /**
  * The session's one onHeadersReceived, installed on first need (an extension that observes

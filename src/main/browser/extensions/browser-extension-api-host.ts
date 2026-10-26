@@ -55,18 +55,25 @@ function resolveFrameCaller(event: Electron.IpcMainInvokeEvent): {
 /** Installs the frame-side handler once; workers call through each session's protocol handler. */
 export function installBrowserExtensionApiHost(): void {
   ipcMain.removeHandler(BROWSER_EXTENSION_INVOKE_CHANNEL)
-  ipcMain.handle(BROWSER_EXTENSION_INVOKE_CHANNEL, async (event, request: unknown) => {
-    const resolved = resolveFrameCaller(event)
-    if (!resolved) {
-      return { ok: false, error: 'Not an extension context' } satisfies BrowserExtensionInvokeResult
+  ipcMain.handle(
+    BROWSER_EXTENSION_INVOKE_CHANNEL,
+    async (event, request: unknown, userGesture?: unknown) => {
+      const resolved = resolveFrameCaller(event)
+      if (!resolved) {
+        return {
+          ok: false,
+          error: 'Not an extension context'
+        } satisfies BrowserExtensionInvokeResult
+      }
+      const { caller, state, frame } = resolved
+      caller.userGesture = userGesture === true
+      return handleBrowserExtensionApiRequest(caller, state, request, {
+        kind: 'frame',
+        webContents: event.sender,
+        frame
+      })
     }
-    const { caller, state, frame } = resolved
-    return handleBrowserExtensionApiRequest(caller, state, request, {
-      kind: 'frame',
-      webContents: event.sender,
-      frame
-    })
-  })
+  )
 }
 
 /** Tracks the running worker so calls and events can extend its lifetime with startTask(). */

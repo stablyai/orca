@@ -30,16 +30,16 @@ afterEach(() => {
 describe('declarativeNetRequest matched rules', () => {
   it('counts actions but not allows, per tab, and shows the count only when displayed', () => {
     const hidden = tracker({ displays: false })
-    hidden.matched.record(action(1), 3, false)
-    hidden.matched.record(action(2, 'allow'), 3, false)
+    hidden.matched.record(action(1), 3, null)
+    hidden.matched.record(action(2, 'allow'), 3, null)
     expect(hidden.matched.actionCount(EXT, 3)).toBe(1)
     expect(hidden.shown).toEqual([])
     expect(hidden.matched.actionCounts(EXT)).toEqual([[3, 1]])
 
     const shown = tracker()
-    shown.matched.record(action(1, 'redirect'), 3, false)
-    shown.matched.record(action(1, 'modifyHeaders'), 4, false)
-    shown.matched.record(action(1), -1, false)
+    shown.matched.record(action(1, 'redirect'), 3, null)
+    shown.matched.record(action(1, 'modifyHeaders'), 4, null)
+    shown.matched.record(action(1), -1, null)
     expect(shown.shown).toEqual([
       [3, 1],
       [4, 1]
@@ -48,8 +48,8 @@ describe('declarativeNetRequest matched rules', () => {
 
   it("starts a tab over at each document, keeping the navigation's own matches", () => {
     const { matched } = tracker()
-    matched.record(action(1), 3, false)
-    matched.record(action(7), 3, true)
+    matched.record(action(1), 3, null)
+    matched.record(action(7, 'redirect'), 3, 7)
     expect(matched.matchedRules(EXT, { tabId: 3 }).map((info) => info.rule.ruleId)).toEqual([1])
     matched.commitNavigation(3)
     expect(matched.matchedRules(EXT, { tabId: 3 }).map((info) => info.rule.ruleId)).toEqual([7])
@@ -59,10 +59,10 @@ describe('declarativeNetRequest matched rules', () => {
   it('filters by tab and time, and drops matches outside tabs after five minutes', () => {
     vi.useFakeTimers({ now: 1_000 })
     const { matched } = tracker()
-    matched.record(action(1), -1, false)
-    matched.record(action(2), 3, false)
+    matched.record(action(1), -1, null)
+    matched.record(action(2), 3, null)
     vi.setSystemTime(2_000)
-    matched.record(action(3), 3, false)
+    matched.record(action(3), 3, null)
     expect(matched.matchedRules(EXT, { minTimeStamp: 1_500 }).map((i) => i.rule.ruleId)).toEqual([
       3
     ])
@@ -73,9 +73,24 @@ describe('declarativeNetRequest matched rules', () => {
 
   it('keeps no rule list for extensions that cannot read it', () => {
     const { matched } = tracker({ keeps: false })
-    matched.record(action(1), 3, false)
+    matched.record(action(1), 3, null)
     expect(matched.matchedRules(EXT, {})).toEqual([])
     expect(matched.actionCount(EXT, 3)).toBe(1)
+  })
+
+  it('does not restore historical feedback after revocation and regrant during navigation', () => {
+    const options = { keeps: true }
+    const { matched } = tracker(options)
+    matched.record(action(1), 3, null)
+    matched.record(action(2, 'redirect'), 3, 7)
+    options.keeps = false
+    matched.forgetMatches(EXT)
+    options.keeps = true
+    matched.commitNavigation(3)
+    expect(matched.matchedRules(EXT, {})).toEqual([])
+    expect(matched.actionCount(EXT, 3)).toBe(1)
+    matched.record(action(3), 3, null)
+    expect(matched.matchedRules(EXT, {}).map((info) => info.rule.ruleId)).toEqual([3])
   })
 
   it('lets the extension adjust the count, never below zero', () => {

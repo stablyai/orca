@@ -22,6 +22,8 @@ const wire = await import('../../../shared/browser-extension-worker-api')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
 const { getBrowserExtensionWorkerToken } = await import('./browser-extension-worker-api-host')
+const { forgetExtensionContexts, getHostSessionState } =
+  await import('./browser-extension-contexts')
 
 const VAULT = 'a'.repeat(32)
 const OTHER = 'b'.repeat(32)
@@ -46,6 +48,7 @@ function makeSession(ids: string[]) {
   const handlers: ProtocolHandler[] = []
   const stub = {
     handlers,
+    extensions,
     worker,
     task,
     startWorkerForScope: vi.fn((_scope: string) => Promise.resolve(worker)),
@@ -230,6 +233,49 @@ describe('worker API protocol', () => {
     expect(vaultSession.worker.startTask).toHaveBeenCalled()
     expect(vaultSession.task.end).toHaveBeenCalled()
   })
+
+  it.each(['extension reload', 'host replacement'] as const)(
+    'rejects an old lifetime when its request body finishes after %s',
+    async (teardown) => {
+      const stub = makeSession([VAULT])
+      const session = asSession(stub)
+      host.attachBrowserExtensionApiHostToSession(session, 'retired')
+      let release = (_body: Uint8Array): void => {}
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          release = (bytes) => {
+            controller.enqueue(bytes)
+            controller.close()
+          }
+        }
+      })
+      const options = { method: 'POST', body, duplex: 'half' }
+      const request = Object.assign(new Request(wire.BROWSER_EXTENSION_API_CALL_URL, options), {
+        initiatorOrigin: originOf(VAULT)
+      })
+      const before = seen.length
+      const pending = send(stub, request)
+      if (teardown === 'extension reload') {
+        forgetExtensionContexts(session, VAULT)
+        stub.extensions.set(VAULT, makeExtension(VAULT))
+      } else {
+        host.forgetBrowserExtensionContexts(session)
+        host.attachBrowserExtensionApiHostToSession(session, 'replacement')
+      }
+      release(
+        new TextEncoder().encode(
+          wire.encodeBrowserExtensionWireJson({
+            token: getBrowserExtensionWorkerToken(VAULT),
+            request: echo
+          })
+        )
+      )
+      expect((await pending).status).toBe(403)
+      expect(seen).toHaveLength(before)
+      expect(getHostSessionState(session)?.workers.has(VAULT)).toBe(false)
+      host.forgetBrowserExtensionContexts(session)
+    }
+  )
 
   it('streams events, queues them while the worker is stopped, and delivers after restart', async () => {
     const first = await openEvents(vaultSession, VAULT)

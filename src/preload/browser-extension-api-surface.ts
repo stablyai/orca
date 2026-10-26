@@ -183,13 +183,13 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
     methods: { get: {}, getAll: {}, set: {}, remove: {}, getAllCookieStores: {} },
     events: ['onChanged']
   },
-  // Electron registers first; Orca records persistAcrossSessions scripts for the next launch.
   scripting: {
     permission: 'scripting',
     methods: {
-      registerContentScripts: { native: {} },
-      updateContentScripts: { native: {} },
-      unregisterContentScripts: { native: {} }
+      registerContentScripts: {},
+      updateContentScripts: {},
+      unregisterContentScripts: {},
+      getRegisteredContentScripts: {}
     },
     events: []
   },
