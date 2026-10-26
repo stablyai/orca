@@ -106,7 +106,8 @@ async function uploadMobileClipboardImageTransaction(
   const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
     connectionId,
-    fileName
+    // Image uploads keep the exact request shape older hosts and recordings expect.
+    ...(fileName ? { fileName } : {})
   })
 
   // Read method_not_found before interpretation to allow a small image’s legacy single-frame fallback.
