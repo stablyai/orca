@@ -73,18 +73,17 @@ export async function prepareMobileClipboardImageBase64(
 export async function saveMobileClipboardImageAsTempFile(
   client: MobileClipboardImageRpcSender,
   imageData: string,
-  args?: { connectionId?: string | null; fileName?: string | null }
+  args?: { connectionId?: string | null; fileName?: string }
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
-  const fileName = args?.fileName?.trim() ? args.fileName.trim() : undefined
   for (let retry = 0; ; retry += 1) {
     try {
       return await uploadMobileClipboardImageTransaction(
         client,
         contentBase64,
         connectionId,
-        fileName
+        args?.fileName
       )
     } catch (error) {
       if (
@@ -117,11 +116,7 @@ async function uploadMobileClipboardImageTransaction(
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
       return clipboardImageSaveAsTempFile.interpret(
-        await clipboardImageSaveAsTempFile.request(client, {
-          contentBase64,
-          connectionId,
-          ...(fileName ? { fileName } : {})
-        })
+        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
       )
     }
     throw new Error(startResponse.error.message)

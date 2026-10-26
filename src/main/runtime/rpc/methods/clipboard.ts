@@ -16,7 +16,7 @@ const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
 type ClipboardImageUpload = {
   expectedBase64Length: number
   connectionId?: string | null
-  fileName?: string | null
+  fileName?: string
   mobileClientId?: string
   chunks: string[]
   receivedBase64Length: number
@@ -99,8 +99,7 @@ export const CLIPBOARD_METHODS = [
       const path = await saveClipboardImageBufferAsTempFile(
         Buffer.from(params.contentBase64, 'base64'),
         {
-          connectionId: params.connectionId,
-          fileName: params.fileName
+          connectionId: params.connectionId
         }
       )
       if (clientId && !params.connectionId) {

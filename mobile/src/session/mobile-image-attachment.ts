@@ -41,7 +41,7 @@ export async function attachMobileImageToTerminal(
   const connectionId = await getConnectionId()
   const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
     connectionId,
-    ...(picked.fileName ? { fileName: picked.fileName } : {})
+    fileName: picked.fileName
   })
   // Always bracket injected image paths atomically and append a space so following typing cannot glue onto the filename.
   const payload = separateImagePasteFromFollowingText(

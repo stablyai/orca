@@ -47,30 +47,15 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
-  it('preserves the original sanitized file name and extension when provided', async () => {
+  it('saves a phone-picked file under its own leaf name in a folder of its own', async () => {
     const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
       fileName: '../dir/柴静-看见.txt'
     })
 
-    expect(dirname(savedPath)).toBe(join('/os/temp'))
-    expect(savedPath).toMatch(/orca-paste-\d+-uuid-1-柴静-看见\.txt$/)
-  })
-
-  it('keeps supplied extensionless file names extensionless instead of appending .png', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('FROM node:22'), {
-      fileName: '../dir/Dockerfile'
-    })
-
-    expect(basename(savedPath)).toMatch(/^orca-paste-\d+-uuid-1-Dockerfile$/)
-  })
-
-  it('bounds the complete generated file name within 255 UTF-8 bytes for multi-byte names', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
-      fileName: `${'中'.repeat(90)}.txt`
-    })
-
-    const generatedName = basename(savedPath)
-    expect(generatedName).toMatch(/^orca-paste-\d+-uuid-1-中+\.txt$/)
-    expect(Buffer.byteLength(generatedName, 'utf8')).toBeLessThanOrEqual(255)
+    expect(mkdirMock).toHaveBeenCalledWith(dirname(savedPath), { recursive: true })
+    expect(dirname(dirname(savedPath))).toBe(join('/os/temp'))
+    expect(basename(dirname(savedPath))).toMatch(/^orca-paste-\d+-uuid-1$/)
+    expect(basename(savedPath)).toBe('柴静-看见.txt')
+    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from('hello'))
   })
 })

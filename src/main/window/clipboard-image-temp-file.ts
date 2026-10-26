@@ -5,11 +5,15 @@ import { randomUUID } from 'node:crypto'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import {
+  sanitizeAgentSessionAttachmentName,
+  type AgentSessionAttachmentClipboardTarget
+} from '../../shared/agent-session-attachments'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
+  /** A phone-picked file's own name; without it the paste is saved as a .png. */
   fileName?: string | null
   runtimeEnvironmentId?: string | null
   /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
@@ -20,62 +24,13 @@ export type SaveClipboardImageAsTempFileArgs = {
   forStructuredChat?: boolean
 }
 
-const MAX_TEMP_FILE_NAME_BYTES = 255
-
-function sliceUtf8ByBytes(value: string, maxBytes: number): string {
-  if (maxBytes <= 0) {
-    return ''
-  }
-  if (Buffer.byteLength(value, 'utf8') <= maxBytes) {
-    return value
-  }
-  let result = ''
-  let usedBytes = 0
-  for (const char of value) {
-    const charBytes = Buffer.byteLength(char, 'utf8')
-    if (usedBytes + charBytes > maxBytes) {
-      break
-    }
-    result += char
-    usedBytes += charBytes
-  }
-  return result
-}
-
-function sanitizeTempAttachmentFileName(
-  rawName: string | null | undefined,
-  maxBytes: number
-): string | null {
-  if (!rawName || maxBytes <= 0) {
-    return null
-  }
-  const baseName = rawName.trim().split(/[/\\]/).pop() ?? ''
-  const cleaned = baseName.replace(/[\p{Cc}<>:"/\\|?*]+/gu, '_').replace(/^[.\s]+|[.\s]+$/g, '')
-  if (!cleaned) {
-    return null
-  }
-  const ext = path.posix.extname(cleaned)
-  const stem = ext ? cleaned.slice(0, -ext.length) : cleaned
-  if (!stem) {
-    return null
-  }
-  const boundedStem = sliceUtf8ByBytes(stem, maxBytes - Buffer.byteLength(ext, 'utf8'))
-  if (!boundedStem) {
-    return sliceUtf8ByBytes(stem, maxBytes) || null
-  }
-  return `${boundedStem}${ext}`
-}
-
 export async function saveClipboardImageBufferAsTempFile(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  const prefix = `orca-paste-${Date.now()}-${randomUUID()}`
-  const maxSanitizedBytes = MAX_TEMP_FILE_NAME_BYTES - Buffer.byteLength(`${prefix}-`, 'utf8')
-  const sanitizedFileName = sanitizeTempAttachmentFileName(args?.fileName, maxSanitizedBytes)
-  const fileName = sanitizedFileName ? `${prefix}-${sanitizedFileName}` : `${prefix}.png`
+  const pasteName = `orca-paste-${Date.now()}-${randomUUID()}`
 
   if (args?.connectionId) {
     throw new SshHostNotServedError(args.connectionId)
@@ -87,7 +42,13 @@ export async function saveClipboardImageBufferAsTempFile(
     folder = nativeChatPasteFolder()
     await fs.mkdir(folder, { recursive: true })
   }
-  const tempPath = path.join(folder, fileName)
+  let tempPath = path.join(folder, `${pasteName}.png`)
+  if (args?.fileName) {
+    // A picked file keeps its own name, so the paste gets a folder to stay unique.
+    const fileFolder = path.join(folder, pasteName)
+    await fs.mkdir(fileFolder, { recursive: true })
+    tempPath = path.join(fileFolder, sanitizeAgentSessionAttachmentName(args.fileName))
+  }
   await fs.writeFile(tempPath, buffer)
   return tempPath
 }

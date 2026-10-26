@@ -23,8 +23,20 @@ import { mobilePickedFileFallbackName } from './mobile-picked-file-name'
 // Refusals reject; only user cancellation returns an empty selection.
 
 // The page cannot load a native cache URI; the composer falls back to an inline data URI.
-function pickedImage(base64: string, fileName?: string | null): PickedMobileImage {
+function pickedImage(base64: string, fileName: string | undefined): PickedMobileImage {
   return fileName ? { base64, fileName } : { base64 }
+}
+
+// Older shells lack nameMedia; derive a filename from MIME instead.
+async function pickedFileName(
+  verbs: NativeVerbs,
+  item: BridgeMediaItem,
+  index: number
+): Promise<string> {
+  return (
+    (verbs.canNameMedia ? await verbs.nameMedia(item.handle) : null) ??
+    mobilePickedFileFallbackName(item.mime, index)
+  )
 }
 
 async function* readPicked(
@@ -38,13 +50,7 @@ async function* readPicked(
     while (unread.length > 0) {
       const item = unread[0]!
       index += 1
-      const fileName =
-        source === 'files'
-          ? ((verbs.canNameMedia ? await verbs.nameMedia(item.handle) : null) ??
-            (item.mime.startsWith('image/')
-              ? null
-              : mobilePickedFileFallbackName(item.mime, index)))
-          : null
+      const fileName = source === 'files' ? await pickedFileName(verbs, item, index) : undefined
       const base64 = await readStagedMediaItem(verbs, item)
       // Release before yielding because callers may stop after one image and strand scarce handles.
       unread.shift()
@@ -76,10 +82,7 @@ async function* readPickedFiles(
     while (unread.length > 0) {
       const item = unread[0]!
       index += 1
-      // Older shells lack nameMedia; derive a filename from MIME instead.
-      const name =
-        (verbs.canNameMedia ? await verbs.nameMedia(item.handle) : null) ??
-        mobilePickedFileFallbackName(item.mime, index)
+      const name = await pickedFileName(verbs, item, index)
       const base64 = await readStagedMediaItem(verbs, item)
       unread.shift()
       await releaseStagedMedia(verbs, item.handle)
