@@ -54,7 +54,7 @@ function devinVisibleChain(
   return [...devinVisibleChain(nodes, replaced, depth + 1), ...ids.slice(summary + 1)]
 }
 
-type DevinToolCall = { id: string | null; name: string; input: unknown }
+type DevinToolCall = { name: string; input: unknown }
 
 export type DevinConversationMessage = {
   role: 'user' | 'assistant'
@@ -165,7 +165,7 @@ function toolCalls(value: unknown): DevinToolCall[] {
   return value.flatMap((item) => {
     const call = asRecord(item)
     const name = call ? extractString(call.name) : null
-    return call && name ? [{ id: extractString(call.id), name, input: call.arguments ?? null }] : []
+    return call && name ? [{ name, input: call.arguments ?? null }] : []
   })
 }
 

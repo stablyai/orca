@@ -48,7 +48,14 @@ beforeEach(async () => {
     [8, 7, message('user', 'Conversation to summarize: ...'), null],
     [9, 1, message('system', 'You are continuing work'), JSON.stringify({ summarized_from: 6 })],
     [10, 9, user('And again?'), null],
-    [11, 10, reply('Again.', { tool_calls: [{ name: 'read' }] }), null]
+    [
+      11,
+      10,
+      reply('Again.', {
+        tool_calls: [{ id: 'toolu_1', name: 'read', arguments: { file_path: '/work/a.ts' } }]
+      }),
+      null
+    ]
   ] as const) {
     node.run('acp-chat', id, parent, body, 1_777_000_000 + id, metadata)
   }
@@ -104,7 +111,8 @@ describe('Devin sessions only in sessions.db', () => {
       'user: Say goodbye',
       'assistant: Goodbye.',
       'user: And again?',
-      'assistant: Again.'
+      'assistant: Again.',
+      'tool: read: /work/a.ts'
     ])
   })
 })

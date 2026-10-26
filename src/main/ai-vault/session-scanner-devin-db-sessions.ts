@@ -154,9 +154,11 @@ export function parseDevinDbSession(
 function devinMessageStep(message: DevinConversationMessage): Record<string, unknown> {
   return {
     source: message.role === 'user' ? 'user' : 'agent',
-    message: message.content,
+    message: [
+      { type: 'text', text: message.content },
+      ...message.toolCalls.map((call) => ({ type: 'tool_use', name: call.name, input: call.input }))
+    ],
     ...(message.createdAtMs ? { timestamp: new Date(message.createdAtMs).toISOString() } : {}),
-    ...(message.metadata ? { metadata: message.metadata } : {}),
-    ...(message.toolCalls.length > 0 ? { tool_calls: message.toolCalls } : {})
+    ...(message.metadata ? { metadata: message.metadata } : {})
   }
 }
