@@ -109,7 +109,11 @@ export function resolveAgentAccountRestartResumeStartup(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    // Both restart executors spawn in the tab's start folder.
+    launchCwd:
+      state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd ??
+      worktree?.path
   })
   if (!startupPlan) {
     return null
@@ -120,8 +124,7 @@ export function resolveAgentAccountRestartResumeStartup(
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
-    // Why it rides along: main only repins the launch home for a spawn that
-    // names the session it is resuming, so dropping this drops the account move.
+    // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
     resumeProviderSession: providerSession
   }
 }

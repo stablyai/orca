@@ -1,6 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  readPersistedState,
   readPersistedStateJson
 } from './persistence-test-harness'
 // Keep undecryptable proxy secrets sealed and unapplied; preserve plaintext upgrades and unrelated saves (STA-3442).
@@ -101,12 +102,9 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
   it('persists the configured proxy across a restart and applies it as fixed_servers', async () => {
     await seedConfiguredProxy()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
-      settings: { httpProxyUrl: string; httpProxyBypassRules: string }
-    }
+    const persisted = readPersistedState(dataFile())
     expect(persisted.settings.httpProxyUrl).not.toBe(PROXY_URL)
-    expect(Buffer.from(persisted.settings.httpProxyUrl, 'base64').toString('utf-8')).toMatch(
+    expect(Buffer.from(persisted.settings.httpProxyUrl ?? '', 'base64').toString('utf-8')).toMatch(
       /^enc:/
     )
     expect(persisted.settings.httpProxyBypassRules).toBe(BYPASS_RULES)
@@ -149,10 +147,7 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     reloaded.updateSettings({ httpProxyBypassRules: 'localhost' })
     vi.advanceTimersByTime(2000)
     await reloaded.waitForPendingWrite()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
-      settings: { httpProxyUrl: string }
-    }
+    const persisted = readPersistedState(dataFile())
     expect(persisted.settings.httpProxyUrl).toBe(originalCiphertext)
   })
 
@@ -178,10 +173,7 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     await store.waitForPendingWrite()
 
     expect(existsSync(join(testState.dir, 'profile-state.db'))).toBe(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
-      settings: { httpProxyUrl: string; httpProxyBypassRules: string }
-    }
+    const persisted = readPersistedState(dataFile())
     expect(persisted.settings.httpProxyUrl).toBe('')
     expect(persisted.settings.httpProxyBypassRules).toBe(BYPASS_RULES)
 

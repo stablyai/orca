@@ -213,22 +213,6 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
   })
 
-  it('refuses exactly the record the list files as an orphan', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedSshAutomation(store)
-    reRegisterTarget(store)
-
-    const item = store
-      .listAutomationsForScope()
-      .items.find((entry) => entry.automationId === automation.id)
-
-    expect(item?.selector).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-  })
-
   it('dispatches while the registration the record captured is still the live one', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()

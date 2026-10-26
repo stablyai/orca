@@ -73,7 +73,6 @@ describe('MobileNativeChatView: Stop control', () => {
     }
   )
 
-  // A Stop the provider took and never answered ends only at a repeat Stop.
   it('keeps Stop for the repeat that escalates while the host alone says Stopping', async () => {
     await render({
       structuredActivityUi: true,

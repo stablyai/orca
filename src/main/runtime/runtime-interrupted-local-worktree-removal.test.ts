@@ -1,6 +1,5 @@
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-// Real-binary coverage for finishing a removal a quit or crash interrupted: what is left has to
-// come from Git and disk, whatever point the earlier run reached.
+// Use real Git/disk evidence to finish interrupted removal regardless of how far the earlier run progressed.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
@@ -57,7 +56,7 @@ async function git(args: string[], cwd = repoPath): Promise<string> {
   return stdout
 }
 
-// Why parsed: Git prints forward slashes on Windows, so raw text never contains a joined path.
+// Parse Git paths: Windows output uses forward slashes unlike native joins.
 async function isRegistered(path: string): Promise<boolean> {
   return (await listWorktreesStrict(repoPath)).some((worktree) =>
     areWorktreePathsEqual(worktree.path, path)

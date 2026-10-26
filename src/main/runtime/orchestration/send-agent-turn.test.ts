@@ -105,7 +105,6 @@ describe('sendAgentTurn to a structured session', () => {
       clientMessageId: 'op-1',
       submission: submissionOf('accepted')
     })
-    // The body-only digest every orchestration send carried before it was derived here.
     expect(fake.send).toHaveBeenCalledWith(
       { callerKey: 'trusted-local:k' },
       {
@@ -176,7 +175,7 @@ describe('sendAgentTurn to a structured session', () => {
           sessionId: 's1',
           clientOperationId: 'op-1',
           expectedRuntimeFence: 7,
-          // The sender rides on the body, outside the fingerprint: a retry still replays.
+          // Sender provenance stays outside the fingerprint so retries still replay.
           payloadFingerprint: hostFingerprint({ body: turn.body, delivery: 'queue-if-active' })
         },
         body: mailTurn.body,
@@ -211,7 +210,6 @@ describe('sendAgentTurn to a terminal', () => {
       handle: 'term_1',
       turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' }
     })
-    // The same promise, so a caller's await takes no extra tick.
     expect(sent).toBe(written)
     await expect(sent).resolves.toBe(receipt)
     expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(

@@ -20,8 +20,7 @@ const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
   notice: colors.textMuted
 }
 
-/** A row the agent did not write in its own words, drawn as desktop's `NativeChatNoticeRow` and
- *  its faint system asides are, so it never reads as the agent speaking. */
+// Render system notices separately so they cannot read as the agent’s own prose.
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
@@ -31,11 +30,9 @@ export function MobileNativeChatNoticeRow({
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onOpenFile?: (relativePath: string) => void
-  /** Android only: a long press on a plan's link opens the row's actions sheet. */
   onLongPress?: () => void
 }): React.JSX.Element | null {
   const notice = nativeChatNoticeBlock(blocks)
-  // A system row with no notice of its own is an aside, a size under the agent's prose.
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
     const text = blocks

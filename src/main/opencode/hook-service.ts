@@ -50,17 +50,16 @@ type OpenCodeHookVariant = {
   legacyHooksDir: string
   overlayDir: string
   pluginSource: () => string
-  /** Also install the module as an OpenCode 2 TUI plugin (never for forks without one). */
+  /** Install a TUI copy only for OpenCode variants that support it. */
   installsTuiPlugin?: boolean
   tuiOnlyDirectory?: string
 }
 
-// Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
+// IDs are hashed downstream, so separators are valid; cap pathological input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 
-// Why: installs the plugin into OpenCode's config discovery path so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini.
 export class OpenCodeHookService {
   private readonly pluginSource: () => string
   private readonly pluginFileName: string
@@ -96,7 +95,7 @@ export class OpenCodeHookService {
   }
 
   clearPty(_ptyId: string): void {
-    // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
+    // Directories outlive individual PTYs; recursive cleanup here can freeze Windows main.
   }
 
   installIntoSourceOverlay(
@@ -127,7 +126,6 @@ export class OpenCodeHookService {
     defaultConfigDir?: string
   ): Record<string, string> {
     if (!isUsableId(ptyId)) {
-      // Why: on a bad id, still preserve a user-set OPENCODE_CONFIG_DIR; only the Orca status plugin is forfeited.
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
@@ -164,8 +162,7 @@ export class OpenCodeHookService {
     }
   }
 
-  // Why: pre-1.4.209 Orca left a server()-only plugin here that OpenCode 2 rejects. Only helps
-  // processes that load it later; a running OpenCode 2 service keeps its cached module until restarted.
+  // Refresh pre-1.4.209 server-only plugins for future loads; running services may retain cached modules.
   refreshLegacySharedPlugin(): void {
     if (this.tuiOnlyDirectory) {
       return
@@ -175,7 +172,7 @@ export class OpenCodeHookService {
     try {
       const source = this.pluginSource()
       const installed = readFileSync(pluginPath, 'utf8')
-      // Why: a TUI or service still loading this dir needs the TUI copy too, or the service keeps reporting under its starter pane.
+      // Old-directory services must find the TUI copy or they report under the starter pane.
       writeLegacyOpenCodePluginWithAclRetry(
         join(pluginsDir, openCodeTuiPluginDirName(this.pluginFileName), 'tui.js'),
         () => this.writeTuiPlugin(pluginsDir, source)
@@ -193,8 +190,7 @@ export class OpenCodeHookService {
     }
   }
 
-  // Why: a running OpenCode 2 service reloads a changed plugin file, so refreshing Orca's existing
-  // installs at app start upgrades it without waiting for the next pane. Never creates an install.
+  // Refresh existing installs at startup so OpenCode 2 reloads upgrades before the next pane opens.
   refreshInstalledPlugins(): void {
     this.refreshLegacySharedPlugin()
     const overlayRoot = this.getOverlayRoot()
@@ -233,10 +229,10 @@ export class OpenCodeHookService {
     )
   }
 
-  // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
+  // Link config for live user edits; keep plugins real so Orca can install a sibling.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
     const previousManifest = readOpenCodeOverlayManifest(overlayDir)
-    // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
+    // Remove only mirrored paths; persistent overlays may contain OpenCode runtime directories.
     clearOpenCodeOverlayManifestEntries(overlayDir, previousManifest, this.pluginFileName)
 
     const nextManifest: OpenCodeOverlayManifest = {
@@ -249,25 +245,25 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
+        // Windows junctions report both flags; symlink handling must win.
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
         if (isSymlink) {
           try {
             isLinkPointingToDir = statSync(sourcePath).isDirectory()
           } catch {
-            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
+            // Preserve broken/inaccessible symlinks verbatim.
             isLinkPointingToDir = false
           }
         }
 
         if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
+          // Resolve user plugin links while keeping the overlay directory real to contain writes.
           const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
+            // Never mirror Orca’s filename: installation would overwrite the user’s target.
             if (
               pluginEntry.name === this.pluginFileName ||
               pluginEntry.name === this.tuiOnlyDirectory ||

@@ -20,7 +20,10 @@ import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
-import { diffFromText, diffFromToolCall } from './native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../../shared/native-chat/tools/native-chat-diff'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
@@ -29,7 +32,7 @@ const NO_SEARCH_RESULTS: NonNullable<NativeChatToolCallBlock['webSearchResults']
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
-/** What an opened row shows. Its own component so a row diffs only while it is open. */
+/** Mount detail separately so collapsed rows do no diff work. */
 function ToolLineDetail({
   block,
   body,
@@ -81,9 +84,7 @@ export function NativeChatToolLine({
   onLinkClick
 }: {
   block: NativeChatBlock
-  /** This call's output, when the run paired one to it. Drawn here rather than
-   *  as a `Result` row of its own, so an opened run lists the work, not twice
-   *  as many rows half of which say `Result`. */
+  /** Pair output with its call instead of adding a separate Result row. */
   result?: NativeChatToolResultBlock
   /** Identity this line's open state is remembered under while it is unmounted. */
   disclosureKey?: string
@@ -130,15 +131,14 @@ export function NativeChatToolLine({
         aria-expanded={hasDetail ? expanded : undefined}
       >
         {isCall ? (
-          /* Decorative category glyph; the word beside it is the row's name. */
           <NativeChatToolIcon
             mcpIdentity={block.mcpIdentity}
             rowWord={name}
+            input={block.input}
             className={failed ? 'text-destructive/70' : 'text-chat-foreground-faint'}
           />
         ) : (
-          /* A result's word is translated copy, not a tool name, so there is no
-             category to read from it. The empty slot keeps rows aligned. */
+          /* Translated result labels identify no tool category; reserve an empty slot for alignment. */
           <span aria-hidden className="size-4 shrink-0" />
         )}
         {label?.verb && label.verb !== name ? <span className="sr-only">{name} </span> : null}
@@ -168,7 +168,6 @@ export function NativeChatToolLine({
             {label?.target ?? resultPreview}
           </span>
         ) : null}
-        {/* Held at the row's right edge, so the carets of a run line up in one column. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
           {isCall ? <NativeChatCommandMetadata block={block} /> : null}
           {hasDetail ? (

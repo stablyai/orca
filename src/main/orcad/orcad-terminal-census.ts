@@ -1,4 +1,3 @@
-/** The terminal census a managed orcad reports to the client planning an update or stop. */
 import {
   countInProcessFallbackTerminals,
   listLiveDaemonSessionsWithProtocol
@@ -18,7 +17,7 @@ export async function collectOrcadTerminalCensus(
   listSessions: () => Promise<DaemonSessionInfo[] | null> = listLiveDaemonSessionsWithProtocol,
   countInProcess: () => Promise<number> = countInProcessFallbackTerminals
 ): Promise<OrcadTerminalCensus> {
-  // Degraded mode runs fresh terminals in orcad itself; a restart kills those too.
+  // Count in-process fallback terminals: daemon failure does not make restart safe.
   let inventory: [DaemonSessionInfo[] | null, number]
   try {
     inventory = await Promise.all([listSessions(), countInProcess()])
@@ -36,13 +35,12 @@ export async function collectOrcadTerminalCensus(
   const [protocol] = protocols
   return {
     liveSessions: sessions.length + inProcess,
-    // In-process terminals carry no creation time to compare against activation.
+    // Fallback terminals lack creation times, so activation-relative counts remain unknown.
     startedSinceActivation:
       timestampsKnown && inProcess === 0
         ? sessions.filter((session) => session.createdAt >= activatedAt).length
         : null,
-    // Why one protocol only: sessions split across daemon generations have no single owner to
-    // check an incoming build against, so that reads as unverifiable.
+    // Mixed daemon generations cannot establish one protocol owner for build compatibility.
     daemonProtocolVersion: protocols.size === 1 && protocol !== undefined ? protocol : null,
     inProcessSessions: inProcess
   }

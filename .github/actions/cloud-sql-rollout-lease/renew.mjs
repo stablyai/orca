@@ -3,8 +3,7 @@ import { createAccessTokenSource } from './gcloud-access-token.mjs'
 import { renewerLogPath } from './runner-state.mjs'
 import { CloudSqlRolloutLease, RENEW_INTERVAL_MS } from './storage-lease.mjs'
 
-// Detached renewer. `main` spawns it, `post` kills it. It rewrites expires_at on the same
-// generation-matched path as acquisition, and stops the moment the object stops being ours.
+// Detached renewer shares acquisition’s generation-matched writes; stop when ownership changes. Main starts it and post kills it.
 
 const MAX_LIFETIME_MS = 6 * 60 * 60 * 1_000 // Backstop if post never runs (runner killed).
 

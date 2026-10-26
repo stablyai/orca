@@ -62,14 +62,12 @@ export function loadTaskPageJiraProjectStatusOrder(
   runtimeScopeKey: string,
   projectScope: TaskPageJiraProjectScope
 ): Promise<JiraProjectStatusOrder> {
-  // Why: a project key can exist on multiple Jira sites and runtimes; all three
-  // identities must participate in caching to preserve SSH and multi-site parity.
+  // Cache by runtime, Jira site and project because project keys can repeat across hosts and sites.
   const cacheKey = getTaskPageJiraStatusOrderScopeKey(runtimeScopeKey, projectScope)
   return loadMetadata(jiraProjectStatusOrderStore, cacheKey, () =>
     jiraGetProjectStatusOrder(settings, projectScope.projectKey, projectScope.siteId)
   ).catch((error: unknown) => {
-    // Why: older remote runtimes do not expose this optional metadata method;
-    // an empty order preserves the deterministic alphabetical fallback.
+    // Older hosts lack this optional metadata method; empty order preserves alphabetical fallback.
     console.warn('[jira] Failed to load project status order:', error)
     return { statusIdsByColumn: [] }
   })

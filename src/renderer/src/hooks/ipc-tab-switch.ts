@@ -7,6 +7,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
+import { activateCycledTabOnOwner } from '@/lib/cycled-tab-owner-activation'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -17,20 +18,14 @@ type CycleContext = {
   groupTabIdInNav: string | null
 }
 
-/**
- * Shared setup for the type-scoped and across-all-types tab-cycle actions.
- * Returns null when there is no active worktree or the visible nav has at most
- * one tab (nothing to cycle).
- */
+/** Resolve active workspace/nav for either cycle action; null means nothing to cycle. */
 function resolveCycleContext(): CycleContext | null {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
   if (!worktreeId) {
     return null
   }
-  // Why: walk the active group's visible order so drag-reordered tabs cycle
-  // in the sequence the user sees. See getActiveTabNavOrder for the stale
-  // legacy-order bug this replaces.
+  // Cycle the visible group’s order so keyboard navigation follows dragged tabs.
   const allTabIds = getActiveTabNavOrder(store, worktreeId)
   if (allTabIds.length <= 1) {
     return null
@@ -39,12 +34,7 @@ function resolveCycleContext(): CycleContext | null {
   const group = activeGroupId
     ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
     : undefined
-  // Why: prefer the active group's unified tab id so split layouts disambiguate
-  // which copy of a same-entity tab is focused. Match strictly against `tabId`
-  // in that path; only fall back to backing-id matching when the group path
-  // doesn't apply (no group, or its activeTabId isn't in the visible nav —
-  // e.g. hydration races). Keeping the two domains in separate branches
-  // prevents a backing id from colliding with an unrelated tab's `tabId`.
+  // Prefer exact unified tab IDs for split copies; fall back to backing IDs only without a valid group selection, keeping ID domains separate.
   const groupTabIdInNav =
     group?.activeTabId && allTabIds.some((entry) => entry.tabId === group.activeTabId)
       ? group.activeTabId
@@ -52,18 +42,12 @@ function resolveCycleContext(): CycleContext | null {
   return { store, worktreeId, allTabIds, groupTabIdInNav }
 }
 
-/**
- * Apply the next-tab selection to the store. Preserves the split-layout
- * disambiguation: `activateTab(tabId)` is required on the file/browser
- * branches so that when the same entity is open in multiple splits, the
- * correct tab instance is focused.
- */
+/** Activate by unified tab ID after file/browser updates so duplicate entities focus the correct split instance. */
 export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
   const worktreeId = store.activeWorktreeId
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
-    // Terminal entities can be open in multiple split groups. setActiveTab uses the legacy
-    // entity id and therefore may pick the first copy; the unified id restores the exact target.
+    // Legacy terminal entity activation can choose another split copy; finish with exact unified ID.
     if (next.tabId) {
       store.activateTab?.(next.tabId)
     }
@@ -86,24 +70,17 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     }
     store.setActiveTabType('agent-session', worktreeId)
   } else {
-    // Why: `setActiveFile` targets the file entity (its implicit activateTab
-    // picks the first matching tab in the active group); `activateTab(tabId)`
-    // then disambiguates which split copy when the same file is open twice.
+    // setActiveFile selects the entity; activateTab disambiguates its split copy.
     store.setActiveFile(next.id)
     if (next.tabId) {
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('editor', worktreeId)
   }
+  activateCycledTabOnOwner(worktreeId, next)
 }
 
-/**
- * Handle direction switching within the active tab type (same-type cycle).
- * The default chord is Cmd/Ctrl+Alt+[ / ] for fresh installs; pre-swap installs
- * keep Cmd/Ctrl+Shift+[ / ] via the seed migration, and either is rebindable.
- * Extracted from useIpcEvents to keep file size under the max-lines lint threshold.
- * Returns true if a tab switch occurred, false otherwise.
- */
+/** Cycle the current type. Fresh installs use Cmd/Ctrl+Alt+[ / ]; migrated bindings may retain the inverse and remain rebindable. */
 export function handleSwitchTab(direction: number): boolean {
   const ctx = resolveCycleContext()
   if (!ctx) {
@@ -126,15 +103,7 @@ export function handleSwitchTab(direction: number): boolean {
   return true
 }
 
-/**
- * Handle cycling across every visible tab, regardless of tab type.
- *
- * Why: companion chord to the type-scoped same-type cycle. Fresh installs bind
- * this broad cycle to Cmd/Ctrl+Shift+[ / ] — the widespread "switch tab" chord —
- * and the same-type cycle to Cmd/Ctrl+Alt+[ / ]; pre-swap installs keep the
- * inverse via the seed migration (see PR #1281 for the original type-scope
- * rationale). Returns true if a tab switch occurred, false otherwise.
- */
+/** Cycle all visible types. Fresh installs use Cmd/Ctrl+Shift+[ / ]; migrated bindings may retain the inverse and remain rebindable. */
 export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   const ctx = resolveCycleContext()
   if (!ctx) {
@@ -242,9 +211,7 @@ function shouldUseWorktreeTerminalFallback(
     return true
   }
 
-  // An empty projection is only a hydration gap when the active group itself has no
-  // populated rows. If it has editor/browser rows and every runtime terminal is declared
-  // in another group, crossing that split would surprise the user.
+  // Only empty group projection proves hydration gaps; do not cross splits whose populated editor/browser rows intentionally exclude terminals.
   const hasPopulatedNonterminalRows = activeGroupNavTabs.some((tab) => tab.type !== 'terminal')
   const groupTerminalTabs = unifiedTerminalTabs.filter((tab) => tab.groupId === activeGroup.id)
   const visibleTerminalEntityIds = new Set(activeGroupTerminalTabs.map((tab) => tab.id))
@@ -255,8 +222,7 @@ function shouldUseWorktreeTerminalFallback(
     return groupTerminalTabs.length > 0
   }
 
-  // With one group, a runtime row outside that group's model is a hydration gap. Multiple groups
-  // may legitimately have one terminal each, so keep that split-local no-op intact.
+  // One group can recover absent runtime rows as hydration gaps; multiple one-terminal groups intentionally no-op.
   const declaredGroupTabIds = new Set(activeGroup.tabOrder ?? [])
   if (groupTerminalTabs.some((tab) => !declaredGroupTabIds.has(tab.id))) {
     return true
@@ -279,10 +245,7 @@ function shouldUseWorktreeTerminalFallback(
   return false
 }
 
-/**
- * Handle Ctrl+Tab MRU quick-toggle across every visible tab in the active group.
- * Returns true if a tab switch occurred, false otherwise.
- */
+/** Ctrl+Tab quick-toggles MRU across visible types in the active group. */
 export function handleSwitchRecentTab(): boolean {
   const ctx = resolveCycleContext()
   if (!ctx) {
@@ -317,18 +280,14 @@ export function handleSwitchRecentTab(): boolean {
   return true
 }
 
-/**
- * Handle Ctrl+PageUp/PageDown switching across terminal tabs only.
- * Returns true if a terminal tab switch occurred, false otherwise.
- */
+/** Ctrl+PageUp/PageDown cycle visible terminal tabs only. */
 export function handleSwitchTerminalTab(direction: number): boolean {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
   if (!worktreeId) {
     return false
   }
-  // Why: reuse the same visible-order source as handleSwitchTab so drag-reordered
-  // tabs still cycle in the sequence shown in the active tab strip.
+  // Reuse visible order so terminal-only cycling follows drag order too.
   const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
@@ -344,9 +303,7 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (terminalTabs.length === 0) {
     return false
   }
-  // Why: this list is pre-filtered to terminals, so the index search below has no type check to
-  // reject a stale terminal id — a structured tab must resolve to its own entity or the chord
-  // cycles from whichever terminal was last active.
+  // Prefiltered terminal navigation must use the active entity’s domain, never a stale background terminal ID under structured focus.
   const activeTab = store.getActiveTab(worktreeId)
   const currentId = getActiveEntityIdForTabType(
     store.activeTabType,
@@ -355,26 +312,20 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     store.activeBrowserTabId,
     activeTab?.contentType === 'agent-session' ? activeTab.entityId : null
   )
-  // Why: when an editor/browser/structured tab is active, jump to the first terminal on
-  // forward navigation instead of skipping to index 1.
+  // From another tab type, forward navigation starts at the first terminal rather than skipping it.
   const idx = terminalTabs.findIndex((t) => t.id === currentId)
-  // Why: only no-op when the sole terminal is already focused. With one terminal
-  // and an editor/browser active, the chord must still jump to that terminal -
-  // that is the whole point of the shortcut. The single-terminal-already-active
-  // case is the only true no-op.
+  // A sole terminal no-ops only when already focused; other active types must still jump to it.
   if (terminalTabs.length === 1 && idx === 0) {
     return false
   }
   const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
   const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
-  // Why: skip the store writes when the target terminal is already the active
-  // tab (e.g. single-terminal with that terminal focused but via a different
-  // code path). Redundant setActiveTab calls trigger unnecessary subscriber
-  // work in components that react to active-tab changes.
+  // Skip redundant activation writes to avoid unnecessary active-tab subscriber work.
   if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
     return false
   }
   store.setActiveTab(next.id)
   store.setActiveTabType('terminal', worktreeId)
+  activateCycledTabOnOwner(worktreeId, next)
   return true
 }

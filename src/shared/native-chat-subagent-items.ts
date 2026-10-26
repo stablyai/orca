@@ -1,11 +1,5 @@
-// A subagent's own row, and the group its siblings draw as.
-//
-// The host writes one row per subagent, where it was spawned, and revises that row alone for
-// every change, so no row ever lists siblings and nothing caps how many a turn spawns. "Ran N
-// subagents" is how readers draw the siblings one turn spawned: every transcript (desktop and
-// the phone) folds them here into the roster row older hosts wrote, at the first sibling's
-// place, so one renderer draws both. Ordinals that tell same-named siblings apart are derived
-// here too, never stored.
+// Hosts revise individual subagent rows at spawn positions; readers fold siblings into legacy-shaped roster rows at the first sibling.
+// Shared desktop/mobile grouping supports uncapped spawns and derives disambiguating ordinals without storing them.
 
 import { normalizeSubagentState } from './native-chat-subagent-summary'
 import {
@@ -18,8 +12,7 @@ import {
   type NativeChatSubagentGroupBlock
 } from './native-chat-types'
 
-/** The plain sentence an older client draws in the block's place, frozen at write time. Like the
- *  group's, it claims no live count: `Kicked off` only says no outcome had landed yet. */
+/** Frozen fallback for older clients; Kicked off means no outcome recorded yet, never current liveness. */
 export function subagentFallbackText(block: NativeChatSubagentEntry): string {
   const state = normalizeSubagentState(block.state)
   if (state === 'working') {
@@ -29,7 +22,6 @@ export function subagentFallbackText(block: NativeChatSubagentEntry): string {
   return `Ran subagent ${block.label}${adverse ? ` (${state})` : ''}`
 }
 
-/** The entry a group row draws for this subagent: the block less what only its writer reads. */
 export function subagentEntryOf(
   block: NativeChatSubagentBlock,
   label = block.label
@@ -44,7 +36,6 @@ export function subagentEntryOf(
   }
 }
 
-/** The subagents a block names: an older host's group row lists them, a subagent's own row is one. */
 export function namedSubagents(block: NativeChatBlock): readonly NativeChatSubagentEntry[] {
   if (isSubagentGroupBlock(block)) {
     return block.agents
@@ -52,8 +43,7 @@ export function namedSubagents(block: NativeChatBlock): readonly NativeChatSubag
   return isSubagentBlock(block) ? [subagentEntryOf(block)] : []
 }
 
-/** The siblings a block folds with, and the folded row's groupId: a helper's own helpers keep
- *  open state apart from the turn's. */
+/** Group by spawning turn/parent; nested helpers need independent disclosure state. */
 export function subagentFoldKey(block: NativeChatSubagentBlock): string {
   return block.parentId === undefined
     ? block.groupId
@@ -77,13 +67,11 @@ export function subagentItemBlock(
 
 type Folded = { members: readonly NativeChatMessage[]; row: NativeChatMessage }
 
-/** Keyed by the first sibling: an unchanged group hands back the same row, so the transcript's
- *  memoized rows stay put while one sibling streams. */
+/** Cache by first sibling so unchanged groups retain memoized transcript rows during other siblings’ streams. */
 const foldedGroups = new WeakMap<NativeChatMessage, Folded>()
 const foldedEntries = new WeakMap<NativeChatSubagentBlock, NativeChatSubagentEntry>()
 
-/** `messages` in transcript order. Sibling subagent rows become one roster row at the first
- *  sibling's place; every other row is handed back as it came. */
+/** Fold sibling rows at the first sibling’s position; preserve every unrelated row. */
 export function foldSubagentItems(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
@@ -147,9 +135,7 @@ function groupRow(groupId: string, members: readonly NativeChatMessage[]): Nativ
   return row
 }
 
-/** Two siblings can share a name; an ordinal keeps their lines apart without inventing a name the
- *  provider never sent. Probed over the labels already taken, so a derived `Audit 2` never
- *  collides with a sibling the provider itself named `Audit 2`. */
+/** Disambiguate duplicate provider labels with ordinals that avoid existing names, including provider-authored Audit 2. */
 function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
   const taken = new Set<string>()
   const repeated = new Set<string>()

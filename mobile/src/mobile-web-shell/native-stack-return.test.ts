@@ -15,7 +15,6 @@ function hostStack(...routes: Route[]): Route {
   return { name: 'h', state: stack('host-stack', routes) }
 }
 
-// The root layout is a screen of expo-router's own navigator, so the walk starts one level up.
 function rootStack(...routes: Route[]): NativeStackState {
   return stack('expo-root', [{ name: '__root', state: stack('root-stack', routes) }])
 }

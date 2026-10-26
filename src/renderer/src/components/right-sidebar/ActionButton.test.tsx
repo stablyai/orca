@@ -55,9 +55,7 @@ function findTooltipContentText(node: unknown): string {
   return texts.join(' ')
 }
 
-// Why: ActionButton's onClick handler only touches these three fields, so a
-// narrow event type is both correct and avoids a forbidden `as unknown as X`
-// double-cast on the event value.
+// Only these event fields are read; narrow the mock instead of double-casting it.
 type MinimalMouseEvent = Pick<
   React.MouseEvent,
   'preventDefault' | 'stopPropagation' | 'defaultPrevented'
@@ -91,9 +89,7 @@ describe('ActionButton', () => {
 
   it('renders the title as tooltip content (non-native, Radix)', () => {
     const element = ActionButton({ ...baseProps, onClick: vi.fn() })
-    // Why: the Radix TooltipContent is what renders the visual tooltip.
-    // Native `title` was removed because its styling diverges from the
-    // rest of the sidebar chrome.
+    // Assert the rendered Radix tooltip rather than the removed native title.
     expect(findTooltipContentText(element)).toContain('Stage all')
   })
 
@@ -107,10 +103,7 @@ describe('ActionButton', () => {
   })
 
   it('does NOT render the native disabled prop on the inner button', () => {
-    // Why: Radix TooltipTrigger on a DOM-disabled <button> gets its pointer
-    // events blocked in Chromium, suppressing the tooltip entirely — a
-    // regression vs. the native `title` attribute it replaced. ActionButton
-    // uses aria-disabled + a click guard instead.
+    // DOM disabled blocks tooltip pointer events in Chromium; aria-disabled needs an explicit activation guard.
     const element = ActionButton({ ...baseProps, onClick: vi.fn(), disabled: true })
     const button = findInnerButton(element)
     expect(button.props.disabled).toBeUndefined()
@@ -128,10 +121,7 @@ describe('ActionButton', () => {
     const button = findInnerButton(element)
     const { event, preventDefault } = makeClickEvent()
     ;(button.props.onClick as (e: MinimalMouseEvent) => void)(event)
-    // Why: keyboard Enter/Space also fires onClick on a non-DOM-disabled
-    // button. The guard must block both pointer and keyboard activation
-    // while `disabled` is true, even though the inner handler is trusted
-    // to early-return on `isExecutingBulk`.
+    // Enter/Space also dispatch onClick; disabled must guard keyboard and pointer activation.
     expect(onClick).not.toHaveBeenCalled()
     expect(preventDefault).toHaveBeenCalledTimes(1)
   })

@@ -4,7 +4,7 @@
   "jsPlugins": [
     {
       "name": "anti-slop",
-      "specifier": "../.anti-slop-plugin/index.ts"
+      "specifier": "./oxlint-plugins/anti-slop-prefilter.mjs"
     }
   ],
   "categories": {
@@ -47,10 +47,13 @@
   "overrides": [
     {
       "files": [
-        "**/*.test.{ts,tsx}",
+        "**/*.test.{ts,tsx,mjs}",
         "**/*.spec.{ts,tsx}",
-        // Extracted React Native mocks remain test-only.
-        "**/mobile/src/session/MobileNativeChatView.harness.test-fixture.ts",
+        // Vitest support modules shared by split suites; only test files import them.
+        "**/*-test-harness.{ts,tsx}",
+        "**/*-test-fixture.{ts,tsx}",
+        "**/*-test-fixtures.{ts,tsx}",
+        "**/*.test-fixture.{ts,tsx}",
         "tests/**/*.{ts,tsx}",
         "**/__mocks__/**"
       ],
@@ -67,24 +70,9 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
-    // Test-only builtin adapters publish Node-compatible behavior and instrument OS metrics.
+    // Test-only builtin adapter publishing Node-compatible behavior.
     {
-      "files": ["**/vitest-bun-node-builtins.ts", "**/hang-watchdog-process-metrics.test.mjs"],
-      "rules": {
-        "anti-slop/no-module-mocking": "off"
-      }
-    },
-    // Test-only side effect for explicit RPC registries; real catalog tests never import it.
-    {
-      "files": ["**/src/main/runtime/rpc/unused-default-rpc-methods.test-fixture.ts"],
-      "rules": {
-        "anti-slop/no-module-mocking": "off"
-      }
-    },
-    // Shared render harness for the split MobileNativeChatView suites; it registers the same
-    // hoisted mocks every suite needs and is only imported by those test files.
-    {
-      "files": ["**/mobile/src/session/MobileNativeChatView.harness.test-fixture.ts"],
+      "files": ["**/vitest-bun-node-builtins.ts"],
       "rules": {
         "anti-slop/no-module-mocking": "off"
       }

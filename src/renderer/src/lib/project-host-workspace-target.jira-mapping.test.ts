@@ -63,6 +63,31 @@ describe('mapped repository creation target hints', () => {
     ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
   })
 
+  it('does not pick the first host when two hosts share the setup id and none is named', () => {
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        projectHostSetupId: 'same-id'
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('resolves an unnamed shared setup id when only one of its hosts can run it', () => {
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        projectHostSetupId: 'same-id',
+        actionableHostIds: new Set(['ssh:builder'])
+      })
+    ).toMatchObject({ status: 'ready', target: { hostId: 'ssh:builder', repo: sshRepo } })
+  })
+
   it('keeps an explicit host selection unavailable when only a same-ID setup on another host remains', () => {
     const projection = projectHostSetupProjectionFromRepos([localRepo])
     expect(

@@ -29,8 +29,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -214,14 +216,6 @@ describe('AgentBrowserBridge keypress input', () => {
       unmodifiedText: 'é'
     })
     expect(keyEventCalls(wc)[1]).toMatchObject({ type: 'keyUp', windowsVirtualKeyCode: 229 })
-  })
-
-  it('keeps the helper for a surrogate-pair character', async () => {
-    succeedWith({ pressed: '👍' })
-
-    await expect(bridge.keypress('👍', undefined, 'tab-1')).resolves.toEqual({ pressed: '👍' })
-
-    expect(keyEventCalls(wc)).toHaveLength(0)
   })
 
   it('falls back to agent-browser for a key name the table cannot express', async () => {

@@ -29,6 +29,7 @@ export type CodexUsageParseResumeState = {
   sessionCwd: string | null
   currentCwd: string | null
   currentModel: string | null
+  currentTurnId?: string | null
   previousTotals: CodexUsageRawUsage | null
 }
 

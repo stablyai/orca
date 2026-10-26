@@ -54,16 +54,13 @@ function paint(container: HTMLElement): void {
   throw new Error('the transcript never settled: resize and scroll kept moving it')
 }
 
-// Exercise the real virtualizer while a streaming row grows and messages append.
 describe('transcript follow ownership across growth and appends', () => {
   const TAIL_INDEX = TRANSCRIPT_LENGTH - 1
   const GROWTH_STEPS = 24
   const LINES_PER_STEP = 12
-  /** One wrapped prose line. Content and measured height grow from this one
-   *  number, so a step that adds lines is a step that adds pixels. */
+  // Grow content and measured height from the same wrapped-line size.
   const STREAM_LINE_PX = 22
-  /** Every row but the growing one measures at its estimate, so the reserved
-   *  total is arithmetic rather than a snapshot. */
+  /** All settled rows measure at their estimates, keeping reserved totals deterministic. */
   const BASE_TOTAL_PX =
     (TRANSCRIPT_LENGTH - 1) * ROW_PX + (TRANSCRIPT_LENGTH - 1) * NATIVE_CHAT_ROW_GAP_PX
 
@@ -172,14 +169,10 @@ describe('transcript follow ownership across growth and appends', () => {
       const distance = distanceFromBottom(container)
       frames.push({ step, tail: tailHeightAt(step), total: totalSize, distance })
 
-      // Pinned: the reader is still looking at the bottom of the row.
       expect(distance).toBeLessThanOrEqual(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
-      // Mounted: never swapped for reserved space while it is the live row.
       expect(indexes).toContain(TAIL_INDEX)
       expect(screen.getByText(/streamed line 0/)).toBeInTheDocument()
-      // Tracking: the reservation follows the measurement, not the estimate.
       expect(totalSize).toBe(BASE_TOTAL_PX + tailHeightAt(step))
-      // Still a window, not the whole transcript remounted by the growth.
       expect(indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
     }
 
@@ -207,10 +200,8 @@ describe('transcript follow ownership across growth and appends', () => {
       paint(container)
 
       const { totalSize, indexes } = windowState(container)
-      // Not yanked: the offset the reader chose is the offset they still have.
       expect(scrollRoot(container).scrollTop).toBe(readingAt)
-      // The row is off screen but still measured, which is what keeps the
-      // reserved total — and so the scrollbar — honest while it grows.
+      // Keep measuring the offscreen live row so its reserved height and scrollbar track growth.
       expect(indexes).toContain(TAIL_INDEX)
       expect(totalSize).toBe(BASE_TOTAL_PX + tailHeightAt(step))
     }
@@ -233,8 +224,6 @@ describe('transcript follow ownership across growth and appends', () => {
       const parkedAt = scroller.scrollHeight - scroller.clientHeight - parkGapPx
       scrollTranscript(container, parkedAt)
       expect(distanceFromBottom(container)).toBe(parkGapPx)
-      // Not the "scrolled far away" case above: the latest message is still on
-      // screen, so there is nothing to offer a way back to yet.
       expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
 
       setMeasuredTail(5)
@@ -248,9 +237,7 @@ describe('transcript follow ownership across growth and appends', () => {
         rerender(streamingList(step))
         paint(container)
 
-        // The offset stops moving at all...
         expect(scroller.scrollTop).toBe(parkedAt)
-        // ...so the end runs away from the reader instead of carrying them along.
         const distance = distanceFromBottom(container)
         expect(distance).toBeGreaterThan(previousDistance)
         previousDistance = distance
@@ -363,9 +350,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const { container, rerender } = render(list(transcript))
     paint(container)
     const scroller = scrollRoot(container)
-    // Establish a forward scroll direction before reading at this offset. The
-    // backward-scroll suppression below covers the separate case where a reader
-    // is still moving upward while overscan rows settle.
+    // Seed forward scrolling; backward-scroll suppression is covered separately.
     scrollTranscript(container, 0)
     paint(container)
     const readingAt = 2000
@@ -488,14 +473,9 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
   })
 
-  // With something above the spacer, the two parties stop agreeing on where the
-  // end is: the transcript measures it from the document, the virtualizer from
-  // the spacer's own height against a container-absolute offset. The second is
-  // short by everything outside the spacer, so it reads a reader who is clearly
-  // above the end as sitting on it.
+  // Chrome outside the spacer makes document-end and virtualizer-end calculations disagree.
   describe('with a gutter above the transcript', () => {
-    /** A gutter well past `pt-10`, standing in for any chrome in flow above
-     *  the spacer. */
+    /** Exceed the normal top gutter to expose spacer/document coordinate differences. */
     const GUTTER_PX = 92
     /** Far enough up that the transcript itself calls the reader detached, and
      *  still inside the band the virtualizer computes (48 + 92 + 24). */
@@ -531,8 +511,6 @@ describe('transcript follow ownership across growth and appends', () => {
           rerender(streamingList(step))
           paint(container)
 
-          // Not dragged along: the offset the reader chose is the offset they keep,
-          // however much the row below them grows.
           expect(scroller.scrollTop).toBe(readingAt)
         }
       }

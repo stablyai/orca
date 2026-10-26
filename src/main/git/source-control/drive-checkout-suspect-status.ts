@@ -7,7 +7,7 @@ import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
-} from '../../ipc/local-watcher-event-observers'
+} from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
 import {

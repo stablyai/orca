@@ -10,7 +10,7 @@ import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
-import { CdpPageInputCommands } from './cdp-page-input-commands'
+import { CdpPageInputCommands, type ShowAgentPointer } from './cdp-page-input-commands'
 import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
 import {
   assertRemoteCliPageAccess,
@@ -31,11 +31,13 @@ export class CdpWsProxy {
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
   private readonly input: CdpPageInputCommands
+  private pointAtNextResolvedNode = false
 
   constructor(
     private readonly webContents: WebContents,
     holdPaint: CapturePaintHold,
-    guardFocus: AgentInputFocusGuard = async () => () => {}
+    guardFocus: AgentInputFocusGuard = async () => () => {},
+    showAgentPointer: ShowAgentPointer = async () => {}
   ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
@@ -63,8 +65,14 @@ export class CdpWsProxy {
       this.responder,
       this.debuggerChannel,
       this.domFocusReplay,
-      guardFocus
+      guardFocus,
+      showAgentPointer
     )
+  }
+
+  /** Shows the agent cursor on the next node the helper resolves: its fill/check/select target. */
+  pointAtNextNode(enabled: boolean): void {
+    this.pointAtNextResolvedNode = enabled
   }
 
   async start(): Promise<string> {
@@ -203,6 +211,20 @@ export class CdpWsProxy {
     // Acknowledge activation without taking the user's keyboard focus (#20595).
     if (msg.method === 'Page.bringToFront' || msg.method === 'Target.activateTarget') {
       this.responder.sendResult(clientId, {}, client)
+      return
+    }
+    if (
+      msg.method === 'DOM.resolveNode' &&
+      this.pointAtNextResolvedNode &&
+      effectiveSessionId === undefined
+    ) {
+      this.pointAtNextResolvedNode = false
+      const { method, params = {}, sessionId } = msg
+      void this.input
+        .pointAtNode(params.backendNodeId)
+        .then(() =>
+          this.debuggerChannel.forwardCommand(client, clientId, method, params, sessionId)
+        )
       return
     }
     if (msg.method === 'DOM.focus') {

@@ -48,10 +48,7 @@ function normalizeLogin(login: string): string {
   return login.trim().replace(/^@/, '').toLowerCase()
 }
 
-/**
- * Apply pending list ops onto a confirmed snapshot.
- * Same login keeps only the latest op (callers should pre-collapse if needed).
- */
+/** Apply list operations in order to a copied confirmed snapshot; later operations for a login win. */
 export function applyTaskPageGitHubListOps(
   snapshot: readonly GitHubAssignableUser[],
   ops: readonly PendingListOp[]
@@ -106,9 +103,7 @@ function findUser(
   return candidates.find((user) => user.login.toLowerCase() === loginLower)
 }
 
-/**
- * Pure intent → frozen previous/next patches against a registry-merged base item.
- */
+/** Freeze previous/next patch values from the registry-merged base item. */
 export function buildTaskPageGitHubWorkItemMutationPatch(
   baseItem: GitHubWorkItem,
   intent: TaskPageGitHubMutationIntent

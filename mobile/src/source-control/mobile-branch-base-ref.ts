@@ -40,8 +40,7 @@ export async function resolveMobileBranchCompareBaseRef(
   }
 
   const defaultReply = await repoDefaultBaseRefRead.request(client, { repo: `id:${repoId}` })
-  // Why the raw refusal: a host that does not offer git to mobile is a capability gap to degrade
-  // on, not an error to surface, and no acceptance policy carries the code and message through.
+  // Inspect the raw refusal to distinguish a missing git capability from an actionable error.
   if (isMobileGitUnavailableReply(defaultReply)) {
     return null
   }

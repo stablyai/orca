@@ -14,10 +14,9 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
-// The orphan class no recording-driven prune can reach. Both existing rules — stale generation and
-// tab death — run only when a verdict is RECORDED, so an environment that is removed and never
-// expires another pane keeps its rows for the life of the session.
+// Teardown must evict removed environments that will never record another verdict; recording-time pruning cannot reach them.
 
 const ENVIRONMENT_ID = 'env-torn-down'
 const OTHER_ENVIRONMENT_ID = 'env-survivor'
@@ -26,20 +25,18 @@ const WORKTREE_ID = 'repo-1::/workspace/repo'
 const initialAppStoreState = useAppStore.getState()
 
 function parkAndExpire(environmentId: string, tabId: string): void {
-  // Rows ACCUMULATE. Replacing them would unpublish the panes parked earlier, and the tab-death
-  // rule would then legitimately sweep their verdicts before teardown was ever reached — this
-  // suite is about a class no recording-driven prune can reach, so every pane here stays live.
+  // Accumulate live rows so tab-death pruning cannot hide the teardown-only retention case.
   const state = useAppStore.getState()
   const published = state.tabsByWorktree[WORKTREE_ID] ?? []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
-      [WORKTREE_ID]: [...published.filter((tab) => tab.id !== tabId), { id: tabId, title: tabId }]
+      [WORKTREE_ID]: [
+        ...published.filter((tab) => tab.id !== tabId),
+        makeTerminalTab({ id: tabId, worktreeId: WORKTREE_ID, title: tabId })
+      ]
     },
-    // A verdict names its PANE by the environment-minted PTY held at park time, so a fixture with
-    // no layout binding records '' and the verdict refuses to answer. Bind per environment: one
-    // shared environment id would filter to '' for every other environment's pane.
+    // Bind each pane to its own environment or fixtures record empty identity and cannot answer verdict queries.
     terminalLayoutsByTabId: {
       ...state.terminalLayoutsByTabId,
       [tabId]: {
@@ -49,7 +46,7 @@ function parkAndExpire(environmentId: string, tabId: string): void {
         ptyIdsByLeafId: { [`leaf-${tabId}`]: `remote:${environmentId}@@term_${tabId}` }
       }
     }
-  } as never)
+  })
   parkUntilHostMirrorHandleLands(environmentId, WORKTREE_ID, tabId, () => {})
   vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 }
@@ -82,16 +79,17 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
     )
   })
 
-  // Matches `clearHostSessionMirrorHydration`: a re-pair replaces the connection's evidence, it
-  // does not cancel the recovery this client still owes the pane. Clearing the waiter here would
-  // silently drop a parked resume sweep that nothing else will replay.
+  // As with clearHostSessionMirrorHydration, re-pair replaces evidence without canceling recovery; bounded waiters must survive and replay.
   it('leaves a parked waiter alone, cancelling only the verdicts', () => {
     const replay = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       ptyIdsByTabId: {},
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'web-terminal-host-tab-9', title: 'nine' }] }
-    } as never)
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          makeTerminalTab({ id: 'web-terminal-host-tab-9', worktreeId: WORKTREE_ID, title: 'nine' })
+        ]
+      }
+    })
     parkUntilHostMirrorHandleLands(ENVIRONMENT_ID, WORKTREE_ID, 'web-terminal-host-tab-9', replay)
 
     clearHostMirrorHandleGapVerdictsForEnvironment(ENVIRONMENT_ID)
@@ -101,8 +99,7 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
     expect(replay).toHaveBeenCalledTimes(1)
   })
 
-  // The live wiring: session-tabs tracking teardown is the only caller that fires for an
-  // environment that is going away, so the hook has to hang off it or the rows never drain.
+  // Wire cleanup to session-tabs environment teardown, the only caller guaranteed on permanent removal.
   it('drains through the session-tabs tracking teardown for the environment', () => {
     parkAndExpire(ENVIRONMENT_ID, 'web-terminal-host-tab-1')
     parkAndExpire(OTHER_ENVIRONMENT_ID, 'web-terminal-host-tab-3')
@@ -116,9 +113,7 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
     )
   })
 
-  // Why the stranded row was inert rather than dangerous, pinned so nobody "optimises" the
-  // generation advance away: removing an environment advances its connection generation, so a
-  // verdict left behind can never match again even if the id returns.
+  // Environment removal advances generation; leaked verdicts must remain unreachable even if the ID returns.
   it('cannot match again after the environment returns on a new generation', () => {
     parkAndExpire(ENVIRONMENT_ID, 'web-terminal-host-tab-1')
     expect(hasHostMirrorHandleWaitExpired(ENVIRONMENT_ID, 'web-terminal-host-tab-1')).toBe(true)

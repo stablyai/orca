@@ -281,8 +281,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
     })
 
     const store = hydrate(session)
-    // Why: the row's own pane lives only in a leaf binding, which orphan detection ignores — without
-    // this anchor the sweep below hard-deletes the row and its session never reattaches.
+    // Anchor the retained leaf-only PTY or orphan sweep deletes the row before its pane can reattach.
     expect(store.getState().pendingReconnectPtyIdByTabId['split-tab']).toBe(soloPtyId)
     expect(getOrphanTerminalIds(store.getState(), WORKTREE_ID).has('split-tab')).toBe(false)
 

@@ -611,8 +611,7 @@ describe('orchestration federation', () => {
       ok: true,
       result: {
         observation: { status: 'live', exactWorker: true },
-        // The execution host answered; the push-fed status snapshot only covers local panes,
-        // so this projection used to contradict the observation printed beside it.
+        // Host evidence must drive projection; local-only push snapshots previously contradicted the adjacent remote observation.
         projection: {
           host: { kind: 'remote', id: 'environment_windows' },
           liveness: { verdict: 'live', source: 'execution_host' },

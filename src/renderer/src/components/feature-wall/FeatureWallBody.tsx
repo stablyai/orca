@@ -138,8 +138,7 @@ export function FeatureWallBody(props: {
   const shouldUseOnboardingTourZones =
     source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
   const shouldStickSetupToBottom = shouldUseOnboardingTourZones
-  // Why: several visuals expand/collapse internally; setup controls should sit
-  // after a stable stage so they do not jump with the animation loop.
+  // Reserve a stable stage so expanding visuals cannot move setup controls.
   const visualStageHeight = isTasks
     ? 'h-[288px]'
     : isWorkbenchEditor

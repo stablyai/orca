@@ -13,8 +13,7 @@ const BASE = {
   theme: 'dark'
 }
 
-// #10754: mobile mirrors the desktop contrast gate, so an explicit floor has to travel with the
-// theme payload — otherwise the same session renders differently on the phone.
+// Explicit contrast floor must travel with theme or mobile renders the same session differently (#10754).
 describe('resolveMobileTerminalTheme contrast floor', () => {
   it('omits the floor when the user has not set one', () => {
     const theme = resolveMobileTerminalTheme(stateWith(BASE), true)

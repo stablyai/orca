@@ -97,8 +97,7 @@ const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
 // A release holds the row for about one lock timeout, so one second is enough.
 const ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS = 1
 const REGION_CATALOG_CACHE_MS = 30_000
-// A drain that outlives the roll step it belongs to is an outage, not a pacing win. The roll
-// step's timeout scales with the window, up to the same-cap wave's slowest pace.
+// Drain pace must fit the roll-step timeout, including its slowest same-cap wave.
 const DRAIN_PACE_WINDOW_MAX_MS = 20 * 60 * 1_000
 
 type AdmissionRejectionLogEntry = {
@@ -262,9 +261,7 @@ export function createRelayApp(
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
-  // Reconnecting hosts declare themselves and are verified against the durable
-  // assignment inside this bounded lane, so a placement backlog can never
-  // starve session recovery. Unhinted traffic never touches this lane.
+  // Verify hinted reconnects against durable assignments in a separate bounded lane so placement backlogs cannot starve recovery.
   const stickyRetryAfterSeconds = config.publicStickyRetryAfterSeconds ?? 2
   const stickyAssignmentAdmission = new RelayPublicAssignmentAdmission({
     maxConcurrent: config.publicStickyConcurrency ?? 1,
@@ -310,10 +307,7 @@ export function createRelayApp(
     context.header('Retry-After', String(retryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
-  // An admin route that collapses every failure into one status cannot tell a
-  // real conflict from a database that was briefly out of reach, and the rollout
-  // tooling retries on 503 only. Transient failures get the answer the public
-  // routes already give; everything else keeps the route's own mapping.
+  // Rollout tooling retries only 503; classify transient admin DB failures like public routes while preserving other route mappings.
   const rejectAdminOperation = (
     context: Context,
     error: unknown,
@@ -327,9 +321,7 @@ export function createRelayApp(
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'database_temporarily_unavailable' }, 503)
   }
-  // Aggregate counters cannot separate a handful of pathological hosts from a broad
-  // population, so every admission rejection names its host and reason. Keyed on
-  // route:lane:reason rather than host, the log stays bounded under load.
+  // Log host/reason to distinguish isolated failures; bound windows by route:lane:reason to stay bounded across hosts.
   const rejectionLogWindow = new AssignmentRejectionLogWindow<AdmissionRejectionLogEntry>({
     windowMs: ASSIGNMENT_REJECTION_LOG_WINDOW_MS,
     onWindowClosed: ({ suppressed, sample }) => logAssignmentRejection({ ...sample, suppressed })
@@ -383,9 +375,7 @@ export function createRelayApp(
     demote: operations.cellDemote
   })
 
-  // Not /healthz: Google Front End reserves that path before the container.
-  // The drain pace cap is read before a roll isolates a cell, so a slower pace than the cell
-  // accepts stops with the cell untouched.
+  // Google Front End reserves /healthz. Report drain cap before isolation so an unsupported pace refuses without touching the cell.
   app.get('/health', (context) =>
     context.json({
       ok: true,
@@ -689,10 +679,7 @@ export function createRelayApp(
       admission.release()
     }
     recordSelection(assignment, assignment.placed === true)
-    // Grant-side counterpart of the rejection log: reconnect grants are rare
-    // enough to log and make "which cell is this host on" answerable. The
-    // placement-lane ones matter most — they are the only record that a host
-    // whose sticky lane failed verification landed anywhere at all.
+    // Reconnect grant logs locate hosts; placement-lane grants prove where failed sticky verifications eventually landed.
     if (body.data.reconnect) {
       console.warn(
         `[orca-relay] assignment granted lane=${lane} hinted=true` +
@@ -1264,8 +1251,7 @@ export function createRelayApp(
       return rejectAdminOperation(context, error, 409)
     }
   })
-  // Step 5: the flag workflow's record of a cell's admitMode, which every sweep reads. Without
-  // `admitMode` it only reads; reserve is refused while a drain, migration or rehome is open.
+  // Read without admitMode; writes feed every sweep and refuse reserve during open drain/migration/rehome flows.
   app.post('/v1/admin/cell-admit-mode', async (context) => {
     const bearer = readBearer(context.req.header('authorization'))
     if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
@@ -1856,9 +1842,7 @@ const RegionalRehomeSafetySchema = z
     databasePoolWaiting: z.number().int().nonnegative().max(100),
     databasePoolWaitersMax: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     databasePoolWaitMsMax: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    // Cells spread the full pool-pressure counts into the payload; rejecting
-    // the extra gauges 400'd every rehome-status heartbeat since 2026-08-15,
-    // so no cell ever recorded rehome protocol 1.
+    // Accept cell pool gauges or strict validation rejects every rehome-status heartbeat, preventing protocol-1 registration.
     databasePoolTotal: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     databasePoolIdle: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     databasePoolOldestWaitMs: z
@@ -2071,13 +2055,7 @@ const AdminAdmissionSelectorApplySchema = z
     expectedGeneration: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     expectedMembershipSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     membership: AdmissionSelectorMembershipSchema,
-    // Optional, so an older caller reaching an updated director is unchanged:
-    // the cell goes unmarked and its hosts stay pinned, today's behaviour. The
-    // other direction is NOT ignored — the schema below is .strict(), so an
-    // updated caller reaching an older director is a 400. That fails closed,
-    // before the isolate step sets MUTATION_STARTED and before anything is
-    // written, but it is a deploy ordering constraint: the director ships
-    // first, then any workflow run that uses the updated script.
+    // Deploy director before callers: old callers omit this safely, but old strict directors reject it with 400 before isolation/MUTATION_STARTED, leaving hosts pinned.
     rollIsolatedCells: z.array(CellIdSchema).max(256).optional()
   })
   .strict()
@@ -2417,8 +2395,7 @@ function operationError(error: unknown): string {
 }
 
 
-// `suppressed` is present only on a window-closing line, and counts the rejections
-// that line stands for beyond the one already logged when the window opened.
+// Only window-close logs carry suppressed, excluding the rejection already logged at window open.
 function logAssignmentRejection(input: {
   route: 'assign' | 'assign-verify' | 'resolve'
   lane: AssignmentAdmissionLane | 'none'

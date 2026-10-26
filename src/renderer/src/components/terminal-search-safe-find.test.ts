@@ -1,34 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { safeFind } from './terminal-search-safe-find'
 
-/**
- * Regression for crash report 0b9ab636-1333-4aac-a7bb-ddb338feb151 (Orca 1.4.104, macOS).
- *
- * boundary_id: terminal.workbench  surface: terminal-workbench
- * error: "This API only accepts positive integers"
- * stack (deminified):
- *   _verifyPositiveIntegers
- *   registerDecoration            <- @xterm/xterm Terminal.registerDecoration
- *   _createResultDecorations      <- @xterm/addon-search DecorationManager
- *   createHighlightDecorations
- *   _highlightAllMatches
- *   findNext                      <- SearchAddon.findNext
- *   commitHookEffectListMount     <- TerminalSearch useEffect
- *
- * The addon computes a match-highlight decoration width as
- *   amountThisRow = Math.min(terminal.cols - matchCol, remainingSize)
- * which goes NEGATIVE when the live viewport is narrower than the buffer column
- * where a match starts (a not-yet-reflowed / collapsed viewport). xterm's
- * registerDecoration then throws synchronously inside findNext. Thrown from the
- * TerminalSearch effect, it trips RecoverableRenderErrorBoundary and kills the
- * terminal surface.
- *
- * safeFind() wraps the addon call so that specific decoration error is swallowed
- * (match navigation already ran), keeping search alive instead of crashing.
- */
+/** A viewport narrower than a stored match makes addon decoration width negative and throws from registerDecoration (crash 0b9ab636). safeFind must contain that failure without killing the terminal surface. */
 
-// The exact synchronous error xterm raises from registerDecoration on a negative
-// decoration width.
+// Match xterm’s exact synchronous negative-decoration-width error.
 const positiveIntegerError = (): Error => new Error('This API only accepts positive integers')
 
 describe('safeFind (TerminalSearch decoration crash guard)', () => {
@@ -36,8 +11,7 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     const find = vi.fn(() => {
       throw positiveIntegerError()
     })
-    // Before the fix this threw straight through TerminalSearch's effect into the
-    // error boundary. Now it is contained and reported as "no match this frame".
+    // Contain decoration failure as no match this frame instead of tripping the terminal error boundary.
     expect(() => safeFind(find, 'query')).not.toThrow()
     expect(safeFind(find, 'query')).toBe(false)
     expect(find).toHaveBeenCalledWith('query', undefined)

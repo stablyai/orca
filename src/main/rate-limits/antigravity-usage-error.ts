@@ -58,7 +58,6 @@ function classifyStructured(error: StructuredAgyError): AntigravityUsageFailure 
     return { failureKind: 'missing-credentials', signedOut: true }
   }
   if (status === 'PERMISSION_DENIED' || code === 403) {
-    // The session is real; the account simply is not entitled to what was asked for.
     return { failureKind: 'no-subscription', signedOut: false }
   }
   if (status === 'RESOURCE_EXHAUSTED' || code === 429) {

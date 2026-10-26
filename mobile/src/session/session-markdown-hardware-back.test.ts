@@ -39,7 +39,6 @@ import type { MarkdownDocState } from './mobile-session-route-types'
 
 const leaves: { back: (() => void) | null; replaced: string[] } = { back: null, replaced: [] }
 
-/** The three members the hook calls, which is all a probe of it can honestly stand behind. */
 const probeRouter: { canGoBack: () => boolean; back: () => void; replace: (href: string) => void } =
   {
     canGoBack: () => true,
@@ -113,11 +112,7 @@ beforeEach(() => {
   leaves.replaced = []
 })
 
-/**
- * The session's native claim on the device Back key, which had no unit test of its own (ruling
- * 33.2). Held always natively, dirty or not: the page half, claimed only while a draft is dirty, is
- * `session-markdown-page-back.test.ts`.
- */
+// Native sessions always claim Back: an unclaimed root key would exit the app; dirty-page claims are tested separately.
 describe("the session's hardware back gate", () => {
   it('arms the hardware back press natively, with nothing dirty', () => {
     render(new Map())

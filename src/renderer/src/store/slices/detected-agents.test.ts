@@ -580,8 +580,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs remote detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect.
+    // Retry empty detections so later installs/PATH fixes appear without reconnect; [] truthiness must not cache misses.
     detectRemoteAgents.mockResolvedValueOnce([])
 
     await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
@@ -625,9 +624,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs runtime detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect. This is
-    // the Orca-serve path (kind: 'runtime'), distinct from the SSH remote path.
+    // Runtime Orca-serve path must retry empty detection after install/PATH fixes too, independently of SSH.
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown

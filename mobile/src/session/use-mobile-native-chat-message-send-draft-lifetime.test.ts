@@ -11,10 +11,10 @@ const transport = vi.hoisted(() => ({
   error: vi.fn()
 }))
 
-vi.mock('./mobile-native-chat-stale-input', () => ({
+vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: transport.heal
 }))
-vi.mock('./mobile-native-chat-send', () => ({
+vi.mock('./native-chat/mobile-native-chat-send', () => ({
   healMobileNativeChatStaleInput: transport.heal,
   clearMobileNativeChatInput: transport.clearInput,
   sendMobileNativeChatMessageWithOutcome: transport.send,

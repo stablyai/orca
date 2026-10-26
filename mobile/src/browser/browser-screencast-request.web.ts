@@ -16,34 +16,9 @@ export type {
   MobileBrowserViewMode
 } from './browser-screencast-request-parameters'
 
-/**
- * The bytes one pixel of this pane's JPEG costs at its worst.
- *
- * Uniform random noise at quality 72, which is the image JPEG compresses least and the ceiling
- * every real page sits under; photographic content measures near a tenth of it.
- *
- * Swept 2026-09-20 over 143 viewports — widths 320 to 1400 and heights 480 to 1600 — each frame
- * encoded at the scale `budgetedMobileViewDeviceScaleFactor` picks for it. Across the 111 the
- * budget fits, `Page.startScreencast` measured 0.543986 to 0.552964 bytes per pixel. This is that
- * maximum plus a margin of 0.007036, about 1.3%, for the encoder version it was not swept on.
- *
- * Re-measured on the real encoder, which was the point of the exercise: the first sweep used
- * `canvas.toDataURL` and read 0.54470 to 0.55351, while the product's frames come from
- * `Page.startScreencast`. The two agree to within a thousandth of a byte per pixel, and the
- * screencast is the marginally cheaper of them, so the encoder is not what makes a budgeted frame
- * miss. `mobile-web-app-frame-budget-sweep.test.ts` now drives the screencast, so the number and
- * the product share one encoder, and re-running it is how this number is changed.
- *
- * It was 0.545 before any sweep, taken from one 2400x2160 frame. A single large frame is the
- * cheapest per pixel in the whole range, so the number it gave was under 90 of those 143 viewports
- * and the budget it produced posted a frame over the cap on a phone. A worst case measured at one
- * point is not a worst case.
- *
- * What this margin does not cover: the C6.6 device proof, with the budget on, dropped 1 frame in
- * 41 at 402x593, which needs about 0.5649 bytes per pixel — above everything either sweep has
- * seen. Nothing here reproduces it, so it is not folded into this constant; a frame that still
- * does not fit is C6 ruling 1's to drop.
- */
+// Worst-case quality 72 random-noise JPEG: real Page.startScreencast sweep (2026-09-20), 143 viewports from 320–1400×480–1600, 111 fit budget.
+// Measured 0.543986–0.552964 bytes/pixel; add 0.007036 (~1.3%) encoder-version margin. Re-run mobile-web-app-frame-budget-sweep.test.ts to change.
+// One large-frame sample understates small viewport costs. Known unswept device outlier: 1/41 dropped at 402×593 needs ~0.5649; shell still drops overflow (C6 ruling 1).
 export const WORST_CASE_JPEG_BYTES_PER_PIXEL = 0.56
 
 /** Base64 carries three bytes in four characters, and a character is one UTF-8 byte here. */
@@ -54,38 +29,15 @@ export function base64Characters(byteLength: number): number {
   return 4 * Math.ceil(byteLength / 3)
 }
 
-/**
- * The widest `JSON.stringify` of a finite double.
- *
- * Sign, `0.`, the five zeros fixed notation writes just above 1e-6, and seventeen significant
- * digits: `-0.0000012345678901234567`. Exponential form is one character shorter, because ToString
- * only leaves fixed notation below 1e-6, so this covers both.
- *
- * It has to be an upper bound rather than a plausible width. The budget's entire margin is what
- * this over-estimates by, so a metadata field wider than assumed is a frame over the cap.
- */
+// Bound widest finite double JSON: sign, 0., five zeros and 17 significant digits (-0.0000012345678901234567); exponential form is shorter.
+// Plausible widths are insufficient: underestimating metadata can push frame over cap.
 const WIDEST_JSON_DOUBLE_CHARS = 25
 
 /** `JSON.stringify(0)`, which is what the skeleton below spends per metadata field before widening. */
 const NARROWEST_JSON_DOUBLE_CHARS = 1
 
-/**
- * An upper bound on what the frame's envelope costs, derived rather than typed, so the budget
- * cannot drift from the shape the shell actually sends.
- *
- * Everything but the image at its widest: a full-length correlation id, both sequence counters at
- * the largest integer they can hold, and every named metadata field present and as wide as a double
- * can print. The field list comes from the protocol module rather than a copy of it, so a tenth
- * field cannot be added to frames without being paid for here.
- *
- * Two things it does not cover, both of them C6 ruling 1's to drop rather than this budget's to
- * predict: the metadata object is a loose one, so a shell may send keys this list has never heard
- * of, and web view mode's frame is a letterboxed desktop viewport the page cannot size.
- *
- * `browser-screencast-budget-at-the-shell.test.ts` is what makes this evidence rather than an
- * assumption checked against a copy of itself: it reconstructs this number, to the byte, from a
- * frame the real encoder produced and the real host serialized.
- */
+// Derive envelope bound from real protocol shape: longest correlation id, MAX_SAFE_INTEGER counters and every metadata field widened to finite-double maximum.
+// Budget cannot predict unknown loose metadata or letterboxed web frames; shell drops over-cap frames. browser-screencast-budget-at-the-shell.test.ts reconstructs bound from real encoded/serialized event.
 export function binaryEventEnvelopeBytes(): number {
   const skeleton = JSON.stringify({
     v: BRIDGE_PROTOCOL_VERSION,
@@ -102,35 +54,16 @@ export function binaryEventEnvelopeBytes(): number {
   return skeleton + METADATA_KEYS.length * (WIDEST_JSON_DOUBLE_CHARS - NARROWEST_JSON_DOUBLE_CHARS)
 }
 
-/**
- * The frame area one bridge message can carry, in device pixels.
- *
- * The cap, less what the envelope costs, is the base64 the image may occupy; three quarters of that
- * is the JPEG; divided by the worst case a pixel costs, it is an area. Computed from the cap rather
- * than written down beside it, because a cap that moves and a budget that does not is a pane that
- * goes dark on a page it could have streamed.
- */
+// Derive area from bridge cap minus envelope: whole base64 groups→JPEG bytes→worst-case pixels, so cap changes cannot leave stale budget.
 export function mobileBrowserFrameAreaBudget(): number {
   const available = BRIDGE_MAX_MESSAGE_BYTES - binaryEventEnvelopeBytes()
-  // Whole base64 groups, not three quarters of the room: an image of 3k+1 bytes costs two
-  // characters more than the ratio says, which at a margin this tight is a dropped frame.
+  // Round to whole base64 groups: 3k+1 bytes costs two more characters than 3/4 ratio predicts.
   const imageBytes = Math.floor(available / 4) * 3
   return Math.floor(imageBytes / WORST_CASE_JPEG_BYTES_PER_PIXEL)
 }
 
-/**
- * The device scale factor the mobile view may ask for and stay inside one message.
- *
- * Mobile view is the one mode where the page knows the frame exactly: it names the viewport, so the
- * frame is that viewport times this factor squared. Web mode is a desktop viewport letterboxed into
- * `maxWidth`/`maxHeight`, which the page cannot predict, so it is left alone and C6 ruling 1's
- * drop-the-over-cap-frame rule is its only protection.
- *
- * Floored to two decimals so rounding cannot push the area back over the budget, and never above
- * what native asks for: this bounds density, it does not raise it. Never below 1 either — past that
- * the page would be asking for fewer device pixels than it has CSS pixels, which is a blurry frame
- * rather than a working one, and a frame that still does not fit is ruling 1's to drop.
- */
+// Budget only mobile density because page knows its viewport; letterboxed desktop/web frames remain unpredictable and shell drops overflow.
+// Floor factor to two decimals to avoid rounding above cap; never exceed native density or fall below 1 (device pixels per CSS pixel).
 export function budgetedMobileViewDeviceScaleFactor(layout: BrowserStreamLayout | null): number {
   if (!layout || layout.width <= 0 || layout.height <= 0) {
     return MOBILE_VIEW_DEVICE_SCALE_FACTOR

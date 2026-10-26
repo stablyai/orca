@@ -27,7 +27,12 @@ vi.mock('../agent-hooks/windows-native-hook-executable', async (importOriginal) 
   resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
-import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands,
+  type HookCommandConfig,
+  type HookDefinition
+} from '../agent-hooks/installer-utils'
 import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
@@ -44,6 +49,7 @@ const CURRENT_CLAUDE = { claudeVersion: '2.1.261 (Claude Code)' }
 const EXE = 'orca-agent-hook.exe'
 const SCRIPT_PATH = 'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
 const EXE_PATH = `C:\\Users\\alice\\.orca\\agent-hooks\\${EXE}`
+const SPACED_EXE_PATH = `C:\\Users\\Bob Smith\\.orca\\agent-hooks\\${EXE}`
 
 function withWin32<T>(run: () => T): T {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -82,12 +88,35 @@ describe('getManagedLifecycleHook native executable gate', () => {
   })
 
   it('falls back to the .cmd form without an installed exe or with a path shells cannot carry', () => {
-    for (const exePath of [null, `C:\\Users\\Bob Smith\\.orca\\agent-hooks\\${EXE}`]) {
+    for (const exePath of [null, SPACED_EXE_PATH]) {
       const hook = withWin32(() =>
         getManagedLifecycleHook(SCRIPT_PATH, CLAUDE_HOOK_SETTINGS, exePath)
       )
       expect(hook).toEqual(getWindowsManagedLifecycleHook(SCRIPT_PATH))
     }
+  })
+
+  // #19187: a spaced profile kept the encoded PowerShell launcher; exec form needs no shell.
+  it('registers a spaced exe path in exec form when the CLI supports it', () => {
+    const hook = withWin32(() =>
+      getManagedLifecycleHook(SCRIPT_PATH, CLAUDE_HOOK_SETTINGS, SPACED_EXE_PATH, {
+        execForm: true
+      })
+    )
+    expect(hook).toEqual({
+      type: 'command',
+      command: SPACED_EXE_PATH,
+      args: ['claude', SCRIPT_PATH],
+      timeout: 10
+    })
+    // Builds since v1.4.183 match managed args, so an older Orca replaces this entry instead of duplicating it.
+    const definitions = [{ hooks: [hook] }]
+    expect(
+      removeManagedCommands(definitions, createManagedCommandMatcher('claude-hook.cmd'))
+    ).toEqual([])
+    expect(
+      removeManagedCommands(definitions, createManagedCommandMatcher('openclaude-hook.cmd'))
+    ).toEqual(definitions)
   })
 })
 
@@ -103,8 +132,12 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     }
   })
 
-  function useTempHome(): { hooksDir: string; settingsPath: string; bundle: string } {
-    home = mkdtempSync(join(tmpdir(), 'orca-claude-native-hook-'))
+  function useTempHome(prefix = 'orca-claude-native-hook-'): {
+    hooksDir: string
+    settingsPath: string
+    bundle: string
+  } {
+    home = mkdtempSync(join(tmpdir(), prefix))
     vi.stubEnv('HOME', home)
     vi.stubEnv('USERPROFILE', home)
     const bundle = join(home, 'bundled-agent-hook.exe')
@@ -116,12 +149,17 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     }
   }
 
-  function managedCommands(settingsPath: string, event: string): string[] {
+  function managedHooks(settingsPath: string, event: string): HookCommandConfig[] {
     const settings = JSON.parse(readFileSync(settingsPath, 'utf8'))
-    return settings.hooks[event]
-      .flatMap((definition: { hooks: { command: string }[] }) => definition.hooks)
-      .map((hook: { command: string }) => hook.command)
-      .filter(createManagedCommandMatcher('claude-hook.cmd'))
+    const definitions: HookDefinition[] = settings.hooks[event]
+    const isManaged = createManagedCommandMatcher('claude-hook.cmd')
+    return definitions
+      .flatMap((definition) => definition.hooks ?? [])
+      .filter((hook) => removeManagedCommands([{ hooks: [hook] }], isManaged).length === 0)
+  }
+
+  function managedCommands(settingsPath: string, event: string): string[] {
+    return managedHooks(settingsPath, event).map((hook) => hook.command)
   }
 
   const exeCommand = (hooksDir: string): string =>
@@ -151,6 +189,30 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     expect(existsSync(join(hooksDir, 'claude-hook.cmd'))).toBe(true)
     expect(existsSync(join(hooksDir, 'claude-hook-impl.cmd'))).toBe(true)
     expect(managedCommands(settingsPath, 'PreToolUse')).toEqual([exeCommand(hooksDir)])
+  })
+
+  it('registers a spaced profile exe in exec form only for CLIs that accept it', () => {
+    const { hooksDir, settingsPath, bundle } = useTempHome('orca claude native hook ')
+    bundledHook.path = bundle
+    const service = new ClaudeHookService()
+
+    expect(service.install({ claudeVersion: '2.1.138' }).state).toBe('installed')
+    expect(managedHooks(settingsPath, 'Stop')).toEqual([
+      expect.objectContaining({ command: expect.stringMatching(/-EncodedCommand /) })
+    ])
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      expect(managedHooks(settingsPath, 'Stop')).toEqual([
+        {
+          type: 'command',
+          command: join(hooksDir, EXE),
+          args: ['claude', join(hooksDir, 'claude-hook.cmd')],
+          timeout: 10
+        }
+      ])
+    }
+    expect(service.getStatus().state).toBe('installed')
   })
 
   it('leaves unchanged bytes unwritten', () => {

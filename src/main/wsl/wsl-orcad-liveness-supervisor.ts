@@ -1,13 +1,4 @@
-/**
- * Keeps each WSL distro's orcad connection honest (design D2c, step C6): a held watch bridge
- * reports exits within tens of milliseconds, each exit is classified against a confirmed running
- * list and the guest's process identity, and the verdict drives recovery. Every status change
- * goes out through the connection manager's `onChange`.
- *
- * Never boots a distro for background work: a stopped distro comes back only while a user-visible
- * WSL project or terminal needs it, otherwise once the background gate next sees it running.
- * Timers are monotonic, and a power resume re-verifies instead of trusting them.
- */
+/** D2c/C6 classify watch exits against fresh running lists and guest incarnation, publishing through onChange. Boot only for visible demand; background work waits for running evidence. Use monotonic timers and reverify after resume. */
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -66,16 +57,16 @@ export class WslOrcadLivenessSupervisor {
   /** User-initiated, so it may boot the distro. Resolves once the watch is armed. */
   async connect(distro: string, options: WslOrcadConnectIntent = {}): Promise<WslOrcadConnection> {
     const entry = this.entryFor(distro)
-    // An unchanged bridge offer may stay quiet even when an earlier failure needs clearing.
+    // Clear prior failures even if the bridge offer is unchanged.
     const reportReady = entry.busy || (entry.state !== null && entry.state !== 'ready')
-    // Supersedes a recovery or deferred re-check: this connect relaunches and re-arms itself.
+    // Explicit connect supersedes pending recovery/rechecks and owns rearming.
     const generation = (entry.generation += 1)
     disarmSupervised(entry)
     let connection: WslOrcadConnection
     try {
       connection = await this.deps.manager.ensure(entry.distro, options)
     } catch (error) {
-      // e.g. a rejected update: the incumbent still serves and must stay watched.
+      // Rejected updates may leave the incumbent serving; keep it watched.
       const incumbent = this.deps.manager.get(entry.distro)
       if (incumbent && entry.generation === generation) {
         await this.arm(entry, incumbent)
@@ -156,7 +147,7 @@ export class WslOrcadLivenessSupervisor {
       }
       return
     }
-    // A later connect owns the timer now; this arm must not replace it.
+    // Do not overwrite the timer owned by a superseding connect.
     if (entry.generation === generation) {
       this.scheduleHeartbeat(entry)
     }
@@ -175,7 +166,7 @@ export class WslOrcadLivenessSupervisor {
     entry.lastBeatMs = this.now()
     entry.timer = this.schedule(this.heartbeatMs, () => {
       entry.timer = null
-      // A tick far past due means this process or the VM was paused: verify everything.
+      // Long-overdue ticks imply process/VM suspension; reverify all evidence.
       const late = this.now() - entry.lastBeatMs > this.heartbeatMs * 2
       this.trigger(entry, late ? { source: 'verify' } : 'heartbeat')
     })
@@ -222,7 +213,7 @@ export class WslOrcadLivenessSupervisor {
       return
     }
     if (failedExit(trigger) && confirmsRunning(running, entry.key)) {
-      // A stopping distro can still list as running; an exec into it then would boot it again.
+      // Stopping distros can still appear running; wait before exec accidentally boots them again.
       await new Promise<void>((resolve) => this.schedule(EXIT_SETTLE_MS, resolve))
       running = await this.deps.readRunning()
       if (entry.generation !== generation) {
@@ -245,7 +236,7 @@ export class WslOrcadLivenessSupervisor {
     const connection = this.deps.manager.get(entry.distro)
     await gatherWslLivenessEvidence(evidence, {
       readIdentity: () => this.deps.readIdentity(entry.distro, connection?.pid ?? null),
-      // Opening a watch is the port probe; a held one already proved the port.
+      // A held watch proves the port; opening a fresh one is the probe.
       probePort: async () =>
         connection && !entry.watch ? this.attachWatch(entry, connection) : 'ready'
     })
@@ -270,7 +261,7 @@ export class WslOrcadLivenessSupervisor {
         return
       }
       case 'unverifiable':
-        // Loss of contact is not death: keep any watch that survives and look again later.
+        // Lost contact is not death; retain surviving watches and recheck.
         if (entry.state !== 'unverifiable') {
           this.publish(entry, {
             state: 'unverifiable',
@@ -288,7 +279,7 @@ export class WslOrcadLivenessSupervisor {
       case 'orcad-exited':
         disarmSupervised(entry)
         if (!this.deps.hasUserVisibleWork(entry.distro)) {
-          // A managed orcad idle-exits; relaunching it for nobody would undo that every time.
+          // Relaunch without visible demand would defeat managed orcad idle exit.
           this.publish(entry, { state: 'idle', terminals: 'unverifiable' })
           return
         }
@@ -299,14 +290,14 @@ export class WslOrcadLivenessSupervisor {
   private async onDistroStopped(entry: Supervised): Promise<void> {
     disarmSupervised(entry)
     const recovering = this.deps.hasUserVisibleWork(entry.distro)
-    // The holder and the watch both exit on a stop; report it once.
+    // Holder and watch exit together; publish distro-stop once.
     if (recovering || entry.state !== 'distro-stopped') {
       this.publish(entry, { state: 'distro-stopped', terminals: 'exited', recovering })
     }
     if (recovering) {
       return this.recover(entry, 'distro-stopped')
     }
-    // Never boot it for background work; the gate runs this once something else starts it.
+    // Background recovery waits until another actor starts the distro.
     const generation = entry.generation
     this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${entry.key}`, () => {
       if (entry.generation === generation) {

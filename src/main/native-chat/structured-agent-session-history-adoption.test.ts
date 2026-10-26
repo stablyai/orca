@@ -64,12 +64,13 @@ function ownership(
     provider: 'codex',
     providerSessionId: 'thread-1',
     lease: agentSessionLeaseFixture(),
+    role: 'head',
     ...overrides
   }
 }
 
 describe('findConflictingStructuredAdoption', () => {
-  it('names the session that already holds the conversation', () => {
+  it('names the session continuing the conversation now, never one that held it earlier', () => {
     const owner = ownership()
 
     expect(
@@ -77,7 +78,11 @@ describe('findConflictingStructuredAdoption', () => {
         agent: 'codex',
         providerSessionId: 'thread-1',
         selfSessionId: 'codex_new',
-        ownership: [ownership({ sessionId: 'other', providerSessionId: 'thread-2' }), owner]
+        ownership: [
+          ownership({ sessionId: 'other', providerSessionId: 'thread-2' }),
+          ownership({ sessionId: 'moved_on', role: 'earlier' }),
+          owner
+        ]
       })
     ).toBe(owner)
   })

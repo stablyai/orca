@@ -188,7 +188,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expand(mounted)
     const rows = mounted.root.findAll((node) => node.props.testID === 'background-task-row')
     expect(rows.map(textOf)).toEqual(['review a · Agent18.1k · 1m 5s'])
-    // Uppercased by style, so a screen reader hears the word itself.
     const label = mounted.root.find(
       (node) => String(node.type) === 'Text' && node.props.children === 'Agents'
     )
@@ -295,7 +294,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stop).toHaveBeenCalledTimes(1)
     expect(stop).toHaveBeenCalledWith('task-a')
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    // Unconfirmed: the row is the verdict, so its Stop is offered again.
     await act(async () => finish(UNCONFIRMED))
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
   })
@@ -334,7 +332,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     act(() => stopButtons(mounted)[0]!.props.onPress())
     await act(async () => finish(STOPPED))
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    // The helper's next run, with no render between: same provider id, a new invocation.
     act(() => {
       mounted.update(
         createElement(MobileNativeChatBackgroundTasks, {
@@ -452,7 +449,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
   })
 
   it("reads elapsed on the host's clock when the phone's runs ahead", () => {
-    // The phone is 30 s ahead of the host that stamped the child's start.
     const mounted = mount(
       tasksFor(
         { state: 'monitoring', children: [view('a', { totalTokens: 900 })] },

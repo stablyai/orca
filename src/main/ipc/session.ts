@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
+import { visibleSessionHostIds } from '../ssh/orcad-retained-source-session'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
@@ -25,7 +26,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).
   ipcMain.handle('session:list-host-ids', () => {
-    return store.getWorkspaceSessionHostIds()
+    return visibleSessionHostIds(store, store.getWorkspaceSessionHostIds())
   })
 
   // Main owns layout membership; merge the window's view and facts, then report layout drift.

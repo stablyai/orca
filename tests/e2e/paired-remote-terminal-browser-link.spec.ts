@@ -9,6 +9,8 @@ import {
   sendClientGuestPointerInput
 } from './helpers/client-hosted-browser-observer'
 import { expect, test } from './helpers/orca-app'
+import type { BrowserTabListResult } from '../../src/shared/runtime-browser-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -72,18 +74,19 @@ async function readTabInventory(
       if (!browserResponse.ok) {
         throw new Error('host browser page inventory unavailable')
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtimeEnvironments.call is untyped at the IPC boundary; session.tabs.list answers RuntimeMobileSessionTabsResult.
+      const sessionTabs = (sessionResponse.result as RuntimeMobileSessionTabsResult).tabs
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtimeEnvironments.call is untyped at the IPC boundary; browser.tabList answers BrowserTabListResult.
+      const browserPages = (browserResponse.result as BrowserTabListResult).tabs
       return {
         clientBrowserWorkspaces: (state?.browserTabsByWorktree[worktreeId] ?? []).length,
         clientBrowserTabs: (state?.unifiedTabsByWorktree[worktreeId] ?? []).filter(
           (tab) => tab.contentType === 'browser'
         ).length,
         clientTerminalTabs: (state?.tabsByWorktree[worktreeId] ?? []).length,
-        hostAuthoritativeBrowserTabs: sessionResponse.result.tabs.filter(
-          (tab) => tab.type === 'browser'
-        ).length,
-        hostRegisteredBrowserPages: browserResponse.result.tabs.length,
-        hostTerminalTabs: sessionResponse.result.tabs.filter((tab) => tab.type === 'terminal')
-          .length
+        hostAuthoritativeBrowserTabs: sessionTabs.filter((tab) => tab.type === 'browser').length,
+        hostRegisteredBrowserPages: browserPages.length,
+        hostTerminalTabs: sessionTabs.filter((tab) => tab.type === 'terminal').length
       }
     },
     { environmentId, worktreeId }

@@ -7,8 +7,7 @@ type AgentPaneAuthorityAlias = {
 
 const aliasesByPhysicalPaneKey = new Map<string, AgentPaneAuthorityAlias>()
 
-// Why: teardown paths that never retire (pty exit, workspace purge) would otherwise
-// leak an entry per detach for the renderer's lifetime; evict oldest-first.
+// Evict oldest aliases: PTY exit/purge can skip retirement and otherwise leak entries forever.
 const MAX_AGENT_PANE_AUTHORITY_ALIASES = 512
 
 function evictOldestAgentPaneAuthorityAliases(): void {
@@ -53,8 +52,7 @@ export function transferAgentPaneAuthorityAlias(args: {
     }
   }
   const ptyId = args.ptyId?.trim() || aliasesByPhysicalPaneKey.get(physicalPaneKey)?.ptyId || null
-  // Why: every key that resolved to the old owner must follow the move in one hop,
-  // or a chained detach leaves an intermediate key routing to a dead pane.
+  // Move every alias in one hop or chained detach routes intermediate keys to dead panes.
   const formerOwnerPaneKeys = new Set([physicalPaneKey, previousOwnerPaneKey])
   for (const [candidatePhysicalPaneKey, alias] of aliasesByPhysicalPaneKey) {
     if (alias.ownerPaneKey === previousOwnerPaneKey) {

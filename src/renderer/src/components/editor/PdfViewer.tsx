@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PDF loading drives pdf.js document/viewer instances and decode errors through an external worker lifecycle. */
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -36,11 +35,9 @@ const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
 type PdfViewerProps = {
   content: string
   filePath: string
-  // Why: callers that do not have an owner identity (for example diff and
-  // conflict panes) must not persist a preference under a path-only key.
+  // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
   preferenceKey?: string | null
-  // Why: absent means "no scroll memory" — the diff and conflict-review callers
-  // mount several viewers on one path, so a shared key would cross-write.
+  // Omit scroll memory for diff/conflict surfaces that can mount several viewers on the same path.
   scrollCacheKey?: string | null
 }
 
@@ -72,15 +69,13 @@ function PdfDocumentViewer({
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
-  // Why: content reloads rebuild the pdf.js viewer; keep zoom across updates of
-  // the same file and restore the durable preference after a remount or restart.
+  // Retain zoom through viewer rebuilds; durable preferences restore it after remount or restart.
   const scalePreferenceRef = useRef<PdfScalePreference>('page-width')
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
 
-  // Why: every zoom entry point (toolbar, app zoom command, wheel/pinch) must record the
-  // scale preference so the next content reload restores it (see scalePreferenceRef).
+  // All zoom entry points must record preferences so content reloads restore the chosen scale.
   const recordScalePreference = useCallback(
     (preference: PdfScalePreference) => {
       scalePreferenceRef.current = preference
@@ -139,7 +134,7 @@ function PdfDocumentViewer({
 
   useEffect(() => {
     loaderRef.current?.load(cleanedContent)
-    // Why: owner changes must load again even when the bytes are identical.
+    // Identical bytes still require reload when ownership changes.
   }, [cleanedContent, filePath, preferenceKey, scrollCacheKey])
 
   const closeFindBar = useCallback(() => {
@@ -194,10 +189,7 @@ function PdfDocumentViewer({
     <div ref={rootRef} className="flex h-full min-h-0 flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
-        {/* Why: PDFViewer requires its container to be position:absolute.
-            The outer div uses all:revert to prevent Tailwind Preflight from
-            cascading into pdf.js DOM (text layer misalignment). The inner div
-            carries positioning and background since all:revert nullifies classes. */}
+        {/* PDFViewer needs absolute positioning; isolate pdf.js DOM from Preflight with all:revert, then apply layout on the inner container. */}
         <div style={{ all: 'revert' }}>
           <div
             ref={containerRef}

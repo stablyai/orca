@@ -52,7 +52,7 @@ describe('WslRelayRecovery', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('distro not running'))
   })
 
-  it('does nothing when the state was replaced or the manager is disposed', async () => {
+  it('does nothing when the state was replaced before the restart probe', async () => {
     const restart = vi.fn()
     const probe = vi.fn(async () => true)
     const recovery = new WslRelayRecovery({

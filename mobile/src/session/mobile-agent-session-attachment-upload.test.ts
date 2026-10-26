@@ -21,7 +21,6 @@ function fail(message: string): RpcFailure {
   }
 }
 
-/** A host that answers by method, recording what reached it. */
 function fakeHost(answer: (method: string, params: unknown) => RpcResponse) {
   const calls: { method: string; params: Record<string, unknown> }[] = []
   const client: Pick<RpcClient, 'sendRequest'> = {

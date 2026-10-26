@@ -1,7 +1,4 @@
-/**
- * Invariant: the documented hello-orca plugin stays inert before visible
- * consent, then its panel, worker command, and event subscription all work.
- */
+// Require visible consent before the hello-orca panel, worker command or event subscription runs.
 
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

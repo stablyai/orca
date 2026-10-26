@@ -20,7 +20,6 @@ describe('mobileComposerSlashItems', () => {
       structured: { reported, conversationCommands: ['clear', 'compact'] },
       query: ''
     })
-    // The host answers /compact itself, so its row stands in for the session's.
     expect(items.map((item) => [item.kind, item.token, item.description ?? null])).toEqual([
       ['command', '/model', 'Choose the model'],
       ['command', '/effort', 'Choose reasoning effort'],

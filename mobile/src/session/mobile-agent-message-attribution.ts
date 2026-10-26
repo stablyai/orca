@@ -1,5 +1,3 @@
-// The plain line naming who sent another agent's message; not a link on mobile yet.
-
 import {
   agentMessageSendersShown,
   type AgentMessageSource
@@ -7,7 +5,6 @@ import {
 
 const UNNAMED_SENDER = 'an agent'
 
-/** Null for the person's own message. */
 export function agentMessageAttribution(
   lead: 'From' | 'Message from',
   source: AgentMessageSource | undefined

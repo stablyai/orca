@@ -41,20 +41,15 @@ const CREATE_INDEX_IF_NOT_EXISTS = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+E
 const ALTER_TABLE_ADD_CONSTRAINT = /^ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\b/i
 const DROP_INDEX_IF_EXISTS = /^DROP\s+INDEX\s+(?:CONCURRENTLY\s+)?IF\s+EXISTS\b/i
 
-// Marked in the schema text, beside the SQL it applies to, and read from the raw statement because
-// classification strips comments. Says: this boot may leave the statement unapplied rather than
-// fail. Only sound for a statement that is idempotent AND that nothing this boot goes on to do
-// depends on, because the database is then simply as it was and the next boot re-sends it.
+// Leading schema-deferrable marker permits deferral only for idempotent DDL with no later boot dependency.
+// Read raw text because classification strips comments; next boot retries unapplied work.
 const DEFERRABLE = /^\s*--[^\n]*\bschema-deferrable\b/
 
 export function schemaDeferrable(statement: string): boolean {
   return DEFERRABLE.test(statement)
 }
 
-// `IF NOT EXISTS` only checks the name before the catalog inserts, so the loser of a concurrent
-// CREATE can fail on the catalog unique index (23505) or, when the winner has already committed by
-// the time the loser reaches TypeCreate/heap_create_with_catalog, on the name check those routines
-// repeat (42710 duplicate type, 42P07 duplicate relation). Each is a no-op on the next attempt.
+// Concurrent CREATE losers can hit catalog 23505 or repeated name-check 42710/42P07; the next attempt is a no-op.
 function concurrentCreateCollision(
   value: { code?: unknown; constraint?: unknown },
   sql: string
@@ -81,10 +76,7 @@ function constraintAlreadyApplied(error: unknown, sql: string): boolean {
   )
 }
 
-// `IF EXISTS` resolves the name, then locks; between those two steps another director's drop can
-// commit and the loser raises 42704 instead of the notice it would have got a moment later. Every
-// director boots at once on a deploy, so without this the losers fail their boot over a drop that
-// already happened.
+// IF EXISTS resolves before locking; another director’s DROP can commit between them and produce benign 42704.
 function dropAlreadyApplied(error: unknown, sql: string): boolean {
   return DROP_INDEX_IF_EXISTS.test(sql) && (error as { code?: unknown } | null)?.code === '42704'
 }
@@ -94,8 +86,7 @@ function retryableSchemaError(error: unknown, sql: string): boolean {
   return RETRYABLE_SCHEMA_CODES.has(String(value.code)) || concurrentCreateCollision(value, sql)
 }
 
-// Evaluated immediately before each statement, so a pre-check still sees the objects the statements
-// ahead of it created in this same boot.
+// Precheck immediately before each statement so prior creates in this boot are visible.
 async function nothingToDo(
   target: SchemaLockTarget | undefined,
   options: SchemaStartupOptions,
@@ -150,14 +141,9 @@ export async function applyPostgresSchema(
           break
         }
         const code = String((error as { code?: unknown } | null)?.code)
-        // With the pre-check ahead of it a lock timeout means the object is genuinely missing and
-        // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
-        // every writer behind it again for another timeout. Fail once, loudly.
+        // Prechecked missing objects lost the lock queue; retries would park writers for another timeout, so fail once.
         if (code === LOCK_NOT_AVAILABLE && !options.retryLockTimeout) {
-          // A deferrable statement yields the queue instead of crash-looping the instance. Every
-          // director boots at once on a migration, so a table under continuous write can hand the
-          // whole fleet a lock timeout on the one statement that has to win once; failing the boot
-          // for it restarts the instance, which re-queues the same DDL behind the same writers.
+          // Deferrable DDL yields instead of restarting every director into the same continuously written table’s lock queue.
           if (schemaDeferrable(statement)) {
             console.warn(
               JSON.stringify({
@@ -182,9 +168,7 @@ export async function applyPostgresSchema(
           )
           throw error
         }
-        // The object was created between the pre-check and this statement. Re-asking the catalog
-        // is the cheap answer; retrying the CREATE INDEX would take SHARE on the table again for
-        // an object that is already there.
+        // Re-ask catalog after concurrent creation; retrying CREATE INDEX re-takes SHARE for an existing object.
         if (
           concurrentCreateCollision((error as { code?: unknown; constraint?: unknown }) ?? {}, sql) &&
           (await nothingToDo(target, options, eventPrefix))

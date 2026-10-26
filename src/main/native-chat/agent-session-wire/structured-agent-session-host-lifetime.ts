@@ -147,7 +147,14 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         () => context.restartWitness?.beforeStop(sessionId)
       )
     }
-    if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) !== 'exited') {
+    if (
+      (await joinStructuredAgentSessionChildClose(
+        context,
+        sessionId,
+        child,
+        'recorded' in ending ? ending.observeClose : undefined
+      )) !== 'exited'
+    ) {
       throw new StructuredAgentSessionEvictionError(
         'stop-provider-child',
         sessionId,

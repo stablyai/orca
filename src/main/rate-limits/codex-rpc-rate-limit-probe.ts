@@ -283,7 +283,7 @@ export function readCodexRateLimitsViaRpc(
   })
 }
 
-// Why: surfaced text drives re-auth classification, so diagnosis and classification must use the same sanitized value.
+// Reauthentication classification and surfaced diagnostics must share the same sanitized text.
 function describeCodexRpcExit(
   code: number | null,
   signal: NodeJS.Signals | null,

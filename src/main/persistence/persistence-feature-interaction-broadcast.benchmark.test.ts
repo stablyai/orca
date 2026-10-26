@@ -1,7 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
-  readPersistedStateJson
+  readPersistedState
 } from './persistence-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +9,6 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeFeatureInteractions } from '../../shared/feature-interactions'
-import type { PersistedState } from '../../shared/persisted-state-types'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -86,8 +85,7 @@ describe('feature interaction UI broadcast benchmark', () => {
         'agent-orchestration'
       ]?.interactionCount
     ).toBe(INTERACTIONS)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
+    const persisted = readPersistedState(dataFile)
     expect(persisted.featureInteractionTelemetryBuckets?.['agent-orchestration']).toBe(
       'count_200_499'
     )

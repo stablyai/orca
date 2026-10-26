@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (options.reason !== undefined && options.reason !== 'user' && observedPtyIds === null) {
-      // Why: keep-on-unknown must also restore the mirror the caller already pruned.
+      // Keep-on-unknown must restore the mirror the caller already pruned.
       this.republishMobileSessionTabsSnapshot(worktreeId)
       return refusedMobileSessionTabClose('unknown-liveness', {
         snapshotRepublished: Boolean(snapshot)
@@ -122,7 +122,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         closedSelectionTabIds
       )
     if (tab.type === 'terminal') {
-      // Why: the wire id carries the intent — `parent::leaf` names a pane, `parent` its tab.
+      // Wire parent::leaf names a pane; parent names its tab.
       const resolution = this.resolveTerminalCloseTarget(
         worktreeId,
         tab.id === tabId
@@ -137,48 +137,33 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             : []
         )
       }
-      // Why: a non-'user' reason is a client-lifecycle echo ("terminal gone"),
-      // not authorization to kill. Every destructive branch below can take the
-      // whole parent down, so any live PTY under the parent means the echo is a
-      // transport artifact: refuse the close and republish the snapshot so the
-      // echoing client re-syncs and re-attaches. A reasonless close keeps
-      // legacy behavior — old clients send user closes without the field.
+      // Non-user lifecycle echoes cannot authorize killing any live parent PTY; refuse and republish for client resync.
+      // Missing reason retains user-close behavior for legacy clients.
       if (options.reason !== undefined && options.reason !== 'user') {
         const leafHasConnectedPty = lifecycleClose.leafHasConnectedPty
         if (lifecycleClose.parentLeaves.some(leafHasConnectedPty)) {
-          // Why: when the echo addresses a dead leaf under a live sibling we
-          // still refuse (every reachable close path below destroys the whole
-          // parent, live sibling included) but skip the republish — re-adding
-          // the dead leaf on the echoing client would feed an endless
-          // refuse→republish→re-echo cycle.
+          // Refuse dead-leaf echoes under live siblings, but do not republish the dead leaf or clients loop refuse/republish/echo.
           const addressedDeadLeaf = tab.id === tabId && !leafHasConnectedPty(tab)
           if (!addressedDeadLeaf) {
             this.republishMobileSessionTabsSnapshot(worktreeId)
           }
-          // Why: both markers are skew-safe; clients must restore a mirror only
-          // when the host actually republished it, not for a dead leaf.
+          // Skew-safe markers tell clients whether the host actually republished a mirror.
           return refusedMobileSessionTabClose('live-host-pty', {
             snapshotRepublished: !addressedDeadLeaf
           })
         }
         if (!closingWholeParent || this.tabs.has(tab.parentTabId)) {
-          // Why: only the renderer may retire its own tab or split leaf; a
-          // remote lifecycle echo must never cross that boundary into a kill.
+          // Only the renderer may retire its own tab/split leaf; remote lifecycle echoes cannot authorize kills.
           return refusedMobileSessionTabClose('retirement-owner')
         }
       }
-      // Switch point: a terminal row main owns closes in main's layout, with or without a window.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         (await this.closeMobileRowInMainLayout(worktreeId, tabId, tab, options))
       ) {
         return finishCommittedClose()
       }
-      // Why: a runtime-owned headless tab is absent from renderer state, so the
-      // closeTerminalTab relay below would ack success without killing its PTY,
-      // and syncMobileSessionTabs would republish the "closed" tab. Only bypass
-      // the relay when no renderer owns the parent: an adopted tab needs the
-      // renderer's live pin guard and durable close transaction.
+      // Headless parents need local kill/de-persist or relay acknowledgments resurrect them; renderer-owned parents retain its pin guard/durable close.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
@@ -193,9 +178,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         return finishCommittedClose()
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
-        // The renderer flush can rebase its omission; the host commits the acknowledged identity.
+        // Commit the acknowledged identity even if renderer flush rebased its omission.
         const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
-        // Wait for the renderer's pin guard, retirement and forced session flush.
+        // Await renderer pin guard, retirement and forced session flush.
         const win = this.getAvailableAuthoritativeWindow()
         if (win?.webContents.isDestroyed?.()) {
           throw new Error('runtime_unavailable')
@@ -234,18 +219,16 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           const remainingPtyCloseAuthority = options.expectedPtyCloseAuthority
             ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)
             : null
-          // Why: after relay recovery the renderer can acknowledge a tab it no longer mirrors; the HUB must still retire its SSH-owned surface.
+          // Relay recovery may acknowledge an absent renderer tab; HUB still retires its SSH surface.
           await this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
-            // Why: the renderer may already have durably removed the tab before acknowledging.
+            // The renderer may already have durably removed it.
             allowMissingPersistedTab: true,
             force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         } else if (retirement.hasPersistedTab) {
-          // Why: the renderer's close normally commits this through its own intent; this covers
-          // a renderer that acknowledged a tab it no longer listed. Missing is fine: that intent's
-          // durable write can land between this check and this commit.
+          // Cover acknowledged tabs absent from renderer inventory; concurrent durable removal is idempotent.
           await this.closeTerminalSurface(
             worktreeId,
             { kind: 'tab', tabId: tab.parentTabId },
@@ -260,8 +243,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         return finishCommittedClose()
       }
       if (closingWholeParent) {
-        // Why: notifier implementations without the acknowledged relay may expose
-        // only raw pane close. Runtime-owned parents still need de-persist + kill.
+        // Notifiers without acknowledged relay may offer raw close only; runtime parents still need kill and de-persist.
         if (
           !this.notifier?.closeTerminal ||
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
@@ -280,8 +262,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.closeMobileSessionTerminalPane(worktreeId, tab)
       return finishCommittedClose()
     } else if (tab.type === 'browser') {
-      // Why: a browser tab can be hosted by a client, by the offscreen backend,
-      // or by the renderer; each surface owns a different retirement path.
+      // Client-hosted, offscreen and renderer browser pages each own their retirement path.
       const clientPage = tab.browserPageId
         ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
         : undefined
@@ -302,7 +283,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     } else if (tab.type === 'agent-session') {
       if (this.notifier?.closeSessionTab) {
         try {
-          // Why: a reopened chat's window tab id is not derivable from its session; the window maps ours.
+          // The window maps reopened chats to tab ids not derivable from session ids.
           await this.notifier.closeSessionTab(tab.id, worktreeId)
         } catch (error) {
           // The renderer already having removed the tab is an idempotent close, not a veto.
@@ -316,7 +297,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         structuredAgentSessionTabCloseCause(options.reason)
       )
     } else if (!this.notifier?.closeSessionTab) {
-      // Why: a headless host listed this editor from its own session, so it retires it there.
+      // Headless editors retire through the host-owned session.
       if (!retireHeadlessMobileSessionEditorTab(this, worktreeId, tab, options.force)) {
         throw new Error('runtime_unavailable')
       }

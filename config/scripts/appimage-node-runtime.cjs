@@ -1,8 +1,4 @@
-/**
- * Linux builds place the pinned Node at resources/node-runtime/bin/node in afterPack, before the
- * glibc-floor gate scans the tree. deb and rpm drop it again through fpm, so only the AppImage
- * ships it: an AppImage's files vanish with its mount, an installed package's do not.
- */
+// Stage pinned Linux Node before glibc-floor checks; deb/rpm remove it via fpm, while AppImage needs it because mounted files can vanish.
 const { chmodSync, copyFileSync, mkdirSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 const { pathToFileURL } = require('node:url')

@@ -76,16 +76,14 @@ describe('createPaneDOM link tooltips', () => {
       vi.fn()
     )
 
-    // Why: corner offsets live in .pane-link-tooltip (terminal.css); JS only
-    // toggles visibility so padding/offset cannot drift back into inline styles.
+    // CSS owns tooltip corner offsets; JS must not reintroduce inline padding drift.
     expect(pane.linkTooltip.classList.contains('pane-link-tooltip')).toBe(true)
     expect(pane.linkTooltip.style.left).toBe('')
     expect(pane.linkTooltip.style.bottom).toBe('')
     expect(pane.linkTooltip.style.display).toBe('none')
   })
 
-  // Why: the caller owns the hint, so dropping the wiring is a compile error rather
-  // than a silent fall back to stale copy.
+  // Require caller hint wiring at compile time instead of silently falling back to stale copy.
   it('re-resolves the caller hint on every hover so setting changes apply live', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
     let hint = 'first hint'
@@ -129,8 +127,7 @@ describe('createPaneDOM link tooltips', () => {
     expect(pane.linkTooltip.textContent).toBe(labeledText)
   })
 
-  // Why: the hovered pane's host decides where its links can go, so both hooks must
-  // receive that pane's id rather than resolving against global state.
+  // Both link hooks need hovered pane identity; global runtime focus cannot decide its host routes.
   it('identifies the hovered pane to both tooltip hooks', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
     const linkOpenHint = vi.fn(() => 'open hint')

@@ -52,12 +52,8 @@ export function recordAgentSessionProviderHandle(args: {
   }
 }
 
-/**
- * Move the live owner's resume point in place: the head link this owner minted keeps its id and
- * provenance, and only the adapter-owned data its handle carries changes, so a long conversation
- * does not grow the chain. The adapter decides what that data means; this only refuses a handle
- * that names another conversation.
- */
+/** Revise the live head in place, preserving link id/provenance and bounding chain growth.
+ * The adapter owns handle data; reject changes naming another conversation. */
 export function reviseAgentSessionProviderResumePoint(args: {
   record: AgentSessionRecord
   fence: number
@@ -86,7 +82,7 @@ export function reviseAgentSessionProviderResumePoint(args: {
     ...record.providerHandleChain.slice(0, -1),
     { ...head, handle: args.handle, observedAt: args.now }
   ]
-  // The revised chain must still read back as the same persisted chain.
+  // Updated handles must retain the persisted chain contract.
   if (!isAgentSessionProviderHandleChain(providerHandleChain)) {
     throw new Error('agent_session_provider_handle_invalid')
   }

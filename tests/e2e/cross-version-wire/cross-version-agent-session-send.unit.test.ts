@@ -1,7 +1,4 @@
-// A current client's `agentSession.send`, built by the outbox clients send from, against a real
-// published release. The release's schema must take it and its admission must re-derive the
-// fingerprint the client declared: a send it rejects, or digests differently and refuses as an
-// operation conflict, loses the user's message.
+// Run current outbox-built sends against a real release; both schema admission and operation fingerprints must preserve the user’s message.
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
@@ -24,7 +21,6 @@ import {
 // The first published release whose host advertises `agent-session.send-options.v1` (#27826).
 const SEND_OPTIONS_RELEASE_REF = 'v1.4.228'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
 let current: AgentSessionWireBuild

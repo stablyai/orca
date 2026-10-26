@@ -1,4 +1,4 @@
-import { connect, type Server, type Socket } from 'node:net'
+import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -177,7 +177,6 @@ describe('WslOrcadConnectionManager', () => {
     expect(deployAndLaunch).toHaveBeenCalledTimes(1)
     expect(manager.list()).toEqual([a])
     expect(manager.get('UBUNTU')).toBe(a)
-    // Only the bridge check ran a child so far.
     expect(children.commands).toHaveLength(1)
   })
 
@@ -187,7 +186,6 @@ describe('WslOrcadConnectionManager', () => {
     launches.push(ready(first.port))
     expect(await manager.ensure('Ubuntu')).toBe(connection)
     expect(children.commands).toHaveLength(1)
-    // A refresh that changed nothing stays quiet: connecting, ready, and no more.
     expect(onChange).toHaveBeenCalledTimes(2)
   })
 
@@ -217,6 +215,33 @@ describe('WslOrcadConnectionManager', () => {
     await staleClosed
     expect(await roundTrip(after, 'new')).toBe('new')
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
+  })
+
+  it('rebinds the bridge port the host record saved, so an app restart keeps the pairing', async () => {
+    const saved = await setup().manager.ensure('Ubuntu')
+    const port = saved.localPort
+    await saved.close()
+
+    const { manager } = setup({ recordedLocalPort: () => port })
+    const restarted = await manager.ensure('Ubuntu')
+    expect(restarted.localPort).toBe(port)
+    expect(restarted.pairingOffer).toBe(saved.pairingOffer)
+    expect(await roundTrip(restarted, 'again')).toBe('again')
+  })
+
+  it('picks a free port when the recorded one is taken', async () => {
+    const squatter = createServer()
+    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve))
+    const address = squatter.address()
+    const taken = typeof address === 'object' && address ? address.port : 0
+    try {
+      const { manager } = setup({ recordedLocalPort: () => taken })
+      const connection = await manager.ensure('Ubuntu')
+      expect(connection.localPort).not.toBe(taken)
+      expect(await roundTrip(connection, 'free')).toBe('free')
+    } finally {
+      squatter.close()
+    }
   })
 
   it('serves the incumbent with its deferred update, then reports the update landing', async () => {
@@ -298,7 +323,6 @@ describe('WslOrcadConnectionManager', () => {
     await expect(manager.ensure('Ubuntu')).rejects.toBeInstanceOf(WslOrcadLaunchDeferredError)
     expect(children.commands).toHaveLength(0)
     expect(manager.get('Ubuntu')).toBeNull()
-    // Nothing serves, so the deferral is what offers Update or Force.
     expect(onChange).toHaveBeenLastCalledWith(
       'Ubuntu',
       null,
@@ -424,7 +448,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
       resolve: () => stored,
       connect: async () => {
         const target = { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' } as const
-        // Never used: readReadiness answers from the fixture.
+        // The fixture supplies readiness, so this spawner is unused.
         const spawn = fakeWslBridgeChildren().spawn
         return { target, connection: createWslOrcadHostTransport({ target, spawn }) }
       },
@@ -438,7 +462,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     return { stored: () => stored, refresh, recovery }
   }
 
-  // The host knows only the token it published after losing its device registry.
+  // After registry loss, only the newly published token authenticates.
   const verifyIdentity = async (pairingOffer: string) =>
     parsePairingCode(pairingOffer)?.deviceToken === 'fresh-token'
       ? ({ verdict: 'verified' } as const)
@@ -468,7 +492,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     let hostLostRegistry = false
     const onChange = vi.fn()
     const { manager } = setup({
-      // The host accepts the enrolled token until it loses its registry, then accepts nothing.
+      // Registry loss invalidates the previously enrolled token.
       verifyIdentity: async (pairingOffer: string) =>
         !hostLostRegistry && parsePairingCode(pairingOffer)?.deviceToken === 'lost-token'
           ? ({ verdict: 'verified' } as const)

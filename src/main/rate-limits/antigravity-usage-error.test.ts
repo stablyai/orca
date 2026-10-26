@@ -29,8 +29,7 @@ describe('classifyAntigravityUsageFailure', () => {
   })
 
   it('separates an unentitled account from a signed-out one', () => {
-    // Why this matters: telling a signed-in user to sign in sends them to re-auth that fixes
-    // nothing.
+    // Valid sessions without entitlement need subscription guidance, not reauthentication.
     expect(classifyAntigravityUsageFailure(agyError({ status: 'PERMISSION_DENIED' }))).toEqual({
       failureKind: 'no-subscription',
       signedOut: false
@@ -69,8 +68,7 @@ describe('classifyAntigravityUsageFailure', () => {
     'please sign in to continue',
     'AUTHENTICATION REQUIRED'
   ])('falls back to the sentence when no structured error is printed: %s', (output) => {
-    // Why a fallback at all: the structured line is the stable signal, but not every path prints
-    // one, and a signed-out account must never be reported as an unreadable payload.
+    // Some signed-out paths emit no structured error; preserve sign-in guidance.
     expect(classifyAntigravityUsageFailure(output)).toEqual({
       failureKind: 'missing-credentials',
       signedOut: true

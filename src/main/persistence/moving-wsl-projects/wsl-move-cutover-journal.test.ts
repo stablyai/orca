@@ -106,7 +106,6 @@ describe('WSL move journal', () => {
       userDataPath,
       cutover('move-2', 'prepared', { supersedesMigrationId: 'move-1' })
     )
-    // Rewriting the finished link unchanged is fine; nothing may restart it.
     writeWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
   })
 

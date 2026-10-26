@@ -1,19 +1,9 @@
 import { ACTIVE_CLAIM_TTL_MS, MAX_ACTIVE_BRANCHES } from './hosted-review-refresh-pacing'
 
-/**
- * The branches callers report as their current selection (#11532).
- *
- * Split from the answer cache because it is a different question: not "what is
- * this branch's review" but "is anyone looking at it", which is what buys the
- * per-minute tier.
- */
+/** Track selection separately from cached answers: active branches earn per-minute pacing (#11532). */
 const activeClaims = new Map<string, number>()
 
-/**
- * Records the caller's current selection, reporting whether the branch was not
- * already active. Claims are least-recently-used so the fast tier stays bounded
- * no matter how many a client asserts.
- */
+/** Report newly active selection; LRU bounds the fast tier across client claims. */
 export function noteActiveClaim(key: string): boolean {
   const now = Date.now()
   for (const [candidate, claimedAt] of activeClaims) {

@@ -227,8 +227,7 @@ export function handleTerminalWorkspaceKeyDown(
   ) {
     return
   }
-  // Why: a held tab chord is claimed on every repeat but switches once; an unclaimed repeat
-  // would reach the newly active terminal as its own key (Cmd+Right as Ctrl+E).
+  // Claim held repeats without switching again, or the newly active terminal receives the shortcut’s byte fallback.
   const claimTabSwitch = (): boolean => {
     event.preventDefault()
     event.stopPropagation()

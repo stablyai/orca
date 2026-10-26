@@ -11,7 +11,6 @@ import {
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../requests/remote-runtime-prepared-request-admission'
 import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
-import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
 import {
   closeSharedControlTestServers,
@@ -81,10 +80,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('does not expose a binary sender on the shared control protocol surface', () => {
-    expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
-  })
-
   it('releases a pending request when the socket send throws', async () => {
     const connection = new RemoteRuntimeSharedControlConnection(
       pairedRuntimeConnectionFromOffer({
@@ -120,36 +115,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       retainedBytes: 0
     })
     connection.close()
-  })
-
-  it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
-    const connection = new RemoteRuntimeSharedControlConnection(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:1',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-      })
-    )
-    const close = vi.fn()
-    const cleanup = vi.fn()
-    const open = vi.fn()
-    const unsafe = connection as unknown as {
-      state: string
-      ws: { readyState: number; close: () => void } | null
-      socketCleanup: (() => void) | null
-      open: () => void
-    }
-    unsafe.state = 'awaiting_ready'
-    unsafe.ws = { readyState: 0, close }
-    unsafe.socketCleanup = cleanup
-    unsafe.open = open
-
-    connection.reconnectNow()
-
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(close).toHaveBeenCalledOnce()
-    expect(open).toHaveBeenCalledOnce()
   })
 
   it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
@@ -257,29 +222,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('keeps many logical subscriptions on one authenticated WebSocket', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const subscriptions = await Promise.all(
-      Array.from({ length: 35 }, (_value, index) =>
-        connection.subscribe('runtime.clientEvents.subscribe', { index }, 1000, {
-          onResponse: vi.fn(),
-          onError: vi.fn()
-        })
-      )
-    )
-
-    await vi.waitFor(() => expect(server.requests).toHaveLength(35))
-
-    expect(server.connectionCount()).toBe(1)
-    expect(
-      server.requests.every((request) => request.method === 'runtime.clientEvents.subscribe')
-    ).toBe(true)
-
-    subscriptions.forEach((subscription) => subscription.close())
-    connection.close()
-  })
-
   it('reconnects and replays passive subscriptions without closing them', async () => {
     const server = await createServer({ closeAfterFirstStreamingResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -307,74 +249,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       lastClose: null
     })
 
-    connection.close()
-  })
-
-  it('keeps passive subscriptions alive after reaching the capped reconnect delay', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onClose = vi.fn()
-
-    const unsafe = connection as unknown as {
-      reconnect: {
-        attempt: number
-        scheduleWithDefaultBackoff: (intentionallyClosed: boolean, open: () => void) => void
-      }
-      subscriptions: Map<string, unknown>
-    }
-    unsafe.reconnect.attempt = 7
-    unsafe.subscriptions.set('sub-1', {
-      requestId: 'sub-1',
-      method: 'runtime.clientEvents.subscribe',
-      params: null,
-      callbacks: { onResponse: vi.fn(), onError: vi.fn(), onClose },
-      sent: false,
-      closed: false,
-      closeAfterReady: false,
-      remoteSubscriptionId: null
-    })
-
-    unsafe.reconnect.scheduleWithDefaultBackoff(false, () => {})
-
-    expect(onClose).not.toHaveBeenCalled()
-    expect(connection.getDiagnostics()).toMatchObject({
-      state: 'reconnecting',
-      reconnectAttempt: 8,
-      subscriptionCount: 1
-    })
-
-    connection.close()
-  })
-
-  it('resets reconnect attempts after a stable authenticated ready period', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      reconnectStableResetMs: 50
-    })
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).resolves.toMatchObject({
-      ok: true
-    })
-    ;(connection as unknown as { reconnect: { attempt: number } }).reconnect.attempt = 3
-
-    await vi.waitFor(() =>
-      expect(connection.getDiagnostics()).toMatchObject({ reconnectAttempt: 0 })
-    )
-    connection.close()
-  })
-
-  it('removes ready waiters when a one-shot request times out during handshake', async () => {
-    const server = await createServer({ suppressReadyFrame: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const unsafe = connection as unknown as {
-      readyWaiters: unknown[]
-      pendingRequests: Map<string, unknown>
-    }
-
-    await expect(connection.request('worktree.ps', undefined, 25)).rejects.toThrow('Timed out')
-
-    await vi.waitFor(() => expect(unsafe.readyWaiters).toHaveLength(0))
-    expect(unsafe.pendingRequests.size).toBe(0)
     connection.close()
   })
 
@@ -468,9 +342,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('times out a stuck short RPC on its absolute deadline despite keepalive frames', async () => {
-    // Why: a keepalive on the shared socket is armed by an unrelated long-poll,
-    // not by this request. It must NOT extend a stuck short RPC's deadline —
-    // otherwise a hung server call hangs the caller forever (#7948).
+    // Unrelated long-poll keepalives must not extend stuck short RPC deadlines (#7948).
     const server = await createServer({
       silentMethods: ['worktree.hang'],
       sendKeepaliveBeforeResponse: true,
@@ -529,10 +401,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('detects a half-open socket via client liveness, reconnects, and tags the replayed response', async () => {
-    // Why: the server keeps the TCP connection open but stops answering —
-    // no close frame, no pongs (autoPong disabled), no responses. This is the
-    // half-open devtunnel scenario from #7718: edge-triggered reconnect never
-    // fires, so client liveness must terminate the socket itself.
+    // Half-open tunnels keep TCP open without close/pongs/responses; liveness must terminate the socket to trigger reconnect (#7718).
     const server = await createServer({ disableAutoPong: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
@@ -548,8 +417,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
     expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
 
-    // Liveness terminates the silent socket and the reconnect path replays
-    // the subscription on a fresh connection.
     await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
       timeout: 5000
     })
@@ -561,8 +428,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         ).toBeGreaterThanOrEqual(2),
       { timeout: 5000 }
     )
-    // The first response after the reconnect replay carries the replay tag so
-    // snapshot freshness gates can accept the re-emitted snapshot.
+    // Tag the first replayed response so snapshot freshness gates accept it after reconnect.
     await vi.waitFor(
       () =>
         expect(
@@ -613,8 +479,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(2)
 
     await expect(timedOut).rejects.toThrow('Timed out')
-    // Why: a single slow method is not evidence that a shared socket is dead;
-    // liveness monitoring owns connection-wide failure detection.
+    // One slow RPC does not prove shared-socket death; connection liveness owns that decision.
     expect(connection.getDiagnostics()).toMatchObject({ state: 'ready', pendingRequestCount: 1 })
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(1)
 

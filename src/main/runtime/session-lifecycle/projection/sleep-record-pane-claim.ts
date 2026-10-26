@@ -29,11 +29,7 @@ type SessionEdit = (
   edit: (session: WorkspaceSessionState) => WorkspaceSessionState | null
 ) => Promise<void>
 
-/**
- * Durably hands a running agent's record to the pane about to resume it, before the spawn: a PTY
- * lost later (or a failed spawn) still resumes the pane with its recorded flags on the next open.
- * False when another resume took it first; the pane then opens a plain shell.
- */
+/** Claim durably before spawn so failed/lost PTYs retain resume flags. False on failed commit or changed/missing record; callers then open a shell. */
 export async function claimSleepRecordForPane(
   commit: SessionEdit,
   record: SleepingAgentSessionRecord
@@ -43,8 +39,7 @@ export async function claimSleepRecordForPane(
   try {
     await commit((session) => {
       const stored = session.sleepingAgentSessionsByPaneKey?.[record.paneKey]
-      // Why: an overlapping open of this pane claimed it first; resume alongside it, since a plain
-      // shell spawned here could win the pane and swallow that open's resume.
+      // Same-pane overlapping opens resume together; a competing plain shell could win the pane and swallow the resume.
       if (stored && sameRecord(stored, claimed)) {
         owned = true
         return null
@@ -67,11 +62,7 @@ export async function claimSleepRecordForPane(
   return owned
 }
 
-/**
- * Layout-owner build: once a pane's start resumed its slept agent from `resumed`, that record is a
- * running agent's resume record ('live'), so the pane reads awake while a host crash still resumes
- * it. A record captured since (a new sleep of the pane) is left as it is.
- */
+/** After main resumes the slept record, mark that same record live for wake display and crash recovery; leave any newer sleep capture intact. */
 export async function markResumedRecordLive(
   commit: SessionEdit,
   paneKey: string,

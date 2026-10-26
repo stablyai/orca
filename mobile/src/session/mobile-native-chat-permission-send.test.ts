@@ -8,7 +8,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
 import {
   sendMobileNativeChatPermissionResponse,
   useMobileNativeChatPermissionSend
@@ -17,12 +17,12 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 
 describe('sendMobileNativeChatPermissionResponse', () => {
   it('writes an approval as raw bytes without appending Return', async () => {
@@ -106,9 +106,7 @@ describe('useMobileNativeChatPermissionSend', () => {
     await act(async () => {
       await expect(respond?.('1')).resolves.toBe(true)
     })
-    // A choice is a bare key for a live overlay that swallows a clear while the
-    // host still acks it, so healing here would burn the marker and leave the
-    // paste to corrupt the next real message. Only the choice may go.
+    // An active choice overlay swallows clear keys while the host still acks writes; healing here would consume protection for the next message.
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '1', enter: false })
     expect(isMobileNativeChatInputStale('terminal')).toBe(true)
@@ -134,8 +132,6 @@ describe('useMobileNativeChatPermissionSend', () => {
       renderer = create(createElement(Harness))
     })
 
-    // An image paste sequence is mid-flight into the same PTY: the choice
-    // keystroke must not interleave into it.
     expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
     await act(async () => {
       await expect(respond?.('1')).resolves.toBe(false)
@@ -147,7 +143,6 @@ describe('useMobileNativeChatPermissionSend', () => {
     await act(async () => {
       await expect(respond?.('1')).resolves.toBe(true)
     })
-    // The choice released its own hold on the way out.
     expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
     releaseMobileNativeChatTerminalWrite('terminal')
   })

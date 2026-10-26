@@ -15,12 +15,7 @@ import {
 const CHILD_ALIAS_KEY_PREFIX = 'agent-child-work-alias-v1:'
 const MAX_ALIAS_PART_LENGTH = 512
 
-/**
- * `thread_id` names a child by its own provider thread (a Codex subagent); `turn_id` names one run
- * of such a child, as `tool_use_id` names one run of a task. The hook lane registers a Claude
- * `agent_id` under `task_id` (it is the same registry id) and a Codex `agent_id` under `thread_id`;
- * no `agent_id` kind exists on purpose.
- */
+/** thread_id identifies a child; turn_id/tool_use_id identify runs. Register hook Claude agent_id as task_id and Codex agent_id as thread_id; intentionally define no separate agent_id kind. */
 export const AGENT_CHILD_WORK_ALIAS_KINDS = [
   'task_id',
   'tool_use_id',

@@ -18,14 +18,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('./mobile-source-control-styles', () => ({ styles: new Proxy({}, { get: () => ({}) }) }))
 
-/**
- * The dock closes and the route goes back, and only one of them is a Back control.
- *
- * Nothing else pins this: no golden names this component and no parity census covers
- * `src/source-control`. The Back census reads what a control is called, so a single control
- * serving both modes has to be named "Back" in a mode where it dismisses a dock — which satisfies
- * the rule by making the wording wrong.
- */
+// Dock dismissal and route Back need distinct controls; the dock never pops a route.
 describe('the source-control header control', () => {
   let tree: ReactTestRenderer | null = null
 

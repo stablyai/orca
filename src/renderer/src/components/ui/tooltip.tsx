@@ -9,8 +9,7 @@ function TooltipProvider({
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  // Why: app tooltips are non-interactive labels. Letting the floating
-  // content keep itself open can block the controls it is describing.
+  // Labels must not stay open through pointer hover and block the controls they describe.
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
@@ -59,8 +58,7 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
-        // Why: tooltip portals can be triggered from inside menus/popovers.
-        // Keep labels above those floating surfaces instead of hidden behind them.
+        // Tooltip portals must layer above the menus/popovers that trigger them.
         className={cn(tooltipContentVariants({ variant }), className)}
         {...props}
       >

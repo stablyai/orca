@@ -114,9 +114,7 @@ describe('sidebar host options', () => {
       repos: [],
       sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      // Why: protocol 0 is below the minimum compatible server version, so the
-      // registry must surface a 'server-too-old' blocked verdict + health when
-      // the live status map is passed.
+      // Protocol zero must produce a blocked server-too-old verdict from the live status map.
       runtimeStatusByEnvironmentId: new Map([
         [
           'runtime-1',

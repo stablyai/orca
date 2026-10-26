@@ -56,8 +56,7 @@ export function LocalPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      // Why: keyboard activations have detail=0; only pointer clicks carry
-      // the modifier intent for the system-browser escape hatch.
+      // Keyboard clicks have detail=0; only pointer clicks carry the system-browser modifier intent.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()

@@ -1,10 +1,3 @@
-// Fail-closed validator behavior. These tests exist to catch the classes of
-// input the validator is designed to reject at the IPC boundary: unknown
-// event names, extra properties (via `.strict()`), missing required keys,
-// wrong enum values, and overlength free-form strings. Every rejected case
-// returns `{ ok: false, reason }` — the client.ts wrapper then drops the
-// event instead of calling posthog.capture.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetValidatorWarnCacheForTests, validate } from './validator'
 
@@ -91,9 +84,7 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
-  // Core invariant: agent_error is enum-only. If a call site ever tries to
-  // attach raw error strings to the event, the validator drops it and nothing
-  // transmits.
+  // Raw agent error strings must fail schema validation and never transmit.
   it('rejects error_message on agent_error', () => {
     const result = validate('agent_error', {
       error_class: 'unknown',
@@ -139,9 +130,6 @@ describe('validate', () => {
   })
 
   it('rejects agent_error with a deferred enum value', () => {
-    // `auth_expired` was in an earlier draft; the trimmed enum is
-    // ['binary_not_found', 'unknown']. Pin that contract so re-introducing
-    // a deferred value silently is impossible.
     const result = validate('agent_error', {
       error_class: 'auth_expired',
       agent_kind: 'claude-code'
@@ -149,11 +137,7 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
-  // ── Cohort property (nth_repo_added) ────────────────────────────────
-  // Pin the schema contract from
-  // docs/onboarding-funnel-cohort-addendum.md. The field is optional so a
-  // classifier degraded-mode `undefined` still validates; rejected shapes
-  // (negative, non-integer, string) must drop.
+  // Optional cohort permits degraded undefined; reject negative/noninteger/string shapes (onboarding-funnel-cohort-addendum.md).
 
   it('accepts app_opened with nth_repo_added=0 (the session-zero cohort signal)', () => {
     const result = validate('app_opened', { nth_repo_added: 0 })
@@ -165,9 +149,7 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
-  // ── repo_added.is_git_repo
-  // The git-vs-folder signal moved here from onboarding_completed once project
-  // selection left onboarding. Optional so SSH/remote edges can omit it.
+  // Git/folder evidence belongs to repo_added after project selection left onboarding; optional for remote edges.
 
   it('accepts repo_added with is_git_repo=true', () => {
     const result = validate('repo_added', { method: 'clone_url', is_git_repo: true })
@@ -193,9 +175,7 @@ describe('validate', () => {
   })
 
   it('rejects the retired is_git_repo field on onboarding_completed', () => {
-    // Why: the field moved to repo_added; onboarding_completed is .strict() so
-    // the vestigial key must now drop. Guards against a stale call site
-    // re-adding the meaningless always-false signal.
+    // Strict onboarding-completed schema must reject the retired Git-project field.
     const result = validate('onboarding_completed', {
       path: 'add_project_modal',
       is_git_repo: false,
@@ -223,10 +203,7 @@ describe('validate', () => {
   })
 
   it('rejects nth_repo_added on a non-cohort event (settings_changed)', () => {
-    // The IPC handler relies on this rejection: schemas are `.strict()`,
-    // so injecting `nth_repo_added` on an event whose schema does not
-    // declare it must drop the entire event. The selectivity guard in
-    // `telemetry:track` is what prevents that from happening in practice.
+    // Undeclared injected cohort fields must drop; IPC therefore injects only where schema declares them.
     const result = validate('settings_changed', {
       setting_key: 'editorAutoSave',
       value_kind: 'bool',
@@ -234,8 +211,6 @@ describe('validate', () => {
     } as never)
     expect(result.ok).toBe(false)
   })
-
-  // ── Onboarding extensions (docs/onboarding-telemetry-extensions.md) ─
 
   it('accepts onboarding_agent_picked with all required fields', () => {
     const result = validate('onboarding_agent_picked', {
@@ -249,9 +224,7 @@ describe('validate', () => {
   })
 
   it('accepts onboarding_agent_picked with cohort injected', () => {
-    // Mirrors the IPC handler injection: schemas declare `cohort` as
-    // `.optional()`, so the classifier-injected value must not trip
-    // `.strict()`.
+    // Optional cohort injection must remain compatible with strict schemas.
     const result = validate('onboarding_agent_picked', {
       agent_kind: 'codex',
       on_path: false,
@@ -275,8 +248,6 @@ describe('validate', () => {
   })
 
   it('accepts onboarding_agent_picked with path_source and path_failure_reason', () => {
-    // Why: the on_path:false triage instrumentation —
-    // see docs/agent-on-path-detection.md.
     const result = validate('onboarding_agent_picked', {
       agent_kind: 'claude-code',
       on_path: false,
@@ -290,7 +261,6 @@ describe('validate', () => {
   })
 
   it('accepts onboarding_agent_picked without the new optional path fields', () => {
-    // Pre-deploy events validate cleanly under `.optional()`.
     const result = validate('onboarding_agent_picked', {
       agent_kind: 'codex',
       on_path: true,
@@ -334,8 +304,7 @@ describe('validate', () => {
   })
 
   it('rejects onboarding_ghostty_discovered with raw count instead of bucket', () => {
-    // Pin the privacy-doctrine contract: raw counts are an environment
-    // fingerprint and must not ship.
+    // Raw environment counts fingerprint installs and must never transmit.
     const result = validate('onboarding_ghostty_discovered', {
       state: 'found',
       field_group_count_bucket: 5
@@ -366,8 +335,7 @@ describe('validate', () => {
   })
 
   it('accepts onboarding_step_completed without the new optional fields', () => {
-    // Pre-deploy events (no `duration_ms`, no `advanced_via`) must still
-    // validate cleanly — that's the point of `.optional()`.
+    // Optional additions keep pre-deploy events valid.
     const result = validate('onboarding_step_completed', {
       step: 2,
       value_kind: 'theme'
@@ -447,8 +415,7 @@ describe('validate', () => {
   })
 
   it('rejects cohort on a non-onboarding event', () => {
-    // The IPC injection set is derived from `'cohort' in schema.shape`;
-    // strict() rejection here is what makes that selectivity safe.
+    // Schema shape drives selective IPC cohort injection; reject it elsewhere.
     const result = validate('app_opened', {
       cohort: 'fresh_install'
     } as never)
@@ -456,21 +423,12 @@ describe('validate', () => {
   })
 
   it('accepts onboarding_started with cohort: undefined (classifier fail-soft)', () => {
-    // The IPC handler injects `getOnboardingCohortAtEmit()` even when it
-    // returns `{ cohort: undefined }` — the spread `{ ...withRepoCohort,
-    // ...{ cohort: undefined } }` produces an explicit-undefined key, not a
-    // missing key. Zod's `.optional()` treats those as the same; this test
-    // pins the behavior so the load-bearing fail-soft path is not silently
-    // broken by a future zod or schema change.
+    // Fail-soft IPC spread creates an explicit undefined cohort key; optional schema must accept it just like omission.
     const result = validate('onboarding_started', { cohort: undefined })
     expect(result.ok).toBe(true)
   })
 
-  // Rate-limit: at most one warn per event name per 60s. We cannot easily
-  // control Date.now() without mocking time, so the coarse assertion is
-  // that repeat-dropping the same event name does not emit a warn on every
-  // call. The first rejection should warn; the second within the window
-  // should not.
+  // First rejection warns; repeats in the same minute must not flood stderr.
   it('rate-limits warns to 1/min per event name', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     _resetValidatorWarnCacheForTests()

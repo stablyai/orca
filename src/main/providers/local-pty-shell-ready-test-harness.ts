@@ -5,7 +5,7 @@ import {
   STARTUP_COMMAND_FEATURES
 } from '../shell-startup-launch-intent-fixtures'
 
-// Why: can't import electron (bundled into the plain-node daemon-entry fork), so tests set the wrapper root via ORCA_USER_DATA_PATH instead of mocking app.
+// Wrapper code also runs in plain-node daemon forks; select user data through env without importing Electron.
 export function setTestUserDataPath(path: string): void {
   process.env.ORCA_USER_DATA_PATH = path
 }
@@ -24,8 +24,7 @@ export function restoreUserDataPathAfterEach(): void {
 export async function importFreshLocalPtyShellReady() {
   vi.resetModules()
   const module = await import('./local-pty-shell-ready')
-  // Why the two adapters: the module exposes one feature-driven entry point, and
-  // these are the two launch intents the call sites select between.
+  // Adapt the feature-driven entry point to both production launch intents.
   return {
     ...module,
     getShellReadyLaunchConfig: (shell: string) =>

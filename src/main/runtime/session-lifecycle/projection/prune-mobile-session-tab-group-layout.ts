@@ -35,7 +35,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     ...args: ConstructorParameters<typeof OrcaRuntimeWithScheduleMobileSessionTabsChanged>
   ) {
     super(...args)
-    // Why: a desktop rename of a chat tab reaches main only through the window's saved session.
+    // Desktop chat renames reach main through saved window sessions only.
     this.store?.onWorkspaceSessionWritten?.(() => {
       for (const [workspaceId, snapshot] of this.mobileSessionTabsByWorktree) {
         for (const tab of snapshot.tabs) {
@@ -65,8 +65,6 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     return first ?? second
   }
 
-  // Instance seams over the tab-group projections so callers (and tests) can
-  // reach them through the runtime the way the rest of this surface is reached.
   protected mergeMobileSessionTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],
@@ -162,7 +160,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    // Why display records: a phone status is presentation, so it shows the stale-working clear.
+    // Phone status uses display records to include stale-working title clears.
     const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
     return buildRuntimeMobileAgentStatus(
       displayPty,
@@ -198,8 +196,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (paneMatch || !pty) {
       return paneMatch
     }
-    // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
-    // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
+    // OSC may name a leaf or incarnation handle; reuse worktree.ps's non-minting inventory to rejoin central status after tab remints.
     for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
       const handleMatch = selectFreshAgentRowForMobileTab({
         paneKey,
@@ -225,7 +222,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       if (!pty) {
         return null
       }
-      // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
+      // Persisted PTY ids can collide after restart; require matching spawn-time pane identity before exposing them.
       if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
         return pty
       }
@@ -281,11 +278,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     return recorded.tabId === tab.parentTabId && recorded.paneKey === paneKey
   }
 
-  // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
+  // Group resolution probes status; stale handles must return null instead of throwing.
   async getAgentStatusForHandle(handle: string): Promise<string | null> {
-    // A structured worker has no pane and no title, so every PTY probe below answers null and
-    // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
-    // through a conversation the idle sweep may have closed.
+    // Structured workers lack panes/titles; use their journal-backed status even after the idle sweep closed the conversation.
     const structured = await structuredWorkerHandleAgentStatus(handle, this._orchestrationDb)
     if (structured !== undefined) {
       return structured

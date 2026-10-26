@@ -1,18 +1,4 @@
-/**
- * Applies verdict-flip damping to the *rendered* park verdict.
- *
- * Why here and not inside the cold-park selector: every park input feeds one
- * rendered set, and several of them (worktree-level park, activation-deferred
- * mounts) bypass the cold-park candidate list entirely. Damping only that list
- * left those drivers free to remount a pane at commit cadence while the burst
- * pin silenced its own breadcrumb for the window — issue #15136, where one tab
- * re-burst 60 008 / 60 020 / 60 012 ms apart, i.e. the instant each pin lapsed.
- *
- * The pin lags the verdict by one commit (it is set from the passive effect
- * that observes the flip), which is what lets the loop settle instead of
- * feeding itself: pinned tabs render unparked, so the next observation records
- * no flip.
- */
+/** Damp the final rendered verdict, including worktree/activation inputs that bypass cold-park candidates (#15136). The passive-effect pin lags one commit so rendering unparked settles the flip loop. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -38,27 +24,18 @@ export function haveSameTerminalTabIds(
   return true
 }
 
-/**
- * Returns the park verdict with flip-pinned tabs removed, and records churn on
- * that same (rendered) verdict.
- */
 export function useTerminalParkVerdictPin(args: {
   records: React.RefObject<Map<string, ParkVerdictFlipRecord>>
   terminalTabs: readonly TerminalTab[]
-  /** Park verdict before damping — every input already merged. */
   candidateParkedTabIds: ReadonlySet<string>
   allowSustainedPin: boolean
 }): ReadonlySet<string> {
   const { records, terminalTabs, candidateParkedTabIds, allowSustainedPin } = args
   const [pinnedTabIds, setPinnedTabIds] = useState<ReadonlySet<string>>(EMPTY_TAB_IDS)
   const pinnedTabIdsRef = useRef(pinnedTabIds)
-  // Why a revision and not a raw timer callback: the pin lapse must re-run the
-  // observation effect, which is also what expires the record in place.
+  // Pin expiry must rerun observation so it expires the record in place.
   const [pinExpiryRevision, setPinExpiryRevision] = useState(0)
-  // Why armed-deadline bookkeeping: this effect re-runs on every tab-model
-  // write (runtime titles, unread bumps), which on a busy agent pane is many
-  // times a second. Re-arming an unchanged absolute deadline each time is pure
-  // churn — keep the live timer instead.
+  // Retain an unchanged absolute timer deadline across frequent tab-model writes.
   const armedPinExpiryRef = useRef<{ deadlineMs: number; timer: number } | null>(null)
 
   const parkedTabIds = useMemo(() => {
@@ -117,8 +94,7 @@ export function useTerminalParkVerdictPin(args: {
     }
   }, [allowSustainedPin, parkedTabIds, pinExpiryRevision, records, terminalTabs])
 
-  // Why separate from the observation effect: that effect intentionally keeps a
-  // live timer across its own re-runs, so its cleanup cannot own disposal.
+  // Observation reruns retain the timer, so separate unmount cleanup owns disposal.
   useEffect(() => {
     const armedPinExpiry = armedPinExpiryRef
     return () => {

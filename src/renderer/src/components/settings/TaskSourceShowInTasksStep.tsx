@@ -80,8 +80,7 @@ export function TaskSourceShowInTasksStep({
           type="button"
           size="sm"
           variant={visible ? 'outline' : 'default'}
-          // aria-disabled keeps the locked last provider in the tab order so its
-          // label (and the hint below) can explain why it cannot be hidden.
+          // Keep locked providers in tab order so their label/hint can explain why hiding is blocked.
           aria-disabled={locked}
           className={cn(locked && 'cursor-not-allowed opacity-60')}
           aria-label={getShowInTasksActionLabel(visible, canHide, providerLabel)}

@@ -71,10 +71,7 @@ export function useWorktreeContextMenuModel({
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
   const [menuOpen, setMenuOpen] = useState(false)
-  // Why: the Developer submenu is a power-user affordance, so it is revealed by
-  // holding Option/Alt at right-click — captured at open time (like the Help
-  // menu's admin options) so the submenu can't appear or vanish mid-menu and
-  // shift the rows under the pointer.
+  // Capture Option/Alt at menu open so Developer visibility cannot move items under the pointer.
   const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
@@ -98,12 +95,7 @@ export function useWorktreeContextMenuModel({
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const allWorktrees = useAllWorktrees()
-  // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
-  // teardown replaces them on every set(). Gate them behind menuOpen via stable
-  // empty sentinels so the (common) closed wrapper stays inert to that churn. The
-  // conditional lives INSIDE the selector so useAppStore is always called; the
-  // inline arrow (not a useCallback) re-reads the live map synchronously on the
-  // render where menuOpen flips true, so dependent useMemos recompute with real data.
+  // Closed menus select stable empty maps; opening reads live maps without subscribing idle wrappers to teardown churn.
   const worktreeLineageById = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
   )
@@ -227,8 +219,7 @@ export function useWorktreeContextMenuModel({
         : EMPTY_CYCLIC_LINEAGE_IDS,
     [menuOpen, worktreeLineageById, worktreeMap]
   )
-  // Why: path-derived worktree IDs can be reused. The menu must honor the same
-  // instance check as grouped rows before offering navigation to a parent.
+  // Path-derived IDs can be reused; require the same instance check as grouped-row parent navigation.
   const lineageInfo = useMemo(
     () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap, cyclicLineageIds),
     [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
@@ -353,10 +344,7 @@ export function useWorktreeContextMenuModel({
 
   const handleCloseAutoFocus = useCallback(
     (event: Event) => {
-      // Why: Radix otherwise restores focus to the hidden context-menu trigger.
-      // When Sleep/Delete clears the active workspace and remounts the sidebar,
-      // that focus restore can scroll the virtual list away from the row the
-      // user just acted on.
+      // Suppress Radix focus restoration to a hidden trigger that can scroll the virtual list after Sleep/Delete.
       event.preventDefault()
       if (pendingParentPickerRef.current) {
         window.setTimeout(openPendingParentPicker, 0)

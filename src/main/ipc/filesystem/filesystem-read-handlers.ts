@@ -1,4 +1,4 @@
-import { classifyFilesystemDirectoryEntries } from '../filesystem-symlink-directory-entries'
+import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
 import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
 import {
   capturePathExistence,
@@ -16,7 +16,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
-import { isPathAbsentError } from '../filesystem-path-containment'
+import { isPathAbsentError } from './filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
@@ -24,6 +24,7 @@ import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-e
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { readMediaPreview } from '../../media/media-preview-protocol'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,
@@ -49,7 +50,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         }
         const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
-        const entries = await readdir(dirPath, { withFileTypes: true })
+        const entries = await readdir(windowsFsPath(dirPath), { withFileTypes: true })
         const mapped = await classifyFilesystemDirectoryEntries(
           args.dirPath,
           entries,
@@ -135,7 +136,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
-      const stats = await stat(filePath)
+      const stats = await stat(windowsFsPath(filePath))
       return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
     }
   )
@@ -154,7 +155,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         args.filePaths.map((filePath) =>
           capturePathExistence(async () => {
             try {
-              await stat(await resolveDesktopAuthorizedPath(filePath, store))
+              await stat(windowsFsPath(await resolveDesktopAuthorizedPath(filePath, store)))
               return true
             } catch (error) {
               if (isPathAbsentError(error)) {
@@ -179,7 +180,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           throw new SshHostNotServedError(args.connectionId)
         }
         const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
-        await stat(filePath)
+        await stat(windowsFsPath(filePath))
         return true
       } catch (error) {
         if (isPathAbsentError(error)) {

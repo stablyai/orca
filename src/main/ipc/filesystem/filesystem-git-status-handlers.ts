@@ -25,7 +25,7 @@ import {
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalGitOptionsForRepo,

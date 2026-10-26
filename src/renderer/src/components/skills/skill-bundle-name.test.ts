@@ -19,8 +19,7 @@ function skill(name: string): DiscoveredSkill {
   }
 }
 
-/** The publish call feeds this straight into the manifest, so anything this
- *  returns has to survive the schema that rejected `--`, uppercase, and >64. */
+/** Require derived names to pass the publish manifest schema, including separator/case/length limits. */
 function isPublishable(name: string): boolean {
   return SkillBundleManifestV1Schema.shape.bundleName.safeParse(name).success
 }

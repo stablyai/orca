@@ -21,9 +21,7 @@ type Props = {
   onClose: () => void
 }
 
-// The repo-owned orca.yaml setup-hook trust prompt, shown before a workspace
-// create that would run an untrusted setup script. Extracted from NewWorktreeModal
-// to keep that file focused; the async persist/create logic stays with the caller.
+// Prompt before create runs untrusted repo-owned orca.yaml setup; caller retains async persistence/create.
 export function SetupHookTrustDrawer({
   visible,
   prompt,

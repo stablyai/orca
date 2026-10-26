@@ -29,6 +29,8 @@ const fsAllowances: Record<string, readonly string[]> = {
     'symlinkSync',
     'unlinkSync'
   ],
+  // Stores Claude config folder paths only.
+  'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],

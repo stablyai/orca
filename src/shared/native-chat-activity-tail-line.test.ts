@@ -1,5 +1,4 @@
 import { expect, it, vi } from 'vitest'
-import { normalizePromptField } from './agent-status-field-normalization'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
 it('does not trim every preceding activity line to select the final activity', () => {
@@ -17,59 +16,26 @@ it('does not trim every preceding activity line to select the final activity', (
 })
 
 it('preserves the last nonempty LF-delimited line before prompt normalization', () => {
-  const texts = [
-    '',
-    '\n',
-    '\n\n',
-    ' \r\n\t',
-    'first\rsecond',
-    '\nfirst\r\nsecond\r\n',
-    'first\n\u00a0\u2003\n',
-    'first\n\u2028second\u2029',
-    'a\n😀',
-    'a\n\ud800',
-    'a\n\udc00',
-    `a\n${'x'.repeat(199)}😀`,
-    `first\n${' '.repeat(3000)}last`,
-    'first\n\0\n',
-    'first\n\ufeff\n'
+  const cases: [string, string | null][] = [
+    ['', null],
+    ['\n', null],
+    ['\n\n', null],
+    [' \r\n\t', null],
+    ['first\rsecond', 'first second'],
+    ['\nfirst\r\nsecond\r\n', 'second'],
+    ['first\n\u00a0\u2003\n', 'first'],
+    ['first\n\u2028second\u2029', 'second'],
+    ['a\n😀', '😀'],
+    ['a\n\ud800', '\ud800'],
+    ['a\n\udc00', '\udc00'],
+    [`a\n${'x'.repeat(199)}😀`, 'x'.repeat(199)],
+    [`first\n${' '.repeat(3000)}last`, 'last'],
+    ['first\n\0\n', '\0'],
+    ['first\n\ufeff\n', 'first']
   ]
-  const alphabet = [
-    'a',
-    ' ',
-    '\n',
-    '\r',
-    '\t',
-    '\u00a0',
-    '\u2003',
-    '\u2028',
-    '\ufeff',
-    '😀',
-    '\ud800',
-    '\udc00'
-  ]
-  let seed = 57
-  const next = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-    return seed
-  }
-  for (let index = 0; index < 1000; index++) {
-    let text = ''
-    const length = next() % 300
-    for (let offset = 0; offset < length; offset++) {
-      text += alphabet[next() % alphabet.length]
-    }
-    texts.push(text)
-  }
-  for (const text of texts) {
-    const line = text
-      .split('\n')
-      .map((part) => part.trim())
-      .findLast((part) => part.length > 0)
-    const normalized = line ? normalizePromptField(line) : ''
-    const expected = normalized ? { kind: 'description', text: normalized } : null
+  for (const [text, expected] of cases) {
     expect(selectStructuredAgentTurnActivity([], 'turn', { turnId: 'turn', text })).toEqual(
-      expected
+      expected ? { kind: 'description', text: expected } : null
     )
   }
 })

@@ -16,6 +16,7 @@ import {
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { isCodexSkillsListUnsupported, requestCodexSkillReport } from './codex-skill-list'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
+import { resolveHiddenProbeCwd } from '../rate-limits/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
@@ -106,7 +107,8 @@ async function probeCodexSkills(
     {
       command,
       args: [...args, 'app-server'],
-      cwd,
+      // skills/list takes the folder per request; a settling probe in it blocks Windows worktree removal (#33174).
+      cwd: resolveHiddenProbeCwd(),
       cliPath: command,
       env: { ...definedEnv(environment), CODEX_HOME: accountHomePath },
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],

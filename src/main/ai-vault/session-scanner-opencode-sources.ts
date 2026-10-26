@@ -13,14 +13,20 @@ import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
 
+type OpenCodeSource = {
+  storageDir: string
+  dbPaths: () => Promise<readonly string[]>
+}
+
 export function opencodeDiscoveries(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return opencodeStorageDirs(options, wslHomeDirs).flatMap((storageDir, index) => {
-    const paths = opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues)
+  return opencodeSources(options, wslHomeDirs, issues).flatMap((source) => {
+    const { storageDir } = source
+    const paths = source.dbPaths()
     return [
       paths.then((dbPaths) =>
         discoverOpenCodeSessions({
@@ -40,44 +46,45 @@ export function opencodeDiscoveries(
   })
 }
 
-function opencodeStorageDirs(
-  options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[]
-): string[] {
-  return [
-    options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory(),
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.local', 'share', 'opencode', 'storage'))
-  ]
-}
-
-async function opencodeDbPathsForSource(
+function opencodeSources(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
-  storageDir: string,
-  sourceIndex: number,
   issues: AiVaultScanIssue[]
-): Promise<readonly string[]> {
-  if (options.opencodeDbPaths) {
-    return sourceIndex === 0 ? options.opencodeDbPaths : []
-  }
+): OpenCodeSource[] {
   const onRefusal = (path: string, error: WslTranscriptFsError): void => {
     recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
   }
-  // Custom storage roots still place SQLite databases in the parent data directory.
-  if (sourceIndex === 0 && options.opencodeStorageDir) {
-    return listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
+  const dataDirectorySource = (dataDirectory: string): OpenCodeSource => ({
+    storageDir: join(dataDirectory, 'storage'),
+    dbPaths: async () =>
+      options.opencodeDbPaths
+        ? []
+        : listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, options.signal)
+  })
+  const storageDir = options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory()
+  const primary: OpenCodeSource = {
+    storageDir,
+    dbPaths: async () => {
+      if (options.opencodeDbPaths) {
+        return options.opencodeDbPaths
+      }
+      // Custom storage roots still place SQLite databases in the parent data directory.
+      return options.opencodeStorageDir
+        ? listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
+        : listOpenCodeDatabases(onRefusal, undefined, options.signal)
+    }
   }
-  if (sourceIndex === 0) {
-    return listOpenCodeDatabases(onRefusal, undefined, options.signal)
-  }
-  const wslHomeDir = wslHomeDirs[sourceIndex - 1]
-  return wslHomeDir
-    ? listOpenCodeDatabasesInDirectory(
-        join(wslHomeDir, '.local', 'share', 'opencode'),
-        onRefusal,
-        options.signal
-      )
-    : []
+  // Orca-managed accounts relocate XDG_DATA_HOME, so their stores are invisible to the default lookup.
+  const accountDataDirs = (options.opencodeAccountDataDirs ?? []).filter(
+    (dataDirectory) => dataDirectory !== dirname(storageDir)
+  )
+  return [
+    primary,
+    ...[...new Set(accountDataDirs)].map(dataDirectorySource),
+    ...wslHomeDirs.map((homeDir) =>
+      dataDirectorySource(join(homeDir, '.local', 'share', 'opencode'))
+    )
+  ]
 }
 
 async function discoverOpenCode2Sessions(

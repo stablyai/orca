@@ -21,8 +21,7 @@ export function useBrowserPageFindShortcuts({
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
 
-  // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
-  // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
+  // Allow Cmd/Ctrl+F from chrome, including the address bar, unlike bare grab shortcuts.
   useEffect(() => {
     if (chromeShortcutScope === 'inactive') {
       return
@@ -43,8 +42,7 @@ export function useBrowserPageFindShortcuts({
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, setFindOpen, workspaceId])
 
-  // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
-  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
+  // Main forwards chords from the separately focused guest back to this pane.
   useEffect(() => {
     if (!isActive) {
       return
@@ -57,7 +55,6 @@ export function useBrowserPageFindShortcuts({
     )
   }, [browserTabId, isActive, setFindOpen, workspaceId])
 
-  // Close find bar when tab is deactivated
   useEffect(() => {
     if (!isActive) {
       setFindOpen(false)

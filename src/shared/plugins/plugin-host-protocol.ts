@@ -2,11 +2,7 @@ import { z } from 'zod'
 import { PLUGIN_COMMAND_LIMIT, PLUGIN_EVENT_NAMES, pluginCommandIdSchema } from './plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from './plugin-capabilities'
 
-/**
- * Message protocol between the Orca process and the out-of-process plugin
- * worker (child_process.fork channel). Zod-validated on both sides because
- * the child runs third-party code — nothing it sends is trusted structurally.
- */
+/** Validate fork-channel messages on both sides: third-party worker code cannot supply trusted structure. */
 
 export const pluginWorkerInitSchema = z.object({
   type: z.literal('init'),
@@ -14,8 +10,7 @@ export const pluginWorkerInitSchema = z.object({
   pluginId: z.string().min(1),
   pluginRoot: z.string().min(1),
   mainEntry: z.string().min(1),
-  /** Consented capability kinds, so the in-worker SDK can fail fast client-
-   *  side; the host re-gates every call regardless. */
+  /** Worker-side early refusals only; host rechecks every call regardless of declared grants. */
   grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS))
 })
 
@@ -62,8 +57,7 @@ export const pluginWorkerCommandResultSchema = z.object({
   type: z.literal('commandResult'),
   callId: z.number().int().nonnegative(),
   ok: z.boolean(),
-  // Why: value crosses a fork() IPC boundary, so it is structured-clone data
-  // by construction; zod treats it as opaque and callers re-validate shape.
+  // Fork IPC supplies cloneable data, but callers still validate the opaque result’s shape.
   value: z.unknown().optional(),
   error: z.string().max(8192).optional()
 })
@@ -107,8 +101,7 @@ export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 
 export const PLUGIN_WORKER_READY_TIMEOUT_MS = 10_000
 export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
-/** Idle reap: a worker with no in-flight work for this long is disposed and
- *  re-forked on the next trigger. */
+/** Dispose idle workers and refork on their next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5

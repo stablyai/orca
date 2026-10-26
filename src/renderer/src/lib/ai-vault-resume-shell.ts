@@ -31,9 +31,7 @@ export function resolveAiVaultResumeStartupShell(args: {
   platform: NodeJS.Platform
   isLocalSession: boolean
 }): AgentStartupShell {
-  // Why no login-shell probe: everything this command is built from — quoting
-  // and env clearing — is emitted in a form that is correct in sh and fish
-  // alike, so the Unix branch never has to know which one reads the line.
+  // No login-shell probe: quoting and env clearing are deliberately valid in both sh and fish.
   if (args.platform !== 'win32') {
     return 'posix'
   }

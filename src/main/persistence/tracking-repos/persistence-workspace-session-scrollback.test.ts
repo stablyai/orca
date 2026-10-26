@@ -12,6 +12,7 @@ import {
   createStore,
   dataFile,
   makeRepo,
+  readPersistedState,
   readPersistedStateJson,
   testState,
   workspaceRepos,
@@ -316,12 +317,7 @@ describe('Store', () => {
     })
 
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const stillPublished = JSON.parse(readPersistedStateJson(dataFile())) as {
-      workspaceSession: {
-        terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
-      }
-    }
+    const stillPublished = readPersistedState(dataFile())
     expect(
       stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
         ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]

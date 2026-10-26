@@ -107,8 +107,7 @@ describe('openDocPreviewSource', () => {
     )
   })
 
-  // Why this field and not the rest: an absolute SSH path outside the worktree is indistinguishable
-  // from a client-local external file, so dropping it makes the reopened tab read the wrong host.
+  // An absolute path alone cannot distinguish an external SSH file from this computer’s file.
   it('carries the external SSH target onto the source tab', () => {
     openDocPreviewSource({ ...REMOTE_DOCUMENT, externalSshTargetId: 'ssh-7' })
 
@@ -145,10 +144,7 @@ describe('openDocPreviewExternally', () => {
     )
   })
 
-  // Why this case exists at all: a folder workspace can span repos on different hosts, so asking
-  // who owns the *workspace* answers nothing while the file itself has a definite owner. Routing on
-  // the workspace answer would hand the OS a remote absolute path — a silent no-op, or worse, an
-  // unrelated local file that happens to share the path.
+  // Folder workspaces may span hosts; unresolved workspace ownership must not override a resolved file owner.
   it('routes on the file owner when the workspace-scoped owner is unresolved', () => {
     mocks.connectionIdForFile = 'ssh-1'
     mocks.connectionIdForWorkspace = undefined
@@ -162,9 +158,7 @@ describe('openDocPreviewExternally', () => {
     )
   })
 
-  // Why refusing beats downloading here: with no owner at all the download route reads the absolute
-  // path on this machine, so a client holding a same-named file would be shown its contents under
-  // the remote document's name — the wrong-file outcome, one layer below the OS branch.
+  // Unknown ownership must refuse: downloading could otherwise read an unrelated same-named local file.
   it("refuses a document of a project two hosts publish instead of opening this machine's copy", () => {
     mocks.twin = true
 
@@ -185,8 +179,7 @@ describe('openDocPreviewExternally', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('report/index.html'))
   })
 
-  // Why this one varies only the root: every other case that loses the root also names another
-  // host, so without it nothing proves the root is required for the OS branch on its own.
+  // Vary only the root so other remote-owner fields cannot mask this independent OS-open guard.
   it('refuses a document whose workspace root is unknown even when nothing names another host', () => {
     mocks.worktreePath = null
 
@@ -197,8 +190,7 @@ describe('openDocPreviewExternally', () => {
     expect(mocks.toastError).toHaveBeenCalled()
   })
 
-  // Why keep the tab's field as a fallback: the worktree stops resolving an owner once its runtime
-  // is torn down, and the tab that is still open is then the only record of who owned the document.
+  // A torn-down runtime may leave only the tab’s recorded owner.
   it('falls back to the tab runtime owner when the worktree resolves none', () => {
     mocks.worktreeRuntimeOwnerId = null
     mocks.activeRuntimeEnvironmentId = 'env-9'
@@ -210,10 +202,7 @@ describe('openDocPreviewExternally', () => {
     expect(mocks.downloadAndOpen).toHaveBeenCalled()
   })
 
-  // Why the tab's own field is not enough: a preview tab opened or restored before its worktree's
-  // runtime owner was known carries null there, while the grant it renders through was minted
-  // against the owner the worktree resolves to — routing on the stale field sends a remote
-  // document to the OS.
+  // Restored tabs can lack the owner used to mint their grant; consult the resolved worktree owner before choosing OS-open.
   it('routes on the worktree runtime owner when the tab carries none', () => {
     mocks.worktreeRuntimeOwnerId = 'env-1'
     mocks.activeRuntimeEnvironmentId = 'env-1'
@@ -224,8 +213,7 @@ describe('openDocPreviewExternally', () => {
     expect(mocks.downloadAndOpen).toHaveBeenCalled()
   })
 
-  // Why the root matters: remote-runtime detection is relative to the workspace root, so an unknown
-  // root makes every path look outside the runtime — which reads as local.
+  // Runtime containment needs the root; unknown roots must not misclassify remote paths as local.
   it('downloads a runtime document whose workspace root is unknown', () => {
     mocks.worktreePath = null
     mocks.worktreeRuntimeOwnerId = 'env-1'

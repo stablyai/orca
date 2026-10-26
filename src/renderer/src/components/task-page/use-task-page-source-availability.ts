@@ -1,4 +1,4 @@
-import type { TaskPageRuntimeHostsModel } from '../use-task-page-runtime-hosts'
+import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
 import { useCallback, useMemo } from 'react'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import type { Repo } from '../../../../shared/repo-types'

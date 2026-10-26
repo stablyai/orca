@@ -12,7 +12,7 @@ import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
 } from '../../shared/rpc-contract/agent-session-visual-params'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { readLocalFileBounded } from '../ipc/filesystem/local-regular-file-read'
 
 // O_NOFOLLOW prevents final-component swaps; Windows relies on lstat and post-open identity checks.

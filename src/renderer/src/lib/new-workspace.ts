@@ -43,10 +43,7 @@ export function canUseIssueCommandForLinkedItemProvider(
   return provider === 'github' || provider === 'gitlab'
 }
 
-// Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
-// we still want the composer to send a useful default prompt whenever the user
-// attaches a linked work item without typing anything else. "Complete <url>"
-// is the minimum viable instruction that always produces a coherent agent task.
+// Linked work items without user prompt or issueCommand still need an actionable default task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
 
 export type SetupConfig = {
@@ -82,11 +79,7 @@ function getSetupConfigKind(
   return 'setup'
 }
 
-/**
- * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
- * and keeps `{{issue}}` working silently for repos that have not migrated
- * their `orca.yaml` / `.orca/issue-command` yet.
- */
+/** Prefer artifact_url while retaining issue substitutions for unmigrated orca.yaml/.orca/issue-command templates. */
 export function renderIssueCommandTemplate(
   template: string,
   vars: { issueNumber: number | null; artifactUrl: string | null }
@@ -153,10 +146,7 @@ export function getWorkspaceSeedName(args: {
   prompt: string
   linkedIssueNumber: number | null
   linkedPR: number | null
-  /** Why: when none of the other seed sources produce a name, the composer
-   *  supplies a repo-scoped unique marine-creature name so blank submissions
-   *  still get a distinct, readable workspace rather than a collision-prone
-   *  "workspace" literal that git would append numeric suffixes to. */
+  /** Use repo-unique marine names when other sources yield none; literal workspace seeds collide. */
   fallbackName?: string
 }): string {
   const { explicitName, prompt, linkedIssueNumber, linkedPR, fallbackName } = args
@@ -169,11 +159,7 @@ export function getWorkspaceSeedName(args: {
   if (linkedIssueNumber !== null) {
     return `issue-${linkedIssueNumber}`
   }
-  // Why: the prompt is free-form user text — it can easily exceed a sane
-  // branch-name length or be composed entirely of characters that
-  // sanitizeWorktreeName strips (emoji, CJK, punctuation). Slugify + truncate
-  // here so the downstream branch/path sanitizer always has a usable seed,
-  // and fall back to the stable default when the prompt collapses to empty.
+  // Bound free-form prompts to usable branch seeds; emoji/CJK/punctuation may sanitize away entirely, requiring stable fallback.
   if (prompt.trim()) {
     const slug = slugifyForWorkspaceName(prompt)
     if (slug) {
@@ -183,9 +169,7 @@ export function getWorkspaceSeedName(args: {
   if (fallbackName && fallbackName.trim()) {
     return fallbackName.trim()
   }
-  // Why: the prompt is optional in this flow. Fall back to a stable default
-  // branch/workspace seed so users can launch an empty draft without first
-  // writing a brief or naming the workspace manually.
+  // Optional empty prompts still need a stable workspace/branch seed.
   return 'workspace'
 }
 
@@ -201,9 +185,7 @@ export async function ensureAgentStartupInTerminal(args: {
   }
   const launchToken = ensureStartupLaunchToken(startup)
 
-  // Why: poll until a terminal tab + PTY exists for the worktree before we
-  // can interact with it. Activation creates the tab synchronously but the
-  // PTY spawn is async, so a brief wait is normal.
+  // Activation creates tabs synchronously but PTYs asynchronously; wait for both before input.
   let tabId: string | null = null
   let ptyId: string | null = null
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -222,9 +204,7 @@ export async function ensureAgentStartupInTerminal(args: {
   }
   if (!tabId || !ptyId) {
     if (tabId) {
-      // Why: background-created workspaces can remain unmounted longer than a
-      // bounded readiness wait. Keep the draft/follow-up tied to the seeded
-      // tab until opening the workspace creates its PTY.
+      // Background tabs may stay unmounted beyond readiness budgets; bind delivery to the seed until reveal spawns its PTY.
       queuePendingAgentStartupDelivery({
         worktreeId,
         tabId,
@@ -247,32 +227,27 @@ async function deliverAgentStartupToTerminal(
   startup: AgentStartupPlan
 ): Promise<void> {
   const draftPrompt = startup.draftPrompt ?? null
-  // Why: followupPrompt is the legacy path for stdin-after-start agents
-  // (aider, goose, etc.) that need their initial prompt typed into the live
-  // session and submitted. Wait until the agent owns the PTY before writing.
+  // Legacy stdin-after-start agents need live typed/submitted prompts; wait for agent ownership before writing.
   if (startup.followupPrompt) {
     const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
+      agent: startup.agent,
       expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt
     })
-    // Why: a dropped follow-up is otherwise silent — surface the same toast the
-    // draft path uses so the user knows to open the workspace and paste it.
+    // Report dropped follow-ups so users know to open the workspace and paste manually.
     if (!delivered) {
       showAutomationPromptNotSentToast(startup.agent)
     }
   }
 
-  // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
-  // agent's input buffer (no per-char echo, no auto-submit). Shared with the
-  // launch-work-item-direct flow so both behave identically.
+  // Share atomic unsubmitted bracketed paste with direct work-item launches.
   if (draftPrompt) {
     await pasteDraftToAgentPtyWhenReady({
       ptyId,
       content: draftPrompt,
       agent: startup.agent,
-      // Why: startup.draftPrompt is only attached after native draft launch
-      // planning is unavailable, so this paste is the first delivery attempt.
+      // draftPrompt exists only without native-prefill delivery, so this paste is the first attempt.
       forcePaste: true,
       // Why: surface a dropped draft instead of silently losing it.
       onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
@@ -282,8 +257,7 @@ async function deliverAgentStartupToTerminal(
 
 function ensureStartupLaunchToken(startup: AgentStartupPlan): string {
   if (!startup.launchToken) {
-    // Why: delayed delivery retries must reuse the startup plan's launch token
-    // so they match the pane launch registration for this agent.
+    // Reuse the startup launch token for retries so they match the pane’s delivery registration.
     startup.launchToken = createBrowserUuid()
   }
   return startup.launchToken

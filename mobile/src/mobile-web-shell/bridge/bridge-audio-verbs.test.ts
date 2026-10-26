@@ -1,15 +1,6 @@
-/**
- * Every audio verb `BRIDGE_NATIVE_VERB_NAMES` holds: what their schemas refuse, and what the
- * shell's capture answers. Named off the table rather than counted, because the count was four
- * until #22072 retired the wake-lock verb and a number in a header has nothing to hold it.
- *
- * The handler is driven through its engine seam rather than through `@orca/expo-two-way-audio`,
- * for the reason the media verbs' device half is driven through one: the arms worth pinning — a
- * denied microphone, a ring that filled, a read after the capture ended — are exactly the ones a
- * simulator makes expensive, and none of them is a fact about Swift.
- */
+// Exercise table-listed audio verbs through the engine seam; denied permission, full rings and post-stop reads are device-independent conditions expensive to force in simulators.
 import { afterEach, describe, expect, it } from 'vitest'
-import { MobileWebBundleRouteSchema } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+
 import { BridgeNativeVerbRefusedError } from '../bridge-host-errors'
 import { createNativeAudioCapture, type NativeAudioEngine } from '../../platform/native-audio'
 import {
@@ -45,9 +36,6 @@ function gate() {
   return { promise, release: () => release() }
 }
 
-const AUDIO_VERBS = ['native.audio.start', 'native.audio.read', 'native.audio.stop'] as const
-
-/** An engine whose every call is a value a case can set, and whose events a case can fire. */
 function createTestEngine(
   overrides: Partial<{
     permission: NativeAudioEngine['requestPermission']
@@ -59,8 +47,6 @@ function createTestEngine(
   const interruptions: ((kind: 'began' | 'ended' | 'blocked') => void)[] = []
   const log: string[] = []
   const calls: string[] = []
-  /** The screen lock's calls, apart from the engine's own: whether the capture is holding is a
-   *  different question from what the engine was asked to do. */
   const screen: string[] = []
   const engine: NativeAudioEngine = {
     requestPermission: overrides.permission ?? (async () => 'granted'),
@@ -102,7 +88,6 @@ function createTestEngine(
     calls,
     log,
     screen,
-    /** How many handlers the engine is still calling. One per live capture, or a leak. */
     liveListeners: () => ({ microphone: microphone.length, interruptions: interruptions.length }),
     emit: (bytes: Uint8Array) => {
       for (const handler of microphone) {
@@ -133,24 +118,6 @@ function decode(base64: string): Uint8Array {
   }
   return bytes
 }
-
-describe('the audio verbs in the table', () => {
-  it('accepts the audio verbs as route grants', () => {
-    for (const verb of AUDIO_VERBS) {
-      expect(
-        MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: [verb] }).success,
-        verb
-      ).toBe(true)
-    }
-  })
-
-  it('refuses the camel-cased spelling of the read, which is what makes the name load-bearing', () => {
-    expect(
-      MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: ['native.audio.readChunk'] })
-        .success
-    ).toBe(false)
-  })
-})
 
 describe('what the audio schemas refuse', () => {
   it('refuses a start with no rate, a rate off the grid, and an unknown param', () => {
@@ -217,7 +184,6 @@ describe('the shell capture', () => {
       sampleRate: 16_000,
       permission: 'denied'
     })
-    // Nothing was opened, so nothing has to be torn down.
     expect(calls).toEqual([])
   })
 
@@ -283,8 +249,7 @@ describe('the shell capture', () => {
     const { engine, emit } = createTestEngine()
     const capture = createCapture(engine)
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    // One byte short of the ring, then a chunk that cannot fit: the newcomer is dropped, so what
-    // the page drains is still contiguous audio and never a splice of two moments.
+    // Drop the nonfitting newcomer so retained audio stays contiguous rather than splicing two moments.
     emit(pcm(BRIDGE_AUDIO_RING_MAX_BYTES - 1, 3))
     emit(pcm(64, 4))
     const read = audioReadResultSchema.parse(
@@ -292,7 +257,6 @@ describe('the shell capture', () => {
     )
     expect(decode(read.base64)).toEqual(pcm(BRIDGE_AUDIO_RING_MAX_BYTES - 1, 3))
     expect(read.droppedBytes).toBe(64)
-    // Cleared by the read that reported it: two reads must never count the same dropped byte.
     const next = audioReadResultSchema.parse(
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
@@ -323,7 +287,6 @@ describe('the shell capture', () => {
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
     expect(read.interruption).toBe('began')
-    // The capture is gone, but the bytes it produced are still the page's to drain.
     expect(read.recording).toBe(false)
     expect(decode(read.base64)).toEqual(pcm(256, 9))
     const next = audioReadResultSchema.parse(
@@ -340,8 +303,7 @@ describe('the shell capture', () => {
     const kept = audioReadResultSchema.parse(
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
-    // The kind still crosses — the page is told what happened — but the capture is still live, so
-    // the ring goes on filling and the page goes on draining it.
+    // Nonterminal interruption still reaches the page while the live capture keeps filling its ring.
     expect(kept.interruption).toBe('ended')
     expect(kept.recording).toBe(true)
     interrupt('blocked')
@@ -364,7 +326,6 @@ describe('the shell capture', () => {
       (error: unknown) =>
         error instanceof BridgeNativeVerbRefusedError && error.code === 'native_audio_not_capturing'
     )
-    // A second stop is the state the page already has, not a fault.
     await expect(capture.serve('native.audio.stop', {})).resolves.toEqual({
       stopped: false,
       base64: '',
@@ -388,7 +349,6 @@ describe('the shell capture', () => {
     await capture.serve('native.audio.stop', {})
     expect(log).toContain('end')
     expect(log).toContain('microphone-off')
-    // A late event from an engine that has not finished shutting down reaches nothing.
     emit(pcm(1_024, 1))
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
     const read = audioReadResultSchema.parse(
@@ -398,8 +358,7 @@ describe('the shell capture', () => {
   })
 
   it('replaces a capture a page left behind rather than refusing the new one', async () => {
-    // The page is a document that can navigate, fault or be swiped away mid-capture, and the shell
-    // is the only side that can notice. A second start therefore ends the first.
+    // A page can reload or vanish mid-capture; only the shell sees that lifecycle, so a new start replaces the old capture.
     const { engine, emit, log } = createTestEngine()
     const capture = createCapture(engine)
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
@@ -417,10 +376,7 @@ describe('the shell capture', () => {
   })
 
   it('leaves one capture behind when two starts race the permission prompt', async () => {
-    // A page can be reloaded while the OS prompt is up — the shell's own reason for replacing a
-    // capture rather than refusing one — and both starts then reach `listen()`. The second
-    // overwriting the first left the first's handlers subscribed for the app's lifetime, so the
-    // engine kept filling a ring nobody could read and `dispose` freed one of two.
+    // Concurrent starts can both leave the OS prompt and reach listen; replacement must remove the earlier handlers rather than leak a ring nobody drains.
     const entered = gate()
     const blocked = gate()
     const { engine, log, liveListeners } = createTestEngine({
@@ -440,7 +396,6 @@ describe('the shell capture', () => {
     expect(liveListeners()).toEqual({ microphone: 1, interruptions: 1 })
     capture.dispose()
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-    // Two captures were opened and both were ended: one by the replacement, one by the dispose.
     expect(log.filter((entry) => entry === 'end')).toHaveLength(2)
   })
 
@@ -461,9 +416,7 @@ describe('the shell capture', () => {
     blocked.release()
     await expect(pending).resolves.toMatchObject({ started: false })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-    // And the device is left torn down. The open succeeded — on a phone that is `initialize()`
-    // bringing the audio session up — so a start that simply returned here would leave it up with
-    // nothing holding it: the local end is a no-op with no capture, and nobody else will call one.
+    // A successful engine open needs teardown even if its capture was superseded; local end sees no capture and cannot release the native session later.
     expect(log).toContain('end')
   })
 
@@ -507,8 +460,7 @@ describe('the shell capture', () => {
     const stopped = capture.serve('native.audio.stop', {})
     blocked.release()
     await started
-    // The stop runs after the start it followed, so it ends the capture that start opened rather
-    // than finding nothing and leaving a live microphone behind it.
+    // Serialize stop after pending start so it closes the resulting microphone instead of observing no capture and leaving one live.
     await expect(stopped).resolves.toEqual({ stopped: true, base64: '', droppedBytes: 0 })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
   })
@@ -560,7 +512,6 @@ describe('the screen the shell holds awake while it is capturing', () => {
     await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).rejects.toThrow(
       'would not start'
     )
-    // The throw leaves no capture behind, so it leaves no screen held either.
     expect(screen).toEqual(['+', '-'])
   })
 
@@ -569,8 +520,7 @@ describe('the screen the shell holds awake while it is capturing', () => {
     const capture = createCapture(engine)
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    // The replacement ends the first capture and opens its own: one tag out at a time, never two
-    // activations the second of which nothing will ever give back.
+    // Replace the old capture’s wake tag before activating another; never hold two with only one future release.
     expect(screen).toEqual(['+', '-', '+'])
     capture.dispose()
     expect(screen).toEqual(['+', '-', '+', '-'])
@@ -599,8 +549,6 @@ describe('the tail the stop reply carries', () => {
     const read = audioReadResultSchema.parse(
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
-    // What the microphone produced between that read and the stop, which is the audio no timer is
-    // ever coming for.
     const after = pcm(1_024, 7)
     emit(after)
     const stopped = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
@@ -636,9 +584,7 @@ describe('the tail the stop reply carries', () => {
   })
 
   it('reads a reply from a shell too old to carry a tail', () => {
-    // The page updates over the air and the shell does not, so the page parses a stop reply from a
-    // build that answers `stopped` alone. It loses that dictation's tail; it must not lose the
-    // stop, which is what a required field would have cost.
+    // Accept stopped-only replies from older installed shells; default missing tail fields so the new page retains stop compatibility.
     expect(audioStopResultSchema.parse({ stopped: true })).toEqual({
       stopped: true,
       base64: '',

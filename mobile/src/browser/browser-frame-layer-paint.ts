@@ -17,17 +17,12 @@ export function updateBrowserLayerVisibility(
 }
 
 export function updateBrowserImageSource(image: Image | null, uri: string): void {
-  // Why: browser frames are large strings; mutating only the native Image
-  // source avoids re-rendering the whole tab view for every streamed frame.
+  // Write large frame strings directly to native Image to avoid rerendering whole tab per frame.
   const source = [{ uri }]
   image?.setNativeProps({ source, src: source })
 }
 
-/**
- * Native: the rendered `<Image>` decodes the source it was handed and reports it through `onLoad`
- * and `onError`, so the layer flip already has its signal and this owes nothing. The `.web.ts`
- * sibling is where a signal has to be made, because a `background-image` write fires neither.
- */
+// Native Image onLoad/onError already settle layer flip; web background-image writes need an explicit decode probe instead.
 export function whenBrowserFrameDisplayable(
   _uri: string,
   _handlers: BrowserFrameDisplayHandlers

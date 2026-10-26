@@ -102,8 +102,7 @@ function catalogModelsFromHostCatalog(
   }))
 }
 
-/** Null when the host has no listing yet or predates the surface (`forbidden`
- *  or `method_not_found`) — the caller then falls back to the CLI listing. */
+/** Missing or unsupported host catalogs fall back to CLI listing for mixed-version hosts. */
 async function readLocalHostCatalogModels(
   agent: 'claude' | 'codex'
 ): Promise<CatalogModel[] | null> {
@@ -127,12 +126,10 @@ export async function discoverNativeChatCatalogModels(
   context: RuntimeGitContext,
   hostKey?: string
 ): Promise<CatalogModel[] | null> {
-  // Claude/Codex on this machine read its host model catalog; the CLI listing
-  // below remains for every other host and while this one has never listed.
+  // Use this machine’s host catalog when available; other owners and unlisted hosts use CLI discovery.
   const hostCatalogAgent =
     agent === 'claude' ? ('claude' as const) : agent === 'codex' ? ('codex' as const) : null
-  // Only `local` proves a native pane: a paired runtime's key also covers its SSH/WSL worktrees.
-  // Terminal-backed chat runs the full custom command line, which only the CLI listing models.
+  // Only local proves native ownership; paired keys may cover SSH/WSL, and custom commands need CLI discovery.
   if (
     hostCatalogAgent &&
     hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY &&
@@ -148,8 +145,7 @@ export async function discoverNativeChatCatalogModels(
   if (
     !result.success ||
     result.models.length === 0 ||
-    // Why: a spec's static fallback list must never pass as a probe result for an
-    // agent whose published list replaces rather than extends the seed.
+    // Static fallback lists cannot prove retirements for authoritative catalogs.
     ((agent === 'claude' || catalog?.discoveredModelsAreAuthoritative) &&
       result.catalogOrigin !== 'probe')
   ) {

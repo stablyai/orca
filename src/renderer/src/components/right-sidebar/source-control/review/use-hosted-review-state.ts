@@ -11,10 +11,7 @@ import type {
   HostedReviewCreationState
 } from './hosted-review-creation-state'
 
-/**
- * Owns the hosted-review snapshot for the active repo/worktree/branch: the cached review itself plus
- * the creation-eligibility state, both scoped so a response for a previous target is ignored.
- */
+/** Scope both cached reviews and eligibility so previous-target responses are ignored. */
 export function useSourceControlHostedReviewState({
   activePrFromQueue,
   activeRepoId,

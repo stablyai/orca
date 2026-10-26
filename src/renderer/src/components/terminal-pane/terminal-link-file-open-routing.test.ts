@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -66,9 +66,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the browser tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    // The browser is the surface; activation must not seed a shell into an emptied workspace.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })
   })

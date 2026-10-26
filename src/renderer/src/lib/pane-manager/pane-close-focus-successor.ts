@@ -1,10 +1,7 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { findPaneChildren, getSplitDirection } from './pane-tree-equalization'
 
-/**
- * The pane to focus when `closedContainer` leaves its split: the sibling subtree takes over the
- * freed space, so pick its leaf touching the closed pane's edge. Must run before the DOM removal.
- */
+/** Before DOM removal, choose the sibling leaf touching the freed edge to follow the space it inherits. */
 export function findClosedPaneSuccessor(
   closedContainer: HTMLElement,
   panes: ReadonlyMap<number, ManagedPaneInternal>

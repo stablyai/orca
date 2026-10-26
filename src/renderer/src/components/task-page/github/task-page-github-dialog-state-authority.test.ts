@@ -52,8 +52,7 @@ afterEach(() => resetTaskPageGitHubMutationRegistryForTests())
 
 describe('dialog state authority (STA-3343)', () => {
   it('without authority a stale search refetch reverts a cache-only patch (external edits adopt)', () => {
-    // Why: documents the pre-fix dialog behavior — patchWorkItem alone gives the
-    // row no registry protection, so the lagging search response wins.
+    // Without registry authority, a lagging search response overwrites direct cache patches.
     const materialized = materializeTaskPageItemList({
       networkItems: [item({ state: 'open' })],
       previousItems: [item({ state: 'closed' })],
@@ -105,7 +104,6 @@ describe('dialog state authority (STA-3343)', () => {
     const scope = getTaskSourceCacheScope(sourceContext)
     expect(getLastConfirmedClientValue(scope, 'repo-1', 'issue:1', 'state')).toBe('closed')
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBeUndefined()
-    // Why: overlay resolves the remembered scope, so the list row still holds.
     const overlaid = applyPendingTaskPageGitHubMutationsToItems([item({ state: 'open' })])
     expect(overlaid[0]?.state).toBe('closed')
   })

@@ -1,10 +1,4 @@
-/**
- * The decision that turns on literal-backslash parsing (#11375).
- *
- * Why its own suite: this is the only place that reads the platform, so it is
- * where the fix can be wrong in the direction that matters — applying Windows
- * rules to a command that will actually run under a POSIX shell.
- */
+/** #11375: choose rules from the execution host; a Windows client can still run a POSIX command remotely. */
 import { describe, expect, it } from 'vitest'
 import { commandBackslashMode } from './commit-message-text-generation'
 
@@ -30,7 +24,6 @@ describe('commandBackslashMode', () => {
   })
 
   it('keeps POSIX escaping for a remote target, whose platform we cannot see', () => {
-    // A Windows client driving a Linux host is the case this protects.
     expect(commandBackslashMode(REMOTE, 'win32')).toBe('escape')
   })
 

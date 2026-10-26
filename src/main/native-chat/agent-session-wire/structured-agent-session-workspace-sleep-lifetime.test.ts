@@ -331,7 +331,7 @@ it('stops an agent that is still starting', async () => {
 
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
   expect(acquire).toHaveBeenCalledTimes(2)
-  expect(closeSession).toHaveBeenCalledWith(SESSION)
+  expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
   expect(host['runtimeState'].startFlights.has(SESSION)).toBe(false)
   expect(host['sessions'].get(SESSION)?.child ?? null).toBeNull()
 })
@@ -365,7 +365,7 @@ it('sleeps only proven ended chats after idle eviction or restart', async () => 
     await foundRestTestChat(rig)
     rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => {
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(rig.host.hasSession(SESSION)).toBe(false)
     })
     expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()

@@ -2,9 +2,7 @@ import React from 'react'
 import { Hourglass, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Why: a spinner frozen by reduced motion reads as stuck, so the still state is
-// a different icon that says "working" without moving. The hourglass hides only when
-// motion is allowed: `hidden` plus a `motion-reduce:block` re-show left it hidden.
+// Reduced motion uses an hourglass rather than a stuck spinner. Hide it only when motion is allowed; hidden plus motion-reduce:block left it hidden.
 export function LoadingSpinner({ className }: { className?: string }): React.JSX.Element {
   return (
     <>

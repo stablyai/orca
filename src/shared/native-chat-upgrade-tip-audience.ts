@@ -15,10 +15,7 @@ export const NATIVE_CHAT_UPGRADE_TIP_AUDIENCE_BASES = [
 export type NativeChatUpgradeTipAudienceBasis =
   (typeof NATIVE_CHAT_UPGRADE_TIP_AUDIENCE_BASES)[number]
 
-/**
- * Whether this profile gets the one-time native chat upgrade tip. Decided once, from the profile
- * as it was saved before this upgrade, and never recomputed from the live Chat UI setting.
- */
+/** One-time upgrade audience fixed from pre-upgrade saved profile, never recomputed from live Chat UI settings. */
 export type NativeChatUpgradeTipAudience = {
   version: 1
   membership: NativeChatUpgradeTipMembership

@@ -1,7 +1,10 @@
-import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type {
+  DropAgentStatusByWorktreeOptions,
+  RetainedAgentEntry
+} from './agent-status/agent-status-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { pruneMigrationUnsupportedEntries } from './agent-status/agent-status-migration-unsupported-entries'
 import {
   getTabIdFromPaneKey,
   normalizePaneKeySet,
@@ -10,7 +13,7 @@ import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
-import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { removePaneKeys } from './agent-status/agent-status-pane-keyed-records'
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 
 export function createAgentStatusWorktreeDropActions(

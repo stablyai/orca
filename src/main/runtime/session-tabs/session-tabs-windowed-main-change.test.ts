@@ -1,5 +1,4 @@
-// A server with a window attached: a change main makes to its own layout (a CLI rename, create or
-// close) reaches a subscribed phone's rows with no window publication after it.
+// Main layout changes must reach subscribed phones even without another attached-window publication.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,

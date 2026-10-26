@@ -13,6 +13,7 @@ function status(overrides: Partial<MobileGitStatusResult>): MobileGitStatusResul
     conflictOperation: 'unknown',
     branch: undefined,
     head: undefined,
+    upstreamStatus: undefined,
     ...overrides
   }
 }

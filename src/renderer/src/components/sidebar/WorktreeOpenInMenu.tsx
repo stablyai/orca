@@ -170,7 +170,6 @@ export async function openWorktreePath(args: {
       return
     }
   }
-  // Why: both checks above refuse an unresolved owner, so this is only a narrowing guard.
   if (owner === 'unresolved') {
     return
   }
@@ -275,7 +274,7 @@ export function WorktreeOpenInMenuItems({
             ) : null}
           </DropdownMenuItem>
         )
-        // Why a wrapper: a disabled item takes no pointer events, so its own title never shows.
+        // Disabled items ignore pointer events; put explanatory titles on a wrapper.
         return availability.disabledReason ? (
           <div key={entry.id} title={availability.disabledReason}>
             {item}

@@ -54,7 +54,6 @@ describe('restoreShedStatusFields', () => {
     const restored = restoreShedStatusFields(shed, [createShedSubagentsField(roster)], cached)
     expect(restored.subagents).toEqual(roster)
     expect(restored.state).toBe('done')
-    // Only the named field comes back.
     expect(restored.lastAssistantMessage).toBeUndefined()
   })
 
@@ -93,7 +92,6 @@ describe('restoreShedStatusFields', () => {
     expect(restoreShedStatusFields(shed, undefined, cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [], cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [], cached).lastAssistantMessage).toBeUndefined()
-    // A hostile/garbled marker must not throw or restore.
     expect(restoreShedStatusFields(shed, 'subagents', cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, ['subagents'], cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [{ toString: () => 'subagents' }], cached)).toBe(shed)

@@ -1,10 +1,4 @@
-/**
- * `git worktree prune` deletes the metadata of every linked worktree whose link doesn't resolve.
- * On Windows one repo can hold links written by both Windows Git (`C:/…`) and WSL Git (`/mnt/c/…`,
- * `/home/…`), e.g. after its runtime was switched; each Git reads the other's links as missing.
- * So the other Git's entries are locked for the prune (git never prunes a locked entry), and the
- * rest prune as before.
- */
+// Windows and WSL Git cannot resolve each other’s worktree links; lock foreign entries during prune to preserve their metadata.
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import {

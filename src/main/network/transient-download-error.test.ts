@@ -10,7 +10,6 @@ describe('isRetryableDownloadError', () => {
     expect(isRetryableDownloadError(new Error('net::ERR_CONNECTION_RESET'))).toBe(true)
   })
 
-  // orcad downloads through Node's https, which reports drops by code (#31174).
   it.each([
     ['a response cut mid-body', nodeError('aborted', 'ECONNRESET')],
     ['a reset socket', nodeError('socket hang up', 'ECONNRESET')],

@@ -41,8 +41,7 @@ describe('the host status decodes from every version the gate admits', () => {
 
 describe('capabilities salvage whole, not per element', () => {
   it('drops the whole list for one non-string, which is what the probe published', () => {
-    // transport-capability-probe-non-string-capabilities-drop records main publishing `[]` for
-    // `['push.v1', 7]`; dropping only the 7 would publish a set main never published.
+    // Drop the whole mixed-type list to preserve the legacy probe’s all-or-nothing capability policy.
     expect(reads(hostStatusSchema, { capabilities: ['push.v1', 7] }).capabilities).toBe(undefined)
     expect(reads(hostStatusSchema, { capabilities: 'push.v1' }).capabilities).toBe(undefined)
   })

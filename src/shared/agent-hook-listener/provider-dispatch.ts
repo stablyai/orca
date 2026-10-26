@@ -16,6 +16,7 @@ import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
 import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEphemeralThread } from './providers/codex-ephemeral-threads'
 import { normalizeGeminiEvent } from './providers/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor-events'
@@ -56,10 +57,17 @@ export function normalizeProviderEvent(input: {
   previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
-  const eventName =
+  // Ephemeral side chats share the pane but must not replace its recorded main turn.
+  const codexEventName =
     source === 'codex'
-      ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload)
-      : input.eventName
+      ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload)
+      : undefined
+  const eventName =
+    source !== 'codex'
+      ? input.eventName
+      : codexEventName === undefined
+        ? undefined
+        : codexHookEventForEndedTurn(state, paneKey, codexEventName, hookPayload)
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false

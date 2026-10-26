@@ -11,10 +11,7 @@ import type {
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
 
-/**
- * A host-side failure is toasted here because the host never mirrors a tab for it, so no pane
- * exists to show the error. `notifyFailure: false` is for callers that report it themselves.
- */
+/** Toast host failure here because no mirrored pane can show it; callers reporting themselves use notifyFailure:false. */
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
   options: { notifyFailure?: boolean } = {}
@@ -59,11 +56,7 @@ export async function createWebRuntimeAgentSessionTerminal(
   return { outcome: created.outcome, promptDelivered }
 }
 
-/**
- * Launch a web-host agent terminal whose draft already rode in on the launch
- * command (argv prefill). No post-ready paste runs for that delivery, so seed
- * the chat-composer copy here once the mirrored host tab id is known.
- */
+/** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
 export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
   args: CreateWebRuntimeSessionTerminalArgs & {
     agent: TuiAgent

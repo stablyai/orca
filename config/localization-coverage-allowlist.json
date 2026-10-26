@@ -82,5 +82,26 @@
     "text": "Switch language",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
+    "kind": "jsx-text",
+    "text": "Component fixtures",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
+    "kind": "jsx-text",
+    "text": "fixtures · files named *.fixture.tsx under src/renderer/src",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
+    "kind": "jsx-text",
+    "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
   }
 ]

@@ -43,8 +43,7 @@ function cutTurn(outcome?: AgentJournalTurnOutcome): AgentJournalRenderItem {
   }
 }
 
-/** The host's row, as a host this build or a newer one writes it: today's words and fact, and the
- *  cause beside them. */
+/** Host stop row with current words/fact and an optional newer cause. */
 function stopRow(orcaStop: { cause: string } | undefined, scoped = true): AgentJournalRenderItem {
   return {
     itemId: agentJournalItemKey({

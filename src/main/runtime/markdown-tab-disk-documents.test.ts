@@ -223,7 +223,6 @@ describe('Markdown tab documents on disk', () => {
     const { host, state } = makeHost('# Notes\n')
     const base = hashMarkdownContent('# Notes\n')
 
-    // Run together, the second would pass the same version check and fail the disk precondition.
     const results = await Promise.all([
       saveMarkdownTabToDisk(host, WORKTREE, TAB, base, '# Same\n'),
       saveMarkdownTabToDisk(host, WORKTREE, TAB, base, '# Same\n')

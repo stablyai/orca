@@ -8,18 +8,14 @@ import {
   type AiVaultScope
 } from '../../../src/shared/ai-vault-types'
 
-// Why: the renderer's deriveAiVault* helpers are renderer-located and
-// Metro-unresolvable, so mobile does its own minimal derivation seeded by the
-// active worktree's path plus same-repo sibling worktrees (mobile already loads
-// the full worktree list via worktree.ps). scopePaths only widen the host scan's
-// discovery breadth; they are host-local match prefixes, never device paths.
+// Derive locally because Metro cannot resolve renderer helpers; seed active/same-repo paths from worktree.ps.
+// scopePaths widen host discovery only; they are host-local prefixes, never device paths.
 export function deriveMobileAiVaultScopePaths(
   scope: AiVaultScope,
   activeWorktree: Pick<Worktree, 'worktreeId' | 'path' | 'repoId'> | null,
   liveWorktrees: readonly Pick<Worktree, 'worktreeId' | 'path' | 'repoId'>[]
 ): string[] {
-  // 'all' scope scans without scope hints — the host returns the global recency
-  // list, so no scopePaths are needed (and would only narrow discovery).
+  // All scope omits hints to retain host’s global recency list.
   if (scope === 'all' || !activeWorktree) {
     return []
   }
@@ -28,12 +24,10 @@ export function deriveMobileAiVaultScopePaths(
   const comparisonPaths = new Set<string>()
   addScopePath(paths, comparisonPaths, activeWorktree.path)
 
-  // Workspace scope = the active worktree only. Project scope additionally
-  // covers same-repo sibling worktrees so the project view stays complete.
+  // Workspace uses active path; Project includes same-repo siblings.
   if (scope === 'project') {
     for (const worktree of liveWorktrees) {
-      // Why: the RPC rejects (does not truncate) oversized scopePaths, and the
-      // list only widens discovery — dropping tail siblings beats hard-failing.
+      // RPC rejects oversized scopePaths; drop tail hints rather than fail scan because hints only widen discovery.
       if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         break
       }

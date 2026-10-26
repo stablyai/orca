@@ -4,7 +4,7 @@ import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
-import { getRelayPtyId } from './registry'
+import { getRelayPtyId, tryGetProviderForPty } from './registry'
 import {
   KEEP_HISTORY_STOP_POLL_MS,
   KEEP_HISTORY_STOP_SETTLE_MS
@@ -126,4 +126,15 @@ export function finishPtyShutdown(
   }
   ptyOwnership.delete(id)
   return incarnationId
+}
+
+export async function isRegisteredAgentSessionOwnerLive(
+  owner: AgentSessionOwnerBinding
+): Promise<boolean> {
+  const ownerProvider = tryGetProviderForPty(owner.ptyId)
+  if (!ownerProvider) {
+    // Why: an owner on a host this process cannot reach is unknown, never absent.
+    throw new Error('execution_owner_unavailable')
+  }
+  return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
 }

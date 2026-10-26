@@ -3,15 +3,7 @@ import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import type { TerminalPaneRevealTarget } from '../../../shared/terminal-pane-reveal'
 
-/**
- * Shows a terminal pane on whichever host owns it: a local, SSH or paired-server workspace, or the
- * floating panel. Returns false when this window does not know the workspace.
- *
- * Why the workspace dispatcher rather than a bare `setActiveWorktree`: only the shared
- * sequence switches the view back to terminal, resumes sleeping agent sessions, and seeds a
- * terminal surface. A parked SSH workspace has no resident tab until those run, so the bare
- * call revealed a workspace with nothing in it (#16731).
- */
+/** Reveal through the workspace dispatcher on local/SSH/server/floating owners. Bare setActiveWorktree skips terminal view, sleeping resume and surface seeding, leaving parked SSH workspaces empty (#16731). Return false for unknown workspaces. */
 export function revealTerminalPane(target: TerminalPaneRevealTarget): boolean {
   const activated = activateAndRevealWorkspace(
     target.worktreeId,

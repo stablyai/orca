@@ -134,8 +134,7 @@ describe('contextual tour gate', () => {
   })
 
   it('resolves the browser import step to the visible hint button when both targets exist', () => {
-    // The hint button precedes the overflow-menu row in the DOM, so document-order
-    // resolution must pick it even though the combined selector lists both.
+    // Combined selectors resolve in document order, where the visible hint precedes the menu row.
     const hintButton = {
       closest: () => null,
       getBoundingClientRect: () => ({
@@ -171,8 +170,7 @@ describe('contextual tour gate', () => {
   })
 
   it('falls back to the overflow-menu row when the hint button is hidden', () => {
-    // Hint dismissed: its element is inside an aria-hidden subtree (or unmounted),
-    // so resolution must fall through to the always-present menu row.
+    // A dismissed/hidden hint must yield to the overflow-menu row.
     const hiddenHintButton = {
       closest: (querySelector: string) => (querySelector.includes('aria-hidden') ? {} : null),
       getBoundingClientRect: () => ({

@@ -1,5 +1,4 @@
-// sendAgentTurn against the real host, store and journal, so the envelope it builds has to pass the
-// host's own admission: a fingerprint over other fields than the send carries is refused there.
+// Use the real host's fingerprint admission to reject envelopes derived from different fields.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -68,7 +67,6 @@ function sendTurn(
   })
 }
 
-/** The transcript item a send became. */
 async function sentMessage(clientMessageId: string) {
   const snapshot = await rig.host.journalSnapshot(SESSION)
   return snapshot.items.find((item) => item.itemId === agentJournalSubmissionKey(clientMessageId))
@@ -81,7 +79,6 @@ describe('sendAgentTurn through the real host', () => {
       kind: 'queued',
       queued: { position: 1, state: 'waiting' }
     })
-    // On the card's body, read back whole and published with it.
     expect(
       rig.host
         .collaboratorsForTests()
@@ -160,13 +157,11 @@ describe('sendAgentTurn through the real host', () => {
     const outcome = await sendTurnAccepted(delivery)
     expect(outcome).toMatchObject({ kind: 'sent', submission: { dispatchState: 'accepted' } })
     expect(await rig.drafts()).toEqual([])
-    // An idle chat never queues, and the sent message still names its sender.
     const sent = outcome.kind === 'sent' ? outcome.clientMessageId : ''
     expect((await sentMessage(sent))?.body).toMatchObject({ from: MAIL_SOURCE })
   })
 
-  // An idle chat sends the mail at once: its submission says it is an agent's, without the senders
-  // the card keeps host-only, so a restart or a close rejects it rather than keep it as a card.
+  // Idle mail is agent-kind without host-only sender details, so restart/close rejects it instead of preserving a card.
   it('records an idle chat’s mail as an agent’s, by kind only', async () => {
     const operationId = hostTestOperationId()
     await sendTurnAccepted('queue', operationId)

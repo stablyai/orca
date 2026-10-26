@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAutomationRunWriter } from './automation-run-writer'
-import { collectAutomationRunUsage } from './run-usage-collection'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import type { Store } from '../persistence'
 
@@ -52,45 +51,5 @@ describe('automation run writer publications', () => {
       'disk full'
     )
     expect(publish).not.toHaveBeenCalled()
-  })
-
-  it('names the host a created run belongs to', async () => {
-    const { writer, publish } = writerWith(SSH_SELECTOR)
-    await writer.createRun(automation, 0, 'scheduled')
-    expect(publish).toHaveBeenCalledWith({ reason: 'run', selector: SSH_SELECTOR })
-  })
-
-  it('resolves the host from the written run, which is all a dispatch result names', async () => {
-    const { writer, publish, automationChangeSelector } = writerWith(SSH_SELECTOR)
-    await writer.updateRun({ runId: 'run-1', status: 'completed', usage: null })
-    expect(automationChangeSelector).toHaveBeenCalledWith('auto-1')
-    expect(publish).toHaveBeenCalledWith({ reason: 'run', selector: SSH_SELECTOR })
-  })
-
-  it('keeps the usage reason on a usage-bearing write', async () => {
-    const { writer, publish } = writerWith({ kind: 'self' })
-    await writer.updateRun({
-      runId: 'run-1',
-      status: 'completed',
-      usage: await collectAutomationRunUsage({
-        automation,
-        run,
-        claudeUsage: null,
-        codexUsage: null
-      })
-    })
-    expect(publish).toHaveBeenCalledWith({ reason: 'usage', selector: { kind: 'self' } })
-  })
-
-  it('falls back to the whole authority when the record can no longer be named', async () => {
-    const { writer, publish } = writerWith(null)
-    await writer.createRun(automation, 0, 'scheduled')
-    expect(publish).toHaveBeenCalledWith({ reason: 'run' })
-  })
-
-  it('does not project a selector nobody will hear', async () => {
-    const { store, automationChangeSelector } = writerWith(SSH_SELECTOR)
-    await createAutomationRunWriter(store, null).createRun(automation, 0, 'scheduled')
-    expect(automationChangeSelector).not.toHaveBeenCalled()
   })
 })

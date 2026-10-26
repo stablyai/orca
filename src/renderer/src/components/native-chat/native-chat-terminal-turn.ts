@@ -14,22 +14,18 @@ import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
 export type NativeChatTerminalTurn = {
   /** The agent is generating: drives Stop-vs-Send and the streaming preview. */
   isWorking: boolean
-  /** The turn is running, including while its agent waits on the reader, as a
-   *  structured turn runs on behind its prompt card: its clock keeps counting. */
+  /** Waiting on the reader keeps the turn active and its clock running. */
   turnActive: boolean
   awaitingInput: NativeChatAwaitingInput | null
 }
 
-/** The turn facts a terminal-backed pane feeds the shared turn-status UI. */
 export function resolveNativeChatTerminalTurn(args: {
   isConversation: boolean
   /** Hook 'working', reconciled with the transcript's turn boundaries. */
   working: boolean
   /** Hook 'waiting'/'blocked', reconciled the same way. */
   hookAwaitingInput: boolean
-  /** Local Stop suppression. */
   interrupted: boolean
-  /** The pane draws the agent's prompt as a card. */
   hasPromptCard: boolean
 }): NativeChatTerminalTurn {
   const { isConversation, working, hookAwaitingInput, interrupted, hasPromptCard } = args
@@ -51,11 +47,7 @@ type NativeChatHookTurnEntry = Pick<
   'state' | 'stateStartedAt' | 'turnStartedAt' | 'mainAgent' | 'sessionBoundary'
 >
 
-/**
- * When the pane's current turn began: the host's stamp from the main agent's own turn-opening
- * event, which survives a remount, a reload and child work holding the row open. A host too old to
- * stamp it leaves the current state's start, the main agent's while it is mid-turn.
- */
+/** Prefer the host’s durable main-agent turn stamp; older hosts fall back to the main agent’s current-state start. */
 export function nativeChatHookTurnStartedAt(
   entry: NativeChatHookTurnEntry | undefined
 ): number | null {
@@ -70,12 +62,7 @@ export function nativeChatHookTurnStartedAt(
     : entry.stateStartedAt
 }
 
-/**
- * The latest turn's duration by the host, for a turn the pane is not running: a number once the
- * main agent is done (its done stamp minus the host's turn start), null when the host went quiet
- * mid-turn (nothing says the turn ended, so a locally measured end would be a false claim), and
- * undefined to keep what the pane observed (an old host, a session boundary, a pane-side end).
- */
+/** Return host-ended seconds, null to hide a silent unfinished turn, or undefined to preserve pane observations/old-host fallback. */
 export function nativeChatHookLatestTurnWorkedSeconds(
   entry: NativeChatHookTurnEntry | undefined,
   hookSilent: boolean
@@ -92,19 +79,12 @@ export function nativeChatHookLatestTurnWorkedSeconds(
   return hookSilent ? null : undefined
 }
 
-/** The transcript's latest turn: its last prompt, harness notices aside. */
 export function nativeChatLatestTurnId(messages: readonly NativeChatMessage[]): string | null {
   const latest = messages.findLast((message) => message.role === 'user' && !isNoiseMessage(message))
   return latest?.id ?? null
 }
 
-/**
- * Durations of the transcript's finished turns, from its own timestamps (one clock): a turn runs
- * from its prompt to the agent's last timestamped row or its interruption. Other system rows (file
- * mentions, extension notes) can land long after, next to the following prompt. The latest turn is
- * left out, since nothing here says it has ended, and so is a turn missing either end, which keeps
- * what the pane observed.
- */
+/** Time finished turns within the transcript clock; ignore unrelated system rows and omit the latest or incomplete turn to preserve pane observations. */
 export function nativeChatTranscriptSettledTurns(
   messages: readonly NativeChatMessage[]
 ): NativeChatSettledTurns {

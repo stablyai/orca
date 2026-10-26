@@ -51,8 +51,7 @@ export async function scrollActiveTerminalViewportElement(page: Page): Promise<v
     if (!viewport) {
       throw new Error('Active terminal viewport is unavailable')
     }
-    // Why: Linux CI can drop wheel delivery entirely under PTY flood; changing
-    // the viewport scrollTop exercises xterm's DOM scroll synchronization.
+    // PTY flood can lose synthetic wheel delivery on Linux; scroll the viewport’s real DOM surface.
     viewport.scrollTop = Math.max(0, viewport.scrollTop - 1200)
     viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
   })
@@ -77,8 +76,7 @@ export async function scrollActiveTerminalByApi(page: Page): Promise<void> {
       }
       return candidate
     })()
-    // Why: Linux/Xvfb can lose synthetic wheel/DOM scroll events under flood;
-    // xterm's public API keeps this probe about viewport responsiveness.
+    // Use xterm’s public API to measure responsiveness despite lost Xvfb wheel events.
     const targetLine = Math.max(0, pane.terminal.buffer.active.viewportY - 20)
     pane.terminal.scrollToLine(targetLine)
   })
@@ -126,8 +124,7 @@ export async function dispatchActiveTerminalWheelEvent(page: Page): Promise<void
   })
 }
 
-// Why: Linux/Xvfb can drop CDP wheel delivery, and tall wrapped tables need
-// more scroll steps than a mouse-wheel loop can reliably deliver under CI load.
+// Use absolute scrolling because wrapped tables outlast reliable CI wheel delivery.
 export async function scrollActiveTerminalToText(page: Page, text: string): Promise<void> {
   await page.evaluate((searchText) => {
     const pane = (() => {
@@ -159,10 +156,7 @@ export async function scrollActiveTerminalToText(page: Page, text: string): Prom
     if (targetLine === null) {
       throw new Error(`Text not found in terminal buffer: ${searchText}`)
     }
-    // Why: after workspace restore, xterm's viewport can be several wrapped
-    // rows away from the buffer line even when relative scroll events are
-    // coalesced. Scroll to an absolute line and center the target for the
-    // subsequent DOM-based visual assertion.
+    // Center the absolute buffer line after restore; coalesced relative events can leave wrapped rows offset.
     const centeredLine = Math.max(0, targetLine - Math.floor(pane.terminal.rows / 2))
     pane.terminal.scrollToLine(centeredLine)
     const viewport = pane.container.querySelector<HTMLElement>('.xterm-viewport')

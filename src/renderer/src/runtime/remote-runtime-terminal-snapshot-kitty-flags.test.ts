@@ -15,10 +15,7 @@ import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// `kittyKeyboardFlags` is an additive optional field on the existing
-// SnapshotStart frame (Rule 1 of docs/reference/remote-wire-compatibility.md).
-// An old host omits it, and absence must stay unknown rather than be laundered
-// into "the host proved kitty is inactive".
+// SnapshotStart’s optional additive kittyKeyboardFlags keeps old-host absence unknown, never proven inactive (remote-wire-compatibility.md Rule 1).
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void

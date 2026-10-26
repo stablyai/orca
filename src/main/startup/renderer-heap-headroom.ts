@@ -3,24 +3,11 @@ import { totalmem } from 'node:os'
 
 const RENDERER_HEAP_ENV_VAR = 'ORCA_RENDERER_HEAP_MB'
 const BYTES_PER_GIB = 1024 * 1024 * 1024
-// Why: Chromium sizes the renderer's V8 old-space heap from a physical-memory
-// heuristic (~RAM/4), so an 8 GB machine caps the renderer near ~2.2 GB even
-// though V8's pointer-compression cage allows up to ~4 GB. Heavy Orca sessions
-// (many agent terminals × scrollback, PR/git caches, React tree) legitimately
-// reach that low default and V8 aborts with an OOM — the dominant renderer
-// crash in the crash channel. Reclaim the unused headroom up to the 4 GB cage
-// on machines that have the RAM. Requests above 4096 are silently capped by the
-// pointer-compression cage, so 4096 is the real ceiling — we cannot go higher.
-// Machines below ~8 GB keep Chromium's default: raising their ceiling would
-// trade a clean OOM for OS memory-pressure kills / swap thrash.
-// Why 7.5 not 8: os.totalmem() on Linux reports MemTotal, which excludes
-// kernel/firmware-reserved RAM, so a real 8 GB machine reports ~7.7 GiB. Gating
-// at exactly 8 would wrongly exclude 8 GB Linux boxes (a crashing population)
-// while still cleanly excluding 6 GB machines (which report ~5.7 GiB).
+// Heavy sessions exceed Chromium's ~RAM/4 default; reclaim headroom within V8's 4GB cage. Keep low-RAM defaults to avoid OS kills/swap; 7.5GiB includes 8GB Linux machines whose MemTotal excludes reserved RAM.
 const RENDERER_HEAP_MIN_TOTAL_GIB = 7.5
 const RENDERER_HEAP_RAM_FRACTION = 0.4
 const RENDERER_HEAP_FLOOR_MB = 3072
-// V8 pointer-compression cage hard limit; --max-old-space-size above this is ignored.
+// Pointer compression caps V8 at 4096MB even if the flag requests more.
 const RENDERER_HEAP_CAP_MB = 4096
 
 type HeapOverride = number | 'disable' | undefined
@@ -33,31 +20,24 @@ function parseRendererHeapOverrideMb(value: string | undefined): HeapOverride {
   if (normalized === '') {
     return undefined
   }
-  // Why: give operators an explicit opt-out (and E2E a way to pin the default)
-  // without editing the RAM tiers.
+  // Allow operators/E2E to retain Chromium defaults without changing RAM tiers.
   if (normalized === 'default' || normalized === 'off' || normalized === 'none') {
     return 'disable'
   }
   const parsed = Number(normalized)
-  // Why: ignore an unparseable value (typo) and fall through to the RAM tiers,
-  // but treat an explicit non-positive number as an opt-out.
+  // Typos use RAM tiers; explicit nonpositive values opt out.
   if (!Number.isFinite(parsed)) {
     return undefined
   }
   if (parsed <= 0) {
     return 'disable'
   }
-  // Why: a fractional value in (0,1) floors to 0, which would emit an invalid
-  // --max-old-space-size=0. Treat a floored-to-0 override as an opt-out too.
+  // Fractional overrides can floor to zero, which is an invalid heap flag; treat as opt-out.
   const flooredMb = Math.floor(parsed)
   return flooredMb <= 0 ? 'disable' : flooredMb
 }
 
-/**
- * Renderer V8 old-space ceiling (MB) to request via --max-old-space-size, or
- * null to keep Chromium's physical-memory default. Pure so the RAM tiers and
- * the env override are unit-testable without spawning Electron.
- */
+/** Null keeps Chromium's memory default; compute tiers/overrides without spawning Electron. */
 export function computeRendererHeapCeilingMb(
   totalMemoryBytes: number,
   envOverride?: string
@@ -90,13 +70,11 @@ export function enableRendererHeapHeadroom(
     return
   }
   const existing = app.commandLine.getSwitchValue('js-flags')
-  // Why: respect an explicit --max-old-space-size someone already set (e.g. via
-  // ELECTRON_EXTRA_LAUNCH_ARGS) instead of stacking a second, ignored value.
+  // Respect explicit heap flags rather than append an ignored duplicate.
   if (existing.includes('--max-old-space-size')) {
     return
   }
   const flag = `--max-old-space-size=${ceilingMb}`
-  // Why: js-flags is process-wide and must be set before app 'ready' so it
-  // reaches renderer/utility V8 isolates when Chromium spawns them.
+  // Set process-wide js-flags before ready so newly spawned V8 isolates inherit them.
   app.commandLine.appendSwitch('js-flags', existing ? `${existing} ${flag}` : flag)
 }

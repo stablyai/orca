@@ -92,11 +92,7 @@ function projectFixture(step: FixtureStep): RuntimeLeafProjection {
   return projectRuntimeLeafRecords(input)
 }
 
-/**
- * The mirror's records with the projection's named differences: no renderer pane id, and a pane
- * title dated by its own observation (an OSC title by the PTY's stamp) instead of by the graph
- * sync that relayed it. `overrides` names any other difference, leaf by leaf.
- */
+/** Projection differs from mirror in renderer pane ids and evidence-dated titles; overrides name any additional per-leaf differences. */
 function asProjected(
   leaves: RuntimeLeafRecord[],
   overrides: Record<string, Partial<RuntimeLeafRecord>> = {}

@@ -1,18 +1,18 @@
 # Performance regression checks
 
 `pnpm --silent audit:perf > performance-audit.json` scans production `src/` with
-the existing app-store and buffer-concatenation rules plus the sort-comparator
-rule. Warnings are advisory in this full inventory; tool/parser failures fail.
+the existing app-store and buffer-concatenation rules. Warnings are advisory in this full inventory; tool/parser failures fail.
 New warning findings on changed lines fail `pnpm check:code-quality:changed`.
 Tests, generated files, `mobile/` and `cloud/` are outside this source audit.
 
-The sort rule detects optioned `localeCompare` and `Intl.Collator` construction
+The ast-grep rule `config/ast-grep/rules/no-repeated-collator.yml` (`pnpm lint:ast-grep`,
+an error everywhere) detects optioned `localeCompare` and `Intl.Collator` construction
 inside inline `sort`/`toSorted` callbacks. Construct one collator outside the
 callback, preserving locale, options and tie-breakers. If the locale changes at
 runtime, reconstruct at the next sort or key the cache by locale. Bare comparisons
 and standalone equality checks are allowed. There is no autofix or interprocedural
 analysis: named comparators, aliases, custom methods and deferred callbacks need
-manual review. A warning identifies repeated setup, not proof of visible lag.
+manual review. A finding identifies repeated setup, not proof of visible lag.
 
 `pnpm test:perf:contracts` runs the explicit selection in
 `vitest.performance.config.ts`: SQLite statement reuse and schema parity, relay

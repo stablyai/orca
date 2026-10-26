@@ -17,7 +17,7 @@ import {
   type UsageCredentialHost
 } from './usage-credential-host'
 
-/** Why it names the host: the poller that sends the key runs where the key is stored. */
+/** Name the storage host because its poller sends the key. */
 export function miniMaxStorageHelp(host: UsageCredentialHost): string {
   return host.label === null
     ? translate(

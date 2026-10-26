@@ -141,6 +141,7 @@ export function prepareWebSessionTabsSnapshotBase(
     ? currentTerminalTabs.filter(
         (tab) =>
           !shouldReplaceTerminalTab(
+            state,
             tab,
             environmentId,
             nextRemotePtyIds,
@@ -168,12 +169,7 @@ export function prepareWebSessionTabsSnapshotBase(
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
-  // Why an empty row rather than a deleted key: an explicit empty row is the closed-last-terminal
-  // tombstone every seeder reads (initial-terminal.ts), and dropping the key reads back as "never
-  // initialized", which re-seeds the workspace on every focus (STA-6173). `sameTerminalTabs` treats
-  // a missing row and an empty one as equal, so a worktree that never had a terminal still gets no
-  // row. A removal frame really is gone, and a synthesized unpublished frame is "ask me later", not
-  // evidence the user emptied anything — neither may leave a tombstone behind.
+  // Preserve explicit empty rows as closed-last-terminal tombstones (initial-terminal.ts, STA-6173). Missing/empty compare equal, so never-initialized worktrees gain no row; removal/unpublished frames prove no user-empty action and leave none.
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]

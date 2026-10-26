@@ -95,8 +95,7 @@ describe('spawnSourceControlAgent', () => {
   })
 
   it('hands an npm .cmd shim to process-host unwrapped, multi-line prompt included', () => {
-    // Why: wrapping the shim in cmd.exe here refused every argv prompt, which always has
-    // line breaks, before process-host could run the shim as node + script (#28768).
+    // #28768: cmd.exe wrapping rejects multiline prompts before process-host can resolve npm shims to node + script.
     const shim = join(folder, 'copilot.cmd')
     writeFileSync(shim, '')
     spawnProcessMock.mockReturnValueOnce(fakeChild())
@@ -158,7 +157,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
   })
 
   it.each([
-    // Only macOS throws ENOEXEC; glibc's execvp hands such a file to /bin/sh, direct or supervised.
+    // Only macOS returns ENOEXEC here; glibc execvp hands executable text to /bin/sh.
     ...(process.platform === 'darwin'
       ? [['an executable that is not a program', 'garbage', (path: string) => path] as const]
       : []),
@@ -188,7 +187,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
     })
   })
 
-  // Electron prints startup warnings (a bad NODE_EXTRA_CA_CERTS); Node's debug log stands in here.
+  // Model Electron startup warnings before supervised missing-binary diagnostics.
   it('reads a missing binary as not found past the runtime own stderr output', async () => {
     const missing = join(folder, 'missing-behind-warning')
 

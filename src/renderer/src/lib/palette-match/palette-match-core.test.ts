@@ -56,8 +56,7 @@ describe('palette query preparation', () => {
   })
 
   it('collapses whitespace runs so the whole-query tier still matches', () => {
-    // Why: field text is always single-spaced, so an uncollapsed run could never satisfy
-    // the whole-query equality tier and the exactly-named row silently lost its rank.
+    // Collapse query spaces to match indexed fields or exact visible names would lose whole-query rank.
     expect(ready('scan  daily').normalized).toBe('scan daily')
     expect(run(labelOnly('scan daily'), 'scan  daily')?.rank.placement).toBe(
       run(labelOnly('scan daily'), 'scan daily')?.rank.placement
@@ -65,8 +64,7 @@ describe('palette query preparation', () => {
   })
 
   it('treats emoji and symbols as content, not punctuation', () => {
-    // Why: the palette input expands `:rocket:` into 🚀, so dropping symbol tokens made the
-    // palette unable to match a query it produced itself.
+    // Emoji expansion produces symbol queries; dropping symbols would make the palette unable to match its own input.
     expect(ready('🚀 rocket').tokens[0]?.isPunctuationOnly).toBe(false)
     expect(run(labelOnly('🚀 rocket ship'), '🚀 rocket ship')).not.toBeNull()
     expect(run(labelOnly('a → b'), '→')).not.toBeNull()
@@ -275,8 +273,7 @@ describe('identifier fields', () => {
 })
 
 describe('duplicate evidence unit ids', () => {
-  // Two listeners on one port with different process names: the scanner keys ports on
-  // host:port:pid, so a parent and a forked child both survive.
+  // Scanner identity includes PID, so parent/child listeners on one port must both survive.
   const duplicateUnits: PaletteDocumentInput = {
     id: 'doc',
     visibleFields: [
@@ -322,8 +319,7 @@ describe('duplicate evidence unit ids', () => {
   }
 
   it('keeps the first unit so its text matches the indexed fields', () => {
-    // Why first-wins: indexPaletteFields keeps the first entry's fields, so overwriting the
-    // unit paired one record's rendered text with another's offsets.
+    // Retain first units and fields together or offsets would highlight a different record’s rendered text.
     const match = run(duplicateUnits, 'next-server')
     const evidence = match?.supportingEvidence[0]
     expect(evidence?.text).toBe('3000 · next-server')

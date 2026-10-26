@@ -92,10 +92,7 @@ export function RepositoryPane({
   updateProject
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
-  // Why: this pane renders the switcher-selected host's repo row. Bind every
-  // edit to that host so identity/host-specific writes land on the selected
-  // host, not findRepoForHost's focused-host fallback (the same-id/self-pair
-  // case where local and a runtime share one repo id).
+  // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
   const updateSelectedRepo = useCallback(
     (repoId: string, updates: RepositoryPaneRepoUpdate) =>
@@ -123,11 +120,9 @@ export function RepositoryPane({
   )
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after settings navigation; avoid starting
-  // a reset timer that will outlive this pane.
+  // Clipboard IPC may outlive navigation; do not start timers after pane detach.
   const isMountedRef = useRef(false)
-  // Why: searching a project name is navigation to that project, not a
-  // request to hide every child row that does not repeat the project name.
+  // Project-name search navigates to the project; it must not hide child controls that omit the name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
 
   const clearCopiedTemplateResetTimer = useCallback((): void => {
@@ -154,8 +149,7 @@ export function RepositoryPane({
   }
 
   const handleCopyTemplate = async () => {
-    // Why: the missing-`orca.yaml` state is a migration aid, so copying the shared-template
-    // snippet should be one click rather than forcing users to reconstruct the expected shape.
+    // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
     await window.api.ui.writeClipboardText(`scripts:
   setup: |
     pnpm worktree:setup
@@ -223,9 +217,7 @@ export function RepositoryPane({
       />
     ) : null
 
-  // Why: Identity (name, icon, base ref) stays at the top so it's the first
-  // thing a user sees. Setup commands follow immediately because they're the
-  // most-edited surface and should beat MCP/symlinks/sparse-presets.
+  // Lead with identity, then frequently edited setup commands, before secondary repository controls.
   const visibleSections = [
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
       <section key="identity" className="relative space-y-8">

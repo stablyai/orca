@@ -16,9 +16,7 @@ vi.mock('./rich-markdown-source-owning-cut-feedback', () => ({
   showRichMarkdownSourceOwningCutLimitError: showCutLimitErrorMock
 }))
 
-/**
- * Minimal extensions matching the rich editor schema without UI dependencies.
- */
+/** Match the rich-editor schema without loading UI dependencies. */
 const testExtensions = [
   StarterKit,
   TaskList,
@@ -44,7 +42,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** Count top-level paragraph nodes in the document. */
 function countParagraphs(editor: Editor): number {
   let count = 0
   editor.state.doc.forEach((node) => {
@@ -212,7 +209,6 @@ describe('rich markdown cut handler behavior', () => {
     normalizeEmptyListItems(editor)
     const docAfter = editor.state.doc.toJSON()
 
-    // Already separated paragraphs should not be modified
     expect(docAfter).toEqual(docBefore)
 
     editor.destroy()
@@ -225,7 +221,6 @@ describe('rich markdown cut handler behavior', () => {
     normalizeEmptyListItems(editor)
     const docAfter = editor.state.doc.toJSON()
 
-    // List structure should be unchanged (no top-level paragraphs to split)
     expect(docAfter).toEqual(docBefore)
 
     editor.destroy()

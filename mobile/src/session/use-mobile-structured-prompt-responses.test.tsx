@@ -24,7 +24,7 @@ type PromptResponses = ReturnType<typeof useMobileStructuredPromptResponses>
 let currentHook: PromptResponses | null = null
 let renderer: ReactTestRenderer | null = null
 
-function groupedPrompt(itemId: string, revision: number): AgentJournalRenderItem {
+function groupedPrompt(itemId: string, revision: number): StructuredQuestionItem {
   return {
     itemId,
     revision,
@@ -63,7 +63,7 @@ function sessionState(prompt: AgentJournalRenderItem): StructuredAgentSessionSta
   return { ...EMPTY_STRUCTURED_AGENT_SESSION, status: 'ready', items: [prompt] }
 }
 
-function projectedResponse(prompt: AgentJournalRenderItem, draft: PromptResponses['groupedDraft']) {
+function projectedResponse(prompt: StructuredQuestionItem, draft: PromptResponses['groupedDraft']) {
   const projected = projectStructuredQuestion(prompt, draft)
   const response = projected?.optionTokens[0]
   if (!response) {
@@ -207,7 +207,6 @@ describe('useMobileStructuredPromptResponses', () => {
       }
     }
 
-    // Records what was sent; the verdict is irrelevant to the wire shape under test.
     function recordingMutate() {
       const sent: { method: string; fields: Record<string, unknown> }[] = []
       const mutate: StructuredAgentSessionMutate = async (method, _fingerprint, fields) => {
@@ -360,7 +359,7 @@ describe('useMobileStructuredPromptResponses', () => {
       })
     })
 
-    // Claude always sends a question list, so this is the path a long typed Claude answer takes.
+    // Claude always uses grouped questions, including for a single long typed answer.
     it.each([
       [true, true],
       [null, true],
@@ -371,7 +370,7 @@ describe('useMobileStructuredPromptResponses', () => {
         throw new Error('expected a grouped question')
       }
       const [first, second] = base.body.questions
-      const prompt: AgentJournalRenderItem = {
+      const prompt: StructuredQuestionItem = {
         ...base,
         body: { ...base.body, questions: [first!, { ...second!, freeTextQuestionId: 'q2' }] }
       }
@@ -410,7 +409,7 @@ describe('useMobileStructuredPromptResponses', () => {
         throw new Error('expected a grouped question')
       }
       const [first, second] = base.body.questions
-      const prompt: AgentJournalRenderItem = {
+      const prompt: StructuredQuestionItem = {
         ...base,
         body: { ...base.body, questions: [{ ...first!, freeTextQuestionId: 'q1' }, second!] }
       }

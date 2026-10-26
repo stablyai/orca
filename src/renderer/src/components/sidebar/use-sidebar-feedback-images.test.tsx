@@ -64,8 +64,6 @@ afterEach(() => {
 })
 
 describe('useSidebarFeedbackImages', () => {
-  // Why: the read callback clears its pending reservation before React
-  // re-renders, so rendered state alone would briefly undercount the budget.
   it('counts a just-read batch when another add lands before the re-render', async () => {
     let finishFirstRead: ((value: unknown) => void) | undefined
     readFeedbackImageFiles.mockReturnValueOnce(
@@ -110,8 +108,6 @@ describe('useSidebarFeedbackImages', () => {
     expect(latest!.images.map((image) => image.bytes)).toEqual([1_750_000])
   })
 
-  // Why: a batch still shrinking has no known size yet; reading the next one
-  // against its raw file size would refuse a screenshot even though room is left.
   it('sizes a later add against the shrunk size, not the raw file size', async () => {
     let finishShrink: ((value: unknown) => void) | undefined
     readFeedbackImageFiles.mockReturnValueOnce(
@@ -137,8 +133,6 @@ describe('useSidebarFeedbackImages', () => {
     expect(readFeedbackImageFiles).toHaveBeenNthCalledWith(2, [second], 1, 1_750_000)
   })
 
-  // Why: a queued batch can hold several screenshots, each costing a decode and
-  // up to six re-encodes, all for drafts an unmounted dialog would only revoke.
   it('skips batches still queued when the dialog unmounts', async () => {
     let finishFirstRead: ((value: unknown) => void) | undefined
     readFeedbackImageFiles.mockReturnValueOnce(

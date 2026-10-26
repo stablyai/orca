@@ -71,8 +71,7 @@ describe('remote browser page input model', () => {
     it('keeps the cached CSS viewport while frames report the size this pane requested', () => {
       expect(
         resolveRemoteBrowserCssViewport({
-          // Scrollbars make the page's own innerWidth differ from the requested size, which
-          // is the whole reason the cache is preferred over the frame metadata.
+          // Scrollbars can make innerWidth differ from the requested size, so prefer the cached CSS viewport.
           cssViewportSize: { width: 1385, height: 900 },
           requestedViewportSize: { width: 1400, height: 900 },
           frameMetadata: { deviceWidth: 1400, deviceHeight: 900 },
@@ -112,8 +111,7 @@ describe('remote browser page input model', () => {
     })
   })
 
-  // #30341: the host can only paint 1463x849 of the 1833x1179 this pane asked for, so the frame
-  // is letterboxed (contain) inside the pane and input must go through that same box.
+  // Map input through the same contained frame box when the host cannot paint the requested pane size.
   describe('pointer mapping for a frame smaller than the pane', () => {
     const pane = { left: 0, top: 0, width: 1833, height: 1179 }
     const frame = { width: 1463, height: 849 }

@@ -1,10 +1,4 @@
-// What went wrong in a chat, typed where the host decides it, beside the sentence a person reads.
-//
-// The host writes both at once: `text`/`reason` stays a complete sentence because released clients
-// print it as it is, and this fact is what newer clients choose their copy and action from. A
-// provider's own words ride separately as `detail`, set only where Orca composed them from a
-// value the provider wrote — never recovered from a string afterwards, since by then nothing can
-// tell a provider's sentence from Orca's.
+// Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
 
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
@@ -46,6 +40,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  'conversationOpenInTerminal',
+  'conversationOpenElsewhere',
   'providerExited',
   'restartFailed',
   'providerRejected',
@@ -127,8 +123,7 @@ export type ProviderDiagnostic = {
   audience: ProviderDiagnosticAudience
 }
 
-/** Stderr can be a whole dump; the row keeps enough to act on. The same cap as the exit reason a
- *  lease record keeps, so a diagnostic never outgrows what the record may store. */
+/** Bound stderr dumps to the lease exit-reason cap so diagnostics always fit the record. */
 export const MAX_PROVIDER_DIAGNOSTIC_CHARS = 512
 
 /** Which of Orca's checks an image failed. A new one needs a sentence before it compiles. */
@@ -180,9 +175,7 @@ export type AgentSessionFailureFact = {
   usageLimit?: AgentSessionUsageLimit
   /** A safe option name from Orca's saved Arguments parser, never an error message. */
   argumentProblem?: AgentSessionArgumentProblem
-  /** Written only where Orca proves the agent never received the message: a Stop's withdrawal is
-   *  then owed as stopped history, and a refused carrier owes its history again. Absent means
-   *  unknown. Host-only; clients read the kind. */
+  /** Host-only proof the provider never received the message: Stop owes stopped history and a refused carrier owes history again. Absence means unknown; clients read kind. */
   neverReachedAgent?: true
   /** On `backgroundTaskNotStopped`: one named task, or every task the Stop reached. */
   backgroundStop?: AgentSessionBackgroundStop
@@ -192,8 +185,7 @@ export type AgentSessionFailureFact = {
 
 export type AgentSessionBackgroundStop = 'task' | 'all'
 
-/** A fact as a row stores it: its kind may be one a newer host added, so only
- *  `readAgentSessionFailureFact` or the rejection classifier may place it. */
+/** Persisted kinds may be newer; place them only through readAgentSessionFailureFact or the rejection classifier. */
 export type UnreadAgentSessionFailureFact = { kind: string }
 
 /** A fact a rejected message may carry. */
@@ -205,7 +197,6 @@ export function isSubmissionRejectionFact(
   return isSubmissionRejectionKind(fact.kind)
 }
 
-/** Null for empty text, so a writer never records a detail with nothing in it. */
 export function providerDiagnostic(
   text: string,
   audience: ProviderDiagnosticAudience
@@ -303,8 +294,7 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
-/** A fact as a reader meets it. Undefined for anything this build cannot place, including a kind a
- *  newer host added, so the reader falls back to what it does for a row with no fact. */
+/** Return undefined for unplaceable/newer facts so readers use their no-fact fallback. */
 export function readAgentSessionFailureFact(value: unknown): AgentSessionFailureFact | undefined {
   if (!isRecord(value) || !isAgentSessionFailureKind(value.kind)) {
     return undefined
@@ -333,9 +323,7 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   })
 }
 
-/** The fact only when this build read all of it. Anything it dropped, such as a newer refusal code
- *  or reason, may change the advice, so a surface that would re-word the fact shows the host's
- *  sentence instead. */
+/** Reword only fully understood facts; dropped/newer details may change the advice, so otherwise keep the host sentence. */
 export function readWholeAgentSessionFailureFact(
   value: unknown
 ): AgentSessionFailureFact | undefined {
@@ -343,8 +331,7 @@ export function readWholeAgentSessionFailureFact(
   return fact && structuralValuesEqualIgnoringUndefined(fact, value) ? fact : undefined
 }
 
-/** The provider-authored diagnostic an error carries, set only where it was composed. Follows the
- *  `cause` chain, since wrappers such as the acquisition errors keep the original as their cause. */
+/** Read provider-authored diagnostics through cause chains retained by wrappers such as acquisition errors. */
 export function providerDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {
   return providerDiagnosticWithin(error, 0)
 }

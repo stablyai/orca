@@ -70,8 +70,7 @@ describe('firesNativePasteEvent', () => {
   })
 
   it('does not treat a remapped non-clipboard chord as a native paste event', () => {
-    // A custom terminal.paste binding like Ctrl+Y fires no native paste event and
-    // must stay consumed so it is not encoded to the PTY as a control char.
+    // Remapped paste chords fire no native event and must stay consumed to avoid raw control characters.
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'y', ctrlKey: true }), false)).toBe(false)
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'd', ctrlKey: true }), false)).toBe(false)
     // Cmd+V does not fire a native paste event on Windows/Linux.

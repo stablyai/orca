@@ -1,6 +1,4 @@
-// L80: the one reader of a PTY record's pane copies (`tabId`, `paneKey`, their graph stamp).
-// Layout-owner builds answer from main's layout alone and never touch the copies; the copies and
-// the switch-off branch below are deleted together with the window-owned path.
+// Read pane copies only in the window-owned branch; main-owned builds use layout alone. Delete these copies with the legacy branch (L80).
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'

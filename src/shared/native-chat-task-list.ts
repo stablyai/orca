@@ -69,7 +69,7 @@ export function normalizeNativeChatTaskList(
   return { tasks, ...(explanation ? { explanation } : {}) }
 }
 
-/** A task list's words. Desktop maps these onto `translate`; mobile renders them. */
+/** Shared task copy for desktop translations and direct mobile rendering. */
 export const NATIVE_CHAT_TASK_LIST_COPY = {
   title: 'Tasks',
   completed: 'Completed',

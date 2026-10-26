@@ -3,12 +3,7 @@ import {
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
-// `agentSession.*` — the structured session RPC surface.
-//
-// Every method here is gated on the client advertising
-// `agent-session.structured.v1`. A client that does not is told the surface does
-// not exist rather than receiving the journal or mutation surface. Session-tab
-// inventory may expose only a metadata placeholder for an incapable mobile client.
+// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
 
 import {
   projectBackgroundTaskEvent,
@@ -40,6 +35,7 @@ import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-sessio
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from './structured-agent-session-prompt-response'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS } from './structured-agent-session-regenerate-name'
+import { STRUCTURED_AGENT_SESSION_RENAME_METHODS } from './structured-agent-session-rename'
 import { STRUCTURED_AGENT_SESSION_QUEUED_METHODS } from './structured-agent-session-queued-methods'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import {
@@ -147,14 +143,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({
-    // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
-    // same session can be attached again. Only the provider child and the in-memory entry go.
+    // Close only provider/in-memory state, preserving record/journal for future attachment.
     name: 'agentSession.close',
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
-      // Noted before the host is required: a close that fails still refuses the create it raced.
+      // Record close before requiring host so even failed closes fence racing creates.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         noteStructuredAgentSessionClose(
           params.sessionId,
@@ -257,8 +252,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      // Resolves once the conversation is open and the opening snapshot (or the missed batch) is
-      // emitted; a close that raced the open disposes what it bound.
+      // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
@@ -302,6 +296,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,

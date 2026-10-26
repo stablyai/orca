@@ -1,8 +1,4 @@
-/**
- * A managed SSH host whose saved local tunnel port can no longer be bound when Orca relaunches
- * (a Windows excluded port range, or another app listening there) is reached on a fresh port,
- * with the same pairing, and its pane answers again (#33182).
- */
+// #33182: if the saved tunnel port is excluded or occupied after relaunch, reuse pairing on a fresh port and restore pane input.
 import { createServer, type Server } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'

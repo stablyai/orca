@@ -7,7 +7,7 @@ export type AgentSessionSubscribeInput = {
   sessionId: string
   emit: (event: AgentSessionSubscribeEvent) => void
   cursor?: AgentJournalCursor
-  /** Every frame to fit a phone's bridge frame; the RPC sets it for every phone. */
+  /** Bound each frame to the phone bridge’s limit; RPC enables this for every phone. */
   boundedFrames?: boolean
   projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
   readsCurrentRequests?: boolean

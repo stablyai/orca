@@ -53,9 +53,7 @@ function harness(
     env?: NodeJS.ProcessEnv
   } = {}
 ) {
-  // Why the per-call split: the fetcher probes `--version` before the quota read, and a fixture
-  // that answers both alike either fakes a version line into `/usage` or a usage envelope into the
-  // version probe.
+  // Version and usage probes need distinct payloads.
   const runCommand =
     options.runCommand ??
     vi
@@ -65,7 +63,7 @@ function harness(
           ? (options.versionResult ?? processResult({ stdout: 'agy version 1.2.11\n' }))
           : (options.result ?? processResult())
       )
-  // Why the `in` check and not `??`: an explicit `program: null` is the absent-CLI case.
+  // Explicit program: null models an absent CLI.
   const resolveCommand = vi
     .fn()
     .mockResolvedValue('program' in options ? options.program : '/Users/x/.local/bin/agy')
@@ -130,8 +128,7 @@ describe('fetchAntigravityRateLimits', () => {
     const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }), env: loginShellEnv })
     await h.fetch()
 
-    // Why the login-shell PATH: agy installs to ~/.local/bin, which Electron's inherited PATH omits.
-    // Why auto-update off: a due check spawns agy's updater, whose child flashes a Windows console.
+    // Login PATH finds ~/.local/bin; disabling updates prevents Windows console flashes.
     const probeEnv = { PATH: '/Users/x/.local/bin:/usr/bin', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
     expect(h.runCommand).toHaveBeenCalledTimes(2)
     const [versionSpec, usageSpec] = h.runCommand.mock.calls.map(([spec]) => spec)
@@ -171,7 +168,7 @@ describe('fetchAntigravityRateLimits', () => {
 
   it('reports a signed-out account as unavailable, not as a failed refresh', async () => {
     const result = await harness({
-      // agy exits 0 and prints this rather than an envelope.
+      // agy may exit zero for signed-out diagnostics.
       result: processResult({ stderr: 'You are not logged into Antigravity.' })
     }).fetch()
 
@@ -181,8 +178,7 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('reports an auth failure on stderr as sign-in guidance, not as a broken read', async () => {
-    // Why pinned: the other shape of "signed out" — a non-zero exit with an auth diagnostic — used
-    // to land in the parse-failure branch as a generic refresh error.
+    // Nonzero auth failures still need sign-in guidance.
     const result = await harness({
       result: processResult({ code: 1, stderr: 'Not authenticated. Run agy login.' })
     }).fetch()
@@ -250,8 +246,7 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
-    // Why pinned: stderr containing unrelated words like "oauth" or "author" must not be misclassified
-    // as missing-credentials.
+    // Incidental auth-like words must not trigger credential guidance.
     const result = await harness({
       result: processResult({
         code: 1,
@@ -340,18 +335,13 @@ describe('fetchAntigravityRateLimits', () => {
   it('never reports quota from a successful read as stale session data', async () => {
     const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
 
-    // Why: this tier meters no 5h pool. The Gemini mirror it replaces filled `session` from a
-    // 60-minute per-model window and left `weekly` null — exactly backwards (#22511).
+    // This tier meters weekly pools, not the Gemini mirror's 60-minute per-model window (#22511).
     expect(result.session).toBeNull()
     expect(result.weekly).not.toBeNull()
   })
 })
 
-/**
- * Captured when agy treated `/usage` as a prompt instead of a command: a conversation was started,
- * a turn was spent, and the account answered RESOURCE_EXHAUSTED. This is the exact shape the
- * unsupported latch has to recognise.
- */
+/** Captured billed-turn response when /usage was treated as a prompt; must latch future probes off. */
 const MODEL_TURN_ENVELOPE = JSON.stringify({
   conversation_id: '28a5ca91-301f-4050-8efc-9c82c4e64df3',
   status: 'ERROR',
@@ -380,8 +370,7 @@ describe('agy versions that answer /usage as a prompt', () => {
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
 
-    // Why: the evidence costs a turn of the user's quota, so rediscovering it on a 15-minute
-    // cadence would keep paying for the same answer.
+    // Retrying unsupported /usage would spend another model turn on every poll.
     await h.fetch()
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
@@ -404,7 +393,6 @@ describe('agy versions that answer /usage as a prompt', () => {
     const first = await h.fetch()
     const second = await h.fetch()
 
-    // Why: a transient failure is not evidence that the command is unsupported.
     expect(first.status).toBe('error')
     expect(second.status).toBe('error')
     expect(h.runCommand).toHaveBeenCalledTimes(4)
@@ -426,14 +414,13 @@ describe('the agy version gate', () => {
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(result.error).toContain('needs agy 1.1.11 or newer (found 1.1.10)')
-    // Why the assertion: below the floor `/usage` is a billed model turn, so it must not run at all.
+    // Below the version floor /usage spends a model turn; never run it.
     expect(h.runCommand).toHaveBeenCalledTimes(1)
     expect(h.runCommand.mock.calls[0]![0].args).toEqual(ANTIGRAVITY_VERSION_ARGS)
   })
 
   it('holds a prerelease below the floor', async () => {
-    // Why pinned: `1.1.11-rc.1` sorts below stable `1.1.11`; reading the core alone would let a
-    // release candidate spawn the billable read early.
+    // Release candidates below the stable floor must not reach a billable read.
     const h = harness({ versionResult: processResult({ stdout: 'agy version 1.1.11-rc.1\n' }) })
     const result = await h.fetch()
 

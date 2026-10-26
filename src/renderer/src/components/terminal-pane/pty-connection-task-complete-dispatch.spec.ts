@@ -23,6 +23,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionTaskCompleteDispatchTests(): void {
   let mockStoreState: StoreState
@@ -85,7 +86,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -125,7 +126,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -158,7 +159,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const statusHandler = createdTransportOptions[0]?.onAgentStatus as
         | ((payload: {
@@ -217,7 +218,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -247,7 +248,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       manager.getActivePane.mockReturnValue({ id: 1 })
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -325,7 +326,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       manager.getActivePane.mockReturnValue({ id: 1 })
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -353,7 +354,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
     })
@@ -376,7 +377,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         isVisibleRef: { current: false }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks(6)
       vi.useFakeTimers()
 
@@ -410,7 +411,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ dispatchNotification })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -464,7 +465,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ dispatchNotification })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -535,7 +536,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ dispatchNotification })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -587,7 +588,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ dispatchNotification })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!bellHandler) {
@@ -623,7 +624,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Captured transport options expose onAgentExited as an optional zero-argument callback.
       const agentExitedHandler = createdTransportOptions[0]?.onAgentExited as

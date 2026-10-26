@@ -1,8 +1,4 @@
-/**
- * Phone paired with a desktop that is a client of an `orca serve` host: the phone's server rows
- * must be the ones the desktop's own sidebar shows, under the desktop's "Hide other-client
- * workspaces" and "Hide sleeping" filters, which the server alone cannot evaluate.
- */
+// Phone server rows must match desktop sidebar filters for other-client and sleeping workspaces; the server cannot evaluate desktop-local tabs.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -179,8 +175,7 @@ test("phone lists a server's workspaces exactly as the desktop sidebar filters t
       expect.arrayContaining(['from-desktop', 'from-phone'])
     )
 
-    // Hide sleeping too, with a browser tab open in the desktop's workspace: only the desktop knows
-    // that tab is there, so the server alone reports the workspace asleep.
+    // Keep only a desktop-local browser tab awake; server-only sleep state cannot see it.
     const desktopRowStatus = async () => {
       const row = (await phoneRows()).find((entry) => entry.path.endsWith('from-desktop'))
       return row ? getWorktreeStatus(toMobileRow(row)) : null

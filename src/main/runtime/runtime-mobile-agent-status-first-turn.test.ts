@@ -34,6 +34,7 @@ function shellPty(): RuntimePtyWorktreeRecord {
     launchToken: null,
     launchIncarnationId: null,
     launchAgent: 'codex',
+    launchCommandAgent: null,
     agentSessionOwners: [],
     foregroundAgent: 'codex',
     connected: true,

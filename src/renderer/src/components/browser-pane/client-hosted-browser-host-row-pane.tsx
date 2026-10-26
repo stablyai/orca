@@ -2,12 +2,7 @@ import { Laptop } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
-/**
- * What the HOST sees when it selects a page rendering on a paired client. The mirror image of
- * ClientHostedBrowserUnavailableNotice, which is what the CLIENT shows for a page it cannot reach:
- * same visual language, opposite point of view. There is no guest to show here and never will be —
- * the page is on the other desktop by design, not by failure.
- */
+/** The host has no guest for a page deliberately rendered on another desktop; show that placement rather than a failure. */
 export function ClientHostedBrowserHostRowPane({
   row
 }: {

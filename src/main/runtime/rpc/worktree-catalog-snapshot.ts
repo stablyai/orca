@@ -5,8 +5,7 @@ import type {
   RuntimeWorktreePsResult
 } from '../../../shared/runtime-types'
 
-// Why: 192 bits of a sha256 over the serialized catalog. Accidental collision is
-// impossible at any realistic poll rate, and this is not an auth boundary.
+// Use 192 SHA-256 bits for practical collision resistance; this is catalog identity, not authentication.
 const SNAPSHOT_ID_LENGTH = 32
 
 type MemoizedCatalogId = {
@@ -14,10 +13,7 @@ type MemoizedCatalogId = {
   snapshotId: string
 }
 
-// Why: a pure memo over the most recent catalog. Because ids are derived from content
-// rather than from cache state, dropping or thrashing this slot costs CPU and nothing
-// else — it can never produce a wrong answer, so it needs no scoping, eviction policy,
-// or per-caller isolation. Serializing every poll instead would cost ~3x the compare.
+// Content-derived ids make this memo disposable: eviction costs CPU, never correctness; serializing each poll costs ~3× comparison.
 let memoizedId: MemoizedCatalogId | null = null
 
 function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
@@ -29,15 +25,12 @@ function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
     .update(serialized)
     .digest('base64url')
     .slice(0, SNAPSHOT_ID_LENGTH)
-  // Why: caller-owned mutation must not let an old id label new catalog content.
+  // Clone so caller mutation cannot give new content an old id.
   memoizedId = { result: JSON.parse(serialized) as RuntimeWorktreePsResult, snapshotId }
   return snapshotId
 }
 
-// Why: content-addressed like an HTTP ETag, so snapshot ownership lives entirely in the
-// id. Any number of concurrent clients, any `limit`, and any runtime restart stay correct
-// by construction: ids match only when the catalogs are byte-identical, which is exactly
-// when `unchanged` is the right answer.
+// ETag-style content identity survives concurrency, limits and restarts; unchanged is valid exactly when serialized catalogs match.
 export function resolveWorktreeCatalogSnapshot(
   result: RuntimeWorktreePsResult,
   afterSnapshotId: string | null

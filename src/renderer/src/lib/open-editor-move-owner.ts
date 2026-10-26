@@ -7,10 +7,7 @@ import {
 } from '@/components/right-sidebar/file-explorer-operation-owner'
 import { resolveOwner } from './resolve-owner'
 
-/**
- * Who a file lives on: the paired server (null for this app) and, when known, the SSH host behind
- * it (null for that runtime's own machine, undefined when nothing decisive recorded it).
- */
+/** Track server owner (null for this app) and nested SSH owner (null for server-local, undefined for unknown). */
 type FileOwner = { runtimeEnvironmentId: string | null; sshHostId: string | null | undefined }
 
 /** The host a move ran on, from the route its rename was sent through. */
@@ -33,11 +30,7 @@ export function editorMoveOwnerFromContext(
   }
 }
 
-/**
- * The tab's own owner, recorded when it opened; never re-derived from its worktree id alone. Only an
- * SSH host it names is decisive: a `local` or server route can be this app's view of a host the
- * File Explorer resolves further (an unstamped folder of SSH repos, a server's nested SSH target).
- */
+/** Keep the tab’s recorded owner; only explicit SSH is decisive because local/server routes may still resolve to nested SSH through Explorer. */
 function openFileOwner(
   state: FileExplorerOwnerState,
   file: Pick<
@@ -64,10 +57,7 @@ function openFileOwner(
   }
 }
 
-/**
- * Whether an open tab is the file the move renamed. Why its own owner: the same path open from a
- * same-id workspace on another host is a different file, and its draft must stay where it is.
- */
+/** Match a move by path AND owner so another host’s same-ID workspace draft remains untouched. */
 export function isOpenFileOnMoveOwner(
   state: FileExplorerOwnerState,
   file: Pick<
@@ -100,10 +90,7 @@ export function isOpenFileOnMoveOwner(
   )
 }
 
-/**
- * Where the File Explorer sends a workspace's file operations, the resolver its rename used, so a
- * folder of SSH repos reads as that host on both sides. Null for a twin.
- */
+/** Use Explorer’s current workspace-operation owner, including SSH folder scopes; null for ambiguous twins. */
 function workspaceHost(
   state: FileExplorerOwnerState,
   workspaceId: string | undefined

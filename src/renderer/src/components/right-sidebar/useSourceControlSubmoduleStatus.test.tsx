@@ -103,13 +103,11 @@ describe('useSourceControlSubmoduleStatus', () => {
     await act(async () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" entries={[submoduleEntry()]} />)
     })
-    // Expand a submodule in worktree A -> issues the (slow) A request.
     await act(async () => {
       latest?.toggleSubmodule(submoduleEntry())
     })
     await flush()
 
-    // Switch to worktree B (same submodule path) and expand it there.
     await act(async () => {
       root.render(<Probe worktreeId="B" worktreePath="/b" entries={[submoduleEntry()]} />)
     })

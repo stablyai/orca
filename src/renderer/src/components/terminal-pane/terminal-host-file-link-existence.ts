@@ -13,10 +13,7 @@ export function isHostPathOutsideWorkspace(target: FileLinkTarget): boolean {
   return !target.isRemoteRuntimePath && hasRemoteRuntimeOwner(target.fileContext)
 }
 
-/**
- * Asks the host the same question a click asks, so a link shows exactly when a click can open it.
- * Rejects when the host cannot answer, so callers never mistake an outage for a missing file.
- */
+/** Ask the host using click eligibility; reject uncertainty so an outage never masquerades as absence. */
 export async function hostFileLinkTargetExists(
   target: FileLinkTarget,
   cache: TerminalPathExistsCache,

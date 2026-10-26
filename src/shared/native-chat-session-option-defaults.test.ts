@@ -69,8 +69,7 @@ describe('resolveNativeChatSessionOptionDefaults', () => {
   })
 
   it('returns a stale id verbatim, which is why retirement happens upstream', () => {
-    // Nothing here validates the id against the host; a retired one still resolves
-    // and becomes `-m <id>`. Only clearing the persisted value prevents that.
+    // Stale ids pass through into -m; retirement must clear persisted model upstream.
     expect(resolveNativeChatSessionOptionDefaults(persistedGrok('grok-build'), 'grok')).toEqual({
       model: 'grok-build'
     })
@@ -113,8 +112,7 @@ describe('resolveStructuredLaunchSeedOptions', () => {
   })
 
   it('drops a seeded id whose persisted value is not a usable string', () => {
-    // settings.json is user-writable, so a non-string `effort` must not reach a
-    // record typed Record<string, string> and be emitted as a turn option.
+    // User-writable settings may contain non-string options; never emit them into the durable string record.
     expect(
       resolveStructuredLaunchSeedOptions(
         persistedCodex({ 'gpt-5.6-sol': { effort: true } }),
@@ -130,10 +128,7 @@ describe('resolveStructuredLaunchSeedOptions', () => {
   })
 
   it('seeds nothing when the stored values empty the model out', () => {
-    // `valuesByModel` is merged over the resolved model, so a stored `model` key
-    // can blank it. Emitting `{ model: '' }` fails the record's bounded-string
-    // guard, and that throw is not a wire refusal code — it escapes as a raw
-    // error the client reads as unknown, stranding the launch with no fallback.
+    // valuesByModel can blank the model; bounded-string validation then throws outside wire refusals and strands launch fallback.
     expect(
       resolveStructuredLaunchSeedOptions(persistedCodex({ 'gpt-5.6-sol': { model: '' } }), 'codex')
     ).toBeUndefined()
@@ -158,8 +153,7 @@ describe('narrowStructuredLaunchSeedOptions', () => {
     })
   })
 
-  // A never-picked Fast preference must stay absent, not default on: seeding `true`
-  // would silently move a user onto the faster tier they never chose.
+  // Absent Fast preference must stay absent; defaulting true changes service tier without a user choice.
   it('seeds no fastMode at all when the user never picked one', () => {
     expect(narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high' })).toEqual({
       model: 'opus',
@@ -179,9 +173,7 @@ describe('narrowStructuredLaunchSeedOptions', () => {
     ['no usable string', { model: 5, effort: null }],
     ['undefined', undefined]
   ])('resolves %s to undefined rather than {}', (_name, values) => {
-    // An empty map fails the durable record's bounded-string guard, and
-    // `agent_session_options_invalid` is not a wire refusal code: the throw escapes as a raw
-    // error the client reads as unknown, stranding the launch with no fallback.
+    // Empty maps fail the durable guard outside wire-refusal handling, stranding fallback.
     expect(narrowStructuredLaunchSeedOptions(values as never)).toBeUndefined()
   })
 })

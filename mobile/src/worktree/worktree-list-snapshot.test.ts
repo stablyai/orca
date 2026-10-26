@@ -193,7 +193,7 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
   })
 
-  // The host drops Stopping on letting go of a session without moving any clock the row carries.
+  // Stopping may change without advancing any row clock.
   it("detects the host's Stopping coming and going with nothing else moved", () => {
     const stopping = (value: boolean) => [
       worktree({

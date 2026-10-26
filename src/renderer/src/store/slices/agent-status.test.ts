@@ -6,12 +6,12 @@ import {
 import { flushMicrotasks } from './agent-status-test-harness'
 import { createTestStore, makeTab, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/structured-agent-session-projection'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status/agent-status-drop-reducer'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
@@ -67,15 +67,12 @@ afterEach(() => {
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
 
-      // setAgentStatus bumps epoch once synchronously
       expect(store.getState().agentStatusEpoch).toBe(1)
 
-      // Flush the queueMicrotask that schedules the freshness timer
       await flushMicrotasks()
 
       vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
 
-      // Timer bump adds another increment
       expect(store.getState().agentStatusEpoch).toBe(2)
     })
 
@@ -87,15 +84,12 @@ afterEach(() => {
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
-      // set bumps to 1, remove bumps to 2
       store.getState().removeAgentStatus('tab-1:1')
       expect(store.getState().agentStatusEpoch).toBe(2)
 
-      // Flush microtask and advance past stale threshold
       await flushMicrotasks()
       vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
 
-      // No additional bump since the entry was removed before the timer fires
       expect(store.getState().agentStatusEpoch).toBe(2)
     })
 
@@ -167,15 +161,13 @@ afterEach(() => {
       store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
       const firstStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
 
-      // Advance 5s and re-ping with same state but different prompt/tool fields
       vi.setSystemTime(new Date('2026-04-09T12:00:05.000Z'))
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', toolName: 'Edit' }, 'claude')
 
       const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-      // Why: stateStartedAt is the invariant we are protecting — it must survive
-      // tool/prompt pings within the same state, while updatedAt advances.
+      // Same-state content pings advance updatedAt but must preserve true stateStartedAt.
       expect(entry.stateStartedAt).toBe(firstStart)
       expect(entry.updatedAt).toBe(new Date('2026-04-09T12:00:05.000Z').getTime())
     })
@@ -194,7 +186,6 @@ afterEach(() => {
       const entry = store.getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.stateStartedAt).toBe(new Date('2026-04-09T12:00:10.000Z').getTime())
       expect(entry.stateStartedAt).not.toBe(workingStart)
-      // history should capture the working state's true start
       expect(entry.stateHistory).toHaveLength(1)
       expect(entry.stateHistory[0].state).toBe('working')
       expect(entry.stateHistory[0].startedAt).toBe(workingStart)
@@ -252,9 +243,7 @@ afterEach(() => {
 
 {
   describe('dropAgentStatus + retention suppressor', () => {
-    // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
-    // queueMicrotask. Use fake timers so the handle does not leak into the
-    // test process (see agent-status.ts line 90).
+    // Use fake timers for microtask-scheduled 30-minute freshness timeouts.
     afterEach(() => {
       vi.useRealTimers()
     })
@@ -273,8 +262,7 @@ afterEach(() => {
 
       const s = store.getState()
       expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
-      // Why: user-initiated dismissal must plant a one-shot suppressor so the
-      // retention sync does not resurrect the row on the next render frame.
+      // User dismissal suppresses next retention pass or the row reappears.
       expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
       expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
       expect(s.sortEpoch).toBe(sortEpochBefore + 1)
@@ -308,11 +296,8 @@ afterEach(() => {
 
       const s = store.getState()
       expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
-      // Why: the suppressor is consumed by collectRetainedAgentsOnDisappear,
-      // which only runs on live→gone transitions. A retained-only dismissal has
-      // no live entry to disappear, so writing a suppressor would leak forever.
+      // Only live→gone consumes suppressors; retained-only dismissal must not plant a permanent leak.
       expect(s.retentionSuppressedPaneKeys['tab-retained:0']).toBeUndefined()
-      // Why: hasLive is false, so no epoch bumps.
       expect(s.agentStatusEpoch).toBe(agentEpochBefore)
       expect(s.sortEpoch).toBe(sortEpochBefore)
     })
@@ -320,15 +305,10 @@ afterEach(() => {
     it('drops both live and retained entries when the same paneKey has both', () => {
       vi.useFakeTimers()
       const store = createTestStore()
-      // Seed a live entry first.
       store
         .getState()
         .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-      // Seed a retained entry for the SAME paneKey. The retainAgents path is
-      // what the production retention sync calls on live→gone transitions; here
-      // we invoke it directly to construct the "both live AND retained for the
-      // same paneKey" state that the dropAgentStatus hasLive+hasRetained branch
-      // (agent-status.ts lines 301-311) handles.
+      // Seed live+retained for one paneKey directly to exercise the combined dismissal branch.
       const now = Date.now()
       const retainedEntry: AgentStatusEntry = {
         state: 'done',
@@ -347,7 +327,6 @@ afterEach(() => {
       }
       store.getState().retainAgents([retained])
 
-      // Sanity-check the precondition: both maps carry the paneKey.
       expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
       expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeDefined()
 
@@ -357,15 +336,10 @@ afterEach(() => {
       store.getState().dropAgentStatus('tab-1:0')
 
       const s = store.getState()
-      // Both maps drop the paneKey in the combined branch.
       expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
       expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
-      // Why: hasLive=true, so the suppressor IS planted (mirrors the live-only
-      // test above). The concurrent retained entry does not change that logic —
-      // the live→gone transition on the next frame still needs to be suppressed.
+      // Live+retained still needs a suppressor for its next disappearance, like live-only dismissal.
       expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
-      // Why: hasLive=true means both epochs bump in lockstep (same rationale
-      // as the live-only case).
       expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
       expect(s.sortEpoch).toBe(sortEpochBefore + 1)
     })
@@ -431,8 +405,7 @@ afterEach(() => {
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
       expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
       expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
-      // No suppressor for the orphan: its tab is already gone, so retention sync
-      // never re-surfaces it and a suppressor would leak permanently.
+      // Orphan tab has no retention transition to consume a suppressor; skip planting it.
       expect(s.retentionSuppressedPaneKeys['tab-orphan:0']).toBeUndefined()
       expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
       expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
@@ -573,8 +546,7 @@ afterEach(() => {
       const s = store.getState()
       expect(s.agentStatusEpoch).toBe(agentEpochBefore)
       expect(s.sortEpoch).toBe(sortEpochBefore)
-      // Why: the short-circuit `return s` must preserve object identity so
-      // consumers selecting on these slices do not re-render spuriously.
+      // No-op must retain root identity or subscribed consumers rerender.
       expect(s.retentionSuppressedPaneKeys).toBe(suppressorsBefore)
       expect(s.agentStatusByPaneKey).toBe(liveBefore)
       expect(s.retainedAgentsByPaneKey).toBe(retainedBefore)
@@ -593,8 +565,7 @@ afterEach(() => {
         .getState()
         .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p2', agentType: 'claude' })
 
-      // Why: a new status event means the agent is live again — the one-shot
-      // suppressor must lift so the next disappearance can retain normally.
+      // Fresh status lifts one-shot suppression so later real disappearance retains normally.
       expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBeUndefined()
     })
 
@@ -609,52 +580,26 @@ afterEach(() => {
       const suppressorsBefore = store.getState().retentionSuppressedPaneKeys
       expect(suppressorsBefore['tab-1:0']).toBe(true)
 
-      // Present-key removal: new map reference, key gone.
       store.getState().clearRetentionSuppressedPaneKeys(['tab-1:0'])
       const afterRemove = store.getState().retentionSuppressedPaneKeys
       expect(afterRemove['tab-1:0']).toBeUndefined()
       expect(afterRemove).not.toBe(suppressorsBefore)
 
-      // Absent-key clear: no-op, same object reference.
       store.getState().clearRetentionSuppressedPaneKeys(['tab-does-not-exist:0'])
       const afterNoop = store.getState().retentionSuppressedPaneKeys
-      // Why: preserving object identity on no-op clears avoids spurious
-      // re-renders in any selector subscribed to retentionSuppressedPaneKeys.
+      // No-op suppressor clears must preserve record identity for selectors.
       expect(afterNoop).toBe(afterRemove)
     })
   })
 }
 
 {
-  /**
-   * Memory-leak regression: retainedAgentsByPaneKey must stay bounded.
-   *
-   * `retainedAgentsByPaneKey` is a Record keyed by ephemeral paneKey
-   * (`${tabId}:${leafId}`, where leafId is a fresh UUID minted per pane and never
-   * reused). Every agent that finishes and then vanishes from the live map is
-   * snapshotted here via `retainAgents`. Each snapshot is a full RetainedAgentEntry
-   * — an AgentStatusEntry (which carries an up-to-8KB lastAssistantMessage, an
-   * up-to-16KB interactivePrompt, a prompt, and up to 20 stateHistory rows) plus a
-   * full TerminalTab snapshot.
-   *
-   * Before the fix, `retainAgents` only ever wrote entries and never capped them,
-   * so the map grew monotonically with the number of distinct completed-agent
-   * paneKeys observed. The only removal paths are worktree removal
-   * (`pruneRetainedAgents`) and explicit user dismissal — neither of which runs
-   * while a long-lived worktree stays open. Under a multi-hour multi-agent /
-   * orchestration session (sub-agents complete continuously), this large-payload
-   * accumulator is the dominant driver of the renderer JS-heap OOM seen in the
-   * Windows crash bundles (heap climbing to the 3586 MB old-space limit).
-   *
-   * The fix caps it to MAX_RETAINED_AGENTS, evicting the oldest-retained keys
-   * (insertion order == retention order, so the newest completions survive).
-   */
+  /** Bound retained snapshots by MAX_RETAINED_AGENTS, evicting oldest insertions. Ephemeral pane keys accumulate large messages/prompts/history/tab records during long orchestration sessions; worktree removal/user dismissal alone cannot prevent renderer OOM. */
 
   // MAX_RETAINED_AGENTS is module-private; mirror its value here.
   const MAX_RETAINED_AGENTS = 500
 
-  // Approximate the worst-case per-entry payload the production type permits, so
-  // the leak's byte weight (not just entry count) is visible in the assertions.
+  // Use near-maximum production payloads so assertions expose leaked byte weight, not just count.
   const BIG_ASSISTANT_MESSAGE = 'a'.repeat(8 * 1024)
   const BIG_INTERACTIVE_PROMPT = 'q'.repeat(16 * 1024)
 
@@ -687,21 +632,16 @@ afterEach(() => {
     it('caps retainedAgentsByPaneKey and keeps the most recently retained keys', () => {
       const store = createTestStore()
 
-      // Drive the production retention path with more distinct ephemeral paneKeys
-      // than the cap allows — one call per completion, as production does.
       const total = MAX_RETAINED_AGENTS + 200
       for (let i = 0; i < total; i++) {
         store.getState().retainAgents([makeRetained(i)])
       }
 
       const retained = store.getState().retainedAgentsByPaneKey
-      // Bounded — not `total`. Without the cap this is MAX_RETAINED_AGENTS + 200.
       expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
 
-      // The newest completions survive; the oldest are evicted.
       expect(retained[`tab-${total - 1}:leaf-${total - 1}`]).toBeDefined()
       expect(retained['tab-0:leaf-0']).toBeUndefined()
-      // The exact eviction boundary: everything before (total - cap) is gone.
       expect(
         retained[`tab-${total - MAX_RETAINED_AGENTS - 1}:leaf-${total - MAX_RETAINED_AGENTS - 1}`]
       ).toBeUndefined()

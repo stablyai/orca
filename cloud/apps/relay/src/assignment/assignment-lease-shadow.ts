@@ -1,9 +1,7 @@
 import { percentile } from '../relay-observability.js'
 import { classifyAssignmentLease, type AssignmentLeaseClass } from './assignment-lease.js'
 
-// What `ticketCheck=enforce` would have said, beside the database answer that still decides.
-// `agree`/`disagree` replace `valid`: a valid lease the database refused is the case step 5
-// has to explain before a lease alone may admit a host.
+// Compare enforce’s hypothetical lease verdict with the authoritative DB answer; agree/disagree exposes valid leases the DB refuses before lease-only admission.
 export type AssignmentLeaseShadowClass = Exclude<AssignmentLeaseClass, 'valid'> | 'agree' | 'disagree'
 
 export const ASSIGNMENT_LEASE_SHADOW_EVENT = 'orca_relay_assignment_lease_shadow'

@@ -120,7 +120,6 @@ import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
-// Imported bindings are copied after Vitest's hoisted mocks have registered.
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_END = AGENT_PROMPT_BRACKETED_PASTE_END
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_START = AGENT_PROMPT_BRACKETED_PASTE_START
 export const exportedAGENT_STATUS_STALE_AFTER_MS = AGENT_STATUS_STALE_AFTER_MS

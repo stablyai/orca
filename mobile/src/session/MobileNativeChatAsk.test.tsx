@@ -62,7 +62,6 @@ async function passAutoAdvanceBeat(): Promise<void> {
   })
 }
 
-// The react-native mock above renders host components as plain strings.
 const isHost = (node: { type: unknown }, name: string): boolean => node.type === name
 
 const shows = (text: string): boolean =>

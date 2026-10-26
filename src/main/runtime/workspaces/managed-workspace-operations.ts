@@ -38,6 +38,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../shared/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import { dropStrandedSleepRecord } from '../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
@@ -92,13 +93,9 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     connectionId?: string | null
   ): Promise<{ stoppedWorktreeIds: string[] }> {
     const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
-    // Why: killing PTYs must be proven against the host right now — a cached scan
-    // (30s TTL) can still list a directory git already dropped, and the renderer
-    // purges its state either way, so a stale miss strands those processes for good.
+    // Stop PTYs against fresh host evidence: cached scans can miss removed Git registrations and strand processes after renderer purge.
     this.invalidateWorktreeScanCacheForRepo(repo.id)
-    // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
-    // duplicate id across hosts makes that second lookup throw selector_ambiguous
-    // even though the caller's selector was unique — losing the sweep entirely.
+    // Reuse the resolved repo; duplicate ids across hosts could make a second id lookup ambiguous and lose the sweep.
     const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
     if (!detected.authoritative) {
       return { stoppedWorktreeIds: [] }
@@ -153,10 +150,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
-  /**
-   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
-   * no such record — callers that only need to address the workspace want the scope below instead.
-   */
+  /** Resolve a git record, refusing floating workspaces; use launch scope when only id/path is needed. */
   async showManagedTerminalWorkspace(worktreeSelector: string) {
     const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
     if (!target.managedWorktree) {
@@ -165,12 +159,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     return target.managedWorktree
   }
 
-  /**
-   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
-   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
-   * way for all three — so a caller that reads only those must ask for this rather than demand a
-   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
-   */
+  /** Resolve id/path uniformly for git, folder and floating workspaces; requiring a git record would reject floating targets. */
   async showTerminalWorkspaceLaunchScope(
     worktreeSelector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -204,14 +193,12 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     }
   }
 
-  // Why: remote clients may invoke this over RPC, so the runtime derives
-  // allowed worktree paths from its own store instead of trusting client paths.
+  // Authorize RPC port probes from host-owned workspace paths, never client-supplied paths.
   protected async getWorkspacePortProbes(repoId?: string): Promise<WorkspacePortProbe[]> {
     const repos = this.requireStore().getRepos()
     return filterWorkspacePortProbes(
       (await this.listResolvedWorktrees()).map((worktree) => {
-        // Why host routing, not the repo-id row's connectionId: an SSH repo may carry only
-        // `executionHostId`, and its remote path must never authorize a local listener.
+        // Resolve executionHostId too: remote SSH paths must never authorize local listeners.
         const routing = resolveWorktreeHostRouting(repos, worktree)
         return {
           id: worktree.id,
@@ -231,7 +218,6 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     worktreeSelector: string
   ): Promise<RuntimeWorktreeTerminalSleepResult>
 
-  /** Runs every sleep on this host; created on first use, after the runtime is built. */
   private workspaceSleepCoordinator: WorkspaceSleepCoordinator | null = null
 
   private get workspaceSleep(): WorkspaceSleepCoordinator {
@@ -278,6 +264,14 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   /** The window opened a slept pane; main resumes it and the window attaches. */
   resumeSleptPane(pane: RestoredPane): Promise<boolean> {
     return this.workspaceSleep.resumePane(pane)
+  }
+
+  /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */
+  async retireStrandedSleepRecord(worktreeId: string, paneKey: string): Promise<void> {
+    await this.commitWorkspaceSessionEdit(
+      this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+      (session) => dropStrandedSleepRecord(session, worktreeId, paneKey)
+    )
   }
 
   wakeWindowHibernatedAgents(worktreeId: string): void {

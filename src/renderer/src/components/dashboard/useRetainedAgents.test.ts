@@ -169,11 +169,7 @@ describe('collectRetainedAgentsOnDisappear', () => {
   })
 
   it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {
-    // Why: a reused paneKey (same tab+pane, fresh agent start after a prior
-    // retained run) produces a newer startedAt. Without the freshness check
-    // the loop would early-continue because retainedAgentsByPaneKey[paneKey]
-    // is still truthy from the prior run — leaving stale completion data
-    // visible forever for the reused pane.
+    // Reused pane keys can start newer runs; replace older retained completion snapshots instead of skipping a truthy key.
     const prevRow = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
     prevRow.startedAt = 200
     const previousAgents = new Map([['tab-1:1', { row: prevRow, worktreeId: 'wt-1' }]])

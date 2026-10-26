@@ -1,5 +1,3 @@
-// The terminal tab creates `layout.apply` takes, and the new-group split every tab open shares.
-
 import { z } from 'zod'
 import { isTerminalLeafId } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
@@ -27,10 +25,7 @@ const TerminalCreation = z.object({
     .optional()
 })
 
-/**
- * A terminal tab under the ids the window drew it with: its callers and the pane's terminal need
- * them at once. Main refuses an id another tab holds; the same create again changes nothing.
- */
+/** Preserve window-created tab/pane IDs for immediate callers; refuse collisions and replay creates idempotently. */
 export const CreateTerminalTabCommand = z.object({
   type: z.literal('createTerminalTab'),
   workspace,
@@ -46,10 +41,7 @@ export const CreateTerminalTabCommand = z.object({
   split: NewGroupSplit
 })
 
-/**
- * A workspace's default terminal tabs, in order, under the ids the window proposes; main makes none
- * once the workspace is marked, and refuses an id another tab holds.
- */
+/** Apply ordered defaults under window-proposed IDs only before the workspace is marked; reject collisions. */
 export const ApplyDefaultTabsCommand = z.object({
   type: z.literal('applyDefaultTabs'),
   workspace,

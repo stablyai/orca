@@ -9,7 +9,7 @@ import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobil
 import { reviewTerminalListRead, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import { launchAgentWithPrompt } from './pr-ai-triage-launch'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 
@@ -28,8 +28,7 @@ type SendActionsInput = {
 }
 
 export function useMobileDiffReviewSendActions(input: SendActionsInput) {
-  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
-  // context, which the iOS custom scheme is not and Android's https is.
+  // Use the clipboard seam: iOS custom-scheme pages lack the secure context their own clipboard needs.
   const clipboard = useClipboardWriter()
   const {
     client,
@@ -47,8 +46,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
       return
     }
-    // Caught here because the only caller is `void controller.copyNotes()`: the seam rejects when
-    // the pasteboard refused, and an uncaught rejection would leave "copied" as the last word.
+    // Contain clipboard refusal because copyNotes is fire-and-forget; never leave copied as the last feedback.
     try {
       await clipboard.writeText(formatDiffComments(screenState.comments))
     } catch (err) {
@@ -67,8 +65,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     await saveCommentsAndReviewState(nextComments, screenState.reviewState)
   }, [saveCommentsAndReviewState, screenState])
 
-  // Read when a send settles, not when it was tapped: an agent launch can take a minute, and notes
-  // written meanwhile must survive the whole-list save below, and its rollback if that save fails.
+  // Read notes at settlement: long launches must preserve newer notes through whole-list saves and rollback.
   const latestRef = useRef({ screenState, save: saveCommentsAndReviewState })
   useEffect(() => {
     latestRef.current = { screenState, save: saveCommentsAndReviewState }
@@ -94,8 +91,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      // Marked by terminal handle, not by surface, so a paste orphaned here by native
-      // chat would ride along with these notes (#10228). Diff review carries no device token.
+      // Heal by terminal handle so native-chat image leftovers cannot join review notes.
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
         throw new Error('Failed to send notes')
       }
@@ -122,7 +118,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const createTerminalAndSend = useCallback(
     async (comments: readonly DiffComment[]) => {
-      // Reported, not thrown: the sheet's caller drops the promise, so a throw would show nothing.
+      // Report instead of throwing because the sheet drops the promise.
       if (!client || connState !== 'connected') {
         closeSheet('send')
         setActionError('Waiting for desktop...')
@@ -132,13 +128,12 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         return
       }
       agentLaunchInFlightRef.current = true
-      // Closed up front so the wait (up to a minute for a terminal agent) shows its progress here.
+      // Close the sheet before a long launch so progress stays visible.
       closeSheet('send')
       setActionError('Starting an agent...')
       let result
       try {
-        // The desktop asks which agent to use; the review screen has no picker, so this takes the
-        // desktop's own default resolution with no saved recipe.
+        // Without an agent picker, use desktop’s default resolution with no saved recipe.
         result = await launchAgentWithPrompt({
           client,
           hostCapabilities,
@@ -163,7 +158,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       await markNotesSent(comments)
       triggerSuccess()
-      // The warning is a note on a launch that went ahead, so it follows the success, not replaces it.
+      // Warnings describe successful launches, so append them to success feedback.
       setActionError(result.warning ? `Review notes sent. ${result.warning}` : 'Review notes sent')
     },
     [client, closeSheet, connState, hostCapabilities, markNotesSent, setActionError, worktreeId]

@@ -1,6 +1,4 @@
-// Why: the authorized request path and the handshake that authorizes it must
-// classify a gateway response identically — otherwise the same 503 means "retry"
-// on one leg and "give up" on the other, and register/send disagree about why.
+// Classify handshake and authorized responses identically so retries and refusal reasons cannot diverge.
 import type { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 

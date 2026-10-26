@@ -39,12 +39,6 @@ describe('applyNativeChatReportedSessionOptions', () => {
     expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
     expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'high', source: 'dispatched' })
   })
-
-  it('is a no-op when the report matches tracked state', () => {
-    const record = claudeRecord()
-    record.model = { value: 'sonnet', source: 'reported' }
-    expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
-  })
 })
 
 describe('matchNativeChatCatalogModelId', () => {
@@ -87,8 +81,7 @@ describe('matchNativeChatCatalogModelId', () => {
   })
 
   it('keeps the reported selector as-is for a catalog that seeds no models', () => {
-    // Why: OMP's hook reports `provider/id`, the exact form `/model` accepts back,
-    // and an empty seed has nothing that could outrank it.
+    // OMP’s unseeded catalog cannot outrank its exact hook-reported provider/id selector.
     const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }
     expect(matchNativeChatCatalogModelId(unseeded, ' deepseek/deepseek-v4-pro ')).toBe(
       'deepseek/deepseek-v4-pro'

@@ -1,7 +1,4 @@
-/**
- * The moved worktrees' zsh/bash history files (under the desktop's per-distro WSL history root) as
- * `shell-history` migration blobs, keyed by the worktree id the destination host will use.
- */
+// Key desktop WSL histories by destination worktree ID for host-side installation.
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
@@ -24,9 +21,9 @@ import {
 } from '../migrating-orcad-catalog/orcad-migration-shell-history-format'
 
 export type WslMoveShellHistoryWorktree = {
-  /** The id the desktop keyed history by: the UNC worktree id. */
+  /** UNC identity used by desktop history. */
   sourceWorktreeId: string
-  /** The same worktree's id on the host, after the mover's path rewrite. */
+  /** Rewritten host identity for the same worktree. */
   destinationWorktreeId: string
 }
 
@@ -44,7 +41,6 @@ export type WslMoveShellHistoryBlobs = {
 
 type DesktopHistoryFile = { path: string; fileBytes: number }
 
-/** A blob's bytes in order: the header, then one or more desktop history files. */
 type ShellHistorySegment = { bytes: Buffer } | DesktopHistoryFile
 
 type ShellHistoryBlob = {
@@ -54,11 +50,7 @@ type ShellHistoryBlob = {
 
 const NEWLINE = 0x0a
 
-/**
- * Missing and empty files send nothing. A file over the per-blob cap blocks the move: history is
- * never truncated. The source refuses a read once a file's size moved, so a shell that wrote after
- * quiesce fails the transfer instead of sending bytes the digest does not cover.
- */
+/** Never truncate oversized histories; reject source-size changes after capture. */
 export async function buildWslMoveShellHistoryBlobs(
   request: WslMoveShellHistoryRequest
 ): Promise<WslMoveShellHistoryBlobs> {
@@ -72,14 +64,14 @@ export async function buildWslMoveShellHistoryBlobs(
         continue
       }
       const key = orcadMigrationShellHistoryKey(destinationWorktreeId, shell)
-      // zsh is listed first, so a bash file without a zsh sibling is known here.
+      // zsh-first ordering proves whether a bash file has a zsh sibling.
       const header = encodeOrcadMigrationShellHistoryHeader(destinationWorktreeId, {
         loginShell: shell === 'bash' && !zshSent
       })
       zshSent ||= shell === 'zsh'
       const segments = await joinHistories(header, files)
       const byteLength = segments.reduce((total, segment) => total + segmentBytes(segment), 0)
-      // A move blocker rather than a truncation: dropping old commands would silently lose them.
+      // Refuse rather than silently dropping old commands.
       if (byteLength > MAX_ORCAD_MIGRATION_SHELL_HISTORY_BYTES) {
         throw new Error(
           `orcad_migration_shell_history_too_large:${key}: the ${shell} history of ${destinationWorktreeId} is ${byteLength} bytes, over the ${MAX_ORCAD_MIGRATION_SHELL_HISTORY_BYTES}-byte limit`
@@ -115,7 +107,7 @@ export async function buildWslMoveShellHistoryBlobs(
   }
 }
 
-// The `\\wsl$\` and `\\wsl.localhost\` ids of one worktree rewrite to the same host id.
+// UNC aliases can collapse into one destination worktree.
 function groupByDestination(
   worktrees: readonly WslMoveShellHistoryWorktree[]
 ): Map<string, string[]> {
@@ -130,7 +122,7 @@ function groupByDestination(
   return groups
 }
 
-// Oldest first, so the newest commands end up last, where shells read them back from.
+// Merge oldest first so newest commands stay at the end.
 async function desktopHistoryFiles(
   root: string,
   sourceWorktreeIds: readonly string[],
@@ -149,7 +141,7 @@ async function desktopHistoryFiles(
     .map(({ path, fileBytes }) => ({ path, fileBytes }))
 }
 
-// Without a newline between them, one file's last command would run into the next file's first.
+// Separate files so adjacent commands cannot concatenate.
 async function joinHistories(
   header: Buffer,
   files: readonly DesktopHistoryFile[]
@@ -173,7 +165,6 @@ function segmentBytes(segment: ShellHistorySegment): number {
   return 'bytes' in segment ? segment.bytes.length : segment.fileBytes
 }
 
-// Null for a missing file or anything that is not a regular file.
 async function regularFile(path: string): Promise<{ size: number; mtimeMs: number } | null> {
   try {
     const info = await stat(path)
@@ -191,7 +182,7 @@ async function digestSegments(segments: readonly ShellHistorySegment[]): Promise
       continue
     }
     let read = 0
-    // `end` pins the digest to the size the descriptor declares even if the file grows meanwhile.
+    // Pin hashing to descriptor size even if the source grows.
     for await (const chunk of createReadStream(segment.path, {
       start: 0,
       end: segment.fileBytes - 1

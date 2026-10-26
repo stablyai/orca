@@ -1,3 +1,6 @@
+import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -127,7 +130,19 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {})
   })
   const env = openCodeLaunch.env
-  const launchCommand = openCodeLaunch.command
+  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const shell = resolveStartupShell(
+    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform: process.platform,
+      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
+      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
+    })
+  )
+  const launchCommand =
+    pluginDir && openCodeLaunch.command
+      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
+      : openCodeLaunch.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -189,6 +204,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
     connectionId: connectionId ?? null,
+    codexHome: input.selectedCodexHomePath,
     spawnOptions
   })
   if (trustWrite) {
@@ -225,56 +241,54 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   return { spawnOptions, env, launchCommand }
 }
 
-/** Seed before early output; retain previous geometry to restore after a lost reservation race. */
+export type PtySpawnSizeSeed = {
+  cachedBeforeAttach: { cols: number; rows: number } | undefined
+  rollback: (options?: { reattachId?: string; exitedBeforeSpawnReply?: boolean }) => void
+}
+
+/** Samples and seeds geometry only when preparation reaches this resource. */
 export function seedPtySpawnSize(input: {
   sessionId: string | undefined
   sessionAppId: string | undefined
   isFreshSessionId: boolean
-  /** Hidden window requests are unmeasured; runtime requests are measured. */
   requestIsUnmeasured: boolean
   cols: number
   rows: number
-}): {
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
-} {
-  const hadSessionSizeBeforeAttach =
-    input.sessionAppId !== undefined ? ptySizes.has(input.sessionAppId) : false
-  const sessionSizeBeforeAttach =
-    input.sessionAppId !== undefined ? ptySizes.get(input.sessionAppId) : undefined
+}): PtySpawnSizeSeed {
+  const key = input.sessionAppId ?? input.sessionId
+  const cachedBeforeAttach = key !== undefined ? ptySizes.get(key) : undefined
   if (
     input.sessionId !== undefined &&
     shouldSeedPreAttachPtySize({
       isFreshSessionId: input.isFreshSessionId,
-      hasCachedSize: hadSessionSizeBeforeAttach,
+      hasCachedSize: cachedBeforeAttach !== undefined,
       requestIsUnmeasured: input.requestIsUnmeasured
     })
   ) {
-    // Early daemon output needs actual geometry before spawn resolves, avoiding default-grid TUI wrapping.
-    ptySizes.set(input.sessionAppId ?? input.sessionId, { cols: input.cols, rows: input.rows })
+    // Daemon output can precede the reply; the grid must exist before byte zero.
+    ptySizes.set(key!, { cols: input.cols, rows: input.rows })
   }
-  return { hadSessionSizeBeforeAttach, sessionSizeBeforeAttach }
+  return {
+    cachedBeforeAttach,
+    rollback: (options) => {
+      if (input.sessionId === undefined || key === options?.reattachId) {
+        return
+      }
+      if (cachedBeforeAttach && !options?.exitedBeforeSpawnReply) {
+        ptySizes.set(key!, cachedBeforeAttach)
+      } else {
+        ptySizes.delete(key!)
+      }
+    }
+  }
 }
 
-/** Undoes a provisional size seed after a failed start, or a lost race that reattaches to another id. */
-export function restoreProvisionalPtySize(input: {
-  sessionId: string | undefined
-  sessionAppId: string | undefined
-  /** Set when a lost reservation race reattached; the winner may have committed this id's real size. */
-  reattachId?: string
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
-}): void {
-  if (input.sessionId === undefined) {
-    return
-  }
-  const provisionalSizeKey = input.sessionAppId ?? input.sessionId
-  if (provisionalSizeKey === input.reattachId) {
-    return
-  }
-  if (input.hadSessionSizeBeforeAttach && input.sessionSizeBeforeAttach) {
-    ptySizes.set(provisionalSizeKey, input.sessionSizeBeforeAttach)
-  } else {
-    ptySizes.delete(provisionalSizeKey)
-  }
+/** Takes the acquired seed so teardown and outer failure cannot restore it twice. */
+export function restoreProvisionalPtySize(
+  state: { provisionalPtySize: PtySpawnSizeSeed | undefined },
+  options?: Parameters<PtySpawnSizeSeed['rollback']>[0]
+): void {
+  const seed = state.provisionalPtySize
+  state.provisionalPtySize = undefined
+  seed?.rollback(options)
 }

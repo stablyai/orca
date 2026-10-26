@@ -5,9 +5,7 @@ type DragPointerEvent = Pick<
   'activatorEvent' | 'delta' | 'active'
 >
 
-/** Pointer position during a tab drag. Why: sortable tabs stay visually anchored
- *  (no transform) while DragOverlay follows the cursor, so active.rect.translated
- *  never tracks the pointer and panel-edge split targets would stay wrong. */
+/** Read the pointer directly: anchored sortable rects do not follow the overlay and cannot locate pane-edge split targets. */
 export function getDragPointer(event: DragPointerEvent): { x: number; y: number } | null {
   const activator = event.activatorEvent
   if (

@@ -9,11 +9,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 
 type Addition = { target: RuntimeClientTarget }
 
-/**
- * Where each provider's Add Account in Settings is signing in: this desktop or a server. The
- * header Cancel follows the addition, not the host Settings shows now, since the picker can move
- * while a sign-in runs.
- */
+/** Track each running addition’s original host so header Cancel follows sign-in even after Settings host navigation. */
 const additions = new Map<HostAccountSignInProvider, Addition>()
 
 export function trackAccountAddition<T>(
@@ -32,7 +28,7 @@ export function trackAccountAddition<T>(
 
 /** A Cancel the server could not be told about yet; the sign-in keeps asking it to stop. */
 export function showHostCancelFailure(error: unknown): void {
-  // Why only lost answers: a refusal means the flow already ended, which the pane shows itself.
+  // Only lost replies need warning; refusals mean the flow already ended and the pane explains it.
   if (!isLostHostAnswer(error)) {
     return
   }

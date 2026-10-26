@@ -83,12 +83,7 @@ function isMissingPairedResumePreparation(error: unknown): boolean {
   )
 }
 
-/**
- * The conversation "Switch to Terminal" opens. Most agents' fork command makes the copy, so this
- * only picks the Codex home it runs under, as a resume does (`copied: false`). An agent whose chat
- * makes the copy (`agentForksThroughChat`) has the chat's host make it here; the result is that
- * copy, which a plain resume opens and no chat owns (`copied: true`).
- */
+/** Prepare Switch to Terminal under the chosen account. CLI-forking agents copy at launch (copied:false); chat-forking agents need a host-created independent copy first (copied:true). */
 type ForkPreparationRequest = (
   args: AiVaultPrepareSessionResumeRequest
 ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -188,23 +183,17 @@ export function aiVaultSessionNeedsResumePreparation(
   if (isLegacySharedCodexHome(session.codexHome)) {
     return true
   }
-  // Why: per-account repinning reads the LOCAL account selection, so only
-  // local sessions ask; remote sessions keep their recorded home untouched.
+  // Only local sessions may repin from this client’s account selection; remote sessions retain their recorded home.
   return (
     isPerAccountManagedCodexHome(session.codexHome) &&
     (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
   )
 }
 
-// Why: these sessions are keyed by their folder. Elsewhere Kimi rejects the resume or (1.52+) opens
-// a new empty session under the same id, so the visible `cd` failure is the honest outcome.
+// Kimi is folder-keyed: wrong cwd rejects resume or silently opens an empty same-ID session (1.52+).
 const RESUMES_ONLY_IN_RECORDED_CWD: ReadonlySet<AiVaultSession['agent']> = new Set(['kimi', 'muse'])
 
-/**
- * Drops an SSH session's recorded folder once its host confirms the folder is gone, so the resume
- * opens at the target workspace root, as local resumes already do (#17745). Also drops the
- * scanner-built command, whose `cd` into that folder would stop the agent from starting.
- */
+/** After the SSH host confirms missing cwd, drop it and its prebuilt cd command so resume starts at the workspace root (#17745). */
 export async function dropDeletedSshResumeCwd(
   session: AiVaultResumeCommandSession
 ): Promise<AiVaultResumeCommandSession> {

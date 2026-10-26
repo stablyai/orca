@@ -9,6 +9,9 @@ import {
 } from '../../../shared/agent-session-caller-env'
 import { sessionAddressForHost } from '../../session-caller-flags'
 
+// --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.
+const callerScopeFlags = (): Map<string, string | boolean> => new Map()
+
 /** undefined delegates caller identity to the injected session; the host resolves /clear addresses. */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
@@ -46,9 +49,9 @@ export async function resolveOrchestrationTerminalHandle(
     throw structuredSessionRefusal(flagName)
   }
   if (flagName === 'from') {
-    return await resolveImplicitOrchestrationSender(flags, cwd, client)
+    return await resolveImplicitOrchestrationSender(cwd, client)
   }
-  return await getTerminalHandle(flags, cwd, client)
+  return await getTerminalHandle(callerScopeFlags(), cwd, client)
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
@@ -177,13 +180,12 @@ export async function resolveCoordinatorTerminalHandle(
 }
 
 async function resolveImplicitOrchestrationSender(
-  flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
   try {
     // An arbitrary active-terminal choice would let this command speak as a sibling worker.
-    return await getTerminalHandle(flags, cwd, client, { requireUnambiguous: true })
+    return await getTerminalHandle(callerScopeFlags(), cwd, client, { requireUnambiguous: true })
   } catch (err) {
     if (!isNoActiveTerminalError(err)) {
       throw err

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Alert: { alert },
@@ -67,9 +68,9 @@ async function updatePreview(renderer: ReactTestRenderer, props: PreviewProps): 
 }
 
 function modeToggle(renderer: ReactTestRenderer, label: string) {
-  const toggle = renderer.root
-    .findAllByType('Pressable')
-    .find((node) => node.props.accessibilityLabel === label)
+  const toggle = findAllByHostType(renderer.root, 'Pressable').find(
+    (node) => node.props.accessibilityLabel === label
+  )
   if (!toggle) {
     throw new Error(`Missing ${label} toggle`)
   }
@@ -131,7 +132,7 @@ describe('MobileFileMarkdownPreview', () => {
     })
     const copy = modeToggle(renderer, 'Copy loaded Markdown source')
     expect(
-      renderer.root.findAllByType('Text').some((node) => node.props.children === 'Copy loaded')
+      findAllByHostType(renderer.root, 'Text').some((node) => node.props.children === 'Copy loaded')
     ).toBe(true)
     await act(async () => copy.props.onPress())
     expect(writeText.mock.calls).toEqual([[source]])

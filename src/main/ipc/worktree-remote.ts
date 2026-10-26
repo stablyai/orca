@@ -76,7 +76,7 @@ import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
 import { notifyLineageRepos } from '../worktree-lineage-change-notification'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
@@ -924,14 +924,10 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  checkout?: WorktreeCheckoutProgress | null
+  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
 ): void {
   if (!mainWindow.isDestroyed()) {
-    const event: CreateWorktreeProgressEvent = {
-      creationId,
-      phase,
-      ...(checkout !== undefined ? { checkout } : {})
-    }
+    const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
     mainWindow.webContents.send('createWorktree:progress', event)
   }
 }
@@ -997,7 +993,7 @@ async function performLocalWorktreeCreate(
     ...(creationId
       ? {
           onCheckoutProgress: (checkout: WorktreeCheckoutProgress | null) =>
-            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, checkout)
+            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, { checkout })
         }
       : {})
   })
@@ -1345,7 +1341,10 @@ async function performLocalWorktreeCreate(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
+  // Why: the catalog watcher can publish the checkout mid-create; the renderer must not seed it a shell yet.
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, {
+    worktreeId: composeWorktreeId(repo.id, worktreePath)
+  })
 
   // Defer fork remote creation/fetch until first synchronization; read-only review creation needs neither.
   const preparedPushTarget: GitPushTarget | undefined = args.pushTarget
@@ -1497,6 +1496,9 @@ async function performLocalWorktreeCreate(
   }
 
   const worktreeId = `${repo.id}::${created.path}`
+  if (created.path !== worktreePath) {
+    emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, { worktreeId })
+  }
   const now = Date.now()
   // Review head SHA/ref seeds creation; Source Control comparison uses the review target branch.
   const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch

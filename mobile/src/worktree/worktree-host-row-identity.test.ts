@@ -31,7 +31,6 @@ function row(
 }
 
 describe('removeWorktreeRow', () => {
-  // Deleting on one host used to clear the other host's identically-named row from the list.
   it('keeps a same-id workspace that lives on another host', () => {
     const local = row('shared', 'ssh:a')
     const remote = row('shared', 'ssh:b')

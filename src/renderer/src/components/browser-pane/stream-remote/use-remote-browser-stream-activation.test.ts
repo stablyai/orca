@@ -102,8 +102,7 @@ describe('useRemoteBrowserStreamActivation', () => {
     expect(harness.open).toHaveBeenCalledTimes(2)
   })
 
-  // A staged page has no host page behind it: opening the stream would create a second host tab
-  // racing the create that staged it, and a failed open would close the tab the user just made.
+  // Opening a staged page would race its pending create and could close the optimistic tab on failure.
   it('does not open a stream for an optimistically staged page', async () => {
     const harness = renderActivation(true, true)
     expect(harness.open).not.toHaveBeenCalled()
@@ -112,8 +111,7 @@ describe('useRemoteBrowserStreamActivation', () => {
     expect(harness.open).toHaveBeenCalledTimes(1)
   })
 
-  // Closing a tab while parked leaves no effect cleanup to run, so unmount must not resurrect the
-  // stream when the window comes back — the pane's lifecycle is already disposed by then.
+  // Parked unmount has no stream cleanup left; disposed lifecycles must not reopen on window return.
   it('stays closed when its tab is closed while the stream is parked', async () => {
     const harness = renderActivation()
 

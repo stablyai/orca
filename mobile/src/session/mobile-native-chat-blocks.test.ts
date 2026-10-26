@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { foldToolMessages, pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(
@@ -51,8 +52,6 @@ describe('pairToolBlocks', () => {
     const call2 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'b' } }
     const result1 = { type: 'tool-result' as const, output: 'out-a' }
     const result2 = { type: 'tool-result' as const, output: 'out-b' }
-    // Parallel calls stream as [call, call, result, result]; the Nth result
-    // answers the Nth call, so result1 must land on call1 (not the nearer call2).
     const pairs = pairToolBlocks([call1, call2, result1, result2])
 
     expect(pairs).toHaveLength(2)
@@ -71,11 +70,10 @@ describe('pairToolBlocks', () => {
 
     expect(pairs).toHaveLength(2)
     expect(pairs[0]).toEqual({ call: call1, result: result1 })
-    // call3 was dropped past the limit, so result3 must not misgraft onto call2.
     expect(pairs[1]).toEqual({ call: call2, result: result2 })
   })
 
-  it('retains the last result while bounding rendered pairs', () => {
+  it('keeps the first completed pairs at the rendering limit', () => {
     const blocks = Array.from({ length: 20 }, (_unused, index) => [
       { type: 'tool-call' as const, name: 'Bash', input: { index } },
       { type: 'tool-result' as const, output: String(index) }

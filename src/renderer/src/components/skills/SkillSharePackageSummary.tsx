@@ -56,8 +56,7 @@ export function SkillSharePackageSummary({
   return (
     <section className="space-y-2">
       <div className="min-w-0">
-        {/* Why: a bundle's package name is synthesized ("shared-skills"), so the
-            count is the only honest heading; the list below names the members. */}
+        {/* Bundle names are synthesized; use the member count as the heading and name members below. */}
         <h3 className="truncate text-sm font-semibold">
           {bundle ? skillCountLabel(skillCount) : preview.name}
         </h3>

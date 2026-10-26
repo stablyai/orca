@@ -1,6 +1,7 @@
 import { realpath, rename } from 'node:fs/promises'
 import { dirname, normalize } from 'node:path'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import { windowsFsPath } from './wsl/wsl-unc-drive-fs-path'
 
 // Parent-scoped serialization covers Unicode aliases without guessing filesystem collation.
 const pendingRenamesByParent = new Map<string, Promise<void>>()
@@ -26,9 +27,12 @@ export async function serializedParentDirectoryKey(filePath: string): Promise<st
 }
 
 export async function renameLocalPathSerializedByDestination(
-  oldPath: string,
-  newPath: string
+  requestedOldPath: string,
+  requestedNewPath: string
 ): Promise<void> {
+  // UNC drive-mount paths open only through their drive paths.
+  const oldPath = windowsFsPath(requestedOldPath)
+  const newPath = windowsFsPath(requestedNewPath)
   const key = await serializedParentDirectoryKey(newPath)
   const previous = pendingRenamesByParent.get(key) ?? Promise.resolve()
   let release!: () => void

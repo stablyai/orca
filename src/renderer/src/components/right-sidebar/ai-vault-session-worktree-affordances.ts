@@ -42,9 +42,7 @@ export function canJumpToAiVaultSessionWorktree(
   )
 }
 
-// Why: a session in the worktree you're already viewing has nowhere to jump,
-// so we hide the affordance rather than offering a self-jump (the "Current
-// worktree" badge already signals where it lives).
+// Hide self-jumps; the Current worktree badge already identifies the destination.
 export function isAiVaultSessionInCurrentWorktree(
   worktreeInfo: AiVaultSessionWorktreeInfo | null
 ): boolean {
@@ -112,8 +110,7 @@ export function shouldShowAiVaultSessionWorktreeLine(
   if (!worktreeInfo) {
     return false
   }
-  // Why: workspace scope already limits history to the active workspace; the
-  // worktree row adds no value when the session lives in the worktree on screen.
+  // Workspace scope already identifies the current worktree; omit its redundant row.
   if (options?.vaultScope === 'workspace' && worktreeInfo.status === 'current') {
     return false
   }
@@ -124,12 +121,11 @@ export function shouldShowAiVaultWorktreeStatusBadge(
   status: AiVaultSessionWorktreeStatus,
   options?: { vaultScope?: AiVaultScope }
 ): boolean {
-  // Why: "active" repeats the branch label without adding scan value in dense rows.
+  // Active repeats the branch label without adding information.
   if (status === 'active') {
     return false
   }
-  // Why: workspace scope already filters to the active workspace, so "Current
-  // worktree" is redundant in the default history view.
+  // Workspace scope makes Current worktree redundant.
   if (status === 'current' && options?.vaultScope === 'workspace') {
     return false
   }

@@ -54,7 +54,6 @@ function withdrawn(clientMessageId: string): AgentJournalSubmission {
   }
 }
 
-// A Stop's withdrawn message draws no row, so a chat that has one rebuilds no notice per batch.
 it('keeps the same notices across batches in a chat whose only rejection a Stop withdrew', () => {
   const { result, rerender } = renderHook(
     ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
@@ -87,8 +86,6 @@ function renderNotices(submissions: readonly AgentJournalSubmission[]) {
   )
 }
 
-// A batch for another message rebuilds the journal's rows; the rows already marked not sent keep
-// the same notices, so no row wrapper re-renders.
 it('keeps the same notices when a batch leaves every not-sent message as it was', () => {
   const { result, rerender } = renderNotices([rejected('lost', 'hostRestarted')])
   const first = result.current

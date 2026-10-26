@@ -46,11 +46,10 @@ describe('Prime Agent readiness from captured bytes', () => {
     foregroundProcess: 'prime-agent',
     ready: READY,
     notReady: NOT_READY,
-    // Why all: an idle Prime is quiet, so the quiet-process lane settles it.
     readyWithoutScreen: READY.map(({ name }) => name)
   })
 
-  // Why the footer is no ready signal (#22153): it and the bare caret stay painted mid-turn.
+  // The footer and bare caret remain painted during work, so neither proves ready (#22153).
   it('keeps the footer and the bare caret on screen mid-turn', async () => {
     const { ruledScreenLines } = await finalReplayFrame('prime-agent-0-9-8-busy-streaming', 120, 40)
     expect(ruledScreenLines.at(-1)?.trim().startsWith('← manage')).toBe(true)
@@ -58,8 +57,7 @@ describe('Prime Agent readiness from captured bytes', () => {
     expect(screenOf(ruledScreenLines)).toMatch(/[⠀-⣿] Writing/)
   })
 
-  // Why a clocked pane waits for quiet: the rule reads these frames as ready, and only the
-  // spinner ticks and the question's animation keep the stream from going quiet.
+  // Busy frames can look ready; spinner/question animation must keep the quiet-process gate waiting.
   it.each([
     ['prime-agent-0-9-8-busy-streaming', 'a spinner row erased before its redraw', 'Without using'],
     ['prime-agent-0-9-8-trace-question', 'the composer painted before the question', null]

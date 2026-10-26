@@ -15,12 +15,12 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     permission: 'workspace',
     params: TerminalSetDisplayMode,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
+      // Reject stale handles before changing the wrong PTY's display mode or viewport (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      // Why: late-bind viewport for desktop-subscribed callers; otherwise an 'auto' toggle skips phone-fit and nothing resizes.
+      // Late-bind desktop subscriber viewport so auto mode still phone-fits.
       if (params.viewport && params.client?.id) {
         runtime.updateMobileSubscriberViewport(leaf.ptyId, params.client.id, params.viewport)
       }
@@ -37,7 +37,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     permission: 'workspace',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
+      // Reject stale handles before reclaiming the wrong PTY to desktop size (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
@@ -61,7 +61,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     permission: 'workspace',
     params: TerminalUpdateViewport,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
+      // Reject stale handles before writing the wrong PTY's viewport (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
@@ -73,7 +73,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
         params.client,
         params.viewport,
         'mobile',
-        // Why: one-shot RPC with no disconnect hook — refresh the existing stream-owned floor, never create a leak-prone one.
+        // One-shot RPC owns no disconnect cleanup; refresh an existing stream floor only.
         'refresh',
         params.claim === true
       )
@@ -89,7 +89,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
     params: TerminalUnsubscribe,
     handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
       if (params.requestId !== undefined) {
-        // Why: an unknown request already ended or never registered; falling back to the slot could end a newer stream.
+        // Unknown requests cannot fall back to a slot that may hold a newer stream.
         runtime.releaseSubscriptionByRequest(connectionId, params.requestId)
         return { unsubscribed: true }
       }
@@ -100,10 +100,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
         connectionId,
         subscriptionRegistrationVersion
       )
-      // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
-      // Why AND over the calls that ran: a clientless stream registers under the bare id
-      // and a client-scoped one under the composite, so either call can be the real
-      // teardown. Reporting false needs one genuine refusal, not merely a missing id.
+      // Older builds use bare-handle ids; try reconstructed client keys too. AND actual teardown results: missing ids are not refusals.
       if (params.client && !params.subscriptionId.includes(':')) {
         unsubscribed =
           runtime.cleanupSubscriptionIfOwnedByConnection(

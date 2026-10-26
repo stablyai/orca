@@ -25,7 +25,6 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     }
   })
 
-  /** Builds a current database, then strips it back to the v36 shape it would have on disk. */
   function createV36Database(): { path: string; dispatchId: string } {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v37-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -40,6 +39,8 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     seed.close()
 
     const raw = new Database(dbPath)
+    // The current mail-routing trigger reads creator_handle; the next open recreates it.
+    raw.exec('DROP TRIGGER trg_messages_route_coordinator_mail')
     for (const column of CREATOR_COLUMNS) {
       raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
     }
@@ -67,7 +68,7 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     const raw = new Database(v36.path)
     raw.pragma('user_version = 37')
     try {
-      // Why: the skew repair is the only thing that catches a partially-written v37.
+      // Only schema-skew repair detects a partially written v37.
       expect(resolveOrchestrationMigrationStartVersion(raw, 37, SCHEMA_VERSION)).toBe(6)
     } finally {
       raw.close()

@@ -13,11 +13,7 @@ export function dedupeReadySetupRows(
   return collapseMergedHostCheckouts(options.filter(dedupeByHost()), hostById)
 }
 
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
+// Creation uses the first project+host setup, so display that same row; legacy duplicates (e.g. linked worktree projects) are otherwise identical and unreachable.
 function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   const seenHosts = new Set<ExecutionHostId>()
   return (option) => {
@@ -29,10 +25,7 @@ function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   }
 }
 
-// Why: an SSH host and its managed Orca server are one machine, and both can report the same
-// checkout (the old SSH repo locally, the server's own setup remotely), which rendered as two
-// identical rows. Keep the one on the row the picker shows, the route serving the host now. A
-// different path on the other id is a distinct checkout, so it keeps its own row.
+// SSH and managed server may report the same machine/checkout; keep the picker’s current route. Distinct paths remain separate checkouts.
 function collapseMergedHostCheckouts(
   options: readonly ReadyProjectHostSetupOption[],
   hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>

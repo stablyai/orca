@@ -21,6 +21,9 @@ import {
   type ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
 
+// These act on an element with no pointer input, so the agent cursor is shown on it first.
+const ELEMENT_COMMANDS_WITHOUT_POINTER = new Set(['check', 'uncheck', 'select', 'focus'])
+
 export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs {
   protected abstract destroySession(
     sessionName: string,
@@ -96,7 +99,18 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     }
     args.push('--json')
 
-    const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
+    const pointAtTarget = ELEMENT_COMMANDS_WITHOUT_POINTER.has(commandArgs[0] ?? '')
+    if (pointAtTarget) {
+      session.proxy.pointAtNextNode(true)
+    }
+    let stdout: string
+    try {
+      stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
+    } finally {
+      if (pointAtTarget) {
+        session.proxy.pointAtNextNode(false)
+      }
+    }
     const translated = translateResult(stdout)
 
     if (!translated.ok) {

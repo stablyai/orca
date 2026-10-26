@@ -7,7 +7,7 @@ import {
   type RpcContext,
   type RpcStreamingMethod
 } from '../core'
-// Why: importing client-events directly trips its module-init cycle through ipc/ssh; the index resolves it.
+// Import the registry to avoid client-events' module-init cycle through ipc/ssh.
 import { ALL_RPC_METHODS } from './index'
 
 const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(

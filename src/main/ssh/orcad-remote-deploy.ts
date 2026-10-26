@@ -1,14 +1,8 @@
-/**
- * Activate installed bytes only after the candidate proves healthy. A rejected candidate
- * allows restarting the incumbent only when profile state is provably unchanged; otherwise
- * preserve current state and the prelaunch snapshot for explicit recovery.
- *
- * Every activation runs under the host's activation fence and journal
- * (`orcad-activation-lock.ts`), so an interrupted one is recoverable to exactly one slot.
- */
+/** Activate under a durable host fence/journal only after candidate readiness. Recover the incumbent only with safe profile state; retain changed state/snapshot for explicit recovery. */
 import { logOrcadActivationOutcome } from '../managed-server/activation/orcad-activation-outcome-log'
 import { join } from 'node:path'
 import type { OrcadHostTransport } from './orcad-host-transport'
+import type { OrcadUpdateForce } from './orcad-update-plan'
 import { ORCAD_INSTALL_MODEL } from '../managed-server/install/remote-install-model'
 import {
   computeRemoteInstallDir,
@@ -52,35 +46,18 @@ export type OrcadDeployOptions = {
   userDataDir: string
   bindHost: string
   port: number
-  /**
-   * Live-terminal counts, supplied by the caller from the runtime it is already connected
-   * to. Not probed here: counting the daemon's sessions needs its protocol, and a deploy
-   * that guessed zero from silence would be the "loss of contact means death" mistake.
-   */
+  /** Caller supplies a protocol-aware census; unanswered host evidence must never become zero live terminals. */
   census: OrcadTerminalCensus
-  /**
-   * The record `census` was counted against; defaults to the one read before upload. A different
-   * incumbent found under the fence makes the census unverifiable rather than wrongly zero.
-   */
+  /** Bind census to its incumbent record; a changed locked record makes earlier counts unverifiable. */
   censusRecord?: OrcadActivationRecord
-  /**
-   * Counts again under the fence just before the incumbent stops, so a terminal opened during
-   * the upload still defers the update. Required, since `census` may predate a long upload.
-   * Called only while the incumbent is the one counted; any failure must read as unverifiable.
-   */
+  /** Recount under fence just before stopping the same incumbent; uploads may outdate initial counts and failures stay unverifiable. */
   recountCensus: () => Promise<OrcadTerminalCensus>
-  /**
-   * Reopens the terminal admission `recountCensus` closes, when the update then leaves the
-   * incumbent running. Best effort: the server reopens on its own once the fence lapses.
-   */
+  /** Best-effort reopen when incumbent keeps serving; admission also expires server-side. */
   releaseIncumbentAdmission: () => Promise<void>
-  force?: boolean
+  force?: OrcadUpdateForce
   /** The Orca app version activating, recorded so an older client never downgrades the host. */
   appVersion?: string
-  /**
-   * Re-applies the caller's version policy to the record read under the host fence, since another
-   * desktop can activate or stop a build while this one uploads. A reason refuses the activation.
-   */
+  /** Reapply version policy under lock because peer activation/stop may land during upload. */
   admitRecord?: (record: OrcadActivationRecord, candidateVersion: string) => string | null
   readinessTimeoutMs?: number
   /** WSL only; SSH hosts always re-hash the runtime (see `installOrcadBundle`). */
@@ -95,7 +72,6 @@ export type OrcadDeployResult =
   | { outcome: 'already-active'; fullVersion: string }
   | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
 
-/** Activate on a healthy verdict; retain changed candidate state for explicit recovery. */
 export async function deployOrcad(
   input: OrcadDeployOptions,
   retryClearedFence = true
@@ -124,16 +100,16 @@ export async function deployOrcad(
   const remoteDir = computeRemoteInstallDir(ORCAD_INSTALL_MODEL, options.remoteHome, fullVersion)
   const held = async (): Promise<OrcadDeployResult> => {
     const { cleared, ...refusal } = await orcadActivationFenceRefusal(options, 'update')
-    // Once: a second abandoned fence means something keeps leaving them, so report it.
+    // Retry one cleared abandoned fence; repeated abandonment must surface to the caller.
     if (cleared && retryClearedFence) {
       return deployOrcad({ ...input, target, localOrcadDir: options.localOrcadDir }, false)
     }
     return { outcome: 'installed-not-activated', fullVersion, ...refusal }
   }
-  // Fail fast before upload; the activation re-reads both under the fence.
+  // Refuse before upload, then re-read both admission inputs under fence.
   const preUploadRecord = await readOrcadActivationRecord(options)
   const censusRecord = options.censusRecord ?? preUploadRecord
-  // An unanswered probe only skips this shortcut: the fence acquisition itself still decides.
+  // An unanswered probe only skips this shortcut; lock acquisition still arbitrates.
   if (await orcadActivationFenceExists(options).catch(() => false)) {
     return held()
   }

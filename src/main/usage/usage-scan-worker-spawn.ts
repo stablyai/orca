@@ -20,9 +20,7 @@ import {
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
 
-// Why: resolve the built worker entry and own the process-wide shared client, so
-// the client class stays free of runtime-layout concerns and each usage store
-// depends only on its own routing function below.
+// Keep built-entry layout and the shared singleton outside provider stores and the transport client.
 
 export const USAGE_SCAN_WORKER_ENTRY_FILENAME = 'usage-scan-worker-entry.js'
 
@@ -31,8 +29,7 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     USAGE_SCAN_WORKER_ENTRY_FILENAME
   )
-  // Why: a missing built entry must throw synchronously so the client can fail
-  // closed before it waits on a worker that can never post a result.
+  // Reject missing entries synchronously; never await a worker that cannot become ready.
   if (!existsSync(workerPath)) {
     throw new Error(`Usage scan worker entry not found: ${workerPath}`)
   }
@@ -46,12 +43,6 @@ function getSharedClient(): UsageScanWorkerClient {
   return sharedClient
 }
 
-/**
- * Scan Claude usage transcripts through the shared worker client.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker keeps that provider's per-source cache.
- * @returns The session and daily projections, computed off the main thread.
- */
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef
@@ -71,12 +62,6 @@ export function scanClaudeUsageFilesViaWorker(
   )
 }
 
-/**
- * Scan Codex rollouts through the shared worker client.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker keeps that provider's per-source cache.
- * @returns The session and daily projections, computed off the main thread.
- */
 export function scanCodexUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef
@@ -87,12 +72,6 @@ export function scanCodexUsageFilesViaWorker(
   return scanCodexUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
-/**
- * Scan OpenCode usage databases through the shared worker client.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker keeps that provider's per-source cache.
- * @returns The session and daily projections, computed off the main thread.
- */
 export function scanOpenCodeUsageDatabasesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef
@@ -103,12 +82,6 @@ export function scanOpenCodeUsageDatabasesViaWorker(
   return scanOpenCodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
-/**
- * Scan Muse Code session logs through the shared worker client.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker keeps that provider's per-source cache.
- * @returns The session and daily projections, computed off the main thread.
- */
 export function scanMuseUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef
@@ -119,11 +92,7 @@ export function scanMuseUsageFilesViaWorker(
   return scanMuseUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
-/**
- * Split a usage cache that still carries its per-source records, through the shared worker client.
- * @param request - The cache file and the key its per-source records sit under.
- * @returns The report alone, as JSON text, and whether a split happened.
- */
+/** Split source records on the worker; return only report JSON and whether migration occurred. */
 export function splitUsageCacheFileViaWorker(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {

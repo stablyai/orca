@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from './parcel-watcher-crash-fuse'
+import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from './filesystem/watcher-process/parcel-watcher-crash-fuse'
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,
   FakeWatcherChild as FakeChild
-} from './parcel-watcher-process-test-child'
+} from './filesystem/watcher-process/parcel-watcher-process-test-child'
 
 const { forkMock, existsSyncMock } = vi.hoisted(() => ({
   forkMock: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('node:fs', () => ({
   rmSync: vi.fn()
 }))
 
-import { createWatcherProcessSupervisor } from './parcel-watcher-process'
+import { createWatcherProcessSupervisor } from './filesystem/watcher-process/parcel-watcher-process'
 
 const currentChild = (): FakeChild => currentWatcherChild(forkMock)
 

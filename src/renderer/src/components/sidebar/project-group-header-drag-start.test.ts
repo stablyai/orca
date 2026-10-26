@@ -121,7 +121,6 @@ describe('createProjectGroupHeaderDragSession', () => {
   })
 
   it('does not arm when pressing an svg icon inside an action button', () => {
-    // Why: row stays the handle for hit-testing; action targets must be filtered.
     const header = document.createElement('div')
     header.setAttribute('data-project-group-header-drag-handle', '')
     const actionButton = document.createElement('button')
@@ -157,7 +156,6 @@ describe('createProjectGroupHeaderDragSession', () => {
   })
 
   it('does not arm from the actions overlay even if the row is the drag handle', () => {
-    // Why: row keeps the handle attr for indent/padding; overlay gaps must still be excluded.
     const header = document.createElement('div')
     header.setAttribute('data-project-group-header-drag-handle', '')
     const dragSurface = document.createElement('div')

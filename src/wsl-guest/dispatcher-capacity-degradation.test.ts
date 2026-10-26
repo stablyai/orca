@@ -29,8 +29,7 @@ type BoundedClient = {
   write: (data: Buffer) => boolean
 }
 
-// Why: a sink that never accepts a write and never drains retains producer bytes, so the queue saturates
-// while every individual frame stays comfortably inside the per-frame capacity.
+// Never settle/drain writes to fill the producer queue while each frame remains within capacity.
 function makeSaturatingClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.write = (data: Buffer) => {
@@ -59,8 +58,7 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
   return client
 }
 
-// Why: the sink accepts every write but never settles it, so control-lane bytes stay retained and the
-// queue fills, while the writer keeps pumping the other lanes — the shape of a peer whose socket is behind.
+// Accept without settling to retain control bytes while the other lanes keep pumping.
 function makeUnsettledWriteClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.options = { ...client.options, supportsWriteCallback: true }
@@ -138,7 +136,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       bounded.detachClient(secondaryId)
       expect(bounded.producerEnvelopeBudget('fs.changed', params, secondaryId)).toBeLessThan(0)
       expect(bounded.producerEnvelopeBudget('fs.changed', params, 999)).toBeLessThan(0)
-      // The no-target broadcast case still reports unbounded room.
       expect(bounded.producerEnvelopeBudget('fs.changed', params)).toBeGreaterThan(0)
     } finally {
       bounded.dispose()
@@ -151,7 +148,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     try {
       // Snapshot of the shipped formula: 49152-byte producer capacity minus the 96-byte empty-data frame.
       expect(bounded.producerDataBudget('pty.data', { ptyId: 'pty-7', seq: 42 })).toBe(49056)
-      // A vanished client leaves no room for data at all.
       expect(bounded.producerDataBudget('pty.data', { ptyId: 'pty-7', seq: 42 }, 999)).toBe(0)
     } finally {
       bounded.dispose()
@@ -231,7 +227,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
         /^\[relay\] Dropped fs\.changed \(\d+B > producer frame capacity 4128768B\)\n$/
       )
 
-      // Both classifications stay one-per-generation once logged.
       bounded.notify('fs.changed', { events: ['x'.repeat(1_500_000)] })
       bounded.notify('fs.changed', { events: ['x'.repeat(5_000_000)] })
       expect(stderr).toHaveBeenCalledTimes(2)
@@ -342,7 +337,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
         /^\[relay\] Dropped fs\.changed \(\d+B > producer frame capacity 12288B\)\n$/
       )
 
-      // Same one-line-per-generation budget as notify().
       expect(bounded.publishProducerNotification(secondaryId, 'fs.changed', flood)).toBe(false)
       expect(stderr).toHaveBeenCalledTimes(1)
     } finally {
@@ -500,7 +494,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       expect(rejected.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(rejected.error.message).toBe('Relay response exceeded the bounded transport capacity')
 
-      // Every other pane and request on this connection keeps working.
       bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 93, method: 'workspace.get' }, 3, 0))
       await vi.advanceTimersByTimeAsync(0)
       expect(decodePayload(primary.frames[2])).toMatchObject({

@@ -1,9 +1,12 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
+import {
+  TERMINAL_PASTE_CHUNK_MAX_BYTES,
+  TERMINAL_PASTE_DIRECT_MAX_BYTES
+} from './terminal-paste-limits'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { flushAsyncTicks, drainPendingTimeouts } from './pty-connection-test-async'
+import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
@@ -68,7 +71,6 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      // Local connection: no connectionId
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -82,10 +84,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       expect(capturedDataCallback.current).not.toBeNull()
 
-      // Simulate PTY output (shell prompt arriving)
       capturedDataCallback.current?.('(base) user@host $ ')
 
-      // Even after the debounce, the renderer must not inject the command (main already wrote it via writeStartupCommandWhenShellReady).
       expect(transport.sendInput).not.toHaveBeenCalledWith(
         expect.stringContaining("claude 'say test'")
       )
@@ -395,12 +395,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     it('chunks large terminal-paste startup commands through the PTY before submitting', async () => {
-      const pendingTimeouts: (() => void)[] = []
-      const originalSetTimeout = globalThis.setTimeout
-      globalThis.setTimeout = vi.fn((fn: () => void) => {
-        pendingTimeouts.push(fn)
-        return 999 as unknown as ReturnType<typeof setTimeout>
-      }) as unknown as typeof setTimeout
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'],
+        loopLimit: 100
+      })
+      const scheduledTimeouts = vi.spyOn(globalThis, 'setTimeout')
 
       try {
         const { connectPanePty } = await import('./pty-connection')
@@ -436,8 +435,9 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         expect(capturedDataCallback.current).not.toBeNull()
 
         capturedDataCallback.current?.('user@host $ ')
-        await drainPendingTimeouts(pendingTimeouts)
+        await vi.advanceTimersByTimeAsync(100)
         await flushAsyncTicks()
+        expect(scheduledTimeouts.mock.calls.length).toBeLessThanOrEqual(100)
 
         const writtenInput = transport.sendInput.mock.calls.map((call) => call[0])
         expect(pane.terminal.paste).not.toHaveBeenCalled()
@@ -446,17 +446,17 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         expect(writtenInput.slice(0, -1).length).toBeGreaterThan(1)
         expect(transport.sendInput).not.toHaveBeenCalledWith(`${command}\r`)
       } finally {
-        globalThis.setTimeout = originalSetTimeout
+        vi.restoreAllMocks()
+        vi.useRealTimers()
       }
     })
 
     it('does not submit a terminal-paste startup command after the PTY changes mid-paste', async () => {
-      const pendingTimeouts: (() => void)[] = []
-      const originalSetTimeout = globalThis.setTimeout
-      globalThis.setTimeout = vi.fn((fn: () => void) => {
-        pendingTimeouts.push(fn)
-        return 999 as unknown as ReturnType<typeof setTimeout>
-      }) as unknown as typeof setTimeout
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'],
+        loopLimit: 100
+      })
+      const scheduledTimeouts = vi.spyOn(globalThis, 'setTimeout')
 
       try {
         const { connectPanePty } = await import('./pty-connection')
@@ -464,9 +464,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
         let livePtyId = 'pty-local-paste'
+        let ptyIdBeforeReplacement: string | null = null
         transport.getPtyId.mockImplementation(() => livePtyId)
         transport.sendInput.mockImplementation((data: string) => {
           if (data !== '\r') {
+            ptyIdBeforeReplacement = livePtyId
             livePtyId = 'pty-replaced'
           }
           return true
@@ -499,14 +501,20 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         expect(capturedDataCallback.current).not.toBeNull()
 
         capturedDataCallback.current?.('user@host $ ')
-        await drainPendingTimeouts(pendingTimeouts)
+        await vi.advanceTimersByTimeAsync(100)
         await flushAsyncTicks()
+        expect(scheduledTimeouts.mock.calls.length).toBeLessThanOrEqual(100)
 
         expect(pane.terminal.paste).not.toHaveBeenCalled()
         expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
+        expect(ptyIdBeforeReplacement).toBe('pty-local-paste')
+        expect(transport.sendInput.mock.calls.map((call) => call[0])).toEqual([
+          'x'.repeat(TERMINAL_PASTE_CHUNK_MAX_BYTES)
+        ])
         expect(transport.sendInput.mock.calls.map((call) => call[0]).join('')).not.toBe(command)
       } finally {
-        globalThis.setTimeout = originalSetTimeout
+        vi.restoreAllMocks()
+        vi.useRealTimers()
       }
     })
   })

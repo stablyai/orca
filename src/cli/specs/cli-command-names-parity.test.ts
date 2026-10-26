@@ -7,7 +7,8 @@ vi.mock('electron', () => ({ app: { commandLine: { getSwitchValue: () => '' } } 
 
 describe('CLI launch redirect command names', () => {
   it('routes every CLI root through command redirect or direct serve', () => {
-    const roots = new Set(COMMAND_SPECS.map((spec) => spec.path[0]))
+    // Why agent-teams-tmux: the CLI dispatches it before spec parsing, and the tmux shim runs it.
+    const roots = new Set([...COMMAND_SPECS.map((spec) => spec.path[0]), 'agent-teams-tmux'])
     const options = {
       platform: 'linux',
       isPackaged: true,

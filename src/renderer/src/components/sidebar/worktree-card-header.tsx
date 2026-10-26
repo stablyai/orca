@@ -15,7 +15,6 @@ import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
-// Why: pinned and compact inline project cues share this chip so both read as the same affordance.
 function RepoIdentityChip({
   repo,
   children
@@ -127,9 +126,7 @@ export function WorktreeCardHeader({
             <TooltipTrigger asChild>
               <span className="shrink-0 inline-flex items-center">
                 {isRuntimeDisconnected ? (
-                  // Passive by design: runtime ("Orca server") hosts have no
-                  // renderer-reachable connect API, unlike the SSH glyph above which is
-                  // now a control. Don't "fix" the inconsistency by wiring one up.
+                  // This surface shows runtime disconnection passively; reconnect controls belong to host management.
                   <ServerOff className="size-3 text-destructive" />
                 ) : (
                   <Server className="size-3 text-muted-foreground" />
@@ -173,7 +170,6 @@ export function WorktreeCardHeader({
           </RepoIdentityChip>
         )}
 
-        {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
           disabled={isDeleting || affiliateListMode}
@@ -194,7 +190,7 @@ export function WorktreeCardHeader({
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&
         !titleRenaming ? (
-          // Why: the error can be raw agent CLI output, so the badge opens a dialog rather than a tooltip.
+          // Errors can contain raw agent output; open a dialog rather than a tooltip.
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

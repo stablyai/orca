@@ -47,12 +47,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       } else {
         // Why: main dropped buffered output at the pending cap, so the stream has a gap; repaint from the main-owned snapshot instead of writing on.
         session.markHiddenOutputRestoreNeeded()
-        // Why the synthesized \x1b[?2026l is not written here: this branch discards
-        // `data` deliberately, and the grounded snapshot replay
-        // (REPLAY_BASELINE_TERMINAL_RESET) releases the latch instead. Writing it
-        // through writePtyOutputToXterm perturbs the hidden-output-restore state
-        // machine (it consumes the pending snapshot), so the release rides the
-        // restore. Residual gap: a pane whose restore never arrives.
+        // Discarded sentinel bytes must not enter the PTY writer and consume pending restore; snapshot reset releases DEC 2026 when recovery arrives.
         if (data) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
           session.salvageRendererQueriesFromDiscardedRestoreData(data)

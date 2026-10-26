@@ -118,8 +118,7 @@ export function PRActionsPanel({
     }
     const previousState = localState
     setStatePending(true)
-    // Why: without registry authority a search-lagged Tasks refetch silently
-    // reverts this row to its pre-mutation state (STA-3343).
+    // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
     const authority = assertTaskPageGitHubDialogStateAuthority({
       repoId: item.repoId,
       itemId: item.id,

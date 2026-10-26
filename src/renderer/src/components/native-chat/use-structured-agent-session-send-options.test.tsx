@@ -64,7 +64,6 @@ describe('what each composer send carries', () => {
       model: 'opus[1m]',
       effort: 'low'
     })
-    // A model the list lacks runs as picked.
     expect(sendOptionsFor(true, { model: 'claude-retired' })()).toMatchObject({
       model: 'claude-retired'
     })

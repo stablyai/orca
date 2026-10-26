@@ -1,4 +1,5 @@
 import { getDiskBaselineSignature, getWrittenContentDiskSignature } from './disk-baseline-signature'
+import { ERRNO_CODE_PATTERN } from './errno-code'
 
 // Why: the host serves `files.writeIfUnchanged`; without it a client compares from its side first.
 export const FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY =
@@ -9,10 +10,7 @@ export const FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY = 'files.write.identical-no
 
 export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
 
-/**
- * Whether the host's guarded write can be sent as is. A v1 host can't check bytes or skip identical
- * text, so only saves that must refuse non-UTF-8 files pay for a client-side read first.
- */
+/** v1 hosts cannot check bytes or skip identical writes; require a client-side read only for saves that must refuse non-UTF-8 files. */
 export function hostEnforcesPrecondition(
   capabilities: readonly unknown[],
   precondition: FileWriteDiskPrecondition
@@ -93,28 +91,34 @@ function isConfirmedFileNotFoundError(error: unknown): boolean {
   }
   // Other codes (an RPC envelope's 'runtime_error') carry no errno, so the wording decides.
   const code = 'code' in error ? error.code : undefined
-  if (typeof code === 'string' && ERRNO_CODE.test(code)) {
+  if (typeof code === 'string' && ERRNO_CODE_PATTERN.test(code)) {
     return code === 'ENOENT'
   }
   // Why only a leading wrapper is stripped: the rest may quote a path, which can spell anything.
   return NOT_FOUND_MESSAGE.test(error.message.replace(IPC_ERROR_WRAPPER, ''))
 }
 
-const ERRNO_CODE = /^E[A-Z0-9]+$/
 const IPC_ERROR_WRAPPER = /^Error invoking remote method '[^']*': (?:Error: )?/
 const NOT_FOUND_MESSAGE = /^(?:ENOENT: no such file or directory|No such file(?: or directory)?$)/i
 
+const FILE_TOO_LARGE_CODE = 'file_too_large'
+
+/** A host's `file_too_large` refusal, which travels as the bare code in the message. */
+export function isFileTooLargeCodeMessage(message: string): boolean {
+  return message === FILE_TOO_LARGE_CODE
+}
+
 // Why both: hosts answer with the `file_too_large` code (carried as the message); local readers in prose.
+export function isFileTooLargeMessage(message: string): boolean {
+  return isFileTooLargeCodeMessage(message) || /\btoo large\b|\bis larger than\b/i.test(message)
+}
+
 function isFileTooLargeToReadError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
   const code = 'code' in error ? error.code : undefined
-  return (
-    code === 'file_too_large' ||
-    error.message === 'file_too_large' ||
-    /\btoo large\b|\bis larger than\b/i.test(error.message)
-  )
+  return code === FILE_TOO_LARGE_CODE || isFileTooLargeMessage(error.message)
 }
 
 /** Settles a precondition whose disk read failed; rethrows anything that doesn't prove the disk state. */

@@ -27,7 +27,7 @@ import {
   agentSessionRecordFixture
 } from './agent-session-record.test-fixture'
 
-/** The rules of the handle guard builds before the neutral handle shipped ran on every stored one. */
+/** The pre-neutral-handle guard applied to every stored handle. */
 function olderBuildReadsHandle(value: unknown): boolean {
   const isHandleField = (field: unknown): boolean =>
     typeof field === 'string' && field.length > 0 && field.length <= 512 && field === field.trim()

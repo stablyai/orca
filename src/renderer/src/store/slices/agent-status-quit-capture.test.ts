@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
-import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
+import './agent-status'
+import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status/agent-status-recovery-collection'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 function makeAgentEntry(overrides: {
@@ -57,8 +58,7 @@ describe('captureAllSleepingAgentSessions', () => {
       }
     )
 
-    // Why: Windows update/reboot exits can miss beforeunload; the provider
-    // session handle must already be durable for pane-level cold restore.
+    // Windows update/reboot can skip beforeunload; persist provider identity early for cold restore.
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       agent: 'codex',
       worktreeId: 'wt-1',
@@ -237,8 +237,7 @@ describe('captureAllSleepingAgentSessions', () => {
     const first = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
     expect(first).toMatchObject({ origin: 'quit' })
 
-    // Why: beforeunload can fire twice during a confirmed close; the second
-    // capture must not dirty the store with a capturedAt-only rewrite.
+    // Duplicate beforeunload must not dirty store solely by rewriting capturedAt.
     store.getState().captureAllSleepingAgentSessions('quit')
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(first)
 
@@ -550,7 +549,7 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('clears multiple sleeping records and launch configs in one update', () => {
+  it('clears multiple sleeping records in one update and leaves launch configs untouched', () => {
     const store = createTestStore()
     const sleeping = {
       'tab-1:leaf-1': { paneKey: 'tab-1:leaf-1' },
@@ -596,7 +595,7 @@ describe('captureAllSleepingAgentSessions', () => {
     const state = store.getState()
     expect(changedUpdates).toBe(1)
     expect(Object.keys(state.sleepingAgentSessionsByPaneKey)).toEqual(['tab-3:leaf-3'])
-    expect(Object.keys(state.agentLaunchConfigByPaneKey)).toEqual(['tab-3:leaf-3'])
+    expect(state.agentLaunchConfigByPaneKey).toBe(launchConfigs)
   })
 
   it('clears launch config registry entries when invalid sleeping sessions are pruned', () => {
@@ -686,10 +685,7 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(firstRecord)
   })
 
-  // Why: a finished resumable-agent turn leaves the TUI alive at its prompt, so the persisted
-  // recovery anchor must survive `done` without relabeling completed work as pending — else
-  // logout→relaunch cold-restores to a bare shell instead of `--resume` (#9454).
-  // Covers claude (the reported agent) and codex; previously this was Pi-only.
+  // Done TUIs remain at prompts; retain recovery without marking completed work pending or relaunch opens bare shells (#9454). Cover Claude/Codex beyond former Pi-only behavior.
   it.each([
     ['claude', 'Claude'],
     ['codex', 'Codex']

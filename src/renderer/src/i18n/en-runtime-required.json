@@ -73,6 +73,10 @@
         "af6e02c44a": "page",
         "f5a6b38a14": "sheet"
       },
+      "NativeChatResumeOnRestartModal": {
+        "serverResumeHere": "Resume {{count}} chats started here",
+        "serverResumeHereOne": "Resume 1 chat started here"
+      },
       "NewWorkspaceComposerCard": {
         "0e587e31fb": "yaml",
         "2132b670da": "both",
@@ -1809,6 +1813,15 @@
             }
           }
         },
+        "claudeSubagentNavigation": {
+          "search": {
+            "mod": "mod",
+            "navigation": "navigation",
+            "plugin": "plugin",
+            "shortcut": "shortcut",
+            "subagent": "subagent"
+          }
+        },
         "computerUseSkillRuntime": {
           "thisDevice": "This device"
         },
@@ -2915,6 +2928,7 @@
         "nativeDropTempCopyFailed_other": "Orca couldn't copy {{count}} dropped files."
       },
       "useIpcEvents": {
+        "56d3ec4203": "Failed to create untitled markdown file.",
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f6300deb8b": "New Browser Tab"
       },
@@ -2931,6 +2945,16 @@
             }
           }
         }
+      },
+      "claudeAgentRowView": {
+        "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required."
+      },
+      "dropFailureReason": {
+        "changed": "The file changed while it was uploading. Try again.",
+        "disconnected": "The host is disconnected.",
+        "hostUnreachable": "The connection to the host changed or dropped. Try again.",
+        "noSpace": "The host is out of disk space.",
+        "tooLarge": "Too large to upload to this host."
       },
       "dropSkipReason": {
         "missing": "No longer at its original path.",
@@ -3164,6 +3188,8 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
+        "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -3185,6 +3211,12 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goalControl": {
+        "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
+        "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
+        "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
       "notices": {
         "compaction": "Context compacted",
@@ -3314,7 +3346,7 @@
         "notAvailable": "This isn't available in this chat.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
-        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneGoalChangeIncomplete": "Couldn't finish changing the goal. Check the chat.",
         "notDoneOption": "The setting wasn't changed.",
         "notDoneQueuedEdit": "Your edit wasn't saved.",
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -3458,6 +3490,22 @@
     }
   },
   "settings": {
+    "agents": {
+      "loadingHost": "Loading agent settings…",
+      "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
+      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
+      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
+      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
+      "permissionOverrideFollows": "{{agent}} now follows {{mode}}",
+      "permissionOverrideMore": "and {{count}} more",
+      "permissionOverrideMore_one": "and {{count}} more",
+      "permissionOverrideMore_other": "and {{count}} more",
+      "permissionOverridesUse": "Use {{mode}}",
+      "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config"
+    },
     "browser": {
       "clientHostedRemote": {
         "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",

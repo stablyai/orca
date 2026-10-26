@@ -24,12 +24,7 @@ function replaceWorkspaceRecordKeys<T>(
   }
 }
 
-/**
- * Folds every workspace's reconciliation into one patch. Equivalent to
- * applying each patch with its own `set()`: each projection reads the state
- * left by its predecessors (they share `unreadTerminalTabs` and the orphan
- * cleanup maps), only the store write and subscriber fanout are deferred.
- */
+/** Fold in workspace order so shared unread/orphan maps see prior patches; defer only the store write and subscriber notifications. */
 function projectWorktreeTabModelReconciliations(
   state: AppState,
   worktreeIds: readonly string[]

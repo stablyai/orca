@@ -123,7 +123,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
+      // Treat typed Linear identifiers as lookup text too, rather than user-owned names.
       if (
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
@@ -140,7 +140,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
       branchAutoNameRef.current = linearBranchName ?? ''
-      // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
+      // Source selection must not inject user instructions through note prefill; match GitHub behavior.
     },
     [
       isProjectGroupTarget,

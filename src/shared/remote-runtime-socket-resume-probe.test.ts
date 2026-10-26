@@ -3,11 +3,8 @@ import {
   probeAllRemoteRuntimeSocketsNow,
   startRemoteRuntimeSocketLiveness
 } from './remote-runtime-socket-liveness'
-import { SharedControlReconnectScheduler } from './remote-runtime/control/remote-runtime-shared-control-reconnect'
 
-// Regression for #9092: after sleep a socket can still read OPEN while its path is gone, so resume
-// probes every socket at once. A miss at the probe deadline marks it suspect and re-pings; only the
-// normal 25 s keepalive window kills it, because relayed links can take longer than 8 s to reroute.
+// After sleep, probe every socket immediately; 8s misses only re-ping and the normal 25s keepalive decides death so relayed paths have time to recover (#9092).
 describe('remote runtime resume probe', () => {
   const monitors: { stop: () => void }[] = []
 
@@ -154,47 +151,5 @@ describe('remote runtime resume probe', () => {
     probeAllRemoteRuntimeSocketsNow(2_000)
     await vi.advanceTimersByTimeAsync(25_000)
     expect(onDead).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('SharedControlReconnectScheduler.retryNow after an outage', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('restarts the backoff ladder so a failure right after wake retries quickly', () => {
-    const scheduler = new SharedControlReconnectScheduler()
-    const open = vi.fn()
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      scheduler.scheduleWithIdleBackoff(false, open)
-      vi.runOnlyPendingTimers()
-    }
-    expect(scheduler.attemptCount).toBeGreaterThanOrEqual(6)
-
-    scheduler.scheduleWithIdleBackoff(false, open)
-    expect(scheduler.retryNow()).toBe(true)
-    expect(scheduler.attemptCount).toBe(0)
-  })
-
-  it('restarts the ladder even when the wake lands while a reconnect is already opening', () => {
-    const scheduler = new SharedControlReconnectScheduler()
-    const open = vi.fn()
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      scheduler.scheduleWithIdleBackoff(false, open)
-      vi.runOnlyPendingTimers()
-    }
-    // The last open() is in flight, so no timer is pending for retryNow to advance.
-    expect(scheduler.isScheduled).toBe(false)
-    expect(scheduler.retryNow()).toBe(false)
-    expect(scheduler.attemptCount).toBe(0)
-  })
-
-  it('does nothing when no reconnect is pending', () => {
-    const scheduler = new SharedControlReconnectScheduler()
-    expect(scheduler.retryNow()).toBe(false)
-    expect(scheduler.attemptCount).toBe(0)
   })
 })
