@@ -250,6 +250,20 @@ describe('tab.close uses the unified active tab', () => {
     await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
   })
 
+  it('leaves the chord to an agent terminal preview dialog over a workspace editor', () => {
+    tab.contentType = 'editor'
+    const preview = document.createElement('div')
+    preview.setAttribute('data-agent-terminal-preview', '')
+    const target = document.createElement('textarea')
+    target.classList.add('xterm-helper-textarea')
+    preview.appendChild(target)
+    const event = new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true })
+    Object.defineProperty(event, 'target', { value: target })
+    handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
+    expect(event.defaultPrevented).toBe(false)
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
   it('does not close the main workspace tab while the floating panel owns focus', () => {
     mocks.floatingFocused = true
     expect(close().defaultPrevented).toBe(false)

@@ -504,6 +504,25 @@ describe('AgentTerminalPreview', () => {
     expect(input).not.toHaveBeenCalled()
   })
 
+  it('dismisses the hosting dialog on the pane-close chord', async () => {
+    const onRequestClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onRequestClose={onRequestClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      ctrlKey: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onRequestClose).toHaveBeenCalledOnce()
+    expect(input).not.toHaveBeenCalled()
+  })
+
   it('keeps a native input-source chord from inserting text into the preview', async () => {
     storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
