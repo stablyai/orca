@@ -14,7 +14,7 @@ import Animated, {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing, springs } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import {
   clampDragReorderIndex,
@@ -24,6 +24,7 @@ import {
   type DragReorderPositions
 } from './drag-reorder-positions'
 
+const ROW_SPRING = { damping: 28, stiffness: 350 }
 const LONG_PRESS_ACTIVATION_MS = 200
 // NUL cannot occur in row keys, making joined change signature unambiguous.
 const KEY_SEPARATOR = '\u0000'
@@ -319,7 +320,7 @@ function DragReorderRow({
       }
     }
     return {
-      top: withSpring(index * rowHeight, springs.listReorder),
+      top: withSpring(index * rowHeight, ROW_SPRING),
       zIndex: 0,
       elevation: 0,
       shadowOpacity: 0,

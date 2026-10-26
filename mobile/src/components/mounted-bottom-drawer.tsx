@@ -11,7 +11,7 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
-import { spacing, springs } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import {
@@ -30,6 +30,7 @@ import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/ke
 import { hostOs } from '../platform/host-os'
 
 const DISMISS_THRESHOLD = 80
+const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Damp upward pull with rubber-band factor to signal drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const TOP_SCROLL_EPSILON = 1
@@ -219,7 +220,7 @@ export function MountedBottomDrawer({
           runOnJS(onClose)()
         })
       } else {
-        translateY.value = withSpring(0, springs.drawer)
+        translateY.value = withSpring(0, SPRING_CONFIG)
       }
     })
   const contentPanGesture = Gesture.Pan()
@@ -235,7 +236,7 @@ export function MountedBottomDrawer({
         contentDragCanDismiss.value = false
         contentDragStartY.value = 0
         if (translateY.value !== 0) {
-          translateY.value = withSpring(0, springs.drawer)
+          translateY.value = withSpring(0, SPRING_CONFIG)
         }
         return
       }
@@ -267,7 +268,7 @@ export function MountedBottomDrawer({
           runOnJS(onClose)()
         })
       } else {
-        translateY.value = withSpring(0, springs.drawer)
+        translateY.value = withSpring(0, SPRING_CONFIG)
       }
     })
 

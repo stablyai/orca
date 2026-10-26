@@ -12,13 +12,14 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing, springs } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
+const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Damp negative translateX so panel resists pulling inward past docked edge.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
@@ -128,7 +129,7 @@ function MountedRightDrawer({
           runOnJS(dismiss)()
         })
       } else {
-        translateX.value = withSpring(0, springs.drawer)
+        translateX.value = withSpring(0, SPRING_CONFIG)
       }
     })
 

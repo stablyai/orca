@@ -14,7 +14,6 @@ const probe = vi.hoisted(
     jsQueue: (() => void)[]
     frame: ((frame: { timeSincePreviousFrame: number }) => void) | null
     scroll: ReturnType<typeof vi.fn>
-    springCalls: { value: number; config: unknown }[]
     viewport: { pageY: number; height: number } | null
   } => ({
     gestures: [],
@@ -24,7 +23,6 @@ const probe = vi.hoisted(
     jsQueue: [],
     frame: null,
     scroll: vi.fn(),
-    springCalls: [],
     viewport: null
   })
 )
@@ -87,10 +85,7 @@ vi.mock('react-native-reanimated', async () => {
       probe.frame = fn
       return { setActive: probe.frameActive }
     },
-    withSpring: (value: number, config: unknown) => {
-      probe.springCalls.push({ value, config })
-      return value
-    },
+    withSpring: (value: number) => value,
     runOnJS:
       (fn: (...args: unknown[]) => unknown) =>
       (...args: unknown[]) => {
@@ -108,7 +103,6 @@ vi.mock('react-native-reanimated', async () => {
 vi.mock('lucide-react-native', () => ({ GripVertical: () => null }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn(), triggerSelection: vi.fn() }))
 
-import { springs } from '../theme/mobile-theme'
 import { DragReorderList } from './DragReorderList'
 
 beforeEach(() => {
@@ -119,7 +113,6 @@ beforeEach(() => {
   probe.jsQueue.length = 0
   probe.frame = null
   probe.scroll.mockClear()
-  probe.springCalls.length = 0
   probe.viewport = null
 })
 
@@ -351,14 +344,12 @@ it('stops scrolling at the viewport edge when rows are replaced', async () => {
   await act(async () => fixture.root.unmount())
 })
 
-it('places a newly appended row at its initial slot index instead of springing from top 0', async () => {
+it('mounts an appended row in its own slot instead of at the top', async () => {
   const fixture = await mounted()
-  probe.springCalls.length = 0
   await fixture.updateItems(['a', 'b', 'c'])
-  expect(probe.springCalls).toEqual([
-    { value: 0, config: springs.listReorder },
-    { value: 72, config: springs.listReorder },
-    { value: 144, config: springs.listReorder }
-  ])
+  const rowTops = fixture.root.root
+    .findAllByType('AnimatedView')
+    .flatMap((node) => (Array.isArray(node.props.style) ? [node.props.style[2].top] : []))
+  expect(rowTops).toEqual([0, 72, 144])
   await act(async () => fixture.root.unmount())
 })
