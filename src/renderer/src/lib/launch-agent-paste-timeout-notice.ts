@@ -29,11 +29,15 @@ export function createPasteReadinessTimeoutNotice(args: {
         return
       }
       toast.message(
-        translate(
-          'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-          "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-          { value0: args.submitted ? 'prompt' : 'notes' }
-        )
+        args.submitted
+          ? translate(
+              'agentLaunch.pasteTimeout.prompt',
+              "Your prompt wasn't sent — paste it once the agent is ready."
+            )
+          : translate(
+              'agentLaunch.pasteTimeout.notes',
+              "Your notes weren't sent — paste them once the agent is ready."
+            )
       )
       notified = true
       track('agent_error', {

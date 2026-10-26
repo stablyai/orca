@@ -17,7 +17,7 @@ import {
   getWorkspaceSpaceStatusLabel
 } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
-import { pluralize, type WorkspaceDecisionDetails } from './workspace-space-decision-details'
+import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
 
@@ -55,26 +55,45 @@ function DecisionLine({
 }
 
 function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string {
+  const active = translate('workspaceSpace.decision.activeAgents', '{{count}} active agents', {
+    count: details.activeAgentCount,
+    defaultValue_one: '{{count}} active agent'
+  })
+  const completed = translate(
+    'workspaceSpace.decision.completedAgents',
+    '{{count}} completed agents',
+    {
+      count: details.completedAgentCount,
+      defaultValue_one: '{{count}} completed agent'
+    }
+  )
   if (details.activeAgentCount > 0 && details.completedAgentCount > 0) {
-    return `${pluralize(details.activeAgentCount, 'active agent')}, ${pluralize(
-      details.completedAgentCount,
-      'completed agent'
-    )}`
+    return `${active}, ${completed}`
   }
   if (details.activeAgentCount > 0) {
-    return pluralize(details.activeAgentCount, 'active agent')
+    return active
   }
   if (details.completedAgentCount > 0) {
-    return `${pluralize(details.completedAgentCount, 'completed agent')} retained`
+    return translate('workspaceSpace.decision.retainedAgents', '{{agents}} retained', {
+      agents: completed
+    })
   }
-  return 'No tracked agents running'
+  return translate('workspaceSpace.decision.noAgents', 'No tracked agents running')
 }
 
 function getTerminalDecisionLabel(details: WorkspaceDecisionDetails): string {
   if (details.terminalTabCount === 0) {
-    return 'No terminal tabs'
+    return translate('workspaceSpace.decision.noTerminalTabs', 'No terminal tabs')
   }
-  return `${details.liveTerminalCount} live of ${pluralize(details.terminalTabCount, 'terminal tab')}`
+  return translate(
+    'workspaceSpace.decision.liveTerminalTabs',
+    '{{live}} live of {{count}} terminal tabs',
+    {
+      live: details.liveTerminalCount,
+      count: details.terminalTabCount,
+      defaultValue_one: '{{live}} live of {{count}} terminal tab'
+    }
+  )
 }
 
 function getGitDecisionLabel(
@@ -83,27 +102,43 @@ function getGitDecisionLabel(
 ): string {
   if (details.changedFileCount === null) {
     if (gitRefreshState?.error) {
-      return `Git status unavailable: ${gitRefreshState.error}`
+      return translate(
+        'workspaceSpace.decision.gitStatusUnavailable',
+        'Git status unavailable: {{error}}',
+        {
+          error: gitRefreshState.error
+        }
+      )
     }
-    return 'Git status has not loaded yet'
+    return translate('workspaceSpace.decision.gitStatusNotLoaded', 'Git status has not loaded yet')
   }
   if (details.changedFileCount === 0) {
-    return 'No uncommitted files'
+    return translate('workspaceSpace.decision.noUncommittedFiles', 'No uncommitted files')
   }
-  return pluralize(details.changedFileCount, 'changed file')
+  return translate('workspaceSpace.decision.changedFiles', '{{count}} changed files', {
+    count: details.changedFileCount,
+    defaultValue_one: '{{count}} changed file'
+  })
 }
 
 function getEditorDecisionLabel(details: WorkspaceDecisionDetails): string {
   if (details.openEditorFileCount === 0) {
-    return 'No editor files open'
+    return translate('workspaceSpace.decision.noEditorFiles', 'No editor files open')
   }
   if (details.dirtyEditorBufferCount === 0) {
-    return `${pluralize(details.openEditorFileCount, 'editor file')} open`
+    return translate('workspaceSpace.decision.openEditorFiles', '{{count}} editor files open', {
+      count: details.openEditorFileCount,
+      defaultValue_one: '{{count}} editor file open'
+    })
   }
-  return `${pluralize(details.dirtyEditorBufferCount, 'dirty editor buffer')} of ${pluralize(
-    details.openEditorFileCount,
-    'open file'
-  )}`
+  return translate(
+    'workspaceSpace.decision.dirtyEditorBuffers',
+    'Unsaved editor buffers: {{dirty}}; open files: {{total}}',
+    {
+      dirty: details.dirtyEditorBufferCount,
+      total: details.openEditorFileCount
+    }
+  )
 }
 
 function getDeleteDecisionLabel(
@@ -111,18 +146,18 @@ function getDeleteDecisionLabel(
   details: WorkspaceDecisionDetails
 ): string {
   if (details.isActive) {
-    return 'This is the active workspace'
+    return translate('workspaceSpace.decision.activeWorkspace', 'This is the active workspace')
   }
   if (worktree.status !== 'ok') {
     return worktree.error ?? getWorkspaceSpaceStatusLabel(worktree.status)
   }
   if (worktree.isMainWorktree) {
-    return 'Main worktree is protected'
+    return translate('workspaceSpace.decision.mainWorktreeProtected', 'Main worktree is protected')
   }
   if (!worktree.canDelete) {
-    return 'Workspace is protected'
+    return translate('workspaceSpace.decision.workspaceProtected', 'Workspace is protected')
   }
-  return 'Can be deleted after review'
+  return translate('workspaceSpace.decision.canDelete', 'Can be deleted after review')
 }
 
 export function WorkspaceDecisionHoverCard({
@@ -138,7 +173,8 @@ export function WorkspaceDecisionHoverCard({
 }): React.JSX.Element {
   const deleteDecision = getDeleteDecisionLabel(worktree, details)
   const issueLabel =
-    [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') || 'No linked issue'
+    [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') ||
+    translate('workspaceSpace.decision.noLinkedIssue', 'No linked issue')
   return (
     <HoverCardContent
       align="end"
@@ -219,7 +255,9 @@ export function WorkspaceDecisionHoverCard({
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.fb2069acb7',
             'Review'
           )}
-          value={details.reviewLabel ?? 'No linked PR'}
+          value={
+            details.reviewLabel ?? translate('workspaceSpace.decision.noLinkedPR', 'No linked PR')
+          }
         />
         <DecisionLine
           icon={<ExternalLink />}
@@ -234,11 +272,10 @@ export function WorkspaceDecisionHoverCard({
       <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
         <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
           {details.browserTabCount > 0
-            ? translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.131662ac65',
-                '{{value0}} open',
-                { value0: pluralize(details.browserTabCount, 'browser tab') }
-              )
+            ? translate('workspaceSpace.decision.openBrowserTabs', '{{count}} browser tabs open', {
+                count: details.browserTabCount,
+                defaultValue_one: '{{count}} browser tab open'
+              })
             : worktree.path}
         </div>
         <Button

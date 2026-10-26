@@ -75,7 +75,9 @@ export function normalizeStoredWebOverrides(
     }
     const normalized = normalizeKeybindingArrayForAction(actionId, rawBindings)
     if (!Array.isArray(normalized)) {
-      const error = normalized.ok ? 'Unable to parse shortcut.' : normalized.error
+      const error = normalized.ok
+        ? translate('webKeybindings.unableToParseShortcut', 'Unable to parse shortcut.')
+        : normalized.error
       diagnostics.push({
         severity: 'error',
         section,

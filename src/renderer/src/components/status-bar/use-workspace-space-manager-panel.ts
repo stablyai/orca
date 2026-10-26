@@ -141,11 +141,11 @@ export function useWorkspaceSpaceManagerPanel() {
             ),
         {
           description: translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.63efebe0e6',
-            '{{value0}} {{value1}} removed from Space.',
+            'workspaceSpace.deletedWorkspaces',
+            '{{count}} workspaces removed from Space.',
             {
-              value0: deletedTargets.length,
-              value1: deletedTargets.length === 1 ? 'workspace' : 'workspaces'
+              count: deletedTargets.length,
+              defaultValue_one: '{{count}} workspace removed from Space.'
             }
           )
         }

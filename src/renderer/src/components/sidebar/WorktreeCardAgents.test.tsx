@@ -557,7 +557,7 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('All 2 agents done')
-    expect(markup).toContain('Expand All 2 agents done')
+    expect(markup).toContain('Expand agent summary: All 2 agents done')
     expect(markup).not.toContain('title="Codex done"')
     expect(markup).not.toContain('title="Claude done"')
     expect(markup).not.toContain('>2 done<')
@@ -721,7 +721,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('inline-flex size-4 items-center justify-center')
     expect(markup).toContain('width="13"')
     expect(markup).toContain('3 agents: 1 waiting, 1 working, 1 done')
-    expect(markup).toContain('Expand 3 agents: 1 waiting, 1 working, 1 done')
+    expect(markup).toContain('Expand agent summary: 3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).not.toContain('title="Codex waiting"')
     expect(markup).not.toContain('title="Claude working"')
     expect(markup).not.toContain('title="Gemini done"')
@@ -752,7 +752,7 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('All 3 agents done')
-    expect(markup).toContain('Expand All 3 agents done')
+    expect(markup).toContain('Expand agent summary: All 3 agents done')
     expect(markup).not.toContain('3 agents: 3 done')
     expect(markup).not.toContain('>+3<')
   })
@@ -822,7 +822,7 @@ describe('WorktreeCardAgents', () => {
     )
 
     expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Collapse 5 agents')
+    expect(markup).toContain('Collapse agent summary: 5 agents')
     expect(markup).toContain('compact-agent-summary-button-expanded')
     expect(markup).toContain('>5 agents<')
     expect(markup).not.toContain('>+2<')

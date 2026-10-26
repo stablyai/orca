@@ -39,11 +39,10 @@ export function WorktreeCardPortsTrigger({
     <button
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={translate(
-        'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
-        '{{value0}} live {{value1}}',
-        { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' }
-      )}
+      aria-label={translate('worktreePorts.liveCount', '{{count}} live ports', {
+        count: ports.length,
+        defaultValue_one: '{{count}} live port'
+      })}
       onClick={(event) => {
         event.stopPropagation()
         recordFeatureInteraction('ports')
@@ -108,7 +107,9 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : null
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid ? `PID ${port.pid}` : translate('worktreePorts.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(

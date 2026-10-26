@@ -1,0 +1,2086 @@
+{
+  "accounts.antigravity.keyword.agy": {
+    "source": "agy",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "accounts.antigravity.keyword.antigravity": {
+    "source": "antigravity",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "accounts.antigravity.keyword.google": {
+    "source": "google",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "aiVault.antigravity2ToCli": {
+    "source": "2.0 → CLI",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "aiVault.antigravityIdeToCli": {
+    "source": "IDE → CLI",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.GitHubItemDialog.136542c9ba": {
+    "source": ":L{{value0}}",
+    "rationale": "GitHub source line URL suffix."
+  },
+  "auto.components.GitHubItemDialog.924c2fe05e": {
+    "source": "destructive",
+    "rationale": "Component variant identifier."
+  },
+  "auto.components.GitHubItemDialog.b1157c78ff": {
+    "source": "sheet",
+    "rationale": "Component presentation variant identifier."
+  },
+  "auto.components.GitHubItemDialog.ce8a85d209": {
+    "source": "default",
+    "rationale": "Component variant identifier."
+  },
+  "auto.components.GitHubItemDialog.d1c0dad471": {
+    "source": "-L{{value0}}",
+    "rationale": "GitHub source line range URL suffix."
+  },
+  "auto.components.GitLabItemDialog.3c0b6ccca7": {
+    "source": "bug, backend",
+    "rationale": "Example external label names."
+  },
+  "auto.components.JiraIssueWorkspace.0f3c07a901": {
+    "source": "backend, bug",
+    "rationale": "Example external label names."
+  },
+  "auto.components.Landing.6ca6ff404e": {
+    "source": "ORCA",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NativeChatResumeOnRestartModal.sshHost": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NativeChatResumeOutcomeRow.statusFor": {
+    "source": "{{value0}}: {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NativeChatResumeRunStatusIcon.inFlight": {
+    "source": "{{value0}} · {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NewWorkspaceComposerCard.branchNamePlaceholder": {
+    "source": "feature/my-branch",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NewWorkspaceComposerCard.cloneDestinationPlaceholder": {
+    "source": "/parent/directory/on/host",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.NewWorkspaceComposerCard.setupHostExistingFolderPlaceholder": {
+    "source": "/path/to/project/on/host",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.QuickOpen.250e5b2dfb": {
+    "source": "Enter",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.QuickOpen.95fccbae88": {
+    "source": "Esc",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.TaskPage.171b7739d8": {
+    "source": "mrs",
+    "rationale": "Task source identifier."
+  },
+  "auto.components.TaskPage.2007e14d95": {
+    "source": "gitlab",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.TaskPage.33a4bd7f5c": {
+    "source": "todos",
+    "rationale": "Task source identifier."
+  },
+  "auto.components.TaskPage.3659f9792a": {
+    "source": "board",
+    "rationale": "View layout identifier."
+  },
+  "auto.components.TaskPage.38139edb52": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.TaskPage.3b11c8e8fc": {
+    "source": "array",
+    "rationale": "Field type identifier."
+  },
+  "auto.components.TaskPage.3cb855080f": {
+    "source": "views",
+    "rationale": "Internal task view identifier."
+  },
+  "auto.components.TaskPage.3d93316bb0": {
+    "source": "prs",
+    "rationale": "Task source identifier."
+  },
+  "auto.components.TaskPage.456b8512da": {
+    "source": "MergeRequest",
+    "rationale": "GitLab work item type identifier."
+  },
+  "auto.components.TaskPage.4645a7814f": {
+    "source": "jira",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.TaskPage.51411113df": {
+    "source": "list",
+    "rationale": "View layout identifier."
+  },
+  "auto.components.TaskPage.68df347677": {
+    "source": "you@example.com",
+    "rationale": "Пример адреса email."
+  },
+  "auto.components.TaskPage.9ae151b26b": {
+    "source": "linear",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.TaskPage.e224d76876": {
+    "source": "MR",
+    "rationale": "Merge request abbreviation."
+  },
+  "auto.components.TaskPage.eb10c32872": {
+    "source": "ID",
+    "rationale": "Identifier abbreviation."
+  },
+  "auto.components.TaskPageJiraSavedFilters.42ce360813": {
+    "source": "JQL",
+    "rationale": "Jira Query Language name."
+  },
+  "auto.components.UnexpectedSignoutCard.6e3f1a9c5b": {
+    "source": "Orca Relay",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.WorktreeJumpPalette.66b5a67bee": {
+    "source": "Esc",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.WorktreeJumpPalette.f65d992a11": {
+    "source": "Enter",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.artifacts.typeHtml": {
+    "source": "HTML",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.automations.AutomationDetail.51a470b966": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.automations.AutomationDetail.de0fedac06": {
+    "source": "new_per_run",
+    "rationale": "Automation session policy identifier."
+  },
+  "auto.components.automations.AutomationEditorDialog.ff5db28639": {
+    "source": "existing",
+    "rationale": "Automation workspace mode identifier."
+  },
+  "auto.components.automations.AutomationsPage.dd0bc7a1ba": {
+    "source": "new_per_run",
+    "rationale": "Automation session policy identifier."
+  },
+  "auto.components.crash.report.CrashReportDialog.835037edc9": {
+    "source": "· Orca",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.tips.CliFeatureTipVisual.badb4fc342": {
+    "source": ">",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219": {
+    "source": "Pro",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.59ae327405": {
+    "source": "Starter",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.f2034c4930": {
+    "source": ">",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.ComputerUseAnimatedVisual.99a8624bcb": {
+    "source": ">",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.list_mid": {
+    "source": ", ",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.EditorAnimatedVisual.cda56c5915": {
+    "source": "notes / launch-plan.md",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.2ef0b97954": {
+    "source": "typecheck",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.c2062da7ec": {
+    "source": "stderr",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.d340c052fb": {
+    "source": "verify",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344": {
+    "source": "Grep",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97": {
+    "source": ">",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785": {
+    "source": "Read",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd": {
+    "source": "src/auth/session.ts",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.agents.orchestration.StatusesPage.2f549fc0ba": {
+    "source": "src/auth/session.test.ts",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.feature.wall.agents.orchestration.StatusesPage.7b26349cb2": {
+    "source": "pnpm migrate latest",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.PRFilterDropdowns.19bb6f115f": {
+    "source": "reviewed-by",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.github.rate.limit.display.01f7323e58": {
+    "source": "GraphQL API",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.github.rate.limit.display.1f2f28a4de": {
+    "source": "Search API",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.github.rate.limit.display.c392c749a6": {
+    "source": "REST API",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectCell.d0d0e13a5a": {
+    "source": "PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectCell.ffeff79861": {
+    "source": "PULL_REQUEST",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectPicker.43a88ae574": {
+    "source": "BOARD_LAYOUT",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectPicker.cafb908f34": {
+    "source": "TABLE_LAYOUT",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectRoadmapBar.cd68ccc17a": {
+    "source": "{{value0}} — {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.github.project.ProjectRow.c3b81ddea2": {
+    "source": "DRAFT_ISSUE",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.gitlab.gitlab.rate.limit.display.0a891e8935": {
+    "source": "REST API",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.jira.connect.dialog.17787d6e4b": {
+    "source": "Atlassian Cloud",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.jira.connect.dialog.e91b9a4073": {
+    "source": "you@example.com",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.linear.api.key.dialog.edec49dfae": {
+    "source": "lin_api_...",
+    "rationale": "Literal API key prefix placeholder."
+  },
+  "auto.components.mobile.MobileHero.5410d55d79": {
+    "source": "Orca Mobile",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.HomeSlide.091355da3d": {
+    "source": "M1 Mini · home",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.HomeSlide.19c212e25e": {
+    "source": "MacBook Pro",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.HomeSlide.d047197480": {
+    "source": "GitHub · Linear",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.HomeSlide.d33d7a9c29": {
+    "source": "orca  ·  feat/mobile-page",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.1d448b69f7": {
+    "source": "PASS",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.2defc05141": {
+    "source": "dev@mac",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.336c0e070e": {
+    "source": "mobile/orca-mobile-sidebar-mock-v3.html",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.4930eaaae7": {
+    "source": "Esc",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.4b3666f9a9": {
+    "source": "src/cache/worktree-cache.test.ts",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.53ff909568": {
+    "source": "Tab",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.80cc356591": {
+    "source": "Read",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.817090af40": {
+    "source": "Ctrl+C",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.a6e7cdc688": {
+    "source": "pnpm test --filter mobile",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.d39445686a": {
+    "source": "src/transport/host-store.test.ts",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.TerminalSlide.e0f98be657": {
+    "source": "orca/feat-mobile-page",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.mobile.slides.WorktreeListSlide.b4271864bd": {
+    "source": "MacBook Pro",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.new.workspace.SmartWorkspaceNameField.34ca97bce3": {
+    "source": "\"",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.new.workspace.SmartWorkspaceNameField.69ce292138": {
+    "source": "linear",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.new.workspace.SmartWorkspaceNameField.766083a596": {
+    "source": "\"",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.new.workspace.SmartWorkspaceNameField.9c004911c3": {
+    "source": "gitlab",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.pet.pet.models.2528586aa7": {
+    "source": "Claudino",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.pet.pet.models.7433516faf": {
+    "source": "Gremlin",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.repo.RepoCombobox.3639fd9da2": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.repo.repo.icon.31826b712e": {
+    "source": "API",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.settings.AccountsPane.37b4b4a3f7": {
+    "source": "auth=…; __Host-console_session=…",
+    "rationale": "Образец точного синтаксиса заголовка Cookie."
+  },
+  "auto.components.settings.AccountsPane.3c92b0d31c": {
+    "source": "general",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.AccountsPane.566d9a99ab": {
+    "source": "_token=…; minimax_group_id_v2=…",
+    "rationale": "Образец точного синтаксиса cookie MiniMax."
+  },
+  "auto.components.settings.AccountsPane.5d63bbfbec": {
+    "source": "MiniMax",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.AccountsPane.8951c5309f": {
+    "source": "auth=Fe26.2**…",
+    "rationale": "Образец точного синтаксиса cookie авторизации."
+  },
+  "auto.components.settings.AccountsPane.922b51e02d": {
+    "source": "Fe26.2**…",
+    "rationale": "Образец непрозрачного значения токена авторизации."
+  },
+  "auto.components.settings.AccountsPane.ae3b21eb6c": {
+    "source": "opencode.ai/workspace/wrk_…/go",
+    "rationale": "Пример URL с идентификатором рабочего пространства OpenCode; требуется сохранить точную структуру."
+  },
+  "auto.components.settings.AgentsPane.agentPermissionsYolo": {
+    "source": "Yolo",
+    "rationale": "Название режима разрешений агента Yolo."
+  },
+  "auto.components.settings.BrowserUseExamples.59722f31b4": {
+    "source": "\"",
+    "rationale": "Кавычка вокруг текста примера, без переводимых слов."
+  },
+  "auto.components.settings.BrowserUseExamples.b84807f228": {
+    "source": "\"",
+    "rationale": "Кавычка вокруг текста примера, без переводимых слов."
+  },
+  "auto.components.settings.CliSection.c5c0f2641d": {
+    "source": "Orca CLI",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.CommitMessageAiPane.02bab6542c": {
+    "source": "pr",
+    "rationale": "Сокращение PR (pull request), точный поисковый термин запроса на слияние."
+  },
+  "auto.components.settings.CursorAccountsSection.source.desktop": {
+    "source": "Cursor IDE",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.windows": {
+    "source": "Windows",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.DevToolsPane.orcaCloud": {
+    "source": "Orca Cloud",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.b2210b1b4f": {
+    "source": "Bluetooth",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.GitPane.3072428ac7": {
+    "source": "glab",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.GitPane.32dca11189": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.GitPane.8a527d48e3": {
+    "source": "gitlab",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.GitPane.f35007e6e8": {
+    "source": "git-username",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.GrokAccountsSection.a1b2c3d4e5": {
+    "source": "Grok (xAI)",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.IntegrationsPane.44cde4aa01": {
+    "source": "ORCA_BITBUCKET_API_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.4ab9b96925": {
+    "source": "Gitea",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.IntegrationsPane.5ee6ef6405": {
+    "source": "ORCA_AZURE_DEVOPS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.5efce6953d": {
+    "source": "Azure DevOps",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.IntegrationsPane.6193444689": {
+    "source": "ORCA_GITEA_API_BASE_URL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.6e0ff3403e": {
+    "source": "ORCA_BITBUCKET_ACCESS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.8f960935c1": {
+    "source": "ORCA_AZURE_DEVOPS_ACCESS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.a3326f6f1b": {
+    "source": "glab",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.IntegrationsPane.ae6b7f5f40": {
+    "source": "ORCA_AZURE_DEVOPS_API_BASE_URL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.b8a7efb3f6": {
+    "source": "ORCA_BITBUCKET_EMAIL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.e678d89e8c": {
+    "source": "ORCA_GITEA_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.IntegrationsPane.ea160a9978": {
+    "source": "CLI.",
+    "rationale": "CLI — стандартное сокращение интерфейса командной строки; завершает составную фразу с именем команды."
+  },
+  "auto.components.settings.ManageSessionsSection.a06ababda0": {
+    "source": "killAll",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.McpConfigFileRow.b145eb6009": {
+    "source": "env:",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.McpConfigSection.9ee215caf6": {
+    "source": ".mcp.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.MobileEmulatorExamples.b525ff2b12": {
+    "source": "\"",
+    "rationale": "Кавычка вокруг текста примера, без переводимых слов."
+  },
+  "auto.components.settings.MobileEmulatorExamples.d151e25078": {
+    "source": "\"",
+    "rationale": "Кавычка вокруг текста примера, без переводимых слов."
+  },
+  "auto.components.settings.MobileEmulatorSdkStatus.027cbf668a": {
+    "source": "Android SDK",
+    "rationale": "Название набора средств разработки или его формата."
+  },
+  "auto.components.settings.MobilePairingConnectionOptions.anywhereTitle": {
+    "source": "Orca Relay",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.MobileRelayBetaAvailability.androidApk": {
+    "source": "Android APK",
+    "rationale": "Название набора средств разработки или его формата."
+  },
+  "auto.components.settings.MobileRelayBetaAvailability.testFlight": {
+    "source": "TestFlight",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.MobileRelayStatusSection.title": {
+    "source": "Orca Relay",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.MobileSettingsPane.androidApkLabel": {
+    "source": "Android APK",
+    "rationale": "Название набора средств разработки или его формата."
+  },
+  "auto.components.settings.MobileSettingsPane.b5a2ed83ff": {
+    "source": "App Store",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.OpenInMenuSetting.810ef39b56": {
+    "source": "cursor",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.PluginConsentDialog.subtitle": {
+    "source": "{{value0}} v{{value1}} · {{value2}}",
+    "rationale": "Имя плагина, версия и готовая подпись происхождения без собственного переводимого текста."
+  },
+  "auto.components.settings.PluginMarketplacePreviewDialog.versionLine": {
+    "source": "v{{value0}} · {{value1}}",
+    "rationale": "Версия и готовая подпись происхождения, без собственного переводимого текста."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.windows": {
+    "source": "Windows",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.ProviderHostScopeControl.scope_label": {
+    "source": "{{value0}}: {{value1}}",
+    "rationale": "Две готовые подписи с разделителем, без собственного переводимого текста."
+  },
+  "auto.components.settings.QuickCommandsPane.44923dd982": {
+    "source": "destructive",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.QuickCommandsPane.9b3e338d62": {
+    "source": "Enter",
+    "rationale": "Имя клавиши Enter в выборе способа отправки команды."
+  },
+  "auto.components.settings.ReleaseChannelSection.willSwitch": {
+    "source": "{{value0}} → {{value1}}",
+    "rationale": "Два идентификатора сборок и направление перехода, без переводимого текста."
+  },
+  "auto.components.settings.RepositoryHooksSection.9b821fa19d": {
+    "source": "# e.g. echo \"Cleaning up $ORCA_WORKSPACE_NAME\"",
+    "rationale": "Полный пример скрипта оболочки: сохраняются команда, строковый литерал и переменные окружения."
+  },
+  "auto.components.settings.RepositoryHooksSection.a3fc966677": {
+    "source": "# e.g. pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\"",
+    "rationale": "Полный пример скрипта оболочки: сохраняются команда, строковый литерал и переменные окружения."
+  },
+  "auto.components.settings.RepositoryPane.cloneDestinationPlaceholder": {
+    "source": "/destination/on/host",
+    "rationale": "Пример абсолютного пути назначения на сервере."
+  },
+  "auto.components.settings.RepositoryPane.setupExistingFolderPathPlaceholder": {
+    "source": "/path/to/project/on/host",
+    "rationale": "Пример абсолютного пути на сервере."
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.960e901ae4": {
+    "source": "orca serve --pairing-address <host>",
+    "rationale": "Точная команда запуска сервера Orca с аргументом адреса."
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.orcaVersion": {
+    "source": "Orca v{{value0}}",
+    "rationale": "Название продукта и шаблон его версии."
+  },
+  "auto.components.settings.Settings.2309068a6f": {
+    "source": "destructive",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.SettingsFormControls.3119c012a5": {
+    "source": "string",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.SettingsSidebar.e0900f83e7": {
+    "source": "SSH",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.ShortcutsPane.d8c988dab4": {
+    "source": "~/.orca/keybindings.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.SshTargetForm.2ee9bcd2e8": {
+    "source": "server, deploy@server:2222, ssh://server",
+    "rationale": "Примеры точного синтаксиса SSH-адресов."
+  },
+  "auto.components.settings.SshTargetForm.47e082bc17": {
+    "source": "deploy",
+    "rationale": "Пример имени пользователя SSH, не подпись действия."
+  },
+  "auto.components.settings.TerminalFontSizeSetting.9b5252c85a": {
+    "source": "px",
+    "rationale": "Стандартное обозначение пикселя в числовом поле."
+  },
+  "auto.components.settings.TerminalPane.0cbe5ad727": {
+    "source": "fish",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.TerminalPane.96be03b8eb": {
+    "source": "PowerShell 7+",
+    "rationale": "Имя оболочки Microsoft; сохраняется название и версия."
+  },
+  "auto.components.settings.TerminalPane.c2ddb189e7": {
+    "source": "rcfile",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.TerminalPane.c9bc93d343": {
+    "source": "zsh",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.TerminalPane.d26174e1dd": {
+    "source": "Windows PowerShell",
+    "rationale": "Имя оболочки Microsoft; сохраняется название и версия."
+  },
+  "auto.components.settings.TerminalPane.d469840b75": {
+    "source": "nushell",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.TerminalPane.f58cb71f53": {
+    "source": "--rcfile\n/path/to/rcfile",
+    "rationale": "Точный пример аргумента оболочки и пути, по одному на строку."
+  },
+  "auto.components.settings.TerminalPane.scrollSpeed.tui": {
+    "source": "TUI",
+    "rationale": "Сокращение TUI (текстовый интерфейс), стандартный технический термин."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.site.bigmodel": {
+    "source": "Zhipu · BigModel (open.bigmodel.cn)",
+    "rationale": "Название провайдера и точный адрес сайта тарифа."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.site.zai": {
+    "source": "Z.AI (z.ai)",
+    "rationale": "Название провайдера и точный адрес сайта тарифа."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.title": {
+    "source": "GLM Coding Plan",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.421c6be25e": {
+    "source": "id",
+    "rationale": "Сокращение идентификатора (ID); точный технический поисковый термин."
+  },
+  "auto.components.settings.accounts.search.488a7e9206": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.accounts.search.7e67d7d1b6": {
+    "source": "wrk",
+    "rationale": "Технический тип или ключ из исходного кода; обычным текстом интерфейса не является."
+  },
+  "auto.components.settings.accounts.search.8dcbef1856": {
+    "source": "opencode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.933deaf732": {
+    "source": "oauth",
+    "rationale": "Обозначение протокола OAuth; сохраняется техническое имя авторизации."
+  },
+  "auto.components.settings.accounts.search.b0a4e8c6d9": {
+    "source": "oauth",
+    "rationale": "Обозначение протокола OAuth; сохраняется техническое имя авторизации."
+  },
+  "auto.components.settings.accounts.search.bdbd1e668e": {
+    "source": "windows",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.accounts.search.c1b5f9d7e0": {
+    "source": "xai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.cursor.kw.cursor": {
+    "source": "cursor",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.d16378a88f": {
+    "source": "minimax",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.d2c6a0e8f1": {
+    "source": "grok",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.bigmodel": {
+    "source": "bigmodel",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.codingPlan": {
+    "source": "coding plan",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.glm": {
+    "source": "glm",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.zai": {
+    "source": "zai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.zhipu": {
+    "source": "zhipu",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.title": {
+    "source": "GLM Coding Plan",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.advanced.search.4383251647": {
+    "source": "vpn",
+    "rationale": "Сокращение VPN; общепринятое техническое имя сетевой технологии."
+  },
+  "auto.components.settings.advanced.search.48a1c8f534": {
+    "source": "http",
+    "rationale": "Обозначение протокола HTTP; сохраняется название и номер версии."
+  },
+  "auto.components.settings.advanced.search.4b4ae4345a": {
+    "source": "http2",
+    "rationale": "Обозначение протокола HTTP; сохраняется название и номер версии."
+  },
+  "auto.components.settings.advanced.search.621233008b": {
+    "source": "http/1.1",
+    "rationale": "Обозначение протокола HTTP; сохраняется название и номер версии."
+  },
+  "auto.components.settings.advanced.search.a0f71bd909": {
+    "source": "http/2",
+    "rationale": "Обозначение протокола HTTP; сохраняется название и номер версии."
+  },
+  "auto.components.settings.advanced.search.f8ff125ebe": {
+    "source": "http1",
+    "rationale": "Обозначение протокола HTTP; сохраняется название и номер версии."
+  },
+  "auto.components.settings.agents.search.77c02fa3c3": {
+    "source": "windows",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.agents.search.e2b7c0dcd7": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.agents.search.f622b8eb2a": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.agents.search.yolo": {
+    "source": "yolo",
+    "rationale": "Название режима разрешений агента Yolo."
+  },
+  "auto.components.settings.appearance.search.08c86bf58e": {
+    "source": "gitignore",
+    "rationale": "Имя файла настройки исключений Git как поисковый термин."
+  },
+  "auto.components.settings.appearance.search.1f2880a9d5": {
+    "source": "orca",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.2ee4810f38": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.35565867cb": {
+    "source": "moonshot",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.46d21eef62": {
+    "source": "localhost",
+    "rationale": "Название модели идентификатора URL localhost; это буквальное имя loopback-сервера."
+  },
+  "auto.components.settings.appearance.search.51b0ccd6a2": {
+    "source": "google",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.6b846424cc": {
+    "source": "linear",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.6ecad74eb3": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.appearance.search.97957e374e": {
+    "source": "openai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.a9d56852eb": {
+    "source": "opencode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.antigravityKeyword": {
+    "source": "antigravity",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.bce3ac317a": {
+    "source": "git",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.c5b9f8d1e3": {
+    "source": "xai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.cursor.kw.cursor": {
+    "source": "cursor",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.d16378a88f": {
+    "source": "minimax",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.d6c0a9e2f4": {
+    "source": "grok",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.d77537b580": {
+    "source": "opencode-go",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.glm": {
+    "source": "glm",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.language.i18n": {
+    "source": "i18n",
+    "rationale": "Термин i18n — стандартное сокращение интернационализации."
+  },
+  "auto.components.settings.appearance.search.showPinnedWorktreesInGroups.pr": {
+    "source": "pr",
+    "rationale": "Сокращение PR (pull request), точный поисковый термин запроса на слияние."
+  },
+  "auto.components.settings.appearance.search.zai": {
+    "source": "zai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.appearance.search.zcode": {
+    "source": "zcode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.artifacts.keywordHtml": {
+    "source": "HTML",
+    "rationale": "Стандартное имя формата HTML."
+  },
+  "auto.components.settings.auto.rename.branch.search.0971762141": {
+    "source": "kebab-case",
+    "rationale": "Имя формата kebab-case: строчные слова через дефис."
+  },
+  "auto.components.settings.bitbucket.credentials.dialog.emailPlaceholder": {
+    "source": "you@example.com",
+    "rationale": "Пример адреса email."
+  },
+  "auto.components.settings.bitbucket.integration.card.accountUnknown": {
+    "source": "Bitbucket Cloud",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.1c1e097985": {
+    "source": "arc",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.1f8153acfb": {
+    "source": "duckduckgo",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.533a253deb": {
+    "source": "edge",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.75a0d435b7": {
+    "source": "chrome",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.82ba1c80ea": {
+    "source": "localhost",
+    "rationale": "Название модели идентификатора URL localhost; это буквальное имя loopback-сервера."
+  },
+  "auto.components.settings.browser.search.8a489aab8d": {
+    "source": "google",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.90425d313c": {
+    "source": "shift",
+    "rationale": "Имя клавиши-модификатора; сохраняется стандартная подпись клавиши."
+  },
+  "auto.components.settings.browser.search.ad40e75d13": {
+    "source": "bing",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.search.sshWorkspaceRouting.ssh": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.browser.use.search.088e7a9012": {
+    "source": "chrome",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.use.search.2e1b09897b": {
+    "source": "edge",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.use.search.a57c2172dc": {
+    "source": "agent-browser",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.browser.use.search.ab349a2dd0": {
+    "source": "arc",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.browser.use.search.f5b8fdddf5": {
+    "source": "orca-cli",
+    "rationale": "Имя кодовой команды навыка; необходимо точное написание для вызова."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.2a6b359e75": {
+    "source": "glab",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.a47f71e357": {
+    "source": "CLI.",
+    "rationale": "CLI — стандартное сокращение интерфейса командной строки; завершает составную фразу с именем команды."
+  },
+  "auto.components.settings.commit.message.ai.search.b261c88609": {
+    "source": "pr",
+    "rationale": "Сокращение PR (pull request), точный поисковый термин запроса на слияние."
+  },
+  "auto.components.settings.developer.permissions.search.00e954319e": {
+    "source": "whisper",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.developer.permissions.search.0c13b249e3": {
+    "source": "tcc",
+    "rationale": "Сокращение TCC — система разрешений конфиденциальности macOS."
+  },
+  "auto.components.settings.developer.permissions.search.11653d3f42": {
+    "source": "mdns",
+    "rationale": "Имя протокола mDNS (multicast DNS)."
+  },
+  "auto.components.settings.developer.permissions.search.1e6e27b202": {
+    "source": "ffmpeg",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.developer.permissions.search.6db4fca386": {
+    "source": "macos",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.developer.permissions.search.78a10b826f": {
+    "source": "bonjour",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.developer.permissions.search.c4a4a02ea4": {
+    "source": "usb",
+    "rationale": "Имя интерфейса USB; сохраняется стандартное сокращение."
+  },
+  "auto.components.settings.developer.permissions.search.e3fbc48083": {
+    "source": "bluetooth",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.developer.permissions.search.f061f08b7b": {
+    "source": "sox",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.experimental.search.44c7f209d5": {
+    "source": "node_modules",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.experimental.search.nativeChat.grok": {
+    "source": "grok",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.experimental.search.nativeChat.omp": {
+    "source": "omp",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.experimental.search.nativeChat.openclaude": {
+    "source": "openclaude",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.06ea5a69a6": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.0cb3d94f00": {
+    "source": "cursor",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.12ecc640a8": {
+    "source": "mru",
+    "rationale": "Термин MRU (most recently used) для порядка недавних вкладок."
+  },
+  "auto.components.settings.general.search.327e3fa70d": {
+    "source": "Orca CLI",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.3566fce83f": {
+    "source": "localhost",
+    "rationale": "Название модели идентификатора URL localhost; это буквальное имя loopback-сервера."
+  },
+  "auto.components.settings.general.search.5baf51c4d9": {
+    "source": "open claude",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.5d9ba08673": {
+    "source": "copilot",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.5fdf1dc2d1": {
+    "source": "omp",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.68d03d9980": {
+    "source": "vscode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.882c4896fd": {
+    "source": "opencode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.8f03d44672": {
+    "source": "http_proxy",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.general.search.9b0bc30160": {
+    "source": "pi",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.aea7d2cccb": {
+    "source": "openclaude",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.b9096a44cf": {
+    "source": "https_proxy",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.general.search.c61b14be7c": {
+    "source": "grok",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.c9d9636f24": {
+    "source": "finder",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.e55d62dfa4": {
+    "source": "launchpad",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.ebf8f056b5": {
+    "source": "zed",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.f472e97440": {
+    "source": "aider",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.general.search.fe62b3f09f": {
+    "source": "ctrl",
+    "rationale": "Имя клавиши-модификатора; сохраняется стандартная подпись клавиши."
+  },
+  "auto.components.settings.general.search.nodeDistNodejs": {
+    "source": "nodejs",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.git.search.4808f065b3": {
+    "source": "gitlab",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.git.search.6ee3cfff02": {
+    "source": "git diff",
+    "rationale": "Точная команда Git для просмотра изменений."
+  },
+  "auto.components.settings.git.search.d088806071": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.git.search.ead733645f": {
+    "source": "glab",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.git.search.jira": {
+    "source": "jira",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.git.search.originMaster": {
+    "source": "origin/master",
+    "rationale": "Полная ссылка Git на ветку удалённого репозитория."
+  },
+  "auto.components.settings.input.search.26c83b06c5": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.input.search.71905435dd": {
+    "source": "x11",
+    "rationale": "Имя оконной системы X11."
+  },
+  "auto.components.settings.input.search.886597d6b3": {
+    "source": "macos",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.integrations.search.03a7b275be": {
+    "source": "ado",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.129fc59aa8": {
+    "source": "gitea",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.581844769a": {
+    "source": "mr",
+    "rationale": "Сокращение MR (merge request), точный поисковый термин запроса на слияние."
+  },
+  "auto.components.settings.integrations.search.7319e3015b": {
+    "source": "linear",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.7345b7c3e6": {
+    "source": "atlassian",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.b38b5d27f1": {
+    "source": "azure devops",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.b40cbe5de4": {
+    "source": "glab",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.integrations.search.b79c21bd42": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.b939695c69": {
+    "source": "gitlab",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.e1263dd748": {
+    "source": "jira",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.integrations.search.ed63380247": {
+    "source": "azure repos",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.jira.integration.card.09d310e42d": {
+    "source": "you@example.com",
+    "rationale": "Технический термин «you@example.com»: точное имя команды, переменной, протокола, формата, идентификатора или сочетания клавиш."
+  },
+  "auto.components.settings.linear.agent.skill.search.linear": {
+    "source": "linear",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.linear.agent.skill.search.orcaLinear": {
+    "source": "orca-linear",
+    "rationale": "Имя кодовой команды навыка; необходимо точное написание для вызова."
+  },
+  "auto.components.settings.managedServers.search.keywordSsh": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.mobile.emulator.search.25d7bfbcd4": {
+    "source": "udid",
+    "rationale": "Формат идентификатора устройства Apple UDID."
+  },
+  "auto.components.settings.mobile.emulator.search.3211e7acf9": {
+    "source": "xcrun",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.mobile.emulator.search.7650063d17": {
+    "source": "simctl",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.mobile.emulator.search.7c5a8a2bee": {
+    "source": "xcode",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.mobile.emulator.search.bec7231663": {
+    "source": "ipad",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.mobile.emulator.search.d4b7833894": {
+    "source": "orca cli",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.mobile.pane.search.16bff559a0": {
+    "source": "tailnet",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.mobile.pane.search.1f70d63998": {
+    "source": "ip",
+    "rationale": "Обозначение интернет-протокола IP; стандартное сетевое сокращение."
+  },
+  "auto.components.settings.mobile.pane.search.3c1807a81a": {
+    "source": "qr",
+    "rationale": "QR — стандартное имя формата двумерного кода для сопряжения устройств."
+  },
+  "auto.components.settings.mobile.pane.search.87711f4b8f": {
+    "source": "vpn",
+    "rationale": "Сокращение VPN; общепринятое техническое имя сетевой технологии."
+  },
+  "auto.components.settings.mobile.settings.search.6bfa001752": {
+    "source": "apk",
+    "rationale": "Название набора средств разработки или его формата."
+  },
+  "auto.components.settings.mobile.settings.search.87816d1c59": {
+    "source": "qr",
+    "rationale": "QR — стандартное имя формата двумерного кода для сопряжения устройств."
+  },
+  "auto.components.settings.networkAddress.tailscale": {
+    "source": "Tailscale · {{address}}",
+    "rationale": "Название сети и подставляемый адрес без собственного переводимого текста."
+  },
+  "auto.components.settings.notifications.search.079c29aeb5": {
+    "source": "flac",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.5362074f19": {
+    "source": "mp3",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.57e34a31cd": {
+    "source": "wav",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.6ecb8418cb": {
+    "source": "m4a",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.722face52f": {
+    "source": "aac",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.d16ae23645": {
+    "source": "ogg",
+    "rationale": "Имя формата аудиофайла; сохраняется стандартное расширение."
+  },
+  "auto.components.settings.notifications.search.ssh": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.orcaAccount.relayTitle": {
+    "source": "Orca Relay",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.orchestration.search.ca54c69806": {
+    "source": "DAG",
+    "rationale": "Сокращение DAG — ориентированный ациклический граф задач."
+  },
+  "auto.components.settings.privacy.search.058550f6bc": {
+    "source": "do_not_track",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.privacy.search.2b5a5c312f": {
+    "source": "posthog",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.privacy.search.69637f4dc4": {
+    "source": "orca_telemetry_disabled",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.quick.commands.search.b86c727100": {
+    "source": "npm",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.quick.commands.search.b949a7c0a0": {
+    "source": "pnpm",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.repository.search.26f42fe773": {
+    "source": ".cursor/mcp.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.343f0a508c": {
+    "source": "mcp",
+    "rationale": "Имя протокола MCP (Model Context Protocol)."
+  },
+  "auto.components.settings.repository.search.4733ec2395": {
+    "source": "../worktrees",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.8068d8d0f1": {
+    "source": "pr",
+    "rationale": "Сокращение PR (pull request), точный поисковый термин запроса на слияние."
+  },
+  "auto.components.settings.repository.search.84da7fa2d7": {
+    "source": "node_modules",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.9dc60d7f6d": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.repository.search.apfs": {
+    "source": "apfs",
+    "rationale": "Имя файловой системы APFS, необходимое для поиска технологии клонирования."
+  },
+  "auto.components.settings.repository.search.d73fb47b45": {
+    "source": ".claude/mcp.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.db11b337c4": {
+    "source": ".claude.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.e760e3fae7": {
+    "source": ".mcp.json",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.repository.search.origin": {
+    "source": "origin",
+    "rationale": "Имя удалённого репозитория Git, должно сохранять точное написание."
+  },
+  "auto.components.settings.repository.search.ssh": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.serverList.version": {
+    "source": "v{{version}}",
+    "rationale": "Шаблон номера версии без переводимого текста."
+  },
+  "auto.components.settings.shortcuts.search.7f1b38f59a": {
+    "source": "tui",
+    "rationale": "Сокращение TUI (текстовый интерфейс), стандартный технический термин."
+  },
+  "auto.components.settings.ssh.search.7efd17e816": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.tasks.search.11f001cdd4": {
+    "source": "gitlab",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.tasks.search.412ec3c702": {
+    "source": "linear",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.tasks.search.5430396e11": {
+    "source": "jira",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.tasks.search.604d8e4089": {
+    "source": "atlassian",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.tasks.search.c10ac2125e": {
+    "source": "github",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.clipboard.search.043b32faa1": {
+    "source": "ssh",
+    "rationale": "Имя протокола SSH; стандартное сокращение без русской подстановки."
+  },
+  "auto.components.settings.terminal.clipboard.search.2061d8db1a": {
+    "source": "neovim",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.clipboard.search.5ffcd13c90": {
+    "source": "tmux",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.clipboard.search.62d1208b90": {
+    "source": "osc 52",
+    "rationale": "Имя управляющей последовательности терминала OSC 52."
+  },
+  "auto.components.settings.terminal.clipboard.search.64533e30cc": {
+    "source": "nvim",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.clipboard.search.737cef6de1": {
+    "source": "x11",
+    "rationale": "Имя оконной системы X11."
+  },
+  "auto.components.settings.terminal.clipboard.search.9dfc125cd3": {
+    "source": "osc52",
+    "rationale": "Имя управляющей последовательности терминала OSC 52."
+  },
+  "auto.components.settings.terminal.clipboard.search.9fda309db9": {
+    "source": "fzf",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.clipboard.search.cf83ac3dbd": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.clipboard.search.grok": {
+    "source": "grok",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.clipboard.search.zellij": {
+    "source": "zellij",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.search.11fd3fbcf2": {
+    "source": "ansi",
+    "rationale": "Название стандарта кодов терминала ANSI."
+  },
+  "auto.components.settings.terminal.search.1ab57a0fbd": {
+    "source": "mac",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.search.1abcf4d7de": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.search.35c2311a33": {
+    "source": "jetbrains mono",
+    "rationale": "Название шрифта; сохраняется имя для точного поиска и выбора гарнитуры."
+  },
+  "auto.components.settings.terminal.search.454df22a5e": {
+    "source": "fish",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.search.6cddc858ba": {
+    "source": "webgl",
+    "rationale": "Название графического API WebGL; точное имя технологии."
+  },
+  "auto.components.settings.terminal.search.6ded6297fe": {
+    "source": "iosevka",
+    "rationale": "Название шрифта; сохраняется имя для точного поиска и выбора гарнитуры."
+  },
+  "auto.components.settings.terminal.search.7ace5beec9": {
+    "source": "meta",
+    "rationale": "Имя клавиши-модификатора; сохраняется стандартная подпись клавиши."
+  },
+  "auto.components.settings.terminal.search.7c3ede6f12": {
+    "source": "nushell",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.search.7f7640c29e": {
+    "source": "fira code",
+    "rationale": "Название шрифта; сохраняется имя для точного поиска и выбора гарнитуры."
+  },
+  "auto.components.settings.terminal.search.9f2dda133c": {
+    "source": "pty",
+    "rationale": "Термин PTY — псевдотерминал, стандартный технический поисковый термин."
+  },
+  "auto.components.settings.terminal.search.b37edfc65a": {
+    "source": "option",
+    "rationale": "Имя клавиши-модификатора; сохраняется стандартная подпись клавиши."
+  },
+  "auto.components.settings.terminal.search.b495dc6a9f": {
+    "source": "jis",
+    "rationale": "Название стандарта японской раскладки JIS."
+  },
+  "auto.components.settings.terminal.search.c4427dc5ff": {
+    "source": "alt",
+    "rationale": "Имя клавиши-модификатора; сохраняется стандартная подпись клавиши."
+  },
+  "auto.components.settings.terminal.search.d26257a80d": {
+    "source": "zsh",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.search.d31ed1ac1c": {
+    "source": "rcfile",
+    "rationale": "Точное имя файла или папки конфигурации; используется для поиска и открытия пути."
+  },
+  "auto.components.settings.terminal.search.d8d6f7a3c5": {
+    "source": "macos",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.search.db82cb13b0": {
+    "source": "gpu",
+    "rationale": "Сокращение GPU (графический процессор); технический поисковый термин."
+  },
+  "auto.components.settings.terminal.search.e3aeea308e": {
+    "source": "cascadia code",
+    "rationale": "Название шрифта; сохраняется имя для точного поиска и выбора гарнитуры."
+  },
+  "auto.components.settings.terminal.search.fae142a354": {
+    "source": "readline",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.search.minimumContrast.wcag": {
+    "source": "wcag",
+    "rationale": "Сокращение WCAG — стандарт доступности и контрастности."
+  },
+  "auto.components.settings.terminal.search.tui": {
+    "source": "tui",
+    "rationale": "Сокращение TUI (текстовый интерфейс), стандартный технический термин."
+  },
+  "auto.components.settings.terminal.search.warp_import.keyword_warp": {
+    "source": "warp",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.windows.search.02c772582a": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.windows.search.28ff08ed35": {
+    "source": "windows",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.windows.search.4ee2579c32": {
+    "source": "ubuntu",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.terminal.windows.search.591912177b": {
+    "source": "git bash",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.terminal.windows.search.6cd20b9e64": {
+    "source": "cmd",
+    "rationale": "Имя исполняемой команды; перевод изменит команду или лишит поиск точного совпадения."
+  },
+  "auto.components.settings.terminal.windows.search.768613e483": {
+    "source": "powershell 7",
+    "rationale": "Имя оболочки Microsoft; сохраняется название и версия."
+  },
+  "auto.components.settings.terminal.windows.search.f9162f0b8e": {
+    "source": "windows powershell",
+    "rationale": "Имя оболочки Microsoft; сохраняется название и версия."
+  },
+  "auto.components.settings.terminal.windows.search.fc564eadaf": {
+    "source": "debian",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.settings.token.source.control.integration.cards.186a6689df": {
+    "source": "ORCA_AZURE_DEVOPS_API_BASE_URL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.19416c874c": {
+    "source": "ORCA_BITBUCKET_API_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.48842720d2": {
+    "source": "ORCA_AZURE_DEVOPS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.63a7f47392": {
+    "source": "ORCA_BITBUCKET_EMAIL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.6d5c2a3005": {
+    "source": "ORCA_GITEA_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.709057ad91": {
+    "source": "ORCA_GITEA_API_BASE_URL",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.e63fe8f627": {
+    "source": "ORCA_BITBUCKET_ACCESS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.token.source.control.integration.cards.fbfd237f5e": {
+    "source": "ORCA_AZURE_DEVOPS_ACCESS_TOKEN",
+    "rationale": "Имя переменной окружения; написание должно совпадать с переменной настройки."
+  },
+  "auto.components.settings.voice.pane.search.04c25a6fb0": {
+    "source": "openai",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.voice.pane.search.10d45a9fce": {
+    "source": "stt",
+    "rationale": "Сокращение STT (speech-to-text), поисковое имя технологии распознавания речи."
+  },
+  "auto.components.settings.voice.pane.search.micAirpods": {
+    "source": "airpods",
+    "rationale": "Название продукта или провайдера; сохраняется исходное имя."
+  },
+  "auto.components.settings.wslHostsExperimental.keywordLinux": {
+    "source": "linux",
+    "rationale": "Имя операционной системы; сохраняется название продукта."
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.pairingCommand": {
+    "source": "orca serve --pairing-address <host>",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.sshHostPlaceholder": {
+    "source": "deploy@server:22",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.usernamePlaceholder": {
+    "source": "deploy",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.AddRepoHostSelector.ssh": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarFeedbackDialog.c9e5ea0791": {
+    "source": "GitHub:",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarFilter.81ded53722": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarNav.1b5c41caee": {
+    "source": "Orca Mobile",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a": {
+    "source": "X",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31": {
+    "source": "PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli": {
+    "source": "Orca CLI",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeCardMeta.5e982e6128": {
+    "source": "Linear {{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeCardMeta.cliHeader": {
+    "source": "Orca CLI",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeCardMeta.jiraIssue": {
+    "source": "Jira {{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeCardMetadataStatusBadges.29df45afa2": {
+    "source": "MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeCardReviewDetailSection.reviewHeader": {
+    "source": "{{value0}} #{{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeMetaDialog.gitlabMR": {
+    "source": "GitLab MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.WorktreeVisibilitySourceList.gsd": {
+    "source": "GSD",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.preserved.branch.batch.toast.4cf75caab7": {
+    "source": "{{value0}}, {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.worktreeIssueDisplacement.3f61c0a8d2": {
+    "source": "Linear {{value}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.sidebar.worktreeIssueDisplacement.9c4b7e1f60": {
+    "source": "GitHub #{{value}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.skills.SkillBundleInstallReview.01c5a11e06": {
+    "source": "SHA-256",
+    "rationale": "Стандартное имя алгоритма проверки целостности."
+  },
+  "auto.components.skills.SkillDelete.blockedLine": {
+    "source": "{{count}} × {{reason}}",
+    "rationale": "Количество и готовая причина без собственного переводимого текста."
+  },
+  "auto.components.skills.SkillDelete.resultLine": {
+    "source": "{{count}} × {{label}}",
+    "rationale": "Количество и готовая подпись без собственного переводимого текста."
+  },
+  "auto.components.skills.SkillInstallManagementDialog.176fef9516": {
+    "source": "· SSH",
+    "rationale": "Название протокола и разделитель в подписи подключения."
+  },
+  "auto.components.skills.SkillInstallReviewContent.f72ee4022a": {
+    "source": "SHA-256",
+    "rationale": "Стандартное имя алгоритма проверки целостности."
+  },
+  "auto.components.skills.SkillInstallTargetFields.0c10a406fb": {
+    "source": "WSL ·",
+    "rationale": "Название среды Windows Subsystem for Linux и разделитель."
+  },
+  "auto.components.skills.SkillInstallTargetFields.85d85880df": {
+    "source": "· SSH",
+    "rationale": "Название протокола и разделитель в подписи подключения."
+  },
+  "auto.components.skills.SkillShareReviewContent.b3b1d4b911": {
+    "source": "SHA-256",
+    "rationale": "Стандартное имя алгоритма проверки целостности."
+  },
+  "auto.components.skills.install.agentsCountLabel": {
+    "source": "{{count}} {{label}}",
+    "rationale": "Число и готовая локализованная подпись без собственного текста."
+  },
+  "auto.components.skills.managedInstall.titleMore": {
+    "source": "{{name}} +{{count}}",
+    "rationale": "Имя навыка и число дополнительных навыков, без переводимого текста."
+  },
+  "auto.components.stats.GrokUsagePane.h9i0j1k2l3": {
+    "source": " • {{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.ShareUsageCard.0eb31e79ee": {
+    "source": "Orca IDE",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.share.card.utils.19f4b4dc75": {
+    "source": "github.com/stablyai/orca",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.stats.search.6953af58e6": {
+    "source": "opencode",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.stats.search.9f2a3b4c5d": {
+    "source": "xai",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.stats.search.f8a1b2c3d4": {
+    "source": "grok",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.stats.stats.search.museKeyword": {
+    "source": "muse",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.CaffeinateStatusSegment.ariaLabel": {
+    "source": "{{title}}, {{status}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.StatusBar.2483c60695": {
+    "source": "···",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.StatusBar.4dff061aab": {
+    "source": "·",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.StatusBar.54e8d6bb2d": {
+    "source": "Fable",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.StatusBar.a79c64f87e": {
+    "source": "Fable",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.StatusBar.d7a0668acc": {
+    "source": "opencode-go",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.tooltip.a79c64f87e": {
+    "source": "Fable",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.tooltip.zcode.mcp": {
+    "source": "MCP",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.status.bar.usagePercentageLabel.bare": {
+    "source": "{{value0}}%",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.tab.bar.QuickLaunchButton.cliTag": {
+    "source": "(CLI)",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.tab.bar.tab.create.menu.options.44caaf7b36": {
+    "source": "md",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08": {
+    "source": "ipad",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.terminal.quick.commands.TerminalQuickCommandDialog.size_count": {
+    "source": "{{value0}} / {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.ui.color.picker.faa855a582": {
+    "source": "Hex",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.components.ui.repo.multi.combobox.286ce70256": {
+    "source": "SSH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner": {
+    "source": "sonner",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.i18n.hostedReview.copy.c4e8f1a2b9": {
+    "source": "MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.i18n.hostedReview.copy.f0a4b8c2d1": {
+    "source": "PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.lib.worktree.palette.search.ca40ffcbec": {
+    "source": "PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "auto.web.web.runtime.environment.07f788de83": {
+    "source": "WebSocket",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.RepositoryJiraProjectSection.keywordJira": {
+    "source": "jira",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.onboarding.flow.stepTooltip.windowsTerminal": {
+    "source": "Windows Terminal",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.settings.nativeChat.shellEnvSearchPath": {
+    "source": "PATH",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.browse.chip.list": {
+    "source": "{{value0}}: {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.browse.chip.presence": {
+    "source": "{{value0}}: {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.browse.chip.triState": {
+    "source": "{{value0}}: {{value1}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.browse.reviewPresence": {
+    "source": "PR / MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.presentation.githubPullRequestNumber": {
+    "source": "PR #{{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "components.workspace.cleanup.presentation.gitlabMergeRequestNumber": {
+    "source": "MR #{{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "resourceManager.pty.pid": {
+    "source": "PID",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "sessionHistory.settings.serverVersion": {
+    "source": "Orca v{{version}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "settings.appearance.chat.pixels": {
+    "source": "px",
+    "rationale": "Стандартное обозначение пикселя в числовом поле."
+  },
+  "settings.terminal.windows.keywordUac": {
+    "source": "uac",
+    "rationale": "Сокращение UAC — контроль учётных записей Windows."
+  },
+  "updates.installBlock.processId": {
+    "source": "PID {{pid}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.kind.azure_devops_pr": {
+    "source": "Azure DevOps PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.kind.bitbucket_pr": {
+    "source": "Bitbucket PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.kind.gitea_pr": {
+    "source": "Gitea PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.kind.github_pr": {
+    "source": "GitHub PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.kind.gitlab_mr": {
+    "source": "GitLab MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.mrReference": {
+    "source": "MR !{{number}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "workspace.links.prReference": {
+    "source": "PR #{{number}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "worktreeJumpPalette.filter.chipOverflow": {
+    "source": "+{{value0}}",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "worktreeJumpPalette.filter.tabKey": {
+    "source": "Tab",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "worktreeJumpPalette.matchLabel.mr": {
+    "source": "MR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "worktreeJumpPalette.matchLabel.pr": {
+    "source": "PR",
+    "rationale": "Reviewed original name, code, path, shortcut, external identifier or interpolation-only syntax; see navigation-workspace-runtime translation report."
+  },
+  "browser.history.enterKey": {
+    "source": "Enter",
+    "rationale": "Standard keyboard key name; preserve the physical Enter label."
+  },
+  "browser.history.escKey": {
+    "source": "Esc",
+    "rationale": "Standard keyboard key name; preserve the physical Esc label."
+  },
+  "auto.components.PullRequestPage.6568ae8ece": {
+    "source": "default",
+    "rationale": "Internal button variant identifier default; translating breaks variant selection."
+  },
+  "auto.components.PullRequestPage.19f19560d5": {
+    "source": "destructive",
+    "rationale": "Internal button variant identifier destructive; translating breaks variant selection."
+  },
+  "auto.components.PullRequestPage.aae99c6c04": {
+    "source": "pr",
+    "rationale": "Internal GitHub work item kind pr; preserve its machine identifier."
+  },
+  "auto.components.PullRequestPage.34b9f7c264": {
+    "source": ":L{{value0}}",
+    "rationale": "Source line reference syntax :L followed by an interpolated line number."
+  },
+  "auto.components.PullRequestPage.84fc40769a": {
+    "source": "-L{{value0}}",
+    "rationale": "Source line range syntax -L followed by an interpolated line number."
+  },
+  "auto.components.right.sidebar.ChecksPanel.e56c42122e": {
+    "source": "destructive",
+    "rationale": "Internal button variant identifier destructive; translating breaks variant selection."
+  },
+  "auto.components.right.sidebar.FileExplorerRow.a06551beee": {
+    "source": "Enter",
+    "rationale": "Standard keyboard key name; preserve the physical Enter label."
+  },
+  "auto.components.right.sidebar.HostedReviewActions.ef064cb7c3": {
+    "source": "default",
+    "rationale": "Internal button variant identifier default; translating breaks variant selection."
+  },
+  "auto.components.right.sidebar.HostedReviewActions.59b4dccf70": {
+    "source": "destructive",
+    "rationale": "Internal button variant identifier destructive; translating breaks variant selection."
+  },
+  "auto.components.right.sidebar.PortsPanel.17bea6e391": {
+    "source": "localhost",
+    "rationale": "Loopback hostname localhost; must resolve exactly as written."
+  },
+  "auto.components.right.sidebar.PortsPanel.57d930fa45": {
+    "source": "PID",
+    "rationale": "Standard process identifier abbreviation PID."
+  },
+  "auto.components.right.sidebar.SourceControl.9febd8ab5f": {
+    "source": "create_pr",
+    "rationale": "Internal source control action identifier create_pr; preserve machine syntax."
+  },
+  "auto.components.right.sidebar.SourceControl.f62ce91ade": {
+    "source": "origin",
+    "rationale": "Git remote name origin; must match configured remote exactly."
+  },
+  "auto.components.right.sidebar.SourceControl.b8c2e1a904": {
+    "source": "{{value0}} → {{value1}}",
+    "rationale": "Interpolation-only branch direction indicator; preserve both placeholders and arrow."
+  },
+  "auto.components.right.sidebar.activity.bar.buttons.f1132ea95d": {
+    "source": "neutral",
+    "rationale": "Internal semantic tone identifier neutral; preserve variant token."
+  },
+  "auto.components.right.sidebar.useFileDeletion.a76c74f105": {
+    "source": "destructive",
+    "rationale": "Internal button variant identifier destructive; translating breaks variant selection."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.5af8251002": {
+    "source": "SCSS",
+    "rationale": "Syntax highlighting language name SCSS."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.78eba32de4": {
+    "source": "JSON",
+    "rationale": "Syntax highlighting language name JSON."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.a209c57063": {
+    "source": "JavaScript",
+    "rationale": "Programming language name JavaScript."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.8c4a3fa02d": {
+    "source": "HTML",
+    "rationale": "Markup language name HTML."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa": {
+    "source": "Diff",
+    "rationale": "Syntax highlighting format name Diff in the code block language picker."
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.4daed43ae3": {
+    "source": "C++",
+    "rationale": "Programming language name C++."
+  },
+  "auto.components.editor.UntitledFileRenameDialog.2d7d39dc63": {
+    "source": ".md",
+    "rationale": "Markdown file extension .md; preserve file type syntax."
+  },
+  "auto.components.editor.CheckRunJobs.5a8e1d4f23": {
+    "source": " · ",
+    "rationale": "Punctuation-only separator between check job statistics."
+  },
+  "auto.components.browser.pane.GrabConfirmationSheet.7d1480fbf1": {
+    "source": "HTML",
+    "rationale": "Markup language name HTML used for captured page source."
+  },
+  "auto.components.browser.pane.GrabConfirmationSheet.accessibleNameOpenQuote": {
+    "source": "\"",
+    "rationale": "Punctuation-only opening quotation mark around an accessible name."
+  },
+  "auto.components.browser.pane.GrabConfirmationSheet.eb98a0971a": {
+    "source": "\"",
+    "rationale": "Punctuation-only closing quotation mark around an accessible name."
+  },
+  "auto.components.browser.pane.GrabConfirmationSheet.d053db279d": {
+    "source": "role=",
+    "rationale": "Technical accessibility attribute role=; preserve attribute syntax."
+  },
+  "auto.components.browser-pane.markup.widthOption": {
+    "source": "{{value0}} px",
+    "rationale": "CSS pixel unit with interpolated size; preserve px technical unit."
+  }
+}

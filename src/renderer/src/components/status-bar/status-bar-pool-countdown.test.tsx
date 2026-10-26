@@ -6,6 +6,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { ProviderSegment } from './StatusBarProviderSegment'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values: Record<string, string> = {}) =>
     Object.entries(values).reduce(

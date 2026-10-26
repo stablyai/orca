@@ -187,7 +187,12 @@ export function WorktreeJumpPaletteSurface({
               '{{value0}} results found{{value1}}',
               {
                 value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
+                value1: controller.showCreateAction
+                  ? translate(
+                      'worktreeJumpPalette.createActionAvailableClause',
+                      ', create worktree action available'
+                    )
+                  : ''
               }
             )
           : translate(
@@ -195,7 +200,12 @@ export function WorktreeJumpPaletteSurface({
               '{{value0}} items available{{value1}}',
               {
                 value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
+                value1: controller.showCreateAction
+                  ? translate(
+                      'worktreeJumpPalette.createActionAvailableClause',
+                      ', create worktree action available'
+                    )
+                  : ''
               }
             )}
       </div>

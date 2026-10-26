@@ -4,6 +4,7 @@ import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_PORTUGUESE,
+  UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
@@ -36,6 +37,30 @@ describe('renderer i18n lazy locale loading', () => {
     await setRendererUiLanguage(UI_LANGUAGE_PORTUGUESE)
     expect(i18n.language).toBe('pt')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it('loads Russian and selects its complete CLDR plural family', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_RUSSIAN)
+    expect(i18n.language).toBe('ru')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Файл')
+    for (const [count, expected] of [
+      [0, '0 изображений'],
+      [1, '1 изображение'],
+      [2, '2 изображения'],
+      [5, '5 изображений'],
+      [11, '11 изображений'],
+      [21, '21 изображение'],
+      [22, '22 изображения'],
+      [25, '25 изображений'],
+      [1.5, '1.5 изображения']
+    ] as const) {
+      expect(
+        i18n.t('components.native-chat.queuedMessages.imageCount', {
+          defaultValue: '{{count}} images',
+          count
+        })
+      ).toBe(expected)
+    }
   })
 
   it.each(['network', 'http', 'invalid-json'] as const)(

@@ -9,20 +9,17 @@ export function reportTerminalDropUploadSkipsAndFailures(
   if (skipped.length > 0) {
     // Why: symlink rejection is policy, not an error; mixed reasons stay generic.
     const allSymlinks = skipped.every((item) => item.reason === 'symlink')
-    const noun = skipped.length === 1 ? 'item' : 'items'
     const commonReason = sharedReason(skipped)
     toast.message(
       allSymlinks
-        ? translate(
-            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
-            'Skipped {{value0}} symlink{{value1}}.',
-            { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
-          )
-        : translate(
-            'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889',
-            'Skipped {{value0}} {{value1}}.',
-            { value0: skipped.length, value1: noun }
-          ),
+        ? translate('terminalDrop.skippedSymlinks', 'Skipped {{count}} symlinks.', {
+            count: skipped.length,
+            defaultValue_one: 'Skipped {{count}} symlink.'
+          })
+        : translate('terminalDrop.skippedItems', 'Skipped {{count}} items.', {
+            count: skipped.length,
+            defaultValue_one: 'Skipped {{count}} item.'
+          }),
       {
         description:
           commonReason && commonReason !== 'symlink'
@@ -32,13 +29,11 @@ export function reportTerminalDropUploadSkipsAndFailures(
     )
   }
   if (failed.length > 0) {
-    const noun = failed.length === 1 ? 'file' : 'files'
     toast.error(
-      translate(
-        'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-        'Failed to upload {{value0}} {{value1}}.',
-        { value0: failed.length, value1: noun }
-      )
+      translate('terminalDrop.failedUploads', 'Failed to upload {{count}} files.', {
+        count: failed.length,
+        defaultValue_one: 'Failed to upload {{count}} file.'
+      })
     )
   }
 }

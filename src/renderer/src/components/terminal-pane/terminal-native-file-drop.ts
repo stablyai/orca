@@ -128,11 +128,10 @@ async function uploadRuntimeDropPaths(
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
   const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to runtime…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
+    translate('terminalDrop.uploadingToRuntime', 'Uploading {{count}} files to runtime…', {
+      count: args.dataPaths.length,
+      defaultValue_one: 'Uploading {{count}} file to runtime…'
+    })
   )
   try {
     const { results } = await importExternalPathsToRuntime(
@@ -161,7 +160,9 @@ async function uploadRuntimeDropPaths(
       results.filter((result) => result.status === 'failed')
     )
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    toast.error(
+      extractIpcErrorMessage(err, translate('terminalDrop.uploadFailed', 'Failed to upload files.'))
+    )
   } finally {
     toast.dismiss(pending)
   }
@@ -180,7 +181,12 @@ async function pasteLocalDropPaths(
       await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
       reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
+      toast.error(
+        extractIpcErrorMessage(
+          err,
+          translate('terminalDrop.resolveFailed', 'Failed to resolve dropped files.')
+        )
+      )
     }
     return
   }
@@ -197,11 +203,10 @@ async function uploadRemoteDropPaths(
   args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
 ): Promise<void> {
   const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to remote…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
+    translate('terminalDrop.uploadingToRemote', 'Uploading {{count}} files to remote…', {
+      count: args.dataPaths.length,
+      defaultValue_one: 'Uploading {{count}} file to remote…'
+    })
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
@@ -215,7 +220,9 @@ async function uploadRemoteDropPaths(
     await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    toast.error(
+      extractIpcErrorMessage(err, translate('terminalDrop.uploadFailed', 'Failed to upload files.'))
+    )
   } finally {
     toast.dismiss(pending)
   }

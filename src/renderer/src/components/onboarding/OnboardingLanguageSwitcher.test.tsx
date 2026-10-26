@@ -321,7 +321,8 @@ describe('onboarding language request', () => {
     expect(screen.getByRole('radio', { name: 'Français' }).getAttribute('data-state')).toBe(
       'checked'
     )
-    expect(screen.getAllByRole('radio')).toHaveLength(7)
+    expect(screen.getAllByRole('radio')).toHaveLength(8)
+    expect(screen.getByRole('radio', { name: 'Русский' })).toBeTruthy()
     expect(save).not.toHaveBeenCalled()
     expect(useAppStore.getState().settings?.uiLanguage).toBe('system')
     fireEvent.click(screen.getByRole('radio', { name: 'English' }))
@@ -459,7 +460,7 @@ describe('onboarding language request', () => {
       })
       installWebPreloadApi()
       render(<OnboardingLanguageSwitcher open onOpenChange={vi.fn()} />)
-      expect(screen.getAllByRole('radio')).toHaveLength(7)
+      expect(screen.getAllByRole('radio')).toHaveLength(8)
       expect(screen.queryByRole('button', { name: 'Other language…' })).toBeNull()
       expect(screen.queryByRole('textbox')).toBeNull()
     } finally {
@@ -475,7 +476,7 @@ describe('onboarding language request', () => {
     const save = vi.fn().mockResolvedValue(undefined)
     useAppStore.setState({ updateSettingsOrThrow: save })
     render(<OnboardingLanguageSwitcher open onOpenChange={vi.fn()} />)
-    expect(screen.getAllByRole('radio')).toHaveLength(7)
+    expect(screen.getAllByRole('radio')).toHaveLength(8)
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
     expect(save).not.toHaveBeenCalled()
   })
