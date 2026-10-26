@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
 import {
   agentSessionFailureFact,
   readAgentSessionFailureFact

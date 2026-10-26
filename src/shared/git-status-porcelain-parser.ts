@@ -1,21 +1,8 @@
 import type { GitStatusEntry } from './git-status-types'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 
-/**
- * Incremental parser for `git status --porcelain=v2 --branch` output.
- *
- * Why incremental: a repo with an enormous un-ignored folder can emit a status
- * listing too large to buffer into one string (it overflows V8's max string
- * length and crashes the process). Feeding chunks here as they arrive lets the
- * caller stop git the moment the changed-entry count crosses a limit, so memory
- * stays bounded. Records are newline-delimited; a partial trailing line is
- * carried across chunks.
- *
- * Sync record types (1/2/?/!) are parsed into `entries`/`ignoredPaths` here.
- * Unmerged (`u`) records need per-file worktree lookups, so their raw lines are
- * collected and resolved by the caller after the stream ends. They still count
- * toward the limit so a conflict-heavy merge cannot bypass the cap.
- */
+/** Parse porcelain v2 incrementally so callers can stop Git at the entry limit instead of buffering output past V8’s string ceiling.
+ * Carry partial newline-delimited records between chunks. Defer unmerged u rows to caller resolution (using mW presence), but count them toward the cap. */
 export type BranchMetadata = {
   head?: string
   branch?: string
@@ -29,7 +16,6 @@ export type StatusPorcelainRecord =
 
 export class StatusPorcelainParser {
   private carry = ''
-  /** Count of changed-file entries seen — the limit is measured against this. */
   private count = 0
 
   readonly entries: GitStatusEntry[] = []
@@ -45,11 +31,7 @@ export class StatusPorcelainParser {
     return this.count
   }
 
-  /**
-   * Feed one decoded chunk. Returns true once the accumulated changed-entry
-   * count exceeds `limit` (limit 0 disables the cap), signaling the caller to
-   * stop git. Complete lines are parsed; an incomplete trailing line is carried.
-   */
+  /** Parse complete lines, carrying any trailing fragment. Return true past the changed-entry limit so callers stop Git; zero disables the cap. */
   update(chunk: string, limit: number): boolean {
     const text = this.carry + chunk
     let start = 0
@@ -92,8 +74,7 @@ export class StatusPorcelainParser {
     }
     if (line.startsWith('# branch.head ')) {
       const branchHead = line.slice('# branch.head '.length).trim()
-      // Why: undefined (not '') keeps this transport-compatible — the renderer
-      // turns "head without branch" into an explicit detached-HEAD clear.
+      // Undefined preserves transport compatibility and lets renderer clear detached-HEAD branch state.
       this.branch.branch =
         branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
       return
@@ -144,9 +125,7 @@ export class StatusPorcelainParser {
     const worktreeStatus = xy[1]
 
     if (line.startsWith('2 ')) {
-      // Why: porcelain v2 type-2 records put the new path after 9 fixed
-      // space-delimited fields and the old path after the tab. Preserving spaces
-      // keeps row actions and numstat counts keyed correctly.
+      // Type-2 paths follow nine fixed fields, with oldPath after TAB; retain spaces for row actions and numstat keys.
       const tabParts = line.split('\t')
       const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
       const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))

@@ -93,8 +93,7 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
     if (releasedModifier) {
       return heldModifiers[releasedModifier]
     }
-    // Why: modifier state can already be false on the keyup that ends a chord,
-    // so release matching tracks the accepted keydown's key identity instead.
+    // Modifiers may already be released at keyup; match the accepted keydown’s primary key identity.
     const releasePrimaryCode = getReleasedPrimaryCode(releaseEvent)
     if (primaryCode !== null && releasePrimaryCode !== null) {
       return releasePrimaryCode === primaryCode
@@ -115,9 +114,7 @@ export function useHoldDictationGesture({
 }: HoldDictationGestureOptions): void {
   const releaseMatcherRef = useRef<HoldDictationReleaseMatcher | null>(null)
 
-  // Why: hold mode uses renderer-side DOM events instead of the IPC path
-  // (before-input-event). Electron suppresses keyUp after preventDefault()
-  // there, so the renderer owns both press and release.
+  // Hold mode owns DOM press/release events; main before-input-event suppresses keyup after preventDefault.
   useEffect(() => {
     const mode = settings?.voice?.dictationMode ?? 'toggle'
     if (mode !== 'hold') {

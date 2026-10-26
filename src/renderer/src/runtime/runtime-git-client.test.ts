@@ -161,9 +161,7 @@ describe('runtime git client', () => {
   })
 
   it('uses the backing folder path for other local folder-workspace git ops', async () => {
-    // Why: status is not the only command run as a subprocess cwd. Every local
-    // op (diff, submodule status, upstream, stage, …) must strip the synthetic
-    // `::workspace:<uuid>` suffix or Git spawns against a nonexistent directory.
+    // Every local Git cwd strips synthetic ::workspace:<uuid>, not just status; otherwise subprocesses target nonexistent directories.
     gitDiff.mockResolvedValue({ hunks: [] })
     gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
@@ -290,8 +288,7 @@ describe('runtime git client', () => {
     const statusArgs = gitStatus.mock.calls[0]?.[0] as { requestToken?: string }
     controller.abort()
     resolveStatus({ entries: [], conflictOperation: 'unknown' })
-    // Why: cancel is best-effort on the main process; even if status still
-    // settles, the aborted local call must reject rather than look fresh.
+    // Best-effort main cancellation may still resolve status; aborted calls must reject rather than publish fresh results.
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
 
     expect(gitStatus).toHaveBeenCalledWith({

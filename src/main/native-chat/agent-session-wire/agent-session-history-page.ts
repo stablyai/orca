@@ -1,13 +1,8 @@
 import { resolveHistoryLimit } from './agent-session-history-limit'
 export { resolveHistoryLimit } from './agent-session-history-limit'
-// Paged history over one journal.
-//
-// `tail` and `before` read the REDUCED timeline, so backward paging keeps
-// working after compaction — the folded snapshot still holds every live item.
-// `after` is the catch-up direction and must read rows instead: an item created
-// early and revised late orders by its creation sequence, so an item-window
-// read would silently skip that revision. Rows carry the revision, which is why
-// `after` is the only direction that can answer `cursor_compacted`.
+// Backward pages use the reduced timeline so compaction retains live items. Catch-up reads rows:
+// late revisions keep old creation positions and would be skipped by item windows. Only catch-up
+// can therefore return cursor_compacted.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -42,9 +37,7 @@ import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
-/** Whose rows a backward read serves. Both window over the session's own rows; a
- *  reader of the session's own agent alone gets only those. In-process only: no wire
- *  request carries it. */
+/** In-process only: both scopes window by own-agent rows; own-agent also excludes other producers. */
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
 /** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */

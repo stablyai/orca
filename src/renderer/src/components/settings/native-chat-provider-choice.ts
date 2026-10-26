@@ -1,7 +1,7 @@
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { buildNativeChatProviderUpdate } from '../../../../shared/native-chat-providers'
+import { buildNativeChatProviderUpdate } from '../../../../shared/native-chat/native-chat-providers'
 import {
   isNativeChatDefaultFor,
   isNativeChatEnabled
@@ -14,7 +14,7 @@ import { useAppStore } from '../../store'
 import { createAgentSettingsUpdateQueue } from './agent-availability-settings'
 import type { DefaultAgentOpensAs } from './AgentDefaultSetting'
 
-// One queue for every settings row that writes this map, so back-to-back flips never overwrite each other.
+// Serialize shared-map writes across Settings rows so rapid flips cannot overwrite each other.
 const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
 
 export function saveNativeChatProviderChoice({
@@ -36,7 +36,7 @@ export function saveNativeChatProviderChoice({
   })
 }
 
-/** The default agent's chat-or-CLI choice, offered where the stored value and the Providers switch agree. */
+/** Offer chat/CLI choice only when its stored value agrees with the Providers switch. */
 export function buildDefaultAgentOpensAs({
   defaultAgent,
   settings,
@@ -52,7 +52,7 @@ export function buildDefaultAgentOpensAs({
     return undefined
   }
   const agent = defaultAgent
-  // Built-ins or agents in this computer's own inventory: elsewhere Providers shows a different unset value.
+  // Require local inventory so this control agrees with the local Providers switch’s unset-value behavior.
   const offered =
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined).includes(agent) &&
     (isAgentSessionHandleProvider(agent) || installedHere?.includes(agent) === true) &&

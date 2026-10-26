@@ -8,7 +8,6 @@ import {
   REMOTE_RUNTIME_RECOVERY_DELAYS_MS
 } from './remote-runtime-pty-recovery-state'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -66,8 +65,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: 'terminal-1',
       viewport: { cols: 100, rows: 30 }
     })
-    // Why: opening the pane is the user's wake gesture for a slept pane, so it
-    // must not be labelled like the reconnect probe (STA-3465).
+    // Opening is an explicit wake gesture; distinguish it from reconnect probes that preserve deliberate sleep (STA-3465).
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'session.tabs.activate',

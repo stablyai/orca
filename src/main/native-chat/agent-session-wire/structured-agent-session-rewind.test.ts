@@ -449,6 +449,28 @@ describe('host rewind', () => {
     })
     expect(rewind).not.toHaveBeenCalled()
   })
+  it('refuses an older client unresolved target without mutation and keeps ordinary Rewind usable', async () => {
+    const target = await seed()
+    sink.appendItem(
+      LATE,
+      { ...hostTestMessage('outside follow-up'), role: 'user' },
+      {
+        turnScope: { kind: 'unknown' }
+      }
+    )
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const record = store.getRecord(HOST_TEST_SESSION)
+    expect(await host.rewind(caller, await params(agentJournalItemKey(LATE)))).toMatchObject({
+      ok: false,
+      refusal: { rewindReason: 'invalid-target' }
+    })
+    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
+    expect(store.getRecord(HOST_TEST_SESSION)).toEqual(record)
+    expect(rewind).not.toHaveBeenCalled()
+    expect(await host.rewind(caller, await params(target))).toMatchObject({ ok: true })
+    expect(rewind).toHaveBeenCalledOnce()
+  })
   it('keeps a failed hydration epoch intact and blocks sends and duplicate rewind while it stays unknown', async () => {
     const target = await seed()
     const request = await params(target)

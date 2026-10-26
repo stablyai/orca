@@ -25,7 +25,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
-import { resolveTaskPullRequestRepo } from '../../task-page-github-review-model'
+import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
 export function PRMergeCell({
   item,
   repo,

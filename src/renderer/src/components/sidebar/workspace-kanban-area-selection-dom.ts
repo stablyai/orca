@@ -104,8 +104,7 @@ export function getAreaSelectionCardIds(
     if (startContentY !== undefined && card.contentRect && options.currentY !== undefined) {
       const currentContentY =
         options.currentY - card.contentRect.containerTop + card.contentRect.scrollTop
-      // Why: during lane scroll, viewport Y changes but the marquee range is
-      // anchored to the content positions the user dragged across.
+      // Lane scrolling changes viewport Y; keep the marquee anchored in content coordinates.
       verticalHit =
         Math.min(startContentY, currentContentY) <= card.contentRect.bottom &&
         Math.max(startContentY, currentContentY) >= card.contentRect.top
@@ -206,7 +205,7 @@ export function clearPreviewSelection(
   previewIds: Set<string>
 ): void {
   for (const card of cardRects) {
-    // Why: virtual remounts replace the element; clear via live connected node when present.
+    // Virtual remounts replace elements; clear the live connected node.
     if (card.element?.isConnected && previewIds.has(card.id)) {
       card.element.removeAttribute(AREA_SELECTED_ATTR)
     }
@@ -235,7 +234,7 @@ export function updatePreviewSelection(
       continue
     }
     const shouldPreview = nextIds.has(card.id)
-    // Why: virtualization can remount the same card id; trust the live attr, not previewIds alone.
+    // Virtual remounts can preserve the ID; trust the live attribute rather than previewIds alone.
     const isPreviewed = element.getAttribute(AREA_SELECTED_ATTR) === 'true'
     if (shouldPreview === isPreviewed) {
       if (shouldPreview) {

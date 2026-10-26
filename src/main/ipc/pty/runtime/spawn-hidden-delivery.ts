@@ -1,4 +1,4 @@
-import { markRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
+import { markRuntimeOwnedHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
 import type { RuntimePtySpawnState } from './spawn-state'

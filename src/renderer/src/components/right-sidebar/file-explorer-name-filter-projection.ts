@@ -133,8 +133,7 @@ export function createNameFilteredFileExplorerProjection({
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
-    // Why: empty queries use the normal explorer projection, and loading filters must not
-    // fall back to a partial cached path list.
+    // Empty queries use normal projection; loading filters must not reveal partial cached paths.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 

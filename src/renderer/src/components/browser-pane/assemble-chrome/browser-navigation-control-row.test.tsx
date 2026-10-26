@@ -106,8 +106,7 @@ describe('BrowserNavigationControlRow', () => {
     expect(document.querySelector('[data-contextual-tour-target="browser-toolbar"]')).not.toBeNull()
   })
 
-  // Why: the row must not assume its middle is an address bar — a surface with no URL to type
-  // still gets the same history controls in the same chrome.
+  // A read-only document identity must retain the same history controls as an address bar.
   it('renders a non-address identity widget in the same slot', () => {
     renderWithIdentityChip()
     expect(screen.getByText('docs/report.html')).not.toBeNull()
@@ -116,8 +115,7 @@ describe('BrowserNavigationControlRow', () => {
     expect(screen.getByLabelText('Reload')).not.toBeNull()
   })
 
-  // Why the row and not each widget: a text input and a line of text come out different heights,
-  // and the whole toolbar would change size when a document tab replaces a web tab.
+  // The row sets height so switching between input and document text cannot resize the toolbar.
   it('gives every identity widget the same slot height, and stretches it to fill', () => {
     renderRow()
     const addressSlot = document.querySelector(`[${BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE}]`)

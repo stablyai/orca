@@ -224,9 +224,7 @@ describe('prunePendingSends', () => {
   })
 })
 
-// A glued row is written by the agent AFTER the sends that produced it, so every
-// fixture here puts the transcript row past `sentAt`. Matching an earlier row is
-// the failure mode these tests exist to pin down.
+// Glue fixtures place rows after sentAt; older matching rows must never retire newer sends.
 const GLUE_BOUNDARY = assistantMessage('glue-boundary', 'ready', 1000)
 const GLUE_SENT_AT = 5000
 
@@ -240,7 +238,6 @@ function gluePending(id: string, text: string): NativeChatPendingSend {
   }
 }
 
-/** Visible history, the send boundary, then the row the agent glued the queue into. */
 function glueTranscript(row: string): NativeChatMessage[] {
   return [
     userMessage('glue-history', 'hello', 900),
@@ -332,10 +329,7 @@ describe('glued rapid sends', () => {
     expect(prunePendingSends(pending, advancedGlueTranscript('hi there'))).toEqual(pending)
   })
 
-  // A draft ending in `\` is a newline request to the agent TUI, not a submit:
-  // measured against Claude Code v2.1.234, `first\` + CR leaves the input open
-  // with the backslash dropped, so the next send lands in the SAME turn
-  // ("first\nsecond"). The echo keeps the backslash the transcript never has.
+  // Claude Code v2.1.234 drops a trailing backslash plus CR to continue the same turn; other agents retain it.
   it('still retires literal-backslash sends glued by agents that retain it', () => {
     const pending = [gluePending('p1', 'run\\'), gluePending('p2', 'again')]
     expect(prunePendingSends(pending, advancedGlueTranscript('run\\ again'))).toEqual([])
@@ -372,8 +366,7 @@ describe('glued rapid sends', () => {
     expect(pendingSendsAsMessages(pending, glueTranscript('tell me a joke\ncontinue'))).toEqual([])
   })
 
-  // The observed report: the rest of the turn was finished somewhere this queue
-  // cannot see (another client, or typed into the pane), so the echo is alone.
+  // Another client or direct terminal input can finish a continuation outside this queue.
   it('retires a lone continuation echo absorbed into a longer turn', () => {
     const pending = [gluePending('p1', 'tell me a joke\\')]
 
@@ -389,7 +382,6 @@ describe('glued rapid sends', () => {
   })
 
   it('retires a continuation echo the user then submitted on its own', () => {
-    // `\` + Enter, then Enter again on the empty line it opened.
     const pending = [gluePending('p1', 'tell me a joke\\')]
 
     expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke'))).toEqual([])
@@ -439,7 +431,6 @@ describe('glued rapid sends', () => {
   })
 
   it('keeps a queued pair when an earlier turn splits across it (#14406 regression)', () => {
-    // The row predates both sends: "run the tests"+"again" only looks glued.
     const pending = [pendingOf('p1', 'run the tests'), pendingOf('p2', 'again')]
 
     expect(
@@ -451,8 +442,6 @@ describe('glued rapid sends', () => {
   })
 
   it('keeps a re-sent pair that an older identical turn would match (#14406 regression)', () => {
-    // Rapid-sending "fix the"+"bug" a second time must not bind to the first
-    // "fix the bug" turn — that drops a real queued prompt with no bubble.
     const history = [userMessage('u1', 'fix the bug', 1000), assistantMessage('a1', 'fixed', 1100)]
     const pending = [gluePending('p3', 'fix the'), gluePending('p4', 'bug')]
 
@@ -471,8 +460,7 @@ describe('glued rapid sends', () => {
     expect(pendingSendsAsMessages(pending, history)).toHaveLength(2)
   })
 
-  // A row that already existed when a send was issued can never be that send's
-  // echo — for EVERY queued send, not just the oldest one the glue run starts at.
+  // Every send carries its own boundary, including later sends in a glued row.
   const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {
     const gluedRow = userMessage('glue-row', 'fix the bug', 6000)
     return {
@@ -482,7 +470,6 @@ describe('glued rapid sends', () => {
         assistantMessage('glue-answer', 'fixed', 6100),
         userMessage('later-history', 'anything', 6200)
       ],
-      // 'fix the' was queued before the row landed; 'bug' only after it.
       pending: [
         gluePending('p1', 'fix the'),
         {
@@ -502,23 +489,18 @@ describe('glued rapid sends', () => {
     expect(prunePendingSends(pending, messages)).toEqual(pending)
   })
 
-  // Separate from the prune case on purpose: the render path is what makes the
-  // bubble visually vanish, and a shared `it` would mask it behind the first
-  // failing assertion.
+  // Keep prune and render assertions separate so one failure cannot mask the other regression.
   it('still renders a queued send whose own boundary is newer than the row (STA-4477)', () => {
     const { messages, pending } = mixedAgeGlue()
 
     expect(pendingSendsAsMessages(pending, messages)).toHaveLength(2)
   })
 
-  // Glue is adjacency: a send the row predates ends the run rather than being
-  // skipped, so a row must never bridge across a send it cannot represent.
   it('never glues across a send the row cannot represent (STA-4477)', () => {
     const gluedRow = userMessage('glue-row', 'alpha gamma', 6000)
     const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'ok', 6100)]
     const pending = [
       gluePending('p1', 'alpha'),
-      // Queued after the row landed, so the row is not its echo...
       {
         id: 'p2',
         text: 'beta',
@@ -526,7 +508,6 @@ describe('glued rapid sends', () => {
         afterMessageId: 'glue-row',
         afterMessageTimestamp: 6000
       },
-      // ...and 'alpha'+'gamma' must not close over the gap it leaves.
       gluePending('p3', 'gamma')
     ]
 
@@ -620,8 +601,7 @@ describe('pendingSendsAsMessages', () => {
     expect(prunePendingSends(pending, history)).toEqual(pending)
   })
 
-  // #11519: a first send into a settled empty transcript has no row to compare, and the
-  // host that writes the transcript may run a clock behind this one.
+  // Empty-transcript sends cannot compare row boundaries or assume host/client clock alignment (#11519).
   it('retires a send into a settled empty transcript whatever the host clock says', () => {
     const fiveMinutes = 5 * 60_000
     const pending = [
@@ -761,9 +741,7 @@ describe('launchPromptAsMessage', () => {
     ).toBe(true)
   })
 
-  // Grok transcripts carry no timestamps; before the null-matchable rule the
-  // seeded bubble was never hidden or pruned and sat rank-pinned at the list
-  // tail forever, reading as the conversation reordering.
+  // Grok has no timestamps; excluding its rows stranded launch echoes at the transcript tail.
   it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
     const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
     const transcript = [
@@ -925,9 +903,7 @@ describe('applyCommandMarkerBoundaries', () => {
 })
 
 describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
-  // The per-key arrays were capped at 8, but the KEY count (paneKey/agent/session,
-  // all ephemeral) was unbounded, so distinct panes/sessions accumulated forever.
-  // Both caches now LRU-bound the key count at 128 (shared helper, #7566).
+  // Per-key limits alone leaked ephemeral scope keys; both caches also cap keys at 128 (#7566).
   const CAP = 128
 
   it('appendCommandMarkerCache evicts the oldest scope key past the cap', () => {
@@ -938,7 +914,6 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
         '/clear'
       )
     }
-    // Oldest sessions evicted; the most-recent CAP survive.
     expect(
       readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's0' })
     ).toEqual([])
@@ -969,7 +944,6 @@ describe('commandMarkersAsMessages with a host answer', () => {
       { id: 'c2', command: '/context', sentAt: 9, output: 'Context: 54.6k / 200k tokens (27%)' }
     ])
     expect(message?.role).toBe('system')
-    // Plain text: it draws as the muted aside the Ran line would have been.
     expect(message?.blocks).toEqual([{ type: 'text', text: 'Context: 54.6k / 200k tokens (27%)' }])
   })
 })

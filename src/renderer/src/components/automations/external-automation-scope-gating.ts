@@ -1,11 +1,4 @@
-/**
- * Whether a host's external automation managers are actually listed.
- *
- * External managers are a desktop-authority surface this release, so most hosts
- * are *scope limited* rather than empty. The distinction is load-bearing: a
- * runtime-owned host with no rows has not been probed, and presenting it as
- * clean would tell the user something we did not check.
- */
+/** External managers are desktop-authority-only here; runtime hosts are unprobed/scope-limited, never proven empty. */
 
 import {
   EXTERNAL_AUTOMATION_SCOPE_CODES,
@@ -35,10 +28,7 @@ function notListed(code: ExternalAutomationScopeCode | null): ExternalAutomation
   return { status: 'not-listed', probeOwner: null, code }
 }
 
-/**
- * Resolves one host. A null entry is the unresolved/All-hosts case and makes no
- * claim either way; compose per-host gates for All hosts instead.
- */
+/** An unresolved/All-hosts selection makes no claim; compose one gate per concrete host instead. */
 export function resolveExternalAutomationScopeGate(
   entry: AutomationHostCatalogEntry | null
 ): ExternalAutomationScopeGate {
@@ -55,10 +45,7 @@ export function resolveExternalAutomationScopeGate(
   return entry.owner ? { status: 'listed', probeOwner: entry.owner, code: null } : notListed(null)
 }
 
-/**
- * The hosts whose external managers are in view. Probing and retention both key
- * off this: a host the user filtered away is not a host we may go ask about.
- */
+/** Probe and retain only in-view hosts; filtering away a host removes authorization to query it. */
 export function externalAutomationScopeEntries(
   entries: readonly AutomationHostCatalogEntry[],
   resolution: AutomationHostFilterResolution
@@ -83,10 +70,7 @@ export function externalAutomationProbeOwners(
   return owners
 }
 
-/**
- * Maps a rejected scoped call onto a gate. The engine carries its code as a
- * trailing `: <code>` token because IPC preserves nothing but the message.
- */
+/** Read the engine’s trailing scope code from IPC’s preserved error message. */
 export function externalAutomationScopeGateFromError(
   error: unknown
 ): ExternalAutomationScopeGate | null {

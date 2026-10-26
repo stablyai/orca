@@ -26,11 +26,7 @@ const CONTENT_TYPE_BY_EXTENSION = {
   woff2: 'font/woff2'
 }
 
-/**
- * Canonical serialization the buildId hashes. Key order is fixed and the list is sorted by path,
- * so the id is a pure function of content. Must stay byte-identical to the contract module's
- * serializer in src/shared/mobile-web-bundle/.
- */
+// Keep canonical key/path order byte-identical to src/shared/mobile-web-bundle serializer; buildId must depend only on content.
 export function serializeMobileWebBundleAssets(assets) {
   return JSON.stringify(
     [...assets]
@@ -79,15 +75,11 @@ function readIntegerConstant(source, name, file = 'src/shared/protocol-version.t
   return Number.parseInt(match[1], 10)
 }
 
-/**
- * Parsed rather than imported because protocol-version.ts is TypeScript and this script runs on
- * bare node during packaging, before any build output exists.
- */
+// Parse TS protocol source: packaging runs bare Node before build outputs exist.
 export async function readProtocolWindow() {
   const source = await readFile(join(projectDir, 'src', 'shared', 'protocol-version.ts'), 'utf8')
   return {
     runtimeProtocolVersion: readIntegerConstant(source, 'RUNTIME_PROTOCOL_VERSION'),
-    // The bundle is a client: the floor it cares about is the oldest host protocol it can talk to.
     minCompatibleRuntimeProtocolVersion: readIntegerConstant(
       source,
       'MIN_COMPATIBLE_RUNTIME_SERVER_VERSION'
@@ -95,7 +87,6 @@ export async function readProtocolWindow() {
   }
 }
 
-/** The page's build number, parsed for the same reason the protocol window is. */
 export async function readPageVersion() {
   const file = join('src', 'shared', 'mobile-web-bundle', 'manifest-contract.ts')
   const source = await readFile(join(projectDir, file), 'utf8')
@@ -110,17 +101,13 @@ export async function readDesktopVersion() {
   return packageJson.version
 }
 
-/**
- * Manifest assembly and the on-disk write, kept apart from any one builder so the manifest shape
- * the contract module and the packaging guard read has a single producer.
- */
+// Single manifest producer keeps builder/contract/packaging guard shape aligned.
 export async function writeMobileWebBundleTree({
   outDir,
   written,
   desktopVersion,
   protocolWindow,
-  // Empty for a tree with no route list at all: a shell reading it finds no screen listed and
-  // renders every route natively.
+  // Empty route list makes shell render every screen natively.
   routes = [],
   env = process.env
 }) {
@@ -140,14 +127,14 @@ export async function writeMobileWebBundleTree({
     routes
   }
 
-  // Why a full clear: a stale asset left from an earlier build would ship unreferenced inside asar.
+  // Clear entire output or stale unreferenced assets ship inside asar.
   await rm(outDir, { recursive: true, force: true })
   await mkdir(join(outDir, 'assets'), { recursive: true })
   for (const asset of written) {
     await writeFile(join(outDir, asset.path), asset.bytes)
   }
   await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-  // Outside the manifest, so the page's bytes and buildId stay what the switch compiled.
+  // Keep switch metadata outside manifest so compiled page bytes/buildId remain unchanged.
   for (const marker of darkBuildMarkers(env)) {
     await writeFile(join(outDir, marker.fileName), marker.text, 'utf8')
   }

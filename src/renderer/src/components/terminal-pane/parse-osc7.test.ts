@@ -10,7 +10,7 @@ describe('parseOsc7', () => {
     expect(parseOsc7('file:///home/jin')).toBe('/home/jin')
   })
 
-  it('percent-decodes spaces and unicode', () => {
+  it('percent-decodes spaces', () => {
     expect(parseOsc7('file:///home/jin/my%20code')).toBe('/home/jin/my code')
   })
 

@@ -24,13 +24,13 @@ export function prepareAiVaultSessionContinuation(args: {
       sourceTitle: session.title,
       sourceWorkingDirectory: session.cwd,
       transcriptPath: vaultTranscriptPath(session),
-      // Why: preview user entries can be tool results or injected skill text; only provider-authenticated prompts are safe hints.
+      // Use provider-authenticated prompts; preview user entries may contain tool results or injected skills.
       lastPrompt: session.lastUserPrompt ?? null,
       lastAssistantMessage: latestAssistantPreview(session)
     },
     worktreeId: targetWorktreeId,
     workspacePath: targetWorkspacePath,
-    // Why: sessions can outlive their worktree selection, but continuation should preserve their recorded cwd.
+    // Preserve recorded cwd even when the original worktree selection is gone.
     initialCwd: session.cwd || targetWorkspacePath,
     launchSource: 'sidebar'
   }

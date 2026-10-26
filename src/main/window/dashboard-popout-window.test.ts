@@ -116,8 +116,7 @@ const {
   }
 })
 
-// Static helpers live on the constructor; broadcastPopoutOpenChanged uses
-// BrowserWindow.getAllWindows(). Return the instances created in this test.
+// Expose constructor getAllWindows for broadcasting to this test's instances.
 ;(BrowserWindowMock as unknown as { getAllWindows: () => unknown[] }).getAllWindows = () =>
   instances
 
@@ -210,13 +209,12 @@ describe('createOrFocusDashboardPopout', () => {
     // Native frame: neither a custom titleBarStyle nor frame:false is set.
     expect(opts.titleBarStyle).toBeUndefined()
     expect(opts.frame).toBeUndefined()
-    expect(opts.backgroundColor).toBe('#0a0a0a') // dark theme mock
+    expect(opts.backgroundColor).toBe('#0a0a0a')
     expect(opts.webPreferences?.sandbox).toBe(true)
     expect(opts.webPreferences?.partition).toBe('orca-dashboard-popout')
     expect(opts.webPreferences?.webviewTag).toBe(false)
     expect(opts.webPreferences?.preload).toMatch(/preload[\\/]index\.js$/)
-    // Why unstamped: no guest of ours can run here, so this renderer hosts no client-placed page
-    // and must keep mirroring what the host publishes for every one of them.
+    // No guests run here; omit host identity so every client-placed page stays mirrored.
     expect(
       readBrowserClientHostIdArgument(opts.webPreferences?.additionalArguments ?? [])
     ).toBeNull()
@@ -298,7 +296,6 @@ describe('createOrFocusDashboardPopout', () => {
   })
 
   it('discards off-screen persisted bounds and falls back to defaults', () => {
-    // Display does not overlap the saved rect at all.
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 800, height: 600 } }])
     const store = makeStore({
       dashboardPopoutBounds: { x: 5000, y: 5000, width: 1000, height: 800 }
@@ -325,7 +322,7 @@ describe('createOrFocusDashboardPopout', () => {
       })
 
       store.updateUI.mockClear()
-      win.bounds = { x: 10, y: 10, width: 100, height: 100 } // below minimum
+      win.bounds = { x: 10, y: 10, width: 100, height: 100 }
       win.emit('resize')
       vi.advanceTimersByTime(500)
       expect(store.updateUI).not.toHaveBeenCalled()
@@ -383,7 +380,7 @@ describe('createOrFocusDashboardPopout', () => {
     store.emitUIChanged({ uiZoomLevel: 2 })
     expect(win.webContents.setZoomLevel).toHaveBeenCalledWith(2)
 
-    // Unchanged level: no redundant reapply that would clobber a local zoom.
+    // An unchanged app zoom must preserve window-local zoom.
     win.webContents.setZoomLevel.mockClear()
     store.emitUIChanged({ uiZoomLevel: 2 })
     expect(win.webContents.setZoomLevel).not.toHaveBeenCalled()
@@ -408,7 +405,7 @@ describe('createOrFocusDashboardPopout', () => {
 
     win.zoomLevel = 5
     expect(zoomDashboardPopoutIfFocused('in')).toBe(true)
-    expect(win.zoomLevel).toBe(5) // clamped at max
+    expect(win.zoomLevel).toBe(5)
 
     expect(zoomDashboardPopoutIfFocused('reset')).toBe(true)
     expect(win.zoomLevel).toBe(0)

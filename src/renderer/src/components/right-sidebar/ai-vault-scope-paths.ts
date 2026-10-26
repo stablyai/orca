@@ -46,12 +46,7 @@ function collectWorkspaceScopePaths(
   return accumulator
 }
 
-/**
- * Paths sent to the scanner so a scoped panel view surfaces its own sessions
- * even when they are older than the global recency cap. Covers the active
- * workspace plus the active project's other worktrees (same repo), so both the
- * Workspace and Project scopes stay complete.
- */
+/** Include workspace/project paths so scoped scans can find sessions older than the global recency cap. */
 export function deriveAiVaultScopeSessionPaths(
   activeWorktree: Pick<
     Worktree,
@@ -70,8 +65,7 @@ export function deriveAiVaultScopeSessionPaths(
   if (options.scope === 'workspace') {
     return deriveAiVaultWorkspaceScopePaths(activeWorktree, liveWorktrees)
   }
-  // Carries the workspace pass's dedupe keys forward, so the project pass does
-  // not restart deduplication against a plain array.
+  // Carry workspace dedupe keys into the project pass instead of rescanning accepted paths.
   const accumulator = collectWorkspaceScopePaths(activeWorktree, liveWorktrees)
   const setupsByRepoId = buildProjectSetupsByRepoId(options.projectHostSetupProjection)
   for (const worktree of liveWorktrees) {
@@ -112,14 +106,7 @@ function worktreeProjectKey(
   return toAiVaultProjectKey(entry.projectId ?? setup?.projectId ?? null, entry.repoId)
 }
 
-/**
- * Paths plus their comparison keys.
- *
- * Why the key set: deduping by rescanning the accumulated paths re-normalized
- * every accepted path on every insert, which is O(n^2) `normalize('NFC')` calls
- * and cost ~190ms on a 1124-workspace profile — on the workspace-switch path,
- * since these paths are derived from the active worktree.
- */
+/** Retain comparison keys to avoid quadratic NFC normalization on workspace switches. */
 type ScopePathAccumulator = {
   paths: string[]
   comparisonKeys: Set<string>
@@ -142,15 +129,7 @@ function addAiVaultWorkspaceScopePath(accumulator: ScopePathAccumulator, pathVal
   accumulator.paths.push(trimmedPath)
 }
 
-/**
- * Comparison paths owned by a worktree *other than* the active one.
- *
- * Why exclude the active worktree while building rather than when reading: a
- * path→id map would otherwise have to pick one owner among duplicates, and
- * picking the active worktree would mask a real claimant sitting later in the
- * list. Excluding it up front means any surviving entry is a claim by
- * definition, which matches the previous `some()` regardless of ordering.
- */
+/** Exclude the active worktree up front so duplicate paths cannot mask another owner, regardless of ordering. */
 function buildClaimedComparisonPaths(
   liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[],
   activeWorktree: Pick<Worktree, 'id'>

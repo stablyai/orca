@@ -11,8 +11,6 @@ import {
 } from '../ui/dropdown-menu'
 import { ManagedRuntimeRemoveDialog } from './ManagedRuntimeRemoveDialog'
 
-/** The ⋯ menu beside an installed runtime's switch: Update or Reinstall, and Remove behind a
- *  confirmation. */
 export function ManagedRuntimeActionsMenu(props: {
   agentLabel: string
   host: RuntimeClientTarget

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { BoundedMap } from '../../../../../../shared/bounded-map'
 import { resolveSourceControlGroupOrder } from '../listing/section-order'
 import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
@@ -11,11 +12,16 @@ function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
 }
 
-/**
- * Local presentation state for the Source Control panel: filter, collapsed sections/directories,
- * list-vs-tree mode and the base-ref dialog, plus the per-worktree reset that keeps a worktree
- * switch from inheriting the previous worktree's view.
- */
+// Preserve per-worktree disclosure across sidebar-tab unmounts for this renderer session.
+const collapsedSectionsByWorktree = new BoundedMap<string, Set<string>>({ maxEntries: 512 })
+
+function readCollapsedSections(worktreeId: string | null): Set<string> {
+  return (
+    (worktreeId ? collapsedSectionsByWorktree.get(worktreeId) : undefined) ??
+    createDefaultCollapsedSections()
+  )
+}
+
 export function useSourceControlPanelViewState({
   activeWorktreeId,
   settings,
@@ -26,12 +32,12 @@ export function useSourceControlPanelViewState({
   updateSettings: SourceControlStoreActions['updateSettings']
 }) {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
-  // Why: virtualize against the panel's shared scroller; use state (not a ref) so lists re-render and start observing once the element attaches.
+  // Use state so virtual lists start observing the shared scroller when its element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    createDefaultCollapsedSections
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
+    readCollapsedSections(activeWorktreeId)
   )
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
@@ -52,30 +58,34 @@ export function useSourceControlPanelViewState({
     })
   }, [settings, sourceControlViewMode, updateSettings])
 
-  // Why: reset during render instead of key-remounting on switch (which caused a Windows IPC storm).
+  // Reset during render; key-based remounts on switches caused Windows IPC storms.
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
   if (viewStateWorktreeId !== activeWorktreeId) {
     setViewStateWorktreeId(activeWorktreeId)
     setFilterExpanded(false)
-    setCollapsedSections(createDefaultCollapsedSections())
+    setCollapsedSections(readCollapsedSections(activeWorktreeId))
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
-    // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
+    // Preserve repo-scoped defaultBaseRef and per-worktree in-flight commits so switches cannot clobber defaults or enable duplicate commits.
     setFilterQuery('')
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }
 
-  const toggleSection = useCallback((section: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
+  const toggleSection = useCallback(
+    (section: string) => {
+      const next = new Set(collapsedSections)
       if (next.has(section)) {
         next.delete(section)
       } else {
         next.add(section)
       }
-      return next
-    })
-  }, [])
+      setCollapsedSections(next)
+      if (activeWorktreeId) {
+        collapsedSectionsByWorktree.set(activeWorktreeId, next)
+      }
+    },
+    [activeWorktreeId, collapsedSections]
+  )
 
   const toggleTreeDir = useCallback((key: string) => {
     setCollapsedTreeDirs((prev) => {

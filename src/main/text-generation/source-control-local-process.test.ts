@@ -46,7 +46,7 @@ function fakeSupervisor(exitsOn: NodeJS.Signals | null): FakeSupervisor {
   return child
 }
 
-// Behaves as the supervisor does: a SIGTERM ends it, after the time its provider takes to stop.
+// Model supervisor SIGTERM completion after provider cleanup delay.
 function fakeSupervisedAgent(stopMs: number): FakeSupervisor & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -112,7 +112,6 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
     expect(terminateTreeMock).toHaveBeenCalledWith(child, {
       site: 'source-control-text-generation'
     })
-    // The shared close then gives the forced root its own short wait.
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped
     expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
@@ -235,9 +234,7 @@ describe.runIf(process.platform !== 'win32')(
         for (const pid of [agentPid, child.pid!]) {
           try {
             process.kill(pid, 'SIGKILL')
-          } catch {
-            // Already gone, as the test expects.
-          }
+          } catch {}
         }
       }
     })
@@ -252,7 +249,7 @@ describe.runIf(process.platform !== 'win32')(
         }
         const pidFile = join(folder, 'first-pid')
         const stoppedFile = join(folder, 'first-stopped')
-        // Ignores its stdin end, then takes a moment to stop on SIGTERM, as a CLI flushing state does.
+        // Model a CLI that ignores stdin EOF and flushes state before stopping on SIGTERM.
         const slowStop = join(folder, 'slow-stop.cjs')
         writeFileSync(
           slowStop,
@@ -319,7 +316,6 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
       try {
         const pidFile = join(folder, 'agent-pid')
         const agent = join(folder, 'floods.cjs')
-        // Floods stdout past the limit, then waits on its never-answered request.
         writeFileSync(
           agent,
           `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
@@ -364,7 +360,6 @@ setInterval(() => {}, 60000)
         const home = join(folder, 'codex-home')
         const pidFile = join(folder, 'flood-pid')
         const floods = join(folder, 'floods.cjs')
-        // Floods stdout past the limit, then takes a moment to stop on SIGTERM.
         writeFileSync(
           floods,
           `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))

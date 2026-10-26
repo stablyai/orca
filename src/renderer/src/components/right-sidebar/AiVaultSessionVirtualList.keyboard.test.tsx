@@ -21,7 +21,6 @@ import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
 const VIEWPORT_PX = 600
 const ROW_PX = 98
 
-// The rich row is covered by its own tests; here only which row is selected matters.
 vi.mock('./AiVaultSessionRow', () => ({
   VaultSessionRow: (props: { session: AiVaultSession }) => <div>{props.session.title}</div>
 }))
@@ -404,7 +403,6 @@ describe('Session History keyboard selection', () => {
     expect(dismiss).toHaveBeenCalledOnce()
     await refusedBy('other')
     expect(order()).toEqual(['old', 'other'])
-    // The closed chat that holds the row reopens in this one's place.
     await refusedBy('held')
     expect(order()).toEqual(['held', 'other'])
     expect(toastError).not.toHaveBeenCalled()

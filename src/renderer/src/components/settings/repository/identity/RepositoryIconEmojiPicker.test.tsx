@@ -27,7 +27,6 @@ vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 
-/** Signature of the onEmojiClick callback captured by the emoji-picker-react mock. */
 type MockEmojiClickHandler = (data: { emoji: string }) => void
 
 const emojiPickerMocks = vi.hoisted(() => ({
@@ -49,7 +48,6 @@ vi.mock('emoji-picker-react', () => ({
 let container: HTMLDivElement
 let root: Root
 
-/** Renders RepositoryIconEmojiPicker with default props and returns the spy callback. */
 function renderPicker(overrides: Partial<Parameters<typeof RepositoryIconEmojiPicker>[0]> = {}) {
   const onSetIcon = vi.fn()
   act(() => {
@@ -104,10 +102,8 @@ describe('RepositoryIconEmojiPicker', () => {
     expect(toastMocks.error).toHaveBeenCalledTimes(1)
   })
 
-  // Guards the skinTonesDisabled removal: skin-toned picks must save like any other emoji, not be blocked.
   it('saves a valid skin-tone emoji selection instead of blocking it for global inclusivity', () => {
     const { onSetIcon } = renderPicker()
-    // Base emoji + skin-tone modifier: well within the 16 UTF-16 unit cap.
     const thumbsUpMediumSkinTone = '👍🏽'
     expect(thumbsUpMediumSkinTone.length).toBeLessThanOrEqual(16)
 

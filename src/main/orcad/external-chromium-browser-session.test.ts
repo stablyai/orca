@@ -85,7 +85,6 @@ describe('orcad external-chromium agent-browser environment', () => {
     }
   )
 
-  // Why: this daemon owns the user's remote Chromium, so an idle bound would close a live browser.
   it('never bounds the daemon that owns the Chromium tree', () => {
     const env = externalChromiumAgentBrowserEnvironment({ inheritedEnv: {}, ...BASE })
 
@@ -113,9 +112,6 @@ describe('orcad external-chromium agent-browser environment', () => {
     expect(env.AGENT_BROWSER_ARGS).toBe('--headless=new\n--no-sandbox')
   })
 
-  // Why (#16367): orcad is the backend a remote user's Chromium hangs off, and this session
-  // never passes --cdp, so a daemon an earlier orcad left behind is not bound to the dead
-  // process. Closing it on every start would take their browser and every tab with it.
   it("reuses a surviving session instead of closing the user's browser", async () => {
     runProcessMock.mockImplementation((spec: Spec) => {
       const data = spec.args?.includes('tab')
@@ -142,14 +138,11 @@ describe('orcad external-chromium agent-browser environment', () => {
     expect(issued.some((args) => args.includes('open'))).toBe(false)
   })
 
-  // Why: a name that answers nothing is wedged or half-dead, so reclaiming it is correct —
-  // that is the killed-orcad case the stable session name exists to recover.
   it('reclaims a session that answers nothing, then opens', async () => {
     let listed = 0
     runProcessMock.mockImplementation((spec: Spec) => {
       if (spec.args?.includes('tab')) {
         listed += 1
-        // First probe finds nothing; after `open` the page exists.
         const tabs =
           listed === 1 ? [] : [{ active: true, tabId: 'tab-1', title: 'x', url: 'about:blank' }]
         return Promise.resolve({

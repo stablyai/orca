@@ -33,7 +33,7 @@ vi.mock('@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput', () => ({
 
 afterEach(() => {
   cleanup()
-  // cleanup only unmounts, so a prototype spy would outlive its test
+  // Unmount cleanup does not restore prototype spies.
   vi.restoreAllMocks()
 })
 
@@ -50,8 +50,7 @@ type HarnessProps = {
   showUnreadEmphasis?: boolean
 }
 
-// Mirrors WorktreeCard: the card clears the trigger as soon as the title consumes it,
-// so from then on the editor stays open on its own state.
+// Mirror the card clearing its shortcut trigger; the editor must retain open state itself.
 function ShortcutRenameHarness({
   displayName = DISPLAY_NAME,
   onRename = vi.fn(),
@@ -117,8 +116,7 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
     await waitFor(() => expect(renameEditor()).toBeNull())
   })
 
-  // The parent re-enables drag off this callback, so a close that skips it leaves the
-  // card wedged even though the editor disappeared.
+  // Both editing transitions must release the parent’s drag guard.
   it('reports both edit-mode transitions to the parent exactly once', () => {
     const onEditingChange = vi.fn()
     const { input } = openEditorByShortcut({ onEditingChange })
@@ -168,8 +166,6 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
     expect(select).toHaveBeenCalledTimes(1)
   })
 
-  // The hovercard editor never sets the unread flag, so a title change is the only
-  // way its key used to move.
   it('leaves an open editor untouched when the workspace is renamed elsewhere', () => {
     const { input, renameElsewhere } = openEditorByShortcut()
     fireEvent.change(input, { target: { value: 'Half typed name' } })
@@ -190,8 +186,7 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
 
     markUnread()
 
-    // A remount re-runs focus + select and the next keystroke replaces the name; the
-    // value and focus assertions catch the same loss arriving without one.
+    // Remounting reselects the name and loses typing; verify input identity, draft and focus.
     expect(renameEditor()).toBe(input)
     expect(input.value).toBe('Half typed name')
     expect(document.activeElement).toBe(input)

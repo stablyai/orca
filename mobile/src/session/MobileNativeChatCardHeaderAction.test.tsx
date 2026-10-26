@@ -44,7 +44,6 @@ describe('rendered prompt card collapse controls', () => {
     })
     act(() => tree!.root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress())
     expect(onCollapse).toHaveBeenCalledOnce()
-    // The reply field the collapse hides must not keep the keyboard.
     expect(Keyboard.dismiss).toHaveBeenCalledOnce()
     expect(onCancel).not.toHaveBeenCalled()
     expect(onAnswer).not.toHaveBeenCalled()

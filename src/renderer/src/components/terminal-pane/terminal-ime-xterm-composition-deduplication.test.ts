@@ -562,8 +562,7 @@ describe('xterm IME composition de-duplication', () => {
     startComposition(textarea, '한')
     await nextEventLoop()
 
-    // Why: IBus clears at compositionend, then restores the same commit after
-    // xterm's keypress path has already emitted it.
+    // IBus restores the commit after keypress already emitted it; the later insertText must dedup.
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
     const compositionHelper = (

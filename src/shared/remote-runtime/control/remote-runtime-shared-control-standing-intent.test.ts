@@ -200,7 +200,8 @@ function invokeSocketClose(
 ): void {
   unsafeConnection(connection).handleSocketClosed(
     new RemoteRuntimeClientError('runtime_unavailable', 'test close'),
-    generation
+    generation,
+    'socket_close'
   )
 }
 
@@ -219,7 +220,11 @@ function replaceOpen(connection: RemoteRuntimeSharedControlConnection): ReturnTy
 
 function unsafeConnection(connection: RemoteRuntimeSharedControlConnection): {
   open: () => void
-  handleSocketClosed: (error: RemoteRuntimeClientError, generation: number) => void
+  handleSocketClosed: (
+    error: RemoteRuntimeClientError,
+    generation: number,
+    cause: 'socket_close'
+  ) => void
   socketGeneration: { begin: () => number }
   subscriptions: Map<string, SharedControlLogicalSubscription>
   reconnect: { attempt: number }

@@ -145,8 +145,7 @@ function resolveCurrentEditorRoute(
   if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
     return null
   }
-  // Why: ordinary folder workspaces have no published worktree row, so re-resolve their live
-  // folder owner after preserving the explicit-owner fail-closed contract above (#10251).
+  // Folder workspaces lack worktree rows; re-resolve their live owner while preserving explicit-owner fail-closed checks (#10251).
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return resolveEditorOwnerRoute(state, worktreeId, provenance.generation.route.executionHostId)
   }

@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { marked } from 'marked'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
 
-// Offsets marked itself treats as fenced code, so the sweep below compares the
-// normalizer against the parser that decides what the file really means.
+// Use marked’s own fence ranges as an independent oracle for normalization boundaries.
 function markedCodeRanges(markdown: string): [number, number][] {
   const ranges: [number, number][] = []
   let offset = 0

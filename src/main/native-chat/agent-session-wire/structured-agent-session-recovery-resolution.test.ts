@@ -7,7 +7,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import {
   readPersistedLease,
   writeOlderBuildLease
-} from '../../runtime/agent-session-older-build-lease.test-fixture'
+} from '../../runtime/agent-session/ownership/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'

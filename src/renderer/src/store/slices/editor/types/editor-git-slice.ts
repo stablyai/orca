@@ -19,11 +19,9 @@ import type { FileSearchWorktreeState } from './file-search-worktree-state'
 import type { GitRuntimeOperationOptions } from './git-runtime-operation'
 
 export type EditorGitSlice = {
-  // Cursor line tracking per file
   editorCursorLine: Record<string, number>
   setEditorCursorLine: (fileId: string, line: number) => void
 
-  // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
@@ -114,7 +112,6 @@ export type EditorGitSlice = {
   ) => void
   clearGitBranchCompare: (worktreeId: string) => void
 
-  // File search state
   fileSearchStateByWorktree: Record<string, FileSearchWorktreeState>
   updateFileSearchState: (worktreeId: string, updates: Partial<FileSearchWorktreeState>) => void
   seedFileSearchQuery: (worktreeId: string, query: string) => void
@@ -123,13 +120,11 @@ export type EditorGitSlice = {
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 
-  // Editor navigation (for search result → go-to-line)
   pendingEditorReveal: PendingEditorReveal | null
   setPendingEditorReveal: (reveal: PendingEditorReveal | null) => void
   pendingEditorFocusRequest: PendingEditorFocusRequest | null
   consumeEditorFocusRequest: (token: number) => void
 
-  // Session hydration — restore editor files from persisted workspace session
   hydrateEditorSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

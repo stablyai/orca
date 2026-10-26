@@ -581,10 +581,7 @@ describe('wrapPosixHookCommand', () => {
     }
   )
 
-  // Why: commit 4d618795 explicitly switched from `&& ... || true` (which
-  // swallowed non-zero exits) to `if ... then ... fi` (which preserves the
-  // script's exit code). This test guards against a future regression that
-  // re-introduces the swallowing form.
+  // 4d618795 replaced && … || true to preserve failing script exit codes; guard against swallowing them again.
   it.skipIf(process.platform === 'win32')(
     'propagates the script exit code when the script runs and fails',
     () => {
@@ -719,10 +716,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
   )
 
   it('uses the permitted PowerShell flag shape on the Git Bash branch', () => {
-    // Why: this branch launches PowerShell from bash, where the parent has no
-    // console to inherit — Windows allocates a fresh one per hook event unless
-    // the switch says otherwise (#14815), and the AV verdict on the flag triple
-    // applies to the exact same string (#16003).
+    // Git Bash has no console to inherit (#14815); preserve the exact AV-reviewed PowerShell flag shape (#16003).
     const command = wrapRuntimeHomeHookCommand('claude-hook')
 
     expect(command).toContain('powershell.exe" -NoProfile -EncodedCommand ')
@@ -914,8 +908,7 @@ describe('buildWindowsAgentHookCurlPostCommand', () => {
     expect(command).toContain('-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"')
     expect(command).toContain('--data-urlencode "paneKey=%ORCA_PANE_KEY%"')
     expect(command).toContain('--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"')
-    // Why: `payload@-` makes curl read raw bytes from stdin and urlencode them,
-    // so UTF-8 prompts survive without a code-page conversion.
+    // payload@- preserves stdin’s UTF-8 bytes without code-page conversion.
     expect(command).toContain('--data-urlencode "payload@-"')
     expect(command).toContain('--connect-timeout 0.5 --max-time 1.5')
   })

@@ -35,7 +35,7 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
-// Lower test caps avoid allocating gigabytes on Windows; see filesystem-runtime-upload-staging.test.ts.
+// Lower test caps avoid allocating gigabytes on Windows; see filesystem/filesystem-runtime-upload-staging.test.ts.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<RuntimeImportLimitsModule>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 2 * 1024 * 1024

@@ -106,8 +106,7 @@ describe('splice forwarder', () => {
   })
 
   it('queues one full catalog-sized frame for a backpressured peer without closing', () => {
-    // Why: the desktop's worktree catalog response exceeds 1MiB on large
-    // workspaces; a single maxFrameBytes frame must survive backpressure.
+    // Large workspace catalogs exceed 1MiB; one maxFrameBytes frame must survive backpressure.
     vi.useFakeTimers()
     const client = new FakeSocket()
     const host = new FakeSocket()
@@ -126,7 +125,6 @@ describe('splice forwarder', () => {
     expect(host.closes).toEqual([])
     expect(budget.current()).toBe(8 * 1024 * 1024)
 
-    // Peer drains; the queued frame flushes and the reservation releases.
     host.bufferedAmount = 0
     vi.advanceTimersByTime(25)
     expect(host.sent).toHaveLength(1)

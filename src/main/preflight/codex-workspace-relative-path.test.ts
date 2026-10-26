@@ -98,7 +98,6 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
         ).rejects.toThrow('0.135.0')
-        // An external update is checked again on the next chat start.
         await writeFile(versionFile, '0.136.0')
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })

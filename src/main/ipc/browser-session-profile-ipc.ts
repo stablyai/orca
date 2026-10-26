@@ -10,7 +10,7 @@ import {
   detectInstalledBrowsers,
   selectBrowserProfile,
   importCookiesFromBrowser
-} from '../browser/browser-cookie-import'
+} from '../browser/cookies/browser-cookie-import'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,

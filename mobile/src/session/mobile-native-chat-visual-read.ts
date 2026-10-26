@@ -5,7 +5,6 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import type { RpcClient } from '../transport/rpc-client'
 
-/** Where a chat's visuals are read from: the host that owns the structured session. */
 export type MobileNativeChatVisualSource = {
   client: RpcClient
   sessionId: string
@@ -13,9 +12,9 @@ export type MobileNativeChatVisualSource = {
 
 export type MobileNativeChatVisualRead =
   | { kind: 'ready'; html: string; revision: string }
-  /** The host positively refused (missing, too large, outside the folder...) or cannot serve visuals. */
+  // Definitive refusal, including unsupported hosts; discard stale cached content.
   | { kind: 'refused' }
-  /** No verdict: no answer, an error reply, an unreadable answer. Worth asking again. */
+  // No file verdict from this failure; retry may succeed.
   | { kind: 'unreachable' }
 
 const Revision = z.string().regex(/^[0-9a-f]{16,64}$/)
@@ -31,7 +30,6 @@ const visualReadReplySchema = z.union([
   z.object({ ok: z.literal(false), error: z.string() })
 ])
 
-/** An error reply and an unreadable reply both read as null. */
 const nativeChatVisualRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'agentSession.read-visual',
@@ -52,8 +50,7 @@ type CachedVisual = { html: string; revision: string }
 const cache = new Map<string, CachedVisual>()
 const inFlight = new Map<string, Promise<MobileNativeChatVisualRead>>()
 
-// The client stands for the host: each paired host has its own, so one host's visuals never
-// answer for another's even if two session ids collided.
+// Key by paired client so colliding session ids on different hosts cannot share visuals.
 const clientKeys = new WeakMap<RpcClient, number>()
 let nextClientKey = 0
 
@@ -74,7 +71,6 @@ function remember(key: string, entry: CachedVisual): void {
   for (const value of cache.values()) {
     chars += value.html.length
   }
-  // Oldest first: Map iteration follows insertion order, and a hit re-inserts.
   for (const [oldKey, value] of cache) {
     if (cache.size <= MAX_CACHE_ENTRIES && chars <= MAX_CACHE_CHARS) {
       break
@@ -87,7 +83,6 @@ function remember(key: string, entry: CachedVisual): void {
   }
 }
 
-/** What this phone already holds for a visual, to paint before revalidating. */
 export function cachedMobileNativeChatVisual(
   source: MobileNativeChatVisualSource,
   file: string
@@ -121,11 +116,11 @@ async function readOnce(
   }
   const reply = nativeChatVisualRead.interpret(response)
   if (reply === null) {
-    // An error reply, an older host or an unreadable answer is not a verdict on the file.
+    // An unreadable/error reply proves nothing about the file.
     return { kind: 'unreachable' }
   }
   if (!reply.ok) {
-    // The host no longer serves it (deleted, now too large...): stop painting the old bytes.
+    // A host refusal invalidates the cached bytes.
     cache.delete(key)
     return { kind: 'refused' }
   }
@@ -133,7 +128,7 @@ async function readOnce(
     remember(key, { html: reply.html, revision: reply.revision })
     return { kind: 'ready', html: reply.html, revision: reply.revision }
   }
-  // `unchanged` answers the revision this phone sent; anything else is a host that lost track.
+  // An unchanged reply must name the cached revision we sent; any other revision is inconsistent.
   if (known && known.revision === reply.revision) {
     remember(key, known)
     return { kind: 'ready', html: known.html, revision: known.revision }
@@ -142,10 +137,6 @@ async function readOnce(
   return { kind: 'unreachable' }
 }
 
-/**
- * Reads one visual from the chat's owning host, revalidating what the phone already holds by
- * revision. Concurrent reads of the same visual share one request.
- */
 export function readMobileNativeChatVisual(
   source: MobileNativeChatVisualSource,
   file: string
@@ -162,7 +153,6 @@ export function readMobileNativeChatVisual(
   return read
 }
 
-/** Test seam: forget every cached visual. */
 export function resetMobileNativeChatVisualCacheForTest(): void {
   cache.clear()
   inFlight.clear()

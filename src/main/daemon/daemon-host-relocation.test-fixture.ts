@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export function buildInstallFixture(root: string): void {
@@ -47,6 +47,15 @@ export function buildInstallFixture(root: string): void {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })
     writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
   }
+  const registryDir = join(root, 'resources', 'node_modules', '@orca', 'windows-registry')
+  mkdirSync(join(registryDir, 'build', 'Release', 'obj'), { recursive: true })
+  const actualRegistryDir = join(import.meta.dirname, '../../../native/windows-registry')
+  for (const name of ['package.json', 'index.js']) {
+    cpSync(join(actualRegistryDir, name), join(registryDir, name))
+  }
+  writeFileSync(join(registryDir, 'build', 'Release', 'orca_windows_registry.node'), 'native')
+  writeFileSync(join(registryDir, 'build', 'Release', 'orca_windows_registry.pdb'), 'symbols')
+  writeFileSync(join(registryDir, 'build', 'Release', 'obj', 'addon.obj'), 'intermediate')
   const processTreeDir = join(root, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
   mkdirSync(join(processTreeDir, 'build', 'Release'), { recursive: true })
   mkdirSync(join(processTreeDir, 'lib'), { recursive: true })

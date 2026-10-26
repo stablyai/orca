@@ -4,7 +4,6 @@ import { measureUsageRow, pickCollapsedUsageChips } from './status-bar-usage-col
 
 const GAP = 12
 const MORE = 20
-// Roster order, as the status bar renders it.
 const chips = [
   { provider: 'claude', width: 60, urgent: false, percentage: true },
   { provider: 'codex', width: 60, urgent: false, percentage: true },
@@ -67,7 +66,6 @@ describe('measureUsageRow unit label', () => {
     document.body.innerHTML = ''
   })
 
-  // Collapsed items are out of the flow, so the row is narrower by their width and gap.
   function renderRow(options: {
     unitCollapsed: boolean
     moreInRow: boolean
@@ -140,7 +138,6 @@ describe('measureUsageRow unit label', () => {
     const withoutUrgentPercentage = measureUsageRow(
       renderRow({ unitCollapsed: false, moreInRow: false, chips: calm })
     )
-    // Natural minus the calm chip and the label, plus the "+N" chip that replaces it.
     expect(withoutUrgentPercentage.pinnedWidth).toBe(
       withoutUrgentPercentage.naturalWidth - (CHIP + GAP) - (UNIT + GAP) + (MORE + GAP)
     )

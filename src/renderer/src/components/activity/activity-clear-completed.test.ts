@@ -289,8 +289,7 @@ describe('clearCompletedActivity', () => {
   })
 
   it('undo removes the suppressor even after an identity-only live entry replacement', () => {
-    // A runtime orchestration merge replaces the live entry object without a state
-    // change; the suppressor undo must key on the turn, not on object identity.
+    // Runtime merges replace live objects without new turns; Undo must match turn timestamps, not object identity.
     const retained = mockStore.retainedAgentsByPaneKey['t-done:1']
     mockStore.agentStatusByPaneKey['t-done:1'] = retained.entry
 

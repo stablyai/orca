@@ -7,9 +7,8 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('os', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-imports -- vi.importActual needs the inline import() to type the real module
-  const actual = await vi.importActual<typeof import('os')>('os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return { ...actual, homedir: homedirMock }
 })
 

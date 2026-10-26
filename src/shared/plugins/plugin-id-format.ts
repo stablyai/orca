@@ -1,6 +1,4 @@
-// Why separate from plugin-manifest-fields: these are the pure id rules the
-// zod schemas refine, and boot-path callers (sidebar routing) need them without
-// pulling zod in.
+// Boot-path identity checks stay separate from manifest schemas to avoid importing Zod.
 const PLUGIN_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DANGEROUS_PLUGIN_NAMES = new Set(['__proto__', 'prototype', 'constructor'])
 

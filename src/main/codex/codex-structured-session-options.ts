@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { agentSessionEffortLevels } from '../../shared/agent-session-effort-levels'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexSession } from './codex-structured-session-state'
 import { isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
@@ -39,6 +39,7 @@ export function reportedCodexSessionOptions(
   const serviceTier = session.options.get('serviceTier')
   return {
     model,
+    reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
     ...(effort ? { effort } : {}),
     ...(serviceTier ? { serviceTier } : {})
   }
@@ -78,7 +79,14 @@ function composeLiveCodexCatalog(
         }
       : {})
   })
-  return { ...catalog, fastModeSupport: listing.fastModeSupport }
+  return {
+    ...catalog,
+    current: {
+      ...catalog.current,
+      reportedPermissionMode: session.reportedOptions.reportedPermissionMode
+    },
+    fastModeSupport: listing.fastModeSupport
+  }
 }
 
 export async function readLiveCodexSessionOptions(

@@ -72,8 +72,7 @@ describe('agent session fork context', () => {
       '\x1b]0;Codex working\x07\x1b[31mUser: ship it\x1b[0m\r\nAssistant: done'
     )
 
-    // Why: the standalone Copy Context action must yield raw transcript only —
-    // no fork header/footer that a paste target would treat as instructions.
+    // Copy Context must return raw transcript without fork instructions a paste target could execute.
     expect(transcript).toBe('User: ship it\nAssistant: done')
     expect(transcript).not.toContain('fork of an existing Orca agent session')
     expect(transcript).not.toContain('wait for my next instruction')

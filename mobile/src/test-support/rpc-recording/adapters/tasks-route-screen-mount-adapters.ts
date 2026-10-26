@@ -11,12 +11,10 @@ import type { HostStatusGates } from '../../../transport/host-status-gates'
 
 const HOST = 'host-1'
 
-/** The screen-root hook reads its client through the context handle `client-context.tsx` keeps. */
 export const tasksRouteScreenMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/** The tasks screen root: the repo list its pickers and its create form are hydrated from. */
 export function tasksRouteScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -56,7 +54,7 @@ export function tasksRouteScreenMountAdapters(
         isPairingRejected: () => false,
         getRelayHostReachability: () => 'connecting'
       })
-      // A holder rather than a binding: Harness is a component, so it cannot assign an outer name.
+      // Use a holder because the component cannot assign an external bare binding.
       const observed: { model?: ReturnType<typeof useRoute> } = {}
       function Harness(): null {
         observed.model = useRoute()
@@ -99,8 +97,7 @@ export function tasksRouteScreenMountAdapters(
           const repos = model().repos
           return {
             crash,
-            // A reply whose result carries no `repos` array is published as it arrived, so the
-            // projection records what the screen holds rather than assuming a list.
+            // Preserve malformed non-array repos in observations instead of normalizing away the screen’s state.
             repos: Array.isArray(repos) ? repos.map((repo) => repo?.id) : repos,
             repoListStatus: model().repoList.state.status,
             repoListError: model().repoList.state.error

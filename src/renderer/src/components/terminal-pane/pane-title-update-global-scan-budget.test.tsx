@@ -1,43 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Deterministic, count-based reproduction for STA-7552 (under STA-7551).
- *
- * Zustand notifies every subscriber synchronously on every `set`, and each
- * subscriber re-runs its selector. A single pane title update therefore pays
- * for every mounted selector that rescans a global collection to conclude
- * nothing changed for it. `useShallow` suppresses the *re-render*, never the
- * selector body, so it does not help here.
- *
- * Scale is Jinjing's live 1.4.203-hourly capture: ~870 workspaces, ~1,400
- * terminal tabs, ~857 sleeping-agent records, ~177 agent-status rows, 20
- * mounted panes/cards.
- *
- * Scale check: this mount opens 5,500 zustand listeners, inside the capture's
- * 5,462-7,478. Most come from the sidebar — the worktree list is not
- * virtualised, so all 870 rows mount and each opens ~6 subscriptions.
- *
- * ONE `setRuntimePaneTitle` at that scale, before/after the park-exemption memo:
- *
- *   metric                                    before      after
- *   zustand listeners                          5,500      5,500
- *   store notifications                            1          1
- *   listener invocations                       5,500      5,500
- *   selector runs: worktree activity summary     896        896
- *   selector runs: worktree card status inputs 2,688      2,688
- *   selector runs: sleeping-record exemption      23         23
- *   sidebar rows committed (of 870)                1          1
- *   React commits: retained panes                  1          1
- *   sleeping-agent records read               19,711          0
- *   agent-status rows read                         0          0
- *   workspace tab buckets read                 1,394      2,081
- *
- * The current count also includes the later per-workspace sleep-state reader.
- *
- * So notification work is O(mounted workspaces) and this fix does not change
- * that — one shared store means every subscriber is visited. What changes is
- * the cost of each visit: the scan is gone, and 5,499 of the 5,500 invocations
- * were already resolving to "nothing changed for me" without re-rendering.
- */
+/** STA-7552: count selector reads at live-profile scale; Zustand invokes every selector on set, even when useShallow suppresses rendering. Global scans must stay absent. */
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,8 +14,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
-// Why namespace type imports: vi.mock factories are hoisted, and `typeof import()`
-// annotations are banned, so the module shapes come from erased type-only imports.
+// Hoisted mock factories need erased namespace types because typeof import() annotations are banned.
 import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
 import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/worktree-agent-activity-summary'
 import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/worktree-card-status-inputs'
@@ -69,8 +30,7 @@ const MOUNTED_WORKTREE_COUNT = 20
 
 const reads = { sleepingRecords: 0, agentStatusRows: 0, workspaceTabBuckets: 0 }
 
-/** True per-module selector executions. Cached selectors read no records, so the
- *  scan counters alone cannot tell "never ran" from "ran and short-circuited". */
+// Count selector executions separately from record reads so cache hits remain visible.
 const selectorRuns = vi.hoisted(() => ({
   sleepingRecordParkExemption: 0,
   worktreeAgentActivitySummary: 0,
@@ -121,9 +81,7 @@ vi.mock('@/components/sidebar/worktree-card-status-inputs', async (importOrigina
   }
 })
 
-/** Workspaces whose sidebar-row subtree committed. Why a `Profiler` and not a
- *  counter in the wrapper: `WorktreeCardStatusSlot` subscribes to the store
- *  itself, so it can commit without re-executing anything above it. */
+// Profile row subtrees because their store subscriptions can commit without rerunning the wrapper.
 const committedSidebarRows = new Set<string>()
 /** React commits of the retained-pane hooks, which live in the probe body. */
 const renders = { retainedPanes: 0 }
@@ -184,8 +142,7 @@ function buildTabsByWorktree(): Record<string, TerminalTab[]> {
 
 const seededTabsByWorktree = buildTabsByWorktree()
 const seededTerminalTabs = Object.values(seededTabsByWorktree).flat()
-/** Counting view of the workspace inventory: one hit per bucket actually read,
- *  so "looked up my own workspace" and "walked all 870" are different numbers. */
+// Count bucket reads to distinguish per-workspace lookup from global inventory scans.
 const tabsByWorktree = countingRecord(Object.entries(seededTabsByWorktree), 'workspaceTabBuckets')
 
 function buildSleepingRecords(): Record<string, SleepingAgentSessionRecord> {
@@ -242,9 +199,7 @@ function recordSidebarRowCommit(worktreeId: string): void {
   committedSidebarRows.add(worktreeId)
 }
 
-/** The real sidebar row. `useWorktreeActivityStatus` opens ~6 store
- *  subscriptions per row, which is where the capture's thousands of listeners
- *  come from — the sidebar is not virtualised, so every workspace is mounted. */
+// Mount real unvirtualized sidebar rows to reproduce roughly six store subscriptions per workspace.
 function SidebarRowProbe({ worktreeId }: { worktreeId: string }): React.JSX.Element {
   return (
     <React.Profiler id={worktreeId} onRender={recordSidebarRowCommit}>
@@ -376,30 +331,23 @@ describe('one pane title update: fanout at live-capture scale', () => {
 
     applyOnePaneTitleUpdate('next title')
 
-    // The capture saw 5,462–7,478 listeners; this mount must be the same order,
-    // and zustand visits every one of them on each notification.
+    // Match the captured listener scale; Zustand visits every listener on each notification.
     expect(listeners).toBeGreaterThan(5_000)
     expect(listeners).toBeLessThan(8_000)
     expect(notifications).toBe(1)
 
-    // Every mounted subscriber's selector still runs. That is unchanged by this
-    // fix and is inherent to one shared store: notification work stays
-    // O(mounted workspaces), ~3,630 instrumented selector executions.
+    // Shared-store notification still invokes every mounted selector.
     expect(selectorRuns.worktreeAgentActivitySummary).toBeGreaterThanOrEqual(WORKSPACE_COUNT)
     expect(selectorRuns.worktreeCardStatusInputs).toBeGreaterThanOrEqual(WORKSPACE_COUNT * 3)
     expect(selectorRuns.sleepingRecordParkExemption).toBeGreaterThanOrEqual(MOUNTED_WORKTREE_COUNT)
 
-    // …but every one of those executions is now an identity check. These three
-    // counters sit on the state maps themselves, so they catch a walk by ANY of
-    // the 5,500 subscribers, not only the three instrumented modules.
+    // Map-level counters catch global walks by any subscriber, including uninstrumented modules.
     expect(reads.sleepingRecords).toBe(0)
     expect(reads.agentStatusRows).toBe(0)
-    // Activity status, card inputs, and sleep state each read their own bucket;
-    // a global inventory scan per consumer would multiply this by 870.
+    // Each consumer reads its own bucket; a global scan multiplies that cost by 870.
     expect(reads.workspaceTabBuckets).toBeLessThan(WORKSPACE_COUNT * 3)
 
-    // Only the workspace that owns the changed pane commits — the other 869
-    // sidebar rows hold their identities and bail out.
+    // Only the owning workspace commits; sibling row identities remain stable.
     expect([...committedSidebarRows]).toEqual([TARGET_WORKTREE_ID])
     expect(renders.retainedPanes).toBeLessThanOrEqual(1)
   })
@@ -412,8 +360,7 @@ describe('one pane title update: fanout at live-capture scale', () => {
     applyOnePaneTitleUpdate('title b')
     applyOnePaneTitleUpdate('title c')
 
-    // Why repeat: one update could be served by a memo warmed at mount; three
-    // prove the cost is independent of how many records the profile stores.
+    // Repeat updates to rule out a mount-warmed memo hiding inventory-dependent cost.
     expect(reads.sleepingRecords).toBe(0)
     expect(reads.agentStatusRows).toBe(0)
     expect([...committedSidebarRows]).toEqual([TARGET_WORKTREE_ID])

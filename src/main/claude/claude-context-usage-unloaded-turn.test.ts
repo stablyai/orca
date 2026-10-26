@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { MAX_RETAINED_OWN_ITEMS } from '../../shared/structured-agent-session-item-retention'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage
@@ -242,8 +243,11 @@ describe('context usage for a turn row outside the loaded page', () => {
       translator.handle(assistantFrame(`turn-b-reply-${index}`, 4_000 + index, 200_000 + index))
     }
     let index = 0
-    for (; index < 1_900; index += 1) {
+    for (; index < MAX_RETAINED_OWN_ITEMS - 20; index += 1) {
       respond(index)
+      if (index % 100 === 99) {
+        await settle()
+      }
     }
     await settle()
     state = catchUp(journal, state)

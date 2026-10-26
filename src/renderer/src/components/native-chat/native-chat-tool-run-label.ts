@@ -2,18 +2,11 @@ import { translate } from '@/i18n/i18n'
 import {
   nativeChatToolRunSentence as sharedRunSentence,
   type NativeChatToolRunSentenceWords
-} from '../../../../shared/native-chat-tool-run-sentence'
-import type { NativeChatToolCategory } from '../../../../shared/native-chat-tool-icon'
+} from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
+import type { NativeChatToolCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 
-/** One clause, localized.
- *
- *  Spelled out per category, with the English literal at the call site: the
- *  catalog extractor reads only string literals, so a key built at runtime — or
- *  a fallback read from the shared record — never reaches a translator, and the
- *  sentence would stay English in every locale while the row above it translated.
- *  `native-chat-shared-copy-matches-catalog` pins these against the record mobile
- *  renders from, which is what keeps the duplication honest. */
+/** Extraction requires literal keys/fallbacks; parity tests keep these clauses aligned with mobile’s shared record. */
 function clause(category: NativeChatToolCategory, count: number, live: boolean): string {
   const one = count === 1
   const value0 = { value0: count }
@@ -61,6 +54,14 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
             'Searched the web {{value0}} times',
             value0
           )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runBrowserOne', 'Used the browser')
+        : translate(
+            'components.native-chat.tool.runBrowserMany',
+            'Used the browser {{value0}} times',
+            value0
+          )
     case 'mcpToolCall':
       return one
         ? translate('components.native-chat.tool.runIntegrationOne', 'Used 1 integration')
@@ -88,8 +89,6 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
   }
 }
 
-/** The present-tense clause, while the run is still live. Same shape as the
- *  settled one so the header's text changes in place and nothing else does. */
 function liveClause(
   category: NativeChatToolCategory,
   one: boolean,
@@ -144,6 +143,14 @@ function liveClause(
             'Searching the web {{value0}} times',
             value0
           )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runLiveBrowserOne', 'Using the browser')
+        : translate(
+            'components.native-chat.tool.runLiveBrowserMany',
+            'Using the browser {{value0}} times',
+            value0
+          )
     case 'mcpToolCall':
       return one
         ? translate('components.native-chat.tool.runLiveIntegrationOne', 'Using 1 integration')
@@ -189,8 +196,6 @@ const LOCALIZED_WORDS: NativeChatToolRunSentenceWords = {
     })
 }
 
-/** The one line a run reads as, localized: past tense once settled, present
- *  while live. */
 export function nativeChatToolRunSentence(
   blocks: readonly NativeChatBlock[],
   { live = false }: { live?: boolean } = {}

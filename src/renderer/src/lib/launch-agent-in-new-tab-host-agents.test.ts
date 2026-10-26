@@ -227,12 +227,13 @@ describe("a new tab during startup, before this computer's runtime answered", ()
   it.each(['claude', 'opencode'] as const)(
     'opens the %s chat when the capabilities arrive within the wait, after a failed probe',
     async (agent) => {
+      vi.useFakeTimers()
       const route = awaitingRoute(agent)
       const relaunch = fakeRelaunch()
 
       const result = launchOnceHostAnswered(route, { ...args, agent }, startupPlan, relaunch)
       // The failed probe has answered; the launch is still waiting for one that lands.
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      await vi.advanceTimersByTimeAsync(20)
       expect(relaunch).not.toHaveBeenCalled()
       await capabilitiesLand()
 
@@ -240,6 +241,7 @@ describe("a new tab during startup, before this computer's runtime answered", ()
         kind: 'structured',
         sessionId: 'session-1'
       })
+      expect(relaunch).toHaveBeenCalledOnce()
       expect(relaunch.mock.calls[0]?.[0]).toMatchObject({
         agentSessionLaunchPlan: { route: 'structured-native-chat' }
       })

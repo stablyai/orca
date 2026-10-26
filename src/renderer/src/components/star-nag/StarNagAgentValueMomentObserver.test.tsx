@@ -131,8 +131,7 @@ describe('StarNagAgentValueMomentObserver', () => {
     container = rendered.container
     const initialRenders = rendered.getRenderCount()
 
-    // Why: separate acts model separate hook pings; main produced 50 renders and
-    // 25,000 completion-scan entry visits for this exact 500 x 50 scenario.
+    // Separate acts model individual same-state pings so render/scan amplification remains observable.
     for (let ping = 0; ping < 50; ping += 1) {
       act(() => {
         useAppStore.setState((state) => ({

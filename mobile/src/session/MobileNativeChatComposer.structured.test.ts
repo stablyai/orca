@@ -137,21 +137,27 @@ describe('MobileNativeChatComposer on a structured chat', () => {
   })
 
   it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
     const file = { id: 'f1', name: 'spec.pdf', mime: 'application/pdf', byteLength: 10 }
     await act(async () => {
       renderer = create(
         draw({
           value: 'see attached',
+          onSend,
           structured: structured({ files: [{ ...file, path: null }] })
         })
       )
     })
     expect(labelled('Send message')[0]!.props.disabled).toBe(true)
+    await act(async () => labelled('Send message')[0]!.props.onPress())
+    expect(onSend).not.toHaveBeenCalled()
     await act(async () =>
       renderer!.update(
-        draw({ structured: structured({ files: [{ ...file, path: '/s/spec.pdf' }] }) })
+        draw({ onSend, structured: structured({ files: [{ ...file, path: '/s/spec.pdf' }] }) })
       )
     )
     expect(labelled('Send message')[0]!.props.disabled).toBe(false)
+    await act(async () => labelled('Send message')[0]!.props.onPress())
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('')
   })
 })

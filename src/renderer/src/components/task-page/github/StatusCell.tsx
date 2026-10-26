@@ -7,7 +7,7 @@ import {
   createTaskPageGitHubStatusStateDraft,
   resolveTaskPageGitHubStatusStateDraft,
   updateTaskPageGitHubStatusLocalState
-} from '@/components/task-page-github-status-state'
+} from '@/components/task-page/github/task-page-github-status-state'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
@@ -18,11 +18,11 @@ import {
   type TaskPageGitHubCloseAction,
   buildTaskPageGitHubCloseUpdate,
   getTaskPageGitHubDuplicateTargetErrorMessage
-} from '@/components/task-page-github-status-actions'
+} from '@/components/task-page/github/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
-import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { CircleDot, ChevronDown, Copy, CheckCircle2, Ban, ChevronRight } from 'lucide-react'
@@ -118,8 +118,7 @@ export function GHStatusCell({
               state: newState
             }
       updateLocalState(newState)
-      // Why: coordinator owns durable patch + soft-hide + quiet revalidate; keep
-      // the status draft so one-frame flash is still covered until proven safe.
+      // Keep the draft through coordinator patch/revalidation to prevent a stale status flash.
       setStatusUpdating(true)
       try {
         await workItemMutation.run({
@@ -133,8 +132,7 @@ export function GHStatusCell({
           errorToast: translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'),
           mutate: async () => {
             const target = ownerTarget
-            // Why: issue rows can be sourced by owner/repo URL instead of the local
-            // repo context; slug-aware writes preserve close reasons and duplicates.
+            // URL-sourced rows need slug-aware writes to preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
               return target.kind === 'environment'
                 ? callRuntimeRpc<{
@@ -199,8 +197,7 @@ export function GHStatusCell({
       } finally {
         setStatusUpdating(false)
       }
-      // Why: draft realigns from item.state via resolveTaskPageGitHubStatusStateDraft
-      // when patchWorkItem (begin/rollback) updates the cache-backed row.
+      // Begin/rollback cache patches realign the draft through resolveTaskPageGitHubStatusStateDraft.
     },
     [
       item,

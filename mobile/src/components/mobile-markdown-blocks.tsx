@@ -44,9 +44,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
 export type ParagraphText = { style: StyleProp<TextStyle>; selectable: boolean }
 
 function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNode {
-  // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
-  // Growing or unclosed fences are still streaming: mounting the WebView per tick would
-  // reload its document up to 20x/sec, so they stay raw code until done.
+  // Keep streaming/unclosed Mermaid fences as code; per-tick WebView mounts would reload document up to 20x/sec. Render diagram only once complete.
   if (isMobileMermaidLanguage(node.lang ?? undefined) && !ctx.growing && codeFenceClosed(node)) {
     const occurrence = ctx.mermaidOccurrences.get(node.value) ?? 0
     ctx.mermaidOccurrences.set(node.value, occurrence + 1)

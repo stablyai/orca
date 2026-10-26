@@ -1,7 +1,4 @@
-/**
- * The platform each SSH host last reported this app session, so connect telemetry can name it
- * without a probe of its own. Keyed by the local target id, which never leaves this process.
- */
+/** Memoize session host facts for connect telemetry without extra probes; keys are local target ids. */
 import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 

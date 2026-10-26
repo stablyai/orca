@@ -65,7 +65,7 @@ describe('pty-bound agent draft readiness budget', () => {
     vi.useRealTimers()
   })
 
-  it('delivers when a cold Codex composer becomes ready after 8s', async () => {
+  it('delivers when a cold Codex composer becomes ready after 10s', async () => {
     const promise = pasteDraftToAgentPtyWhenReady({
       ptyId: 'pty-1',
       content: 'draft',
@@ -77,7 +77,11 @@ describe('pty-bound agent draft readiness budget', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'codex-composer-prompt')
-    expect(testState.sendInput).toHaveBeenCalledTimes(1)
+    expect(testState.sendInput).toHaveBeenCalledExactlyOnceWith(
+      'pty-1',
+      '\x1b[200~draft\x1b[201~',
+      'launch'
+    )
   })
 
   it('gives a cold opencode composer the same headroom as Codex', async () => {
@@ -141,8 +145,7 @@ describe('pty-bound agent draft readiness budget', () => {
   })
 
   it('flags a blind paste when only the opencode process, not its composer, was seen', async () => {
-    // Regression (#22479): ConPTY never forwards DECSET 2004, so on Windows this is the only
-    // path opencode can take. Callers must be able to tell it apart from a real delivery.
+    // ConPTY omits DECSET 2004; distinguish OpenCode’s blind-write fallback from observed delivery (#22479).
     testState.waitForReady.mockResolvedValue(false)
     testState.inspectProcess.mockResolvedValue({
       foregroundProcess: 'opencode',

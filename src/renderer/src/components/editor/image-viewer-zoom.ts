@@ -102,8 +102,7 @@ export function getZoomedImageLayoutSize({
   )
   const boundedZoom = clampImageViewerZoom(zoom)
 
-  // Why: transformed images do not change scroll extents, so zoom must resize
-  // the layout box for popup panning to reach the full image.
+  // Resize the layout box for panning; transforms alone do not expand scroll extents.
   return {
     width: imageDimensions.width * fitScale * boundedZoom,
     height: imageDimensions.height * fitScale * boundedZoom

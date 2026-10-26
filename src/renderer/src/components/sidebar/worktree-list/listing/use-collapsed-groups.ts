@@ -62,8 +62,7 @@ export function useEffectiveCollapsedGroups(args: {
     }
     const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
     if (!targetWorktree) {
-      // Why: folder workspaces are absent from worktreeMap, so without this the
-      // agent-send picker could never open the section hiding one (#15362).
+      // Folder workspaces are absent from worktreeMap but still need picker-driven section reveal.
       const folderKeys = getFolderWorkspaceRevealGroupKeys(
         agentSendTargetWorktreeId,
         folderWorkspaces,

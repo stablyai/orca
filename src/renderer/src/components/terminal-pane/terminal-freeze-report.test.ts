@@ -1,6 +1,4 @@
-// Why: pins the one-paste freeze report contract — a single console call must
-// return renderer state + main snapshot + breadcrumbs, and a dead/throwing
-// invoke channel must be captured as data instead of sinking the report.
+// A single report must include both processes and breadcrumbs; failed invoke becomes diagnostic data instead of losing the report.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))

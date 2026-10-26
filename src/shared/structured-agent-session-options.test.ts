@@ -256,10 +256,7 @@ describe('structured agent session options', () => {
       }
     )
 
-    // The switch has no third position, so the value resolves to the catalog's
-    // own `false`. `unknown` is what stops any surface calling that a default:
-    // `default` is unreachable in this lane (it is hardcoded `mode: 'live'`), and
-    // nothing here has reported the tier the thread is actually routing.
+    // A binary switch resolves false, but unknown provenance prevents claiming it is the running default in this live-only lane.
     expect(structuredAgentSessionOptionSnapshot(state)).toContainEqual(
       expect.objectContaining({
         id: 'fastMode',

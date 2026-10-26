@@ -9,18 +9,8 @@ import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import { currentMarkdown } from './editor-content'
 import { startEditorSurface } from './editor-surface'
 
-/**
- * Markdown into the surface and back out of it, over a real document.
- *
- * These are the document's two halves and they are only correct together: a renderer that loses an
- * ordered list's start and a serializer that renumbers from one agree with each other and lose the
- * user's text. So each case renders, then reads the markup back, and the source it began with is
- * the assertion.
- *
- * Against real elements rather than shaped objects. The serializer reads `closest`, `children`,
- * `cloneNode` and a checkbox's `checked`, and a stand-in for those is a stand-in for the thing
- * being tested — which is how the old fixtures could describe a list no renderer would produce.
- */
+// Render then serialize real DOM and compare original source: two implementations can agree while both lose numbering.
+// Real closest/children/cloneNode/checked semantics prevent fixtures inventing structures renderer never produces.
 function surface(markdown: string, options: { editable?: boolean } = {}) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
@@ -31,13 +21,7 @@ function surface(markdown: string, options: { editable?: boolean } = {}) {
   return { scope, editor, html: editor.innerHTML }
 }
 
-/**
- * The surface holding a paragraph that carries a list inside it, which is what an engine leaves.
- *
- * Built through the paragraph's own `innerHTML` rather than the editor's: the HTML parser closes a
- * `<p>` before a `<ul>`, so `editor.innerHTML = '<p><ul>...'` gives two siblings and would measure
- * the flat shape while claiming to measure the nested one. Each case asserts the nesting it got.
- */
+// Plant nested list through paragraph.innerHTML, not editor HTML: normal parser closes p before ul and would silently flatten fixture. Assert actual nesting.
 function nestedListSurface(paragraphMarkup: string) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
@@ -75,9 +59,7 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('serializes a bullet list the engine nested inside a paragraph, as the flat shape does', () => {
-    // Captured from the render rig, not written from memory: on WebKit 26.4 and Chromium 147 alike,
-    // `insertUnorderedList` over `<p>alpha</p>` leaves `<p><ul><li>alpha</li></ul></p>` rather than
-    // replacing the paragraph, and WebKit additionally wraps the item's text in a styled span.
+    // Captured WebKit 26.4/Chromium 147 insertUnorderedList nests ul in p instead of replacing p; WebKit also adds styled text span.
     const { scope, editor } = nestedListSurface(
       `<ul>${webkitItem('alpha')}${webkitItem('beta')}</ul>`
     )
@@ -100,9 +82,7 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('reads a paragraph that holds a list and text around it as separate blocks', () => {
-    // The trailing half is captured: leaving the list with two returns and typing puts the text in
-    // a `<div>` beside the `<ul>`, both still inside the one `<p>`. Text before the list is the
-    // same rule read forward — a run of inline content is a paragraph wherever it sits.
+    // Captured two-return list exit leaves trailing div beside ul inside p; serialize surrounding inline text as paragraphs wherever it sits.
     const { scope, editor } = nestedListSurface(
       'before the list<ul><li>solo</li></ul><div>after the list</div>'
     )
@@ -130,8 +110,7 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('serializes ordered lists from the parent start when item metadata is missing', () => {
-    // What a paste leaves behind: the list carries a start and its items carry nothing, which is
-    // the one case where position rather than an attribute decides the number.
+    // Pasted list may set ol start only; without item attribute, position determines number.
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const editor = document.getElementById('editor')!
     editor.innerHTML = '<ol start="8"><li><p>Pasted step</p></li><li><p>Inserted step</p></li></ol>'
@@ -175,10 +154,7 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('makes progress on a marker with nothing after it, rather than reading it forever', () => {
-    // `isBlockStart` admits `# ` and the list test admits `- `, but the heading reader needs text
-    // after the hashes and `parseListLine` needs text after the marker, so neither consumed the
-    // line and the index never moved: `markdownToHtml` looped forever on a one-line source the
-    // host could hand it from any file. Bare markers are text.
+    // Bare block markers pass isBlockStart but item/heading readers require text; ensure index advances as plain text instead of looping forever.
     const render = (markdown: string) =>
       runInNewContext(
         'markdownToHtml(scope, markdown)',
@@ -198,16 +174,14 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('renders no link for a javascript: URL, which is the one scheme it filters', () => {
-    // The refused token falls through to the emphasis branch, so the URL survives as inert text
-    // rather than disappearing. What must not survive is an element that can be tapped.
+    // Refused URL remains inert text via emphasis fallback; no tappable element may survive.
     const { html } = surface('[tap](javascript:alert(1))')
     expect(html).not.toContain('<a')
     expect(html).not.toContain('href')
   })
 
   it('round-trips a code block that holds a fence of its own', () => {
-    // The fence has to be longer than the longest run inside it, or the block ends at its content:
-    // a three-backtick reader took the inner line for the close and the rest became paragraphs.
+    // Choose closing fence longer than any inner backtick run or reader ends code at its own content.
     const markdown = ['````', '```', 'nested', '```', '````'].join('\n')
     const { scope, html } = surface(markdown)
 
@@ -216,8 +190,7 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {
-    // A cell's own pipe is the row separator unless a backslash claims it, and the backslash is
-    // itself a cell character: escaping backslashes before pipes is what keeps the two apart.
+    // Escape cell backslashes before pipes so literal pipe remains distinct from row separator.
     const markdown = ['| a \\| b | c\\\\d |', '| --- | --- |', '| 1 \\| 2 | 3 |'].join('\n')
     const { scope, html } = surface(markdown)
 

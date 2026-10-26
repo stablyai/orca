@@ -1,17 +1,4 @@
-/**
- * #16432. The original fix chunked the payload because the constraint was believed to be a ~50KB
- * cmd.exe stdin ceiling. Re-measured on Windows 11 26200.9168 / OpenSSH_for_Windows_10.0p2, it is
- * not a size limit and not cmd.exe's: a read on Windows PowerShell 5.1's redirected-stdin handle
- * over a non-pty ssh exec can die permanently when it finds the stream momentarily empty, taking
- * both the remaining data and the EOF with it. It is probabilistic per such read — identical 2MB
- * payloads died at 167936, 270336 and 372736 — so a 32KB chunk still failed 15 times in 120 under
- * load, while `findstr` took 2,016,000 bytes through one exec on the same host.
- *
- * So the covering property is no longer "every write is small". It is "the bytes do not cross a
- * remote process's stdin at all": sftp first, PowerShell 7 next, and Windows PowerShell 5.1 last,
- * bounded and loud. The staging-and-rename discipline is kept on every path, with a unique staging
- * name per attempt so a retry never meets a predecessor's lock.
- */
+/** #16432: PowerShell 5.1 hangs per empty-pipe read, not at a size threshold (32KiB still failed 15/120 under load). Verify SFTP first, PowerShell 7 next and bounded 5.1 last, with unique staging/publish names. */
 import { EventEmitter } from 'node:events'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, stat } from 'node:fs/promises'
@@ -76,7 +63,6 @@ const target = {
 const hostPlatform = getRemoteHostPlatform('win32-x64')
 const remoteRoot = 'C:/Users/dev/.orca-remote'
 
-/** Recover the script from `powershell.exe ... -EncodedCommand <base64 utf-16le>`. */
 function decodePowerShellCommand(command: string): string {
   const encoded = /-EncodedCommand (\S+)/.exec(command)?.[1]
   return encoded === undefined ? command : Buffer.from(encoded, 'base64').toString('utf16le')
@@ -105,7 +91,6 @@ type RecordedSftpBatch = { args: string[]; script: string }
 
 const sftpBatches: RecordedSftpBatch[] = []
 const commands: RecordedCommand[] = []
-/** Index of the exec that should report a non-zero exit, to model a chunk failing mid-file. */
 let failAtSpawn = -1
 let failedWriteExit = 1
 let failedWriteStderr = ''
@@ -122,7 +107,6 @@ const putLines = (): string[] =>
 const putDestination = (line: string): string => /put "(?:[^"]*)" "([^"]*)"/.exec(line)?.[1] ?? ''
 const putSource = (line: string): string => /put "([^"]*)"/.exec(line)?.[1] ?? ''
 
-/** Makes every sftp batch succeed, recording what it was asked to do. */
 function acceptSftp(): void {
   runProcessMock.mockImplementation(
     async (spec: { args: string[]; input: string; program: string }) => {
@@ -137,7 +121,6 @@ function acceptSftp(): void {
   )
 }
 
-/** Models a host whose sshd has no `Subsystem sftp` line. */
 function refuseSftp(): void {
   runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
     sftpBatches.push({ args: spec.args, script: spec.input })
@@ -151,7 +134,6 @@ function refuseSftp(): void {
   })
 }
 
-/** Models a host with no PowerShell 7, which cmd.exe reports as an unrecognized command. */
 function refusePwsh(): void {
   spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
     const spawnIndex = spawnSystemSshCommandMock.mock.calls.length - 1
@@ -222,10 +204,8 @@ describe('Windows upload over sftp', () => {
 
     await uploadFileViaSystemSsh(target, localPath, `${remoteRoot}/big.node`, { hostPlatform })
 
-    // The defect is a remote stdin read; the fix is that there is not one.
     expect(fileWrites()).toHaveLength(0)
     expect(putLines()).toHaveLength(1)
-    // One transfer, not 61 execs: the whole point of the change.
     expect(sftpBatches).toHaveLength(1)
   })
 
@@ -254,8 +234,7 @@ describe('Windows upload over sftp', () => {
       hostPlatform
     })
 
-    // A backslash destination silently writes a file named `C` and still exits 0, so the leading
-    // slash and forward separators are correctness, not style.
+    // Unnormalized Windows destinations can silently write a file named C and still exit 0.
     expect(putDestination(putLines()[0]!)).toMatch(
       /^\/C:\/Users\/dev\/\.orca-remote\/relay\.js\.orca-partial-[0-9a-f]{12}$/
     )
@@ -268,15 +247,13 @@ describe('Windows upload over sftp', () => {
     await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), remotePath, { hostPlatform })
 
     const destination = putDestination(putLines()[0]!)
-    // Assert the positive first: an unmatched regex yields '', which would satisfy the `not.toBe`
-    // below without this test ever having seen a destination.
+    // Require a matched destination first; an empty regex result would trivially differ from the real path.
     expect(destination).toContain(WINDOWS_STAGED_WRITE_SUFFIX)
     expect(destination).not.toBe(`/C:${remotePath.slice(2)}`)
     const publish = commands.at(-1)!
     expect(publish.script).toContain(
       '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
     )
-    // The publish reads the staged file, never a pipe, so it is safe on PowerShell 5.1.
     expect(publish.script).not.toContain('OpenStandardInput')
   })
 
@@ -288,14 +265,11 @@ describe('Windows upload over sftp', () => {
     })
 
     const publish = commands.at(-1)!
-    // Delete-then-move destroys the user's existing file outright if the move then fails, and
-    // exposes a window where a reader sees no file at all — worse than the truncated partial the
-    // staging discipline exists to prevent. `File.Replace` is the atomic swap.
+    // Delete-then-Move can destroy an existing file on failure; File.Replace must swap it atomically.
     expect(publish.script).not.toContain('[System.IO.File]::Delete($path)')
     expect(publish.script).toContain(
       '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
     )
-    // An absent destination cannot be Replaced, so that case falls back to a plain Move.
     expect(publish.script).toContain(
       'catch [System.IO.FileNotFoundException] { [System.IO.File]::Move($staging, $path) }'
     )
@@ -313,7 +287,6 @@ describe('Windows upload over sftp', () => {
 
     const [first, second] = putLines().map(putDestination)
     expect(first).toContain(WINDOWS_STAGED_WRITE_SUFFIX)
-    // Losing contact is not evidence the previous writer died, so the name must not be reused.
     expect(second).not.toBe(first)
   })
 
@@ -373,8 +346,7 @@ describe('Windows upload over sftp', () => {
 
     expect(seen).toHaveLength(1)
     expect(seen[0]!.contents.toString()).toBe('1.2.3')
-    // The payload can be repository content and tmpdir is world-readable on every platform, so the
-    // window between write and upload must not be group- or world-readable.
+    // Repository payloads in shared temp directories must be private from creation.
     expect(seen[0]!.mode).toBe(0o600)
     await expect(readFile(seen[0]!.path)).rejects.toThrow()
   })
@@ -385,8 +357,7 @@ describe('Windows upload over sftp', () => {
 
     await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
 
-    // Anchor on a non-empty observation: `some` is false of an empty list, so this would pass even
-    // if no command had been recorded at all.
+    // Observe a command first: some() on an empty list would pass this negative assertion.
     expect(commands.length).toBeGreaterThan(0)
     expect(commands.some((command) => command.script.includes('StreamReader([Console]::'))).toBe(
       false
@@ -396,8 +367,7 @@ describe('Windows upload over sftp', () => {
 
   it('sweeps the staged bytes when the publish is the thing that fails', async () => {
     writeFileSync(join(localDir, 'import.bin'), 'x')
-    // An exclusive conflict is the ordinary way to get here: the payload is on the host, and the
-    // rename that would have given it a name refuses.
+    // Model publish refusal after payload staging, as on an exclusive conflict.
     spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
       const script = decodePowerShellCommand(command)
       return createFakeChannel((channel) => {
@@ -416,16 +386,14 @@ describe('Windows upload over sftp', () => {
 
     const sweep = commands.at(-1)!
     expect(sweep.script).toContain('[System.IO.File]::Delete($staging)')
-    // Tolerated, not asserted: the previous writer may still hold the file, and losing contact is
-    // not evidence it died.
+    // Contact loss never proves writer death; a locked staging file is tolerated.
     expect(sweep.script).toContain('$ErrorActionPreference = "SilentlyContinue"')
   })
 
   it('reports a cancelled transfer as an abort, not as a failed one', async () => {
     writeFileSync(join(localDir, 'relay.js'), 'x')
     const controller = new AbortController()
-    // runProcess reports the kill as a non-zero exit rather than throwing, so without checking the
-    // signal first a user pressing cancel is indistinguishable from the transfer genuinely failing.
+    // runProcess reports cancellation as nonzero exit; check signal before classifying it as transfer failure.
     runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
       sftpBatches.push({ args: spec.args, script: spec.input })
       controller.abort()
@@ -444,8 +412,7 @@ describe('Windows upload over sftp', () => {
 
     expect(error?.name).toBe('AbortError')
     expect(error?.message).not.toContain('sftp batch failed')
-    // A cancel is also not evidence about the host, so it must not send later writes to the slow
-    // path, and must not fall through to the defective reader now.
+    // Cancellation proves no host limitation and must not trigger the defective fallback.
     expect(getWindowsRemoteWriteCapabilities(target).shouldTry('sftp-subsystem')).toBe(true)
     expect(fileWrites()).toHaveLength(0)
   })
@@ -453,8 +420,7 @@ describe('Windows upload over sftp', () => {
   it('does not let one unaddressable path become a verdict about the host', async () => {
     writeFileSync(join(localDir, 'relay.js'), 'x')
 
-    // A UNC destination has no settled mapping in sftp's drive-rooted namespace, so this write
-    // falls back — but the host still serves sftp perfectly well for every other path.
+    // UNC path refusal applies to this write; it says nothing about the host's SFTP support.
     await uploadFileViaSystemSsh(
       target,
       join(localDir, 'relay.js'),
@@ -464,8 +430,7 @@ describe('Windows upload over sftp', () => {
 
     expect(fileWrites().length).toBeGreaterThan(0)
     expect(sftpBatches).toHaveLength(0)
-    // The 30-minute capability cache is keyed by host; caching this would send every later write
-    // to the same machine down the defective path on the strength of one odd destination.
+    // Never cache path refusal: a host-wide verdict would degrade later ordinary destinations too.
     expect(getWindowsRemoteWriteCapabilities(target).shouldTry('sftp-subsystem')).toBe(true)
   })
 
@@ -526,10 +491,7 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
 
     const mkdir = commands.find((command) => command.script.includes('ConvertFrom-Json'))!
-    // `@($json | ConvertFrom-Json)` wraps the parsed array in another array, so the loop variable
-    // binds to the whole thing and `[string]` of it is the paths joined by spaces — which
-    // CreateDirectory rejects. It only ever worked for a single directory, where stringifying a
-    // one-element array happens to yield the element, so no batch of one can catch this.
+    // @() nests ConvertFrom-Json's array and joins its paths when stringified; string[] iterates them. Test multiple directories to expose it.
     expect(mkdir.script).toContain('[string[]]($json | ConvertFrom-Json)')
     expect(mkdir.script).not.toContain('@($json | ConvertFrom-Json)')
     const batch = JSON.parse(mkdir.stdin.toString('utf-8')) as string[]
@@ -554,7 +516,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
 
     await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
 
-    // One refusal is enough; re-probing per file is a wasted round trip on every file.
     expect(sftpBatches).toHaveLength(1)
   })
 
@@ -565,8 +526,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
       hostPlatform
     })
 
-    // A refused subsystem staged nothing, so there is nothing to delete — and on a host without
-    // sftp that sweep would otherwise be paid on every single write.
     expect(commands.length).toBeGreaterThan(0)
     expect(commands.some((command) => command.script.includes('Delete($staging)'))).toBe(false)
   })
@@ -579,7 +538,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     })
 
     expect(fileWrites().map((write) => write.executable)).toEqual(['pwsh.exe'])
-    // PowerShell 7 took 2MB through one exec when measured, so chunking it buys nothing.
     expect(fileWrites()[0]!.stdin).toHaveLength(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3)
   })
 
@@ -599,9 +557,7 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     )
     expect(Buffer.concat(writes.map((write) => write.stdin)).equals(contents)).toBe(true)
     expect(writes.map(fileMode)).toEqual(['Create', 'Append', 'Append', 'Append'])
-    // A wedged PowerShell never closes on its own, so no wait on this path may be unbounded.
-    // Count first: `every` is true of zero calls, so a wait that moved to a different helper would
-    // pass this silently.
+    // A wedged 5.1 read never closes; require bounded waits and a nonempty call list so every() cannot pass vacuously.
     expect(waitForChannelCloseSpy.mock.calls.length).toBeGreaterThan(0)
     expect(
       waitForChannelCloseSpy.mock.calls.every((call) => call[2] === WINDOWS_STDIN_WRITE_TIMEOUT_MS)
@@ -621,7 +577,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
 
   it('leaves no truncated file under the real name when a chunk fails mid-file', async () => {
     writeFileSync(join(localDir, 'relay.js'), Buffer.alloc(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3))
-    // Spawn 0 is the pwsh write; fail it and every retry beneath it.
     failAtSpawn = 0
 
     await expect(
@@ -865,7 +820,7 @@ describe('last-resort Windows PowerShell failure reporting', () => {
 
     const explained = explainWindowsPowerShellStdinFailure(timeout) as Error
 
-    // "timed out" alone sends the user to retry a network they cannot fix; the fix is host-side.
+    // Identify the host-side remedy; a generic timeout would suggest an ineffective network retry.
     expect(explained.message).toContain('Windows PowerShell 5.1')
     expect(explained.message).toContain('Subsystem sftp sftp-server.exe')
     expect(explained.cause).toBe(timeout)
@@ -902,7 +857,6 @@ describe('waitForChannelClose bounding', () => {
     try {
       const channel = createFakeChannel(() => {})
       const settled = vi.fn()
-      // POSIX `cat` drains its stdin; only the Windows writes need the bound.
       void waitForChannelClose(channel as never, 'posix write').then(settled, settled)
 
       await vi.advanceTimersByTimeAsync(60 * 60 * 1000)

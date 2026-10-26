@@ -8,7 +8,7 @@ import {
   quoteFtsTerm
 } from './session-search-query-planner'
 
-describe('literal shape decides whether the phrase route is even tried', () => {
+describe('literal shape controls stop-word retention and identifier expansion', () => {
   it.each([
     'resolveTerminalPath',
     'src/main/foo-bar.ts',
@@ -31,8 +31,8 @@ describe('literal shape decides whether the phrase route is even tried', () => {
   )
 })
 
-describe('the body is what the phrase and AND routes see', () => {
-  it('drops stop words from prose so the AND route is not defeated by "the"', () => {
+describe('the OR body drops prose stop words and retains literal tokens', () => {
+  it('drops stop words from the prose body', () => {
     expect(planSessionSearchQuery('why is the relay dropping frames').body).toEqual([
       'relay',
       'dropping',
@@ -84,7 +84,7 @@ describe('FTS5 expressions quote every term', () => {
 describe('the phrase candidate is the query as typed', () => {
   const sentence = 'The sol review says the PR is not quite merge-ready yet'
 
-  it('is prose, so nothing about its shape reaches the phrase route', () => {
+  it('classifies a pasted sentence as prose', () => {
     expect(isLiteralQuery(sentence)).toBe(false)
   })
 

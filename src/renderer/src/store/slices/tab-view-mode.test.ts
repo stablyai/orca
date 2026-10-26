@@ -1,5 +1,4 @@
-// The window's own view-mode switch, as a paired server's workspace keeps it. A local workspace's
-// switch goes through main and its frame draws it: workspace-layout-frame-held-tabs.test.ts.
+// Paired-server view-mode toggles stay window-owned; local frame-owned coverage: workspace-layout-frame-held-tabs.test.ts.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
 import {
@@ -10,7 +9,6 @@ import {
 } from './store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -19,7 +17,6 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 
 vi.mock('@/runtime/web-runtime-terminal-actions', () => ({ setWebRuntimeTabProps: vi.fn() }))
 
-// Mock sonner (imported transitively by repos.ts via the full store).
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const mockApi = {
@@ -97,7 +94,6 @@ describe('tab view mode', () => {
     await layoutApplyTestTransport.settle()
 
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
-    // The sibling leaf's tab keeps its (default) view mode.
     expect(findTab(store, 'right-tab')?.viewMode).toBeUndefined()
   })
 
@@ -107,9 +103,7 @@ describe('tab view mode', () => {
     expect(store.getState().unifiedTabsByWorktree[WT]).toBe(before)
   })
 
-  // Why: terminal-pane recovery asks the terminal row who owns the surface.
-  // Host sync already writes viewMode there; only these local toggles skipped
-  // it, which is why the guard had to OR two indices to get a safe answer.
+  // Local toggles must mirror viewMode onto terminal rows used by recovery, matching host sync.
   describe('mirrors onto the terminal row', () => {
     function terminalRow(tabId: string) {
       return store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === tabId)

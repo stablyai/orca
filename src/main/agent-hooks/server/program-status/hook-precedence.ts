@@ -28,5 +28,15 @@ export function programStatusHookYieldEndsAt(
       ? undefined
       : Infinity
   }
+  // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
+  // lease renewal) proves nothing; a working transition after it keeps the silence fallback.
+  if (
+    (previous.payload.state === 'waiting' || previous.payload.state === 'blocked') &&
+    payload.state === 'working' &&
+    programWorkingSince !== undefined &&
+    programWorkingSince <= previous.receivedAt
+  ) {
+    return Infinity
+  }
   return previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
 }

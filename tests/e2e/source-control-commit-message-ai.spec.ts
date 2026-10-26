@@ -42,9 +42,7 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
 }
 
 test.describe('Source Control AI commit messages', () => {
-  // Why: the unlinked case separates a real resolver from one that always returns a number,
-  // and — because the generator echoes the whole line — a literal `{linkedIssue}` reaches the
-  // assertion as `saw-issue:{linkedIssue}` instead of masquerading as the empty expansion.
+  // The unlinked control rejects constant issue numbers; full-line echo also exposes literal {linkedIssue} instead of treating it as empty.
   for (const { label, linkedIssue, expected } of [
     { label: 'substitutes the workspace-linked issue into', linkedIssue: 4242, expected: '4242' },
     {

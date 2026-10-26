@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
 
@@ -84,12 +85,10 @@ type RenderProps = {
   paired?: boolean
 }
 
-// A new chat: create has not published, so there is no fence and no live read.
 const PROVISIONAL: RenderProps = { transportEnabled: false, fence: null, launch: 'new' }
 // The receipt lands first; attach delivers the fence on a later render.
 const PUBLISHED_UNATTACHED: RenderProps = { transportEnabled: true, fence: null, launch: 'new' }
 const ATTACHED: RenderProps = { transportEnabled: true, fence: 1, launch: 'new' }
-// A chat this view did not launch (reopened), attached before its first live read.
 const REOPENED: RenderProps = { transportEnabled: true, fence: 1 }
 
 function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutate) {
@@ -163,7 +162,6 @@ const LIVE_OPTIONS = {
   current: { model: 'gpt-5.5', confirmed: ['model'] }
 }
 
-// The account's saved list, naming the launch seed's model.
 const SAVED_LIST = {
   origin: 'probe',
   models: [
@@ -210,7 +208,7 @@ describe('useStructuredAgentSessionOptions', () => {
       mutateWith(async () => null).mutate
     )
     await tick()
-    // A read can start a background listing process; restored hidden tabs must not at startup.
+    // Hidden restored tabs must not start background listing processes on startup.
     expect(mocks.call).not.toHaveBeenCalled()
     rerender(REOPENED)
     await waitFor(() =>
@@ -243,7 +241,7 @@ describe('useStructuredAgentSessionOptions', () => {
       mutateWith(async () => null).mutate
     )
     await waitFor(() => expect(modelChoiceCount(result.current.optionSnapshot)).toBeGreaterThan(0))
-    // Nothing would carry the pick: no launch holds it and there is no fence to send it under.
+    // Without a holding launch or runtime fence, no path can apply the pick.
     expect(descriptor(result.current.optionSnapshot, 'model')).toMatchObject({
       settable: false,
       disabledReason: 'available-after-session-start'
@@ -264,7 +262,7 @@ describe('useStructuredAgentSessionOptions', () => {
         expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
       )
       expect(modelChoiceCount(result.current.optionSnapshot)).toBeGreaterThan(0)
-      // The built-in label could differ from the host's, so the saved pick is not painted from it.
+      // Wait for host labels instead of flashing built-in labels for saved picks.
       expect(currentValue(result.current.optionSnapshot, 'model')).toBeNull()
       unmount()
     }
@@ -326,7 +324,6 @@ describe('useStructuredAgentSessionOptions', () => {
         'gpt-5.6-luna',
         expect.anything()
       )
-      // The launch owns the pick; the view renders what it holds.
       rerender({ ...PROVISIONAL, launchSeedOptions: SEED, heldOptions: { model: 'gpt-5.6-luna' } })
       expect(currentValue(result.current.optionSnapshot, 'model')).toBe('gpt-5.6-luna')
       expect(descriptor(result.current.optionSnapshot, 'model')?.valueSource).toBe('dispatched')
@@ -353,7 +350,6 @@ describe('useStructuredAgentSessionOptions', () => {
       )
       unmount()
       mocks.call.mockClear()
-      // A resumed chat names no listed default, so its read asks nothing of the workspace.
       renderOptions(
         { ...PROVISIONAL, launch: 'resume', worktree: 'id:wt-1' },
         mutateWith(async () => null).mutate
@@ -387,7 +383,7 @@ describe('useStructuredAgentSessionOptions', () => {
         ).toBe(true)
       })
       expect(currentValue(result.current.optionSnapshot, 'model')).toBeNull()
-      // Every new chat names its workspace: the host decides whether its listed default runs there.
+      // New-chat reads include workspace identity so the host can resolve project overrides.
       expect(mocks.call).toHaveBeenCalledWith(LOCAL_TARGET, 'agentSession.modelCatalog', {
         agent: 'claude',
         sessionId: 'session-1',
@@ -500,7 +496,7 @@ describe('useStructuredAgentSessionOptions', () => {
       await act(async () => {
         accepted = await result.current.setStructuredOption('model', 'gpt-5.6-luna')
       })
-      // Published, not yet attached: nothing holds it and there is no fence to send it on.
+      // After publication but before attach, neither launch holding nor fenced writes can accept picks.
       expect(accepted).toBe(false)
       expect(calls).not.toHaveBeenCalled()
 
@@ -544,7 +540,7 @@ describe('useStructuredAgentSessionOptions', () => {
       unmount()
     })
 
-    // What a started Claude host reports: the model its settings or env make Claude run.
+    // A started host knows the model selected by Claude settings/environment.
     const CLAUDE_STARTED = {
       models: [
         { id: 'opus[1m]', label: 'Opus (1M context)', isDefault: true, efforts: [] },
@@ -563,7 +559,6 @@ describe('useStructuredAgentSessionOptions', () => {
         mutateWith(async () => null).mutate
       )
       await tick()
-      // The host has not read what Claude will run yet, so its answer would be a guess.
       expect(optionReads()).toBe(0)
       expect(currentValue(result.current.optionSnapshot, 'model')).toBeNull()
 
@@ -571,7 +566,6 @@ describe('useStructuredAgentSessionOptions', () => {
       await waitFor(() =>
         expect(currentValue(result.current.optionSnapshot, 'model')).toBe('haiku')
       )
-      // Unconfirmed until a turn reports it.
       expect(descriptor(result.current.optionSnapshot, 'model')?.valueSource).toBe('dispatched')
       expect(optionReads()).toBe(1)
       unmount()
@@ -589,13 +583,11 @@ describe('useStructuredAgentSessionOptions', () => {
       )
 
       rerender({ ...starting, providerStarting: false })
-      // Re-read once started: only then has the host read what the provider will run.
       await waitFor(() => expect(optionReads()).toBe(2))
       unmount()
     })
   })
 
-  // A paired server names the saved selection its create seeds when it admits the chat.
   describe("a paired server's new chat", () => {
     it("shows the server's seed once its list answers and remembers a pick on the server under its model", async () => {
       answer({ modelCatalog: () => Promise.resolve(SAVED_LIST) })
@@ -622,7 +614,6 @@ describe('useStructuredAgentSessionOptions', () => {
       unmount()
     })
 
-    // A server whose user never saved a model starts the CLI default, as a local chat does.
     it('shows the CLI default and takes picks when the server saved no model', async () => {
       answer({ modelCatalog: () => Promise.resolve(HOST_CATALOG) })
       mocks.hold.mockResolvedValue({ kind: 'accepted', options: { model: 'gpt-hosted' } })
@@ -671,7 +662,6 @@ describe('useStructuredAgentSessionOptions', () => {
         { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts }
       ]
     }
-    // The at-rest answer for a chat with nothing saved (readStructuredAgentSessionOptionsAtRest).
     const AT_REST = {
       models: FRESH_LIST.models,
       listedModelIds: ['opus', 'sonnet'],
@@ -709,7 +699,7 @@ describe('useStructuredAgentSessionOptions', () => {
   })
 
   it.each([
-    // Claude replies with the values Orca set, so an effort it keeps is not in the reply.
+    // Claude replies only with values Orca set; retained effort is omitted.
     {
       agent: 'claude' as const,
       tiers: [[], []],
@@ -717,7 +707,7 @@ describe('useStructuredAgentSessionOptions', () => {
       reply: {},
       shown: ['effort', 'high']
     },
-    // Codex writes Standard when the new model lacks the tier, which shows with no later read.
+    // Codex immediately reports Standard when the new model lacks the selected tier.
     {
       agent: 'codex' as const,
       tiers: [[{ value: 'priority', label: 'Fast' }], [{ value: 'flex', label: 'Flex' }]],
@@ -725,7 +715,7 @@ describe('useStructuredAgentSessionOptions', () => {
       reply: { serviceTier: 'default' },
       shown: ['serviceTier', 'default']
     },
-    // A configured tier no model lists (Flex) still runs, so it shows as held.
+    // Unlisted configured Flex remains effective and must stay shown as held.
     {
       agent: 'codex' as const,
       tiers: [[{ value: 'priority', label: 'Fast' }], [{ value: 'priority', label: 'Fast' }]],

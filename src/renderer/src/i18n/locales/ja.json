@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",
       "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
       "description": "チャットの外観と動作を選びます。",
@@ -209,7 +210,8 @@
           "microphone": "マイクロフォン",
           "location": "場所",
           "notifications": "通知",
-          "clipboard": "クリップボード"
+          "clipboard": "クリップボード",
+          "localNetwork": "ローカル ネットワーク"
         },
         "description": "サイトはカメラ、マイク、位置情報などを使用する前に許可を求めます。サイトごとに許可またはブロックした内容を変更できます。",
         "profile": "ブラウザプロファイル",
@@ -310,6 +312,7 @@
     "view": "表示",
     "reload": "リロード",
     "forceReload": "強制リロード",
+    "toggleDevTools": "開発者ツールの切り替え",
     "resetSize": "サイズをリセット",
     "zoomIn": "ズームイン",
     "zoomOut": "ズームアウト",
@@ -1146,6 +1149,11 @@
       "aiVaultResumeRefusal": {
         "openInChat": "この {{value0}} の会話はチャットで開かれています。開くにはセッション履歴を更新してください。",
         "ownershipUnknown": "Orca はこの {{value0}} の会話の所有者を確認できませんでした。セッション履歴を更新して、再試行してください。"
+      },
+      "composerCreateHandoff": {
+        "reopen": "再度開く",
+        "preparationTimedOut": "ワークツリーの準備がタイムアウトしました。",
+        "needsInput": "追加の入力が必要なため、ワークツリーは作成されませんでした。"
       },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%",
@@ -3505,13 +3513,28 @@
             "removeWorkspaceButton": "ワークスペースを削除"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "リモートランタイムに再接続中",
             "pairingRefusedTitle": "このホストはこのコンピューターを受け付けなくなりました",
             "pairingRefusedBody": "Orca は SSH 経由で再ペアリングできませんでした。ホスト上では何も停止していません。再接続してもう一度お試しください。",
             "disconnectedTitle": "リモートランタイムが切断されました",
-            "retryingBody": "Orca は自動的に再試行します。接続が復元されると、このターミナルが再開されます。",
             "disconnectedBody": "自動再試行が停止しました。このターミナルセッションを再開するには再接続してください。",
-            "reconnectButton": "再接続"
+            "reconnectButton": "再接続",
+            "signInTitle": "SSH のサインインを待っています",
+            "signInBody": "ホストにサインインすると、このターミナルは自動的に続行します。",
+            "signInButton": "サインイン",
+            "serverRestartingTitle": "{{server}} を再起動しています",
+            "serverRestartingBody": "サーバーが復帰すると Orca が再接続し、ターミナルも再開します。",
+            "streamStalledTitle": "ターミナルが応答していません",
+            "streamStalledBody": "{{server}} からこのターミナルの出力が届かなくなりました。Orca が自動的に再接続しています。",
+            "sessionEndedTitle": "ターミナルを再接続しています",
+            "sessionEndedBody": "{{server}} がこのターミナルのストリームを閉じました。Orca が自動的に再接続しています。",
+            "waitingTitle": "{{server}} を待っています",
+            "waitingBody": "サーバーがこのターミナルを再び提供するか接続が変わると、Orca が再接続します。今すぐ試すには「再接続」を押してください。",
+            "downFor": "切断から {{duration}}",
+            "tailscaleHint": "Tailscale の経路を確認:",
+            "fallbackServerName": "サーバー",
+            "connectionLostTitle": "{{server}} に再接続しています",
+            "connectionLostBody": "サーバーとの接続が切断されました。Orca が自動的に再試行しており、接続が戻るとターミナルは再開します。",
+            "reattachingBody": "Orca がこのターミナルを {{server}} に自動的に再接続しています。"
           },
           "TerminalLinkActionPopover": {
             "openLink": "リンクを開く",
@@ -3532,11 +3555,7 @@
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
             "openInThisGroup": "このグループで開く",
-            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした",
-            "fileInOtherWorkspace": "このファイルは {{value0}} にあります",
-            "fileInAnotherWorkspace": "このファイルは別のワークスペースにあります",
-            "openInOwningWorkspace": "そこで開く",
-            "openedHereReadOnly": "ここでは読み取り専用で開いています"
+            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "ホストが利用不可",
@@ -4205,10 +4224,6 @@
               "waiting": {
                 "label": "Claude の実行時に更新",
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
-              },
-              "expired": {
-                "label": "サインインの有効期限切れ",
-                "message": "Claude の使用状況が期限切れです。このアカウントで Claude を起動して更新してください。"
               }
             },
             "remoteOwnerNotConfigured": "{{server}} では未構成",
@@ -11894,7 +11909,8 @@
           "failed": "更新に失敗しました",
           "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じて Orca を更新してください。",
           "unpackedHelp": "開発ビルドはソースチェックアウトから更新する必要があります。",
-          "legacyHelp": "このサーバーではリモート更新を利用できません。サーバー上で Orca を更新してください。"
+          "legacyHelp": "このサーバーではリモート更新を利用できません。サーバー上で Orca を更新してください。",
+          "managedOverSshHelp": "このサーバーはこのデスクトップから SSH で更新されます。リモート Orca サーバーの行にある「更新」を使ってください。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステムブラウザを使用します。",
@@ -12668,7 +12684,10 @@
             "forgetDescription": "ホストに接続せずに、このサーバーのリンクをここで解除します。ホストが復帰した場合、サーバーはまだそこで動作している可能性があります。",
             "orcaVersion": "このホストの Orca: {{version}}",
             "stopOrcaDescription": "SSH ホスト上の Orca を停止し、この一覧から削除します。",
-            "updateOrcaOnHost": "このホストの Orca を更新"
+            "updateOrcaOnHost": "このホストの Orca を更新",
+            "updateAnyway": "それでも更新",
+            "notNow": "後で",
+            "forceUpdate": "このホストでターミナルが実行中です。更新中も実行は続き、Orca のサーバーが再起動するとペインが再接続されます。"
           },
           "title": "SSH ホスト上の Orca",
           "description": "Orca は空の SSH ホストに自身をインストールし、常に最新の状態を保ちます。",
@@ -14636,6 +14655,17 @@
                 }
               }
             }
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "開始できませんでした: {{value0}}",
+                  "4c119f5e2a": "未開始",
+                  "b817a96fcf": "停止しました: {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -15929,7 +15959,6 @@
           "6c4f1a8d2e": "チェック詳細を利用できません。"
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "読み取り専用",
           "fb8331694e": "プレビューを横に開く",
           "4157f3cbf3": "Markdown プレビューを開く",
           "269ce4842b": "相対パスをコピー",
@@ -16908,7 +16937,12 @@
             "copyImage": "画像をコピー",
             "copyImageAddress": "画像アドレスをコピー",
             "searchSelection": "{{value0}} で「{{value1}}」を検索",
-            "inspect": "検証"
+            "inspect": "検証",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "右側にドッキング",
+            "devToolsDockBottom": "下部にドッキング",
+            "devToolsUndock": "別ウィンドウで開く",
+            "devToolsClose": "DevTools を閉じる"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",
@@ -18334,6 +18368,7 @@
             "notifications": "通知",
             "clipboard": "クリップボード",
             "idleDetection": "デバイスの使用",
+            "localNetwork": "ローカル ネットワーク",
             "windowManagement": "ウィンドウ管理",
             "midi": "MIDIデバイス"
           },
@@ -18345,6 +18380,7 @@
             "camera": "カメラを使用する",
             "location": "位置情報を取得する",
             "idleDetection": "このデバイスを操作中かどうかを検出する",
+            "localNetwork": "このデバイス上のアプリとローカル ネットワーク上のデバイスにアクセスする",
             "windowManagement": "すべてのディスプレイ上のウィンドウを管理",
             "clipboard": "クリップボードにコピーされたテキストと画像を読み取る",
             "midi": "MIDI デバイスを使用する"
@@ -18507,6 +18543,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "このワークスペースは、リモートの Orca ホストに接続されていません。",
+        "splitSourceUnpublished": "ペインを分割できませんでした: ホスト上でターミナルがまだ起動していません。",
         "terminalCreateUnconfirmed": "Orca は、ホスト上で新規ターミナルが開いたことを確認できませんでした。"
       },
       "gitlabJobTraceClient": {
@@ -18638,6 +18675,8 @@
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
+        "conversationOpenElsewhere": "Codex がまだこの会話を開いたままにしています。少し待ってからもう一度試すか、ほかの Codex ターミナルを閉じてください。",
+        "conversationOpenInTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じて、ここで続けてください。",
         "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
         "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
         "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
@@ -18722,7 +18761,6 @@
         "notDoneAnswer": "回答は送信されませんでした。",
         "notDoneOption": "設定は変更されませんでした。",
         "notDoneCommand": "コマンドは実行されませんでした。",
-        "notDoneGoal": "目標は変更されませんでした。",
         "notDoneQueuedEdit": "編集内容は保存されていません。",
         "restartFailed": "Agent を再起動できませんでした。",
         "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",
@@ -18968,6 +19006,8 @@
         "runFileChangeMany": "編集された{{value0}}ファイル",
         "runWebSearchOne": "ウェブを 1 回検索しました",
         "runWebSearchMany": "ウェブを{{value0}}回検索しました",
+        "runBrowserOne": "ブラウザを使用しました",
+        "runBrowserMany": "ブラウザを{{value0}}回使用しました",
         "runIntegrationOne": "使用済み 1 連携",
         "runIntegrationMany": "{{value0}} 連携を使用しました",
         "runAgentOne": "Agent を 1 人実行しました",
@@ -18990,6 +19030,8 @@
         "runLiveFileChangeMany": "{{value0}} ファイルの編集",
         "runLiveWebSearchOne": "ウェブ検索 1 回",
         "runLiveWebSearchMany": "ウェブを{{value0}}回検索しています",
+        "runLiveBrowserOne": "ブラウザを使用しています",
+        "runLiveBrowserMany": "ブラウザを{{value0}}回使用しています",
         "runLiveIntegrationOne": "1 つの連携を使用する",
         "runLiveIntegrationMany": "{{value0}} 連携の使用",
         "runLiveAgentOne": "1 つの Agent を実行中",
@@ -18997,7 +19039,9 @@
         "runLivePlanOne": "計画を更新する",
         "runLivePlanMany": "計画を{{value0}}回更新しています",
         "runLiveToolOne": "1つのツールを使用する",
-        "runLiveToolMany": "{{value0}} ツールの使用"
+        "runLiveToolMany": "{{value0}} ツールの使用",
+        "showBrowserPage": "表示",
+        "showBrowserPageLabel": "{{value0}} を表示"
       },
       "status": {
         "responding": "Agent が応答中です",
@@ -19029,8 +19073,8 @@
       "resumeInNewChat": {
         "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
         "cannotResume": "この {{agent}} の会話はネイティブチャットで再開できません。",
-        "exitUnconfirmedFromTerminal": "Orca は {{agent}} がターミナルで終了したことを確認できません。実行中の処理を停止するかターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
-        "exitUnconfirmed": "Orca は、{{agent}} がターミナルで終了したことを確認できません。そこで実行されているものを停止するか、ターミナルを閉じてから、もう一度試してください。"
+        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。"
       },
       "state": {
         "loading": {
@@ -19396,7 +19440,9 @@
           "switchToChatView": "チャット UI で続ける"
         },
         "BrowserTab": {
-          "closeOthers": "その他を閉じる"
+          "closeOthers": "その他を閉じる",
+          "muteTab": "タブをミュート",
+          "unmuteTab": "タブのミュートを解除"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "その他を閉じる"
@@ -19413,6 +19459,10 @@
           "editors": "すべてのエディタータブを閉じますか？",
           "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
           "confirm": "タブを閉じる"
+        },
+        "chatRename": {
+          "empty": "チャット名を空にすることはできません",
+          "failed": "このチャットの名前を変更できませんでした"
         }
       }
     },
@@ -21146,5 +21196,8 @@
       "pending": "削除が進行中です。"
     },
     "rowActions": "{{name}} の操作"
+  },
+  "browserTab": {
+    "agentDriving": "Agent がこのページを使用中です"
   }
 }

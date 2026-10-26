@@ -70,8 +70,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
   const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
-  // Why a ref, not state: the cold-activation pass runs during render, where a
-  // setState would be a render-phase update; the pass returns the count instead.
+  // Cold activation runs during render; return its count into a ref instead of triggering a render-phase state update.
   const activationDeferralPlanRevisionRef = useRef(0)
 
   useEffect(() => {
@@ -135,8 +134,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       closeDialogDebounceTimers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [])
+  }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
 
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
@@ -146,8 +144,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       timers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
-  }, [])
+  }, [terminalWorktreeParkingTimersRef])
 
   return {
     measurableBackgroundWorktreeTimersRef,

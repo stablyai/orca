@@ -1,13 +1,5 @@
 import type { JSX } from 'react'
 
-// Why: Ship-page-specific CSS plus the cursor / caret animations shared with
-// the Notes page. Both visuals render their respective styles modules so the
-// per-file line cap is satisfied without one giant style sheet.
-//
-// AI-active signal across both cards uses violet (Tailwind violet-500/700 —
-// rgb(139 92 246) / rgb(109 40 217)) so the "agent is working" affordance
-// reads consistently. The signal lives in the file-row pulse, not in icon
-// rotation, so the read→write motion is what the eye follows.
 export function ReviewShipVisualStyles(): JSX.Element {
   return (
     <style>

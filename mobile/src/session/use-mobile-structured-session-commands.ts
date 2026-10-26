@@ -22,8 +22,7 @@ const sessionCommandsSchema = z.looseObject({
     .optional()
 })
 
-/** The `/` menu a session reports. A host that predates the read refuses it: a skip, so the menu
- *  keeps the host's own commands. */
+// Older hosts refuse this read; retain their published commands on skip.
 const sessionCommandsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'agent-session.commands-or-skip',
@@ -34,13 +33,7 @@ const sessionCommandsRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The `/` menu the running session reports: its commands and the skills it loaded.
- *
- * Phones get bounded subscribe frames, which never carry the list, so it is read on its own: once
- * per session and again each time the menu opens, since a skill installed mid-chat lands there. A
- * read asked for while one is out follows it rather than being dropped.
- */
+// Bounded phone frames omit commands; reread on menu open for newly installed skills and follow any in-flight read.
 export function useMobileStructuredSessionCommands(args: {
   client: RpcClient | null
   hostId: string | null

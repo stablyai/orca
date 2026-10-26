@@ -3,7 +3,6 @@ import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 export type OnboardingProjectChecklistItem = 'addedRepo' | 'addedFolder'
 
-/** Returns the onboarding state read before marking, so callers can tell a first add from a later one. */
 export async function markOnboardingProjectAdded(
   item: OnboardingProjectChecklistItem
 ): Promise<OnboardingState | null> {

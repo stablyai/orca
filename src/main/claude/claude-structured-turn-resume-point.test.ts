@@ -1,3 +1,9 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -7,7 +13,7 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session-provider-handle-transition'
+import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionAdapterDeps,
@@ -17,12 +23,14 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  recordingJournalSink,
+  claudeStartupSettled,
   tick
 } from './claude-structured-session-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const FENCE = 7
+const journals = createTrackedJournalOpener()
+const cleanups: (() => Promise<void>)[] = []
 
 function liveRecord(): AgentSessionRecord {
   const record = agentSessionRecordFixture(
@@ -51,8 +59,39 @@ function liveRecord(): AgentSessionRecord {
 }
 
 async function liveOwner(
-  persistResumePoint?: ClaudeStructuredSessionAdapterDeps['persistResumePoint']
+  persistResumePoint?: ClaudeStructuredSessionAdapterDeps['persistResumePoint'],
+  options: {
+    missingTranscript?: boolean
+    beforeOpen?: (frame: (message: Record<string, unknown>) => void) => void
+    lifecycleLimit?: number
+    resumeLeafUuid?: string | null
+    resumesTranscript?: boolean
+  } = {}
 ) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-claude-leaf-'))
+  const claudeConfigDir = join(root, 'claude-home')
+  const projects = join(claudeConfigDir, 'projects', '-work-repo')
+  await mkdir(projects, { recursive: true })
+  const transcript = join(projects, `${PROVIDER_SESSION_ID}.jsonl`)
+  if (!options.missingTranscript) {
+    await writeFile(
+      transcript,
+      `${JSON.stringify({
+        type: 'assistant',
+        uuid: 'resumed-at',
+        sessionId: PROVIDER_SESSION_ID,
+        message: { role: 'assistant', content: [] }
+      })}\n`
+    )
+  }
+  const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
+  const deferred = createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
+    ...(options.lifecycleLimit === undefined
+      ? {}
+      : { watermarks: { maxLifecycleQueuedOperations: options.lifecycleLimit } })
+  })
+  deferred.bind({ journal, fence: FENCE, publish: () => {} })
   const store = { record: liveRecord() }
   const claude = fakeClaude()
   const events: ClaudeStructuredSessionEvent[] = []
@@ -62,10 +101,10 @@ async function liveOwner(
       pathToClaudeCodeExecutable: 'claude',
       options: { resume: PROVIDER_SESSION_ID },
       cwd: '/work/repo',
-      claudeConfigDir: '/accounts/claude',
+      claudeConfigDir,
       providerSessionId: PROVIDER_SESSION_ID,
-      resumeLeafUuid: 'resumed-at',
-      resumesTranscript: true,
+      resumeLeafUuid: options.resumeLeafUuid === undefined ? 'resumed-at' : options.resumeLeafUuid,
+      resumesTranscript: options.resumesTranscript ?? true,
       continuesChain: true
     }),
     onEvent: (event) => events.push(event),
@@ -90,26 +129,177 @@ async function liveOwner(
     identity: identityFor(),
     fence: FENCE,
     spawnToken: 'spawn-7',
-    events: recordingJournalSink()
+    events: deferred.sink
   })
-  const connection = claude.connections[0]!
   const frame = (message: Record<string, unknown>) =>
-    connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+    claude.connections.at(-1)!.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+  options.beforeOpen?.(frame)
+  await claudeStartupSettled(adapter, 'session-1')
+  cleanups.push(async () => {
+    await adapter.closeAll()
+    deferred.close()
+    await journals.closeAll()
+    await rm(root, { recursive: true, force: true })
+  })
   const turn = async (userUuid: string, assistantUuid: string) => {
-    frame({ type: 'user', uuid: userUuid })
-    frame({ type: 'assistant', uuid: assistantUuid })
+    frame({
+      type: 'user',
+      uuid: userUuid,
+      parent_tool_use_id: null,
+      message: { role: 'user', content: 'ask' }
+    })
+    frame({
+      type: 'assistant',
+      uuid: assistantUuid,
+      parent_tool_use_id: null,
+      message: { id: assistantUuid, role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
+    })
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: `${assistantUuid}-hook` })
     frame({ type: 'result', subtype: 'success', uuid: `${assistantUuid}-result` })
     await tick()
   }
-  return { adapter, claude, store, events, persistedHandles, frame, turn }
+  return {
+    adapter,
+    claude,
+    store,
+    events,
+    persistedHandles,
+    frame,
+    turn,
+    deferred,
+    journal,
+    transcript
+  }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) {
+    await cleanup()
+  }
   vi.restoreAllMocks()
 })
 
 describe('Claude durable resume point at turn end', () => {
+  it.each([false, true])(
+    'allows a first native checkpoint without a loaded leaf (resume=%s)',
+    async (resumesTranscript) => {
+      const { store, turn } = await liveOwner(undefined, {
+        resumeLeafUuid: null,
+        resumesTranscript
+      })
+      await turn('u1', 'a1')
+      expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'a1' })
+    }
+  )
+
+  it('re-derives missed suffix coverage on the next acquisition before advancing', async () => {
+    const { adapter, store, turn, transcript, journal, deferred } = await liveOwner(undefined, {
+      missingTranscript: true
+    })
+    await turn('u1', 'a1')
+    await adapter.closeSession('session-1')
+    await writeFile(
+      transcript,
+      [
+        {
+          type: 'assistant',
+          uuid: 'resumed-at',
+          sessionId: PROVIDER_SESSION_ID,
+          message: { role: 'assistant', content: [] }
+        },
+        {
+          type: 'assistant',
+          uuid: 'outside',
+          parentUuid: 'resumed-at',
+          sessionId: PROVIDER_SESSION_ID,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'outside reply' }] }
+        }
+      ]
+        .map((row) => `${JSON.stringify(row)}\n`)
+        .join('')
+    )
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: FENCE,
+      spawnToken: 'spawn-8',
+      events: deferred.sink
+    })
+    await claudeStartupSettled(adapter, 'session-1')
+    expect(
+      journal
+        .snapshot()
+        .items.some(
+          (item) =>
+            item.body.kind === 'message' &&
+            item.body.blocks.some(
+              (block) => block.type === 'text' && block.text === 'outside reply'
+            )
+        )
+    ).toBe(true)
+    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
+      resumeCursor: 'resumed-at'
+    })
+    await turn('u2', 'a2')
+    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'a2' })
+  })
+
+  it.each([
+    { missingTranscript: true },
+    {
+      beforeOpen: (frame: (message: Record<string, unknown>) => void) =>
+        frame({
+          type: 'stream_event',
+          uuid: 'early',
+          event: { type: 'message_start', message: { id: 'early' } }
+        })
+    }
+  ])('retains the loaded leaf after unproved history, including close: %j', async (options) => {
+    const { adapter, store, events, persistedHandles, turn } = await liveOwner(undefined, options)
+    await turn('u1', 'a1')
+    expect(
+      events.some((event) => event.type === 'message' && event.message.type === 'result')
+    ).toBe(true)
+    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
+      resumeCursor: 'resumed-at'
+    })
+    await adapter.closeAll()
+    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
+  })
+
+  it('keeps the leaf after refused finals even when every admitted write succeeds', async () => {
+    const { adapter, store, turn, deferred, journal, persistedHandles } = await liveOwner(
+      undefined,
+      { lifecycleLimit: 1 }
+    )
+    deferred.unbind()
+    await turn('u1', 'a1')
+    deferred.bind({ journal, fence: FENCE, publish: () => {} })
+    expect(await deferred.drained()).toEqual({ ok: true })
+    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
+      resumeCursor: 'resumed-at'
+    })
+    await adapter.closeAll()
+    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
+  })
+
+  it('publishes the result while journal coverage is pending, and retains the leaf on failure', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { adapter, store, turn, deferred, events, persistedHandles } = await liveOwner()
+    const write = Promise.withResolvers<{ ok: false; error: Error }>()
+    deferred.sink.written = () => write.promise
+    await turn('u1', 'a1')
+    expect(
+      events.some((event) => event.type === 'message' && event.message.type === 'result')
+    ).toBe(true)
+    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
+      resumeCursor: 'resumed-at'
+    })
+    write.resolve({ ok: false, error: new Error('journal failed') })
+    await tick()
+    await adapter.closeAll()
+    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
+  })
+
   it('advances after each completed turn without growing the handle chain', async () => {
     const { adapter, store, turn } = await liveOwner()
     try {
@@ -208,18 +398,30 @@ describe('Claude durable resume point at turn end', () => {
     }
   })
 
-  it('ignores a result that trails the child exit', async () => {
+  it('keeps completed output drained through the same connection after its root exits', async () => {
     const persist = vi.fn(async () => {})
     const { adapter, claude, frame, persistedHandles, turn } = await liveOwner(persist)
     await turn('u1', 'a1')
     expect(persist).toHaveBeenCalledTimes(1)
-    claude.connections[0]!.handlers.onExit?.(new Error('claude crashed'))
-    frame({ type: 'user', uuid: 'u2' })
-    frame({ type: 'assistant', uuid: 'a2' })
+    const connection = claude.connections[0]!
+    const close = connection.close.bind(connection)
+    const drained = Promise.withResolvers<void>()
+    connection.close = async () => {
+      await drained.promise
+      return close()
+    }
+    connection.handlers.onExit?.(new Error('claude crashed'))
+    frame({ type: 'user', uuid: 'u2', message: { role: 'user', content: 'buffered ask' } })
+    frame({
+      type: 'assistant',
+      uuid: 'a2',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'buffered answer' }] }
+    })
     frame({ type: 'result', subtype: 'success', uuid: 'a2-result' })
+    drained.resolve()
     await adapter.drainObservedExits()
     await tick()
     expect(persist).toHaveBeenCalledTimes(1)
-    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'a1' })])
+    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'a2' })])
   })
 })

@@ -2,10 +2,7 @@ import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placem
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 
-/**
- * Low-cardinality: it lands on the `persistence.pty-binding` span. `absent` counts new leaves with
- * no placement, which only the mint and graft can place; it should read zero before they go.
- */
+/** Low-cardinality span attribute; absent tracks new leaves relying on legacy mint/graft placement. */
 export type TerminalPanePlacementAgreement =
   | 'absent'
   | 'leaf_present'
@@ -16,10 +13,7 @@ export type TerminalPanePlacementAgreement =
   | 'root_occupied'
   | 'check_threw'
 
-/**
- * Whether placement names the tab today's binding write picks, read before that write. Report-only
- * until the mint and graft are deleted; the write never branches on it.
- */
+/** Compare placement before binding; reporting never changes the write. */
 export function terminalPanePlacementAgreement(
   placement: TerminalPanePlacement | undefined,
   session: WorkspaceSessionState,

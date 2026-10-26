@@ -1,16 +1,5 @@
-/**
- * The wire shape of `agent.launch`, mirroring `AgentLaunchIntent`.
- *
- * A caller states WHERE the agent lands and WHAT it should say, and may name the surface the user
- * picked (`surface`); the host honours that pick or refuses it, and otherwise decides from its
- * settings. There is no startup-agent field on the create payload —
- * `withoutReservedAgentCreateFields` strips a stale one out of a payload a caller migrated over
- * from `worktree.create`.
- *
- * Shared rather than main-side because every field resolves to a shared schema: a remote client
- * that sends this method needs `RpcSendParams<'agent.launch'>` to exist, and a method missing from
- * the catalog can only be sent through the raw request port.
- */
+/** Shared agent.launch schema lets remote clients use typed RpcSendParams.
+ * The host honors an explicit surface or refuses it; migrated worktree.create startup-agent fields are stripped. */
 
 import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
@@ -27,18 +16,8 @@ import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
-const LaunchAgent = z
-  .unknown()
-  .superRefine((value, ctx) => {
-    if (!isTuiAgent(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unknown TUI agent' })
-    }
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the superRefine above rejects anything isTuiAgent refuses, so the transform only ever runs on a TuiAgent.
-  .transform((value): TuiAgent => value as TuiAgent)
+const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
 
-/** The launch's fields without the cross-field check, for building an older host's shape in tests;
- *  every receiver parses `AgentLaunch` or `AgentLaunchReplay`. */
 /** A layout id the caller may get wrong without failing the launch: anything but a string is dropped. */
 const tolerantTabLayoutId = z
   .unknown()
@@ -47,14 +26,8 @@ const tolerantTabLayoutId = z
 
 export const AgentLaunchFields = z.object({
   agent: LaunchAgent,
-  /**
-   * Names this launch so a retry replays instead of starting a second agent.
-   *
-   * Optional, and optional forever: shipped mobile sends none, and a host that required one would
-   * refuse every live client. Its absence is not a silent downgrade to a weaker guarantee — it is
-   * the caller declining the guarantee, and the host must never mint an id on a caller's behalf
-   * after an ambiguous launch, because an id minted on the retry is a brand new operation.
-   */
+  /** Caller-minted retry identity; optional forever for shipped clients. Never mint after an ambiguous launch:
+   * a fresh ID on retry would create another operation instead of replaying. */
   operationId: z
     .string()
     .refine(
@@ -70,8 +43,7 @@ export const AgentLaunchFields = z.object({
     }),
     z.object({
       kind: z.literal('create-worktree'),
-      /** The `worktree.create` request verbatim, so a caller migrating to this method keeps its
-       *  existing payload; the agent fields in it are stripped rather than honoured. */
+      /** Preserve the worktree.create payload while stripping its migrated agent fields. */
       create: WorktreeCreate
     }),
     z.object({
@@ -91,20 +63,12 @@ export const AgentLaunchFields = z.object({
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
-  /** A start directory other than the workspace root. Terminal-only, and the host downgrades a
-   *  structured launch that carries one rather than ignoring it. */
+  /** Terminal-only cwd; structured launches downgrade rather than silently ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),
   launchSource: LaunchSourceParam.optional(),
-  /**
-   * The pane a terminal launch should create, minted by a caller that places its own tabs.
-   *
-   * Identity, never placement: the host still reveals the tab, and the caller finds its placement
-   * by this key. Refused here unless the runtime would adopt it verbatim (it trims, and mints its
-   * own for an invalid one), so the caller's reservation always matches. A structured launch
-   * records its tab half as the chat's tab id (the outcome's `tabId`); a reused terminal ignores
-   * it. The outcome's `paneKey` says which pane really exists. Tab ids are global across
-   * workspaces, so the caller mints a fresh UUID for each.
-   */
+  /** Caller reserves identity, not placement; validate verbatim adoption so reservations match.
+   * Structured launches use its tab half as tabId; reused terminals ignore it. paneKey reports the actual pane.
+   * Tab IDs span workspaces, so mint a fresh UUID per launch. */
   paneKey: z
     .string()
     .refine((value) => {
@@ -117,58 +81,34 @@ export const AgentLaunchFields = z.object({
       )
     }, 'Malformed launch pane key')
     .optional(),
-  /**
-   * The id of the chat session a structured launch creates, minted by the caller so it knows which
-   * conversation it started before the reply arrives. Refused when a session with this id already
-   * exists. Ignored when the launch settles as a terminal; the outcome's `sessionId` says which
-   * session really exists.
-   */
+  /** Caller-reserved chat ID; refuse duplicates, ignore for terminal outcomes. The returned sessionId is authoritative. */
   sessionId: SessionId.optional(),
-  /**
-   * Where the new tab goes in the workspace's layout: a group, the host tab it should follow, or
-   * both. About the view, not the effect, so it is outside the replay fingerprint and never fails a
-   * launch: a group that is gone falls back to the anchor's group, then the active one, and keys
-   * this host does not know are dropped. The receipt's `placement` says where it landed. Read by
-   * hosts advertising `agent.launch.placement.v1`; older hosts drop it.
-   */
+  /** View-only placement is outside replay identity and never fails launch: fall back from missing group to
+   * anchor group, then active group; drop unknown keys. Requires agent.launch.placement.v1; receipt reports placement. */
   placement: z
     .object({ groupId: tolerantTabLayoutId, afterTabId: tolerantTabLayoutId })
     .optional()
     .catch(undefined),
-  /** `terminal.create`'s field, with its meaning: `focused` selects the new tab, `background` moves
-   *  nothing; absent reveals it, as before. Whose view that is follows main's navigation default for
-   *  the caller, so a paired device moves only its own selection. Outside the fingerprint for the
-   *  same reason as `placement`, and open like it: a word this host does not know reads as absent. */
+  /** focused selects the tab; background leaves selection; absent reveals as before. Caller navigation defaults
+   * keep paired-device selection local. View-only, outside replay identity; unknown words read as absent. */
   presentation: z
     .unknown()
     .transform((value): 'focused' | 'background' | undefined =>
       value === 'focused' || value === 'background' ? value : undefined
     )
     .optional(),
-  /**
-   * The Claude/Codex home a desktop prepared for a host with no account services (WSL orcad).
-   * Terminal-only: a structured launch keeps its host-derived home and warns. Optional forever; an
-   * older host strips it and runs its default account. Outside the replay fingerprint.
-   */
+  /** Desktop-prepared Claude/Codex home for WSL orcad without account services. Terminal-only; chat warns and
+   * keeps its host home. Optional forever, outside replay identity; old hosts strip it and use their default. */
   accountEnv: AgentLaunchAccountEnv.optional(),
-  /**
-   * The launching user's "new agent tabs open as chats" default, sent by a client that owns the
-   * user's settings when the host's own setting is not theirs (a desktop relaying its phone to a
-   * server). Replaces only the host setting; feasibility still decides. Older hosts strip it and
-   * read their own setting. Outside the replay fingerprint. An explicit `surface` replaces it.
-   */
+  /** Forward the launching user’s chat default when host settings belong to someone else (e.g. relayed phone).
+   * Explicit surface overrides it; feasibility still decides. Outside replay identity; old hosts use their own default. */
   nativeChatDefault: z.boolean().optional(),
-  /**
-   * The surface the user picked for this one launch. `terminal` always runs the CLI; `chat` that
-   * this host can prove it cannot open is refused before anything is created. Strict: an unknown
-   * word changes what runs, so it is refused rather than ignored. Inside the replay fingerprint.
-   * Read by hosts advertising `agent.launch.surface.v1`; older hosts strip it, so clients gate it.
-   */
+  /** Explicit terminal runs CLI; proven-unsupported chat refuses before creation. Inside replay identity; unknown
+   * values refuse. Clients must gate on agent.launch.surface.v1 because older hosts strip this field. */
   surface: z.enum(AGENT_LAUNCH_SURFACES).optional()
 })
 
-/** A caller-minted session id must be shaped like every id the host mints, so an id still names
- *  its lane on sight. */
+/** Caller IDs must retain the agent lane encoded by host-minted IDs. */
 function refuseSessionIdForAnotherAgent(
   launch: { agent: string; sessionId?: string | undefined },
   ctx: z.RefinementCtx

@@ -17,7 +17,6 @@ import {
   waitForEditorBaselineRestamp
 } from './editor-save-disk-precondition'
 
-/** Conflict state is a record field, so it reaches every view of the record. */
 export function setModelExternalMutation(
   state: AppState,
   fileId: string,
@@ -46,21 +45,17 @@ export function waitForModelBaselineRestamps(state: AppState, file: OpenFile): P
   return Promise.all(tabs.map((sibling) => waitForEditorBaselineRestamp(sibling.id)))
 }
 
-/**
- * After a write the model's one baseline moves to it. Tabs sharing the model show the written text
- * (it is their text), so their conflict mark clears and a clean one's cached copy is dropped.
- */
+/** Advance the shared baseline and clear conflicts; evict clean sibling caches unless the record holds newer edits. */
 export function rebaselineAfterEditorWrite(state: AppState, fileId: string, content: string): void {
-  // Why computed: the signature of what a UTF-8 write leaves on disk, with no extra stat.
+  // Match the bytes a UTF-8 write produces without an extra stat.
   const moved = setEditorDiskBaseline(state, fileId, getWrittenContentDiskSignature(content))
   noteEditorBaselineWrite(fileId)
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
   if (file) {
-    // Why: disk now holds this UTF-8 write, so a non-UTF-8 pause no longer applies.
+    // The completed UTF-8 write ends any non-UTF-8 autosave pause.
     resumeAutosaveForNonUtf8File(file)
   }
-  // Why: views of one record share its draft. While it holds edits beyond this write, every view
-  // must show them, not disk; the written draft itself is about to be settled.
+  // Newer record edits must stay visible in every view instead of being replaced by disk text.
   const draft = state.editorDrafts[fileId]
   const recordDirty = draft !== undefined && draft !== content
   for (const sibling of moved) {
@@ -74,7 +69,6 @@ export function rebaselineAfterEditorWrite(state: AppState, fileId: string, cont
   }
 }
 
-/** Moves the record `viewId` shows to the written text: its baseline, dirty flag, draft and conflict. */
 export function settleEditorRecordAfterWrite(
   getState: () => AppState,
   viewId: string,
@@ -90,7 +84,6 @@ export function settleEditorRecordAfterWrite(
   if (!stillDirty) {
     state.clearEditorDraft(viewId)
   }
-  // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
   const savedFile = state.openFiles.find((openFile) => openFile.id === viewId)
   if (savedFile?.externalMutation === 'changed') {
     trackExternalChangeConflictAction(savedFile, 'save_overwrite')
@@ -98,11 +91,7 @@ export function settleEditorRecordAfterWrite(
   }
 }
 
-/**
- * A write whose record has no open view left: a kept record (no-prompt removal) moves to it, and
- * other open views of the file (a detached peer) take its baseline, so their next save isn't
- * refused over our own write. Their dirty state stays.
- */
+/** With no original views left, settle retained records and advance detached peers’ baselines without clearing their edits. */
 export function settleEditorWriteWithoutViews(
   state: AppState,
   recordViewIds: readonly string[],

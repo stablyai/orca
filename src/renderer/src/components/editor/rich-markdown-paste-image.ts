@@ -76,8 +76,7 @@ async function saveClipboardImageForMarkdownPaste(
   const hasRuntimeOwner =
     requireRuntimeTargetForFileOwner(useAppStore.getState(), worktreeId, runtimeEnvironmentId)
       .kind === 'environment'
-  // Why: runtime-owned notes use runtime-side clipboard import; routing this
-  // temp save through SSH would put the source file on the wrong machine.
+  // Runtime clipboard imports belong on the runtime host; SSH temp saves would place them on the wrong machine.
   const connectionId = hasRuntimeOwner ? undefined : (getConnectionId(worktreeId) ?? undefined)
 
   return window.api.ui.saveClipboardImageAsTempFile({ connectionId })

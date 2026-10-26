@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 
-// Why: window.api is a fallback Proxy that answers `then`, so returning it from an async helper
-// would make `await` treat it as a thenable and never settle.
+// The fallback proxy answers then; returning it from an async helper would never settle.
 function installedApi(): PreloadApi {
   return (globalThis as unknown as { window: { api: PreloadApi } }).window.api
 }

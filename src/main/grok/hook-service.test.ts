@@ -294,7 +294,7 @@ describe('GrokHookService', () => {
         script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       )
       expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).toContain('${#GROK_HOME}" -le 4096')
       expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')

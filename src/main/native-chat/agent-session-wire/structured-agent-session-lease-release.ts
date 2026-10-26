@@ -4,7 +4,7 @@
 import {
   isSurfaceReleasableAgentSessionRecord,
   releaseStoredAgentSessionOwnerAfterSurfaceClose
-} from '../../runtime/agent-session-surface-release-transition'
+} from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 

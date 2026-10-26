@@ -1,6 +1,4 @@
-// The background-tasks strip HEADER: the one line that speaks for the whole
-// roster while the strip is collapsed. Counting and phrasing only — grouping,
-// row state and the state vocabulary live in `background-task-roster.ts`.
+// Collapsed roster header counts/phrases only; grouping and states belong to background-task-roster.ts.
 
 import type {
   AgentSessionBackgroundTask,
@@ -18,10 +16,7 @@ import {
 type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState
 
-/** Below this strip width (in root-font units; 16 px each where a surface has no root font) the
- *  header drops a breakdown across several kinds for an honest total. A single kind keeps its state
- *  forms ("2 agents waiting — needs approval"): they are one segment and fit. Measured on the strip
- *  itself, so a narrow split pane behaves like a narrow window. */
+/** Below this strip width in rem (16px fallback), replace multi-kind breakdowns with totals. Single-kind state forms still fit; measure the strip so split panes behave like narrow windows. */
 export const NARROW_BACKGROUND_TASKS_STRIP_REM = 24
 
 function kindCountLabel(kind: TaskKind, count: number, say: BackgroundTaskSay): string {
@@ -40,12 +35,10 @@ function kindCountLabel(kind: TaskKind, count: number, say: BackgroundTaskSay): 
   }
 }
 
-/** How many kind segments the header may enumerate before an honest total
- *  replaces the breakdown entirely — never a partial enumeration. */
+/** Replace oversized kind breakdowns entirely; never enumerate a misleading subset. */
 const HEADER_SEGMENT_CAP = 3
 
-/** Done comes last but must be present: the headline counts settled rows too,
- *  so omitting it made the breakdown contradict its own count. */
+/** Include done last: settled rows count in the headline and must also count in the breakdown. */
 const HEADER_STATE_ORDER: readonly RunState[] = [
   'working',
   'monitoring',
@@ -60,9 +53,7 @@ const ATTENTION_STATES: ReadonlySet<RunState> = new Set(['waiting', 'unverifiabl
 
 export type BackgroundTasksHeaderSegment = {
   text: string
-  /** The kind this segment counts, so the renderer can lead it with that kind's
-   *  icon. Null when the segment spans kinds (the collapsed total), which no
-   *  single icon can stand for. */
+  /** Icon kind, or null for multi-kind totals no single icon can represent. */
   kind: TaskKind | null
 }
 
@@ -73,10 +64,7 @@ export type BackgroundTasksHeaderContent = {
   detail: string | null
 }
 
-/** Every variant in the signed-off mock, plus the overflow and narrow forms. Narrow replaces
- *  only a breakdown across kinds; one kind reads the same at every width. Any lossy form
- *  (fallback or total) leaves the detail reachable — the strip stays expandable regardless of
- *  task count. */
+/** Narrow replaces only multi-kind breakdowns. Any lossy total/fallback stays expandable, regardless of count, so detail remains reachable. */
 export function backgroundTasksHeaderContent(
   groups: readonly BackgroundTaskGroup[],
   options: { narrow: boolean; now: number },
@@ -141,8 +129,7 @@ export function backgroundTasksHeaderContent(
   })).filter((entry) => entry.count > 0)
   return {
     segments: [{ text: kindCountLabel(group.kind, count, say), kind: group.kind }],
-    // Done is accounted for in the muted detail but never earns its own emphasised
-    // segment: a finished sibling claims no colour above the composer.
+    // Count done in muted detail, never an emphasized segment: finished siblings claim no composer color.
     detail:
       stateCounts.length > 0
         ? stateCounts

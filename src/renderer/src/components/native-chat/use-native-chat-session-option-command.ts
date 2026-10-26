@@ -24,10 +24,7 @@ export function useNativeChatSessionOptionCommand(args: {
   const mountedRef = useRef(true)
   const activeObserversRef = useRef(new Set<ClaudeModelSwitchConfirmationObserver>())
   const activeSendsRef = useRef(new Set<AbortController>())
-  // Why: expose an in-flight flag so the composer can block a normal send while
-  // an option command's body+delayed-Enter (and its confirmation observer) is
-  // still writing to the same pty — otherwise the two write sequences interleave
-  // on one input line and corrupt both.
+  // Block composer sends until option-command writes and confirmation finish to prevent interleaved PTY input.
   const [isDispatching, setIsDispatching] = useState(false)
 
   useEffect(() => {
@@ -56,14 +53,10 @@ export function useNativeChatSessionOptionCommand(args: {
       onSubmitted?.()
       const sendController = new AbortController()
       activeSendsRef.current.add(sendController)
-      // Why: block composer chat sends for the whole drain+observe+verify window.
       setIsDispatching(true)
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
       try {
-        // Why: chat sends keep a delayed Enter for 500ms. Drain them *before*
-        // arming the model-switch observer so (a) that Enter cannot hit Claude's
-        // confirmation UI and (b) any Ctrl+U cleanup is outside the observation
-        // window (Ctrl+U mid-observe can miss "Set model to …" markers).
+        // Drain delayed chat Enter/Ctrl+U before observing so they cannot answer the model dialog or hide confirmation markers.
         cancelNativeChatPtySends(target.ptyId)
         await waitForNativeChatPtyIdle(target.ptyId)
         if (!mountedRef.current || sendController.signal.aborted) {
@@ -81,8 +74,7 @@ export function useNativeChatSessionOptionCommand(args: {
           if (!mountedRef.current || sendController.signal.aborted) {
             throw new Error('Chat UI command was canceled because the composer closed.')
           }
-          // Why: arm only after the observer reaches the live PTY tail, then
-          // submit immediately so historical output cannot satisfy the match.
+          // Arm at the live tail immediately before submitting so historical output cannot confirm the switch.
           observer.arm()
         }
         const accepted =
@@ -92,9 +84,7 @@ export function useNativeChatSessionOptionCommand(args: {
         if (!accepted) {
           throw new Error('The terminal did not accept the command.')
         }
-        // Why: start the model-switch detection clock only now that the command
-        // has been accepted, so SSH/remote send latency doesn't eat the window
-        // before the agent has responded.
+        // Start detection after acceptance so remote send latency cannot consume the response window.
         observer?.startDetection()
         onSlashCommand?.(command.trim())
         emitNativeChatMessageSent({

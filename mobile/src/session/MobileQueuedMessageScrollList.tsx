@@ -3,22 +3,17 @@ import { Platform, ScrollView, StyleSheet, View, type LayoutRectangle } from 're
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { colors, spacing } from '../theme/mobile-theme'
 
-/** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
- *  sign that the list scrolls. */
 export const QUEUE_LIST_MAX_HEIGHT = 160
 
 type Metrics = { offset: number; viewport: number; content: number }
 
-/** The queued cards under the fixed header, capped so a long queue never takes over the screen. */
 export function MobileQueuedMessageScrollList({
   messageIds,
   newestIsPersons,
   children
 }: {
   messageIds: readonly string[]
-  /** The newest card has no sender: the person just queued it, so the list shows it. */
   newestIsPersons: boolean
-  /** Rows, given `reveal` to keep an edited row in view. */
   children: (reveal: (row: LayoutRectangle) => void) => ReactNode
 }): React.JSX.Element {
   const scrollRef = useRef<ScrollView>(null)
@@ -31,7 +26,7 @@ export function MobileQueuedMessageScrollList({
     const appended =
       shownIds.current.size > 0 && newest !== undefined && !shownIds.current.has(newest)
     shownIds.current = new Set(messageIds)
-    // Reveal the committed own append even when a simultaneous removal keeps content size equal.
+    // Reveal own appends even if a simultaneous removal leaves content height unchanged.
     if (appended && newestIsPersons) {
       scrollRef.current?.scrollToEnd({ animated: false })
     }
@@ -48,7 +43,6 @@ export function MobileQueuedMessageScrollList({
       }
     }
   }
-  // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
   const reveal = (row: LayoutRectangle) => {
     const { offset, viewport, content } = metrics.current
     if (viewport === 0) {
@@ -86,7 +80,6 @@ export function MobileQueuedMessageScrollList({
   )
 }
 
-/** Fades the cards into the box's fill at an edge more content lies past. */
 function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
   const id = `queued-list-fade-${edge}`
   const top = edge === 'top'

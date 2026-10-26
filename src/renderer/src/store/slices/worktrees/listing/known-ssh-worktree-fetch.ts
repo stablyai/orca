@@ -69,8 +69,7 @@ const inflightKnownSshWorktreeFetches = new Map<
   Promise<DetectedWorktreeListResult | null>
 >()
 
-// Why: the authoritative path dedupes through listDetectedWorktreesForRepoCoalesced; without a matching guard
-// the four refresh triggers can each issue this IPC and its merge for the same repo/host.
+// Deduplicate fallback reads/merges like authoritative scans; concurrent refresh triggers otherwise repeat the same repo/host IPC.
 export async function fetchKnownSshWorktreesForRepo(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   repoId: string,
@@ -127,8 +126,7 @@ export async function runKnownSshWorktreeFetch(
       withRepoHostOwnership(worktree, executionHostId, setup)
     )
     const priorDetected = state.detectedWorktreesByRepo[repoId]
-    // Why: only the rows are ours to merge. This entry is keyed by repo alone, so adopting the fallback's
-    // authoritative/source would demote a sibling host's completed scan and blank every authoritative-gated surface.
+    // Merge only fallback rows; repo-wide authority/source may belong to a sibling host and must not be demoted.
     const detected = {
       ...(priorDetected ?? known),
       worktrees: appendMissingWorktreesForHost(

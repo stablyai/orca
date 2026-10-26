@@ -33,7 +33,7 @@ function request(argv: string[]) {
 }
 
 describe('orca search argument parsing', () => {
-  it('takes the query positionally', () => {
+  it('takes the query positionally without adding optional fields', () => {
     expect(parseCli(['search', 'resize race']).commandPath).toEqual(['search'])
     expect(request(['search', 'resize race'])).toEqual({ query: 'resize race' })
   })
@@ -92,10 +92,6 @@ describe('orca search argument parsing', () => {
       },
       debug: true
     })
-  })
-
-  it('omits every optional field the caller did not name', () => {
-    expect(Object.keys(request(['search', 'q']))).toEqual(['query'])
   })
 
   it('reads --scope all and --sort relevance', () => {

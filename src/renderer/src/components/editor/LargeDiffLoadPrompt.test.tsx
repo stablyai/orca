@@ -34,8 +34,7 @@ describe('LargeDiffLoadPrompt', () => {
   })
 
   it('does not claim an uncounted row is large', () => {
-    // A lone tracked binary (resources/build/icon.icns) is deferred with no
-    // counts at all; it may be 4 KB.
+    // Deferred binaries can be small and have no line counts.
     render(<LargeDiffLoadPrompt onLoad={vi.fn()} sizeUnknown />)
 
     screen.getByText(UNKNOWN_SIZE_COPY)

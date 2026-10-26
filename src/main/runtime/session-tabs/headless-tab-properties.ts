@@ -1,3 +1,4 @@
+import { renameStructuredSessionTab, type SessionTabProps } from './structured-session-tab-rename'
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
@@ -18,8 +19,7 @@ type HeadlessPaneLayoutEdit = {
   titlesByLeafId?: Record<string, string>
 }
 
-// Why: a remounted client pane re-sends the layout it was given; an unchanged write must not
-// persist or republish the workspace to every paired client.
+// Remounts resend unchanged layouts; avoid persisting and broadcasting them to every client.
 function paneLayoutEditIsNoOp(
   layout: Pick<TerminalLayoutSnapshot, 'root' | 'expandedLeafId' | 'chatLeafId' | 'titlesByLeafId'>,
   edit: HeadlessPaneLayoutEdit
@@ -33,44 +33,42 @@ function paneLayoutEditIsNoOp(
 }
 
 export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
-  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
-  // push path, so pinning or coloring a tab reverted on the next snapshot and
-  // was never persisted. Persist to the workspace session + live snapshot.
+  // Remote tab color/pin need persistence and live publication or the next snapshot reverts them.
   async setMobileSessionTabProps(
     worktreeSelector: string,
-    args: {
-      tabId: string
-      color?: string | null
-      isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
-      customTitle?: string | null
-    }
+    args: SessionTabProps
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: a renderer-authoritative host owns + republishes tab props, so a
-    // headless write would be overwritten. Persist only when headless.
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    // Attached renderers own and republish props; headless writes would be overwritten.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    // Why by tab: a sleeping or starting pane has no handle for terminal.rename to name (#29975).
-    const customTitle =
-      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
-    // Switch point: a terminal tab main owns takes its props in main's layout, window or not.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
       return { updated: true }
     }
-    if (this.getAvailableAuthoritativeWindow()) {
-      if (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined) {
-        throw Object.assign(
-          new Error(
-            'Tab color, pin, and view mode edits are unavailable while a desktop window owns the layout'
-          ),
-          { code: 'capability_unsupported' }
-        )
-      }
+    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    if (
+      authoritativeWindow &&
+      (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)
+    ) {
+      throw Object.assign(
+        new Error(
+          'Tab color, pin, and view mode edits are unavailable while a desktop window owns the layout'
+        ),
+        { code: 'capability_unsupported' }
+      )
+    }
+    args = await renameStructuredSessionTab(snapshot, hostTabId, args, () =>
+      this.ensureStructuredAgentSessionHost()
+    )
+    // Sleeping/starting panes lack handles, so title edits must address the tab (#29975).
+    const customTitle =
+      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
+    if (authoritativeWindow) {
       if (customTitle !== undefined) {
         this.notifier?.renameTerminal(hostTabId, customTitle)
       }
@@ -217,9 +215,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     return tab.type === 'terminal' ? tab.parentTabId : tab.id
   }
 
-  // Merge the client's pane structure into the persisted tab layout. PTY
-  // bindings and active leaf stay host-owned; only ratios/expand/titles change.
-  // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
+  // Merge only client geometry/titles; PTY bindings and active leaf remain host-owned. Layouts are keyed by tab, independent of worktree.
   protected persistHeadlessTerminalPaneLayout(
     worktreeId: string,
     args: HeadlessPaneLayoutEdit
@@ -249,7 +245,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
       }
     }
     this.setWorkspaceSessionForWorktree(worktreeId, candidate)
-    // Why: persistence may reject stale membership while accepting its metadata; publish only that rebased layout.
+    // Publish the persisted rebase: stale membership may be rejected while metadata is accepted.
     return (
       this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId[args.tabId] ??
       candidate.terminalLayoutsByTabId[args.tabId]

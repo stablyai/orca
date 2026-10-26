@@ -28,7 +28,7 @@ function bindCurrentCoordinatorRun(harness: LegacyCompatibilityDispatcherHarness
   }).id
 }
 
-// Why: the adopted Run's recovered task is the cross-Run target; its dispatch must stay live when a gate is refused.
+// Refusing a cross-Run gate must leave the adopted Run's recovered task dispatch live.
 function adoptedTaskState(harness: LegacyCompatibilityDispatcherHarness) {
   return {
     task: harness.db.getTask(harness.taskId)?.status,

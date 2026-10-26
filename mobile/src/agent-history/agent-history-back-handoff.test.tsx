@@ -2,19 +2,8 @@ import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-/**
- * The panel's Back button, from the tap handler to the frame that leaves the page.
- *
- * `route-handoff.web.test.tsx` proves the seam answers `back()` correctly; this proves the screen
- * asks the seam at all. The two are not the same claim: the panel held `useRouter` directly until
- * C5.1, and a screen that still held it would pass every test next door while shipping a Back
- * button that does nothing inside the page — the document has the single history entry the entry
- * wrote with `replaceState`, so expo-router's own `back()` goes nowhere.
- *
- * Both substitutions below are the builder's own, not conveniences: the web bundle resolves
- * `route-handoff` and `client-context` to their `.web` siblings, so mocking each to its sibling is
- * the module graph this screen has inside the shell's page.
- */
+// Prove panel asks handoff to navigate Back: seam tests alone miss direct useRouter, whose back() cannot leave single-entry page.
+// Resolve route-handoff/client-context to .web siblings like actual bundle; these substitutions reproduce the shipped graph.
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
@@ -27,8 +16,7 @@ const router = vi.hoisted(() => ({
 
 vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
-// The house pattern for a screen test: react-native is Flow source vitest cannot parse, so the
-// host components become strings and the tree below is the panel's own structure.
+// Mock RN hosts as strings: Vitest cannot parse React Native Flow, but panel structure stays real.
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
@@ -48,16 +36,14 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
-// Its asset table `require()`s PNGs, which Metro resolves and vitest does not; the session list
-// below the header never renders here anyway, because no client means no sessions.
+// Mock Metro PNG requires; no client means session list never renders here.
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 
 vi.mock('../navigation/route-handoff', async () => await import('../navigation/route-handoff.web'))
 
 vi.mock('../transport/client-context', async () => await import('../transport/client-context.web'))
 
-// The web provider re-exports the screen hooks through this module, and the real ones reach an Expo
-// runtime this test does not have. The panel reads `client`/`state` off `useHostClient`.
+// Mock hooks re-exported by web provider because real hooks require Expo runtime.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,

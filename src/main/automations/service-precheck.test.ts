@@ -5,7 +5,7 @@ import {
   writePersistedStateJson,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'

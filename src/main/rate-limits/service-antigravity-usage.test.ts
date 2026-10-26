@@ -5,9 +5,13 @@ import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import {
+  asRateLimitWindow,
   errorProvider,
+  FakeRateLimitWindow,
+  mockFreshBackgroundProviderFetches,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -80,7 +84,7 @@ describe('RateLimitService Antigravity usage', () => {
     const state = service.getState()
     expect(state.antigravity?.status).toBe('ok')
     expect(state.antigravity?.provider).toBe('antigravity')
-    // Why both: the mirror made these two numbers the same value by construction.
+    // Distinct values prove Antigravity is no longer a Gemini mirror.
     expect(state.antigravity?.session?.usedPercent).toBe(30)
     expect(state.gemini?.session?.usedPercent).toBe(42)
   })
@@ -95,8 +99,7 @@ describe('RateLimitService Antigravity usage', () => {
     await service.refresh()
 
     const state = service.getState()
-    // Why: the two providers no longer share a credential or an endpoint, so a Gemini
-    // token problem is not evidence about Antigravity quota (#9122).
+    // Separate credentials/endpoints mean Gemini auth failure cannot invalidate Antigravity (#9122).
     expect(state.antigravity?.status).toBe('ok')
     expect(state.antigravity?.session?.usedPercent).toBe(55)
     expect(state.gemini?.status).toBe('error')
@@ -128,7 +131,6 @@ describe('RateLimitService Antigravity usage', () => {
     const state = service.getState()
     expect(state.antigravity?.status).toBe('error')
     expect(state.antigravity?.error).toContain('spawn agy ENOENT')
-    // Why: a thrown Antigravity fetch must not abort the cycle for everyone else.
     expect(state.claude?.status).toBe('ok')
     expect(state.gemini?.status).toBe('ok')
   })
@@ -149,11 +151,9 @@ describe('Antigravity usage gating', () => {
 
     await service.refresh()
 
-    // Why: the probe starts the agy language server for ~2.5 s. A user not showing the meter
-    // should not pay that every cycle.
+    // Hidden meters should not pay for agy language-server startup on every cycle.
     expect(fetchAntigravityRateLimits).not.toHaveBeenCalled()
     expect(service.getState().antigravity?.status).toBe('idle')
-    // Why the rest must be untouched: gating one provider cannot gate the cycle.
     expect(service.getState().gemini?.status).toBe('ok')
   })
 
@@ -169,8 +169,7 @@ describe('Antigravity usage gating', () => {
   })
 
   it('fetches when no resolver is configured', async () => {
-    // Why default-on: the status bar shows Antigravity by default, so an unconfigured service
-    // must still fill the meter rather than silently reporting nothing.
+    // Antigravity usage defaults on; an unconfigured service must still populate it.
     vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
     const service = new RateLimitService()
 
@@ -190,9 +189,46 @@ describe('Antigravity usage gating', () => {
     enabled = false
     await service.refresh()
 
-    // Why kept: hiding the meter is not evidence the quota changed, and re-showing it should not
-    // flash an empty segment while the next poll runs.
+    // Hiding/revealing the meter must not flash away known usage.
     expect(service.getState().antigravity?.session?.usedPercent).toBe(44)
     expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits out the browser sign-in cooldown, then recovers on the next poll', async () => {
+    vi.useFakeTimers()
+    try {
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+      vi.mocked(fetchAntigravityRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...unavailableProvider('antigravity', 'Sign in with `agy`'),
+          usageMetadata: {
+            failureKind: 'missing-credentials',
+            retryAtMs: Date.now() + 60 * 60 * 1000
+          }
+        }))
+        .mockImplementation(async () => okProvider('antigravity', 30))
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+
+      // Why: each read inside the cooldown would open another browser sign-in page (#26484).
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(58 * 60 * 1000)
+      expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(1)
+      expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(32 * 60 * 1000)
+      expect(vi.mocked(fetchAntigravityRateLimits).mock.calls.length).toBeGreaterThan(1)
+      expect(service.getState().antigravity?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

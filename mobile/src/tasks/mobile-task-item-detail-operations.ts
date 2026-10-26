@@ -11,10 +11,6 @@ import {
   linearTeamsSchema
 } from './task-item-detail-reply-schema'
 
-// What one task item's detail sheet reads: the provider's own detail payload, the Linear comment
-// list beside it, and the label, assignee and workflow-state pickers the sheet opens. Each schema
-// lives in task-item-detail-reply-schema.ts with the consumer line behind every requirement.
-
 export const githubItemDetailRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.work-item-details',
@@ -35,11 +31,7 @@ export const gitlabItemDetailRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * One Linear issue. The detail sheet and the sub-issue opener share it: both throw the host's
- * message on refusal and both treat an accepted `null` as "not found" with their own copy, which
- * is the fallback each keeps at its own site.
- */
+// Both consumers distinguish refused reads from accepted null, which means issue not found.
 export const linearIssueRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.issue-detail',
@@ -50,11 +42,7 @@ export const linearIssueRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The comment list beside a Linear issue, asked in the same group as the issue itself. A refused
- * comment read leaves the sheet with no comments rather than failing it, so refusal is a skip —
- * which is exactly why the two legs of that group cannot share one policy.
- */
+// Comment reads are advisory; their refusal must not fail the readable issue in the same request group.
 export const linearIssueCommentsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.issue-comments-or-skip',
@@ -85,10 +73,7 @@ export const githubAssignableUserListRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A Linear team's workflow states, for the status picker. Advisory: a refusal empties the picker
- * rather than failing the sheet, so it is a skip.
- */
+// Workflow-state picker reads are advisory; refusal empties only the picker.
 export const linearTeamStateListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.team-states-or-skip',
@@ -99,13 +84,7 @@ export const linearTeamStateListRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The composer's Linear team list, the first of two policies on this method. The composer empties
- * its picker on a refusal and stays open; hydration in mobile-task-list-operations.ts cannot
- * proceed without the list and surfaces the host's message. Both build their reader from
- * `linearTeamsSchema`, which is what keeps them agreeing about what a team row is; the reader
- * itself is a pure factory and there is nothing to share.
- */
+// Composer team reads may skip refusal; hydration requires the same data and must fail explicitly.
 export const linearComposerTeamListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.composer-team-list-or-skip',

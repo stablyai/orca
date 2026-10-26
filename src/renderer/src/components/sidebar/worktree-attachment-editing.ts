@@ -16,7 +16,7 @@ import {
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../shared/linear/links'
-import { parseJiraIssueUrl } from '../../../../shared/jira-issue-url'
+import { parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
 
 export const ATTACHMENT_INPUT_KINDS = [

@@ -176,10 +176,10 @@ describe('older clients against a host with the stored choice', () => {
     expect(resolveTuiAgentLaunchArgs('claude', { ...host, ...manual })).toBe('')
   })
 
-  it('new chats start in the stored choice; agents on their own settings keep the Chat default', () => {
+  it('new chats start in the stored choice; agents on their own settings delegate their chats too', () => {
     expect(newChatPermissionModeForSettings('codex', host)).toBe('auto')
     const own = { ...host, agentPermissionOverrides: { codex: 'own' as const } }
-    expect(newChatPermissionModeForSettings('codex', own)).toBe('ask')
+    expect(newChatPermissionModeForSettings('codex', own)).toBe('own')
   })
 })
 
@@ -600,14 +600,14 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     })
   })
 
-  it('preserves chat-only migration defaults, then seeds Ask and retains raw choices through Auto', () => {
+  it('migrates agents without terminal flags to own, then retains explicit chat choices through Auto', () => {
     const agents = ['antigravity', 'opencode', 'opencode2', 'omp'] as const
     const upgraded = {
       ...migrateAgentPermissionChoice(legacy({})),
       nativeChatPermissionMode: 'ask' as const
     }
     for (const agent of ['opencode', 'opencode2', 'omp'] as const) {
-      expect(newChatPermissionModeForSettings(agent, upgraded)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, upgraded)).toBe('own')
     }
     const ask = { ...upgraded, ...applyAllAgentsPermission(upgraded, 'ask') }
     for (const agent of agents) {

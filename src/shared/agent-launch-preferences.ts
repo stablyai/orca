@@ -1,7 +1,6 @@
 import type { AgentLaunchPreferences } from './agent-session-host-authority'
 
-/** Session options as the model, effort and mode a launch starts with; one converter for every lane,
- *  so a structured create and a terminal launch read the same picks the same way. */
+/** Share model/effort/mode conversion so structured and terminal launches read identical preferences. */
 export function toAgentLaunchPreferences(
   sessionOptions: Readonly<Record<string, unknown>> | null | undefined
 ): AgentLaunchPreferences | undefined {

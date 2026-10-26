@@ -87,8 +87,7 @@ describe('matchNativeChatCatalogModelId', () => {
   })
 
   it('keeps the reported selector as-is for a catalog that seeds no models', () => {
-    // Why: OMP's hook reports `provider/id`, the exact form `/model` accepts back,
-    // and an empty seed has nothing that could outrank it.
+    // OMP’s unseeded catalog cannot outrank its exact hook-reported provider/id selector.
     const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }
     expect(matchNativeChatCatalogModelId(unseeded, ' deepseek/deepseek-v4-pro ')).toBe(
       'deepseek/deepseek-v4-pro'

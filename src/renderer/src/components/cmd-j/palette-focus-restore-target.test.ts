@@ -16,8 +16,7 @@ function addTerminal(id: string): HTMLTextAreaElement {
 
 describe('resolvePaletteFocusRestoreTarget', () => {
   it('returns the exact previously-focused element when it is still connected', () => {
-    // Two terminals mounted (e.g. a background worktree comes first in the DOM);
-    // the user was typing in the second one before opening Cmd+J.
+    // DOM order may put a retained background terminal before the one the user was typing in.
     addTerminal('background')
     const active = addTerminal('active')
 

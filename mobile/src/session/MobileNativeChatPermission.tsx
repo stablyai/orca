@@ -11,9 +11,6 @@ import {
 } from '../../../src/shared/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
-// Renders a detected agent permission ask as a card with tappable options.
-// The first option is treated as the primary (allow) action and gets a filled
-// accent button so the affirmative choice reads as distinct from the rest.
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
@@ -23,12 +20,12 @@ function MobileNativeChatPermissionImpl({
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
-  /** Fold the card to a strip and free Send, writing nothing. */
+  // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }): React.JSX.Element {
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
-  // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
+  // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {

@@ -158,7 +158,7 @@ export function installModuleMocks(
     getCanonicalUserDataPath: () => USER_DATA
   }))
   // Model legacy unmarked stages; real SQLite merges have separate file-backed coverage.
-  vi.doMock('../browser-cookie-staged-import', () => ({
+  vi.doMock('../cookies/browser-cookie-staged-import', () => ({
     SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
     applyScopedStagedCookieImport: vi.fn(() => false),
     isScopedStagedCookieImport: vi.fn(() => false),

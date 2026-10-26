@@ -19,8 +19,7 @@ vi.mock('./relay-token-verifier.js', () => ({
 
 import { createRelayApp } from './app.js'
 
-// A fleet with no database-mode cell, through /v1/assign: the real plan and the real store,
-// with each reserve cell's own booking rule played by a ceiling of two seats.
+// Exercise real /v1/assign plan/store with no database-mode cells; booking fakes enforce two seats per cell.
 
 const CEILING = 2
 const CELLS: RelayCellConfig[] = [

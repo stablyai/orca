@@ -17,7 +17,6 @@ function repo(id: string): Repo {
   }
 }
 
-/** The common case: every match owns the slug through its own origin remote. */
 function originOnly(matches: Repo[]): { origin: Repo[]; upstream: Repo[] } {
   return { origin: matches, upstream: [] }
 }

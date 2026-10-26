@@ -19,7 +19,6 @@ const siteB = { ...siteA, id: 'site-b', siteUrl: 'https://b.atlassian.net', disp
 
 describe('extractJiraConnection', () => {
   it('explains an unreadable status without blocking the remaining providers', () => {
-    // A host predating the Jira RPCs answers with an error, which reaches us as null.
     for (const value of [null, undefined, 'nope', 42]) {
       expect(extractJiraConnection(value)).toEqual({
         connected: false,
@@ -98,9 +97,7 @@ describe('jiraSiteLabel', () => {
 
 describe('readJiraConnection', () => {
   it('reports a refused status read instead of showing it as disconnected', async () => {
-    // A host that does not authorize jira.* for mobile clients answers with an
-    // error; treating that as "no Jira connected" strands the user on a setup
-    // prompt they cannot satisfy.
+    // Unauthorized Jira RPCs must not look like disconnected accounts and show an unsatisfiable setup prompt.
     const client = {
       sendRequest: async (): Promise<RpcResponse> => ({
         id: 'jira-test',

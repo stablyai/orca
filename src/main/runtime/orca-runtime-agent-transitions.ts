@@ -14,10 +14,7 @@ import {
   type TerminalAgentWorkspaceLabels
 } from './terminal-agent-phone-push'
 
-/**
- * Owns the runtime's agent transition detector, and the phone push it drives while no window
- * runs here. Both run on every host and in every build.
- */
+/** All hosts/builds own transition detection and windowless phone pushes. */
 export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMigrationCatalog {
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
@@ -25,8 +22,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     now: Date.now
   })
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
-    // A desktop that has not shown its window yet counts as having one: that window seeds what it
-    // missed rather than announcing it, so the phone hears no more than it does today.
+    // Pending desktop windows seed missed state without announcing it; do not duplicate their phone pushes.
     hasWindow: () =>
       this.authoritativeWindowId === null
         ? this.rendererGraphEpoch === 0
@@ -40,7 +36,6 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
     setTimer: (run, delayMs) => {
-      // A pending finish must never hold the process open at quit.
       const timer = setTimeout(run, delayMs)
       timer.unref?.()
       return { cancel: () => clearTimeout(timer) }
@@ -60,10 +55,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
   }
 
-  /** Attaches the detector, and main's generated tab titles; layers above subscribe their readers first. */
+  /** Attach after higher layers subscribe; also drive generated tab titles. */
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {
-    // Why here: each host attaches its hook store at startup, so an enabled connector seam watches
-    // its links' agent sessions from then rather than from its first call.
+    // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
@@ -76,7 +70,6 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     }
   }
 
-  // The window's labels (getNotificationWorkspaceLabels), read from this host's own records.
   private readTerminalAgentWorkspaceLabels(
     worktreeId: string,
     paneKey: string
@@ -96,7 +89,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
       return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
     }
     const id = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    // The listing is a cache a catalog change empties; the persisted record names it meanwhile.
+    // Catalog changes empty the listing cache; persisted metadata remains available.
     const listed = this.resolvedWorktrees.peek()?.worktrees.find((item) => item.id === id)
     const meta = listed ? undefined : store?.getWorktreeMeta(id)
     const repoId = listed?.repoId ?? (meta ? getRepoIdFromWorktreeId(id) : undefined)

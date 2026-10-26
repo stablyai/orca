@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { checkNativeBuildDirArtifacts, ensureSharedNativeBuild } from './shared-native-build.mjs'
+import { peImage } from './windows-pe-image-fixture.mjs'
 
 const roots = []
 
@@ -19,7 +20,7 @@ function makePackage() {
 }
 
 describe('ensureSharedNativeBuild', () => {
-  it('reuses a usable published entry without compiling, even when forced', () => {
+  it('reuses a usable published entry without compiling', () => {
     const packageDir = makePackage()
     const entryDir = path.join(packageDir, 'build', 'orca-napi-linux-x64')
     mkdirSync(entryDir, { recursive: true })
@@ -90,6 +91,17 @@ describe('checkNativeBuildDirArtifacts', () => {
     for (const file of ['conpty.node', 'conpty/conpty.dll', 'conpty/OpenConsole.exe']) {
       writeFileSync(path.join(dir, file), 'not-a-pe')
     }
+    writeFileSync(path.join(dir, 'conpty.node'), peImage({ arch: 'x64' }))
+    expect(
+      checkNativeBuildDirArtifacts('node-pty', dir, { platform: 'win32', arch: 'arm64' })
+    ).toMatch(/not arm64/)
+
+    writeFileSync(path.join(dir, 'conpty.node'), peImage({ arch: 'arm64' }))
+    expect(
+      checkNativeBuildDirArtifacts('node-pty', dir, { platform: 'win32', arch: 'arm64' })
+    ).toBe(null)
+
+    writeFileSync(path.join(dir, 'conpty.node'), 'not-a-pe')
     expect(
       checkNativeBuildDirArtifacts('node-pty', dir, { platform: 'win32', arch: 'arm64' })
     ).toMatch(/not arm64/)

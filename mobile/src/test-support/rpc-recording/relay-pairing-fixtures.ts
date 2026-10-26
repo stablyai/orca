@@ -108,10 +108,7 @@ export function pairingJournal(hash: (token: string) => string): MobileRelayPair
   }
 }
 
-/**
- * A pairing candidate over the scripted transport. Spread rather than a named `sendRequest`: the
- * raw-port ratchet counts the literal, and an adapter faking a candidate is not a new call site.
- */
+// Spread sendRequest because this adapter is not a new raw-port call site; the source ratchet counts the literal name.
 export function candidateClient(
   client: MountContext['client'],
   effect: MountContext['effect'],

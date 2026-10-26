@@ -8,9 +8,7 @@ const DISMISSED_VERSION_KEY = 'orca:appUpdate:dismissedVersion'
 export type KnownAppUpdate = { readonly version: string; readonly url: string }
 
 export type AppUpdatePreferences = {
-  /** Last successful check; failures never move it. */
   readonly lastCheckedAt: number | null
-  /** Newest installable release that check saw, or null when it saw none. */
   readonly latest: KnownAppUpdate | null
   readonly dismissedVersion: string | null
 }
@@ -23,7 +21,7 @@ export const EMPTY_APP_UPDATE_PREFERENCES: AppUpdatePreferences = {
 
 const knownAppUpdateSchema = z.object({ version: z.string(), url: z.string() })
 
-// A corrupt record loses only itself, never the check time or the dismissal stored beside it.
+// Discard only the corrupt field; preserve adjacent check and dismissal state.
 function parseLatest(raw: string | null): KnownAppUpdate | null {
   try {
     const parsed = raw ? knownAppUpdateSchema.safeParse(JSON.parse(raw)) : null

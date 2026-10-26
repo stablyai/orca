@@ -85,8 +85,7 @@ export function AutoRenameBranchFromWorkSetting({
 
   useEffect(() => {
     setBranchNameTemplateDraft(persistedBranchNameTemplateRef.current)
-    // Why: Settings owns the discard confirmation, but the draft lives here so
-    // the row can keep its prompt-specific save/discard affordances.
+    // Settings owns discard confirmation; keep the draft here for row-specific save/discard controls.
   }, [branchPromptDiscardSignal])
 
   useEffect(() => {
@@ -99,8 +98,7 @@ export function AutoRenameBranchFromWorkSetting({
     if (node !== null) {
       return
     }
-    // Why: Settings owns the global unsaved-branch-prompt guard; reset it
-    // when this setting detaches without a passive cleanup-only Effect.
+    // Clear Settings’ global dirty guard when this row detaches.
     onBranchPromptDirtyChangeRef.current?.(false)
   }, [])
 

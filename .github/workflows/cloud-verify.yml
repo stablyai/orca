@@ -80,8 +80,7 @@ jobs:
 
       - wait: history-scan
 
-  # Compiles the workspace. No Postgres service: nothing here reaches a
-  # database, and the service container costs ~13s of startup.
+  # Compile without Postgres: no database access occurs here, avoiding ~13s service startup.
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: blacksmith-4vcpu-ubuntu-2204
@@ -167,9 +166,7 @@ jobs:
           path: cloud/security-reports/
           retention-days: 30
 
-  # Runs in parallel with build. `pnpm test` compiles the workspace
-  # packages it needs through pretest hooks, so it does not depend on
-  # `pnpm build` having run.
+  # Run tests beside build; pretest hooks compile their own workspace dependencies.
   test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: blacksmith-4vcpu-ubuntu-2204

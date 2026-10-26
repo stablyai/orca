@@ -163,7 +163,17 @@ it.each([100, 1000])(
       submissionCopies: 1,
       submissionEntries: n + 1
     }
-    expect(failure).toEqual({ publication: oneDisplay, failure: oneDisplay })
+    expect(failure).toEqual({
+      publication: oneDisplay,
+      failure: {
+        displays: 1,
+        cardVisits: 0,
+        itemCopies: 0,
+        itemEntries: 0,
+        submissionCopies: 0,
+        submissionEntries: 0
+      }
+    })
     expect(r.mail()).toHaveLength(1)
     expect(r.mail()[0]?.body).toBe(
       [

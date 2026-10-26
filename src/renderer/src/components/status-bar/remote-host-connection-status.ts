@@ -120,9 +120,6 @@ export function runtimeHostConnectionDetail(
       { value0: remoteControl.lastClose.reason }
     )
   }
-  // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
-  // live browser screencast shows as "N streams"). They're noise in a user-facing
-  // status row and make the line truncate — only surface actionable detail
-  // (errors, close reasons, reconnect attempts) above.
+  // Hide internal RPC counts; only errors, close reasons and reconnect attempts help users act.
   return undefined
 }

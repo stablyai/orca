@@ -1,5 +1,7 @@
-// Opening starts no provider. Settle crash-stranded work before readers: handed-over sends become
-// unknown, provably unhanded personal text becomes cards. History reconciliation later requires a lease.
+// Open and settle the crash boundary before any reader, command or child: damaged journals fail;
+// handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
+// other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
+// Settlement needs no lease and starts no provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -90,7 +92,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
-    // Provider history may resolve uncertainty only after winning the lease.
+    // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
     deps.logger.warn('marking pending sends unknown on open failed', {

@@ -1,4 +1,3 @@
-/** The supervisor's dependencies and its per-distro state. */
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'

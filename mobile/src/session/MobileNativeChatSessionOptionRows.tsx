@@ -1,6 +1,3 @@
-// The pill and choice-row primitives the session-option card is built from, kept
-// beside it so the card file stays about layout and apply wiring.
-
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -11,12 +8,10 @@ import {
   type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
-/** Muted one-liner above a group — dispatch state, or why a row is locked. */
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   return <Text style={styles.caption}>{children}</Text>
 }
 
-/** The composer's model pill: the model, then its options muted, with a shield for full access. */
 export function ModelPill({
   primary,
   secondary,
@@ -125,7 +120,6 @@ function ToggleRow({
 }: {
   label: string
   checked: boolean
-  /** Where the rendered value came from, or null once something picked it. */
   marker: SessionOptionValueMarker | null
   disabled: boolean
   grouped: boolean
@@ -190,7 +184,6 @@ export function SessionOptionSummaryRow({
   valueColor?: string
   disabled: boolean
   divided: boolean
-  /** Absent for a value with no choice to make: the row reads as text, with no page behind it. */
   onPress?: () => void
 }): React.JSX.Element {
   if (!onPress) {
@@ -245,7 +238,6 @@ export function DescriptorRows({
   grouped?: boolean
   onSetOption: (value: SessionOptionValue) => void
   onInvokeAction: () => void
-  /** A choice whose name reads in a colour of its own, as Full access does. */
   choiceLabelColor?: (value: string) => string | undefined
 }): React.JSX.Element {
   const locked = disabled || !descriptor.settable
@@ -271,9 +263,7 @@ export function DescriptorRows({
       />
     )
   }
-  // One switch, not an On/Off pair: the option is binary. The value always
-  // renders; the marker is what keeps an unpicked one from reading as confirmed,
-  // since the switch itself cannot say "nobody said".
+  // An unknown baseline still renders a switch; the source marker prevents implying the value was confirmed.
   if (descriptor.kind.type === 'boolean') {
     return (
       <ToggleRow

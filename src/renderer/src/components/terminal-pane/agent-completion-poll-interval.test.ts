@@ -15,11 +15,9 @@ describe('nextCadenceInspectionDelayMs', () => {
     })
 
   it('walks panes that scheduled at different moments onto one shared deadline', () => {
-    // Why this matters: the inspection queue collapses shared-observation tasks enqueued in the
-    // same tick onto one process-table capture, so a shared deadline is one `ps` for all panes.
+    // Same-tick shared inspections collapse into one host capture, so panes must converge on common deadlines.
     const clocks = [0, 137, 999, 1_501].map((offset) => 1_700_000_000_000 + offset)
-    // Each pane may only be pulled forward by the snapshot TTL per step, so convergence takes
-    // at most IDLE_MS / TTL steps.
+    // Bound each pull-forward by snapshot TTL, allowing at most IDLE_MS / TTL steps to align.
     for (let step = 0; step < IDLE_MS / PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS; step += 1) {
       for (let pane = 0; pane < clocks.length; pane += 1) {
         clocks[pane] += alignedDelay(clocks[pane]!)

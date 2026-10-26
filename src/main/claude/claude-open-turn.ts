@@ -204,7 +204,7 @@ export class ClaudeOpenTurn {
     }
     writeAgentJournalTurnRow(this.deps.sink, { identity: item.identity }, write, {
       publish: false,
-      options: item.options
+      options: { ...item.options, lifecycle: true }
     })
     // Separate keys preserve a queued start publication when the end arrives.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })

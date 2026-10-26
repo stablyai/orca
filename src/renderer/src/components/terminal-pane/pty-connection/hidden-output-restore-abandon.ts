@@ -4,15 +4,12 @@ import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): void {
-  // Why: a loss finalized while hidden swallows the banner and zeroes recovery, so no reveal
-  // can reach the gap. Stay armed; reveal spends one fresh snapshot (attempt counters are kept),
-  // which heals a recovered source or abandons in the foreground where the banner lands.
+  // Background abandonment would swallow loss disclosure; retain recovery and spent counters so reveal tries once, then heals or banners visibly.
   session.deferHiddenOutputRestoreLossToReveal = function (): boolean {
     if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       return false
     }
-    // A deadline armed while foreground fires after reveal under hidden-timer throttling and
-    // would bump the generation, discarding the reveal's fresh snapshot mid-flight.
+    // Cancel the throttled old deadline before it can invalidate reveal’s fresh snapshot.
     session.clearHiddenOutputRestoreForegroundDeadlineTimer()
     session.hiddenOutputRestoreNeeded = true
     return true
@@ -20,7 +17,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
 
   session.abandonHiddenOutputRestoreAndDrainPendingForeground = function (
     expectedPtyId: string,
-    opts: { quiet?: boolean; rearmRemote?: boolean } = {}
+    opts: { quiet?: boolean; rearmRemote?: boolean; preserveReplayState?: boolean } = {}
   ): void {
     if (
       session.transport.getPtyId() !== expectedPtyId ||
@@ -67,16 +64,12 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
 
     // Why quiet: flood cuts abandon deliberately and repaint post-flood, so the "restore unavailable" warning would be noise the repaint wipes.
     if (!opts.quiet && !rearmedRemoteRestore) {
-      // Why: this abandon declares the bytes unrecoverable, so a repaint armed by earlier live
-      // backpressure must not outlive it — it would re-open recovery and banner a second time.
+      // Final loss disclosure cancels earlier backpressure repaint so it cannot reopen recovery and duplicate the banner.
       session.clearHiddenOutputRestoreFloodRepaintTimer()
       session.writeRestoreUnavailableWarning()
     }
-    // Why an else: the branch above already grounds the gap inside
-    // session.writeRestoreUnavailableWarning, and the remote re-arm grounds it in
-    // session.rearmRemoteHiddenOutputRestoreInsteadOfWarning. Only the quiet
-    // flood-abandon reaches neither, and it still drains chunks below.
-    else if (!rearmedRemoteRestore) {
+    // Intact replay tails must reach queued live bytes without a parser or rendition reset.
+    else if (!rearmedRemoteRestore && !opts.preserveReplayState) {
       session.writeAbandonedRestoreGap()
     }
     if (hadPendingOverflow) {

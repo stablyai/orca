@@ -1,8 +1,9 @@
+import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -87,7 +88,9 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = journal.snapshot().items.filter((item) => ended(journal.itemFence(item.itemId)))
+  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+    ended(journal.itemFence(item.itemId))
+  )
   const dispatches =
     below === undefined
       ? []

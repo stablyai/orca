@@ -34,8 +34,7 @@ function phrasePlacement(field: PaletteIndexedField, normalizedQuery: string): n
   if (text.startsWith(normalizedQuery)) {
     return 0
   }
-  // Merge the ordered occurrence and word-start streams: occurrences only count at word
-  // starts, so each side advances monotonically and never rescans the other.
+  // Merge monotonic occurrence/word-start streams so neither side rescans the other.
   let index = text.indexOf(normalizedQuery, 1)
   let wordIndex = 0
   while (index !== -1) {

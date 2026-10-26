@@ -53,7 +53,6 @@ describe.each([
   ['picture', 'Modal', () => overlays!.openImage({ uri: 'file:///a.jpg', label: 'a photo' })],
   ['actions sheet', 'MessageActionsSheet', () => overlays!.openActions(message)]
 ])("a row's %s", (_, type, open) => {
-  /** Opens it in the first conversation, then moves through the rest; one shown flag each. */
   function shownAcross(conversations: MobileNativeChatConversation[]): boolean[] {
     const [first, ...rest] = conversations
     act(() => {

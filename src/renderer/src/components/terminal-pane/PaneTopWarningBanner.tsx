@@ -85,8 +85,7 @@ export function PaneTopWarningBanner({
       // Why pr-16: the pane's own split/close controls float over its top-right corner.
       className="pane-top-banner @container border-b border-status-warning-border bg-status-warning-background py-2 pr-16 pl-3 text-xs"
     >
-      {/* Why a container query: split panes are narrow, so actions drop below the text there.
-          Narrow and wide variants never share a property, so an unlayered utility cannot override them. */}
+      {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
           <TriangleAlert

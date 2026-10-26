@@ -1,5 +1,4 @@
-// The scrub gate is the only thing standing between a live agent transcript and a
-// committed account identifier, so it is pinned on the shapes those transcripts carry.
+// Pin identifier shapes from live agent transcripts so the commit-time scrub gate cannot leak account IDs.
 import { readdirSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -68,8 +67,7 @@ describe('pty transcript secret scan', () => {
 
 describe('redaction', () => {
   it('replaces every finding with the same number of characters', () => {
-    // Why length matters: the fixture's value is its exact wrapping. A shorter
-    // replacement reflows the screen and invalidates the capture.
+    // Same-length redaction preserves captured wrapping; shorter replacements invalidate evidence.
     const text = 'Antigravity CLI 1.1.17\njin.woo@acme.dev (Antigravity Business)\n> '
     const { text: redacted, redacted: count } = redactTranscript(text)
     expect(count).toBe(1)
@@ -90,8 +88,7 @@ describe('redaction', () => {
 })
 
 describe('committed transcripts', () => {
-  // Why in CI and not just in the recorder: a transcript is committed once and read forever.
-  // The capture-time warning is skippable; this is not.
+  // Enforce in CI: recorder warnings can be skipped, while committed transcripts persist.
   const fixtureDir = join(import.meta.dirname, '..', '..', 'src', 'main', 'runtime', '__fixtures__')
   const transcripts = readdirSync(fixtureDir).filter((entry) => entry.endsWith('.txt'))
 

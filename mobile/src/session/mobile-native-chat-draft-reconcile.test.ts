@@ -41,6 +41,9 @@ describe('mobile native chat image preview reconciliation', () => {
       deadline: null
     }
 
+    expect(
+      findLandedImagePreviewEchoes(messages, [{ ...preview, baselineTailMessageId: 'prompt' }])
+    ).toEqual([])
     expect(findLandedUnconfirmedSends(messages, [unconfirmed])).toEqual([unconfirmed])
     expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
       { pendingId: 'pending', messageId: 'prompt', images: ['file:///a.jpg'] }
@@ -48,10 +51,7 @@ describe('mobile native chat image preview reconciliation', () => {
   })
 
   it('binds an image echo to the row it was glued into with a following send', () => {
-    // Regression: a send issued while the agent was mid-turn glues onto the input line
-    // with the send beside it, so the landed row's text is the concatenation. Demanding
-    // the whole row equal this echo left it unbound — the phone-local photo never
-    // reached the authoritative row and the echo could never be retired.
+    // Adjacent TUI sends can land as concatenated text; image-preview retirement must still recognize that authoritative echo.
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look at this[Image #1] is it still working?')

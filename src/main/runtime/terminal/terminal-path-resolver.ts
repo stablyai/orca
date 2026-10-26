@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { provenancePathCandidate, resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
 
@@ -52,7 +52,7 @@ export class RuntimeTerminalPathResolver {
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
     const connectionId = route.kind === 'ssh' ? route.connectionId : undefined
-    // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
+    // Mobile may connect after OSC 7; use runtime's latest terminal cwd for taps.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
     const terminalCwd = normalizedTerminalHandle
@@ -71,7 +71,7 @@ export class RuntimeTerminalPathResolver {
       isDirectory: false
     }
 
-    // Why: SSH/WSL homes are unknown here; native-chat grants must not expand their ~/… paths against the local host home.
+    // Never expand SSH/WSL home-relative grants using this machine's home.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
     if (isTilde && (connectionId || (nativeChatContext && parseWslPath(worktree.path)))) {
       return empty
@@ -85,16 +85,13 @@ export class RuntimeTerminalPathResolver {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
-    // Why: clients that predate crossWorkspace reuse their own worktree id for the
-    // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
+    // Cross-workspace retargeting is opt-in; older clients reuse their original workspace in files.open.
     const knownWorkspaceTarget =
       crossWorkspace && relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, target.executionHostId)
         : null
     const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
-    // Why: the owner's host replaces this target's outright. Coalescing an optional connection
-    // instead let a sibling workspace resolved as `local` inherit this worktree's SSH target and
-    // stat a local path on the remote host.
+    // Replace the full route with the path owner's; optional connection coalescing could stat a sibling local path on SSH.
     const ownedRoute = runtimeFileRouteForTarget(knownWorkspaceTarget ?? target)
     const ownedRelativePath = knownWorkspaceTarget?.relativePath ?? relativePath
 

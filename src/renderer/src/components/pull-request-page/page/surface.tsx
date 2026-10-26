@@ -45,7 +45,6 @@ export default function PullRequestPage({
   onReviewRequestsChange,
   onClose
 }: PullRequestPageProps): React.JSX.Element {
-  // Why: this component is page-only — the sheet variant lives in GitHubItemDialog.
   const workItemId = workItem?.id
   const [tab, setTab] = useState(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
@@ -180,7 +179,6 @@ export default function PullRequestPage({
     }
   }, [workItem])
 
-  // Why: icon must track resolved state so a merged PR reads as merged, not as the open-PR glyph.
   const Icon =
     workItem?.type === 'pr'
       ? localState === 'merged'
@@ -210,8 +208,7 @@ export default function PullRequestPage({
     ) {
       return
     }
-    // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
-    // Why: keyed on identity, not the whole item, so replacing the same PR object doesn't repush unchanged reviewers.
+    // Propagate fresher reviewer metadata to Tasks; identity keys prevent unchanged same-PR objects from repushing it.
     onReviewRequestsChange?.(
       { id: workItemId, repoId: workItemRepoId },
       details.item.reviewRequests
@@ -238,7 +235,6 @@ export default function PullRequestPage({
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
       if (node === null) {
-        // Why: clear the copied-state timer on ref detach instead of via a passive cleanup Effect.
         clearLinkCopiedResetTimer()
       }
     },

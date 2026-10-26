@@ -95,15 +95,7 @@ export type TaskPageUnresolvedSourceRepo = {
   label: string
 }
 
-/**
- * Select the fetched repos that resolved neither an issue nor a PR GitHub source.
- *
- * Why: since #9660 an unresolvable source returns an empty null-source envelope
- * instead of an unscoped search. That empty is otherwise indistinguishable from a
- * genuine zero-result query, so surface these repos to the user. The three states
- * are told apart purely by `sources`: present-but-both-null = unresolved (this
- * function), a non-null side = resolved (genuine zero), `null` = not yet fetched.
- */
+/** Surface fetched both-null sources as unresolved; null means unfetched, and a non-null source can have genuine zero results. */
 export function selectTaskPageUnresolvedSourceRepos(
   repos: readonly { id: string; displayName?: string; path: string }[],
   sourceState: readonly TaskPageRepoSourceState[]

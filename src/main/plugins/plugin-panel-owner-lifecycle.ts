@@ -9,8 +9,7 @@ type OwnerState = {
 
 const ownerStates = new WeakMap<PluginPanelOwnerSender, OwnerState>()
 
-/** Deduplicates WebContents lifecycle hooks and returns a generation lease so
- *  an async panel load cannot publish a session after its renderer died. */
+/** Generation leases prevent async panel loads publishing after renderer death; deduplicate lifecycle hooks. */
 export function bindPluginPanelOwnerLifecycle(
   sender: PluginPanelOwnerSender,
   revoke: () => void

@@ -1,16 +1,11 @@
-/**
- * The same repo id is allowed on two execution hosts (persistence.ts `removeProjectForHost`).
- * `repo.rm` resolves a *row*, so the deletion it performs must be scoped to that row's host,
- * never the sibling host's registration.
- * A `path:`/`name:` selector resolves unambiguously even when the id is duplicated, so this
- * is reachable — and since #11994 every paired device now learns about it immediately.
- */
+/** Same repo ids may exist on multiple hosts; repo.rm resolves one row and must delete only that host registration, including unambiguous path/name selectors (#11994). */
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { findRepoRowForHostScopedWrite } from '../persistence/tracking-repos/repo-update-operations'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { RepoHostTarget } from '../../shared/repo-host-identity'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerRuntimeRemoveProjectHostScopeTests(): void {
   function makeRepos(): Repo[] {
@@ -22,7 +17,7 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
         badgeColor: '#000',
         addedAt: 1,
         executionHostId: 'local'
-      } as Repo,
+      },
       {
         id: 'dup',
         path: '/remote/dup',
@@ -30,7 +25,7 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
         badgeColor: '#000',
         addedAt: 2,
         connectionId: 'ssh-1'
-      } as Repo
+      }
     ]
   }
 
@@ -48,26 +43,34 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
         }
       }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store stub covers every read and write repo.rm and repo.update drive.
-    const runtime = new OrcaRuntimeService({
-      getRepos: () => [...repos],
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) ?? null,
-      getAllWorktreeMeta: () => ({}),
-      getWorktreeMeta: () => null,
-      setWorktreeMeta: vi.fn(),
-      removeWorktreeMeta: vi.fn(),
-      getGitHubCache: () => null,
-      // Same row lookup the real store's host-scoped write uses.
-      updateRepo: (target: RepoHostTarget, updates: Partial<Repo>) => {
-        const row = findRepoRowForHostScopedWrite(repos, target.id, getRepoExecutionHostId(target))
-        return row ? Object.assign(row, updates) : null
-      },
-      moveProjectToGroup: (target: RepoHostTarget, groupId: string | null) => {
-        const row = findRepoRowForHostScopedWrite(repos, target.id, getRepoExecutionHostId(target))
-        return row ? Object.assign(row, { projectGroupId: groupId }) : null
-      },
-      removeProjectForHost
-    } as never)
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getRepos: () => [...repos],
+        getRepo: (id: string) => repos.find((repo) => repo.id === id),
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        setWorktreeMeta: vi.fn(),
+        removeWorktreeMeta: vi.fn(),
+        // Same row lookup the real store's host-scoped write uses.
+        updateRepo: (target: RepoHostTarget, updates: Partial<Repo>) => {
+          const row = findRepoRowForHostScopedWrite(
+            repos,
+            target.id,
+            getRepoExecutionHostId(target)
+          )
+          return row ? Object.assign(row, updates) : null
+        },
+        moveProjectToGroup: (target: RepoHostTarget, groupId: string | null) => {
+          const row = findRepoRowForHostScopedWrite(
+            repos,
+            target.id,
+            getRepoExecutionHostId(target)
+          )
+          return row ? Object.assign(row, { projectGroupId: groupId }) : null
+        },
+        removeProjectForHost
+      })
+    )
     return { runtime, repos, removeProjectForHost }
   }
 

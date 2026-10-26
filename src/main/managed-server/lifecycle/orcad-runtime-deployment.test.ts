@@ -62,7 +62,8 @@ vi.mock('../../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
-vi.mock('../activation/orcad-activation-fence-hold', () => ({
+vi.mock('../activation/orcad-activation-fence-hold', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   orcadActivationFenceRefusal: mocks.fenceRefusal
 }))
 vi.mock('../install/orcad-remote-build-hash', () => ({
@@ -695,6 +696,7 @@ describe('getManagedOrcadRuntimeStatus', () => {
       environmentId: environment?.id,
       sshTargetId: 'ssh-1',
       activeVersion: VERSION,
+      activeAppVersion: null,
       previousVersion: null,
       activatedAt: 'now',
       rollbackAvailable: false,
@@ -706,7 +708,8 @@ describe('getManagedOrcadRuntimeStatus', () => {
       },
       terminals: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 39 },
       migration: null,
-      deferredUpdate: null
+      deferredUpdate: null,
+      availableUpdate: null
     })
     expect(mocks.recover).toHaveBeenCalledTimes(1)
   })

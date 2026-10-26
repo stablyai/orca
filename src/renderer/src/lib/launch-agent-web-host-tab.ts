@@ -16,12 +16,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './structured-agent-session-launch-admission'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 
-/**
- * Launch an agent terminal on the web runtime host instead of a local tab.
- *
- * Why: paired web tabs are host-owned, so this path never creates a local tab
- * (callers return tabId: null).
- */
+/** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
@@ -129,8 +124,7 @@ export function launchAgentInWebHostTab(args: {
     }).then(handleCreation)
   }
   if (hasPrompt && promptDelivery === 'draft') {
-    // Why: the draft rode in on the launch command, so no paste runs and
-    // nothing else seeds the chat-composer copy for this host class.
+    // Native launch-command prefill skips paste, so explicitly seed this host class’s chat composer.
     return createWebRuntimeAgentSessionTerminalWithLaunchDraft({
       ...launch,
       agent,

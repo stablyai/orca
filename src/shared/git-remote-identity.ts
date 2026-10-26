@@ -27,10 +27,7 @@ export function splitGitRemoteKey(
   }
 }
 
-/**
- * Compare a probed remote against a pasted URL. A host-only mismatch is `'unknown'` when the
- * probed host is an SSH alias, since `git remote -v` reports it unexpanded.
- */
+/** Compare pasted/probed remote identities; a host-only mismatch is unknown when the probed host is an unexpanded SSH alias. */
 export function matchGitRemoteKeyParts(
   identity: GitRemoteKeyParts,
   target: GitRemoteKeyParts

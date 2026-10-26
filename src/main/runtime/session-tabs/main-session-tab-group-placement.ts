@@ -1,5 +1,4 @@
-// Layout-owner builds: where rows one side lists and main's layout does not go in main's groups.
-// Both the row writer's reorder and A2's merge place them the same way.
+// Place side-only rows consistently in main groups for both row-writer reorder and projection merge.
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
@@ -31,11 +30,7 @@ export function withWindowOnlyIds(
   return order
 }
 
-/**
- * Main's groups, each with the side-only order ids (orderIdOf) the side's group of the same id
- * lists, where they stood there. Ids in a group main lacks, or in no group (in `sideOrder`), come
- * back as `stray` for the caller's active group.
- */
+/** Insert side-only ids where they stood in matching main groups; return ungrouped/unknown-group ids as stray for the active group. */
 export function placeInMainGroups(
   mainGroups: readonly Group[],
   sideGroups: readonly Group[],

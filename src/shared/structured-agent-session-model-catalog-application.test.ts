@@ -134,7 +134,6 @@ describe('structured option state from the host model catalog', () => {
       expect(settled.catalogSource).toBe('builtin')
       expect(settled.catalog).toBe(seeded.catalog)
       const hosted = applyStructuredAgentSessionModelCatalog(seeded, SEED, HOST_CATALOG, LAUNCH)
-      // The host list stays.
       expect(applyStructuredAgentSessionModelCatalog(hosted, SEED, answer, LAUNCH)).toBe(hosted)
     }
   })

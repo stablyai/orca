@@ -3,29 +3,17 @@ export type PosixStdoutFence = {
   command: string
   /** Payload the command wrote, or null when the fence never appeared. */
   readStdout: (stdout: string) => string | null
-  // Why exposed: binary reads (`git show` blob content) must slice bytes rather
-  // than decode to a string first, and this module is bundled for the renderer,
-  // so it cannot reference Buffer itself.
+  // Expose raw markers for binary git-show slicing; renderer bundles cannot import Buffer.
   beginMarker: string
   endMarker: string
 }
 
-// Why: the fence has to be absent from both the rc output ahead of it and the
-// payload behind it. A per-call nonce is the only spelling that guarantees
-// both -- `cat`-ing a file that happens to quote a fixed marker would otherwise
-// truncate the file. Not security-sensitive, so Math.random is sufficient.
+// Nonce markers avoid collisions in rc output and payloads (e.g. files quoting a fixed marker). Not security-sensitive; Math.random suffices.
 function nextPosixStdoutFenceNonce(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
-/**
- * Fence `command`'s stdout so startup-file output ahead of it is never read as data.
- *
- * Why: a login shell (WSL's, or the one sshd runs before any exec) reads the
- * user's rc files, and anything they write to stdout -- a banner, an `echo`,
- * a bare terminal-title escape -- lands in the same captured stream as the
- * payload. `label` only keeps markers from different transports distinguishable.
- */
+/** Fence captured stdout against login rc banners, echoes and title escapes from WSL/SSH shells; label distinguishes transports. */
 export function buildPosixStdoutFence(
   command: string,
   label: string,
@@ -45,11 +33,7 @@ export function buildPosixStdoutFence(
   }
 }
 
-/**
- * Same fence on one line that sh, bash, zsh, fish and csh all parse, for a payload run by the
- * user's own login shell. It cannot carry the payload's exit status (fish and csh have no `$?`),
- * so the command always exits with the closing printf's status.
- */
+/** One-line fence parsed by sh/bash/zsh/fish/csh. Fish/csh lack $? so the closing printf, not the payload, determines exit status. */
 export function buildAnyShellStdoutFence(
   command: string,
   label: string,
@@ -77,21 +61,18 @@ function fenceMarkers(label: string, nonce: string): FenceMarkers {
   return {
     beginMarker: begin,
     endMarker: end,
-    // Why split: a whole marker in the script would reach stdout whenever the payload or the
-    // shell prints the command text (`ps -o args`, `set -v`) and be read as the fence.
+    // Split markers so command echoes from ps/set -v cannot be mistaken for emitted fences.
     printBegin: [beginPrefix, `${nonce}__`],
     printEnd: [endPrefix, `${nonce}__`],
     readStdout: (stdout) => {
-      // Why lastIndexOf: the nonce keeps rc output and payloads from forming a marker, so the
-      // last one is the fence itself even if a shell somehow repeats it.
+      // A nonce excludes payload/rc collisions; lastIndexOf handles repeated shell markers.
       const beginIndex = stdout.lastIndexOf(begin)
       if (beginIndex === -1) {
         return null
       }
       const payloadStart = beginIndex + begin.length
       const endIndex = stdout.indexOf(end, payloadStart)
-      // A payload that exited early never prints the closing fence; the rest of
-      // the stream is still its output, and login shells run exit hooks after it.
+      // Early exit skips the closing fence; retain remaining output, including login-shell exit hooks.
       return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
     }
   }

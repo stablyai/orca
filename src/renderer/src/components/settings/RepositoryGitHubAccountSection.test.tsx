@@ -161,7 +161,6 @@ async function render(repo: Repo, updateRepo: UpdateRepo = echoingUpdateRepo()):
       })
     )
   })
-  // Flush the inventory load kicked off by the mount effect.
   await act(async () => {})
 }
 

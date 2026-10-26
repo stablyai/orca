@@ -1,5 +1,4 @@
-// `orca project setup-delete` used to drop a repo-backed project even while its terminals were
-// running and its workspaces had saved details, orphaning both with no warning.
+// Setup deletion must not orphan live project terminals or saved workspace metadata.
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'

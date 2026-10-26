@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -54,6 +54,7 @@ import {
   noUpstreamError,
   workingEvent
 } from './first-work-branch-rename-test-harness'
+import { FIRST_WORK_GENERATION_RETRY_DELAYS_MS } from './first-work-generation-backoff'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const REMOTE_REPO_BASE: Repo = {
@@ -68,10 +69,21 @@ function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}) {
   return makeBranchRenameDeps(vi.fn, overrides)
 }
 
+let clockMs = 0
+function elapseGenerationBackoff(): void {
+  clockMs += Math.max(...FIRST_WORK_GENERATION_RETRY_DELAYS_MS)
+}
+
 describe('maybeAutoRenameBranchOnFirstWork', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     resetFirstWorkBranchRenameState()
     vi.clearAllMocks()
+    clockMs = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => clockMs)
     resolveLocalGitUsernameMock.mockResolvedValue('you')
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)
     prepareLocalEnvMock.mockResolvedValue({ ok: true })
@@ -100,9 +112,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       const items: AgentJournalRenderItem[] = []
       // Advance journal sequence so projection caching cannot hide a rename event.
       let sequence = 0
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        item: ((itemId) =>
+          items.find((item) => item.itemId === itemId) ??
+          null) satisfies AgentSessionJournal['item'],
         stopMarks: { latest: () => null, revision: () => 0 },
         lastActivityAt: () => 1,
         cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
@@ -169,6 +184,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       }
       expect(observe).toHaveBeenCalledTimes(callsBeforeOutput)
 
+      elapseGenerationBackoff()
       items.pop()
       feed.publish('session', journal)
       items.push(turn)
@@ -192,24 +208,34 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
+      },
+      {
+        itemId: 'turn-1',
+        sequence: 2,
+        revision: 1,
+        observedAt: 1,
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
     const journal = {
       lastActivityAt: () => 1,
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
-      snapshot: () => ({
-        items: [
-          { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
-          {
-            body: {
-              kind: 'status',
-              text: 'Working',
-              turnLifecycle: { turnId: 'turn-1', state: 'running' }
-            }
-          }
-        ],
-        submissions: []
-      }),
+      snapshot: () => ({ items, submissions: [] }),
+      item: ((itemId) =>
+        items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
       itemFence: () => undefined,
       wroteBeforeOpen: () => false,
       runningTurn: () => null
@@ -476,6 +502,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(onRenamed).not.toHaveBeenCalled()
 
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
@@ -533,8 +560,30 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: true })
     )
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
+  })
+
+  it('backs off a generation that keeps hitting a usage limit, then recovers (#9705)', async () => {
+    const error = "You've hit your session limit · resets 2pm"
+    generateBranchNameMock.mockResolvedValue({ success: false, error })
+    const { deps, onRenamed, setRenameError } = makeDeps()
+    for (let minute = 0; minute < 60; minute++) {
+      clockMs = minute * 60_000
+      for (let event = 0; event < 5; event++) {
+        await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      }
+    }
+    // 300 working events over an hour; attempts only at minutes 0, 1 (+30s), 3 (+2m) and 33 (+30m).
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(4)
+    expect(onRenamed).not.toHaveBeenCalled()
+    expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, error, null)
+
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'fix-auth' })
+    clockMs = 63 * 60_000
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
   it('does not raise the failure badge when generation is canceled by the user', async () => {

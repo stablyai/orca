@@ -17,7 +17,6 @@ describe('scriptDeclaresPosixShell', () => {
   })
 
   it('rejects scripts with no interpreter line', () => {
-    // Regression: batch-syntax setup scripts must stay on the cmd runner.
     expect(scriptDeclaresPosixShell('copy .env.example .env\nxcopy /E assets dist')).toBe(false)
     expect(scriptDeclaresPosixShell('')).toBe(false)
     expect(scriptDeclaresPosixShell('pnpm install\n#!/usr/bin/env bash')).toBe(false)
@@ -37,8 +36,7 @@ describe('scriptDeclaresPosixShell', () => {
 
 describe('parseSetupScriptShebang', () => {
   it('keeps the interpreter flags a script declares', () => {
-    // Regression: the runner is launched as `bash <path>`, so flags survive only if they are
-    // parsed out here and replayed with `set` — otherwise `pipefail` is silently lost.
+    // Launching bash path ignores shebang flags unless replayed with set; otherwise pipefail is lost.
     expect(parseSetupScriptShebang('#!/usr/bin/env -S bash -euo pipefail\nmake')).toEqual({
       interpreter: 'bash',
       shellOptions: ['-euo', 'pipefail']
@@ -54,8 +52,7 @@ describe('parseSetupScriptShebang', () => {
   })
 
   it('ignores interpreter arguments that `set` cannot apply', () => {
-    // Regression: `set` rejects invocation-only flags with exit 2, and the runner's `set -e`
-    // turns that into an aborted setup before its first line runs.
+    // Invocation-only flags make set exit 2; runner set -e would abort before setup starts.
     expect(parseSetupScriptShebang('#!/bin/bash --norc\nmake')?.shellOptions).toEqual([])
     expect(parseSetupScriptShebang('#!/bin/bash -l\nmake')?.shellOptions).toEqual([])
     expect(parseSetupScriptShebang('#!/bin/bash -s\nmake')?.shellOptions).toEqual([])

@@ -79,6 +79,8 @@ export function createViewportGuestFactory(
       id,
       isDestroyed: vi.fn(() => false),
       isCrashed: vi.fn(() => rendererCrashed),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => committedUrl),
       getUserAgent: vi.fn(() => currentUa),

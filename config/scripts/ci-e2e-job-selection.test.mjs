@@ -5,6 +5,7 @@ import { runProcess } from '@orca/process-host'
 import {
   classifyE2eJobs,
   DEDICATED_E2E_SPECS,
+  generalE2eShards,
   MANAGED_SSH_E2E_SPEC_PREFIX,
   NATIVE_IME_E2E_SPEC,
   NODE_NETWORK_E2E_SPEC,
@@ -64,6 +65,25 @@ it.each([
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const prWorkflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const classify = (specs) => classifyE2eJobs(JSON.stringify(specs))
+
+it('scales broad general selections without charging extra VMs for duplicate or dedicated specs', () => {
+  const specs = Array.from({ length: 51 }, (_, index) => `tests/e2e/example-${index}.spec.ts`)
+  expect(generalE2eShards(JSON.stringify(specs.slice(0, 25)))).toEqual(['1/1'])
+  expect(generalE2eShards(JSON.stringify([...specs, ...specs, ...DEDICATED_E2E_SPECS]))).toEqual([
+    '1/3',
+    '2/3',
+    '3/3'
+  ])
+  expect(generalE2eShards(JSON.stringify(['tests/e2e/ssh-orcad-example.spec.ts']))).toEqual(['1/1'])
+  expect(generalE2eShards('')).toEqual(['1/1'])
+  expect(generalE2eShards('[]')).toEqual(['1/1'])
+  expect(
+    generalE2eShards(JSON.stringify(Array.from({ length: 400 }, (_, i) => `${i}.spec.ts`)))
+  ).toHaveLength(14)
+  for (const invalid of ['malformed', 'null', '{}', '[null]', '[""]']) {
+    expect(() => generalE2eShards(invalid)).toThrow()
+  }
+})
 
 function expectManagedSshLane(spec) {
   expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })

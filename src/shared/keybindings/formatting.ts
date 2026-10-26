@@ -9,7 +9,12 @@ import type {
 } from './types'
 import { KEYBINDING_DEFINITIONS, isDigitIndexActionId, isKeybindingActionId } from './definitions'
 import { parseKeybinding } from './parser'
-import { getEffectiveKeybindingsForAction, getEffectiveKeybindingsForDefinition } from './effective'
+import {
+  getEffectiveKeybindingsForAction,
+  getEffectiveKeybindingsForDefinition,
+  isKeybindingInterceptedBeforeBrowserChords,
+  isKeybindingInterceptedByMainProcess
+} from './effective'
 import { isDoubleTapBinding } from './normalization'
 import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching'
 
@@ -154,6 +159,7 @@ export function findKeybindingConflictsForDefinitions(
       customizedActions.add(actionId)
     }
   }
+  const scopes = new Set(definitions.map((definition) => definition.scope))
   for (const definition of definitions) {
     if (ignoredActionIds.has(definition.id)) {
       continue
@@ -163,6 +169,17 @@ export function findKeybindingConflictsForDefinitions(
       if (definition.conflictGroup) {
         // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
         groups.add(definition.scope)
+      }
+      // Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
+      if (
+        options.includeMainProcessInterception &&
+        isKeybindingInterceptedByMainProcess(definition)
+      ) {
+        for (const scope of scopes) {
+          if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
+            groups.add(scope)
+          }
+        }
       }
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
@@ -183,7 +200,16 @@ export function findKeybindingConflictsForDefinitions(
 
   const seenConflictKeys = new Set<string>()
   return Array.from(owners.values())
-    .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
+    .filter(
+      ({ actionIds }) =>
+        actionIds.size > 1 &&
+        // Why: the two digit ranges may share a modifier on purpose (see tab.selectByIndex's definition).
+        !(
+          options.includeMainProcessInterception &&
+          Array.from(actionIds).every(isDigitIndexActionId)
+        ) &&
+        setIntersects(actionIds, customizedActions)
+    )
     .map(({ binding, actionIds }) => ({
       binding,
       actionIds: Array.from(actionIds)

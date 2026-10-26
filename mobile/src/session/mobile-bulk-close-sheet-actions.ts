@@ -2,7 +2,6 @@ import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 
-/** Session-route state the bulk close orchestration reads and drives. */
 type BulkCloseSheetDeps = {
   sessionTabsRef: { readonly current: readonly MobileSessionTab[] }
   markdownDocs: ReadonlyMap<string, MarkdownDocState>
@@ -11,12 +10,7 @@ type BulkCloseSheetDeps = {
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>
 }
 
-/**
- * Builds the long-press bulk-close entries (Close Others) shared
- * by every session tab sheet. Lives outside the session route to keep the
- * orchestration out of its max-lines budget; anchors are passed by tab id so
- * sheets never need the full tab object.
- */
+// Pass tab ids so long-press sheets share bulk-close orchestration without retaining full tabs.
 export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
   const selectClosable = (anchorTabId: string) =>
     selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId).filter((candidate) => {
@@ -65,10 +59,6 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
   }
 }
 
-/**
- * Builds the destructive Close entry followed by the bulk-close entries, so
- * per-tab-type sheets in the session route stay at one spread per call site.
- */
 export function createCloseWithBulkActions(
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>,
   bulkActions: ReturnType<typeof createBulkCloseSheetActions>

@@ -4,10 +4,7 @@ import {
   parseAntigravityUsageStdout
 } from './antigravity-usage-response'
 
-/**
- * Captured verbatim from `agy -p "/usage" --output-format json` on agy 1.2.11 (macOS arm64).
- * A tier with no 5h bucket reports weekly alone, which is why `session` is null here.
- */
+/** Verbatim agy 1.2.11/macOS ARM64 /usage envelope; this tier exposes weekly quota without a 5h pool. */
 const REAL_AGY_1_2_11_STDOUT = `{"conversation_id":"","status":"SUCCESS","response":"Gemini Models\\tWeekly Limit Remaining\\t100%\\t2026-10-07T08:08:35Z\\nClaude and GPT models\\tWeekly Limit Remaining\\t100%\\t2026-10-07T08:08:35Z\\n","duration_seconds":0,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0},"command":{"name":"usage","data":{"description":"Within each group, models share a weekly limit.","groups":[{"name":"Gemini Models","description":"Models within this group: Gemini Flash, Gemini Pro","buckets":[{"id":"gemini-weekly","name":"Weekly Limit Remaining","window":"weekly","remaining_fraction":1,"reset_time":"2026-10-07T08:08:35Z"}]},{"name":"Claude and GPT models","description":"Models within this group: Claude Opus, Claude Sonnet, GPT-OSS","buckets":[{"id":"3p-weekly","name":"Weekly Limit Remaining","window":"weekly","remaining_fraction":1,"reset_time":"2026-10-07T08:08:35Z"}]}]}}}`
 
 function envelope(groups: unknown, description = 'pool help'): unknown {
@@ -55,8 +52,6 @@ describe('parseAntigravityUsageStdout', () => {
       resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
       resetDescription: null
     })
-    // Why null: this tier meters no 5h pool, and inventing one would claim headroom agy never
-    // reported.
     expect(reading?.session).toBeNull()
   })
 
@@ -169,7 +164,7 @@ describe('parseAntigravityUsageEnvelope', () => {
         {
           name: 'Gemini Models',
           buckets: [
-            // The #22511 account: the 5h pool is not metered and the weekly pool is exhausted.
+            // #22511: unmetered 5h pool alongside exhausted weekly quota.
             { id: 'gemini-5h', name: '5h', window: '5h', remaining_fraction: 1, disabled: true },
             {
               id: 'gemini-weekly',
@@ -187,7 +182,6 @@ describe('parseAntigravityUsageEnvelope', () => {
     expect(reading?.buckets[0]).toMatchObject({ id: 'gemini-weekly', usedPercent: 100 })
     expect(reading?.session).toBeNull()
     expect(reading?.weekly?.usedPercent).toBe(100)
-    // Why the single bucket keeps the bare group name: the disabled sibling is not a row.
     expect(reading?.buckets[0]?.name).toBe('Gemini Models')
   })
 
@@ -205,7 +199,7 @@ describe('parseAntigravityUsageEnvelope', () => {
       ])
     )
 
-    // Why the worst pool: the tier is out of Antigravity when either group is out.
+    // Either exhausted group exhausts this tier.
     expect(reading?.weekly?.usedPercent).toBe(90)
   })
 

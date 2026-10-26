@@ -4,7 +4,7 @@ import {
   JIRA_DETAIL_RUNTIME_CAPABILITIES,
   JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY
 } from './jira/jira-detail-capabilities'
-import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from './jira-quick-filters'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from './jira/jira-quick-filters'
 import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from './jira/jira-saved-filter-capability'
 
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const

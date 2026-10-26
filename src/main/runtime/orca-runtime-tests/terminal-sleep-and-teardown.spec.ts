@@ -321,7 +321,6 @@ describe('OrcaRuntimeService', () => {
     })
     syncSinglePty(runtime)
 
-    // An orphaned workspace's repo is gone, so only the caller's id can identify it.
     await expect(
       runtime.stopTerminalsForWorktree('id:repo-gone::/tmp/gone', {
         resolvedWorktreeId: TEST_WORKTREE_ID
@@ -341,9 +340,7 @@ describe('OrcaRuntimeService', () => {
     })
     syncSinglePty(runtime)
 
-    // Regression for #10252: folder-workspace instances share one checkout dir, so comparing
-    // filesystem paths (which strip `::workspace:<uuid>`) would match the root and its siblings
-    // and kill their live terminals.
+    // Folder instances share a checkout path; path-based matching would kill sibling workspaces (#10252).
     await expect(
       runtime.stopTerminalsForWorktree('id:repo-gone::/tmp/gone', {
         resolvedWorktreeId: `${TEST_WORKTREE_ID}::workspace:11111111-1111-1111-1111-111111111111`
@@ -383,8 +380,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime, null)
-    // The store keeps one `repoId::path` per host, so deleting the SSH copy must leave the
-    // local copy's terminals running — the fence the destructive removal paths now supply.
+    // Worktree ids collide across hosts; SSH deletion must not sweep same-id local terminals.
     runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-1')
     runtime.registerPty('pty-local', TEST_WORKTREE_ID, null)
 
@@ -447,8 +443,7 @@ describe('OrcaRuntimeService', () => {
       owner: true
     }))
 
-    // Why: the runtime-graph sweep must bound the underlying shutdown/list RPCs
-    // below the sweep deadline, or a wedged daemon trips the outer sweep deadline.
+    // Bound shutdown/list RPCs below the outer sweep deadline.
     const deadline = Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
     await expect(
       runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { deadline, stopPty })
@@ -460,8 +455,7 @@ describe('OrcaRuntimeService', () => {
       { deadlineMs?: number } | undefined
     ]
     expect(ptyId).toBe('pty-1')
-    // Pin the margin: RPCs must settle WORKTREE_TEARDOWN_RPC_MARGIN_MS before the
-    // sweep deadline so the accurate stop failure outruns the sweep-timeout error.
+    // RPCs need a margin so accurate stop failure arrives before the outer timeout.
     expect(opts?.deadlineMs).toBe(deadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS)
   })
 

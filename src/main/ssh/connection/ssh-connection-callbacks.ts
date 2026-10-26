@@ -4,8 +4,7 @@ export type SshCredentialKind = 'passphrase' | 'password' | 'keyboard-interactiv
 
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
-  // Why: echo carries the server's RFC 4256 echo flag for keyboard-interactive
-  // prompts so the UI knows whether the typed response may be shown.
+  // Preserve RFC4256 echo flags so the UI hides secret challenge responses.
   onCredentialRequest?: (
     targetId: string,
     kind: SshCredentialKind,

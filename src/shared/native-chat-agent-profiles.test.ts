@@ -8,8 +8,7 @@ import {
 } from './native-chat-agent-profiles'
 
 describe('native chat agent picker profiles', () => {
-  // The composer types the same `/` for every agent; skillPrefix is only the
-  // form a picked skill is written as.
+  // Composer trigger stays /; skillPrefix changes only picked-skill insertion.
   it('keeps Codex skills invocable as dollar tokens', () => {
     expect(getNativeChatAgentProfile('codex')).toMatchObject({
       skillPrefix: '$',
@@ -44,8 +43,7 @@ describe('host-claimed native chat commands', () => {
     return getHostClaimedNativeChatCommands(agent).map((command) => command.name)
   }
 
-  // Claude's harness expands a slash command out of the message body, so claiming
-  // its catalog only answered "/init is not available" for commands that do run.
+  // Claude expands slash commands from message text; host claiming produced false unavailable replies.
   it('claims nothing from the Claude-family catalog', () => {
     expect(names('claude')).toEqual([])
     expect(names('openclaude')).toEqual([])

@@ -54,8 +54,7 @@ describe.skipIf(process.platform === 'win32')('default terminal shell', () => {
   })
 
   it('applies profile args when the shell path was resolved from the setting', () => {
-    // Why: the spawn path fills shellOverride from terminalDefaultShell, so a
-    // populated override is the normal profile launch, not a one-off pick.
+    // Profile launches populate shellOverride from settings; it does not identify a one-off shell choice.
     const plan = createLocalPtyLaunchPlan(
       { cwd: '/tmp', cols: 80, rows: 24, shellOverride: '/bin/bash', terminalShellArgs: [] },
       () => ({ getDefaultShell: () => '/bin/bash' })

@@ -29,7 +29,6 @@ export function handleSharedControlTextFrame(args: {
   setState: (state: SharedControlConnectionState) => void
   handleSocketClosed: (error: RemoteRuntimeClientError) => void
   sendEncrypted: (payload: unknown) => boolean
-  // Seals and sends this socket's auth frame (asynchronously).
   sendAuth: (handshake: PairedE2EEClientHandshake) => void
   markReady: () => void
   replaySubscriptions: () => void

@@ -25,7 +25,7 @@ export type Ssh2ModuleMock = {
   utils: { parseKey: Mock<(...args: unknown[]) => unknown> }
 }
 
-// Read-only from tests: live ESM bindings so importers observe the mock's writes.
+// Live ESM bindings expose mock updates to importers.
 export let eventHandlers = new Map<string, Set<(...args: unknown[]) => void>>()
 export let clientInstances: MockSshClient[] = []
 export let connectAttempts = 0
@@ -58,9 +58,7 @@ export const ssh2Mock: {
   connectErrorMessage: '',
   connectErrorCode: '',
   destroyErrorMessage: '',
-  // Why 'silent': leaves the connect attempt pending (no ready/error emitted)
-  // so a test can drive auth events (e.g. keyboard-interactive prompts)
-  // through emitSshEvent itself.
+  // Silent connect lets tests drive authentication events before ready/error.
   connectSequence: [],
   execBehavior: 'callback',
   sftpBehavior: 'callback',
@@ -74,9 +72,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
   class MockBaseAgent {}
   class MockSshClient {
     setNoDelay = vi.fn()
-    // Why: production code reads `client._sock` and checks `instanceof net.Socket`
-    // to decide which log line to emit. A real Socket instance lets the test
-    // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
+    // Use a real Socket to exercise production instanceof checks rather than proxy-socket logging.
     _sock: Socket | undefined = new Socket()
     lastExecCommand?: string
     lastConnectConfig?: unknown
@@ -118,10 +114,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
     connect(config?: unknown) {
       connectAttempts += 1
       this.lastConnectConfig = config
-      // Why the callback form: ssh2 calls hostVerifier(key, verify) and only accepts synchronously
-      // when the return is not undefined. A mock that passed one argument and ignored the result
-      // would pass against a verifier that never decides — which is the regression host key
-      // verification exists to prevent.
+      // Model ssh2's callback verifier and synchronous return; ignoring the decision would hide a verifier that never settles.
       const hostVerifier = (
         config as
           | { hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined }
@@ -133,8 +126,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
         ssh2Mock.lastHostKeyAccepted = ok
       })
       if (ssh2Mock.lastHostKeyAccepted === false) {
-        // ssh2 aborts the handshake when the verifier denies; a mock that carried on to 'ready'
-        // would let a rejected host key look like a successful connect.
+        // A denied key must abort before ready, matching ssh2.
         this.connectTimer = setTimeout(() => {
           this.connectTimer = null
           this.emit('error', new Error('All configured authentication methods failed'))

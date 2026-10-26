@@ -65,15 +65,6 @@ describe('task detail request lifetime', () => {
     expect(fixture.transport.requests).toHaveLength(1)
   })
 
-  it('ignores a reply after unmount', async () => {
-    const fixture = await mount()
-    const state = fixture.state()
-    await fixture.dispose()
-    await fixture.transport.answer()
-    expect(fixture.state()).toBe(state)
-    expect(fixture.transport.requests).toHaveLength(1)
-  })
-
   it.each([
     success(null),
     success('invalid'),

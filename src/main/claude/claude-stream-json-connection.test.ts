@@ -208,6 +208,33 @@ describe('Claude stream-json connection', () => {
     expect(report.argv).toContain(`--session-id=${SESSION_ID}`)
   })
 
+  it('drops only an API key the user rejected in the TUI, as interactive Claude does', async () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'claude-rejected-key-'))
+    scratchDirs.push(configDir)
+    const rejectedKey = 'sk-ant-api03-REJECTED-0123456789abcdefghij'
+    writeFileSync(
+      join(configDir, '.claude.json'),
+      JSON.stringify({
+        customApiKeyResponses: { approved: [], rejected: [rejectedKey.slice(-20)] }
+      })
+    )
+    await open(
+      launchFor(scriptScenario([HOLD_OPEN]), {
+        CLAUDE_CONFIG_DIR: configDir,
+        ANTHROPIC_API_KEY: ` ${rejectedKey}\n`
+      })
+    )
+    expect(childEnv().ANTHROPIC_API_KEY).toBeUndefined()
+
+    await open(
+      launchFor(scriptScenario([HOLD_OPEN]), {
+        CLAUDE_CONFIG_DIR: configDir,
+        ANTHROPIC_API_KEY: 'sk-ant-api03-0123456789abcdef-INTENDED'
+      })
+    )
+    expect(childEnv().ANTHROPIC_API_KEY).toBe('sk-ant-api03-0123456789abcdef-INTENDED')
+  })
+
   it("strips the launch's inherited keys after Orca's own env is merged in", async () => {
     vi.stubEnv('ORCA_PANE_KEY', 'tab-1:pane-1')
     vi.stubEnv('ORCA_AGENT_HOOK_PORT', '4242')
@@ -407,7 +434,9 @@ describe('Claude stream-json connection', () => {
         blocks: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }]
       }
     ])
-    expect(assistant.map((item) => item.itemId)).toEqual([`claude:${SESSION_ID}:uuid-block-start`])
+    expect(assistant.map((item) => item.itemId)).toEqual([
+      `claude:${SESSION_ID}:block%3Amsg_01%3A0`
+    ])
     expect(
       items.flatMap((item) =>
         item.body.kind === 'status' && item.body.providerFrame ? [item.body.providerFrame.kind] : []

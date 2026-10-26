@@ -2,7 +2,10 @@ import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import type { RuntimeCapability } from '../../protocol-version'
-import type { RemoteRuntimeSocketLivenessOptions } from '../../remote-runtime-socket-liveness'
+import type {
+  RemoteRuntimeSocketDeathCause,
+  RemoteRuntimeSocketLivenessOptions
+} from '../../remote-runtime-socket-liveness'
 
 export type SharedControlConnectionState =
   | 'closed'
@@ -16,11 +19,7 @@ export type SharedControlPendingRequest<TResult> = {
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
   preparedRequest?: RemoteRuntimePreparedRequest | null
-  // Why: keepalives on the shared socket are armed for an unrelated long-poll,
-  // not this request. Only requests that opt in (long-polls issued via the
-  // short-RPC path) may have their deadline refreshed by a keepalive; ordinary
-  // short RPCs keep an absolute deadline so a stuck server call still times
-  // out, tears the socket down, and reconnects/replays as designed.
+  // Only opted-in long-polls refresh on unrelated keepalives; short RPCs time out independently of socket liveness.
   refreshTimeoutOnKeepalive: boolean
 }
 
@@ -41,14 +40,9 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   closed: boolean
   closeAfterReady: boolean
   remoteSubscriptionId: string | null
-  // Why: set while awaiting the first response after a reconnect replay; that
-  // response is the authoritative re-emitted snapshot and gets tagged so
-  // monotonic freshness gates don't drop it (#7718).
+  // Tag the first replay response as an authoritative snapshot so freshness gates accept it (#7718).
   pendingReplayTag?: boolean
-  // Why: true from the moment a reconnect replay clears remoteSubscriptionId
-  // until the resubscribe response arrives. A close() during this window has no
-  // id to unsubscribe by yet, so it must defer instead of finishing locally —
-  // otherwise the resubscribe the server is about to accept leaks.
+  // While resubscribe awaits its ID, close must defer cleanup or leak the server’s new subscription.
   awaitingResubscribe?: boolean
 }
 
@@ -71,6 +65,45 @@ export type RemoteRuntimeSharedConnectionDiagnostics = {
   lastConnectedAt: number | null
   lastClose: { code: number; reason: string } | null
   lastError: string | null
+  /** Why the last socket closed; cleared when a socket becomes ready, like lastClose. */
+  lastCloseCause?: SharedControlSocketCloseCause
+  /** Last keepalive ping round trip; absent until one is measured. Not a publish trigger. */
+  lastRttMs?: number
+}
+
+export type SharedControlSocketCloseCause =
+  | RemoteRuntimeSocketDeathCause
+  | 'socket_close'
+  | 'socket_error'
+  | 'protocol_error'
+  | 'local'
+
+export type SharedControlSocketClosed = (
+  error: RemoteRuntimeClientError,
+  socketGeneration: number,
+  cause: SharedControlSocketCloseCause
+) => void
+
+export type SharedControlSocketClose = {
+  cause: SharedControlSocketCloseCause
+  errorCode: string | null
+}
+
+export type CloseSocketOptions = {
+  preserveReadyWaitersAndPendingRequests?: boolean
+  close?: SharedControlSocketClose
+}
+
+/** One closed control socket, for diagnostics; carries no hostnames, tokens or payloads. */
+export type SharedControlSocketCloseRecord = SharedControlSocketClose & {
+  closeCode: number | null
+  state: SharedControlConnectionState
+  lastRttMs: number | null
+  socketUptimeMs: number | null
+  readyUptimeMs: number | null
+  reconnectAttempt: number
+  pendingRequestCount: number
+  subscriptionCount: number
 }
 export type RemoteRuntimeSharedControlConnectionOptions = {
   environmentId?: string
@@ -82,10 +115,9 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   /** Any inbound frame, ping or pong on the current socket. */
   onAnswered?: () => void
   reconnectStableResetMs?: number
+  /** Every socket close with its cause, e.g. for the diagnostics trace. */
+  onSocketClosed?: (record: SharedControlSocketCloseRecord) => void
   liveness?: RemoteRuntimeSocketLivenessOptions
-  /**
-   * The server refused this socket's token. Null leaves the usual reconnect; a promise means the
-   * caller owns recovery and says whether this connection should then retry or stay closed.
-   */
+  /** Null uses normal retry; a promise owns token recovery and decides whether this connection retries. */
   onAuthenticationRejected?: () => Promise<'retry' | 'stop'> | null
 }

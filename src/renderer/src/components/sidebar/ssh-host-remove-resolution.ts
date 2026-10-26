@@ -2,14 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
-/**
- * Classifies what removing an SSH target means for the workspaces still on it,
- * so the host-removal dialog can offer the right choice:
- *  - connected  → can delete host AND its remote worktrees (real git removal)
- *  - offline    → target still configured but not connected; delete would need a
- *                 reconnect, so default to forgetting the workspaces locally
- *  - (no workspaces) → plain host removal, no workspace decision needed
- */
+/** Connected hosts can delete remotely; offline hosts can forget local records, and empty hosts need no workspace choice. */
 export type SshHostRemoveResolution = {
   targetId: string
   /** Ids of non-main worktrees on this host that a remote delete would remove. */
@@ -34,9 +27,7 @@ export function resolveSshHostRemoval(args: {
     )
   ]
   const hostRepoIdSet = new Set(hostRepoIds)
-  // Why: dedupe by id — the store can transiently hold duplicate worktree rows
-  // (e.g. mid host merge), and a doubled row must not inflate the count shown to
-  // the user or cause a worktree to be removed twice.
+  // Transient duplicate rows must not inflate counts or trigger duplicate removals.
   const workspaceWorktreeIds = [
     ...new Set(
       args.worktrees

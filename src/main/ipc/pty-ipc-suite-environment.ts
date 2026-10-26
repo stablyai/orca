@@ -2,7 +2,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import * as electron from 'electron'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { setPtyHostBindings } from './pty-host-bindings'
+import { setPtyHostBindings } from './pty/pty-host-bindings'
 import { testPtyIpcSurface } from './pty-ipc-test-surface'
 import type { Mock } from 'vitest'
 import {
@@ -28,6 +28,7 @@ import {
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
+  forgetRefusedPaneResumeMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
@@ -52,7 +53,7 @@ import {
   _resetLocalPtyProviderStateForTest
 } from '../providers/local-pty-provider'
 import { setLocalPtyProvider } from './pty/provider/registry'
-import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty-hidden-delivery-gate'
+import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty/delivery/pty-hidden-delivery-gate'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
 
@@ -148,6 +149,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
+    forgetRefusedPaneResumeMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 
@@ -53,7 +53,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     renderer = null
   })
 
-  // The structured session draws, or holds, what the host took; the composer stays cleared.
+  // Accepted messages remain host-owned; keep the composer cleared.
   it.each(['accepted', 'unknown', 'queued'] as const)(
     'leaves a %s send of a command the active agent owns to the structured session',
     async (outcome) => {
@@ -63,6 +63,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       await expect(sendWithOutcome('/review')).resolves.toBe(outcome)
 
       expect(sendStructured).toHaveBeenCalledWith('/review')
+      expect(clearDraftForSend).toHaveBeenCalledExactlyOnceWith(ORIGIN, '/review')
       expect(restoreRejectedDraft).not.toHaveBeenCalled()
     }
   )

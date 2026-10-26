@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -26,6 +26,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React = await import('react')
+  const Selection = React.createContext<string | undefined>(undefined)
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({
@@ -45,52 +46,44 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuRadioGroup: ({
       children,
       value,
-      onValueChange,
       'aria-label': ariaLabel
     }: {
       children: React.ReactNode
       value?: string
-      onValueChange?: (value: string) => void
       'aria-label'?: string
     }) => (
-      <div role="radiogroup" aria-label={ariaLabel}>
-        {React.Children.map(children, (child) => {
-          if (
-            !React.isValidElement<{
-              value?: string
-              disabled?: boolean
-              children?: React.ReactNode
-              onSelect?: () => void
-            }>(child)
-          ) {
-            return child
-          }
-          const props = child.props
-          return (
-            <button
-              role="radio"
-              aria-checked={props.value === value}
-              disabled={props.disabled}
-              data-value={props.value}
-              onClick={() => {
-                props.onSelect?.()
-                if (props.value !== undefined) {
-                  onValueChange?.(props.value)
-                }
-              }}
-            >
-              {props.children}
-            </button>
-          )
-        })}
-      </div>
+      <Selection.Provider value={value}>
+        <div role="radiogroup" aria-label={ariaLabel}>
+          {children}
+        </div>
+      </Selection.Provider>
     ),
-    DropdownMenuRadioItem: ({ children }: { children: React.ReactNode; value: string }) => (
-      <span>{children}</span>
+    DropdownMenuRadioItem: ({
+      children,
+      value,
+      disabled,
+      onSelect
+    }: {
+      children: React.ReactNode
+      value: string
+      disabled?: boolean
+      onSelect?: () => void
+    }) => (
+      <button
+        role="radio"
+        aria-checked={React.useContext(Selection) === value}
+        disabled={disabled}
+        data-value={value}
+        onClick={onSelect}
+      >
+        {children}
+      </button>
     )
   }
 })
 
+import { structuredAgentSessionPermissionDescriptor } from '../../../../shared/structured-agent-session-permission-option'
+import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import {
   NativeChatComposerPermissionPicker,
@@ -110,7 +103,7 @@ function props(
   }
 }
 
-function option(mode: AgentChatPermissionMode): HTMLElement {
+function option(mode: AgentChatPermissionChoice): HTMLElement {
   return screen.getByRole('radio', {
     name: (_name, element) => element.getAttribute('data-value') === mode
   })
@@ -213,7 +206,65 @@ describe('NativeChatComposerPermissionPicker', () => {
     subscribe: () => () => {}
   })
 
-  // A host that states no mode, or an agent with none, gets no pill.
+  it.each([
+    ['claude', 'accept-edits', 'Accept edits'],
+    ['codex', 'full-access', 'Full access'],
+    ['claude', 'plan', 'Plan mode'],
+    ['codex', 'read-only', 'Read only']
+  ])(
+    'checks only an offered reported mode for %s/%s and clears on report loss',
+    (agent, mode, label) => {
+      const options = surface()
+      const state = createStructuredAgentSessionOptionState(agent, null)
+      const snapshot = (reportedPermissionMode?: string | null) => {
+        const row = structuredAgentSessionPermissionDescriptor({
+          ...state,
+          permissionMode: 'own',
+          permissionOwnSupported: true,
+          reportedPermissionMode
+        })
+        return row ? [row] : []
+      }
+      const { rerender } = render(
+        <NativeChatComposerPermissionPicker surface={options} snapshot={snapshot()} agent={agent} />
+      )
+      expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe('true')
+      for (const report of [mode, null, mode, undefined]) {
+        rerender(
+          <NativeChatComposerPermissionPicker
+            surface={options}
+            snapshot={snapshot(report)}
+            agent={agent}
+          />
+        )
+        expect(
+          screen.getByRole('button', { name: `Permissions ${report ? label : 'Permissions'}` })
+        ).toBeTruthy()
+        expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe(
+          report ? null : 'true'
+        )
+        expect(
+          screen
+            .getAllByRole('radio')
+            .filter((row) => row.getAttribute('aria-checked') === 'true')
+            .map((row) => row.getAttribute('data-value'))
+        ).toEqual(report && ['accept-edits', 'full-access'].includes(report) ? [report] : [])
+        expect(
+          screen.getAllByRole('radio').some((row) => row.getAttribute('data-value') === 'own')
+        ).toBe(false)
+      }
+      rerender(
+        <NativeChatComposerPermissionPicker
+          surface={options}
+          snapshot={snapshot(mode)}
+          agent={agent}
+        />
+      )
+      fireEvent.click(option('full-access'))
+      expect(options.setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+    }
+  )
+
   it('renders nothing without a permission descriptor', () => {
     const { container } = render(
       <NativeChatComposerPermissionPicker surface={surface()} snapshot={[]} agent="codex" />
@@ -221,7 +272,7 @@ describe('NativeChatComposerPermissionPicker', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('writes a new pick through the option surface, and skips the current one', () => {
+  it('writes explicit picks through the option surface even when the report matches', () => {
     const options = surface()
     render(
       <NativeChatComposerPermissionPicker
@@ -231,7 +282,7 @@ describe('NativeChatComposerPermissionPicker', () => {
       />
     )
     fireEvent.click(option('ask'))
-    expect(options.setOption).not.toHaveBeenCalled()
+    expect(options.setOption).toHaveBeenCalledWith('permissionMode', 'ask')
     // A write that waits behind a starting agent leaves the pill usable.
     options.setOption.mockImplementation(() => new Promise(() => {}))
     fireEvent.click(option('full-access'))

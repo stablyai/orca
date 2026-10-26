@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs'
 import { readOpenCodeDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import type { BinderSessionRow, OpenCodeSessionCursor } from '../opencode-binder-sessions-result'
 
 /** Composite cursor pagination preserves same-millisecond rows; unknown schemas or absent stores return empty. */
@@ -31,23 +32,21 @@ export function readOpenCodeBinderSessions(
         .all(cursor.ms, cursor.ms, cursor.id)
       const sessions: BinderSessionRow[] = []
       for (const row of rows) {
-        if (typeof row !== 'object' || row === null) {
+        if (!isRecord(row)) {
           continue
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: node:sqlite returns plain row objects; the object check above plus the per-field validation below reject anything else.
-        const record = row as Record<string, unknown>
         if (
-          typeof record.id !== 'string' ||
-          typeof record.directory !== 'string' ||
-          typeof record.time_created !== 'number'
+          typeof row.id !== 'string' ||
+          typeof row.directory !== 'string' ||
+          typeof row.time_created !== 'number'
         ) {
           continue
         }
         sessions.push({
-          id: record.id,
-          directory: record.directory,
-          createdAtMs: record.time_created,
-          parentId: typeof record.parent_id === 'string' ? record.parent_id : null
+          id: row.id,
+          directory: row.directory,
+          createdAtMs: row.time_created,
+          parentId: typeof row.parent_id === 'string' ? row.parent_id : null
         })
       }
       return sessions

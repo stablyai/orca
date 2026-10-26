@@ -5,13 +5,13 @@ import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-nativ
 import {
   NATIVE_CHAT_DIFF_CARD_COPY,
   nativeChatEditFilePatchText
-} from '../../../src/shared/native-chat-edit-cards'
+} from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
-} from '../../../src/shared/native-chat-edit-model'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat-tool-line-label'
+} from '../../../src/shared/native-chat/tools/native-chat-edit-model'
+import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
@@ -37,7 +37,6 @@ function DiffRow({
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
   if (line.kind === 'gap') {
-    // The break between two regions of the file, so the gutter's jump is accounted for.
     return (
       <Text style={[styles.diffGap, type]} accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.diffGap}>
         ⋯
@@ -82,8 +81,7 @@ function DiffRow({
   )
 }
 
-/** The card's rows in their own bounded box. Its own component so a collapsed card
- *  builds none of them. */
+// Mount rows only when expanded so collapsed cards avoid diff work.
 function DiffCardRows({
   file,
   fontScale,
@@ -97,13 +95,11 @@ function DiffCardRows({
 }) {
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
-  // A snippet-relative number would read as a file position, so the gutter is blank
-  // unless the provider resolved the ranges.
+  // Leave unresolved gutters blank; snippet-relative numbers would imply real file positions.
   const widest = file.lineNumbersKnown
     ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
     : 0
   const gutterChars = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
-  // Desktop's row identity: the line itself, and which repeat of it this is.
   const seen = new Map<string, number>()
   return (
     <MobileNativeChatOwnedScrollView
@@ -131,8 +127,6 @@ function DiffCardRows({
   )
 }
 
-/** Desktop parity: `NativeChatDiffCard`. One file an agent changed: its verb, name and
- *  counts, opening to the unified rows. A change with no body keeps only its header. */
 export function MobileNativeChatDiffCard({
   file,
   fontScale,
@@ -142,7 +136,6 @@ export function MobileNativeChatDiffCard({
 }: {
   file: NativeChatEditFile
   fontScale: number
-  /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   rootIdentity?: string
   onOpenFile?: (path: string) => void
@@ -152,7 +145,6 @@ export function MobileNativeChatDiffCard({
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)
   const iconSize = 15 * fontScale
-  // A deleted file has nothing left to open.
   const openFile = file.changeKind === 'deleted' ? undefined : onOpenFile
   return (
     <View>

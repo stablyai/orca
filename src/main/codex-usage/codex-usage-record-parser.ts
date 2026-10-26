@@ -19,6 +19,7 @@ export type CodexUsageParseContext = {
   sessionCwd: string | null
   currentCwd: string | null
   currentModel: string | null
+  currentTurnId?: string | null
   previousTotals: CodexUsageRawUsage | null
   totalOnlyBaselinePending?: boolean
 }
@@ -86,6 +87,7 @@ export function parseCodexUsageRecord(
   }
 
   if (parsed.type === 'turn_context') {
+    context.currentTurnId = extractString(parsed.payload.turn_id)
     context.currentCwd =
       extractString(parsed.payload.cwd) ?? context.currentCwd ?? context.sessionCwd
     context.currentModel = extractModel(parsed.payload) ?? context.currentModel
@@ -149,7 +151,12 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
-    eventKey: buildCodexUsageEventKey(parsed.timestamp, totalUsage, lastUsage),
+    eventKey: buildCodexUsageEventKey(
+      // Fork copies rewrite timestamps but keep turn ids; last-only deltas need the timestamp to stay distinct.
+      totalUsage && context.currentTurnId ? context.currentTurnId : parsed.timestamp,
+      totalUsage,
+      lastUsage
+    ),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,

@@ -96,8 +96,7 @@ export function attachDividerDrag(
     if (windowListenersAttached || typeof window === 'undefined') {
       return
     }
-    // Why: Chromium can transiently lose capture while the button remains held,
-    // so window events keep ownership until pointerup, pointercancel, or blur.
+    // Chromium can lose capture with button held; retain window ownership until up/cancel/blur.
     windowListenersAttached = true
     window.addEventListener('pointermove', onPointerMove, true)
     window.addEventListener('pointerup', onPointerUp, true)
@@ -217,20 +216,14 @@ export function attachDividerDrag(
     prevInitialFlex = prevEl.style.flex
     nextInitialFlex = nextEl.style.flex
 
-    // Why: shells redraw prompts on every PTY SIGWINCH. During a divider drag
-    // we still fit xterm locally, but forward only the final PTY size on drop.
+    // Fit xterm during drag but send only final PTY size; each SIGWINCH makes shells redraw prompts.
     releasePtyResizeHold = holdPtyResizesForPaneSubtrees([prevEl, nextEl])
 
     totalSize = measuredTotalSize
     prevFlex = prevSize
   }
 
-  // Why: WSLg's RDP input path reports press/release as a `mouse` pointer but
-  // streams motion as a `pen` pointer with a different pointerId, so a strict
-  // pointerId match drops every move. A foreign primary pointer may take over
-  // only when neither end is touch: each pointer type has its own primary, so
-  // otherwise a stray finger hijacks a mouse/pen drag and a stray mouse hijacks
-  // a touch drag. Either drag still matches its own pointer by pointerId.
+  // WSLg can change mouse press into pen motion with another ID; permit foreign primary mouse/pen takeover, never cross touch/non-touch ownership.
   const isActiveDragPointer = (e: PointerEvent): boolean =>
     e.pointerId === activePointerId ||
     (e.isPrimary && e.pointerType !== 'touch' && activePointerType !== 'touch')
@@ -246,13 +239,11 @@ export function attachDividerDrag(
 
     const effectiveMinPaneSize = Math.min(MIN_PANE_SIZE, totalSize / 2)
     const maxPrev = totalSize - effectiveMinPaneSize
-    // Why: tiny restored/SSH layouts can be smaller than two minimum panes;
-    // clamping both sides to 50px there would create invalid negative flex.
+    // Tiny restored/SSH layouts cannot fit two minima; avoid negative flex from blindly clamping each side.
     const newPrev = Math.min(Math.max(prevFlex + delta, effectiveMinPaneSize), maxPrev)
     const newNext = totalSize - newPrev
 
-    // Why: pointermove can outpace paint during split resizing. Coalescing the
-    // flex writes keeps drag reflow to one update per frame.
+    // Coalesce flex writes to one reflow per frame when pointer motion outruns paint.
     flexScheduler.schedule(newPrev, newNext)
   }
 

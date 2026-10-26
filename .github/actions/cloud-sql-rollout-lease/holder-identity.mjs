@@ -1,5 +1,4 @@
-// Who we claim to be on the lease object. Shared by main and the detached renewer so both agree
-// on the holder key without re-deriving it from a different set of environment variables.
+// Main and detached renewer must derive the same holder key from one environment contract.
 
 export function holderIdentity(explicitHolderKey) {
   const repository = process.env.GITHUB_REPOSITORY ?? 'unknown'

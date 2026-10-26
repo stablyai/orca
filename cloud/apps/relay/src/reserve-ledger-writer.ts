@@ -1,14 +1,7 @@
 import type { RelayDatabase } from './database.js'
 
-// Step 5's after-the-fact record: a reserve-mode cell admits a booked host without reading
-// Postgres, and the director that booked it writes the host's relay_assignments row about a
-// second later. Phones still resolve through that row until step 6.
-//
-// A guarded mirror, which nothing reads for a desktop's correctness: only a higher epoch
-// replaces a row, and nothing ever lowers one. No relay_cells row and no activity lease is
-// touched. A row whose cell changes drops its counters: the leases that back them keep
-// their own cell, and unbacked units stay counted on the old cell until its next reconcile,
-// which only makes that cell look fuller.
+// Mirror booked joins to relay_assignments after admission; desktop correctness never reads this record.
+// Only higher epochs replace rows. Cell moves reset counters but leave leases/unbacked units on the old cell until reconcile, conservatively overstating load.
 
 export const RESERVE_LEDGER_FLUSH_MS = 250
 export const RESERVE_LEDGER_QUEUE_MAX = 200_000
@@ -59,8 +52,7 @@ export class ReserveLedgerWriter {
     this.timer = null
   }
 
-  // During a database stall the queue grows; past its bound the oldest entries go first,
-  // since the 10-minute reconcile rewrites every seat anyway.
+  // Bound outage growth by dropping oldest queued rows; ten-minute reconcile rewrites seats.
   enqueue(entry: LedgerEntry): void {
     this.queue.push(entry)
     const max = this.input.queueMax ?? RESERVE_LEDGER_QUEUE_MAX
@@ -99,7 +91,6 @@ export class ReserveLedgerWriter {
   }
 
   private async write(batch: LedgerEntry[]): Promise<void> {
-    // The newest entry per host wins inside one batch.
     const latest = new Map<string, LedgerEntry>()
     for (const entry of batch) {
       const key = `${entry.userId}\u0000${entry.relayHostId}`
@@ -147,7 +138,6 @@ export class ReserveLedgerWriter {
     )
   }
 
-  // Rows for these hosts, in one read per batch.
   async readRows(
     hosts: ReadonlyArray<{ userId: string; relayHostId: string }>
   ): Promise<Map<string, { cellId: string; epoch: number }>> {
@@ -193,11 +183,8 @@ const RECONCILE_SETTLE_MS = 30_000
 
 type ReconcileSeat = { userId: string; relayHostId: string; cellId: string; epoch: number; joinedAt: number }
 
-// Every director upserts the map's seats on reserve-mode cells: guarded and idempotent, so
-// concurrent runs are harmless. A row ahead of the seat (today's path answered a newer epoch,
-// and the desktop was then answered the old seat from memory) is never rewritten: that seat is
-// demoted (epoch-checked, closes with 4409), so the desktop re-assigns to what the row names.
-// The demoting director then mints above the row's epoch for that host (see raiseEpochFloor).
+// Every director idempotently mirrors reserve seats; ahead/other-cell equal rows instead trigger epoch-checked 4409 demotion.
+// Demoting director raises the next minted epoch above that row (raiseEpochFloor).
 export async function reconcileReserveLedger(input: {
   writer: ReserveLedgerWriter
   seats: () => ReconcileSeat[]

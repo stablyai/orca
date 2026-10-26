@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../shared/machine-name'
 import { detectRuntimeMachineName, type RuntimeMachineName } from './runtime-machine-name'
 
-// Why mocked: the shared lookup is the one path that spawns the real `scutil`; a live spawn on a
-// loaded macOS runner can hit the lookup timeout and answer with the hostname while a second live
-// spawn does not, which is a flake and not a verdict.
+// Mock shared scutil lookup: runner load can make one live probe time out while another succeeds, yielding a flaky comparison.
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
@@ -68,8 +66,7 @@ describe('runtime machine name detection', () => {
 })
 
 describe('RuntimeMachineName', () => {
-  // Why reloaded: the lookup memo is module state shared by every runtime in the process, which
-  // is the behaviour under test, so each case starts from a process that has never looked.
+  // Reload process-shared memo so every case begins before the first lookup.
   let module: {
     RuntimeMachineName: typeof RuntimeMachineName
     MACHINE_NAME_RETRY_INTERVAL_MS: number

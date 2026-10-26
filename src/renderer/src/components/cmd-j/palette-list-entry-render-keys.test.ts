@@ -32,9 +32,7 @@ describe('buildPaletteListEntryRenderKeys', () => {
     expect(narrowed).toEqual(full.slice(0, 3))
   })
 
-  // Why: a generated key that lands in the persisted-id namespace is worse than the
-  // duplicate it fixes — narrowing the duplicate away hands its fiber, and the row
-  // state frozen in it, to the distinct entry that happens to own that id.
+  // Generated keys must not collide with persisted sibling IDs or React can transfer the duplicate’s frozen state.
   it('never mints a key a sibling entry already owns as its persisted id', () => {
     const full = buildPaletteListEntryRenderKeys(['a', 'a', 'palette-dup:1:a'])
     const narrowed = buildPaletteListEntryRenderKeys(['a', 'palette-dup:1:a'])

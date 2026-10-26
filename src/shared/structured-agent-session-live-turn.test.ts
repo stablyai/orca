@@ -70,8 +70,7 @@ describe('isStructuredAgentSessionThinking', () => {
   })
 
   it('does not read an earlier turn as this one reasoning', () => {
-    // The scan stops at this turn's own record, so the previous turn's reasoning
-    // cannot leak forward into a turn that has produced nothing yet.
+    // A new turn with no content must not inherit the previous turn’s reasoning.
     const newTurn = item('turn-2-start', 2, {
       kind: 'status',
       text: 'Working',
@@ -226,9 +225,7 @@ describe("the live-turn readers answer for the session's own agent", () => {
   })
 
   it('treats an agent id that failed to resolve as a child, not as the parent', () => {
-    // Presence, not truthiness. A truthy test would read the empty id as root
-    // and put the child's tool call straight back on the parent's row — the
-    // exact defect this attribution exists to remove.
+    // Check presence: an empty child ID is still a child and must not put its tool on the parent’s status row.
     const unresolved = child(
       'child-grep',
       3,

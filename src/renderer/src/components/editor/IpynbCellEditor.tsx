@@ -16,7 +16,7 @@ import { useMonacoColorizedLines } from './MonacoCodeExcerpt'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
-// Box metrics the preview and the live editor share, so activating a cell never shifts it.
+// Share preview/editor box metrics to avoid shifts on activation.
 const CODE_LAYOUT = { lineHeight: 20, paddingY: 4, paddingX: 12 } as const
 // Fixed rows keep colorized blank lines one line tall; preflight gives <code> its own font.
 const CODE_ROW_STYLE = {
@@ -47,10 +47,8 @@ type IpynbCellSourceProps = {
 
 type ClientPoint = { x: number; y: number }
 
-/** Rendered cell source (markdown document or colorized code) that swaps to Monaco while active. */
 export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element {
   const { cell, source, active, onActivate } = props
-  // Where the activating press landed; Monaco opens its caret there, or at the start when null.
   const [pressedAt, setPressedAt] = useState<ClientPoint | null>(null)
   const activate = (point: ClientPoint | null): void => {
     setPressedAt(point)
@@ -86,7 +84,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
           role="button"
           tabIndex={0}
           className="cursor-text outline-none"
-          // Why: activating on press (not click) keeps the target stable while the previously active cell collapses.
+          // Activate on press before the previous cell collapses and moves the click target.
           onMouseDown={(event) => {
             if (event.button === 0) {
               event.preventDefault()
@@ -134,7 +132,6 @@ function IpynbCodePreview({
           key={index}
           className="block whitespace-pre"
           style={CODE_ROW_STYLE}
-          // Plain text shows until Monaco's async colorizer fills in token HTML.
           dangerouslySetInnerHTML={{ __html: htmlLines[index] || escapeHtml(line) }}
         />
       ))}
@@ -168,9 +165,7 @@ function IpynbSourceEditor({
     monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
   }, [isDark])
 
-  // Why: created synchronously before paint (not via @monaco-editor/react's async loader), so the
-  // swap from the preview never shows a placeholder, an unlaid-out editor or a guessed caret.
-  // Keep the model and undo history while external reloads update the cell below.
+  // Create before paint to avoid placeholders and guessed caret geometry; retain the model and undo history across external reloads.
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -184,7 +179,7 @@ function IpynbSourceEditor({
       automaticLayout: true,
       fontFamily,
       fontSize,
-      // Why: same box as the preview it replaces. No gutter, so the decorations lane is the inset.
+      // Match preview geometry; the decorations lane supplies the inset without a gutter.
       lineHeight,
       padding: { top: paddingY, bottom: paddingY },
       lineNumbers: 'off',
@@ -194,14 +189,12 @@ function IpynbSourceEditor({
       minimap: { enabled: false },
       overviewRulerLanes: 0,
       renderLineHighlight: 'none',
-      // The preview has no indent guides; matching it keeps the swap invisible.
       guides: { indentation: false },
-      // Clicking (word highlight) or double-clicking (selection highlight) a word should not light
-      // up its other occurrences like a search.
+      // Do not highlight other word occurrences when clicking or selecting cell text.
       occurrencesHighlight: 'off',
       selectionHighlight: false,
       scrollBeyondLastLine: false,
-      // Why: an auto-sized cell must let wheel events scroll the notebook, not trap them.
+      // Auto-sized cells must yield wheel scrolling to the notebook.
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
@@ -214,10 +207,8 @@ function IpynbSourceEditor({
     fitHeightRef.current = fitHeight
     fitHeight()
     editorInstance.onDidContentSizeChange(fitHeight)
-    // Why: restoring a view state marks the visible lines stable, so Monaco tokenizes them now
-    // rather than 50ms later; without it the first frame paints uncoloured text.
+    // Restoring view state marks visible lines stable and forces tokenization before the first paint.
     editorInstance.restoreViewState(editorInstance.saveViewState())
-    // Monaco hit-tests the press against its own lines, so the caret lands where the user pressed.
     const target = pressedAt && editorInstance.getTargetAtClientPoint(pressedAt.x, pressedAt.y)
     if (target?.position) {
       editorInstance.setPosition(target.position)

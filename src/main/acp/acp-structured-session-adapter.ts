@@ -30,7 +30,6 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions, writeAcpSessionOption } from './acp-structured-options'
-import { readAcpRecoveryHistory } from './acp-recovery-history'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import { acpStartupFailure, isAcpReadySession } from './acp-structured-child'
 import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
@@ -44,10 +43,6 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     this.children = new AcpStructuredChildren(deps)
     this.copies = new AcpConversationCopies(deps)
   }
-
-  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
-    input
-  ) => readAcpRecoveryHistory(this.deps, input.identity)
 
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
@@ -256,8 +251,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return session.options.reported()
   }
 
-  readOptions = async (input: { sessionId: string; fence: number }) =>
-    readAcpLiveOptions(this.live(input.sessionId))
+  readOptions = async (input: { sessionId: string; fence: number }) => {
+    const session = this.live(input.sessionId)
+    return readAcpLiveOptions(session, session.spec.permissionModeConfig?.values)
+  }
 
   readCommands = (sessionId: string) => {
     const session = this.children.sessions.get(sessionId)

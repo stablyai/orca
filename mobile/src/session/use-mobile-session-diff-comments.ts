@@ -30,8 +30,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     showToast
   } = scope
   const clipboard = useClipboardWriter()
-  // Why: a new agent's reply can outlast the "+" lock by a minute, and resending notes it still
-  // carries would start a second agent with them. Held from the tap until that reply settles.
+  // Hold notes until prompt-delivery reply, beyond the create lock, so resend cannot launch another agent with the same notes.
   const sendingDiffCommentIdsRef = useRef<ReadonlySet<string>>(new Set())
   const [sendingDiffCommentIds, setSendingDiffCommentIds] = useState<ReadonlySet<string>>(
     sendingDiffCommentIdsRef.current
@@ -68,9 +67,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
   )
 
   useEffect(() => {
-    // Caught here and not in the loader: a *rejected* `worktree.show` would otherwise be an
-    // unhandled rejection on every mount, and the loader's own promise is awaited by the recording
-    // adapter, which a swallowed rejection inside it would hide.
+    // Catch at the fire-and-forget mount caller; the recording adapter still needs the loader’s rejection.
     void loadDiffComments().catch(() => undefined)
   }, [loadDiffComments])
 

@@ -17,9 +17,7 @@ vi.mock('../git/worktree-symlink-detection', () => ({
 
 import { hasUncommittedChanges } from './hosted-review-creation-git-state'
 
-// Why: git ran inside the distro and answered in its namespace, so the fail-closed shared-symlink
-// check must lstat the host spelling — otherwise it never recognises Orca's own symlink and blocks
-// review creation on a permanently "dirty" WSL worktree.
+// Git reports guest paths; shared-symlink lstat needs host spelling or WSL reviews stay falsely dirty.
 describe('hasUncommittedChanges shared-symlink probe', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()

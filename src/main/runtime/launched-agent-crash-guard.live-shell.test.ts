@@ -1,10 +1,4 @@
-/**
- * A launched agent that exits at startup hands the terminal back to its shell, which turns bracketed
- * paste on at its next prompt just as an agent's composer does. Real zsh with a slow user config,
- * spawned the way a pane is (under `login` on macOS), read through the terminal daemon's own
- * foreground tracker: the launch must find the shell and write nothing, and must still find a live
- * agent.
- */
+/** A crashed agent returns to a bracketed-paste shell prompt; real zsh/daemon foreground evidence must prevent delivery. */
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,8 +18,7 @@ import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
 import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readiness'
 
 const PTY_ID = 'pty-1'
-// A function, not a ternary: the Windows-lane registration scan reads a const assigned from a
-// platform check as a Windows-only gate, and this suite runs everywhere but Windows.
+// Use a function: the Windows registration scanner misclassifies platform-gated const ternaries.
 function findZsh(): string {
   if (process.platform === 'win32') {
     return ''
@@ -37,9 +30,7 @@ const ZSH_PATH = findZsh()
 const describeWithZsh = ZSH_PATH ? describe : describe.skip
 
 const STUBS = {
-  // Exits at startup, as an agent with a bad config or a missing dependency does.
   crash: "#!/bin/sh\nprintf 'stub: crashing at startup\\r\\n'\nexit 1\n",
-  // Opens its composer the way an agent does, then stays up.
   ready: "#!/bin/sh\nprintf '\\033[?2004hstub agent\\r\\n> '\nexec sleep 30\n"
 } as const
 
@@ -48,7 +39,6 @@ let savedLoginOptOut: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-crash-guard-'))
-  // The production spawn: a pane on macOS runs under `login` unless the user opted out.
   savedLoginOptOut = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
   delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
 })
@@ -60,11 +50,10 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
-/** Launches the `claude` stub in a fresh zsh pane and runs the launch's own readiness wait. */
 async function launchStub(stub: keyof typeof STUBS, readyTimeoutMs: number) {
   const bin = join(home, 'bin')
   mkdirSync(bin)
-  // Typed by absolute path: `login` resets HOME and PATH, so a bare name would find a real agent.
+  // login resets HOME/PATH; absolute stubs prevent accidentally running a real agent.
   const stubPath = join(bin, 'claude')
   writeFileSync(stubPath, STUBS[stub])
   chmodSync(stubPath, 0o755)
@@ -94,7 +83,6 @@ async function launchStub(stub: keyof typeof STUBS, readyTimeoutMs: number) {
       listener(data)
     }
   })
-  // The daemon's answers, each from the same pieces the daemon uses.
   const controller = {
     getForegroundProcess: async () => tracker.getForegroundProcess(),
     confirmForegroundProcess: () => tracker.confirmForegroundProcess(),
@@ -158,11 +146,8 @@ describeWithZsh('a launch prompt after the launched agent exits at startup', () 
   it('refuses the write after the shell’s prompt turns bracketed paste on', async () => {
     const launch = await launchStub('crash', 9_000)
     try {
-      // The shell's prompt after the crash turned bracketed paste on and went quiet. A read that
-      // finds the shell drops that signal; one that cannot answer on a loaded host lets it settle.
-      // Either way only a read that finds the agent may let the text through.
+      // Unknown foreground may settle readiness, but only proven agent foreground may admit the write.
       await launch.ready
-      // Presence precondition: the stub, not anything else on the host, is what ran and exited.
       expect(launch.output()).toContain('stub: crashing at startup')
       await expect(launch.guard.beforeWrite(PTY_ID)).rejects.toThrow('agent_not_in_foreground')
     } finally {

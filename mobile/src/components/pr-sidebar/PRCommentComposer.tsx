@@ -5,8 +5,7 @@ import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
 import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
 
 type Props = {
-  // Plain-text composer shared by the reply affordance, the root-comment box, and
-  // the inline edit editor.
+  // Share plain-text composer across root comment, reply and edit.
   placeholder: string
   submitLabel: string
   submitting: boolean
@@ -28,8 +27,7 @@ export function PRCommentComposer({
   autoFocus
 }: Props) {
   const [body, setBody] = useState(initialBody ?? '')
-  // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
-  // twice before it flips, so guard locally in the same synchronous tick.
+  // Guard synchronously against double-submit before parent’s async submitting state rerenders.
   const inFlightRef = useRef(false)
   const canSubmit = isSubmittableCommentBody(body) && !submitting
 

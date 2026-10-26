@@ -19,7 +19,7 @@ import {
   dormantState,
   manifest
 } from './persistence-orcad-migration-catalog-fixture'
-import { createStore, readDataFile, testState, writeDataFile } from '../../persistence-test-harness'
+import { createStore, readDataFile, testState, writeDataFile } from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -104,7 +104,7 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps the received blob through a failed flush and a state query, for the retry after restart', async () => {
+  it('keeps the received blob through a failed flush and state query, for retry after reloading the stage', async () => {
     const store = createStore()
     const { input, expectedBlobs, stagedDisk } = await stageHints(store)
     await commitWithFailedFlush(store, input)

@@ -49,7 +49,7 @@ const repo: Repo = {
   displayName: 'repo',
   badgeColor: '#000',
   addedAt: 0
-} as Repo
+}
 
 const ownershipMeta = getProjectHostSetupWorktreeMeta([], repo)
 

@@ -96,8 +96,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     const release = await super.acquireWorktreeTerminalSpawn(target, opts)
     const repoId = target ? getRepoIdFromWorktreeId(target.id) : null
     const removedHosts = repoId ? this.removedProjectHosts.get(repoId) : undefined
-    // Why under the lease: a spawn that resolved its workspace before removal queues behind the sweep.
-    // Why the fence: a surviving same-id row on another host must not admit the removed host's spawn.
+    // Recheck removal under the lease after queued spawns; another host's same-id repo cannot admit this host's spawn.
     if (
       target &&
       repoId &&
@@ -110,10 +109,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     return release
   }
 
-  /**
-   * Stops every terminal this host runs for a project, found through its own PTY table rather
-   * than a client's workspace list, which can be unhydrated or hide workspaces.
-   */
+  /** Stop all project terminals found on this host; client workspace lists can be unhydrated or hide them. */
   async stopTerminalsForProject(
     repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     options: { deadline?: number; closeStructuredSessions?: boolean } = {}
@@ -170,8 +166,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     options: { deadline?: number }
   ): Promise<{ stopped: number; worktreeIds: readonly string[] }> {
-    // Why: after a restart, surviving daemon sessions are in the provider inventory before ptysById.
-    // Bounded so a slow worktree scan cannot spend the budget the known PTYs' stops need.
+    // Restarted daemon sessions can precede runtime records; bound refresh so it cannot consume known-PTY stop budgets.
     const refreshDeadline = Math.min(
       options.deadline ?? Infinity,
       Date.now() + PROJECT_INVENTORY_REFRESH_BUDGET_MS
@@ -201,13 +196,10 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     for (const id of listProjectTerminalWorktreeIds(repo.id, this.leaves, this.ptysById)) {
       projectWorktreeIds.add(id)
     }
-    // Why all at once: one deadline covers the project, so a slow worktree must not spend the
-    // budget its siblings' stops need; each still holds only its own worktree's lock.
+    // Stop worktrees concurrently under one project deadline so slow siblings cannot starve each other.
     const stopWorktree = async (id: string): Promise<number> => {
       const opts = { resolvedWorktreeId: id, ...fence, ...options, requestStopsPastDeadline: true }
-      // Why exclusive: it waits out a spawn that holds the shared lease, so its PTY is registered
-      // and stopped. Bounded by the deadline so repo.rm still answers; past it PTYs are only asked.
-      // A timed-out waiter is dequeued by the lock, so it cannot hold later spawns back.
+      // Exclusive leases wait for spawns to register; deadline cancels queued waits, and overdue PTYs get stop requests only.
       const release = await this.acquireWorktreeTerminalMutation(
         id,
         'exclusive',

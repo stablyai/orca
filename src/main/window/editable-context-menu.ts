@@ -40,9 +40,7 @@ function editableContextPasteItem(
   return {
     label,
     click: () => {
-      // Why: context-menu paste must share renderer ownership with keyboard and
-      // app-menu paste so large text controls can chunk and terminals cannot
-      // receive duplicate native paste.
+      // Use renderer paste ownership for chunked text controls and to avoid duplicate native terminal paste.
       webContents.send('ui:editableContextPaste', {
         plainTextOnly: options?.plainTextOnly === true
       })
@@ -188,7 +186,7 @@ function buildNativeEditMenuTemplate(
     { role: 'cut' },
     { role: 'copy' },
     editableContextPasteItem('Paste', webContents),
-    // Why: a plain-text contenteditable (the chat composer) already pastes text literally and takes no text-only mode.
+    // Plain-text contenteditable composers already paste literally; omit redundant text-only mode.
     ...(params.formControlType !== 'none'
       ? [editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true })]
       : []),

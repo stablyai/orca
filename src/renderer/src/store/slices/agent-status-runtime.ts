@@ -33,16 +33,14 @@ export function createAgentStatusRuntime(
 ): AgentStatusRuntime {
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
-  // Identity can no longer report "this staged update changed something" once the staged object is
-  // mutated in place, so every accepted staged write advances this instead.
+  // Staged in-place mutations cannot signal changes by identity; count every accepted write.
   let batchedAgentStatusRevision = 0
   let batchedAgentStatusEffects: (() => void)[] | null = null
   let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
-  // Deliberately narrower than zustand's `set`: no `replace` parameter, so no call site in
-  // this slice can compile into a REPLACE the batch commit is unable to express.
+  // Omit replace from this write type so no slice call can request replacement the batch cannot express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
     if (staged === null) {
@@ -178,8 +176,7 @@ export function createAgentStatusRuntime(
   const freshness = createFreshnessScheduler({
     getStatusEntries: () => get().agentStatusByPaneKey,
     bumpEpochs: () => {
-      // Why: freshness is time-based — bump both epochs at the stale boundary to force selector
-      // recompute and re-sort even with no new output, since staleness can change worktree ordering.
+      // Time-based staleness changes ordering without output; bump freshness/sort epochs at boundaries.
       set((s) => ({
         agentStatusEpoch: s.agentStatusEpoch + 1,
         sortEpoch: s.sortEpoch + 1
@@ -187,6 +184,7 @@ export function createAgentStatusRuntime(
     }
   })
 
+  // Why: launch configs retire with the pane; a woken pane registers its config before consuming this record.
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
       return
@@ -194,7 +192,6 @@ export function createAgentStatusRuntime(
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
       let nextSleeping = s.sleepingAgentSessionsByPaneKey
-      let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
       for (const paneKey of uniquePaneKeys) {
         if (paneKey in nextSleeping) {
           if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
@@ -202,23 +199,11 @@ export function createAgentStatusRuntime(
           }
           delete nextSleeping[paneKey]
         }
-        if (paneKey in nextLaunchConfigs) {
-          if (nextLaunchConfigs === s.agentLaunchConfigByPaneKey) {
-            nextLaunchConfigs = { ...nextLaunchConfigs }
-          }
-          delete nextLaunchConfigs[paneKey]
-        }
       }
-      if (
-        nextSleeping === s.sleepingAgentSessionsByPaneKey &&
-        nextLaunchConfigs === s.agentLaunchConfigByPaneKey
-      ) {
+      if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
         return s
       }
-      return {
-        sleepingAgentSessionsByPaneKey: nextSleeping,
-        agentLaunchConfigByPaneKey: nextLaunchConfigs
-      }
+      return { sleepingAgentSessionsByPaneKey: nextSleeping }
     })
   }
 

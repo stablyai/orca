@@ -107,8 +107,7 @@ export function WorktreeCardLayoutMenuItem({
         <DropdownMenuRadioGroup
           value={cardLayout}
           onValueChange={(value) => {
-            // Why: layout changes are presets, not just density toggles; keep
-            // the visible menu path aligned with card property defaults.
+            // Apply layout presets so menu selection stays aligned with card-property defaults.
             setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
           }}
         >

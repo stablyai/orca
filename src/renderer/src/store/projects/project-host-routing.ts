@@ -12,14 +12,19 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc
 } from '../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
-import type { ProjectHostSetupTarget } from '../../../../shared/project-host-setup-target'
+import {
+  SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
+  type ProjectHostSetupTarget
+} from '../../../../shared/project-host-setup-target'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import type { AppState } from '../types'
 
 export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
@@ -28,6 +33,42 @@ export function getProjectSetupRuntimeTarget(
   return parsedHost?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsedHost.environmentId }
     : { kind: 'local' }
+}
+
+// Why before dispatch: no process sets up `ssh:` hosts (managed ones are `runtime:`), and a
+// paired server's SSH host would otherwise reach this client's own API.
+export function assertNotSshProjectHost(
+  state: Pick<AppState, 'sshTargetLabels' | 'sshStateByEnvironment'>,
+  hostId: ExecutionHostId
+): void {
+  const parsed = parseExecutionHostId(hostId)
+  if (parsed?.kind !== 'ssh') {
+    return
+  }
+  throw new Error(
+    isPairedServerSshTarget(state, parsed.targetId)
+      ? SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
+      : `SSH connection "${parsed.targetId}" not found or not connected`
+  )
+}
+
+/**
+ * SSH hosts a paired server owns: the server reaches their runtime over its own tunnel, which this
+ * client has no route to (#29593). A web client only ever sees its server's hosts.
+ */
+function isPairedServerSshTarget(
+  state: Pick<AppState, 'sshTargetLabels' | 'sshStateByEnvironment'>,
+  targetId: string
+): boolean {
+  if (isWebClientLocation()) {
+    return true
+  }
+  if (state.sshTargetLabels.has(targetId)) {
+    return false
+  }
+  return [...state.sshStateByEnvironment.values()].some((bucket) =>
+    bucket.targetLabels.has(targetId)
+  )
 }
 
 async function assertProjectHostSetupRuntimeCapability(target: RuntimeClientTarget): Promise<void> {
@@ -96,8 +137,7 @@ export async function assertProjectHostSetupMutationRuntimeCapabilities(
   )
 }
 
-// Why: twins share `id`. A paired server's setups all carry its one `runtime:` hostId, so they
-// stay matched by id there, as before (the server's own by-id answer decides which one it was).
+// Twins share IDs; paired server setups all use one client runtime hostId, so server-side by-ID resolution remains authoritative.
 export function isSameProjectHostSetup(a: ProjectHostSetup, b: ProjectHostSetup): boolean {
   return a.id === b.id && a.hostId === b.hostId
 }
@@ -111,11 +151,7 @@ export function upsertProjectHostSetup(
     : [...setups, setup]
 }
 
-/**
- * Where a setup edit or removal goes. This computer's catalog stamps every row with its real
- * host, so a named host or a same-id twin goes on the wire; a paired server keeps the by-id
- * request, because its rows' client-side host ids cannot name its twins.
- */
+/** Local named/twin setup edits send real host identity; paired requests stay by-ID because client runtime hostIds cannot name server-side twins. */
 export async function prepareProjectHostSetupMutation<T extends ProjectHostSetupTarget>(
   setups: readonly ProjectHostSetup[],
   args: T

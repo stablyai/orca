@@ -32,6 +32,7 @@ import {
   WORKTREE_ID
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
+import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 
@@ -248,7 +249,6 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const unownedRun = createBoundRun(db, 'Unowned backlog')
-    // More than one 50-message page must not hide later owned mail.
     for (let index = 0; index < 51; index += 1) {
       db.insertMessage({
         from: TERMINAL_HANDLE,
@@ -473,8 +473,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  // Window-owned only: main's layout load re-mints a leaf id a second tab repeats, so two live
-  // panes never share a leaf there (workspace-layout-load-bindings.ts loadLeaves).
+  // Main remints duplicate leaf ids at load, so equivalent-pane serialization applies only to window-owned layouts.
   it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'serializes equivalent panes while newer mail arrives during Enter delay',
     async () => {
@@ -576,7 +575,6 @@ describe('orchestration notification mailbox consistency', () => {
 
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
-    // Parking unmounts the renderer leaf but intentionally leaves the PTY alive.
     harness.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await vi.advanceTimersByTimeAsync(500)
@@ -596,7 +594,6 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
 
-    // The first post-unmount graph can omit the target while a decoy remains.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -617,8 +614,7 @@ describe('orchestration notification mailbox consistency', () => {
         }
       ]
     })
-    // The parked watcher then republishes the target leaf. It is not a live
-    // renderer pane and must not clear the cold-park fence.
+    // A parked watcher can republish a leaf without a live renderer; retain the cold-park fence.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -840,32 +836,46 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('does not point newer Run mail behind an outstanding Delivery', async () => {
+  it('points newer Run mail behind an unacked Delivery once, naming the Delivery', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Outstanding Delivery Run')
-    const firstMessage = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${run.id}`,
-      subject: 'First status',
-      runId: run.id
-    })
+    const insert = (subject: string) =>
+      db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject, runId: run.id })
+    const firstMessage = insert('First status')
     const firstDelivery = await checkBoundMailbox(harness.runtime)
-    const newerMessage = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${run.id}`,
-      subject: 'Newer status',
-      runId: run.id
-    })
+    const newerMessage = insert('Newer status')
 
+    const enters = () => harness.write.mock.calls.filter(([, payload]) => payload === '\r').length
     await driveToLiveIdle(harness.runtime)
-    const replayed = await checkBoundMailbox(harness.runtime)
+    const pointers = harness.write.mock.calls.filter(([, payload]) => isMailboxPointer(payload))
+    expect(pointers).toHaveLength(1)
+    expect(String(pointers[0]![1])).toContain(
+      `after delivery ${firstDelivery.deliveryId}, which you have not acknowledged. If you no longer have it, run \`${localOrchestrationCliCommand()} orchestration check --run ${run.id}\` to see it again; once it is handled, run \`${localOrchestrationCliCommand()} orchestration check --run ${run.id} --ack ${firstDelivery.deliveryId}\``
+    )
 
-    expect(pointerCount(harness.write)).toBe(0)
+    // A turn that starts inside the Enter delay keeps the reminder until it ends.
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 3)
+    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(enters()).toBe(0)
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 4)
+    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(enters()).toBe(1)
+    expect(db.getMessageById(newerMessage.id)?.delivered_at).toEqual(expect.any(String))
+
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 5)
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 6)
+    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(pointerCount(harness.write)).toBe(1)
+    expect(enters()).toBe(1)
+
+    const replayed = await checkBoundMailbox(harness.runtime)
     expect(replayed.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
     expect(replayed.deliveryId).toBe(firstDelivery.deliveryId)
-
     const next = await checkBoundMailbox(harness.runtime, { ack: firstDelivery.deliveryId! })
     expect(next.messages).toEqual([expect.objectContaining({ id: newerMessage.id })])
     expect(next.deliveryId).not.toBe(firstDelivery.deliveryId)

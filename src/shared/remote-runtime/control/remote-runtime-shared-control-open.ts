@@ -11,26 +11,30 @@ import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
 } from '../../remote-runtime-socket-liveness'
+import type { SharedControlSocketCloseCause } from './remote-runtime-shared-control-types'
 
 export function openSharedControlSocket(
   connection: PairedRuntimeConnection,
   callbacks: {
     getCurrentSocket: () => WebSocket | null
-    onClose: (close: { code: number; reason: string }, error: RemoteRuntimeClientError) => void
-    onError: (error: RemoteRuntimeClientError) => void
+    /** The current socket closed, errored or went silent; `close` is set for a close frame only. */
+    onSocketClosed: (
+      error: RemoteRuntimeClientError,
+      cause: SharedControlSocketCloseCause,
+      close?: { code: number; reason: string }
+    ) => void
     onTextFrame: (frame: string) => void
     /** Any inbound frame, ping or pong on the current socket. */
     onActivity?: () => void
-    // Why: reconnect is edge-triggered on `close`, but a half-open tunnel
-    // never delivers one. Liveness pings and declares the socket dead when
-    // the server goes silent, so the close/reconnect path can run (#7718).
+    // Half-open tunnels never emit close; liveness must trigger the close/reconnect path (#7718).
     liveness?: {
       options?: RemoteRuntimeSocketLivenessOptions
-      onDead: (error: RemoteRuntimeClientError) => void
+      onRoundTrip?: (rttMs: number) => void
     }
   }
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
   let noteLiveness: () => void = () => {}
+  let notePong: () => void = () => {}
   const noteActivity = (): void => {
     noteLiveness()
     callbacks.onActivity?.()
@@ -38,15 +42,17 @@ export function openSharedControlSocket(
   const opened = openRemoteRuntimeWebSocket(connection, {
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
-        callbacks.onClose(
-          { code, reason: reason.toString() },
-          remoteRuntimeUnavailableError(formatSharedControlCloseMessage(code, reason))
+        callbacks.onSocketClosed(
+          remoteRuntimeUnavailableError(formatSharedControlCloseMessage(code, reason)),
+          'socket_close',
+          { code, reason: reason.toString() }
         )
       }
     },
     onError: (ws, error) => {
       if (callbacks.getCurrentSocket() === ws) {
-        callbacks.onError(error)
+        const cause = error.code === 'invalid_runtime_response' ? 'protocol_error' : 'socket_error'
+        callbacks.onSocketClosed(error, cause)
       }
     },
     onTextFrame: (ws, frame) => {
@@ -57,7 +63,8 @@ export function openSharedControlSocket(
     },
     onPong: (ws) => {
       if (callbacks.getCurrentSocket() === ws) {
-        noteActivity()
+        notePong()
+        callbacks.onActivity?.()
       }
     },
     onPing: (ws) => {
@@ -80,7 +87,7 @@ export function openSharedControlSocket(
       ws.ping()
       return true
     },
-    onDead: () => {
+    onDead: (cause) => {
       if (callbacks.getCurrentSocket() !== ws) {
         return
       }
@@ -90,15 +97,18 @@ export function openSharedControlSocket(
       } catch {
         // Best-effort terminate; the dead callback resets connection state.
       }
-      liveness.onDead(
+      callbacks.onSocketClosed(
         remoteRuntimeUnavailableError(
           'Remote Orca runtime stopped responding; resetting the control connection.'
-        )
+        ),
+        cause
       )
     },
+    onRoundTrip: liveness.onRoundTrip,
     options: liveness.options
   })
   noteLiveness = monitor.noteActivity
+  notePong = monitor.notePong
 
   return {
     ok: true,

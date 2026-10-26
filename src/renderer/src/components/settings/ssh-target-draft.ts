@@ -32,8 +32,7 @@ export const EMPTY_FORM: EditingTarget = {
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
-  // Why: manual targets store configHost as their host. Clear that implicit
-  // value on edit so changing Host recomputes the alias instead of keeping stale resolution.
+  // Clear implicit host aliases so editing Host cannot retain stale resolution.
   const configHost = target.configHost && target.configHost !== target.host ? target.configHost : ''
   return {
     label: target.label,
@@ -51,15 +50,13 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
   }
 }
 
-/** Prefill the add-host form from a ~/.ssh/config Host entry (does not save). */
 export function getEditingTargetFromSshConfigHost(host: SshConfigHostResolution): EditingTarget {
   const configHost = host.alias !== host.hostname ? host.alias : ''
   return {
     ...EMPTY_FORM,
     label: host.alias,
     configHost,
-    // Why: keep the config alias in Host when there is no HostName so OpenSSH
-    // still resolves User/Port/Identity from ~/.ssh/config on connect.
+    // Absent HostName must retain the alias so OpenSSH resolves config User/Port/Identity.
     host: host.hostname,
     port: String(host.port),
     username: host.username,
@@ -108,8 +105,7 @@ export function parseSshHostInput(rawInput: string): ParsedSshHostInput | null {
 
 export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
   const parsed = parseSshHostInput(draft.host)
-  // Why: keep bad host:port text visible so the user can correct it after
-  // the save validator reports the invalid port.
+  // Retain invalid host:port text for correction after save validation.
   if (!parsed || parsed.invalidPort) {
     return draft
   }
@@ -182,8 +178,7 @@ function parseSshUrl(input: string): ParsedSshHostInput | null {
     if (url.protocol !== 'ssh:' || !url.hostname) {
       return null
     }
-    // Why: URL.hostname keeps IPv6 literals bracketed, but ssh2 and DNS
-    // resolution expect the bare address. The non-URL parser already strips.
+    // URL retains IPv6 brackets; ssh2 and DNS need bare addresses.
     const host = url.hostname.replace(/^\[|\]$/g, '')
     const port = url.port ? parsePort(url.port) : undefined
     if (url.port && port === undefined) {
@@ -233,8 +228,7 @@ function decodeSshUrlUsername(value: string): string | undefined {
   try {
     return decodeURIComponent(value)
   } catch {
-    // Why: malformed pasted SSH URLs should surface validation errors in the
-    // form, not throw during parsing before the user can fix the input.
+    // Malformed pasted usernames must remain editable rather than throwing during parsing.
     return value
   }
 }

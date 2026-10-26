@@ -229,8 +229,7 @@ export function useFileExplorerReveal({
     clearPendingExplorerReveal()
     setSelectedPath(revealPath)
 
-    // Only flash when explicitly requested (e.g. "Reveal in Explorer" from Source Control).
-    // Auto-reveals on tab switch skip the flash to avoid visual noise.
+    // Manual reveals flash; automatic tab-switch reveals stay quiet.
     if (pendingExplorerReveal.flash !== false) {
       setFlashingPath(revealPath)
       if (flashTimeoutRef.current !== null) {

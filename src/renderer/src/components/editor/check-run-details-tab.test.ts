@@ -44,7 +44,6 @@ describe('check-run-details-tab', () => {
     expect(getCheckRunTabIdentity({ ...base, name: 'test: unit', gitlabJobId: 42 })).toBe(
       'gitlab-job:42'
     )
-    // Why: GitLab reuses `stage: name` across pipeline runs, so the name alone collides.
     expect(
       buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 42 })
     ).not.toBe(buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 43 }))

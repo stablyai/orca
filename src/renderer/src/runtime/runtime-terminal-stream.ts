@@ -1,6 +1,7 @@
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { getRemoteRuntimeTerminalMultiplexer } from './remote-runtime-terminal-multiplexer'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import type { RemoteTerminalTransportCloseEvent } from './remote-runtime-terminal-multiplexer-types'
 
 const LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS = 10_000
 
@@ -9,7 +10,7 @@ export type RuntimeTerminalDataSubscriptionOptions = {
   onSnapshot?: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onEnd?: () => void
   onError?: (message: string) => void
-  onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
+  onTransportClose?: (event: RemoteTerminalTransportCloseEvent) => void
 }
 
 export function getRemoteRuntimeTerminalHandle(ptyId: string): string | null {
@@ -108,8 +109,7 @@ export async function subscribeToRuntimeTerminalData(
       LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS
     )
     try {
-      // Why: outcome observers must ignore historical snapshots and be armed
-      // before the command whose output they classify, including over SSH.
+      // Arm outcome observers before commands and exclude historical snapshots, including SSH.
       await liveTailReady
     } catch (error) {
       stream.close()

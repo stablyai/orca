@@ -54,7 +54,9 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
   return profileEnv ? { ...env, ...profileEnv } : env
 }
 
-/** Include account history only where setup could not link it into System default. */
+/** Account homes plus the user's CLAUDE_CONFIG_DIR, which a Dock launch only learns from the login shell. */
 export function claudeProfileHistoryDirs(surface: 'projects' | 'transcripts'): string[] {
-  return (installed?.accountHomes() ?? []).map((home) => join(home, surface)).filter(isDirectory)
+  const userConfigDir = installed?.userConfigDir()
+  const homes = [...(userConfigDir ? [userConfigDir] : []), ...(installed?.accountHomes() ?? [])]
+  return homes.map((home) => join(home, surface)).filter(isDirectory)
 }

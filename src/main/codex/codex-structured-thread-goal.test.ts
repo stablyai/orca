@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal, codexThreadGoalRequests } from './codex-structured-thread-goal'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -18,33 +18,33 @@ describe('codex thread goal requests', () => {
     expect(codexThreadGoalRequests(THREAD, { kind: 'set', objective: 'Ship it' }, false)).toEqual([
       {
         method: 'thread/goal/set',
-        params: { threadId: THREAD, objective: 'Ship it', status: 'active' }
+        params: { threadId: THREAD, origin: 'user', objective: 'Ship it', status: 'active' }
       }
     ])
   })
 
   it('clears the existing goal before setting a new objective, so the new goal starts fresh', () => {
     expect(codexThreadGoalRequests(THREAD, { kind: 'set', objective: 'Ship it' }, true)).toEqual([
-      { method: 'thread/goal/clear', params: { threadId: THREAD } },
+      { method: 'thread/goal/clear', params: { threadId: THREAD, origin: 'user' } },
       {
         method: 'thread/goal/set',
-        params: { threadId: THREAD, objective: 'Ship it', status: 'active' }
+        params: { threadId: THREAD, origin: 'user', objective: 'Ship it', status: 'active' }
       }
     ])
   })
 
   it('pauses and resumes by status alone, keeping the objective', () => {
     expect(codexThreadGoalRequests(THREAD, { kind: 'status', status: 'paused' }, true)).toEqual([
-      { method: 'thread/goal/set', params: { threadId: THREAD, status: 'paused' } }
+      { method: 'thread/goal/set', params: { threadId: THREAD, origin: 'user', status: 'paused' } }
     ])
     expect(codexThreadGoalRequests(THREAD, { kind: 'status', status: 'active' }, true)).toEqual([
-      { method: 'thread/goal/set', params: { threadId: THREAD, status: 'active' } }
+      { method: 'thread/goal/set', params: { threadId: THREAD, origin: 'user', status: 'active' } }
     ])
   })
 
-  it('clears with only the thread id', () => {
+  it('clears with user provenance', () => {
     expect(codexThreadGoalRequests(THREAD, { kind: 'clear' }, true)).toEqual([
-      { method: 'thread/goal/clear', params: { threadId: THREAD } }
+      { method: 'thread/goal/clear', params: { threadId: THREAD, origin: 'user' } }
     ])
   })
 
@@ -54,10 +54,10 @@ describe('codex thread goal requests', () => {
       changeCodexThreadGoal(session(request), { kind: 'set', objective: 'Ship it' }, true, 5_000)
     ).resolves.toEqual({ ok: true })
     expect(request.mock.calls).toEqual([
-      ['thread/goal/clear', { threadId: THREAD }, { timeoutMs: 5_000 }],
+      ['thread/goal/clear', { threadId: THREAD, origin: 'user' }, { timeoutMs: 5_000 }],
       [
         'thread/goal/set',
-        { threadId: THREAD, objective: 'Ship it', status: 'active' },
+        { threadId: THREAD, origin: 'user', objective: 'Ship it', status: 'active' },
         { timeoutMs: 5_000 }
       ]
     ])
@@ -82,6 +82,27 @@ describe('codex thread goal requests', () => {
     clear.resolve({ goal: null })
     await expect(result).rejects.toThrow('stopped')
     expect(request).toHaveBeenCalledOnce()
+  })
+
+  it('reports a cleared previous goal when replacement is refused', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ cleared: true })
+      .mockRejectedValueOnce(
+        new CodexAppServerRequestError('thread/goal/set', -32600, 'goals disabled')
+      )
+    await expect(
+      changeCodexThreadGoal(
+        session(request),
+        { kind: 'set', objective: 'Ship it' },
+        true,
+        undefined
+      )
+    ).resolves.toEqual({
+      ok: false,
+      rejected:
+        'Codex cleared the previous goal but could not set the new goal. Set the goal again to continue.'
+    })
   })
 
   it('stops at a refused clear, so a refused replacement leaves the old goal alone', async () => {

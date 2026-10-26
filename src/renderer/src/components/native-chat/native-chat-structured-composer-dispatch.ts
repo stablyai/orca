@@ -14,13 +14,13 @@ export async function dispatchNativeChatStructuredComposerText(
   attachments: readonly NativeChatComposerImageAttachment[] = [],
   skills: readonly AgentJournalSkillRef[] = []
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
-  // The one place a chip's image gets its number: its place among the images this message carries.
+  // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
     draftText,
     attachments.map((attachment) => attachment.id)
   )
   const { handled, ...command } = await transport.dispatchCommand(prompt)
-  // A command's reveal, if any, came at the press; a message reveals unless it waits as a queued card.
+  // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
     return { ...command, revealsTranscript: false }
   }

@@ -47,8 +47,7 @@ describe('Claude Code quarter-circle busy titles (#13889)', () => {
   })
 
   it('reports working when the busy title carries task text instead of the agent name', () => {
-    // Why: the summary-bearing frame has no "claude" token, so it previously fell
-    // through to null — the value the tracker reads as an exit.
+    // Task-only busy frames previously fell through to null, which the tracker treats as exit.
     expect(detectAgentStatusFromTitle('◐ Say hi in one word')).toBe('working')
   })
 

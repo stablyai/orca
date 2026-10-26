@@ -128,7 +128,7 @@ describe('KimiHookService', () => {
       const script = readFileSync(scriptPath(), 'utf-8')
       expect(script).toContain('/hook/kimi')
       // Keep large payloads off curl's command line to avoid EDR false positives.
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
       expect(config).toContain('agent-hooks/kimi-hook.sh')

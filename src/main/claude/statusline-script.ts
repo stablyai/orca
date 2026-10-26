@@ -1,8 +1,5 @@
-import {
-  buildWindowsHookStdinDrainEpilogue,
-  WINDOWS_HOOK_STDIN_DRAIN_LABEL,
-  WINDOWS_HOOK_STDIN_READER
-} from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+import { WINDOWS_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
@@ -30,7 +27,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       // Daemon workers inherit stale pane keys; exit before reading their potentially abandoned stdin.
       'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
       // Endpoint refresh never sets the pane key, so this guard can precede stdin capture.
-      `if "%ORCA_PANE_KEY%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       // UUID suffixes and sanitized legacy delimiters keep filenames safe.
       'set "ORCA_STATUSLINE_PANE_ID=%ORCA_PANE_KEY:~-36%"',
       'set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"',
@@ -79,7 +76,6 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       `:${STATUSLINE_CLEANUP_LABEL}`,
       'del "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -161,7 +157,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'if [ -n "$orca_statusline_now" ]; then',
     '  printf \'%s\' "$orca_statusline_now" >"$orca_statusline_stamp" 2>/dev/null || :',
     'fi',
-    `printf '%s' "$payload" | curl -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}${CLAUDE_STATUSLINE_PATHNAME}" \\`,
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}${CLAUDE_STATUSLINE_PATHNAME}" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

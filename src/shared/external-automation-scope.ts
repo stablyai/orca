@@ -1,15 +1,5 @@
-/**
- * Scoped external-automation requests.
- *
- * External managers are a desktop-only surface, so every scoped call carries the
- * captured desktop `AutomationOwnerRef` it was built from. The provider target is
- * *derived* from that owner and never accepted alongside it, so a caller cannot
- * name one host's owner while asking for another host's manager.
- *
- * The host-changed failure reuses `AutomationOwnerConflictError` rather than
- * introducing a second conflict vocabulary; the codes below cover only the
- * failures that are specific to this surface.
- */
+/** External managers are desktop-only; derive targets from captured AutomationOwnerRef so callers cannot mix owners and hosts.
+ * Host changes reuse AutomationOwnerConflictError; the codes here cover surface-specific failures. */
 
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
@@ -54,10 +44,7 @@ const SCOPE_MESSAGES: Record<ExternalAutomationScopeCode, string> = {
     'Orca runs on that host, so it does not expose external automations.'
 }
 
-/**
- * Carries its code as a trailing `: <code>` token, matching the automation owner
- * conflicts, because Electron IPC and older runtimes preserve nothing but the message.
- */
+/** Trailing : <code> survives Electron IPC and older runtimes that preserve only the message, matching owner conflicts. */
 export class ExternalAutomationScopeError extends Error {
   readonly code: ExternalAutomationScopeCode
 
@@ -78,7 +65,7 @@ export function externalAutomationTargetRemovedError(): AutomationOwnerConflictE
   return new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved)
 }
 
-/** Every scoped request; the target is derived from `owner`, never sent beside it. */
+/** Targets are derived from owner, never supplied separately. */
 export type ScopedExternalAutomationRequest = {
   owner: AutomationOwnerRef
   provider: ExternalAutomationProvider
@@ -103,11 +90,7 @@ export function externalAutomationTargetForOwner(
     : { type: 'local' }
 }
 
-/**
- * Manager identity for a scope. The authority is implicit rather than encoded:
- * this surface is desktop-only, and the existing IDs are already persisted in
- * job, run, and dialog keys that older renderers still parse.
- */
+/** Desktop authority is implicit: existing IDs persist in job/run/dialog keys parsed by older renderers. */
 export function externalAutomationManagerId(
   owner: AutomationOwnerRef,
   provider: ExternalAutomationProvider

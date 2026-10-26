@@ -54,7 +54,7 @@ export function useRemoteFileBrowserPathPreview({
   clearFileHint,
   setFilter
 }: RemoteFileBrowserPathPreviewArgs): RemoteFileBrowserPathPreview {
-  // Drives the list during path mode; separate from committed state so typing doesn't move the Select target before commit.
+  // Keep typed preview separate so it cannot change the Select target before navigation commits.
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const previewGenRef = useRef(0)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -76,7 +76,6 @@ export function useRemoteFileBrowserPathPreview({
   const discardPreview = useCallback(() => {
     setPreview(null)
     previewGenRef.current++
-    // Cancel any pending debounced resolve so it can't fire after Escape dismisses the preview.
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
@@ -93,7 +92,6 @@ export function useRemoteFileBrowserPathPreview({
     }
   }, [])
 
-  // Resolve a path-mode input into preview state; stable callback so paste and the debounce tick share one instance.
   const resolvePathInput = useCallback(
     async (raw: string) => {
       await resolvePathInputAgainstListings({
@@ -110,7 +108,7 @@ export function useRemoteFileBrowserPathPreview({
     [resolvedPath, fetchListing, pathFlavor, homePathRef]
   )
 
-  // Filter-mode edits stay local; path-mode edits trigger a debounced resolve, but trailing-filter-only edits stay local too.
+  // Resolve committed path changes remotely; filter-mode and trailing-filter edits stay local.
   const handleInputChange = useCallback(
     (raw: string) => {
       clearFileHint()
@@ -133,7 +131,7 @@ export function useRemoteFileBrowserPathPreview({
       }
 
       if (!isPathMode(raw, pathFlavor)) {
-        // Leaving path mode: drop preview immediately so the committed directory reappears without a flicker.
+        // Leaving path mode immediately restores the committed directory.
         if (preview) {
           setPreview(null)
           previewGenRef.current++
@@ -146,7 +144,7 @@ export function useRemoteFileBrowserPathPreview({
       }
 
       const parsed = parsePathInput(raw, pathFlavor)
-      // Fast path: unchanged committed prefix updates only the local filter, so intra-segment typing issues no browseDir call.
+      // An unchanged committed prefix needs only local filtering, without another directory read.
       if (
         parsed.mode === 'path' &&
         preview &&
@@ -154,7 +152,7 @@ export function useRemoteFileBrowserPathPreview({
         !parsed.invalid &&
         committedPrefix(raw) === lastCommittedPrefixRef.current
       ) {
-        // Runs even while preview.loading: unchanged prefix hits the same listing, so blocking keystrokes would only feel laggy.
+        // Allow local filter edits during loading; the committed path is unchanged.
         setPreview({ ...preview, filter: parsed.trailingFilter })
         return
       }
@@ -178,7 +176,7 @@ export function useRemoteFileBrowserPathPreview({
       if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
         return
       }
-      // Paste resolves immediately (no debounce), but defer a tick so onChange has applied the pasted value to filter.
+      // Defer immediate paste resolution one tick so onChange first commits the pasted input.
       if (pasteResolveTimerRef.current) {
         clearTimeout(pasteResolveTimerRef.current)
       }

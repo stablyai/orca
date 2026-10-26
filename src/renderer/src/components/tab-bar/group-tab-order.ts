@@ -16,14 +16,7 @@ export type ActiveTabNavOrderIds = {
   agentSessionIds?: string[]
 }
 
-/**
- * One group's visible tab-strip order, via the same `reconcileTabOrder` pass TabBar renders with
- * so keyboard cycling always walks what the user sees. STA-3475: dropping a tab that hydrated
- * before `group.tabOrder` knew it left the cycle a silent no-op until a click.
- *
- * `id` is the backing entity/file id legacy activation APIs take; `tabId` is the unified tab id
- * that picks the right split copy. Tabs whose entity is gone are skipped.
- */
+/** Match reconciled visible strip order; id activates backing entities, tabId selects split copies, and missing entities are skipped. */
 export function getGroupVisibleTabOrder(
   group: TabGroup,
   groupTabs: readonly Tab[],
@@ -56,8 +49,7 @@ export function getGroupVisibleTabOrder(
       ? { type: 'editor', id: tab.entityId, tabId: tab.id }
       : null
   }
-  // Why: the strip keys terminals/browsers by entity id and editors/simulators by unified tab id
-  // (see useTabGroupItemProjections) — reconcileTabOrder must see that same id domain.
+  // Reconcile the strip’s ID domain: terminals/browsers use entities, editors/simulators use unified tabs.
   const visibleIdOf = (tab: Tab): string =>
     tab.contentType === 'terminal' ||
     tab.contentType === 'browser' ||
@@ -89,8 +81,7 @@ export function getGroupVisibleTabOrder(
     return result
   }
 
-  // Why: the strip's per-type maps are last-write-wins, so a duplicate entity resolves to the
-  // last declared tab while the reconciled visible id still occupies one position.
+  // Match last-write-wins strip maps while keeping one position per visible identity.
   const declaredTabs = group.tabOrder.flatMap((unifiedId) => {
     const tab = tabsById.get(unifiedId)
     return tab ? [tab] : []
@@ -116,8 +107,7 @@ export function getGroupVisibleTabOrder(
     }
     const existing = refByVisibleId.get(visibleId)
     if (existing) {
-      // Keep the same type precedence as buildOrderedTabItems, whose terminal map wins over
-      // editor/browser/simulator maps when visible ids collide across content types.
+      // Match strip type precedence when visible IDs collide across content types.
       const priority = {
         terminal: 0,
         editor: 1,
@@ -148,20 +138,7 @@ export function getGroupVisibleTabOrder(
   })
 }
 
-/**
- * Resolve the visible tab order the active surface is showing, for keyboard
- * navigation.
- *
- * Prefers the active group's `group.tabOrder` so drag-reordered tabs cycle
- * in the order the user sees. Falls back to the legacy
- * `tabBarOrderByWorktree` path when no active group exists yet — this covers
- * sessions restored before the split-group model hydrated and the
- * pre-layout titlebar TabBar fallback rendered by Terminal.tsx. The fallback
- * still drifts for drag-reorders (the legacy store never learns about
- * them), but worktrees without a group cannot have split-aware drag in the
- * first place, so in practice only the active-group path matters once
- * layouts are established.
- */
+/** Prefer active-group ordering; use legacy workspace order only before split-group hydration. */
 export function getActiveTabNavOrder(
   state: Pick<
     AppState,
@@ -201,8 +178,7 @@ export function getActiveTabNavOrder(
     const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
       (tab) => tab.groupId === group.id
     )
-    // The group strip renders unified terminal tabs before their legacy runtime rows hydrate.
-    // Keep those tabs keyboard-cyclable; activation can hydrate/reconnect the backing runtime.
+    // Unified terminal tabs render before legacy runtime hydration; keep them cyclable so activation can restore the runtime.
     const groupTerminalIds = new Set([
       ...terminalIds,
       ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
@@ -217,7 +193,6 @@ export function getActiveTabNavOrder(
     )
   }
 
-  // Legacy fallback: no split-group layout yet for this worktree.
   const visibleIds = reconcileTabOrder(
     state.tabBarOrderByWorktree[worktreeId],
     terminalIds,

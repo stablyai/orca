@@ -6,7 +6,7 @@ const fakes = vi.hoisted(() => ({
     onText(value: string): void
     onBinary(value: Uint8Array): void
   },
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   close: vi.fn()
 }))
 
@@ -55,6 +55,11 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
   fakes.linkOptions!.onAuthenticated()
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
   const confirmation = sentRequests()[0]!
+  expect(confirmation).toMatchObject({
+    method: 'pairing.getEndpoints',
+    params: { resumeConfirmReqId: 'confirm-1' },
+    deviceToken: 'device-token'
+  })
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: confirmation.id,
@@ -76,6 +81,11 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
   )
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
   const capabilities = sentRequests()[1]!
+  expect(capabilities).toMatchObject({
+    method: 'runtime.clientCapabilities.update',
+    params: { clientCapabilities: expect.arrayContaining(['agent-session.structured.v1']) },
+    deviceToken: 'device-token'
+  })
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: capabilities.id,
@@ -89,10 +99,21 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
   return session
 }
 
-function sentRequests(): Array<{ id: string; method: string }> {
-  return fakes.sendText.mock.calls.map(
-    ([value]) => JSON.parse(value as string) as { id: string; method: string }
-  )
+function sentRequests() {
+  return fakes.sendText.mock.calls.map(([value]) => {
+    const request: unknown = JSON.parse(value)
+    if (
+      !request ||
+      typeof request !== 'object' ||
+      !('id' in request) ||
+      typeof request.id !== 'string' ||
+      !('method' in request) ||
+      typeof request.method !== 'string'
+    ) {
+      throw new Error('Expected a serialized RPC request')
+    }
+    return request
+  })
 }
 
 describe('mobile relay RPC session liveness', () => {

@@ -3,7 +3,6 @@ import { getConnectionId } from '@/lib/connection-context'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
-/** Keeps the upstream ahead/behind status for the visible branch fresh. */
 export function useSourceControlUpstreamStatusFetch({
   activeRepoTarget,
   activeWorktree,
@@ -22,7 +21,7 @@ export function useSourceControlUpstreamStatusFetch({
   worktreePath: string | null
 }): void {
   useEffect(() => {
-    // Why: gate on isBranchVisible so we don't spawn git processes while the sidebar is closed.
+    // Avoid Git subprocesses while the sidebar is hidden.
     if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
       return
     }

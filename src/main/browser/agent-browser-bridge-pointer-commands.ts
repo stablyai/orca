@@ -53,6 +53,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
       const { params, press, result } = build(state)
+      await this.browserManager.showAgentPointer(wc, params)
       if (press) {
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }

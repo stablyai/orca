@@ -36,7 +36,6 @@ type UseFileExplorerRowScrollingResult = {
   setExplorerShellRef: (node: HTMLDivElement | null) => void
 }
 
-/** Decides which explorer row is measured and scrolled into view. */
 export function useFileExplorerRowScrolling({
   onRevealOutsideRoot,
   visibleRowCount,
@@ -58,7 +57,7 @@ export function useFileExplorerRowScrolling({
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
-  /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
+  /** Include the scrollbar, which is outside Radix’s viewport. */
   const explorerShellRef = useRef<HTMLDivElement | null>(null)
   const flashTimeoutRef = useRef<number | null>(null)
 
@@ -105,8 +104,7 @@ export function useFileExplorerRowScrolling({
       if (node !== null) {
         return
       }
-      // Why: reveal flash/scroll timers target the explorer shell; clear them
-      // when that owner detaches instead of keeping a passive unmount Effect.
+      // Cancel shell-owned reveal timers on detach rather than passive unmount cleanup.
       cancelRevealTimers()
     },
     [cancelRevealTimers]

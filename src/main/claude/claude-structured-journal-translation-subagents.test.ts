@@ -331,6 +331,7 @@ describe('claude journal translation — which agent produced a row', () => {
     )
     expect(row?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
     expect(row?.options).toEqual({
+      lifecycle: true,
       turnScope: { kind: 'turn', turnItemId: expect.any(String) }
     })
   })

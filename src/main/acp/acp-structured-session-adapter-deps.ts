@@ -6,12 +6,11 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 
 // Grace begins at cancellation, before process close.
 export const ACP_STOP_GRACE_MS = 4_000
@@ -24,14 +23,12 @@ export type AcpStructuredSessionAdapterDeps = {
     identity: AgentSessionJournalIdentity
     spawnToken: string
     /** Defaults to ask. */
-    permissionMode?: AgentChatPermissionMode
+    permissionMode?: AgentChatPermissionChoice
   }) => Promise<AcpStructuredLaunch>
-  /** Recovery reads use the same launch with an unsealed environment. */
+  /** The same launch for a read that starts no child (a conversation copy): the agent's env, unsealed. */
   readLaunch: (identity: AgentSessionJournalIdentity) => Promise<AcpStructuredLaunch>
   /** Current host arguments before protocol-specific filtering; copies open through the CLI. */
   resolveLaunchArgs?: () => Promise<string[]> | string[]
-  /** Reads without opening the journal. */
-  readJournal?: (sessionId: string) => JournalLoad | null
   /** Protected by this host's instance lock. */
   dataDirectory: string
   connect: ConnectAcpAgent

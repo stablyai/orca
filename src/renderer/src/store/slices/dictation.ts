@@ -18,8 +18,7 @@ function sameSpeechModelState(a: SpeechModelState, b: SpeechModelState): boolean
   return a.id === b.id && a.status === b.status && a.progress === b.progress && a.error === b.error
 }
 
-// Why: every getModelStates reply is a fresh array, so without this each no-op
-// refresh re-renders every subscriber — including the open speech-model menu.
+// Replies allocate fresh arrays; preserve unchanged identity or every model refresh rerenders subscribers/menu.
 function resolveModelStates(
   previous: SpeechModelState[],
   next: SpeechModelState[]

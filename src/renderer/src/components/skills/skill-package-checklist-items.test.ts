@@ -47,8 +47,6 @@ function singleVersion(): SkillCloudVersion {
 }
 
 describe('checklistItemsFromVersion', () => {
-  // Why: one shape for both package kinds keeps the dialog's list identical
-  // whether the link holds one skill or thirty.
   it('turns a single-skill package into a one-row checklist', () => {
     expect(checklistItemsFromVersion(singleVersion())).toEqual([
       {

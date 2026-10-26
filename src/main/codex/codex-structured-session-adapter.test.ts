@@ -11,10 +11,8 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  CodexAppServerRequestError,
-  type openCodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   CodexStructuredSessionAdapter,
@@ -41,7 +39,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      serviceTier: 'priority'
+      serviceTier: 'priority',
+      reportedPermissionMode: null
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
@@ -108,10 +107,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
-      effort: 'medium'
+      effort: 'medium',
+      reportedPermissionMode: null
     })
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
-      current: { model: 'gpt-live', effort: 'medium' },
+      current: { model: 'gpt-live', effort: 'medium', reportedPermissionMode: null },
       models: [
         {
           id: 'gpt-live',

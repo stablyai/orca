@@ -1,8 +1,4 @@
-/**
- * The export's path-rewrite stage over the fields in orcad-migration-path-fields.ts. A source whose
- * paths differ on the destination (a local WSL distro reached through `\\wsl.localhost`) supplies a
- * rewriter; the relay-era SSH host uses the identity, which leaves the payload byte-identical.
- */
+/** Rewrite differing source/destination paths, such as WSL via \wsl.localhost; SSH identity rewriting must preserve payload bytes. */
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
@@ -33,7 +29,7 @@ export function rewriteOrcadMigrationPayloadPaths(
   rewriter: OrcadMigrationPathRewriter
 ): OrcadMigrationCatalogPayload {
   const copy = structuredClone(payload)
-  // Why: SSH exports run this on every stage and commit check; the identity changes nothing.
+  // Stage/commit checks repeat identity exports; skip traversal when every path stays unchanged.
   if (rewriter === IDENTITY_ORCAD_MIGRATION_PATH_REWRITER) {
     return copy
   }
@@ -137,7 +133,6 @@ function rewriteValue(
   }
 }
 
-/** The worktree id the destination will hold for `value`, as the catalog rewrite computes it. */
 export function rewriteOrcadMigrationWorktreeId(
   value: string,
   rewriter: OrcadMigrationPathRewriter

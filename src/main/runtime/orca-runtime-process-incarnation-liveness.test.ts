@@ -112,9 +112,7 @@ describe('structured worker incarnation liveness', () => {
   })
 
   it('settles a stopped worker as exited after its identity was forgotten', async () => {
-    // Settlement forgets the in-memory identity. Gating on one left the durable resource answering
-    // `unverifiable` forever, so its row never reconciled out of `worker-list --terminalState
-    // retained` for the life of the DB. The durable agent-session record is what actually knows.
+    // Settlement forgets in-memory identity; durable session records must still reconcile retained workers.
     installHost({
       runtimeKind: 'native',
       claimStatus: 'released',

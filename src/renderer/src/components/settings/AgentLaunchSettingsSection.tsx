@@ -1,3 +1,4 @@
+import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -12,6 +13,7 @@ import {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   AgentLaunchSettingsCatalog,
+  AgentLaunchSettingsLoading,
   type AgentPermissionsRenderer
 } from './AgentLaunchSettingsCatalog'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
@@ -55,9 +57,7 @@ export function AgentLaunchSettingsSection({
       ) : !hostScope.available ? (
         <SettingsHostScopeUnavailableNotice />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          {translate('settings.agents.loadingHost', 'Loading agent settings…')}
-        </p>
+        <AgentLaunchSettingsLoading />
       )}
     </section>
   )
@@ -72,6 +72,7 @@ function LocalAgentLaunchSettings({
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   renderPermissions: AgentPermissionsRenderer
 }): React.JSX.Element {
+  const chatOwnSupported = useChatSettingsOwnPermissions()
   const tail = useRef<Promise<void> | null>(null)
   const apply = (
     agent: TuiAgent | undefined,
@@ -122,6 +123,7 @@ function LocalAgentLaunchSettings({
       hostName={null}
       renderPermissions={renderPermissions}
       nativeChatPermissionsSupported
+      chatOwnSupported={chatOwnSupported}
       local={{ settings, updateSettings, saveEnvironment }}
     />
   )

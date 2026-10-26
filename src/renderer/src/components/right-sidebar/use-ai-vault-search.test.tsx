@@ -8,12 +8,26 @@ import type {
 } from '../../../../shared/ai-vault-search-types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
 vi.mock('@/store', () => ({
-  useAppStore: (select: (state: { settings: typeof mockSettings }) => unknown) =>
-    select({ settings: mockSettings })
+  useAppStore: (
+    select: (state: { settings: typeof mockSettings; runtimeEnvironments: never[] }) => unknown
+  ) => select({ settings: mockSettings, runtimeEnvironments: [] })
+}))
+
+const feeds = vi.hoisted(() => ({
+  subscribe: vi.fn(),
+  emit: new Map<string, (event: AgentSessionStatusEvent) => void>()
+}))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: feeds.subscribe
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  runtimeEnvironmentSupportsCapability: async () => true
 }))
 
 const ALL_AGENTS = ['codex' as const]
@@ -31,6 +45,12 @@ const empty: AiVaultSearchResponse = {
   truncated: { candidates: false, snippets: 0, query: false, freshness: false }
 }
 beforeEach(() => {
+  resetStructuredAgentSessionStatusFeedsForTests()
+  feeds.emit.clear()
+  feeds.subscribe.mockImplementation(async (target, emit) => {
+    feeds.emit.set(target.environmentId ?? 'local', emit)
+    return { unsubscribe: vi.fn() }
+  })
   vi.useFakeTimers()
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -39,7 +59,10 @@ beforeEach(() => {
   searchSessions.mockReset().mockResolvedValue(empty)
   delete mockSettings.aiVaultSearch
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  resetStructuredAgentSessionStatusFeedsForTests()
+  vi.useRealTimers()
+})
 async function debounce() {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(250)
@@ -349,7 +372,6 @@ it.each(['disabled', 'no-service'] as const)(
     expect(result.current.titleOnly).toBe(true)
     expect(result.current.loading).toBe(false)
 
-    // Further typing filters titles without asking that host again.
     rerender({ query: 'needles' })
     await debounce()
     expect(searchSessions).toHaveBeenCalledOnce()
@@ -367,4 +389,92 @@ it('keeps full-text search for a host that is merely not ready', async () => {
   expect(result.current.searching).toBe(true)
   expect(result.current.titleOnly).toBe(false)
   unmount()
+})
+
+it('revalidates active search without losing hits, accepting old pages, or touching another host', async () => {
+  const request = { query: 'inventory' }
+  const owned = {
+    ...searchHit(),
+    title: 'Budget plan',
+    structuredSession: { sessionId: 'native', workspaceId: 'workspace' }
+  }
+  searchSessions.mockResolvedValue({
+    ...searchResults(),
+    hits: [owned],
+    page: { cursor: 'old-page', hasMore: true }
+  })
+  const a = renderHook(() => useAiVaultSearch(request, 'runtime:a', ''))
+  const b = renderHook(() => useAiVaultSearch(request, 'runtime:b', ''))
+  const summary = {
+    sessionId: 'native',
+    workspaceId: 'workspace',
+    agent: 'pi' as const,
+    latestPrompt: '',
+    status: null,
+    updatedAt: 1,
+    providerSession: { key: 'session_id' as const, id: '/provider' }
+  }
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [summary] }))
+  await debounce()
+  const baseline = searchSessions.mock.calls.length
+  for (const n of [10, 100]) {
+    await act(async () => {
+      for (let i = 0; i < n; i++) {
+        feeds.emit.get('a')?.({
+          type: 'status',
+          session: { ...summary, updatedAt: i, toolName: `${i}` }
+        })
+        feeds.emit.get('a')?.({
+          type: 'snapshot',
+          sessions: [],
+          namingActiveSessionIds: [],
+          conversationNames: [{ sessionId: 'native', conversationName: `${i}` }]
+        })
+      }
+    })
+    expect(searchSessions).toHaveBeenCalledTimes(baseline)
+  }
+  let settlePage = (_response: AiVaultSearchResponse): void => {}
+  searchSessions.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        settlePage = resolve
+      })
+  )
+  act(() => a.result.current.loadMore())
+  const { providerSession: _provider, ...detached } = summary
+  await act(async () => {
+    for (const id of ['/next', '/third']) {
+      feeds.emit.get('a')?.({
+        type: 'status',
+        session: {
+          ...summary,
+          providerSession: { key: 'session_id', id }
+        }
+      })
+    }
+    feeds.emit.get('a')?.({ type: 'status', session: detached })
+  })
+  expect(a.result.current.hits).toEqual([owned])
+  const recovered = { ...searchHit(), title: 'Check inventory' }
+  searchSessions.mockResolvedValueOnce({ ...searchResults(), hits: [recovered] })
+  await act(async () =>
+    settlePage({ ...searchResults(), hits: [{ ...searchHit(), title: 'obsolete' }] })
+  )
+  expect(a.result.current.hits).toEqual([recovered])
+  expect(b.result.current.hits).toEqual([owned])
+  expect(
+    searchSessions.mock.calls.slice(baseline).map(([args, scope]) => [args.cursor, scope])
+  ).toEqual([
+    ['old-page', 'runtime:a'],
+    [undefined, 'runtime:a']
+  ])
+  a.unmount()
+  b.unmount()
+  await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
+  expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
 })

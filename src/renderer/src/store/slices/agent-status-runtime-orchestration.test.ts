@@ -383,8 +383,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
 }
 
 {
-  // The safety argument for STA-4293 step 1 in one file: an observation-stamped row and an
-  // unstamped row must be indistinguishable to every consumer that reads status today.
+  // Observation-stamped and unstamped rows must remain indistinguishable to existing consumers (STA-4293 step 1).
 
   const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
   const OBSERVATION: AgentStatusObservation = {
@@ -454,8 +453,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
       expect(withoutObservation(stamped.entry)).toEqual(withoutObservation(unstamped.entry))
       expect(stamped.entry.observation).toEqual(OBSERVATION)
       expect(unstamped.entry.observation).toBeUndefined()
-      // Why: an extra epoch tick is an extra render across every aggregate consumer — that
-      // would be a behavior change even though no rendered value differs.
+      // Extra epoch ticks rerender all aggregates and constitute behavior changes even with equal visible values.
       expect(stamped.agentStatusEpoch).toBe(unstamped.agentStatusEpoch)
       expect(stamped.sortEpoch).toBe(unstamped.sortEpoch)
     })
@@ -502,8 +500,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
     })
 
     it('leaves an unstamped entry resolving exactly as it does today', () => {
-      // Why: old hosts, persisted rehydration, title-derived rows and subagent rows all reach
-      // consumers with no observation at all; that path must not have moved.
+      // Old-host/hydrated/title/subagent rows lack observations; preserve that legacy path.
       const now = 1_700_000_000_000
       const entry: AgentStatusEntry = {
         paneKey: PANE_KEY,

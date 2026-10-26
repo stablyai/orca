@@ -8,9 +8,7 @@ describe('buildDiffEditorHideUnchangedOptions', () => {
     })
   })
 
-  // Why: the option must always be present, not omitted when off. Monaco keeps the last applied
-  // value across an options update, so dropping the key would strand a diff editor in collapsed
-  // mode after the user turns the setting back off.
+  // Always emit the disabled option: Monaco retains old values when keys disappear, stranding collapsed regions after toggling off.
   it('emits an explicit disabled state for off, undefined, and legacy settings', () => {
     for (const value of [false, undefined]) {
       expect(buildDiffEditorHideUnchangedOptions(value)).toEqual({

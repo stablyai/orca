@@ -10,14 +10,9 @@ import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
-/**
- * What holds a launched agent's terminal: the agent (anything but the pane's shell), the shell
- * (the launch line has not run yet, or the agent exited), or `unknown` when the host cannot tell.
- * Only `agent` lets a launch write its prompt; only `shell` drops a ready signal.
- */
+/** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
 
-/** A login shell is reported as `-zsh`. */
 function isLaunchShell(processName: string): boolean {
   return isShellProcess(processName.replace(/^-/, ''))
 }
@@ -29,21 +24,9 @@ function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
   )
 }
 
-/**
- * On a local macOS or Linux host, one `ps` limited to the pane's own terminal
- * (`terminal-foreground-group`): its foreground process group decides, read fresh in a few
- * milliseconds. Never the whole-machine capture behind a fresh scan or `inspectProcess`, which
- * took seconds a read on a loaded host and gated every paste behind it, and never the cached name a
- * tab icon uses, which can still name a process that already exited.
- *
- * On an SSH host, the relay's process-group observation when it names the launched agent in the
- * foreground group (a wrapper that did not `exec` it leads the group), then the relay's own name,
- * which it reads from the terminal when asked. The observation never proves a shell.
- *
- * Windows has no foreground process group, and its scan names the pane's shell for an agent it
- * cannot recognize, while Git Bash and WSL keep other processes in the shell's job, so nothing
- * there proves the agent. A Windows host can still prove its shell alone (`confirmShellForeground`).
- */
+/** Local POSIX uses a fresh terminal-scoped process group, avoiding slow global scans and stale icon names.
+ * SSH accepts agent-positive group evidence then the relay's fresh name; group evidence never proves shell.
+ * Windows cannot prove agent from shell/node.exe names or shared jobs, only shell-alone via confirmShellForeground. */
 export async function readLaunchedAgentForeground(
   controller: Pick<
     RuntimePtyController,
@@ -58,7 +41,7 @@ export async function readLaunchedAgentForeground(
   }
   try {
     if (host.windows) {
-      // An SSH pane has no such check, so on a Windows relay nothing proves a shell.
+      // Windows SSH relays lack even the shell-alone check.
       return (await controller.confirmShellForeground?.(ptyId)) ? 'shell' : 'unknown'
     }
     if (!host.remote) {

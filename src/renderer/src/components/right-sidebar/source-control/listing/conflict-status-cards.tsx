@@ -92,7 +92,6 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="mt-1.5 h-7 w-full text-xs"
@@ -110,7 +109,7 @@ export function ConflictSummaryCard({
   )
 }
 
-// Why: separate from ConflictSummaryCard because a rebase/merge/cherry-pick can be in progress with no conflicts (between steps, or resolved but pre-continue).
+// Paused rebase/merge/cherry-pick operations may need recovery even with no conflicted files.
 export function OperationBanner({
   conflictOperation,
   isRecoveryBusy = false,
@@ -156,7 +155,6 @@ export function OperationBanner({
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
       <div className="mt-2 space-y-1.5">
-        {/* Paused operations can need recovery without unmerged paths. */}
         {sourceControlAiActionsVisible && onResolveWithAI ? (
           <Button
             type="button"
@@ -173,7 +171,6 @@ export function OperationBanner({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="h-7 w-full text-xs"

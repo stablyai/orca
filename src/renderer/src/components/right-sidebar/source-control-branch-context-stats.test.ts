@@ -42,7 +42,6 @@ describe('source-control branch context stats', () => {
       shouldShowSourceControlBranchContextRow({ ...readySummary, status: 'loading' }, null)
     ).toBe(true)
     expect(shouldShowSourceControlBranchContextRow(readySummary, null)).toBe(true)
-    // Summary without a usable base must not claim the row is visible.
     expect(shouldShowSourceControlBranchContextRow({ ...readySummary, baseRef: '   ' }, null)).toBe(
       false
     )
@@ -69,8 +68,7 @@ describe('source-control branch context stats', () => {
   })
 
   it('names the base ref, never the tracked branch', () => {
-    // The rebase case: upstream still points at the pre-rebase branch. This count
-    // is against the compare base and says so, so the two cannot be conflated.
+    // A rebased branch may still track its old remote; label this count with the compare base.
     const stats = buildSourceControlCompareBaseStats(
       { ...readySummary, commitsAhead: 36 },
       'origin/main'
@@ -90,7 +88,6 @@ describe('source-control branch context stats', () => {
     ])
   })
 
-  // The case the row exists for: a rebased branch is ahead of its base and behind it.
   it('counts both directions against the compare base', () => {
     const stats = buildSourceControlCompareBaseStats(
       { ...readySummary, commitsAhead: 33, commitsBehind: 12 },

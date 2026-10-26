@@ -155,8 +155,7 @@ export function useAgentMenuObservation(
   const chatEnabled = isNativeChatEnabled(settings)
   const plain = !chatEnabled || hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
-  // Why a branch: a host publishing availability answers every agent from its one health snapshot;
-  // an older host shows this client's facts, and the click's admission states the host's refusal.
+  // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
     input.hostCapabilities?.includes(AVAILABILITY) === true &&
     Boolean(structuredAgentSessionTargetForHost(facts.executionHostId))
@@ -240,7 +239,7 @@ export function useAgentMenuObservation(
     }
     const verdict =
       availability?.state === 'received' ? availability.byAgent.get(agent)?.state : undefined
-    // An agent the host could not check keeps this client's facts; the click's admission decides.
+    // Missing/refused published availability overrides a preliminary route that would otherwise allow launch.
     return !verdict || verdict === 'refused' ? 'not-on-host' : preliminary
   }
   const executionHostId = unresolvedTarget

@@ -73,8 +73,7 @@ describe('mobile structured grouped questions', () => {
       kind: 'advance',
       draft: { promptKey: PROMPT_KEY, answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] }
     })
-    // Read it non-optionally: an absent advance must fail here, not fall to the null draft and
-    // leave the assertion below describing the first step again.
+    // Read advance non-optionally so a missing step cannot fall back to the first draft and pass.
     expect(advance).toBeDefined()
     const second = projectGroupedQuestion(
       questions,
@@ -177,10 +176,7 @@ describe('mobile structured grouped questions', () => {
   })
 
   it('gives each step a distinct card key so a selection cannot carry into the next question', () => {
-    // The view keys MobileNativeChatQuestion by this value; an identical key would reuse the
-    // mounted card and submit step 1's checkboxes as step 2's answer. Claude can legitimately ask
-    // the SAME text twice in one group (once per file, say), so identical wording must still key
-    // apart on the question id and step counter.
+    // Identical question text must still remount by id/step or prior checkboxes become the next answer.
     const questions = [
       question({ id: 'q1', question: 'Approve?' }),
       question({ id: 'q2', question: 'Approve?' })

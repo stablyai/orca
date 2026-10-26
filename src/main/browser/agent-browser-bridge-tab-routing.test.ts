@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -108,25 +110,33 @@ describe('AgentBrowserBridge', () => {
   })
 
   describe('worktree filtering', () => {
-    it('returns only matching worktree tabs', () => {
-      const tabs = new Map([
-        ['tab-a', 1],
-        ['tab-b', 2]
-      ])
-      const worktrees = new Map([
-        ['tab-a', 'wt-1'],
-        ['tab-b', 'wt-2']
-      ])
-      const wc1 = mockWebContents(1, 'https://a.com', 'A')
-      const wc2 = mockWebContents(2, 'https://b.com', 'B')
-      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+    it.each([null, 'workspace-login'])(
+      'lists the matching workspace with profile %s',
+      (profileId) => {
+        const tabs = new Map([
+          ['tab-a', 1],
+          ['tab-b', 2]
+        ])
+        const worktrees = new Map([
+          ['tab-a', 'wt-1'],
+          ['tab-b', 'wt-2']
+        ])
+        const wc1 = mockWebContents(1, 'https://a.com', 'A')
+        const wc2 = mockWebContents(2, 'https://b.com', 'B')
+        webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
 
-      const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
-      const result = b.tabList('wt-1')
-      expect(result.tabs).toHaveLength(1)
-      expect(result.tabs[0].browserPageId).toBe('tab-a')
-      expect(result.tabs[0].url).toBe('https://a.com')
-    })
+        const b = new AgentBrowserBridge(
+          mockBrowserManager(tabs, worktrees, {
+            getSessionProfileIdForTab: vi.fn(() => profileId)
+          })
+        )
+        const result = b.tabList('wt-1')
+        expect(result.tabs).toHaveLength(1)
+        expect(result.tabs[0].browserPageId).toBe('tab-a')
+        expect(result.tabs[0].url).toBe('https://a.com')
+        expect(result.tabs[0].profileId).toBe(profileId ?? 'default')
+      }
+    )
 
     it('surfaces the browser-manager load error on each listed tab', () => {
       const tabs = new Map([['tab-a', 1]])

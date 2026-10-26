@@ -113,7 +113,7 @@ describe('AntigravityHookService', () => {
       expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }

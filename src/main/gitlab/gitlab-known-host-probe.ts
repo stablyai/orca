@@ -12,7 +12,10 @@ export type LocalGitExecOptions = {
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
+export const KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS = 15_000
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
+// Failed probes back off exponentially (capped) so locked keyrings are not re-prompted on every poll.
+const knownHostsFailureBackoff = new Map<string, { retryAt: number; delayMs: number }>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
 
@@ -30,6 +33,7 @@ function knownHostsExecutionKey(
 export function _resetKnownHostsCache(): void {
   knownHostsCacheByExecutionContext.clear()
   knownHostsInFlightByExecutionContext.clear()
+  knownHostsFailureBackoff.clear()
   unauthenticatedHostExpiries.clear()
 }
 
@@ -111,6 +115,7 @@ export function rememberGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): void {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
+  knownHostsFailureBackoff.delete(key)
   const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
   const seen = new Set(cached.map(normalizeGitLabHost))
   const additions: string[] = []
@@ -143,6 +148,9 @@ export async function getGlabKnownHosts(
     knownHostsCacheByExecutionContext.set(key, cached)
     return cached
   }
+  if ((knownHostsFailureBackoff.get(key)?.retryAt ?? 0) > Date.now()) {
+    return [...DEFAULT_GITLAB_HOSTS]
+  }
   // Retire wedged probes so later retries can discover recovered auth.
   return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, (ownsKey) =>
     probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions)
@@ -170,13 +178,32 @@ async function probeGlabKnownHosts(
     const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     if (ownsKey()) {
+      knownHostsFailureBackoff.delete(key)
       knownHostsCacheByExecutionContext.set(key, merged)
       trimKnownHostsCache()
     }
     return merged
   } catch {
-    // Keep failures uncached so auth or tunnel recovery is discovered later.
+    if (ownsKey()) {
+      rememberKnownHostsFailure(key)
+    }
     return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
+  }
+}
+
+function rememberKnownHostsFailure(key: string): void {
+  const previousDelayMs = knownHostsFailureBackoff.get(key)?.delayMs
+  const delayMs = previousDelayMs
+    ? Math.min(previousDelayMs * 2, NEGATIVE_ENTRY_TTL_MS)
+    : KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS
+  knownHostsFailureBackoff.delete(key)
+  knownHostsFailureBackoff.set(key, { retryAt: Date.now() + delayMs, delayMs })
+  while (knownHostsFailureBackoff.size > KNOWN_HOSTS_CACHE_MAX_ENTRIES) {
+    const oldestKey = knownHostsFailureBackoff.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    knownHostsFailureBackoff.delete(oldestKey)
   }
 }
 

@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionConversationLifetimeHost } from './structured-agent-session-conversation-lifetime-host'
+import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 // Open conversations at rest; never start agents for reads. Acquire serialization once because the queue is nonreentrant.
 
 import {
@@ -5,14 +7,12 @@ import {
   agentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
 import { createJournalOpenReadRefusals } from '../agent-session-journal/journal-open-failure'
-import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { releaseLeaseOfEndedStructuredAgentSessionChild } from './structured-agent-session-child-close'
 import {
   holdClosedStructuredAgentSessionSends,
   closeStructuredAgentSessionConversationUnderSerialize,
   stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionCloseCause,
-  type StructuredAgentSessionLifetimeContext,
   type StructuredAgentSessionStopEnding
 } from './structured-agent-session-host-lifetime'
 import type {
@@ -34,25 +34,19 @@ import {
   providerStartupFailureFact,
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
-import { recordStructuredAgentSessionStartFailure } from './structured-agent-session-start-failure-row'
+import {
+  oldestQueuedSubmission,
+  recordStructuredAgentSessionStartFailure
+} from './structured-agent-session-start-failure-row'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
 >
 
-export function createStructuredAgentSessionConversationLifetime(host: {
-  /** Resolve lazily because host collaborators are assigned after construction. */
-  context: () => StructuredAgentSessionLifetimeContext
-  sessions: StructuredAgentSessionConversations
-  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  /** Caller already holds session serialization. */
-  open: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
-  deliveryActive: (sessionId: string) => boolean
-  /** Retain status rows while a tab still lists the chat. */
-  closeStatus: (sessionId: string, options: { listed: boolean }) => void
-  childWorkOpen: (sessionId: string) => boolean
-}) {
+export function createStructuredAgentSessionConversationLifetime(
+  host: StructuredAgentSessionConversationLifetimeHost
+) {
   let disposed = false
   const { sessions, serialize } = host
   const deps = () => host.context().deps
@@ -246,30 +240,35 @@ export function createStructuredAgentSessionConversationLifetime(host: {
           openMs,
           error
         })
+        const { runtimeState: runtime } = host.context()
+        const owned = runtime.startFlights.ownsChild(sessionId, child)
+        if (owned) {
+          const retry = retryableStructuredAgentSessionStart(error)
+          runtime.startupAttempts.childFailed(sessionId, child, failure, retry)
+        }
         try {
-          await recordStructuredAgentSessionStartFailure(
-            { journal: session.journal, fence: child.fence },
-            {
-              startKey: child.generation,
-              ...structuredAgentSessionStartFailure(
-                { failure },
-                structuredAgentSessionFailureWordsContext(deps().store.getRecord(sessionId))
-              )
-            }
-          ).catch((writeError: unknown) =>
-            deps().logger.warn('recording a failed provider open failed', {
-              scope: 'provider-open-failure',
-              sessionId,
-              error: writeError
-            })
-          )
-          await stopAgent(sessionId, {
-            cause: 'host-stop',
-            reason: error instanceof Error ? error.message : String(error),
-            failure
-          })
+          if (!owned) {
+            const record = deps().store.getRecord(sessionId)
+            const wording = structuredAgentSessionFailureWordsContext(record)
+            await recordStructuredAgentSessionStartFailure(
+              { journal: session.journal, fence: child.fence },
+              {
+                startKey: child.generation,
+                ...structuredAgentSessionStartFailure({ failure }, wording)
+              },
+              oldestQueuedSubmission(session)?.clientMessageId ?? null
+            ).catch((writeError: unknown) =>
+              deps().logger.warn('recording a failed provider open failed', {
+                scope: 'provider-open-failure',
+                sessionId,
+                error: writeError
+              })
+            )
+          }
+          const reason = error instanceof Error ? error.message : String(error)
+          await stopAgent(sessionId, { cause: 'host-stop', reason, failure })
         } finally {
-          host.context().runtimeState.startupAttempts.childEnded(sessionId, child)
+          runtime.startupAttempts.childEnded(sessionId, child)
         }
       }),
     dispose: (): void => {

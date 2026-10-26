@@ -2,9 +2,13 @@ import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authorit
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-detection'
 import type {
+  AgentStatusEntry,
   AgentStatusIpcPayload,
+  AgentType,
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import { resolveAgentStatusIdentity } from '../../../../shared/agent-status-identity'
+import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { useAppStore } from '../../store'
 
@@ -28,8 +32,7 @@ export function isAgentStatusForRecentlyClosedTab(
   return tabId ? store.recentlyClosedAgentStatusTabIds[tabId] === true : false
 }
 
-/** A host replay the renderer has already seen; a replayed `done` that differs from the current row
- *  ended while the host was unreachable, so it is not a replay of anything this renderer saw. */
+/** Seed only previously seen host replays; a changed done row may represent completion while unreachable. */
 export function isSeenHostReplay(
   data: Pick<
     AgentStatusIpcPayload,
@@ -95,15 +98,7 @@ export function applyResolvedAgentTerminalTitleToTab(
   store.updateTabTitle(parsed.tabId, nextTitle)
 }
 
-/**
- * `currentTabTitle` must be the TAB record's title, not the pane's layout slot. This path writes
- * `tab.title` and nothing else, so comparing against `titlesByLeafId` — which only a mounted pane
- * updates — skipped the write whenever the two slots had diverged, stranding a self-authored
- * "<Agent> - action required" label on the tab after the agent had already reported done.
- *
- * Inside a batch, pass the staged `tabTitlesByTabId` value when one exists: the batch flushes tab
- * titles at the end, so an earlier event's staged write is what a later event actually overwrites.
- */
+/** Compare the tab title this path writes, never the independently updated pane slot. Batched events compare against staged titles so later events overwrite the latest pending value. */
 export function shouldApplyResolvedAgentTerminalTitleToTab(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string,
@@ -135,8 +130,34 @@ export function resolveHookPayloadAgentType(
   ) {
     return payload
   }
-  // Why: OpenClaude emits Claude-compatible hooks; the title is the last renderer signal to keep it out of Claude-only status paths.
+  // OpenClaude uses Claude-compatible hooks; title evidence keeps it out of Claude-only handling.
   return { ...payload, agentType: 'openclaude' }
+}
+
+/** Nested CLIs inherit the pane key; drop their hooks unless the host names them the pane's owner. */
+export function isInheritedFromActivePane(
+  existing: AgentStatusEntry,
+  data: AgentStatusIpcPayload,
+  incoming: AgentType | undefined,
+  owner: { connectionId: string | null | undefined; worktreeId: string | undefined }
+): boolean {
+  const sameTerminal = sameAgentStatusTerminalOwner(
+    { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+    {
+      connectionId:
+        (owner.connectionId === undefined ? existing.connectionId : owner.connectionId) ?? null,
+      worktreeId: data.worktreeId ?? owner.worktreeId ?? existing.worktreeId
+    }
+  )
+  return (
+    sameTerminal &&
+    resolveAgentStatusIdentity({
+      existing: { ...existing, agentPresence: data.paneOwner },
+      incoming,
+      incomingSession: data.providerSession?.id,
+      now: data.receivedAt
+    }).inheritedFromActivePane
+  )
 }
 
 export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

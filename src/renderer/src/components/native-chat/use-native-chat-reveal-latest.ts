@@ -1,5 +1,3 @@
-// How a chat pane tells its transcript that the reader just sent something.
-
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
 import { hasAskAnswer } from './native-chat-interactive-prompt'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
@@ -21,7 +19,7 @@ export function useNativeChatInteractiveSendReveal(
 ): NativeChatInteractiveSend {
   return useMemo<NativeChatInteractiveSend>(
     () => ({
-      // Only what is written moves the reader: no terminal, or an empty answer, writes nothing.
+      // Only actual writes reveal; missing PTYs and empty answers write nothing.
       sendAnswer: (prompt, selections, onDeliverySettled) => {
         if (targetPtyId && hasAskAnswer(prompt, selections)) {
           revealLatest()
@@ -80,8 +78,7 @@ export function useNativeChatRevealLatest(): {
 
 function ignoreFindMatch(): void {}
 
-/** The transcript's side: what a pane's reveal does to this list. `onSent` hears of it too:
- *  unlike the reader's own jump to the latest, a reveal is them answering the conversation. */
+/** Notify onSent for conversation answers; ordinary jumps to latest do not count as sends. */
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
   jumpToLatest: () => void,

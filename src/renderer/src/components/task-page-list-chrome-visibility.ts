@@ -19,8 +19,7 @@ export function shouldHideTaskPageListChrome({
   hasLinearProjectContext,
   hasLinearViewContext
 }: TaskPageListChromeVisibilityState): boolean {
-  // Why: provider-specific selection can intentionally survive source switches;
-  // stale detail state from another provider must not hide the active list chrome.
+  // Selections survive provider switches; another provider’s retained detail must not hide the active list chrome.
   switch (taskSource) {
     case 'github':
       return hasGitHubDetail

@@ -32,6 +32,12 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     mark: (phase) => ctx.spawnTiming.mark(phase)
   })
   ctx.codexResumeLaunch = hostEnv.codexResumeLaunch
+  if (hostEnv.codexResumeLaunch.droppedResumeArgv && ctx.effectiveLaunchConfig) {
+    ctx.effectiveLaunchConfig = {
+      ...ctx.effectiveLaunchConfig,
+      agentCommand: hostEnv.launchCommand ?? ctx.effectiveLaunchConfig.agentCommand
+    }
+  }
   ctx.launchCommand = hostEnv.launchCommand
   ctx.baseEnv = hostEnv.baseEnv
   ctx.env = hostEnv.env

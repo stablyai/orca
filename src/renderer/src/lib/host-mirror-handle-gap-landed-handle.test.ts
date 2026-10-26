@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
@@ -11,25 +11,9 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
-/**
- * The fourth eviction trigger: a PUBLISHED HANDLE ends the gap episode its verdict measured.
- *
- * Why none of the other three reach it. The generation rule cannot: the #19647 change in this same
- * stack stops recording `status: null` for an unreachable host, so `connectionChanged` no longer
- * fires across an outage on one runtime. The tab-death rule cannot: the row stays published the
- * whole time — it is the HANDLE that comes and goes, which is the definition of the gap. Teardown
- * cannot: the environment is still here. And the read-time pane-identity check cannot, because the
- * pane that reattaches to the SAME PTY is deliberately the same pane
- * (`host-mirror-handle-gap-verdict-union.test.ts`, "answers for a genuine reattach").
- *
- * So a verdict outlives the gap it was about, and the NEXT gap on that pane gets no wait at all —
- * #19735 with the bounded wait removed rather than merely shortened.
- *
- * Why this does not reopen the park/expire/replay loop the verdict exists to break: that loop is
- * a handle that NEVER lands. A landed handle between two gaps is positive host evidence, and each
- * wait is still individually bounded by the deadline.
- */
+/** A published handle ends this gap and permits a fresh wait on the next gap of the same pane/connection; generation, row death, teardown and pane identity cannot detect that transition. Never-landed handles still have bounded waits. */
 
 const ENV_ID = 'env-landed-handle'
 const WORKTREE = 'repo-1::wt-landed'
@@ -39,9 +23,10 @@ const initialAppStoreState = useAppStore.getState()
 
 /** Publishes the row AND the layout binding that makes the pane unverifiable rather than dead. */
 function publishRow(options: { handleLanded: boolean }): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
-    tabsByWorktree: { [WORKTREE]: [{ id: TAB_ID, title: 't', ptyId: null }] },
+    tabsByWorktree: {
+      [WORKTREE]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE, title: 't' })]
+    },
     terminalLayoutsByTabId: {
       [TAB_ID]: {
         root: { type: 'leaf', leafId: 'leaf-1' },
@@ -51,7 +36,7 @@ function publishRow(options: { handleLanded: boolean }): void {
       }
     },
     ptyIdsByTabId: options.handleLanded ? { [TAB_ID]: [PANE_PTY_ID] } : {}
-  } as unknown as AppState)
+  })
 }
 
 describe('handle-gap verdict, landed-handle eviction', () => {
@@ -74,8 +59,7 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS + 1)
     expect(hasHostMirrorHandleWaitExpired(ENV_ID, TAB_ID)).toBe(true)
 
-    // Same connection, same pane, same layout binding — only the handle is new. The verdict's
-    // subject has answered, so the verdict is spent.
+    // Only the handle changed; it ends the gap the verdict measured.
     publishRow({ handleLanded: true })
     expect(hasHostMirrorHandleWaitExpired(ENV_ID, TAB_ID)).toBe(false)
   })
@@ -102,27 +86,26 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     // Adopting an orphaned terminal re-keys `tabsByWorktree` without re-keying the record, so the
     // re-park hands the live wait a new worktree. Retraction evidence about the OLD one says
     // nothing about the wait that is actually running.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       tabsByWorktree: {
-        'wt-old': [{ id: TAB_ID, title: 't', ptyId: null }],
-        'wt-new': [{ id: TAB_ID, title: 't', ptyId: null }]
+        'wt-old': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-old', title: 't' })],
+        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
       },
       ptyIdsByTabId: {}
-    } as unknown as AppState)
+    })
     parkUntilHostMirrorHandleLands(ENV_ID, 'wt-old', TAB_ID, vi.fn())
     const replayAfterAdoption = vi.fn()
     parkUntilHostMirrorHandleLands(ENV_ID, 'wt-new', TAB_ID, replayAfterAdoption)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
-      tabsByWorktree: { 'wt-new': [{ id: TAB_ID, title: 't', ptyId: null }] }
-    } as unknown as AppState)
+      tabsByWorktree: {
+        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
+      }
+    })
     expect(replayAfterAdoption).not.toHaveBeenCalled()
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-    useAppStore.setState({ tabsByWorktree: {} } as unknown as AppState)
+    useAppStore.setState({ tabsByWorktree: {} })
     expect(replayAfterAdoption).toHaveBeenCalledTimes(1)
   })
 })

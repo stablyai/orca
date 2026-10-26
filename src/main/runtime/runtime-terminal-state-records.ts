@@ -1,6 +1,9 @@
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  TerminalLaunchResult,
+  SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -65,16 +68,22 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
   paneKey?: string | null
-  /**
-   * Window-owned builds only (L80). `graphSequence` when `paneKey` was last written. A surface
-   * recorded since the last graph statement has not yet been offered one that could contradict
-   * it — see pty-recorded-surface-topology.ts.
-   */
+  /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
   surfaceRecordedAtGraphSequence?: number
+  savedTerminalLaunchResult?: {
+    incarnationId: PtyIncarnationId | null
+    launchConfig: SleepingAgentLaunchConfig | null
+    launchToken: string | null
+    result: TerminalLaunchResult
+  }
+  /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
+  spawnPaneKey?: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
+  launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
   cliConversations?: {
@@ -88,32 +97,31 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastExitCause: TerminalExitCause | null
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
-  /** Latest first-party state from the agent's own OSC 9999 status stream — what the
-   *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
-   *  OSC title. Optional: absent until a payload lands. */
+  /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */
   lastExplicitAgentStatus?: {
     state: AgentStatusState
     updatedAt: number
     /** A `done` row that marks a new session owning the pane, not the end of a turn. */
     sessionBoundary?: boolean
-    /** OSC 7501 `done`: the program itself says it is at rest awaiting input, which a hook
-     *  `done` (possibly mid-turn) cannot claim. */
+    /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  /** When a replacement process took over this PTY id; earlier hooks describe its predecessor. */
+  providerGenerationResetAtEpochMs?: number
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
-  /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
-   *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
-   *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
+  /** In-memory stale-working title clear follows native-title lifetime/clock; display projects it, evidence never reads it. */
   titleDisplayClear?: { title: string; observedAt: number; observedAtEpochMs: number } | null
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** Wall clock for the recorded title; absent on older or unobserved records. */
+  titleObservedAtEpochMs?: number | null
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */
   manualTitle?: string | null
   lastOutputAt: number | null

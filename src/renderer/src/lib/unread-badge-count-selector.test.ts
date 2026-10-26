@@ -139,7 +139,7 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     expect(dockCount(store)).toBe(1)
   })
 
-  // Why one selector across writes: the App root keeps a single instance, so its cache is under test.
+  // Reuse one selector as App does so cached results across writes are tested.
   it('preserves a folder bell only while its workspace flag and live tab marker remain', () => {
     const store = createStoreOnOtherWorktree()
     const selectCount = createUnreadBadgeCountSelector()

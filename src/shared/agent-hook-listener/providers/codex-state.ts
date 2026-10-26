@@ -74,9 +74,7 @@ export function setCodexMainAgentTurnState(
   return record
 }
 
-/** Interrupt is Codex's own cancel verdict. A root Stop that lands on an already finished turn
- *  (late, after an inferred cancel) restates that turn, so it keeps the recorded verdict; only a
- *  new turn clears it. */
+/** Interrupt records cancellation; late Stops restate the ended turn's verdict until a new turn clears it. */
 export function codexLeadOutcomeForEvent(
   eventName: unknown,
   previous: CodexLeadTurnState | undefined,
@@ -127,8 +125,7 @@ export function seedCodexStateFromSnapshot(
   }
   if (!state.codexLeadStateByPaneKey.has(paneKey)) {
     const mainAgent = payload.mainAgent
-    // Why: child hooks after restart omit the root model; seed it from durable status before they can overwrite the cache.
-    // A row that carries the root's own state is the fact; only an older row makes us infer it.
+    // Restarted relay child hooks lack root model; seed from durable mainAgent, inferring only for older rows.
     if (mainAgent && mainAgent.state !== 'blocked') {
       setCodexMainAgentTurnState(state, paneKey, {
         state: mainAgent.state,
@@ -139,7 +136,7 @@ export function seedCodexStateFromSnapshot(
       return
     }
     setCodexMainAgentTurnState(state, paneKey, {
-      // Why: a child wait drives the aggregate waiting state, so it is not evidence that the root itself was waiting.
+      // Aggregate child waiting does not prove the root waited.
       state:
         payload.state === 'done'
           ? 'done'
@@ -170,9 +167,7 @@ export function codexLeadStateForHookEvent(
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
-    // Why: the execution host's normalizer already ruled on whether this approval is human-owned
-    // or reviewer-owned, reading the reviewer off that host's rollout (STA-7698). Re-deriving
-    // 'waiting' from the event name here would discard that verdict for every relayed pane.
+    // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
     return normalizedState === 'working' ? 'working' : 'waiting'
   }
   if (
@@ -244,8 +239,7 @@ export function reconcileRemoteCodexState(
     return payload
   }
   const resolution = resolveCodexPaneStatus(state, paneKey, lead)
-  // Child lifecycle hooks commonly omit the root prompt. Preserve the last known
-  // turn label while merging their roster/state so relay restarts do not blank it.
+  // Child hooks often omit root prompts; keep the last label across relay restarts.
   const prompt =
     agentId && payload.prompt.length === 0 && previous?.agentType === 'codex'
       ? previous.prompt

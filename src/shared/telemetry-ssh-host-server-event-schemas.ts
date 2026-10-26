@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { SSH_RUNTIME_DURATION_BUCKETS } from './telemetry-ssh-runtime-event-schemas'
 
-// Why enum-only: these rows size how many hosts still need the relay before it can retire. A
-// hostname, user, path, log line or raw error would identify a machine, so none may appear.
+// Measure relay retirement with closed enums; hostnames, users, paths, logs and raw errors would identify machines.
 
 export const SSH_HOST_SERVER_OUTCOME_VALUES = ['managed', 'deployed', 'converted', 'relay'] as const
 
@@ -21,7 +20,6 @@ const UNAVAILABLE_REASONS = [
 
 export const SSH_HOST_SERVER_REASON_VALUES = [
   'connected',
-  // A managed host's update on connect (ssh-host-server-update-on-connect.ts).
   'updated',
   'update_deferred',
   'update_failed',
@@ -84,7 +82,7 @@ export const SSH_HOST_SERVER_FAILURE_VALUES = [
 const hostFields = {
   host_os: z.enum(['linux', 'darwin', 'win32', 'unknown']),
   host_arch: z.enum(['x64', 'arm64', 'unknown']),
-  // `unknown` when this session has not yet probed the host; the decision itself never probes.
+  // unknown until this session probes; the decision itself never probes.
   host_libc: z.enum(['glibc', 'musl', 'none', 'unknown'])
 }
 

@@ -1,6 +1,4 @@
-// Raw error messages can embed secrets such as connection strings. Only two
-// provably inert shapes leave the process: this codebase's snake_case
-// invariant slugs, and five-character SQLSTATE codes; everything else is redacted.
+// Raw messages may contain secrets; emit only invariant slugs or SQLSTATE codes and redact everything else.
 export function relayErrorSlug(error: unknown): string | null {
   const message = error instanceof Error ? error.message : ''
   return /^[a-z0-9_]{1,64}$/.test(message) ? message : null

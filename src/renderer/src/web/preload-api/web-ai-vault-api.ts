@@ -39,8 +39,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       addressesOwnRuntime(executionHostScope)
         ? search.searchStatus()
         : Promise.resolve(unavailableSessionSearchStatus()),
-    // Why refused and not forwarded: consent for a host's index is an operator action,
-    // and the browser client has no desktop settings surface to reconcile it against.
+    // Host-index consent requires the desktop operator’s settings surface.
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
     clearSearchIndex: () =>
       Promise.reject(new Error('Clearing Agent Session History is unavailable in the browser.')),
@@ -78,9 +77,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         requests: args.requests
       }).catch(() => ({ titles: [] }))
     },
-    // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
-    // settles on its own timeout. The renderer's refreshId guard already drops
-    // the late result; this only means web pays for a scan nobody reads.
+    // No RPC cancel verb; refreshId drops late results, but the unused scan runs until its timeout.
     cancelListSessions: () => Promise.resolve(),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeRequest) =>
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
@@ -88,9 +85,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
-    // Why: session deletion is local-only and has no runtime RPC; a web
-    // client's sessions are runtime-hosted, so report the same non-local
-    // rejection the UI already gates on rather than pretend to delete.
+    // No runtime delete RPC; return the UI’s non-local rejection for host-owned sessions.
     deleteSession: (args: AiVaultDeleteSessionArgs) =>
       Promise.resolve({
         outcome: 'rejected',
@@ -104,8 +99,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
   }
 }
 
-// An unparseable id must not normalize into the everything-scope and answer anyway.
-// `all` is a desktop-side merge; it never normalizes to this runtime, so a browser reports no-service.
+// Malformed scopes must not become everything; all is a desktop merge and cannot address this browser’s runtime.
 function addressesOwnRuntime(executionHostScope: ExecutionHostScope | undefined): boolean {
   const ownRuntimeId = toRuntimeExecutionHostId(requireActiveEnvironment().id)
   return (

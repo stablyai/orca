@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>()
 }))
 
-vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
 }))
 

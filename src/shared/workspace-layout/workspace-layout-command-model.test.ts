@@ -1,8 +1,5 @@
-// Extends the seeded model test of #26073 (terminal-topology-model.test.ts) to the layout module:
-// the same seeds and plain reference model, now driven by layout commands from two clients and by
-// process exits, with the structural rules (and id stability) checked after every step and a
-// save/load round trip standing in for quit and relaunch.
-// Replay one seed: FUZZ_SEED=<n> FUZZ_ITERATIONS=1 pnpm test <this file>.
+// Exercise #26073’s topology seeds/reference model through two-client layout commands and exits; check structure/identity after each step and save/load.
+// Replay with FUZZ_SEED=<n> FUZZ_ITERATIONS=1 pnpm test <this file>.
 
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from '../agent-tui-ansi-fuzz-stream'
@@ -76,7 +73,6 @@ class Harness {
     return `pty-${++this.ptyCounter}`
   }
 
-  /** Applies one step, checks the rules against the previous model, returns whether it applied. */
   apply(step: Step): ReturnType<typeof applyLayoutCommand> {
     const result = step.command
       ? applyLayoutCommand(this.model, step.command, this.context)
@@ -92,7 +88,6 @@ class Harness {
     return result
   }
 
-  /** A step the reference says must apply. */
   must(step: Step) {
     const result = this.apply(step)
     if (!result.ok) {

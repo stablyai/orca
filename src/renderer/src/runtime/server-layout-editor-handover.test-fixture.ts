@@ -1,6 +1,4 @@
-// A paired server's main for the editor hand-over tests: it applies each `layout.apply` with main's
-// own command code (so a repeated open is idempotent and a taken tab id is refused as main refuses
-// it), and publishes the change on the open stream before it replies.
+// Use main’s real command model for paired editor handover, including idempotent reopen and taken-ID refusal; publish frame before reply.
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'

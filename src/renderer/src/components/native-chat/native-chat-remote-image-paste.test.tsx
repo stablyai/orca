@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-// #27997: a clipboard image pasted into a terminal-backed chat on a managed SSH host or paired
-// server, through the real composer attachment guards rather than a fake chip store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -137,8 +135,7 @@ const SERVER_OWNER: NativeChatAttachmentOwner = {
 }
 
 beforeEach(async () => {
-  // Why: a draft first written before the load lands is rebuilt from storage, which keeps a
-  // remote paste by name only; a running app has loaded long before any paste.
+  // Hydrate before paste as the app does; pre-load drafts retain remote images by name only.
   await hydrateNativeChatComposerDrafts()
   vi.resetAllMocks()
   mocks.readClipboardText.mockResolvedValue('')

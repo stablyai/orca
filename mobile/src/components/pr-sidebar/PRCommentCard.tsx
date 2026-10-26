@@ -17,8 +17,7 @@ import { prCommentsStyles as styles } from './pr-comments-styles'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
-// Action handlers are passed from the comment actions hook (stable callbacks), so
-// adding them keeps the memo'd card from re-rendering on unrelated timeline changes.
+// Keep hook callbacks stable so memoized cards skip unrelated timeline updates.
 export type PRCommentCardActions = {
   reply: (comment: PRComment, body: string) => Promise<boolean>
   toggleResolve: (comment: PRComment) => Promise<boolean>
@@ -60,10 +59,7 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
   )
 }
 
-// One PR comment (or review-thread reply), mirroring the desktop comment card:
-// avatar + author + relative time + inline file:line + resolved chip + open-on-
-// GitHub, then the markdown body and reactions. When `actions` is provided the
-// card grows a Reply composer and (for review threads) a Resolve/Unresolve toggle.
+// Match desktop comment identity/file/resolved/body/reactions; optional actions add Reply and review-thread Resolve controls.
 export const PRCommentCard = memo(function PRCommentCard({
   comment,
   isReply = false,
@@ -85,8 +81,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   const resolveBusy =
     canResolve && actions ? actions.isResolveBusy(comment.threadId as string) : false
   const replyBusy = actions ? actions.isReplyBusy(comment.id) : false
-  // Edit/delete are offered only on mutable root conversation comments with a repo
-  // slug; GitHub enforces authorship server-side (no client viewer-identity field).
+  // Offer edit/delete only for mutable root comments with repo slug; GitHub enforces authorship without client viewer identity.
   const canMutate = actions ? canEditComment(comment, actions.prRepo) : false
   const editBusy = actions ? actions.isEditBusy(comment.id) : false
   const deleteBusy = actions ? actions.isDeleteBusy(comment.id) : false
@@ -116,9 +111,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   return (
     <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
       <View style={styles.header}>
-        {/* Skipped inside the shell's page. The reason it was added for has gone: img-src now
-            admits https:, so a provider avatar would load rather than be refused. The skip is now
-            a capability the page is missing, tracked with the other ruling-26 items. */}
+        {/* Page avatars remain deferred (ruling 26); https is now permitted, so skip reflects missing capability rather than CSP refusal. */}
         {comment.authorAvatarUrl && Platform.OS !== 'web' ? (
           <Image source={{ uri: comment.authorAvatarUrl }} style={styles.avatar} />
         ) : (
