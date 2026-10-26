@@ -90,8 +90,7 @@ describe('getChecksPanelReviewState — precedence', () => {
   })
 
   it('offers Open Review under a branch blocker when positive evidence has a trusted URL', () => {
-    // A concurrent branch blocker owns the copy but must not swallow the known
-    // review: Open Review is exposed while Create / Push & Create stay suppressed.
+    // Branch guidance must preserve known Open Review while suppressing create actions.
     const state = getChecksPanelReviewState(
       input({
         reviewLookup: 'positive_unresolved',
@@ -130,8 +129,7 @@ describe('getChecksPanelReviewState — precedence', () => {
   })
 
   it('existing_review with a fetch in flight shows Checking status, not the terminal card', () => {
-    // Regression (#9428): the terminal "already exists" card short-circuited the
-    // in-flight fetch window, so the panel stalled until a manual refresh.
+    // An existing-review card must not mask an active fetch and stall automatic recovery (#9428).
     const state = getChecksPanelReviewState(
       input({ eligibilityBlockedReason: 'existing_review', refresh: { status: 'in-flight' } })
     )

@@ -82,7 +82,6 @@ function Checklist({ list, fontScale }: { list: TaskList; fontScale: number }) {
   )
 }
 
-/** The whole list behind a disclosure, under a list of what changed. */
 function FullList({
   list,
   fontScale,
@@ -122,8 +121,6 @@ function OpenedChecklist({ list, fontScale }: { list: TaskList; fontScale: numbe
   )
 }
 
-/** Desktop parity: `NativeChatTaskList`, inline. A plan update reads as what it
- *  changed against the previous list, or as the whole checklist when it is the first. */
 export function MobileNativeChatTaskList({
   list,
   previous,

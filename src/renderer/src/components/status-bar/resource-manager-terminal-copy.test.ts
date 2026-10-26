@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Mirrors resource-memory-metric-copy.test.ts: assert the English source copy
-// through the catalog fallback, with placeholders filled the way i18next would.
+// Use catalog fallbacks with i18next-style placeholder expansion to assert source copy.
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, options?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) => String(options?.[name] ?? match))
@@ -58,8 +57,7 @@ describe('resource manager terminal copy', () => {
     ])
   })
 
-  // Why: the tooltip used to tint this row by matching its English text, so any
-  // translated build lost the tint. The flag is what the segment reads now.
+  // Translated space-scan rows must retain emphasis without matching English text.
   it('flags the space-scan row instead of leaving callers to match its wording', () => {
     const lines = getResourceManagerTooltipLines({
       memoryLabel: '512 MB',

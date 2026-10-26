@@ -33,8 +33,7 @@ function findCursorAgentScreenInputAnchor(args: {
 }): TerminalImeAnchor | null {
   const allowTypedInput = args.knownCursorAgent || hasCursorAgentHeader(args.buffer, args.rows)
 
-  // Why: the input box sits below the transcript, so scan bottom-up — a
-  // transcript line containing "→ " (e.g. a rename diff) must not win.
+  // Find the bottom-most prompt; transcript arrows (e.g. rename diffs) must not become the input anchor.
   for (let row = args.rows - 1; row >= 0; row--) {
     const line = getVisibleLine(args.buffer, row)
     if (!line) {

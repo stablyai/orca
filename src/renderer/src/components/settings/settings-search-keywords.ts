@@ -9,7 +9,7 @@ export type SearchKeywordSpec = {
   englishOnly?: boolean
 }
 
-// Why: settings search should match localized copy and English aliases devs still type.
+// Index localized copy alongside English aliases users still type.
 export function translateSearchKeyword(
   key: string,
   fallback: string,

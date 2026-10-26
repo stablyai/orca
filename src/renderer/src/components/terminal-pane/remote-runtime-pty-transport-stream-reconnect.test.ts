@@ -12,7 +12,6 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -281,16 +280,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
     })
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1))
-    // The first subscribe already carries the host snapshot; re-arming there would cost
-    // every pane a redundant restore request on open.
+    // Initial subscribe already carries a snapshot; do not make every open buy a second restore.
     expect(onStreamRecovered).not.toHaveBeenCalled()
 
     subscriptionCallbacks?.onClose?.()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
     const reconnectStreamId = latestSubscribePayload().streamId
-    // An exited-but-preserved pane has nothing to push and will never emit live bytes,
-    // so without the re-arm the pane stays blank until a visibility flip.
+    // Exited preserved panes emit no new bytes; recovered imageless streams must request retained history before a visibility flip.
     emitSnapshot(reconnectStreamId, '')
     subscriptionCallbacks?.onResponse({
       ok: true,

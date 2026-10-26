@@ -32,9 +32,7 @@ async function rekey(
   return result
 }
 
-// Stage-1 foundation: rekeyOpenFilesForPathChange atomically retargets an open
-// edit session across an Orca-owned move (no close/reopen), preserving all
-// id-keyed state and failing closed on collision/stale without mutating.
+// Rekey atomically without close/reopen, retaining ID-keyed state; collision/stale failures leave state untouched.
 
 function seedEditTab(overrides: Partial<Record<string, unknown>> = {}): void {
   const state = useAppStore.getState()
@@ -66,7 +64,7 @@ function seedEditTab(overrides: Partial<Record<string, unknown>> = {}): void {
 function rekeyFor(oldId: string, newPath: string, newRel: string): OpenFilePathRekey {
   return {
     oldFileId: oldId,
-    newFileId: newPath, // path-derived id for a local tab
+    newFileId: newPath,
     oldFilePath: '/repo/a.md',
     newFilePath: newPath,
     newRelativePath: newRel
@@ -98,7 +96,6 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(moved.relativePath).toBe('sub/a.md')
     expect(moved.isDirty).toBe(true)
     expect(moved.lastKnownDiskSignature).toBe('sig-a')
-    // id-keyed state migrated to the new id, old key gone.
     expect(s.editorDrafts[newPath]).toBe('20 min of work')
     expect(s.editorDrafts[oldId]).toBeUndefined()
     expect(s.editorCursorLine[newPath]).toBe(42)

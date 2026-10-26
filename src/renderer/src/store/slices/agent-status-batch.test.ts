@@ -272,8 +272,7 @@ describe('setAgentStatuses', () => {
 
     expect(outcomes).toEqual(Array(paneCount).fill(true))
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main derives the batch's titles from its own agent status; its frame (not modelled here) is
-      // their one store write, so the window writes only the statuses and sends main nothing.
+      // Main derives titles and frames write them once; window batch writes only status and sends no titles.
       for (let turn = 0; turn < 10; turn += 1) {
         await Promise.resolve()
       }
@@ -450,8 +449,7 @@ describe('setAgentStatuses', () => {
         payload: { state: 'working', prompt: 'first turn', agentType: 'pi' },
         timing: { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME }
       })
-      // Any slice action reached through get() writes straight to the real store — a
-      // REPLACE commit of the fold's snapshot would silently revert it.
+      // Nested slice actions write real store; replacing it with the folded snapshot would revert those writes.
       store.setState({ worktreesByRepo: { 'repo-late': [] } } as Partial<AppState>)
       return applied
     })

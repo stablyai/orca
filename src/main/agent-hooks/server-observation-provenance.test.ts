@@ -82,7 +82,7 @@ describe('agent status observation provenance', () => {
     expect(lastObservation(seen).boundary).toBeUndefined()
   })
 
-  it('stamps main-parsed OSC 9999 rows as osc-origin snapshots', () => {
+  it('stamps terminal status ingestion as osc-origin snapshots', () => {
     const server = newServer()
     const seen = collectObservations(server)
 

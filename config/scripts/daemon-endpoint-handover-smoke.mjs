@@ -1,14 +1,5 @@
-/**
- * Endpoint handover smoke — guards the split-brain failure with real daemon processes.
- *
- * Two starting daemons race to replace one dead endpoint entry. The loser may exit after the
- * winner has published, but its close must not remove the winner's canonical socket. The survivor
- * must remain reachable through that path with its own token.
- *
- * Unix only: Windows named pipes are not directory entries, so the mechanism cannot occur.
- *
- * Usage: node config/scripts/daemon-endpoint-handover-smoke.mjs
- */
+// Race real daemons over a dead endpoint: loser cleanup must leave winner reachable at the canonical socket with its own token.
+// Unix only: Windows named pipes are not directory entries. Run: node config/scripts/daemon-endpoint-handover-smoke.mjs
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
@@ -19,9 +10,7 @@ import { join, resolve } from 'node:path'
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const entryPath = join(repoRoot, 'out', 'main', 'daemon-entry.js')
 
-// Why read it from source: the launcher keys adoption of a live incumbent on this exact code,
-// and hardcoding it here would let the two drift silently — which is the failure the assertion
-// below exists to catch.
+// Read incumbent exit code from source; launcher adoption depends on this exact value.
 const DAEMON_EXIT_ENDPOINT_OCCUPIED = Number(
   readFileSync(join(repoRoot, 'src/main/daemon/daemon-endpoint-ownership.ts'), 'utf8').match(
     /DAEMON_EXIT_ENDPOINT_OCCUPIED = (\d+)/
@@ -150,7 +139,6 @@ function isDaemonReachable(socketPath, tokenPath, protocolVersion) {
   })
 }
 
-/** Resolves with the child's exit code, so callers can assert on it. */
 function killAndWait(child) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve(child.exitCode)
@@ -234,10 +222,7 @@ async function main() {
       throw new Error('losing racer left its ownership record behind')
     }
 
-    // Why a second, non-racing phase: above, both racers are awaited to ready-or-exit before a
-    // winner is identified, so the loser has usually already gone and killing it proves little.
-    // With a known-live incumbent the interleaving is forced rather than hoped for: the newcomer
-    // must find the endpoint occupied, refuse to take it, and damage nothing on its way out.
+    // Force live-incumbent collision separately: racing losers usually exit before winner selection, so killing them proves little.
     const survivorInodeBeforeBlocked = statSync(socketPath).ino
     const blocked = bootDaemon('blocked', dir, socketPath)
     daemons.push(blocked)
@@ -245,13 +230,9 @@ async function main() {
       () => {
         throw new Error('a daemon published onto an endpoint a live daemon already owned')
       },
-      () => {
-        // Expected: it cannot publish onto a live owner's name, so it exits instead.
-      }
+      () => {}
     )
-    // Why pin the code: the launcher keys adoption of a live incumbent on exactly this exit
-    // code, so a silent change to it would strand a concurrently starting app on local
-    // non-persistent terminals with nothing failing.
+    // Pin adoption exit code or concurrently starting apps silently fall back to non-persistent terminals.
     const blockedExit = await killAndWait(blocked.child)
     if (blockedExit !== DAEMON_EXIT_ENDPOINT_OCCUPIED) {
       throw new Error(
@@ -275,9 +256,7 @@ async function main() {
       if (daemon.child.exitCode === null && daemon.child.signalCode === null) {
         try {
           daemon.child.kill('SIGKILL')
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     }
     rmSync(dir, { recursive: true, force: true })

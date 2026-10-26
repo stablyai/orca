@@ -4,8 +4,7 @@ import { iterateNulDelimitedFields } from './nul-delimited-fields'
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
 const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ','
 
-// Why %D too: %(decorate:…) is Git 2.43+, and older Git echoes it verbatim and exits zero.
-// Callers must pass --decorate=full; both fields emit short names otherwise, which parse to no refs.
+// Git <2.43 echoes %(decorate:...) with exit 0, requiring %D fallback. Both need --decorate=full for parseable refs.
 export const GIT_HISTORY_COMMIT_FORMAT =
   '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%D%n%B'
 

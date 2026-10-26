@@ -60,8 +60,7 @@ beforeEach(() => {
 })
 
 describe('resuming a conversation from history in a chat', () => {
-  // The conversation's transcript is on this machine, which the server cannot read; the
-  // terminal resume refuses that target for the same reason.
+  // A paired server cannot read a client-local transcript, matching terminal resume restrictions.
   it("is not offered in a paired server's workspace for a conversation recorded here", () => {
     mocks.owner.mockReturnValue('runtime:server-1')
 

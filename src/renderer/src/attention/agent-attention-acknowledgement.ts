@@ -30,7 +30,7 @@ export function isAgentTurnUnacknowledged(
   return turnStartedAt != null && acknowledgedAt < turnStartedAt
 }
 
-/** Whether a subject's current turn is unread: the same records and test auto-acknowledgement clears. */
+/** Read the same current-turn records that auto-acknowledgement clears. */
 export function isAgentSubjectUnread(
   records: AgentAttentionTurnRecords,
   subjectKey: string
@@ -41,12 +41,7 @@ export function isAgentSubjectUnread(
   )
 }
 
-/**
- * Subjects on the viewed surface whose current turn has not been acknowledged yet.
- *
- * Why compare stateStartedAt (not updatedAt): same-state pings must not re-trigger an ack,
- * matching the is-unvisited rule the workspace card uses.
- */
+/** Acknowledge viewed subjects by stateStartedAt, not updatedAt, so same-state pings cannot retrigger acknowledgement. */
 export function computeAgentAcknowledgementTargets(
   records: AgentAttentionTurnRecords,
   subjectKey: string | null
@@ -81,13 +76,7 @@ export function resolveViewedUnreadSubjectKey(
   return readAgentAttentionUnreadReason(unreadBySubjectKey[subjectKey]) === null ? null : subjectKey
 }
 
-/**
- * Manual mark-unread protections that no longer apply: the user moved to another subject, or
- * the agent took a new turn.
- *
- * Why keep on null: persisted UI hydrates before the turn snapshot lands, so an active subject
- * with no row yet is "not known", not "moved on"; wiping it would lose the user's mark-unread.
- */
+/** Expire manual-unread protection after a subject switch or new turn. Keep it on missing rows: UI hydrates before turn snapshots, so absence does not prove a switch. */
 export function computeLapsedManualUnreadProtections(
   records: Pick<AgentAttentionTurnRecords, 'liveTurns' | 'retainedTurns'> & {
     manuallyUnreadTurnStartedAt: Record<string, number>

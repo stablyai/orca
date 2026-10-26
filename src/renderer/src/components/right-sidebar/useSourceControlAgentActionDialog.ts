@@ -53,9 +53,7 @@ export function useSourceControlAgentActionDialog({
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
   )
-  // Why: when this repo already overrides the global default, default the save
-  // scope to the repo so saving the corrected agent updates that override in
-  // place instead of writing a global default the override would still shadow.
+  // Update existing repo overrides in place; a new global default would remain shadowed.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const [commandTemplate, setCommandTemplate] = useState(
@@ -102,9 +100,7 @@ export function useSourceControlAgentActionDialog({
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
-    // Why: whether CLI arguments apply is read synchronously from the local runtime's
-    // capabilities; settling them alongside detection keeps the field from appearing for a
-    // frame on a launch that turns out to be structured.
+    // Settle CLI-argument applicability with discovery so structured launches never flash an inapplicable field.
     void refreshAgents().then(
       ({ detected, launchable }) => {
         if (stale || openCycleRef.current !== cycle) {
@@ -160,10 +156,7 @@ export function useSourceControlAgentActionDialog({
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  // Why: a structured native chat session reads no CLI arguments, so the field is absent on
-  // launches that would take that route and present on the terminal launches that apply them.
-  // Resolved on every render rather than memoised: it reads the live store and the local
-  // runtime's capabilities, neither of which is in a dependency list.
+  // Recompute from live store/runtime capabilities each render; structured chat ignores CLI arguments and these inputs are not dependency-tracked.
   const agentArgsApply = sourceControlLaunchAppliesAgentArgs({
     agent: selectedAgent,
     worktreeId,
@@ -197,8 +190,7 @@ export function useSourceControlAgentActionDialog({
     groupId,
     promptDelivery,
     launchPlatform,
-    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-    // label aligned with the real remote launch (no `orca-ide` rename).
+    // SSH uses plain orca; preview must match instead of applying the local Linux orca-ide rename.
     isRemote: typeof connectionId === 'string',
     launchSource,
     recoveryContext,

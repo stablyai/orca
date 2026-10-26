@@ -14,7 +14,6 @@ import {
   setSshHostServerStatus
 } from '../../ssh/ssh-host-server-status'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
-import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
 import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
 
@@ -80,7 +79,6 @@ export function publishManagedServerConnect(
     ...(linked ? { linked } : {})
   }
   setSshHostServerStatus(targetId, managedServer)
-  void restoreManagedHostPortForwards(targetId)
   const state: SshConnectionState = {
     ...(connectionManager!.getState(targetId) ?? { targetId, reconnectAttempt: 0 }),
     targetId,

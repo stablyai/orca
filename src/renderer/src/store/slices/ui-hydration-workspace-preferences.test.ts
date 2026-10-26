@@ -467,8 +467,7 @@ describe('createUISlice hydratePersistedUI', () => {
     })
   })
 
-  // Why: the Linear issue view is device-local now. A host that still holds one from
-  // an older build must not reintroduce the key the strict ui.set schema rejects.
+  // Ignore legacy host-persisted Linear views: now device-local, their key is rejected by strict ui.set.
   it('ignores a stale host-persisted Linear issue view during hydration', () => {
     const store = createUIStore()
 
@@ -597,8 +596,7 @@ describe('createUISlice hydratePersistedUI', () => {
     const firstHostIds = store.getState().agentsVisibleHostIds
     const firstRepoIds = store.getState().agentsFilterRepoIds
 
-    // Why identity (toBe): sync hydration fires on every ui:changed broadcast, and a
-    // fresh array would invalidate the agents-view scope memos each time.
+    // Sync fires on every ui:changed; preserve array identity to avoid rebuilding agent scope memos.
     store.getState().hydratePersistedUI(makePersistedUI({ ...persisted }))
     expect(store.getState().agentsVisibleHostIds).toBe(firstHostIds)
     expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
@@ -749,8 +747,7 @@ describe('createUISlice hydratePersistedUI', () => {
         'tab-recent:0': now
       })
     } finally {
-      // The shared afterEach restores mocks/globals but not timers, so clean up
-      // here to avoid leaking fake timers into subsequent tests.
+      // Shared teardown leaves timers intact; restore real timers so later tests cannot inherit this clock.
       vi.useRealTimers()
     }
   })
@@ -763,8 +760,7 @@ describe('createUISlice hydratePersistedUI', () => {
     try {
       const store = createUIStore()
       const malicious: Record<string, number> = {}
-      // Object.defineProperty so these land as own enumerable properties rather
-      // than getting silently re-routed to Object.prototype by the JS engine.
+      // Define __proto__ as an own enumerable property rather than changing Object.prototype.
       Object.defineProperty(malicious, '__proto__', {
         value: now,
         enumerable: true,

@@ -40,7 +40,6 @@ const candidates: ResumeCandidate[] = [
   }
 ]
 
-/** Whether this machine's runtime reports a structured host, as the desktop bridge answers it. */
 function stageLocalHost(installed: boolean): void {
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -53,7 +52,6 @@ function stageLocalHost(installed: boolean): void {
   })
 }
 
-/** Mounts the segment and snoozes the launch dialog the offer raises, as the modal's close does. */
 async function mount(iconOnly = false): Promise<void> {
   await act(async () => {
     render(
@@ -102,8 +100,7 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 
-  // The offer is spent once acted on, so this entry is the one summary a failed resume leaves.
-  // The two are different facts and stay two entries.
+  // The remaining offer and a completed resume’s failure are separate facts with separate entries.
   it('keeps a failed resume as its own entry beside any remaining offer', async () => {
     const failed = {
       ...candidates[0]!,
@@ -123,13 +120,11 @@ describe('NativeChatResumeStatusSegment', () => {
     rpc.mockResolvedValue({ sessions: [], failed: [failed] })
     await act(async () => entry.click())
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
-    // With the offer gone, only the failure entry is left — and it stays.
     expect(screen.queryByText('1 chat to resume')).toBeNull()
     expect(screen.getByText('1 chat failed to resume')).toBeTruthy()
   })
 
-  // The agent may be working on an unconfirmed one, so the entry must not call it failed — the
-  // dialog says "couldn't confirm" for that row, and "failed" would invite a second "continue".
+  // Unconfirmed chats may already be running; calling them failed would invite duplicate continuation.
   it('does not call an unconfirmed resume failed', async () => {
     const failure = (sessionId: 'a' | 'b', outcome: 'refused' | 'unconfirmed') => ({
       ...candidates.find((entry) => entry.sessionId === sessionId)!,
@@ -190,7 +185,6 @@ describe('NativeChatResumeStatusSegment', () => {
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
-    // A machine with no structured chat and the setting off asks the host nothing.
     expect(rpc).not.toHaveBeenCalled()
 
     cleanup()

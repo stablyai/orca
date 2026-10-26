@@ -108,7 +108,7 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       cols: 120,
       rows: 40
     })
-    // Views see the pane as starting while it starts, so none starts its own; then it clears.
+    // Publish starting status to prevent views spawning duplicates, then clear it after binding.
     expect(statusesSeen).toEqual([{ status: 'starting' }])
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, split.leafId ?? ''))).toBeNull()
     expect(split.tabId).toBe(TAB_ID)
@@ -262,7 +262,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
       const root = getSession().terminalLayoutsByTabId[TAB_ID]?.root
       expect(root ? collectLayoutLeafIdsInOrder(root) : []).not.toContain(NEW_LEAF_ID)
-      // Nothing is left showing a start for a pane that is gone.
       expect(runtime.startStatusOf(makePaneKey(TAB_ID, NEW_LEAF_ID))).toBeNull()
     }
   )
@@ -316,7 +315,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
         { direction: 'vertical', newLeafId: HEADLESS_LEAF_ID, keepPaneOnStartFailure: true }
       )
     ).rejects.toThrow('pane_exists')
-    // The live pane is not marked as a failed start.
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))).toBeNull()
   })
 })

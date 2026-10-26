@@ -2,8 +2,7 @@ import { useMemo } from 'react'
 import { nativeChatAskDismissKey, type AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useMobileNativeChatPromptDismiss } from './use-mobile-native-chat-prompt-dismiss'
 
-/** Keep an answered or collapsed ask so across view toggles and remounts until a real observation
- *  supersedes it. */
+// Keep answered/collapsed asks across view toggles and remounts until an observed prompt supersedes them.
 export function useMobileNativeChatAskDismiss(args: {
   ask: AskPrompt | null
   detectedAsk: AskPrompt | null

@@ -3,7 +3,7 @@ import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/ru
 import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
-import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {
   getRepoExecutionHostId,

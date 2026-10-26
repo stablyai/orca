@@ -5,15 +5,11 @@ const META_INPUT_SOURCE_IDS: readonly string[] = [
 ]
 
 export type InputSourceOverride =
-  /** Auto uses Option-as-Meta on this standard input source. Resolves to `'us'`
-   *  for `effectiveMacOptionAsAlt`. */
+  /** Standard source permits Option-as-Meta (us). */
   | 'meta'
-  /** Option composes layout characters on this input source. Resolves
-   *  to `'non-us'` so `macOptionIsMeta` stays off and compositions like
-   *  Option+A → ą reach the shell. */
+  /** Composition source keeps Option text and maps to non-us. */
   | 'compose'
-  /** No input source ID available. macOS stays conservative; other
-   *  platforms may use the layout fingerprint. */
+  /** Missing native identity stays conservative on macOS; other platforms may use browser fingerprints. */
   | 'unknown'
 
 export function classifyInputSourceId(id: string | null | undefined): InputSourceOverride {

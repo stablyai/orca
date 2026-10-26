@@ -111,8 +111,7 @@ export function openFilePathLinkAtBufferPosition(
     })
   }
   const host: FileLinkHost = { ...deps, cwd: deps.startupCwd, homePath: deps.terminalHomePath }
-  // Why: a share outside the workspace is never stat'ed unprompted; like a verified path, its
-  // guess opens as is and the host resolves it.
+  // Never stat external shares unprompted; open the guess as-is and let the host resolve it.
   const settled = (link: ClickedFileLink): boolean =>
     link.cachedExists === true ||
     link.isKnownWorktreeRoot ||
@@ -140,13 +139,11 @@ export function openFilePathLinkAtBufferPosition(
     return link !== undefined
   }
 
-  // Why: hard-wrap joining offers guesses like `a.txt/b.txt` that sort first; opening one
-  // before its hover probe answers (a host round-trip) fails and hides the real path.
+  // Wait for hover probes before choosing longer hard-wrap guesses; otherwise a bad join can hide the real path.
   const isLatestOpen = reserveDetectedFilePathOpenTurn()
   const clickedHost = fileHostFingerprint(toProbe[0].fileContext)
   void probeClickedFileLinks(toProbe, deps).then((existing) => {
-    // Why: if the workspace's host or pairing changed meanwhile, a same-named file there is not
-    // the one clicked.
+    // A changed host/pairing cannot authorize opening a same-named file on the new host.
     const currentHost = fileHostFingerprint(
       getTerminalFileContext(deps.worktreeId, deps.worktreePath, deps.runtimeEnvironmentId)
     )
@@ -154,8 +151,7 @@ export function openFilePathLinkAtBufferPosition(
       return
     }
     const found = longestPath(existing)
-    // Why the shortest otherwise: opening it lets the open report the real failure instead of
-    // a probe guessing "missing" for a refusal.
+    // Without a verified candidate, let opening the shortest report the real failure instead of guessing absence.
     const link = found ?? best ?? shortestPath(toProbe)
     if (link) {
       open(link, link === found || link.cachedExists === true)

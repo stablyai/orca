@@ -13,7 +13,7 @@ type TurnEndTimingRow = Pick<
 
 type HostTurnEnd = HostTurnEndFacts & { hostTurn?: HostTurnRecord }
 
-// Why: a record with no verified opening or native key yet (a new session, a pre-record row).
+// No verified opener or native key exists for a seeded turn.
 const UNOPENED_TURN = 'seed'
 
 /** The hook body's turn facts the host folds into its turn record; in-process only. */
@@ -22,8 +22,7 @@ export function readHostTurnSignals(
   hookPayload: Record<string, unknown>,
   promptInteractionKey: string | undefined
 ): Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'> {
-  // Why: the agent's own turn id tells a new turn from a re-delivery even when no prompt hook
-  // ran (Codex turns woken by agent mail, every Command Code turn).
+  // Native keys distinguish new turns from redelivery when no prompt hook ran (Codex mail/Command Code).
   const nativeTurnKey =
     source === 'codex'
       ? readString(hookPayload, 'turn_id')
@@ -70,16 +69,7 @@ function resolveOwner(
   }
 }
 
-/**
- * The one turn-end derivation every execution host runs (local main and the WSL relay). A turn
- * advances on the agent's native turn key (Codex `turn_id`, Command Code's transcript position)
- * or, without one, only on a prompt-opening event. A live root turn-end event is an identified
- * end, minted, when its turn is unused or a verified continuation re-entered after a blocking Stop
- * hook. A same-turn repeat is a proven duplicate only for an agent with both a native key and a
- * verified continuation flag; otherwise it is ambiguous (a repeat, or a turn whose opening never
- * arrived) and never mints. Restatements (replay, retry, idle reminder, enrichment) keep the end
- * shown in the current done segment. Keys are opaque: only compared for equality.
- */
+/** Shared host turn-end derivation: native opaque keys or prompt openers advance turns; unused live root ends or verified Stop continuations mint. Same-turn repeats are duplicates only with native keys plus continuation support; ambiguous ends never mint. Replays/retries/reminders restate the current done segment. */
 export function reduceHostTurnEnd(
   previous: TurnEndTimingRow | undefined,
   event: AgentHookEventPayload,
@@ -88,8 +78,7 @@ export function reduceHostTurnEnd(
 ): HostTurnEnd {
   const shown = previous?.payload.state === 'done' ? pickHostTurnEnd(previous) : {}
   const done = event.payload.state === 'done'
-  // Why: a relay, a result retry or a replay already decided this event's end; the host restates it,
-  // except over a done segment it shows with no end of its own (a cancel it inferred), which keeps none.
+  // Restate an already-derived/replayed end, except over an inferred-cancel segment that has none.
   if (!canMint || event.isReplay === true || event.turnEndDisposition !== undefined) {
     const shownWithoutEnd =
       previous?.payload.state === 'done' && previous.turnEndDisposition === undefined
@@ -152,8 +141,7 @@ export function reduceHostTurnEnd(
       hostTurn: { ...record, completed: { turnKey: record.currentTurnKey, endedAt } }
     }
   }
-  // Why: the agent's own turn id plus a verified continuation flag mean an unflagged repeat of
-  // this turn's Stop is a duplicate delivery (Codex re-fires it flagged for a continuation).
+  // With native identity and continuation support, an unflagged same-turn Stop is a duplicate.
   if (completed && sameTurn && event.nativeTurnKey && agentReportsStopHookContinuation(source)) {
     return { turnEndedAt: completed.endedAt, turnEndDisposition: 'identified', ...kept }
   }

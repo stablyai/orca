@@ -17,8 +17,7 @@ afterEach(() => {
 })
 
 describe('ScrollArea sizing footgun', () => {
-  // Why: Radix Root's inline `position: relative` always beats an `absolute` class,
-  // so the ScrollArea must be sized by height (h-full), not absolute — locked here.
+  // Radix Root’s inline position beats absolute classes; size ScrollArea with height instead.
   it('keeps Radix inline position:relative even when given an absolute className', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

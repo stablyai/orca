@@ -1,9 +1,4 @@
-/**
- * Boot hydration for a worktree whose session the main-process runtime wrote into `ssh:<targetId>`.
- *
- * The renderer used to read only the local + `runtime:*` partitions, so those tabs were invisible
- * (#12721, #18173).
- */
+/** Restore sessions runtime wrote to SSH partitions, formerly unread by renderer local/runtime-only hydration (#12721/#18173). */
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -50,8 +45,7 @@ function partitionedApi(
   }
 }
 
-/** The observed shape from #12721: the local blob carries the worktree key with an empty list
- *  while the runtime owns the real list in the SSH partition. */
+/** Reproduce #12721: local has an empty terminal list while SSH owns the real rows. */
 function strandedPartitions(hostTabs: TerminalTab[], localTabs: TerminalTab[] = []) {
   return {
     local: session({ tabsByWorktree: { [WORKTREE_ID]: localTabs } }),
@@ -84,8 +78,7 @@ describe('ssh host partition hydration', () => {
   })
 
   it('adopts a hibernated agent record the host partition alone holds', async () => {
-    // The renderer's next full write replaces the SSH partition, so a runtime-authored record the
-    // reunited session never carried would be dropped by the repair itself.
+    // Full SSH writes replace the partition; retain runtime-authored rows during reunification or repair deletes them.
     const partitions = strandedPartitions([tab('tab-runtime')])
     partitions[SSH_HOST_ID] = session({
       ...partitions[SSH_HOST_ID],
@@ -112,8 +105,7 @@ describe('ssh host partition hydration', () => {
   })
 
   it('ignores a stray local copy of a workspace the catalog places on the ssh target', async () => {
-    // `local` rows for an SSH workspace are residue (#23390, #25616). Keeping them restored tabs
-    // the user had closed and dropped the live ones the SSH partition holds.
+    // Local SSH-workspace rows are residue; retaining them resurrected closed tabs while losing live host rows (#23390/#25616).
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local')])),
       repos
@@ -280,9 +272,7 @@ describe('ssh host partition hydration', () => {
 })
 
 describe('ssh host partition workspaces with no terminal tabs', () => {
-  /** An SSH workspace the user left with an editor open and every terminal closed. Orca does not
-   *  auto-create a terminal while other tabs exist, so this is an ordinary state — and the whole
-   *  workspace now persists to `ssh:<targetId>`, tabs or no tabs. */
+  /** Editor-only SSH workspaces are valid: no terminal autocreate occurs beside editors, but all their state still belongs in SSH persistence. */
   function editorOnlyPartitions() {
     return {
       local: session({ tabsByWorktree: {} }),
@@ -359,8 +349,7 @@ describe('ssh host partition workspaces with no terminal tabs', () => {
   })
 
   it('restores a workspace the host partition names with no tabs row at all', async () => {
-    // Stricter than the fixtures above, which carry an empty `tabsByWorktree` key. A workspace that
-    // never had a terminal has no such key, so tab presence cannot be what discovers it.
+    // Never-terminal workspaces have no tabsByWorktree key; discover them from other session chrome too.
     const partitions = {
       local: session({ tabsByWorktree: {} }),
       [SSH_HOST_ID]: session({
@@ -397,10 +386,7 @@ describe('ssh host partition workspaces with no terminal tabs', () => {
 })
 
 describe('ssh host partition rows the host has nothing for', () => {
-  /** The base half of a legacy split: `local` still holds this workspace's editor state, including
-   *  an unsaved draft, while the SSH partition holds only empty rows for it. The workspace is
-   *  adoptable (the base has no terminal tabs for it), and every worktree-keyed row it adopts is a
-   *  replacing write — so an empty host row landing on a populated base row is a real deletion. */
+  /** Legacy local editor/draft state plus empty SSH rows is adoptable by terminal criteria; replacing populated base editor state with host emptiness would delete user content. */
   function emptyHostRowsOverBaseDraft(hostOpenFiles: boolean) {
     const draftFile = {
       filePath: `${WORKTREE_PATH}/src/main.ts`,
@@ -423,9 +409,7 @@ describe('ssh host partition rows the host has nothing for', () => {
   }
 
   it('does not let an empty host row destroy an unsaved draft the base alone holds', async () => {
-    // The host having no open files is not evidence the base's are gone. Losing this is worse than
-    // the bug the adoption exists to fix: nothing can recover a `dirtyDraftContent` once the read
-    // has dropped it.
+    // Host absence of editors proves no base deletion; lost dirtyDraftContent cannot be recovered.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(emptyHostRowsOverBaseDraft(true)),
       repos
@@ -437,9 +421,7 @@ describe('ssh host partition rows the host has nothing for', () => {
   })
 
   it('still adopts a populated host row over the base leftovers, keeping only their drafts', async () => {
-    // The other side of the same rule: the guard must be about the host having nothing, not about
-    // the base having something, or adoption stops repairing the split it exists for. An unsaved
-    // draft the host row lacks is the one leftover kept, since nothing else can recover it.
+    // Replace when the host has content, preserving base-only unsaved drafts; gating merely on populated base would disable split repair.
     const partitions = emptyHostRowsOverBaseDraft(false)
     partitions[SSH_HOST_ID] = session({
       ...partitions[SSH_HOST_ID],
@@ -463,9 +445,7 @@ describe('ssh host partition rows the host has nothing for', () => {
   })
 
   it('adopts the layout of a tab the host slice names only in unifiedTabs', async () => {
-    // `buildWorktreeIdByTabId` — the index the split routes by — resolves unified-only tabs as well
-    // as `tabsByWorktree` ones, so their tab-keyed rows are written to this partition. A read that
-    // discovered tabs from `tabsByWorktree` alone routed them in and never brought them back.
+    // Write routing indexes unified-only tabs too; read discovery must match or those tabs never round-trip.
     const partitions = {
       local: session({ tabsByWorktree: {} }),
       [SSH_HOST_ID]: session({
@@ -499,12 +479,7 @@ describe('ssh host partition rows the host has nothing for', () => {
 })
 
 describe('ssh host partition adoption on a contested bare id', () => {
-  /** A worktree id is `repoId::path` with no host component, so one repo registered on two hosts
-   *  publishes the SAME id for two DIFFERENT workspaces (STA-4343). The contention split parks the
-   *  co-claimant's rows so the primary's write cannot erase them — but ssh slices are deliberately
-   *  kept out of that claimant set, on the premise that `local` and `ssh:<target>` are one workspace
-   *  written twice. A contested id is exactly where that premise fails, and adoption cannot see it
-   *  from `(base, host)` alone. */
+  /** SSH slices bypass contention splitting because local/SSH usually represents one legacy-split workspace. Same repoId::path across real rival hosts breaks that premise; adoption needs external contest evidence beyond base/host. */
   const RUNTIME_HOST_ID: ExecutionHostId = 'runtime:r1'
   const contestedRepos = [
     { id: REPO_ID, connectionId: TARGET_ID, executionHostId: null },
@@ -548,9 +523,7 @@ describe('ssh host partition adoption on a contested bare id', () => {
   }
 
   it("does not overwrite a contested workspace's own rows with the ssh workspace's", async () => {
-    // The read names `local` primary for this id and parks the runtime claimant, so routing writes
-    // whatever survives here back into local's own partition. Replacing local's rows with the SSH
-    // workspace's would persist one workspace's editor state as another's — and destroy the draft.
+    // Read names local primary; replacing its rows with SSH state would persist another workspace’s editor content and destroy drafts.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(contestedPartitions()),
       contestedRepos
@@ -580,9 +553,7 @@ describe('ssh host partition adoption on a contested bare id', () => {
   })
 
   it('does not let a legacy bare recency key move another host workspace of the same id', async () => {
-    // `lastVisitedAtByWorktreeId` is the one worktree-keyed field whose key may name its own host,
-    // and the split has a dedicated branch for that. A bare key carries no host, so it cannot be
-    // told apart from the base's own entry for the id — replacing moves Cmd+J recency permanently.
+    // Only qualified recency keys prove hosts; replacing bare keys could permanently move another claimant’s Cmd+J history.
     const partitions = {
       local: session({
         tabsByWorktree: {},
@@ -620,9 +591,7 @@ describe('ssh host partition adoption on a contested bare id', () => {
 })
 
 describe('ssh host partition write/read round trip', () => {
-  /** The two halves pinned together through the shipping write path. Testing the read against a
-   *  hand-built partition is what let an editor-only workspace fall out: the fixture asserted the
-   *  shape the read expected instead of the shape the write actually produces. */
+  /** Exercise shipping write then read together; hand-built read-shaped fixtures previously hid editor-only workspace loss. */
   async function roundTrip(payload: WorkspaceSessionState): Promise<WorkspaceSessionState> {
     const { buildWorkspaceSessionHostSnapshots } =
       await import('./workspace-session-host-persistence')
@@ -673,13 +642,7 @@ describe('ssh host partition write/read round trip', () => {
 })
 
 describe('ssh host partition and the closed-last-terminal tombstone', () => {
-  /** Two readings of one value meet here. The terminal layer writes an explicit empty
-   *  `tabsByWorktree` row to mean "the user closed the last terminal" and reserves an ABSENT row for
-   *  "never initialized" — a real tombstone, honoured by `shouldAutoCreateInitialTerminal`. This
-   *  adoption reads an empty row on the BASE side as a gap to fill. Opposite readings, same value,
-   *  so the boundary between them is asserted rather than reasoned about: a mature product ships
-   *  exactly this defect, with a correct write side and one reader that decides seeding on a count
-   *  and never consults the record. */
+  /** Terminal code treats explicit empty lists as last-close tombstones and absence as uninitialized; legacy adoption treats base emptiness as repairable. Assert this boundary against shouldAutoCreateInitialTerminal to prevent repeated reseeding despite a correct write. */
   async function roundTripSession(payload: WorkspaceSessionState): Promise<{
     restored: WorkspaceSessionState
     partitions: Record<string, WorkspaceSessionState>
@@ -699,8 +662,7 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
   }
 
   it('writes an SSH workspace emptied by this build into the partition that owns it', async () => {
-    // The precondition the whole non-recurrence claim rests on: the tombstone lands in
-    // `ssh:<targetId>` and `local` keeps no row, so the legacy shape cannot be regenerated.
+    // Tombstones must persist only in owning SSH, leaving no local residue that could regenerate legacy repair input.
     const { partitions } = await roundTripSession(
       session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
     )
@@ -710,8 +672,7 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
   })
 
   it('restores that tombstone as an explicit empty row, not a deleted key', async () => {
-    // A deleted key reads back as "never initialized" and the workspace re-seeds on every launch,
-    // which is the defect the tombstone exists to prevent. Presence is the whole signal.
+    // Presence prevents reseeding; deleting the key means never initialized and recreates terminals on every launch.
     const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
 
     expect(Object.hasOwn(restored.tabsByWorktree, WORKTREE_ID)).toBe(true)
@@ -719,8 +680,7 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
   })
 
   it('leaves the restored workspace un-seeded by the shared seeding predicate', async () => {
-    // Asserted through the real predicate rather than by inspecting the row, because the row being
-    // right is worth nothing if the reader that acts on it disagrees.
+    // Assert the real seeding predicate, not row shape alone, so reader disagreement fails.
     const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
 
     expect(
@@ -732,8 +692,7 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
   })
 
   it('does not adopt a stale populated ssh row over a tombstone in the owning partition', async () => {
-    // The collision stated directly. The tombstone is in `ssh:<targetId>` — where this build writes
-    // it — and adoption must neither hand stale tabs back nor read the row as a gap.
+    // Owned SSH tombstones must neither resurrect stale tabs nor become adoptable gaps.
     const partitions = {
       local: session({ tabsByWorktree: {} }),
       [SSH_HOST_ID]: session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
@@ -745,11 +704,7 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
   })
 
   it('resurrects the legacy-transition shape exactly once and not again', async () => {
-    // The documented knownGap, and the claim that makes it acceptable. Boot 1 adopts the stranded
-    // tabs back over `local`'s empty row — non-destructive, and the repair working. The user then
-    // empties the workspace on THIS build, and boot 2 must hold the tombstone: the row now lives in
-    // the owning partition and `local` no longer names the workspace, so there is nothing left to
-    // resurrect from. A gap that recurred would be a permanent re-seed, not a one-shot.
+    // Known gap must be one-shot: boot one repairs local’s empty legacy half; closing on this build moves tombstone solely to SSH, so boot two cannot resurrect tabs.
     const firstBoot = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi({
         local: session({ tabsByWorktree: { [WORKTREE_ID]: [] } }),

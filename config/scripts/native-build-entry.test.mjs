@@ -64,7 +64,7 @@ describe('nativeBuildEntryName', () => {
     expect(() => nativeBuildEntryName('cpu-features')).toThrow(/no shared native build/)
   })
 
-  // The patched loaders cannot require this module, so they spell the name out themselves.
+  // Patched loaders cannot require this module; hold duplicated name calculation to same contract.
   it('matches the dir the patched node-pty loader tries first', () => {
     const line = addedPatchLine('node-pty@1.1.0.patch', /var dirs = \[/)
     const firstDir = /\[([^,]+),/.exec(line)[1]

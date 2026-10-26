@@ -8,7 +8,7 @@ import {
 } from './last-visited-worktree-repo'
 import { routeExecutionHostOf, type LastVisitedWorktreeOnHost } from './host-list-highlight'
 
-// Why a cap: the page's store refuses a value past its frame cap, and a forgotten host never writes again.
+// Bound history below the page-store frame cap; forgotten hosts never write again.
 const MAX_REMEMBERED_HOSTS = 16
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,13 +45,10 @@ function readByHost(raw: string | null): Map<string, LastVisitedWorktreeOnHost> 
         }
       }
     }
-  } catch {
-    // Unreadable history is no history.
-  }
+  } catch {}
   return byHost
 }
 
-/** This phone's last-opened workspace on `hostId`, or null when it has opened none there. */
 export function readLastVisitedWorktreeOnHost(
   raw: string | null,
   hostId: string
@@ -65,7 +62,6 @@ export function readLastVisitedWorktreeOnHost(
   return record?.hostId === hostId ? { worktreeId: record.worktreeId } : null
 }
 
-/** The stored value with `record` as the latest visit and its host's entry. */
 export function withLastVisitedWorktree(
   raw: string | null,
   record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId }
@@ -110,11 +106,7 @@ export function subscribeLastVisitedWorktree(listener: Listener): () => void {
   }
 }
 
-/**
- * Tells this context's open lists about a visit without storing it. The list's tap uses this: the
- * shell's session page is another page that stores the visit itself, and a long-lived list page's
- * load-time copy of the key could overwrite newer visits to other hosts.
- */
+// Notify without storing: a long-lived list’s stale page copy must not overwrite visits stored by a newer session page.
 export function noteLastVisitedWorktree(
   record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId }
 ): void {
@@ -127,17 +119,12 @@ export function noteLastVisitedWorktree(
 // Serialized: each write merges into what the last one stored.
 let writeChain: Promise<void> = Promise.resolve()
 
-/**
- * The one writer of this key (the session route), so the hybrid shell's mirror sees it as it is
- * written. The page is handed this key on every `init`, built from that mirror; a write that went
- * straight to the store would reach the page one `init` later.
- */
+// Write through the shell mirror so the next page init includes the visit.
 export function writeLastVisitedWorktree(
   record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId }
 ): Promise<void> {
   noteLastVisitedWorktree(record)
-  // Through the path that notes on an accepted write (ruling 35); the page's adapter may refuse,
-  // and nothing is owed a caller that cannot act on one, so a refusal is the adapter's log.
+  // Use accepted-write notification; adapters log refusals the caller cannot recover from.
   writeChain = writeChain
     .then(() => readMirroredKeyOrStore(LAST_VISITED_WORKTREE_STORAGE_KEY).catch(() => null))
     .then((raw) =>

@@ -817,6 +817,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
       reason: 'store-recovery-test'
     })
     expect(readFileSync(databasePath).equals(sourceBytes)).toBe(true)
+    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
   })
 
   it('prepares frozen JSON imports without permitting file publication', () => {

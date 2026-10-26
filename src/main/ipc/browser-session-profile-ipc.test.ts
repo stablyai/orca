@@ -44,7 +44,7 @@ vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 
-vi.mock('../browser/browser-cookie-import', () => ({
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectBrowsersMock,
   importCookiesFromBrowser: vi.fn(),
   importCookiesFromFile: vi.fn(),

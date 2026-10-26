@@ -24,17 +24,13 @@ type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Needed so Retry can revive a parked reconnect loop (STA-1511 / #5049).
+  // Retry must revive a parked reconnect loop.
   hostId: string
   bottomInset: number
-  // Bumped by the hub header refresh so History reloads without remounting.
   refreshNonce?: number
 }
 
-// Headerless commit-history list. Extracted from the /history route so the hub's
-// History segment and the standalone route render the same body over one code path.
-// Memoized: it stays mounted (hidden) while the Changes segment is active, and must
-// not re-reconcile its FlatList on every commit-message keystroke re-render.
+// Memoize the hidden, mounted history list so commit-message keystrokes do not reconcile its FlatList.
 export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   client,
   connState,
@@ -51,8 +47,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [filesById, setFilesById] = useState<Record<string, CommitFilesState>>({})
   const [filesReloadNonce, setFilesReloadNonce] = useState(0)
 
-  // Host or worktree identity change must wipe history immediately — even while
-  // disconnected — so a kept-mounted hub segment never shows another tree's commits.
+  // Clear on host/worktree switches even offline; retained segments must never show another tree’s history.
   useEffect(() => {
     setRows(null)
     setError(null)
@@ -63,12 +58,10 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   useEffect(() => {
     let active = true
     if (!client || connState !== 'connected' || !worktreeId) {
-      // Why: leave already-loaded rows (and expand state) alone across a drop —
-      // resolveMobileHistoryScreenView keeps them visible (STA-1511).
+      // Keep loaded rows and expansion state visible through disconnection.
       return
     }
-    // Why (F10): clear only the error (it wins render precedence, so a stale one would outlive a
-    // successful retry) — the loaded rows stay up until fresh ones land instead of flashing empty.
+    // Clear error precedence for retries, retaining rows until fresh history arrives.
     setError(null)
     void (async () => {
       try {
@@ -87,10 +80,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     }
   }, [client, connState, reloadNonce, refreshNonce, worktreeId])
 
-  // Why: retrying the fetch is useless while the transport's reconnect loop
-  // is parked at its backoff cap — revive the connection instead (mirrors
-  // MobileSourceControlPanel / issue #5049). The load effect re-runs via
-  // connState once the fresh client connects.
+  // Fetching cannot revive a parked reconnect loop; force reconnect and let connState reload.
   const retryAction = connectionRetryAction({
     hostId,
     needsReconnect: connState !== 'connected',
@@ -109,8 +99,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     setExpanded((current) => (current === row.id ? null : row.id))
   }, [])
 
-  // Why (F10): the expanded commit's files load here, not in the tap handler, so a row expanded
-  // during an outage refetches on reconnect instead of caching the outage's answer forever.
+  // Load in an effect so expansion during an outage retries on reconnect rather than caching the outage.
   useEffect(() => {
     if (!expanded || !client || connState !== 'connected') {
       return

@@ -91,8 +91,7 @@ describe('git status line stats cache', () => {
 
   it('lets an earlier recompute store after a later reuse-only read began', () => {
     const recomputeWrite = beginGitStatusLineStatsCacheWrite('native\0/repo')
-    // A hinted safety read begins later, reuses, and never stores; it must not
-    // starve the older recompute's store.
+    // Reuse-only reads must not starve older recompute writes.
     beginGitStatusLineStatsCacheWrite('native\0/repo')
     storeGitStatusLineStats({
       cacheKey: 'native\0/repo',
@@ -111,10 +110,8 @@ describe('git status line stats cache', () => {
   })
 
   it('keeps a prior good snapshot reusable when an overlapping recompute is aborted', async () => {
-    // A completed scan stored healthy counts.
     storeGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries: cachedEntries })
 
-    // A later scan begins and recomputes but is aborted before it can store.
     const abortedWrite = beginGitStatusLineStatsCacheWrite('native\0/repo')
     let aborted = false
     await expect(
@@ -132,8 +129,7 @@ describe('git status line stats cache', () => {
       })
     ).rejects.toMatchObject({ name: 'AbortError' })
 
-    // The aborted pass persisted nothing, so it must not evict the healthy
-    // snapshot — a following safety read still reuses the stored counts.
+    // An aborted pass stored nothing and must not evict the last healthy snapshot.
     const entries: { path: string; status: string; area: string; added?: number }[] = [
       { path: 'src/a.ts', status: 'modified', area: 'unstaged' }
     ]

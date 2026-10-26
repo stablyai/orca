@@ -18,7 +18,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -28,7 +27,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -37,7 +35,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
-// Main answers the window's browser-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -92,7 +89,7 @@ describe('setActiveWorktree', () => {
     store.getState().createTab(wt)
     unsubscribe()
 
-    // Why: a terminal-only intermediate state mounts the legacy host and races the split-group host, duplicating setup panes and PTYs.
+    // Intermediate terminal-only state races legacy/split-group hosts, duplicating panes and PTYs.
     expect(snapshots).toEqual([{ terminalCount: 1, unifiedCount: 1, groupCount: 1 }])
   })
 
@@ -123,7 +120,7 @@ describe('setActiveWorktree', () => {
       store.getState().createTab(wt)
       unsubscribe()
 
-      // Why: a terminal-only intermediate state mounts the legacy host and races the split-group host, duplicating setup panes and PTYs.
+      // Intermediate terminal-only state races legacy/split-group hosts, duplicating panes and PTYs.
       expect(snapshots).toEqual([
         { terminalCount: 1, unifiedCount: 1, groupCount: 1 },
         { terminalCount: 1, unifiedCount: 1, groupCount: 1 }

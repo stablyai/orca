@@ -13,9 +13,7 @@ import { redactConnectionLogEntry, redactConnectionLogText } from './connection-
 const MAX_EVENT_LINE_BYTES = 2 * 1024
 const EVENT_TRUNCATION_MARKER = ' … [truncated]'
 
-// Why: one shareable text blob answering everything we historically had to
-// ask reporters one message at a time (endpoint type, state, attempt count,
-// last-connected, versions, and the reconnect lifecycle log).
+// Include endpoints, connection state, attempts, versions and lifecycle history in one shareable report.
 export function buildConnectionDiagnosticsReport(args: {
   hostName: string
   endpoint: string
@@ -28,7 +26,6 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
-  /** The page bridge version this shell speaks. */
   bridgeProtocolVersion: number
   nowMs?: number
 }): string {

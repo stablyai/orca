@@ -43,7 +43,6 @@ function GoalAction(props: {
   )
 }
 
-/** The session's open goal, as a strip attached to the top of the composer. */
 export function NativeChatThreadGoalBanner(props: {
   goal: AgentJournalThreadGoal
   pending: boolean

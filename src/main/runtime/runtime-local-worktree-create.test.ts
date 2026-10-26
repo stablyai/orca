@@ -142,8 +142,7 @@ function createWorktree(
     createdWithAgent: undefined,
     resolveRemoteTrackingBase: mocks.remoteBase,
     hasRemoteTrackingRef: mocks.hasRemoteRef,
-    // Why: a vi.fn marks the promise it returns as handled; a fresh promise keeps
-    // an unawaited fetch rejection visible to the unhandled-rejection checks.
+    // vi.fn marks returned promises handled; a fresh promise exposes unawaited fetch rejection.
     refreshRemoteTrackingBase: async (...refreshArgs) => await mocks.refresh(...refreshArgs),
     fetchRemote: async (...fetchArgs) => await mocks.fetch(...fetchArgs),
     onWorktreeMetadataPersisted: () => undefined,

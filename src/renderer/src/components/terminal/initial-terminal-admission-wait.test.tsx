@@ -10,12 +10,14 @@ const mocks = vi.hoisted(() => {
     createTab: vi.fn(),
     createUnifiedTab: vi.fn(),
     begin: vi.fn(),
+    select: (selector: (state: { pendingWorktreeCreations: Record<string, never> }) => unknown) =>
+      selector({ pendingWorktreeCreations: {} }),
     answers
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(() => 'none', {
+  useAppStore: Object.assign(mocks.select, {
     getState: () => ({
       activeWorktreeId: 'wt-1',
       tabsByWorktree: {},
@@ -181,8 +183,7 @@ function gateAnsweredLater(): {
   return { gate, finish }
 }
 
-// While this machine decides, a passive first-terminal seeder used to put "Terminal 1" beside the
-// chat, since no launch record exists until the host answers.
+// While admission waits, no launch record exists yet; passive seeding must not add Terminal 1 beside the chat.
 describe('a local chat launch waiting on its host', () => {
   it('defers the watcher shell for a live host launch, then permits a later ordinary mount', async () => {
     mocks.gate.mockResolvedValueOnce('blocked').mockResolvedValueOnce('empty')
@@ -198,7 +199,6 @@ describe('a local chat launch waiting on its host', () => {
 
   it('keeps a watched create free of a stray shell until its chat opens', async () => {
     const { finish } = gateAnsweredLater()
-    // A watched create reveals the workspace, then waits for this machine's answer.
     beginStructuredAgentSessionProvisionalLaunch({
       plan: localChatPlan(),
       hooks: {},
@@ -218,12 +218,10 @@ describe('a local chat launch waiting on its host', () => {
 
   it("keeps an empty workspace's default chat free of a shell seeded by the shared gate", async () => {
     const { gate, finish } = gateAnsweredLater()
-    // The activation's reseed attaches first and opens the default agent as a chat.
     void gate.then(() =>
       beginStructuredAgentSessionProvisionalLaunch({ plan: localChatPlan(), hooks: {} })
     )
     root = createRoot(document.createElement('div'))
-    // The watcher shares that in-flight gate and runs right after the reseed.
     await act(async () => root?.render(createElement(Watcher)))
     await act(async () => finish())
     expect(mocks.begin).not.toHaveBeenCalled()

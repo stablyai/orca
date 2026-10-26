@@ -7,10 +7,6 @@ type SourceControlCommitSurfaceProps = SourceControlPanelReadyProps & {
   showGenericEmptyState: boolean
 }
 
-/**
- * The one action surface below the file list: the review composer when Create review is the direct
- * next step, otherwise the commit box.
- */
 export function SourceControlCommitSurface({
   activeRepo,
   model,

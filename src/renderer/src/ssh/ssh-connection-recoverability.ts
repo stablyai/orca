@@ -1,8 +1,6 @@
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
-// Why: a total Record makes a new SshConnectionStatus member a typecheck failure. An
-// array + .includes() would silently classify it as "not recoverable", leaving its cards
-// with a dead glyph and no way to reconnect.
+// Total Record makes new statuses typecheck failures; includes() would silently leave new recoverable states with dead controls.
 const CONNECTING_BY_STATUS: Record<SshConnectionStatus, boolean> = {
   disconnected: false,
   connecting: true,
@@ -30,7 +28,6 @@ export function isConnectingSshStatus(status: SshConnectionStatus | null | undef
   return status ? CONNECTING_BY_STATUS[status] : false
 }
 
-/** Failure states a user-initiated connect can recover from. */
 export function canConnectSshStatus(status: SshConnectionStatus | null | undefined): boolean {
   return status ? CAN_CONNECT_BY_STATUS[status] : false
 }

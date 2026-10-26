@@ -122,7 +122,6 @@ describe('useWorkspaceKanbanSelection', () => {
   })
 
   it('extends the range from a visible card when a search hides the anchor', () => {
-    // Anchor lands on delta, then a query hides only delta.
     renderSelection()
     click(alpha.id)
     toggleClick(beta.id)
@@ -132,15 +131,11 @@ describe('useWorkspaceKanbanSelection', () => {
     renderSelection([alpha, beta, gamma])
     click(gamma.id, true)
 
-    // Without a rendered anchor this collapsed to just gamma, dropping the
-    // still-visible alpha and beta along with it.
     expect(selectedIds()).toEqual(['alpha', 'beta', 'gamma'])
   })
 
   it('replaces a hidden selection on every replace-shaped gesture alike', () => {
-    // Why: a range, a plain click and a non-additive marquee all mean "replace".
-    // If a range alone carried hidden cards through, the user would be left with
-    // a selection they cannot see, count, or narrow.
+    // Every replace-shaped gesture must drop hidden cards to avoid invisible selections.
     renderSelection()
     click(delta.id)
     toggleClick(alpha.id)

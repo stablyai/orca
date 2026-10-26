@@ -18,8 +18,7 @@ declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
   export const language: languages.IMonarchLanguage
 }
 
-// Monaco ships these contributions without public type declarations. We only
-// touch the paste-override surface, so declare the minimal shape we use.
+// Monaco contributions lack public types; declare only Orca’s paste-override surface.
 declare module 'monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js' {
   type PasteImplementation = () => boolean | Promise<unknown>
   export const PasteAction:

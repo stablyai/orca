@@ -32,14 +32,11 @@ import {
 } from './ai-vault-agent-session-refresh-key'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
-// In-app session creation bypasses the cache so the new session appears promptly.
-// Keep the budget at module scope so tab remounts cannot amplify full scans.
+// Share the forced-rescan budget across remounts so session creation cannot amplify full scans.
 const FORCED_RESCAN_MIN_INTERVAL_MS = 30_000
 let lastForcedRescanAt = 0
 
-/** Takes the shared forced-rescan budget when it is free. Every caller outside the panel that forces
- *  a scan must take it too, or it would amplify full scans the same way. A user's explicit request
- *  takes it even when spent, as the panel's Refresh does, so no automatic rescan follows it. */
+/** All forced callers share this budget; explicit requests consume it even when spent to suppress automatic follow-ups. */
 export function claimAiVaultForcedRescan(userRequested = false): boolean {
   const now = Date.now()
   if (!userRequested && lastForcedRescanAt + FORCED_RESCAN_MIN_INTERVAL_MS > now) {
@@ -55,17 +52,12 @@ export function resetAiVaultForcedRescanThrottleForTest(): void {
   resetAiVaultSessionResultCacheForTest()
 }
 
-// Desktop IPC reports cancellation as a result, but the web/runtime RPC path
-// still rejects, so both shapes have to be recognised.
+// Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
 export const isAiVaultScanCancellation = isAiVaultScanCancelledError
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
 
-// Shares main's request resolver, so this is exactly the scope that fans out on
-// the desktop IPC path. Deliberately over-inclusive: the paired web transport
-// drops the scope and serves one host, so 'all' there costs a redundant
-// reconcile. Erring the other way would re-enable the stamp fast-path on a real
-// merge, which is the bug this guard exists to prevent.
+// Use desktop merge semantics even if web drops scope: redundant reconciliation is safer than trusting a merged stamp.
 function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
   return requestedExecutionHostScope(scope) === ALL_EXECUTION_HOSTS_SCOPE
 }
@@ -152,8 +144,7 @@ export function useAiVaultSessionRefresh(
         setLoading(false)
         return
       }
-      // A scope change during an in-flight scan must not be dropped; queue one more
-      // scan so the current scoped view is refreshed after the older scan settles.
+      // Queue scope changes during an in-flight scan so the new view still refreshes.
       if (refreshInFlightRef.current) {
         pendingRefreshRef.current = true
         pendingForceRef.current ||= args.force === true
@@ -169,14 +160,11 @@ export function useAiVaultSessionRefresh(
       refreshInFlightRef.current = true
       const refreshId = refreshIdRef.current + 1
       refreshIdRef.current = refreshId
-      // A manual force scan counts against the throttle so an auto rescan right
-      // after the button press doesn't trigger a second full scan.
+      // Count manual refresh against the throttle to prevent an immediate automatic full scan.
       if (args.force === true) {
         lastForcedRescanAt = Date.now()
       }
-      // Background (refocus) refreshes usually resolve from the main-process
-      // cache; suppressing the loading flag avoids a spinner flash on every
-      // return to the app.
+      // Background cache hits must not flash a loading spinner on every refocus.
       if (args.background !== true) {
         setLoading(true)
       }
@@ -194,13 +182,11 @@ export function useAiVaultSessionRefresh(
           { force: args.force, requestToken: requestTokenRef.current },
           previous?.scopeKey === scanKey ? previous : undefined
         )
-        // A superseded scan resolves cancelled rather than rejecting, so the
-        // main-process log stays clean; its empty body must not be painted.
+        // Superseded scans resolve cancelled to keep main logs clean; never paint their empty results.
         if (!mountedRef.current || refreshIdRef.current !== refreshId) {
           return
         }
-        // Why: host/scope changes queue a follow-up scan, but the older result
-        // may resolve first and must not briefly paint the wrong history list.
+        // Reject old-scope results before the queued scan so the wrong history never flashes.
         if (scanKey !== currentScanScopeKey()) {
           return
         }
@@ -209,13 +195,7 @@ export function useAiVaultSessionRefresh(
           return
         }
         setFailure(null)
-        // A cache hit returns the snapshot already on screen; skip the state
-        // updates so refocus flips don't force pointless re-renders.
-        // Single-host results carry one scanner's stamp minted when that scan
-        // finished, so an equal stamp does mean equal content. An 'all' result
-        // is a merge of legs on independent clocks stamped with the newest leg,
-        // so a lagging host's leg can change while the merged stamp stands
-        // still — there, only the structural reconcile below may decide.
+        // Equal single-host stamps skip replayed snapshots; merged stamps can hide lagging-host changes and require structural comparison.
         if (
           !isMergedAiVaultHostScope(hostScope) &&
           lastAppliedScanRef.current?.scopeKey === scanKey &&
@@ -236,9 +216,7 @@ export function useAiVaultSessionRefresh(
           }
         })
       } catch (err) {
-        // A cancelled scan is not a failure: another caller's forced refresh
-        // preempts the shared scan, and painting its abort would replace the
-        // list with an error the incoming scan is about to make obsolete.
+        // Cancellation means another shared scan superseded this one; do not replace its incoming list with an error.
         if (
           mountedRef.current &&
           refreshIdRef.current === refreshId &&
@@ -267,16 +245,12 @@ export function useAiVaultSessionRefresh(
           void refresh({ force, background })
         }
       }
-      // Deps intentionally avoid changing scope values: refresh reads them
-      // through refs and recurses on itself, so its identity must stay stable.
+      // Read changing scope through refs; recursion requires a stable refresh identity.
     },
     [applyScan, currentScanScopeKey]
   )
 
-  // Forced rescans triggered by new agent sessions run
-  // immediately when the throttle allows, otherwise once as soon as it frees
-  // up — dropping the event would leave a just-started session invisible
-  // until some unrelated later trigger.
+  // Defer throttled new-session rescans until budget frees so sessions cannot remain invisible indefinitely.
   const forcedRescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestForcedRescan = useCallback(() => {
     if (claimAiVaultForcedRescan()) {
@@ -323,21 +297,10 @@ export function useAiVaultSessionRefresh(
     void refresh({ force: false, reuseLoadedDepth: true })
   }, [executionHostScope, refresh, scanScopeKey])
 
-  // Why: this panel can query the relay before it is ready — at startup, and again for the window
-  // in which a reconnect leaves the session not-ready — and the query throws 'SSH relay is not
-  // ready'. Nothing else here retries: the remaining triggers are mount, window refocus and a new
-  // agent session id, so a user whose workspace is otherwise working sits on that error
-  // indefinitely. The file explorer already recovers this way for the same reason
-  // (use-file-explorer-tree-load-effects.ts); this panel simply never did.
-  //
-  // Gated on a prior error so a local workspace, or one that already listed fine, does not rescan
-  // every time some other host connects.
+  // Retry prior relay-readiness errors on host events; otherwise startup/reconnect failures can persist indefinitely.
   useAiVaultSessionHostRefreshEvents(error, refresh)
 
-  // Sessions started inside Orca never blur the window, so refocus alone
-  // can't surface them. Agent hooks already report provider sessions; re-scan
-  // only when a session id we haven't seen appears — state transitions are
-  // deliberately ignored, they fire constantly while agents work.
+  // In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions.
   const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {

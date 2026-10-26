@@ -5,12 +5,12 @@ import { subtractOrcadMigrationSourceAutomationState } from './orcad-source-auto
 import { subtractOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session-subtraction'
 import { subtractOrcadMigrationClientState } from './orcad-source-client-subtraction'
 
-/** On a copy of the profile only: what an earlier migration moved, gone from the delta view. */
+/** Mutate a delta-view copy only. */
 export function subtractOrcadMigrationSourceDormantState(
   state: PersistedState,
   manifest: OrcadMigrationManifest
 ): void {
-  // By scope, even with no dormant state: a downgraded build may have added some since.
+  // Include state a downgraded build added even when the manifest had none.
   subtractOrcadSourceWorktreeMetadata(state, manifest)
   subtractOrcadMigrationSourceAutomationState(state, manifest)
   const dormant = manifest.payload.dormantState

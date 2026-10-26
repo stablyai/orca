@@ -1,5 +1,5 @@
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { getMatchingJiraSites, parseJiraIssueUrl } from '../../../../shared/jira-issue-url'
+import { getMatchingJiraSites, parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import {
   buildGitHubWorkspaceSource,

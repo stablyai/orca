@@ -15,7 +15,7 @@ vi.mock('./codex-app-server-session', async (importOriginal) => ({
 }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import {
   _internals,

@@ -35,9 +35,7 @@ for (const marker of [
   'export function stripTerminalControl(data: string): string',
   'strippedInBlock === CONTROL_DENSITY_FALLBACK_COUNT',
   'output += withoutAnsi.slice(runStart, index)',
-  // Retuning either density constant changes which fixtures sit above/below the trigger, so
-  // pin the literals rather than the names: a silent retune would leave the sub-threshold
-  // fixture measuring a boundary that no longer exists.
+  // Pin density literals: retuning trigger changes which fixtures exercise fallback and otherwise silently invalidates boundary measurement.
   'const CONTROL_DENSITY_BLOCK_CODE_UNITS = 64',
   'const CONTROL_DENSITY_FALLBACK_COUNT = 32'
 ]) {
@@ -165,10 +163,7 @@ function makeTuiFixture(length, sampleId, strippedControl) {
   return text + 'x'.repeat(length - text.length)
 }
 
-// 31 controls per 64-unit block: one below the fallback trigger, so the adaptive path keeps
-// slice-run bookkeeping on a shape dense enough to lose to the per-character legacy. This is the
-// worst surviving case; it exists so the narrowed adverse window stays visible instead of hiding
-// behind the 50% fixture, where the fallback fires and wins.
+// 31/64 controls stays just below fallback and exposes worst surviving slice-run bookkeeping cost; 50% fixture would hide it behind successful fallback.
 function makeSubThresholdDenseFixture(length, sampleId, strippedControl) {
   const id = fixedSampleId(sampleId)
   const units = []

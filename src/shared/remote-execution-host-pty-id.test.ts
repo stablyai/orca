@@ -28,8 +28,7 @@ describe('isRemoteExecutionHostPtyId', () => {
     expect(isRemoteExecutionHostPtyId(undefined)).toBe(false)
   })
 
-  // Why: a bare "ssh:" id with no relay separator names no connection, so it is
-  // not evidence the request crosses a link.
+  // An ssh prefix without a relay PTY separator proves no remote connection.
   it('rejects an ssh-prefixed id that carries no relay pty id', () => {
     expect(isRemoteExecutionHostPtyId('ssh:target-1')).toBe(false)
   })

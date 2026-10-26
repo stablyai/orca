@@ -1,16 +1,8 @@
-// Why this module exists: a PTY read can end mid-escape-sequence. The bytes
-// already handed to xterm sit inside its parser state machine, not the screen
-// buffer, so a serialized snapshot cannot carry them — and the next chunk's
-// continuation bytes then render as literal text after a snapshot restore
-// (Bug E in notes/garble-fuzz-divergences.md). Tracking the unparsed trailing
-// partial sequence at the ingest boundary lets snapshot producers append it
-// after the serialized screen so the continuation completes exactly as live.
+// Snapshots serialize cells, not xterm’s pending parser bytes. Carry the incomplete escape after the screen so the next live chunk completes it instead of printing it (Bug E).
 
 import { classifyTerminalEscapeIntroducer } from './terminal-escape-introducer'
 
-// Mirrors the VT500 parser states that can span a chunk boundary. C0 controls
-// (except ESC/CAN/SUB) execute mid-sequence without aborting it, matching
-// xterm's state machine.
+// Mirror xterm’s VT500 states; C0 controls except ESC/CAN/SUB execute without aborting the sequence.
 type ScanState =
   | 'ground'
   | 'esc'
@@ -26,10 +18,7 @@ const CAN = 0x18
 const SUB = 0x1a
 const BEL = 0x07
 
-// Why a cap: OSC/DCS payloads are unbounded and an unterminated one would
-// grow the tracked tail (and every snapshot) without limit. Real payloads
-// (titles, cwd, hyperlinks) are far below this; beyond it we stop tracking
-// and degrade to the pre-fix behavior for that pathological stream.
+// Bound unterminated OSC/DCS memory and snapshot size; beyond the cap, abandon carry and lose partial-sequence fidelity.
 export const MAX_PARTIAL_ESCAPE_TAIL_LENGTH = 4096
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
@@ -50,18 +39,13 @@ function stateAfterEscByte(code: number): ScanState {
   }
 }
 
-/** Returns the trailing incomplete escape sequence of `stream` ('' when the
- *  stream ends parser-clean). Fold-safe across chunk boundaries:
- *  extract(a + b) === extract(extract(a) + b), which is how ingest-time
- *  trackers advance without keeping the whole stream. */
+/** Return the incomplete trailing escape (empty when clean), preserving extract(a + b) === extract(extract(a) + b) for incremental ingest. */
 export function extractPartialEscapeTail(stream: string): string {
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
     if (state === 'ground') {
-      // Only ESC leaves ground; skip ordinary text without a per-code-unit walk.
-      // Check the current unit first: on dense escape streams it is usually the
-      // ESC itself, and indexOf's call + SIMD setup costs more than the compare.
+      // Only ESC leaves ground; skip plain runs. Check dense-stream ESC directly to avoid indexOf setup per sequence.
       const escape = stream.charCodeAt(i) === ESC ? i : stream.indexOf('\x1b', i)
       if (escape === -1) {
         return ''
@@ -84,10 +68,7 @@ export function extractPartialEscapeTail(stream: string): string {
       state = 'esc'
       continue
     }
-    // CAN/SUB abort an in-progress escape sequence back to ground in every
-    // non-string state (xterm's VT500 parser). The csi/osc/string cases handle
-    // this inline below; esc/escIntermediate must too, or `ESC CAN` and
-    // `ESC <intermediate> CAN` leave a bogus tail instead of dropping to ground.
+    // ESC/intermediate states need the same CAN/SUB abort as CSI/OSC/string or they retain bogus tails.
     if ((code === CAN || code === SUB) && (state === 'esc' || state === 'escIntermediate')) {
       state = 'ground'
       continue
@@ -153,14 +134,9 @@ export function extractPartialEscapeTail(stream: string): string {
   return state === 'ground' ? '' : stream.slice(start)
 }
 
-/** Ingest-time fold: advance the tracked tail with one more chunk. Returns ''
- *  (tracking abandoned) when the tail exceeds the cap — see the cap comment. */
+/** Advance the incremental tail; abandon it past the cap. */
 export function advancePartialEscapeTail(pendingTail: string, chunk: string): string {
-  // Why the pre-filter: `extractPartialEscapeTail` only leaves `ground` on an ESC byte, so with
-  // no pending tail and no ESC in the chunk the answer is always ''. Taking it here skips both
-  // the full-chunk concat and the per-code-unit walk on ESC-free output (build logs, `cat`,
-  // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` already
-  // applies on the very same ingest path.
+  // Only ESC leaves ground, so no tail + no ESC avoids concatenation and the full chunk walk.
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }

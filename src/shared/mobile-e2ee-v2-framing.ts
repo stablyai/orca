@@ -90,8 +90,7 @@ function encodeNonce(args: {
   counter: bigint
 }): Uint8Array {
   const nonce = new Uint8Array(NONCE_LENGTH)
-  // Why: v2 keys/sessionId are fresh per socket; the fixed layout makes every
-  // direction/kind/counter nonce unique without relying on another RNG draw.
+  // Fresh per-socket keys/sessionId make this direction/kind/counter nonce layout unique without another RNG draw.
   nonce.set(args.sessionId.subarray(0, 12), 0)
   nonce[12] = FRAME_VERSION
   nonce[13] = directionByte(args.direction)

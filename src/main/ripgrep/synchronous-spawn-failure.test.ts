@@ -26,8 +26,7 @@ function fileAsSearchRoot(): string {
 }
 
 describe('synchronous ripgrep spawn failures', () => {
-  // Why a real spawn: the whole reason this path exists is that Node throws inline for errnos
-  // outside its async set. Asserting against a hand-made error would not prove that happens.
+  // Real spawn proves Node throws unsupported async errnos inline; handcrafted errors cannot establish that.
   it.skipIf(process.platform === 'win32')(
     'throws inline rather than emitting error when the root is a file',
     () => {
@@ -66,8 +65,7 @@ describe('synchronous ripgrep spawn failures', () => {
     expect(verdict.message).toContain('EMFILE')
   })
 
-  // Why: a caller that already reached a verdict has more context than a cwd probe does, and
-  // re-diagnosing it would turn "the binary is broken" into "your workspace moved".
+  // Preserve an existing binary verdict rather than replace it with lower-context cwd diagnosis.
   it('passes an already-classified error straight through', async () => {
     const original = new RipgrepUnavailableError()
 

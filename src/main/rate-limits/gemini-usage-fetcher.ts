@@ -219,8 +219,7 @@ export async function fetchGeminiRateLimits(
   geminiCliOAuthEnabled = false
 ): Promise<ProviderRateLimits> {
   if (!geminiCliOAuthEnabled) {
-    // Why: the OAuth sources include other apps' data folders on macOS.
-    // Do not touch them during background polling unless the user opts in.
+    // OAuth sources include other apps' macOS folders; background polling requires user opt-in.
     return {
       provider: 'gemini',
       session: null,

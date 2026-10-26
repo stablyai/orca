@@ -1,18 +1,9 @@
-import { create } from 'zustand'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
 import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
-import { createJiraSlice } from './jira'
+import { createTestStore } from './store-test-helpers'
 
 const jiraStatus = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-jira-client', () => ({ jiraStatus }))
-
-function createTestStore() {
-  return create<AppState>()((...args) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Connection reads use only settings and the fully initialized Jira slice.
-    return { settings: null, ...createJiraSlice(...args) } as AppState
-  })
-}
 
 function status(accountId: string): JiraConnectionStatus {
   return {

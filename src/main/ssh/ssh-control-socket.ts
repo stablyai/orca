@@ -44,8 +44,7 @@ export function getControlSocketPath(
     return null
   }
 
-  // Why: include both persisted target fields and fresh ssh -G output so a
-  // live ControlPersist master is not reused after config-backed routes change.
+  // Include persisted and freshly resolved config so route edits cannot reuse a live stale ControlPersist master.
   const key = JSON.stringify({
     target: {
       id: target.id,
@@ -60,7 +59,7 @@ export function getControlSocketPath(
       identitiesOnly: target.identitiesOnly || false
     },
     resolved: normalizeResolvedConfig(resolvedConfig),
-    // Why: a Kerberos-only session must not reuse a master authenticated by a key.
+    // Kerberos-only auth must not reuse a key-authenticated master.
     gssapiOnly
   })
   const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
@@ -71,9 +70,7 @@ export function getControlSocketPath(
 export function removeControlSocketPath(socketPath: string): void {
   try {
     rmSync(socketPath, { force: true })
-  } catch {
-    // Best-effort stale socket cleanup; the retry can still use `-S none`.
-  }
+  } catch {}
 }
 
 function findControlSocketDirectory(uid: number): string | null {
@@ -99,8 +96,7 @@ function getControlSocketDirectoryCandidates(uid: number): string[] {
 function ensurePrivateDirectory(dir: string, uid: number): boolean {
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
-    // Why: mkdir mode is ignored for pre-existing dirs; lstat rejects symlink
-    // swaps and the owner/perms check avoids exposing the mux socket cross-user.
+    // Existing mkdir mode is ignored; lstat plus owner/perms checks prevent symlink swaps and cross-user mux access.
     const st = lstatSync(dir)
     return st.isDirectory() && st.uid === uid && (st.mode & 0o77) === 0
   } catch {

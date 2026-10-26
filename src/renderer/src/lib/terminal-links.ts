@@ -30,20 +30,11 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // Two passes match VSCode's split: separator paths, plus conservative bare
 // filename tokens that only become links if they resolve against the cwd.
 
-// Matches a path with at least one `/` separator, optionally followed by
-// `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
-// Why: framework route files commonly use punctuation segments like
-// `app/(shop)/products/[id]/page.tsx`; keep those links whole.
-// Keep Japanese middle dots and tildes without admitting prose delimiters.
+// Match separator paths with optional :line:col; preserve route punctuation (app/(shop)/[id]), Japanese middle dots and tildes without swallowing prose.
 const LOCAL_PATH_REGEX =
   /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
 
-// Matches separator paths whose file or folder names include spaces. This runs
-// before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
-// instead of split into `/Users/A/Foo` and `Bar/file.ts`.
-// Why this is intentionally broad: validating "space followed by a later
-// separator" inside the regex creates overlapping whitespace backtracking on
-// large ConPTY TUI lines. Keep the scan linear and filter candidates in code.
+// Claim spaced paths before ordinary paths to avoid splitting /Users/A/Foo Bar/file.ts. Broad linear scans avoid overlapping-whitespace backtracking on ConPTY dashboards; filter candidates in code.
 const SPACED_PATH_WITH_SEPARATOR_REGEX =
   /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
 // Why this shares the broad candidate shape: extension paths with prose after
@@ -120,11 +111,7 @@ function isInsideUriScheme(lineText: string, range: DetectedTerminalFileLinkRang
 function trimSpacedPathTrailingProse(
   range: DetectedTerminalFileLinkRange
 ): DetectedTerminalFileLinkRange {
-  // Why: keep one extension-terminated path, but drop trailing prose or a
-  // second unrelated path that the broad spaced-path scan also captured. A
-  // line-end extension token only extends the span when the added segment is
-  // path-like (contains a separator) — "v1.2 reports/result.json" extends,
-  // prose like "failed to start app.py" must not be swallowed.
+  // Trim prose/unrelated paths after extension-terminated candidates. Extend only path-like added segments (v1.2 reports/result.json), never prose such as failed to start app.py.
   let selected: string | null = null
   const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
   const pathStartPattern = /(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g
@@ -188,9 +175,7 @@ function buildLineEndingSpacedPathPrefixRanges(
   return ranges.toReversed()
 }
 
-// Ported from VSCode's TerminalLocalLinkDetector. Extracts anything that
-// contains a path separator, optionally with a `:line:col` suffix — covers
-// `./src/foo.ts`, `/abs/bar`, `src/foo.ts:12:3`, etc.
+/** Detect separator paths with optional :line:col, ported from VS Code TerminalLocalLinkDetector. */
 function detectLocalPathLinks(
   lineText: string,
   includeLineEndingPrefixCandidates = false
@@ -275,9 +260,7 @@ function detectSpacedLocalPathLinks(
   return links
 }
 
-// Runs Markdown destinations, file URIs, local paths, then bare filenames.
-// `file://` and separator paths claim their ranges first so the bare-filename
-// pass never re-links a token already covered by a longer explicit link.
+/** Claim Markdown destinations/file URIs/paths before bare filenames so longer explicit links keep their ranges. */
 function assembleFileLinks(
   lineText: string,
   includeLineEndingPrefixCandidates: boolean

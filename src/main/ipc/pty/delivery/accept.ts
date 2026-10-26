@@ -1,7 +1,7 @@
 import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import {
   rendererVisibilityKnownPtys,
   visibleRendererPtys,

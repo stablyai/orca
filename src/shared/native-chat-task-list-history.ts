@@ -9,7 +9,7 @@ import type {
   NativeChatMessage,
   NativeChatToolCallBlock
 } from './native-chat-types'
-import { pairToolBlocks } from './native-chat-tool-fold'
+import { pairToolBlocks } from './native-chat/tools/native-chat-tool-pairs'
 
 export type NativeChatTaskListPredecessors = Partial<
   Record<NativeChatTaskListTool, NativeChatToolCallBlock>

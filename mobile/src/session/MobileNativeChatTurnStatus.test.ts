@@ -1,18 +1,18 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+  const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
     React.createElement('Text', props, children)
   return {
     ActivityIndicator: (props: Record<string, unknown>) =>
       React.createElement('ActivityIndicator', props),
-    Pressable: ({ children, ...props }: { children?: unknown }) =>
+    Pressable: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('Pressable', props, children),
     Text,
-    View: ({ children, ...props }: { children?: unknown }) =>
+    View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
@@ -20,12 +20,13 @@ vi.mock('react-native', async () => {
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const labels = (node: ReactTestInstance): string[] =>
-  node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
+  findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
 const spinners = (node: ReactTestInstance): ReactTestInstance[] =>
-  node.findAllByType('ActivityIndicator' as never)
+  findAllByHostType(node, 'ActivityIndicator')
 
 let renderer: ReactTestRenderer | null = null
 
@@ -68,14 +69,13 @@ describe('MobileNativeChatTurnStatus', () => {
     const onToggleExpanded = vi.fn()
     const tree = render({ startedAt: Date.now(), workedSeconds: 184, onToggleExpanded })
     expect(labels(tree.root)).toEqual(['Worked for 3m 4s'])
-    const button = tree.root.findByType('Pressable' as never)
+    const button = findByHostType(tree.root, 'Pressable')
     expect(button.props.accessibilityLabel).toBe('Toggle turn details')
     expect(button.props.accessibilityState).toEqual({ expanded: false })
     act(() => button.props.onPress())
     expect(onToggleExpanded).toHaveBeenCalledOnce()
   })
 
-  // The crash's notice row explains the cut; the turn bar reads like any finished turn.
   it('heads a turn a crash cut off as worked, and a turn the user stopped as interrupted', () => {
     const crashed = render({
       startedAt: Date.now(),
@@ -96,7 +96,7 @@ describe('MobileNativeChatTurnStatus', () => {
 
   it('stays a plain row when the settled turn has nothing to disclose', () => {
     const tree = render({ startedAt: Date.now(), workedSeconds: 5 })
-    expect(tree.root.findAllByType('Pressable' as never)).toHaveLength(0)
+    expect(findAllByHostType(tree.root, 'Pressable')).toHaveLength(0)
     expect(labels(tree.root)).toEqual(['Worked for 5s'])
   })
 

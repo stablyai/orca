@@ -216,8 +216,11 @@ describe('terminal link action routing', () => {
     expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
 
     request.mock.calls[0][0].alternate.run()
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
   })
 
@@ -236,8 +239,11 @@ describe('terminal link action routing', () => {
     expect(request.mock.calls[0][0].alternate.external).toBe(true)
 
     request.mock.calls[0][0].primary.run()
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
 
     request.mock.calls[0][0].alternate.run()
@@ -276,6 +282,7 @@ describe('terminal link action routing', () => {
       workspaceId: 'wt-1',
       url: 'https://example.com/path',
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedRuntimeEnvironmentId: 'env-1'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
@@ -297,6 +304,7 @@ describe('terminal link action routing', () => {
       workspaceId: 'wt-1',
       url,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedSshConnectionId: 'ssh-1'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
@@ -311,8 +319,11 @@ describe('terminal link action routing', () => {
       actionDestinations: { primary: 'system', alternate: 'orca' }
     })
 
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
     expect(openUrl).not.toHaveBeenCalled()
   })

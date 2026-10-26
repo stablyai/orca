@@ -1,7 +1,6 @@
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
 
-/** Codex's non-blocking question: `{questions:[{title, options?: string[]}]}`. It
- *  returns `{"accepted":true}` at once and reads the answer from a later user message. */
+/** Return accepted immediately; nonblocking questions receive answers in later user messages ({questions:[{title, options?: string[]}]}). */
 export const CODEX_ASYNC_QUESTION_TOOL = 'request_user_input_async'
 
 export function parseCodexAsyncQuestionsInput(input: unknown): AskPrompt | null {

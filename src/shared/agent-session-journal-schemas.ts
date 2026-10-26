@@ -1,29 +1,9 @@
-// ─── Canonical runtime schemas for the journal render model ─────────────────
-// The journal admits JSON it did not just write — persisted rows re-enter from
-// SQLite on replay and are republished to clients — while the reducer, the
-// shared projection, and the prompt surfaces dereference nested fields without
-// guards. These schemas are the single deep validators for that render model:
-// admission must reject a JSON-valid but structurally wrong item (a question
-// whose `options` are null, a prompt without its `resolution`) so the row is
-// refused at replay, where the chat fails to load, instead of throwing
-// mid-render.
-//
-// Discriminants (`kind`, known block `type`s) are validated deeply. Open string
-// fields (roles, dispatch/tool states) stay type-checked, never enum-checked,
-// and unknown object keys pass — a same-version row written by a slightly
-// newer build must not be misread as malformed (see journal-row-schema.ts).
-//
-// A newer writer extends a body only by new keys, new kinds of an open union, or a bumped row `v`,
-// never by changing a field's type, a bound or a closed set this build checks (the closed sets are
-// pinned in journal-closed-sets.test.ts). Open unions (a body's `kind`, a block's `type`, a goal's
-// `state`, an approval subject's `kind`) keep a value this build does not know as-is and nobody
-// draws it; the chat stays writable. Unreadable context usage is dropped
-// (journal-row-unusable-annotations.ts). Any other failure is damage: the chat fails to load and
-// nothing is deleted. A new value of an open string (turn, resolution, tool or goal `state`) is
-// read as-is too, except that an older build's rewind replaces an unknown turn, tool or resolution
-// state with a placeholder row and turns an unknown block into a text block of its raw JSON
-// (structured-rewind-journal-body.ts); an unknown body kind is carried as-is. History pages carry
-// no row `v`, so older clients see such a value too. It must be safe for every older build.
+// Validate replayed JSON deeply before unguarded reducers/renderers read it; malformed rows fail load without deletion.
+// Extend with keys, open-union tags or a new row v; never tighten existing types/bounds/closed sets.
+// Unknown keys and string vocabularies survive; unknown bodies/blocks/goals/subjects remain undrawn and writable.
+// Unreadable context usage alone is dropped (journal-row-unusable-annotations.ts).
+// Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
+// History pages lack row v: extensions must also remain safe for older clients (journal-closed-sets.test.ts).
 
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
@@ -62,8 +42,7 @@ const ProviderCallId = z
   .string()
   .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
 
-/** Child-agent lifecycle stays an open string for the same reason tool states
- *  do: a state a newer build writes must not turn the row malformed. */
+/** Keep lifecycle strings open so newer states do not make persisted rows malformed. */
 const SubagentEntry = z.object({
   id: z.string(),
   label: z.string(),
@@ -73,9 +52,7 @@ const SubagentEntry = z.object({
   settledAt: z.number().optional()
 })
 
-/** Renderers select blocks by `type` equality and skip what they cannot draw,
- *  so an unknown block type stays admissible; a known type with a broken
- *  payload does not. */
+/** Skip unknown block types, but reject malformed payloads of known types. */
 const Block = openDiscriminatedUnion(
   z.discriminatedUnion('type', [
     z.object({
@@ -85,8 +62,7 @@ const Block = openDiscriminatedUnion(
       tone: z.string().optional(),
       providerFrame: ProviderFrame.optional()
     }),
-    // `input: undefined` loses its key under JSON.stringify, so a persisted
-    // canonical tool call may lack it entirely.
+    // JSON.stringify drops input: undefined, so persisted canonical calls may omit it.
     z.object({
       type: z.literal('tool-call'),
       name: z.string(),
@@ -119,9 +95,7 @@ const Block = openDiscriminatedUnion(
       outcomeBasis: z.string().optional(),
       background: z.boolean().optional()
     }),
-    // `kind` and `state` stay open strings for the same reason a child's
-    // lifecycle does: a vocabulary a newer build writes must not turn the row
-    // malformed. The renderer falls back on anything it cannot name.
+    // Keep kind/state open for newer vocabularies; renderers fall back on unknown values.
     z.object({
       type: z.literal('background-task'),
       taskId: z.string().min(1),
@@ -209,9 +183,7 @@ const MessageBody = z.object({
 const TurnLifecycleFields = {
   turnId: z.string(),
   state: z.string().min(1),
-  // Open like `state`: a verdict a newer build writes must not turn the row
-  // malformed. `readAgentJournalTurnOutcome` is where an unplaceable one
-  // becomes unknown rather than an arm a caller would act on.
+  // Keep newer verdicts readable; readAgentJournalTurnOutcome maps unplaceable ones to unknown.
   outcome: z.string().min(1).optional(),
   userItemId: z.string().min(1).optional(),
   startedAt: z.number().finite().positive().optional(),
@@ -287,13 +259,9 @@ const KnownItemBody = z.discriminatedUnion('kind', [
 export const AGENT_JOURNAL_ITEM_BODY_KINDS = knownTags(KnownItemBody)
 export const AgentJournalItemBodySchema = openDiscriminatedUnion(KnownItemBody)
 
-/** Producer linkage as it rides a render item across the process boundary.
- *  `producerKind` stays an open string for the reason the header gives: a host
- *  that learns a third kind must not make its rows unreadable to this client. */
+/** Keep producerKind open so newer producer types remain readable across the wire. */
 export const AgentJournalProducerLinkageFields = {
-  // `.min(1)` on every id: an EMPTY string is present, and the reader that
-  // scopes a parent's surfaces tests presence, not truthiness. `agentId: ''`
-  // would read as a subagent and hide the row from its own author for good.
+  // Empty IDs count as present and would permanently hide a parent's own row from parent-scoped readers.
   agentId: z.string().min(1).optional(),
   parentAgentId: z.string().min(1).optional(),
   providerParentRef: z.string().min(1).optional(),
@@ -301,8 +269,7 @@ export const AgentJournalProducerLinkageFields = {
   attempt: z.number().int().optional()
 } as const
 
-/** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
- *  the row malformed. Unknown membership preserves content without claiming a turn boundary. */
+/** Preserve unknown scope kinds from newer hosts without claiming a turn boundary or rejecting their content. */
 export const AgentJournalTurnScopeSchema = z.object({
   kind: z.string().min(1),
   turnItemId: z.string().min(1).optional()
@@ -343,9 +310,7 @@ export function isAdmissibleAgentJournalRenderItem(
   return AgentJournalRenderItemSchema.safeParse(value).success
 }
 
-/** Compile-time proof that every canonical value is admissible, so replay can
- *  never reject a row a writer in this build produced. The schemas are
- *  deliberately wider on open string fields, so only this direction holds. */
+/** Prove canonical writes are admissible on replay; open-string schemas are deliberately wider, so the converse need not hold. */
 type Admits<T extends true> = T
 export type CanonicalJournalTypesAreAdmissible = [
   Admits<AgentJournalItemBody extends z.input<typeof AgentJournalItemBodySchema> ? true : false>,

@@ -14,7 +14,7 @@ import {
   isScopedStagedCookieImport,
   removeCookieImportScopeMarker,
   SCOPED_COOKIE_IMPORT_FORMAT
-} from './browser-cookie-staged-import'
+} from './cookies/browser-cookie-staged-import'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 
 // Runtime-derived route partitions lack startup replay metadata and would strand plaintext cookie DBs.

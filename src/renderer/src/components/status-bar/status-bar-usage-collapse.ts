@@ -20,10 +20,7 @@ export type UsageRowMeasure = {
   unitLabelWidth: number
 }
 
-/**
- * Chooses which usage chips give way so the row sheds `overflowPx`. Calm agents go first,
- * from the end of the roster; urgent ones only when calm ones can't free enough room.
- */
+/** Collapse calm chips from the roster’s end before urgent chips until the overflow and replacement chip fit. */
 export function pickCollapsedUsageChips(
   chips: readonly Pick<UsageChipMeasure, 'provider' | 'width' | 'urgent' | 'percentage'>[],
   overflowPx: number,
@@ -59,7 +56,6 @@ export function pickCollapsedUsageChips(
   return collapsed
 }
 
-/** Reads the `data-usage-*` markers the status bar renders on its usage chips, unit label, and "+N" chip. */
 export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
   if (!usage) {
     return {

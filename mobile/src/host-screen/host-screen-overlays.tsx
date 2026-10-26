@@ -39,7 +39,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     <>
       <WorkspaceOptionsSheet controller={controller} />
 
-      {/* Worktree long-press action sheet (inline confirm to avoid double-Modal lag) */}
+      {/* Confirm inline to avoid stacking native Modals. */}
       <BottomDrawer
         visible={actionTarget != null}
         onClose={() => {
@@ -143,7 +143,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         )}
       </BottomDrawer>
 
-      {/* Host remove confirmation */}
       <ConfirmModal
         visible={state.confirmRemoveHost}
         title="Remove Host"
@@ -162,8 +161,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
-        // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
-        // inside the shell's WebView `openURL` resolves without opening anything.
+        // Use the platform opener: React Native Linking.openURL resolves without opening anything inside the shell’s WebView.
         openExternalUrl={openExternalLink}
         onCreated={(worktreeId, worktreeName, warning, executionHost) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })

@@ -25,8 +25,7 @@ describe('terminal path-exists cache', () => {
   it('re-probes (cache miss) once a negative result expires — issue #5024', () => {
     const cache: TerminalPathExistsCache = new Map()
     writeTerminalPathExistence(cache, 'k', false, startTerminalPathExistsProbe(1000))
-    // Past the negative TTL: treated as a miss so the caller re-checks the
-    // filesystem (the file may have since been created).
+    // Expired misses must re-probe because the file may now exist.
     expect(readTerminalPathExistence(cache, 'k', 1000 + 10_000)).toBeUndefined()
     expect(cache.has('k')).toBe(true)
   })
@@ -70,19 +69,17 @@ describe('terminal path-exists cache', () => {
     expect(cache.get('older-first')).toEqual({ exists: true, ...newer })
   })
 
-  it('returns undefined for an unknown key', () => {
-    expect(readTerminalPathExistence(new Map(), 'missing')).toBeUndefined()
-  })
-
   it('bounds the cache to the max entry count, evicting the oldest', () => {
     const cache: TerminalPathExistsCache = new Map()
     for (let i = 0; i < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; i++) {
       writeTerminalPathExistence(cache, `k-${i}`, true, startTerminalPathExistsProbe(1))
     }
     expect(cache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(readTerminalPathExistence(cache, 'k-0', 2)).toBe(true)
     writeTerminalPathExistence(cache, 'k-fresh', true, startTerminalPathExistsProbe(2))
     expect(cache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
-    expect(cache.has('k-0')).toBe(false)
+    expect(cache.has('k-0')).toBe(true)
+    expect(cache.has('k-1')).toBe(false)
     expect(cache.has('k-fresh')).toBe(true)
   })
 

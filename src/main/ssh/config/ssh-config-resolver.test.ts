@@ -6,10 +6,7 @@ vi.mock('os', () => ({
   homedir: () => '/home/testuser'
 }))
 
-// Why mock the chokepoint and not child_process: the point of routing this
-// probe through runProcess is that the spawn shape (windowsHide, timeout,
-// argv quoting) is no longer this module's decision, so the test must not
-// re-assert it here. @orca/process-host owns that contract.
+// Mock process-host: it owns hidden windows, timeout and argv encoding; this suite verifies routing.
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn()
 }))
@@ -64,8 +61,7 @@ describe('resolveWithSshG', () => {
   })
 
   it('returns null when ssh -G never reports completion', async () => {
-    // Why not fake timers any more: the deadline is runProcess's, and it
-    // reports the outcome as data rather than by leaving the promise pending.
+    // process-host returns timeout data; no fake timer is needed.
     vi.mocked(runProcess).mockResolvedValue({
       code: null,
       signal: 'SIGTERM',

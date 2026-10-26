@@ -1,8 +1,4 @@
-/**
- * The scheduler's budget is the contract: four calls in flight, one unscoped
- * call per old authority per cycle, and no run-history fetch to paper over the
- * usage an old response cannot carry.
- */
+/** Enforce four pooled calls, one legacy authority call per cycle and no run-history fetch to fill missing usage. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -182,8 +178,7 @@ describe('automation host scheduler concurrency', () => {
     expect(listScoped).toHaveBeenCalledTimes(1)
   })
 
-  // Ordinary startup: the catalog settles a moment after the first refresh, so the
-  // re-apply cancels a queue full of hosts nothing else will ever ask for again.
+  // Startup catalog reapply can cancel queued hosts; they must be eligible for the next refresh.
   it('re-fetches queued work that was cancelled before it was sent', async () => {
     const cache = createCache()
     const gates: { resolve: (value: ScopedAutomationList) => void }[] = []
@@ -244,8 +239,7 @@ describe('automation host scheduler concurrency', () => {
     await done
   })
 
-  // One legacy job answers for a whole authority, so cancelling it strands every
-  // entry in the group, not just the one that happened to submit it.
+  // One cancelled legacy job must release every host entry sharing its authority request.
   it('clears every marker of a cancelled legacy authority job', async () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
@@ -490,8 +484,7 @@ describe('automation host scheduler revalidation', () => {
     expect(cache.get(selfRef(RUNTIME_AUTHORITY))?.data).toHaveLength(1)
   })
 
-  // Design doc: a manual All-host refresh bypasses TTL but does not enqueue
-  // requests already known to fail; that host keeps its own Retry instead.
+  // Manual All-hosts refresh bypasses TTL but leaves permanent failures to their own Retry.
   it('leaves a permanently failed host out of a manual all-hosts refresh', async () => {
     const cache = createCache()
     let outcome: () => Promise<ScopedAutomationList> = () =>

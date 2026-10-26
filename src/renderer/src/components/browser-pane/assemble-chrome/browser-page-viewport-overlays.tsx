@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
+import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
@@ -88,6 +89,7 @@ export function BrowserPageViewportOverlays({
       />
       <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
       <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
           browserTab={browserTab}

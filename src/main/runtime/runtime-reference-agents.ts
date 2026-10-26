@@ -67,7 +67,7 @@ export function createReferenceAgentIndex(
   for (const record of sessions?.listRecords() ?? []) {
     if (
       clearedInto(record) ||
-      // Why: records outlive their chat tab; a closed chat is not an agent on the workspace.
+      // Closed chat records outlive tabs and must not surface as workspace agents.
       (visible?.present && !visible.sessionIds.includes(record.sessionId)) ||
       (workspaceKeys &&
         !workspaceKeys.has(

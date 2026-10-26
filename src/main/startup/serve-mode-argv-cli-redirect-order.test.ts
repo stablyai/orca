@@ -47,6 +47,5 @@ describe('serve argv rewrite vs CLI launch redirect ordering', () => {
     expect(getCliLaunchArgs(argv, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toEqual(['serve', '--help'])
   })
 
-  // Why source text: the ordering is the preflight phase's executable statement order, and the
-  // cases above stay green if it is reversed — nothing else would catch the regression.
+  // Source order is the contract: behavior cases remain green if preflight redirect/rewrite order reverses.
 })

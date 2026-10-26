@@ -19,11 +19,7 @@ export type SshConfigHost = {
   proxyJump?: string
 }
 
-/**
- * Parse an OpenSSH config file into structured host entries.
- * Handles Host blocks with single or multiple patterns.
- * Ignores wildcard-only patterns (e.g. "Host *").
- */
+/** Parse concrete OpenSSH Host aliases, including multi-pattern blocks; exclude wildcard-only targets. */
 export function parseSshConfig(content: string): SshConfigHost[] {
   const hosts: SshConfigHost[] = []
   let current: SshConfigHost[] = []
@@ -112,8 +108,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'proxycommand':
         for (const host of current) {
-          // Why: OpenSSH treats ProxyCommand as a shell snippet and preserves
-          // the rest of the line, including quotes and `#` characters.
+          // ProxyCommand is a shell snippet; preserve its quotes and # characters.
           host.proxyCommand ??= rawValue.trim()
         }
         break
@@ -137,20 +132,13 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 }
 
 function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
-  // Why: generated SSH configs can put many concrete aliases on one Host line;
-  // spreading that block into push can exceed JavaScript's argument limit.
+  // Avoid argument-limit failures when generated Host lines contain many aliases.
   for (const entry of entries) {
     target.push(entry)
   }
 }
 
-/**
- * Every `Host` pattern list in a config, plus whether any `Match` block is present.
- *
- * Deliberately raw where {@link parseSshConfig} is not: that one keeps only concrete aliases
- * because it mints importable targets, so a `Host prod.*` or a `Match host prod` route is
- * invisible to it. Answering "does anything in this file claim this alias?" needs those back.
- */
+/** Keep raw patterns and Match presence for alias claims; import parsing intentionally drops routes that cannot become concrete targets. */
 export type SshConfigAliasClaims = {
   hostPatternGroups: string[][]
   hasMatchBlock: boolean
@@ -197,8 +185,7 @@ function parseConfigDirective(line: string): { key: string; rawValue: string } |
 }
 
 function parseScalarConfigValue(input: string): string {
-  // Why: scalar OpenSSH directives strip wrapping quotes and inline comments;
-  // keeping them would turn valid config values into bad hostnames/users/paths.
+  // OpenSSH scalar values discard wrapping quotes and inline comments.
   return splitOpenSshArguments(input)[0] ?? ''
 }
 
@@ -229,7 +216,7 @@ function splitOpenSshArguments(input: string): string[] {
       continue
     }
 
-    // Why: multi-alias import must not turn OpenSSH inline comments into targets.
+    // Inline comments must not become imported aliases.
     if (!inQuotes && char === '#') {
       break
     }

@@ -1,9 +1,4 @@
-import {
-  closeTestStores,
-  testState,
-  createStore,
-  readDataFile
-} from '../../persistence-test-harness'
+import { closeTestStores, testState, createStore, readDataFile } from '../persistence-test-harness'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

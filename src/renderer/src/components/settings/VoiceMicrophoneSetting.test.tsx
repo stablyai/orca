@@ -7,7 +7,6 @@ import type { DeveloperPermissionRequestResult } from '../../../../shared/develo
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { VoiceSettings } from '../../../../shared/speech-types'
 
-// Why: repo convention — React only suppresses its act() warning when this global is set.
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mocks = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn() }))
@@ -215,8 +214,7 @@ describe('VoiceMicrophoneSetting access failures', () => {
     let streamOpened = false
     const getUserMedia = vi.fn(async () => {
       calls += 1
-      // Why: the first attempt is what triggers the OS prompt; the grant must re-open a stream,
-      // because enumerateDevices hides labels until one has been opened in this renderer.
+      // After OS permission, reopen a stream so this renderer can enumerate device labels.
       if (calls === 1) {
         throw namedError('NotAllowedError')
       }
@@ -226,7 +224,6 @@ describe('VoiceMicrophoneSetting access failures', () => {
     Object.assign(navigator, {
       mediaDevices: {
         getUserMedia,
-        // Why: mirrors the real rule the fix exists for — no labels until a stream has been opened.
         enumerateDevices: vi.fn(async () =>
           streamOpened
             ? [{ kind: 'audioinput', deviceId: 'mic-1', label: 'Built-in Microphone' }]
@@ -244,8 +241,7 @@ describe('VoiceMicrophoneSetting access failures', () => {
     expect(getUserMedia).toHaveBeenCalledTimes(2)
     expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
     expect(container.querySelector('[role="alert"]')).toBeNull()
-    // Why: the grant is only useful if the list it unblocks actually fills in — the hint and its
-    // Allow access button are what the pane shows while no device is known.
+    // Verify the granted permission populates devices instead of leaving access guidance visible.
     expect(container.textContent).not.toContain('Allow microphone access to list input devices.')
   })
 
@@ -302,8 +298,7 @@ describe('VoiceMicrophoneSetting access failures', () => {
     await renderSetting()
     await clickAllowAccess()
 
-    // Why: the microphone was never reopened — calling this a microphone-open failure would invert
-    // the provenance, and the raw transport prefix must never reach the pane.
+    // This is an IPC failure before microphone reopen; preserve that provenance and strip transport wrappers.
     expect(alertText()).toBe('xdg-open not found')
     expect(alertText()).not.toContain('Error invoking remote method')
   })

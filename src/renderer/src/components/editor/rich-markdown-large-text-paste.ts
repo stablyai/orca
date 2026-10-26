@@ -276,8 +276,7 @@ export function handleRichMarkdownLargeTextPaste(
   if (!isEditorAvailable(editor, options.canContinue)) {
     return true
   }
-  // Why: large rich-editor text or HTML paste bypasses ProseMirror's
-  // synchronous parser and writes bounded plain-text fallback transactions.
+  // Bypass ProseMirror’s synchronous large-text/HTML parser with bounded plain-text transactions.
   void executeRichMarkdownLargeTextPaste(editor, text, options).then((result) => {
     if (result.status === 'rejected' && result.reason === 'too-large') {
       showRichMarkdownLargePasteLimitError()

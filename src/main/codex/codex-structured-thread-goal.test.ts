@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal, codexThreadGoalRequests } from './codex-structured-thread-goal'
 import type { CodexSession } from './codex-structured-session-state'
 

@@ -203,11 +203,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  // Why: keep-alive mounts every tab of the active worktree and pane connect is
-  // not visibility-gated, so a hidden restorable pane cold-restores in place.
-  // Appending a resume tab here (the pre-keep-alive contract from #6800) forked
-  // a second surface onto the same provider session and stranded the hidden
-  // pane as a bare shell.
+  // Keep-alive mounts hidden active-worktree tabs for in-place cold restore; appending resume tabs forks the session and strands originals as bare shells (#6800).
   it('leaves a hidden restorable stable-pane record for in-place cold restore during activation', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })

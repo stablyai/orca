@@ -12,9 +12,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   const noSel = { isMac: true, hasSelection: false }
 
   it('bubbles Cmd+C so Chromium copy fires and xterm populates clipboard', () => {
-    // Why: this is the whole point of the policy. When kitty progressive
-    // enhancement is on, the default xterm path CSI-u encodes Cmd+C and
-    // preventDefaults the keydown, suppressing the browser copy event.
+    // Kitty encoding cancels Cmd+C keydown and suppresses the browser copy event unless bypassed.
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), opts)
     ).toBe(true)
@@ -62,11 +60,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
-    // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
-    // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
-    // with stopImmediatePropagation before xterm's textarea listener fires.
-    // Cmd+A is claimed by keyboard-handlers.ts before xterm, including when
-    // Kitty keyboard reporting replaces xterm's legacy select-all evaluator.
+    // Other Cmd shortcuts are consumed before xterm by keyboard-handlers.ts, including select-all under Kitty.
     const cases = [
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })
@@ -77,8 +71,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 
   it('bubbles already-handled Cmd app shortcuts so kitty does not also write to shell', () => {
-    // Why: some window-level shortcuts call preventDefault without stopping
-    // propagation. App shortcuts must not also become terminal input.
+    // An app shortcut may preventDefault without stopping propagation; never send it to the PTY too.
     expect(
       shouldBypassXtermKeyboardEvent(
         event({ key: 'b', code: 'KeyB', defaultPrevented: true, metaKey: true }),
@@ -141,10 +134,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 
   it('no longer special-cases Backslash — the native-text forwarder owns it', () => {
-    // Why: this policy carried a `code === 'Backslash'` bypass because the old
-    // forwarder only claimed keys for input sources on a hardcoded allowlist.
-    // The structural claim covers every printable key, so the exception is gone
-    // and the physical key is no longer named anywhere in this file.
+    // Structural native-input claims cover every printable key, replacing the old physical Backslash exception.
     for (const type of ['keydown', 'keyup', 'keypress']) {
       for (const kittyKeyboardFlags of [0, 1]) {
         expect(

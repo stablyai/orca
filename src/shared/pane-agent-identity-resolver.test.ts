@@ -80,7 +80,6 @@ describe('resolvePaneAgentIdentity', () => {
     })
 
     it('produces opposite answers from identical evidence, given only the run ids', () => {
-      // The whole point, stated as one assertion.
       const bug = resolvePaneAgentIdentity({
         evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
@@ -188,9 +187,7 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('two observations of the same class cannot be settled by array order', () => {
-    // Review finding: `eligible.find(...)` returned the FIRST match, so duplicates of one source
-    // naming different agents resolved by input order — the exact property this resolver exists to
-    // remove. The earlier order-independence test only used DISTINCT sources, so it never saw it.
+    // Same-source conflicts previously chose the first row; distinct-source order tests could not detect it.
     it('returns null when two live hooks name different agents', () => {
       const result = resolve([
         { source: 'live-hook', agent: 'claude' },
@@ -230,13 +227,9 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('run keys from different authorities are incomparable, not stale', () => {
-    // Review finding: a bare numeric runId collides across authority restarts. A restarted main
-    // regenerates its authorityId and counts incarnations from its own floor, so `1 === 1` would
-    // equate two unrelated runs.
+    // Bare incarnations collide across authority restarts; authorityId distinguishes unrelated runs.
     it('keeps evidence whose authority differs, even when the incarnations do not match', () => {
-      // The incarnations must DIFFER for this to discriminate. With both at 1, a resolver that
-      // ignored authority entirely would still pass on the numeric compare — verified by mutation,
-      // which is how the first version of this test was caught as vacuous.
+      // Different numbers detect implementations that ignore authority; equal numbers passed that mutant vacuously.
       const result = resolvePaneAgentIdentity({
         evidence: [
           { source: 'live-hook', agent: 'claude', run: { authorityId: 'host-b', incarnation: 5 } }
@@ -248,9 +241,7 @@ describe('resolvePaneAgentIdentity', () => {
     })
 
     it('does not equate the same incarnation number from two authorities', () => {
-      // A restarted main regenerates authorityId and counts from its own floor, so `1` from
-      // host-b is not `1` from host-a. Incomparable is treated as unknown, so the evidence is
-      // kept rather than being read as either current or stale.
+      // Restarted authorities’ counters are incomparable; keep unknown evidence eligible instead of declaring it stale.
       const result = resolvePaneAgentIdentity({
         evidence: [
           { source: 'launch', agent: 'codex', run: { authorityId: 'host-b', incarnation: 1 } }
@@ -273,8 +264,7 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('an action consumer can refuse to see weak evidence at all', () => {
-    // Review finding: title remained available to consumers that AUTHORIZE A WRITE. Ranking it
-    // last makes misuse unlikely; dropping it makes misuse impossible.
+    // Write authorization must drop title evidence entirely, rather than merely rank it last.
     it('ignores a title entirely below the floor', () => {
       const result = resolve([{ source: 'title', agent: 'codex' }], { minimumSource: 'launch' })
       expect(result.agent).toBeNull()

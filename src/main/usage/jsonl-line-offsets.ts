@@ -1,9 +1,4 @@
-/**
- * Streams JSONL lines together with their exact byte offsets so an incremental
- * scan can resume at the end of the last complete line. Byte accounting is done
- * on raw buffers because `readline` hides how many bytes a line consumed, and a
- * CRLF transcript would otherwise drift one byte per line.
- */
+/** Resume after complete JSONL lines using raw byte offsets; readline hides terminators and would miscount CRLF transcripts. */
 import { createReadStream } from 'node:fs'
 import { isResumablePrefixLength, type JsonlFileReader } from './jsonl-file-checkpoint'
 import { readJsonlSnapshotRange, releaseJsonlReadStream } from './jsonl-file-snapshot'

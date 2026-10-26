@@ -35,10 +35,7 @@ afterEach(async () => {
   servers.clear()
 })
 
-/**
- * Accepts TCP but never answers the HTTP upgrade, which is the same silent
- * stall a black-holed host produces and is bounded by the same `ws` timer.
- */
+/** Accept TCP but leave the HTTP upgrade silent to exercise the black-holed-host bound. */
 async function listenSilentUpgradeServer(): Promise<string> {
   const server = createServer((socket) => {
     sockets.add(socket)
@@ -96,9 +93,7 @@ describe('remote runtime connect bound', () => {
     // Loss of contact is never evidence the host's work stopped.
     expect(error.message).not.toMatch(/\b(exited|gone|stopped|empty|no terminals)\b/i)
 
-    // The subscribe IPC boundary drops `code`, so the renderer classifies this
-    // message alone. Fatal there means `recovery.cancel()` and a dead-ended pane
-    // instead of a retry, so the real produced message must still read recoverable.
+    // Subscribe IPC drops code; the real message must remain recoverable or pane recovery stops.
     expect(isRecoverableRemoteRuntimeConnectionError({ message: error.message })).toBe(true)
     // ...and must still earn the Tailscale remedy, which is gated on the same phrase.
     expect(withRemoteRuntimeTailscaleHint(error.message, endpoint)).not.toBe(error.message)
@@ -115,9 +110,7 @@ describe('remote runtime connect bound', () => {
     )
   })
 
-  // Why: the message is the only carrier on the code-less paths (subscribe IPC,
-  // web, mobile). Both gates below match a phrase, so a rewording silently turns
-  // a retrying pane into a dead-ended one and drops the only actionable remedy.
+  // Code-less IPC/web/mobile recovery and Tailscale guidance both depend on the produced message.
   it('keeps the unreachable-host message inside both message gates', () => {
     const message = remoteRuntimeConnectFailureMessage(
       handshakeTimeoutError(),
@@ -141,9 +134,7 @@ describe('remote runtime connect bound', () => {
     ).toContain('tailnet')
   })
 
-  // Why: the hint's idempotency check used to key on the word "tailscale" anywhere in the
-  // message. Now that the message carries the endpoint, such a host would suppress the very
-  // remedy it needs.
+  // An endpoint containing “tailscale” must not suppress the remedy’s suffix.
   it('still earns the hint when the endpoint itself contains the vendor name', () => {
     const endpoint = 'wss://tailscale-box.example.com:6768'
     const message = remoteRuntimeConnectFailureMessage(handshakeTimeoutError(), endpoint)
@@ -164,9 +155,7 @@ describe('remote runtime connect bound', () => {
     expect(message).not.toContain('token=abc')
   })
 
-  // Why: `isRemoteTerminalGoneMessage` in the pty transport substring-matches these tokens and
-  // runs BEFORE the recoverable gate, and WHATWG URL accepts `_` in a host. An endpoint could
-  // otherwise turn loss of contact into a terminal-gone verdict.
+  // The PTY transport checks terminal-gone substrings before recoverability; URL-legal underscores can smuggle them.
   it('never lets the endpoint smuggle a terminal-gone token into the message', () => {
     for (const host of ['terminal_gone.example', 'terminal_exited.example', 'no_connected_pty']) {
       const message = remoteRuntimeConnectFailureMessage(
@@ -174,10 +163,8 @@ describe('remote runtime connect bound', () => {
         `ws://${host}:6768`
       )
       expect(message).not.toMatch(/terminal_exited|terminal_gone|no_connected_pty/)
-      // Still reads as a recoverable connect failure, so the pane keeps retrying.
       expect(isRecoverableRemoteRuntimeConnectionError({ message })).toBe(true)
     }
-    // A well-formed host is still shown, so the redaction is not blanket.
     expect(
       remoteRuntimeConnectFailureMessage(handshakeTimeoutError(), 'ws://[fd7a:115c:a1e0::1]:6768')
     ).toContain('[fd7a:115c:a1e0::1]:6768')

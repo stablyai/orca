@@ -87,7 +87,6 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskResumeApplied,
     taskSource,
@@ -98,7 +97,10 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     linearRefreshNonce,
     getCachedLinearCustomViews,
     listLinearCustomViews,
-    linearTaskSourceContext
+    linearTaskSourceContext,
+    setLinearCustomViewsError,
+    setLinearCustomViewsLoading,
+    setLinearCustomViewsResult
   ])
   useEffect(() => {
     if (!selectedLinearCustomView?.workspaceId) {

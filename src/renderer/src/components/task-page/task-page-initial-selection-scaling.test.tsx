@@ -80,8 +80,7 @@ describe('task page initial repo selection', () => {
       }
     ]
 
-    // A folder workspace is never task-eligible, so a stored selection naming only one must fall
-    // through to the automatic default rather than rendering an empty picker.
+    // Folder-only saved selections must fall back to an eligible repo rather than leave an empty picker.
     expect(resolveSelection(repos, ['folder'])).toEqual(['tracked'])
     expect(resolveSelection(repos, ['folder', 'tracked'])).toEqual(['tracked'])
   })

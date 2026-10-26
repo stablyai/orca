@@ -1,6 +1,4 @@
-/** Identity of a native-chat composer surface: host + worktree + tab. Drafts
- *  and pending image chips are both keyed by it, so a tab switch cannot leak
- *  one tab's composer state into another tab's terminal. */
+// Scope composer drafts/chips by host, workspace and tab so switching cannot leak input into another terminal.
 export function mobileNativeChatScopeKey(
   hostId: string,
   worktreeId: string,

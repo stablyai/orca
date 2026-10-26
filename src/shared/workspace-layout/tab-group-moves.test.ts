@@ -86,7 +86,6 @@ describe('buildHeadlessTabGroupSplit', () => {
   })
 
   it('collapses an emptied source group out of the layout when moving across groups', () => {
-    // g2 holds only 'b'; moving 'b' into a new split off g1 empties g2.
     const result = buildHeadlessTabGroupSplit({
       groups: [group('g1', ['a']), group('g2', ['b'])],
       layout: {
@@ -102,7 +101,6 @@ describe('buildHeadlessTabGroupSplit', () => {
     })
     const ids = result!.groups.map((g) => g.id).sort()
     expect(ids).toEqual(['g1', 'g3'])
-    // g2 must not survive in the layout tree.
     expect([...collectTabGroupLayoutGroupIds(result!.layout)].sort()).toEqual(['g1', 'g3'])
   })
 

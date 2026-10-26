@@ -6,8 +6,6 @@ import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
 
-/** Keeps browser-tab navigation actions out of the session route while preserving
- *  the target captured at the moment each drawer action is pressed. */
 export function MobileBrowserTabActionSheet(props: {
   target: BrowserTab | null
   onClose: () => void

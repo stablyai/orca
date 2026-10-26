@@ -50,13 +50,12 @@ export async function reclaimWorktreeSpace({
     const scripts = [
       'reclaim-electron-dists.mjs',
       'reclaim-dev-electron-bundles.mjs',
-      'reclaim-vite-caches.mjs'
+      'reclaim-vite-caches.mjs',
+      'reclaim-worktree-generated-files.mjs',
+      'reclaim-dev-worktree-profiles.mjs'
     ]
     if (!automatic && testsStopped) {
       scripts.unshift('reclaim-release-test-caches.mjs')
-    }
-    if (!automatic) {
-      scripts.push('reclaim-worktree-generated-files.mjs')
     }
     for (const script of scripts) {
       const args = [resolve(import.meta.dirname, script), '--repo', repoRoot]

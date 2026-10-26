@@ -240,7 +240,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
       (args.runtimeCall as unknown as (value: unknown) => unknown)(request)
   )
   resetAgentBackgroundSessionTestState(args.state)
-  // Why: production reserves the tab id before the spawn; honoring options.id mirrors createTab's adoption contract.
+  // Honor the pre-reserved tab id to mirror createTab adoption.
   args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
     const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }
     args.state.tabsByWorktree['wt-1'].push(tab)

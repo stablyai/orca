@@ -10,12 +10,7 @@ import {
 import { resumeRunInFlight } from '../native-chat-resume-run'
 import { resumeRunView } from '../native-chat-resume-run-view'
 
-// Why: closing the resume dialog is a snooze, not a decline — the host keeps the offer. This is
-// then the only surface left carrying it, so it is always rendered rather than gated by
-// `statusBarItems`. Pressing Resume closes the dialog too, so this entry carries the run while it
-// is in flight, then says it resumed them until that summary has been seen. It is also the lasting
-// summary of chats the resume could not carry on: its toast says so once, and each chat it reached
-// carries its own note.
+// Keep offers and in-flight/results visible after dialog snooze; statusBarItems must not hide the remaining resume surface.
 
 function Segment({
   icon,
@@ -54,7 +49,6 @@ function Segment({
 
 type SegmentText = { label: string; ariaLabel: string; tooltip: string }
 
-/** Chats answered out of the chats asked, each counted as its own answer arrives. */
 function resumingText(done: number, total: number): SegmentText {
   return {
     label: translate(
@@ -136,7 +130,6 @@ function resumedText(count: number): SegmentText {
   }
 }
 
-/** True of a refused chat and an unconfirmed one alike, for a list holding either. */
 function checkText(count: number): SegmentText {
   return {
     label:
@@ -244,8 +237,7 @@ export function NativeChatResumeStatusSegment({
         />
       )}
       {failures > 0 && (
-        // A different fact from the offer — the outcome of acting on it — so a second entry, not a
-        // merged count. Same yellow the skill-update segment uses for its own failed state.
+        // Report failed outcomes separately from the remaining offer, using the shared failure-warning tone.
         <Segment
           iconOnly={iconOnly}
           count={failures}

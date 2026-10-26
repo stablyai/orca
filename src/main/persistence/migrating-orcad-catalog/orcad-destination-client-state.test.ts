@@ -104,7 +104,6 @@ describe('destination client-state migration', () => {
 
   it("moves onto a fresh server whose sidebar shows all hosts, keeping the server's filters", () => {
     const destination = state()
-    // The server's defaults: 'all' and an all-hosts automation filter, not unset.
     destination.ui = getDefaultUIState()
     const prepared = prepareOrcadMigrationClientState(
       {

@@ -11,17 +11,14 @@ import {
 import { literalString, propertyName, unwrap } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-// Ratchet for synchronous child-process launches in Electron main and shared code: each one
-// freezes every window until the child exits, and on Windows antivirus makes every launch slow.
-// Per file it counts uses of the launch APIs and of the repo's synchronous wrappers around them.
+// Synchronous launches freeze all Electron windows; Windows antivirus magnifies the delay. Count launch APIs and synchronous wrappers per file.
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const BASELINE_PATH = 'config/main-sync-spawn-baseline.txt'
 const SCAN_DIRECTORIES = ['src/main', 'src/shared']
 const PROCESS_ADVICE = 'use runProcess or spawnProcess from @orca/process-host'
 const SECURE_ADVICE = `rewrites a DACL on the calling thread, and a directory rewrite blocks on its whole subtree; use restrictWindowsDirectory for a directory, or raise this file's count in ${BASELINE_PATH} (or add a row)`
-// Gated modules (package names, or repo-relative paths without extension, re-exporters included)
-// and the advice for each gated function they export.
+// Include package/repo re-exporters so moving an import cannot bypass the gate.
 const GATED_FAMILIES = [
   {
     modules: ['child_process', 'node:child_process'],
@@ -84,7 +81,6 @@ function symbolsOf(key) {
   return names.length > 0 ? new Set(names) : null
 }
 
-/** Gated functions a module specifier exports, or null when the module is not gated. */
 export function gatedSymbolsFor(file, specifier) {
   const normalizedSpecifier = normalized(specifier)
   if (!normalizedSpecifier.startsWith('.')) {
@@ -121,12 +117,8 @@ function isValueReference(node) {
   )
 }
 
-/**
- * Every value reference to a gated function counts (call, hand-off, alias initializer, each alias
- * use), plus each re-export and a gated module's own references; imports alone count nothing.
- * File-wide, not scope-aware; computed specifiers and member names are not resolved.
- * Counted by reference only: not traced through non-const holders or the file's own wrappers.
- */
+// Count each gated value reference, alias use and re-export; imports alone do not count.
+// File-wide, not scope-aware: computed specifiers/members and non-const holder flows are unresolved; local wrappers are not traced.
 export function collectSyncLaunchUses(file, contents) {
   // Escaped spellings and relative imports inside gated modules still need the full analysis.
   const analyze =
@@ -142,7 +134,6 @@ export function collectSyncLaunchUses(file, contents) {
   const used = new Set()
   let count = 0
   const namespaces = new Map()
-  // Local name -> gated function it refers to.
   const functions = new Map([...(symbolsOf(moduleKey(file)) ?? [])].map((name) => [name, name]))
   const aliases = []
   const members = []
@@ -313,7 +304,6 @@ export function isRatchetedSourcePath(file) {
   )
 }
 
-/** Per-file use counts and the gated functions each file uses. */
 export function countSyncSpawnUses(sources) {
   const counts = new Map()
   const symbols = new Map()

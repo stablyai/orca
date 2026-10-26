@@ -29,15 +29,7 @@ function describeLazyChunkCause(error: Error): string {
   return cause === undefined ? 'unknown' : String(cause)
 }
 
-// Why: a thrown exception inside the TipTap/ProseMirror render or in the
-// effect that runs `setContent` + empty-list repair on external-reload
-// would escape to the React root and — without this boundary — cause React
-// 18 to unmount the entire renderer subtree, blacking out the whole Orca
-// window (see issue #826). Scoping the boundary to the rich-markdown editor
-// contains the failure to the affected pane so the rest of the workspace
-// stays usable. Re-keying on `fileId` resets the boundary when the user
-// switches tabs so a transient failure doesn't permanently disable the
-// rich editor for that pane.
+// Contain TipTap render and reload failures to this pane; fileId changes reset transient errors when switching tabs.
 export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null, fileId: this.props.fileId }
 

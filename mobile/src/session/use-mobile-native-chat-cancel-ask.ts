@@ -3,9 +3,6 @@ import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-a
 import type { RpcClient } from '../transport/rpc-client'
 import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
 
-/** Sends the Escape that dismisses an ask/question card. Its own module for the
- *  same reason stop/permission/answer are: the controller owns composition, not
- *  the per-action write semantics. */
 export function useMobileNativeChatCancelAsk(args: {
   client: RpcClient | null
   enabled: boolean
@@ -42,8 +39,7 @@ export function useMobileNativeChatCancelAsk(args: {
         : {})
     })
     if (outcome === 'unknown') {
-      // Why: the Escape may have landed (ack lost / path cutover) — a definite
-      // "not sent" would invite a second Escape into a changed prompt state.
+      // Lost-ack/cutover Escape may have changed the prompt; never invite another with a definite not-sent verdict.
       onSendError('Cancel unconfirmed — check chat before retrying')
     } else if (outcome === 'rejected') {
       onSendError('Cancel not sent')

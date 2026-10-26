@@ -5,8 +5,7 @@ export type SkillDeletionEligibility =
   | { deletable: true }
   | { deletable: false; reason: SkillDeleteBlockReason; message: string }
 
-/** English defaults. The renderer translates by reason code; logs and the CLI
- *  use these directly. */
+/** Renderer translates codes; CLI/logs use these defaults. */
 export const SKILL_DELETE_BLOCK_MESSAGES: Record<SkillDeleteBlockReason, string> = {
   bundled: 'Bundled with Orca — it would be restored',
   plugin: 'Installed by a plugin — remove the plugin instead',
@@ -19,13 +18,7 @@ function blocked(reason: SkillDeleteBlockReason): SkillDeletionEligibility {
   return { deletable: false, reason, message: SKILL_DELETE_BLOCK_MESSAGES[reason] }
 }
 
-/**
- * Client-side predicate over the displayed row.
- *
- * Advisory for `bundled`/`plugin`: `sourceKind` is first-scanned-root-wins, so a
- * plugin-cache skill symlinked into a plain home root reports `home` here. The
- * host re-derives the verdict from the placement set and can be stricter.
- */
+/** Advisory: first-root-wins sourceKind can hide plugin ownership through symlinks; the host rechecks all placements. */
 export function skillDeletionEligibility(
   skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): SkillDeletionEligibility {

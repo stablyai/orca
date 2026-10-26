@@ -8,16 +8,7 @@ export type MobileWorktreeSummary = {
   readonly linkedPR: number | null
 }
 
-/**
- * One reader for both worktree.show consumers. Branch compare read `worktree.baseRef` behind an
- * `isRecord` guard and the PR sidebar read `worktree.linkedPR` through optional chaining; both
- * yield null on the same inputs, so the fields merge without changing either answer.
- *
- * Total on purpose: both callers treat a missing summary as "no hint" and fall back to another
- * source, so a reply this cannot read is a null summary rather than an incompatible reply. The
- * schema is what turns a `baseRef` of the wrong type into that null instead of into a string the
- * branch-compare request would then send to the host.
- */
+// Both consumers treat unreadable metadata as no hint; normalize malformed baseRef/linkedPR to null before fallback.
 const worktreeSummarySchema: z.ZodType<MobileWorktreeSummary | null, unknown> =
   worktreeSummaryReplySchema
     .transform((value): MobileWorktreeSummary | null =>
@@ -27,7 +18,7 @@ const worktreeSummarySchema: z.ZodType<MobileWorktreeSummary | null, unknown> =
     )
     .catch(null)
 
-/** A refused show is a missing hint, not a failure: both callers fall back to another source. */
+// Refused metadata is a missing hint; callers try another source.
 export const worktreeSummaryRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.summary-or-skip',
@@ -38,7 +29,6 @@ export const worktreeSummaryRead = bindDeferredRpcOperation(
   })
 )
 
-/** Persisting a review link. The payload is unread; only acceptance matters. */
 export const worktreeLinkSet = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.set-review-link',

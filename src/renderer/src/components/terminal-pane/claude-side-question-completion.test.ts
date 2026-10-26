@@ -35,10 +35,7 @@ type TimelineEvent =
 
 type HookName = 'UserPromptSubmit' | 'PreToolUse' | 'Stop' | 'Notification'
 
-// Recorded from Claude Code 2.1.280 over a real PTY (ms from launch): one prompt, then a
-// `/btw` side question 45 s later. The side question spins the title and fires no hook.
-// The BEL beside each idle title is the burst agents commonly emit at a turn end; the one 600 ms
-// after the side question's idle title stands in for Codex /compact's (QA F5b).
+// Recorded Claude 2.1.280 PTY timing: /btw spins titles without hooks; adjacent BELs model turn-end bursts and a delayed /compact bell.
 const SIDE_QUESTION: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 3_416, hook: 'UserPromptSubmit' },
@@ -60,10 +57,7 @@ const SIDE_QUESTION: TimelineEvent[] = [
   { at: 90_000, foreground: null }
 ]
 
-// A Stop hook that blocks twice: Stop #1's banner goes out at 6.5 s, Claude continues text-only and
-// re-enters Stop with the same text, then again with the final text 3 s after that banner, both
-// inside main's 5 s cooldown. A minute on an idle reminder restates the turn. Then a second turn
-// whose re-entered Stop is overtaken by the user's next prompt before its cooldown passes.
+// Repeat blocked Stop hooks inside cooldown, then idle restatements and a new prompt overtaking a delayed Stop banner.
 const BLOCKED_STOP: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 1_000, hook: 'UserPromptSubmit' },
@@ -81,9 +75,7 @@ const BLOCKED_STOP: TimelineEvent[] = [
   { at: 93_000, hook: 'Stop', message: 'Third turn.' }
 ]
 
-// Prompt hooks the host never received (a POST past its 1.5 s limit). Each such end is ambiguous,
-// so the pane keeps main's banners whichever of the title and the hook comes first; a verified
-// tool-using continuation still gets its final banner, and a later unflagged repeat stays quiet.
+// Lost opening hooks make ends ambiguous; retain title/hook fallback banners, verified continuations and repeat suppression.
 const LOST_OPENINGS: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 1_000, hook: 'UserPromptSubmit' },

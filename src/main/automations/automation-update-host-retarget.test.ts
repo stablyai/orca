@@ -3,7 +3,7 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 /** Pausing an orphan must preserve its captured host rather than re-adopting today’s repo host. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

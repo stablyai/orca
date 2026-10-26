@@ -13,8 +13,7 @@ const SET_SLOTS: Record<string, readonly ColorSlot[]> = {
 }
 const RESET_SLOTS: Record<string, ColorSlot> = { '110': 'foreground', '111': 'background' }
 
-// Why one scan for either terminator: two indexOf calls go quadratic on long runs of
-// ST-terminated OSCs with no BEL (OSC 8 hyperlinks), and this runs on every PTY chunk.
+// One terminator scan avoids quadratic searches through ST-only OSC runs on the PTY hot path.
 // oxlint-disable-next-line no-control-regex -- BEL and ESC are the terminators being matched.
 const OSC_TERMINATOR = /[\x07\x1b]/g
 
@@ -23,11 +22,7 @@ function mayBeColorOsc(input: string, bodyStart: number): boolean {
   return input[bodyStart] === '1' && (input[bodyStart + 1] === '0' || input[bodyStart + 1] === '1')
 }
 
-/**
- * Mirrors what an app set with OSC 10/11 (and cleared with OSC 110/111) on one terminal,
- * so the PTY owner reports the colours the viewer is actually painting. A theme change
- * drops them, as a viewer's own theme apply does.
- */
+/** Mirror app-set OSC 10/11 and reset OSC 110/111 colors for the PTY owner; theme changes drop overrides like the viewer does. */
 export class TerminalOscColorOverrideTracker {
   private pending = ''
   private overrides: TerminalOscColorQueryReplyColors = {}

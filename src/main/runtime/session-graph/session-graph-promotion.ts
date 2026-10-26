@@ -21,10 +21,7 @@ import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
 
-  /**
-   * Whether a graph leaf's terminal runs. A graph cannot revoke a host-certified exit, and a pane
-   * main owns is no proof its terminal runs: the terminal's record decides (L80).
-   */
+  /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */
   protected graphLeafConnected(ptyId: string | null, worktreeId: string): boolean {
     if (ptyId === null || this.getPtyLivenessVerdict(ptyId)?.status === 'exited') {
       return false
@@ -149,8 +146,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
       ) {
         return
       }
-      // Why: promotion is a renderer reload of the same graph owner, not a new
-      // runtime; stale handles must transition before the real window publishes.
+      // Promotion reloads the same owner; transition stale handles before its real window publishes.
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
@@ -158,8 +154,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
       return
     }
     if (this.authoritativeWindowId === null) {
-      // Why: a promoted serve can close and later reopen its window while new
-      // background PTYs keep arriving; every windowless gap needs this handoff.
+      // Every windowless gap needs handoff: promoted serve windows can close while new PTYs arrive.
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
@@ -201,7 +196,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     }
 
     for (const [hostId, { session, ptys }] of partitions) {
-      // Why: windowless SSH PTYs must be handed to the desktop through their SSH partition, never the local session.
+      // Hand windowless SSH PTYs to desktop through their SSH partition, never the local session.
       const activeWorktreeIdsOnShutdown = [
         ...new Set([
           ...(session.activeWorktreeIdsOnShutdown ?? []),

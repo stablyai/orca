@@ -1,3 +1,4 @@
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
@@ -47,7 +48,8 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
+  BrowserPopupEvent,
+  BrowserTargetUrlChangedEvent
 } from '../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
@@ -97,11 +99,23 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }
+    detach?: boolean
   }) => Promise<boolean>
+  closeDevTools: (args: { browserPageId: string }) => Promise<void>
+  /** Places docked DevTools over the pane's slot (renderer CSS px); null hides them, and with
+   *  `snapshot` resolves to their last frame as a data URL. */
+  setDevToolsDockBounds: (args: {
+    browserPageId: string
+    bounds: BrowserDevToolsDockBounds | null
+    snapshot?: boolean
+  }) => Promise<string | null>
+  onDevToolsDockChanged: (
+    callback: (event: { browserPageId: string; docked: boolean }) => void
+  ) => () => void
   addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
   copyImageAt: (args: {
     browserPageId: string
@@ -122,6 +136,7 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
+  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
@@ -138,6 +153,9 @@ export type BrowserApi = {
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
   ) => () => void
+  onAudioStateChanged: (
+    callback: (event: { browserPageId: string; audible: boolean }) => void
+  ) => () => void
   proceedCertificate: (args: {
     browserPageId: string
     challengeId: string
@@ -153,6 +171,7 @@ export type BrowserApi = {
   onContextMenuDismissed: (
     callback: (event: BrowserContextMenuDismissedEvent) => void
   ) => () => void
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void) => () => void
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void

@@ -75,7 +75,7 @@ export function detectedWorktreeRefreshKey(
     targetKey,
     options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
   ]
-  // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
+  // Remote foreground refresh must re-probe instead of joining cached-failure background scans; local has no preflight and still coalesces.
   if (target.kind === 'environment') {
     parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
     parts.push(`runtime:${getRuntimeEnvironmentConnectionGeneration(target.environmentId)}`)

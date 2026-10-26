@@ -12,7 +12,6 @@ describe('resumeActivityLabel', () => {
     )
   })
 
-  // A blocked lead names the prompt the user was being asked, not a reply of its own.
   it('names the prompt a waiting chat lost', () => {
     expect(
       resumeActivityLabel({
@@ -23,7 +22,6 @@ describe('resumeActivityLabel', () => {
     ).toBe('Waiting for your approval: Bash')
   })
 
-  // A settled lead says nothing about itself; its children are the whole story.
   it('says nothing for a settled lead beyond its tasks', () => {
     expect(
       resumeActivityLabel({
@@ -65,7 +63,6 @@ describe('resumeActivityLabel', () => {
     ).toBe('2 subagents running · Monitoring 2 background tasks')
   })
 
-  // The roster also lists the foreground command a reply is running; that is not monitoring.
   it('does not call a mid-reply command monitoring, but keeps it in the detail', () => {
     expect(
       resumeActivityLabel({

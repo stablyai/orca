@@ -68,8 +68,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
 }: Params<Result, Tab>): ResultActions {
   const pendingTerminalRecoveryBudget = useMemo(() => new PendingTerminalHandleRecoveryBudget(), [])
   const onPendingTerminalRecoveryParkedRef = useRef(onPendingTerminalRecoveryParked)
-  // Why: only poll/reset callbacks read this, and they run after commit — so writing it in
-  // render would let a discarded render leak a callback that never mounted.
+  // Sync post-commit callbacks in effects so discarded renders cannot leak an unmounted callback.
   useEffect(() => {
     onPendingTerminalRecoveryParkedRef.current = onPendingTerminalRecoveryParked
   })
@@ -188,7 +187,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
         controller.setReconciliationActive(true)
         const tabsRequest = forceTabs ? controller.requestReconciliation() : controller.poll()
         const now = Date.now()
-        // Why: healthy tab streams own liveness; retain only a slow inventory sweep for stale handles and metadata.
+        // Healthy streams own tab liveness; retain slow inventory polling only for stale handles/metadata.
         if (forceTabs || tabsRequest !== null || isCertifiedTerminalSweepDue(now)) {
           void refreshTerminalInventory()
         }

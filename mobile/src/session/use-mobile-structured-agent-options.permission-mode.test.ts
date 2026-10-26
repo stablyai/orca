@@ -13,7 +13,6 @@ function optionsFor(permissionMode?: string): AgentSessionOptionsResult {
   }
 }
 
-/** Answers each options read with the next mode in `modes`, repeating the last. */
 function optionsClient(...modes: (string | undefined)[]) {
   let reads = 0
   const client: RpcClient = {
@@ -197,7 +196,6 @@ describe('the permission mode on the phone', () => {
   })
 })
 
-/** A host whose account listing lands only after the chat's first options read. */
 function listingLandsLaterClient() {
   let landed = false
   let land: () => void = () => {}
@@ -214,7 +212,6 @@ function listingLandsLaterClient() {
       await lands
       return { origin: 'probe', fetchedAt: 1, models: rows }
     }
-    // At rest, a read before the listing lands answers from the agent's built-in list.
     return landed
       ? { models: rows, current: { model: 'opus[1m]', permissionMode: 'ask' } }
       : {

@@ -14,9 +14,7 @@ const LEGACY_TERMINAL_ATTRIBUTION_ENABLE_ENV_KEY = 'ORCA_ENABLE_GIT_ATTRIBUTION'
 const LEGACY_TERMINAL_ATTRIBUTION_BYPASS_ENV_KEY = 'ORCA_ATTRIBUTION_BYPASS'
 
 const LEGACY_SHIM_ROOT_DIR = 'orca-terminal-attribution'
-// Why: must differ from the retired shim's own '7'. A rolled-back build compares this marker and
-// skips rewriting its wrappers when it matches, which would leave our tombstones in place while
-// its attribution toggle claimed to be on.
+// Distinguish retired version 7 so rollback rewrites tombstones instead of treating them as active wrappers.
 const LEGACY_SHIM_VERSION = '7-neutralized'
 const NEUTRALIZATION_RETRY_DELAYS_MS = [1_000, 5_000, 15_000, 30_000]
 export const LEGACY_TERMINAL_SHIM_ENV_KEYS = [
@@ -42,8 +40,7 @@ export function neutralizeLegacyTerminalShimDir(userDataPath: string): void {
     return
   }
   const rootDir = join(userDataPath, LEGACY_SHIM_ROOT_DIR)
-  // Why: only installs that actually ran the shim have resolved wrapper paths worth keeping
-  // alive. Writing them anywhere else would recreate the directory the removal deleted.
+  // Only existing installs need tombstones to keep hashed wrapper paths alive.
   if (!existsSync(rootDir)) {
     neutralized = true
     clearNeutralizationRetry()
@@ -55,7 +52,7 @@ export function neutralizeLegacyTerminalShimDir(userDataPath: string): void {
     neutralized = true
     clearNeutralizationRetry()
   } catch (error) {
-    // Why: Windows can keep a running .cmd open briefly after startup.
+    // Running .cmd files may remain locked briefly on Windows.
     console.warn(
       `[legacy-terminal-shim] neutralization attempt ${neutralizationRetryAttempt + 1} failed:`,
       error instanceof Error ? error.message : String(error)
@@ -69,9 +66,7 @@ function scheduleNeutralizationRetry(userDataPath: string): void {
     return
   }
   if (neutralizationRetryAttempt >= NEUTRALIZATION_RETRY_DELAYS_MS.length) {
-    // Why: retries stop here for the process lifetime; without this the give-up is invisible and a
-    // host left holding live wrappers is undiagnosable.
-    // Why: +1 counts the initial attempt, so this agrees with the per-attempt line above.
+    // Report exhaustion; +1 includes the initial attempt before retries.
     console.warn(
       `[legacy-terminal-shim] gave up neutralizing after ${neutralizationRetryAttempt + 1} attempts; legacy git/gh wrappers may remain until the next launch`
     )
@@ -99,10 +94,7 @@ function writeNeutralWrappers(rootDir: string): void {
   const win32Dir = join(rootDir, 'win32')
   mkdirSync(posixDir, { recursive: true })
   mkdirSync(win32Dir, { recursive: true })
-  // Why: a tombstone with no verifiable absolute interpreter would need an ambient shebang and
-  // could take bash from the current directory. Falling back to the shebang of the wrapper being
-  // replaced keeps a shell that has the path hashed working -- deleting the file strands it on
-  // 127 rather than falling through to PATH. Deleting is the last resort, not the first.
+  // Prefer a verified replacement shebang: deleting a hashed wrapper strands shells at 127; ambient lookup permits cwd hijacking.
   const interpreter = resolvePosixTombstoneInterpreter()
   for (const command of ['git', 'gh'] as const) {
     const posixPath = join(posixDir, command)
@@ -136,15 +128,12 @@ function writeFileAtomically(filePath: string, contents: string, mode: number): 
     try {
       rmSync(temporaryPath, { force: true, recursive: true })
     } catch {
-      // Why: a locked temp file must not replace the in-flight error with a cleanup error.
+      // Cleanup failure must not mask the original write error.
     }
   }
 }
 
-// Why: the captured directory and the PATH entry naming it can differ by a trailing separator (or
-// its slash style on Windows). A literal compare missed that and left the shim dir on PATH. The
-// literal compare itself has to stay: a shim path may contain the PATH delimiter, which splitting
-// would fragment.
+// Preserve literal removal for paths containing PATH delimiters; also account for slash style and trailing separators.
 function pathEntrySpellings(dir: string, windows: boolean): string[] {
   const base = stripTrailingSeparators(dir, windows)
   if (!base) {
@@ -157,18 +146,10 @@ function pathEntrySpellings(dir: string, windows: boolean): string[] {
   return [...spellings]
 }
 
-// Why purely lexical, and why `..` is deliberately not collapsed: collapsing it textually is not
-// the same as resolving it. If `<shim>/posix` is a symlink, `<shim>/posix/../posix` resolves
-// somewhere else entirely, and treating it as the shim directory deletes a legitimate PATH entry
-// and leaves git unresolvable. Resolving for real is not an option either: this env is also built
-// for remote and WSL panes, where these paths do not name anything on the local filesystem.
-// A `..` spelling that does slip through costs nothing at runtime -- the directory now holds the
-// pass-through tombstone, and the tombstone excludes its own directory by -ef, so the lookup still
-// reaches the real git.
+// Keep .. lexical: collapsing through a symlink can erase a real PATH entry, and remote/WSL paths cannot be resolved locally.
+// Missed legacy spellings remain safe because tombstones exclude their directory by inode.
 export function isLegacyTerminalShimPathEntry(entry: string): boolean {
-  // Why `windows` unconditionally here: this classifier only ever matches Orca's own
-  // `orca-terminal-attribution/{posix,win32}` layout, and a Windows PATH can reach it through the
-  // remote env, so both slash styles must be understood regardless of the local platform.
+  // Remote Windows env can reach any host; recognize both slash styles in Orca's fixed layout.
   const normalized = stripTrailingSeparators(entry.replaceAll('\\', '/'), true).toLowerCase()
   return (
     normalized.endsWith(`/${LEGACY_SHIM_ROOT_DIR}/posix`) ||
@@ -176,11 +157,7 @@ export function isLegacyTerminalShimPathEntry(entry: string): boolean {
   )
 }
 
-// Why: `pathEntrySpellings` can only enumerate one added separator, so an entry repeating it
-// survived the literal removal. Comparing separator-stripped forms covers any number of them.
-// Why platform-specific: a backslash is a legal filename character on POSIX, so treating it as a
-// separator there made `/tmp/captured\` and `/tmp/captured` compare equal and deleted a real
-// directory from PATH.
+// Strip repeated separators, but preserve POSIX backslashes as filename characters.
 function stripTrailingSeparators(value: string, windows: boolean): string {
   return value.replace(windows ? /[\\/]+$/ : /\/+$/, '')
 }
@@ -284,7 +261,6 @@ function removeLiteralPathEntry(
   }
 }
 
-/** Test-only: the module-level once-guard would otherwise leak across cases. */
 export function __resetLegacyTerminalShimNeutralizationForTests(): void {
   neutralized = false
   clearNeutralizationRetry()

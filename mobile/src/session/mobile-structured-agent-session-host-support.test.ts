@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
@@ -77,6 +78,9 @@ describe('structuredAgentSessionHostSupport', () => {
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, phoneAttachments: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, itemDetail: true })
     // A host with the store but from before phones could upload into it offers them nothing.
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY])

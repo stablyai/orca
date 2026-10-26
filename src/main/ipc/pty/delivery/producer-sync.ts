@@ -1,5 +1,5 @@
 import { recordDaemonStreamBacklogEvent } from '../../../daemon/daemon-stream-backlog-probe'
-import { isRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
+import { isRuntimeOwnedHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
   PRODUCER_FLOW_CONTROL_ENABLED,

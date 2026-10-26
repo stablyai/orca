@@ -34,8 +34,7 @@ describe('boundRecentlyRetiredAgentStatusPaneKeys', () => {
     expect(boundRecentlyRetiredAgentStatusPaneKeys(existing, ['a', 'b', 'c'])).toBe(existing)
   })
 
-  // Why: LRU order decides which key the cap evicts next. A key-set match is not a
-  // no-op when the re-added key is not already at the tail — it must move there.
+  // LRU readds move keys to tail; equal key sets alone cannot prove no-op.
   it('re-retiring an existing non-tail key changes identity and moves it to the tail', () => {
     const existing = keyRecord(['a', 'b', 'c'])
     const next = boundRecentlyRetiredAgentStatusPaneKeys(existing, ['a'])
@@ -134,8 +133,7 @@ it('removes enumerable undefined values without removing inherited or hidden key
   expect(Object.hasOwn(removePaneKeys(record, new Set(['visible'])), 'visible')).toBe(false)
 })
 
-// Probing the requested keys only matches the old record-enumeration when the two sets
-// disagree in both directions, and the store relies on the unchanged case staying identical.
+// Probe equivalence must cover keys missing in both directions and preserve identity on no-op.
 it('drops every requested key that is present and keeps the reference when none are', () => {
   const base = { a: 1, b: 2, c: 3 }
   expect(removePaneKeys({ ...base }, new Set(['a', 'b', 'c', 'd', 'e']))).toEqual({})

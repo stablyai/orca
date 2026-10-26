@@ -115,5 +115,7 @@ describe('loginSetsEqual', () => {
         loginSetOfUsers([{ login: 'alice', name: null, avatarUrl: '' }])
       )
     ).toBe(true)
+    expect(loginSetsEqual(new Set(['alice']), new Set(['bob']))).toBe(false)
+    expect(loginSetsEqual(new Set(['alice']), new Set(['alice', 'bob']))).toBe(false)
   })
 })

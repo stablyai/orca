@@ -1,7 +1,3 @@
-/**
- * Replacing a stale orcad instance lock without ever displacing a live one (see
- * `orcad-instance-lock.ts`).
- */
 import { createHash, randomUUID } from 'node:crypto'
 import {
   existsSync,
@@ -21,22 +17,17 @@ import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-read
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 export const MAX_ORCAD_LOCK_BYTES = 64 * 1024
-// Serializes stale-lock recovery, so no reclaimer ever renames away a lock another just published.
+// Serialize recovery so reclaimers cannot displace newly published live locks.
 const RECOVERY_DIR_SUFFIX = '.recovery'
 const RECOVERY_OWNER_FILE = 'owner'
 const RECOVERY_RELEASED_FILE = 'released'
 
-/** Who is recovering, as a lock record, and whether a recovery owner's holder provably exited. */
 export type OrcadLockRecoveryOwner = {
   record: string
   exited: (ownerRecord: string) => boolean
 }
 
-/**
- * Why rename-and-then-publish rather than unlink-and-write: rename claims one exact directory
- * entry, so a replacement written between our read and our write stays at the canonical path
- * and wins — we never delete a record we did not inspect.
- */
+/** Rename claims an exact entry; never unlink a contender’s uninspected replacement. */
 export function reclaimAndPublish(
   lockPath: string,
   dataRoot: string,
@@ -45,7 +36,6 @@ export function reclaimAndPublish(
   owner: OrcadLockRecoveryOwner
 ): void {
   return withRecoveryLock(lockPath, inspectedContents, owner, () => {
-    // Another reclaimer finished first: whatever it published is authoritative, not stale.
     if (readBoundedLockFile(lockPath) !== inspectedContents) {
       throw new OrcadInstanceLockError(
         'orcad_instance_lock_held',
@@ -72,7 +62,7 @@ function renameAndPublish(
         'holding it. Retry, or stop the other orcad.'
     )
   }
-  // A contender may have replaced the entry after the liveness check; never displace its record.
+  // Do not displace a contender that replaced the inspected entry after liveness checking.
   const claimedContents = readBoundedLockFile(claimPath)
   if (claimedContents !== inspectedContents) {
     restoreDisplacedLock(claimPath, lockPath, claimedContents)
@@ -82,10 +72,8 @@ function renameAndPublish(
     )
   }
   const published = publish()
-  // A uniquely named claim is inert either way.
   unlinkQuietly(claimPath)
   if (!published) {
-    // Someone else claimed it first. Their record is authoritative; ours is not.
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_held',
       `Another orcad took the data root ${dataRoot} while this one was reclaiming a stale lock.`
@@ -93,12 +81,7 @@ function renameAndPublish(
   }
 }
 
-/**
- * One recovery lock per stale record (named by its contents), in generations: a dead
- * owner's generation is never removed or renamed, the next one is created beside it. Taking one is
- * exclusive, and a later generation exists only once every earlier owner provably exited, so the
- * newest generation's owner is the only live reclaimer and no live owner is ever displaced.
- */
+/** Keep old generations until every prior owner provably exits; only the newest can reclaim. */
 function withRecoveryLock<T>(
   lockPath: string,
   inspectedContents: string,
@@ -112,7 +95,7 @@ function withRecoveryLock<T>(
   const newestOwner = newest === undefined ? null : readRecoveryOwner(newestDir)
   const free =
     newestOwner === null ||
-    // A generation is never published without its owner; one without is a cut-short cleanup's.
+    // Missing owners indicate interrupted cleanup; publication always includes a complete owner.
     newestOwner.state === 'absent' ||
     (newestOwner.state === 'present' &&
       (existsSync(join(newestDir, RECOVERY_RELEASED_FILE)) || owner.exited(newestOwner.record)))
@@ -128,26 +111,21 @@ function withRecoveryLock<T>(
   } finally {
     const current = readBoundedLockFile(lockPath)
     if (current === null || current === inspectedContents) {
-      // Kept, marked released: a reused generation number could be judged by a contender that
-      // read this generation's owner before we let go.
+      // Retain released generations so contenders cannot confuse reused generation numbers.
       writeQuietly(join(`${prefix}${generation}`, RECOVERY_RELEASED_FILE))
     } else {
-      // Once the stale record is gone no reclaimer can use its recovery locks again.
       for (const stale of recoveryGenerations(prefix)) {
         try {
           rmSync(`${prefix}${stale}`, { recursive: true, force: true })
         } catch {
-          // A late contender writing into it; it is inert once the stale record is gone.
+          // Once the stale record is gone, late contenders are inert.
         }
       }
     }
   }
 }
 
-/**
- * Keyed by contents alone: everyone who inspected the same stale record must share one recovery
- * lock, whatever the path held when they looked again (another inode, or nothing mid-reclaim).
- */
+/** Key by inspected contents so all contenders share recovery despite intervening inode/path changes. */
 export function orcadLockRecoveryPrefix(lockPath: string, inspectedContents: string): string {
   const key = createHash('sha256').update(inspectedContents).digest('hex')
   return `${lockPath}${RECOVERY_DIR_SUFFIX}-${key.slice(0, 16)}-`
@@ -165,10 +143,7 @@ function recoveryGenerations(prefix: string): number[] {
   }
 }
 
-/**
- * Staged with its owner, then renamed into place: a recovery lock never exists without a complete
- * owner, and a rename onto one that does (a non-empty directory) fails instead of replacing it.
- */
+/** Stage complete owner records; rename cannot replace an existing nonempty lock directory. */
 function takeRecoveryLock(dir: string, ownerRecord: string): boolean {
   const staged = `${dir}.staged-${process.pid}-${randomUUID()}`
   try {
@@ -185,13 +160,13 @@ function takeRecoveryLock(dir: string, ownerRecord: string): boolean {
     renameSync(staged, dir)
     return true
   } catch {
-    // Whatever holds the name, it was not created by this attempt; only our staging is removed.
+    // Remove only this attempt’s staging, never an entry another attempt owns.
     rmSync(staged, { recursive: true, force: true })
     return false
   }
 }
 
-/** No-clobber restore: a third contender's newer record at the canonical path stays authoritative. */
+/** Restore without replacing newer authoritative contenders. */
 function restoreDisplacedLock(
   claimPath: string,
   lockPath: string,
@@ -208,12 +183,12 @@ function restoreDisplacedLock(
       writeFileSync(lockPath, claimedContents, { flag: 'wx', mode: 0o600 })
       unlinkSync(claimPath)
     } catch {
-      // A newer contender won, or restoration is unavailable; fail closed.
+      // New contenders or failed restoration require a closed result.
     }
   }
 }
 
-/** An unreadable owner fails closed: it proves nothing about whether its reclaimer exited. */
+/** Unreadable owners cannot prove the reclaimer exited. */
 function readRecoveryOwner(
   dir: string
 ): { state: 'absent' } | { state: 'present'; record: string } | { state: 'unreadable' } {
@@ -231,16 +206,14 @@ function writeQuietly(path: string): void {
   try {
     writeFileSync(path, '', { flag: 'wx', mode: 0o600 })
   } catch {
-    // Unwritable: the owner record still releases it once this process exits.
+    // If unwritable, the owner’s process exit still releases recovery.
   }
 }
 
 export function unlinkQuietly(path: string): void {
   try {
     unlinkSync(path)
-  } catch {
-    // Already gone, or inert under its unique name.
-  }
+  } catch {}
 }
 
 export function readBoundedLockFile(path: string): string | null {

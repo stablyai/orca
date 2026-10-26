@@ -1,29 +1,5 @@
 // @vitest-environment happy-dom
-// #11170: a ~/Library/KeyBindings/DefaultKeyBinding.dict remap is honoured everywhere on macOS
-// except the terminal, which sends the raw layout character to the PTY.
-//
-// The OS applies the substitution inside the AppKit text input path, so it exists only on
-// keypress.charCode and on the input event's `data` — keydown.key still carries the layout
-// character. Nothing here needs to parse the dict: Chromium's renderer is already the text
-// system's client and has applied it by the time `input` fires. The bug was that the keydown
-// manufactured a byte and preventDefault'd, tearing the text pipeline down before the
-// substitution could arrive.
-//
-// This pins the behaviour across a design change rather than introducing it. The reported build
-// sent the raw character; a later punctuation table happened to list that one character, which
-// closed the issue by enumeration. Replacing the table with a structural claim removes the entry,
-// so without a test the fix could regress silently on a change that never mentions #11170.
-// Both designs fail this file when their respective claim is removed.
-//
-// The harness supplies no input-source classification, which models a source the older design did
-// not recognise — including the window before its async probe resolves. That is the condition
-// under which the second layout arm separates the two designs: with the source recognised the
-// older one claimed all ASCII punctuation and covered it too, so the gap was real but conditional.
-// The structural claim has no such condition, which is the point.
-//
-// Replays the recorded event shape from the issue rather than an authored one, and pairs it with
-// the same physical key carrying no substitution — a fix that rewrote the Backquote position
-// unconditionally would pass the positive case and be badly wrong.
+/** DefaultKeyBinding.dict substitutions arrive in keypress/input, while keydown retains the layout character (#11170). Replay recorded substitutions and same-key negatives without source classification so claims cannot depend on punctuation lists or async source probes. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import trace from './__fixtures__/macos-keybinding-dict-backquote-trace.json'
@@ -116,8 +92,7 @@ function replay(names: string[]): string {
   for (const name of names) {
     for (const recorded of caseNamed(name).dom) {
       const event = buildEvent(recorded)
-      // Why: the recorded keydown is what a real browser only emits the rest of the sequence
-      // after, so a claim that preventDefaults must truncate the replay exactly as Chromium would.
+      // Truncate replay after preventDefault as Chromium does; later events cannot follow a cancelled keydown.
       if (recorded.type !== 'keydown' && recorded.type !== 'keyup') {
         textarea.value = recorded.value ?? ''
         textarea.setSelectionRange(textarea.value.length, textarea.value.length)
@@ -148,15 +123,12 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
     expect(replay(['remapped'])).toBe(caseNamed('remapped').expectedPty)
   })
 
-  // Same physical key, same dict entry, on the Korean layout that puts an asterisk there instead.
-  // This is the arm that discriminates without a mutation: the older design honoured the
-  // substitution by listing characters, and listed the reported one but not this one.
+  // The Korean-layout asterisk exercises the same substitution without relying on the old punctuation list.
   it('sends the remapped character on the other Korean layout too', () => {
     const remapped = caseNamed('remapped-other-korean-layout')
     expect(replay([remapped.name])).toBe(remapped.expectedPty)
   })
 
-  // The paired negative. Same physical key, same keydown.key, no substitution in play.
   it('still sends the layout character when nothing remaps the key', () => {
     expect(replay(['no-remap-korean'])).toBe(caseNamed('no-remap-korean').expectedPty)
   })
@@ -169,8 +141,7 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
     expect(replay(['remapped', 'remapped-neighbour-key'])).toBe('`a')
   })
 
-  // The dict's "~₩" rule (Option+the key -> the layout character) is out of scope: Option chords
-  // are deliberately excluded from the claim, and the option-as-alt setting consumes Option first.
+  // Option chords stay outside this claim; option-as-alt consumes them first.
   it('does not claim the Option chord the dict also binds', () => {
     const { emitted, terminal, forwarder } = open()
     const textarea = terminal.textarea!

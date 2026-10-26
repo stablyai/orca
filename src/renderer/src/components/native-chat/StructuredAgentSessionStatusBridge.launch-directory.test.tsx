@@ -817,7 +817,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
   })
 
   it('never records a path published by a remote runtime', async () => {
-    // The tab records the paired host that owns the chat.
     mocks.store?.setState({
       unifiedTabsByWorktree: {
         [FLOATING_TERMINAL_WORKTREE_ID]: [
@@ -830,7 +829,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
 
     emit({ type: 'snapshot', sessions: [summary({ launchDirectory: '/srv/remote/floating' })] })
 
-    // The summary itself landed; only its path was withheld.
     expect(Object.keys(mocks.store?.getState().agentStatusByPaneKey ?? {})).toHaveLength(1)
     expect(pins()).toEqual({})
   })

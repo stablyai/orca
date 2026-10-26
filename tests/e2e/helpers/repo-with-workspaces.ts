@@ -20,10 +20,7 @@ export type RepoWithWorkspaces = {
   ids: string[]
 }
 
-/**
- * A fresh git repo with `count` worktrees, added through main as a user adds a project that already
- * has checkouts. Its worktrees are its own, so a spec never grows the worker's shared repo.
- */
+// Add a fresh repo through main so its requested worktrees never grow the worker’s shared fixture repo.
 export async function addRepoWithWorkspaces(
   page: Page,
   testInfo: TestInfo,
@@ -98,7 +95,6 @@ export async function addRepoWithWorkspaces(
   }
 }
 
-/** Writes workspace metadata through main, all at once, and fails unless main lists it. */
 export async function writeWorkspaceMeta(
   page: Page,
   updates: { worktreeId: string; updates: Partial<WorktreeMeta> }[]
@@ -132,7 +128,6 @@ export async function writeWorkspaceMeta(
   )
 }
 
-/** Links each child under its parent through main, as "Set parent workspace" does. */
 export async function linkWorkspaces(
   page: Page,
   links: { childId: string; parentId: string }[]

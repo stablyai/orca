@@ -16,16 +16,13 @@ export type TerminalModes = {
 
 export type TerminalKeyboardAvoidanceMetrics = {
   cursorY: number
-  // Main-buffer TUIs can render footer rows below the caret.
   contentBottomRow: number
   rows: number
   altScreen: boolean
-  // CSS px between drawn rows, fit scale included; absent from older documents and before the
-  // renderer has measured.
+  // Drawn CSS row pitch includes fit scale; older/unmeasured documents omit it.
   rowPitch?: number
 }
 
-/** Every field: a fit-scale change moves only the row pitch, and the lift must hear it. */
 export function sameTerminalKeyboardAvoidanceMetrics(
   a: TerminalKeyboardAvoidanceMetrics,
   b: TerminalKeyboardAvoidanceMetrics
@@ -62,9 +59,7 @@ function toNonNegativeInteger(value: unknown): number {
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
-/** What a terminal-input notification carries besides its bytes. */
 export type TerminalPointerInput = {
-  /** A click the program may answer by moving its cursor to the clicked cell. */
   readonly click: boolean
 }
 
@@ -72,39 +67,31 @@ export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
   onSelectionEvicted?: () => void
-  // A program in the terminal copied text through OSC 52.
   onClipboardWrite?: (text: string) => void
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  // Only a tap's click passes `input`; wheel and drag reports keep the bytes-only call.
   onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
-  // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
-  // WebView-detected URL tap; RN chooses the mobile routing destination.
   onOpenUrl?: (url: string) => void
-  // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
-  // here so the app persists it and keeps Settings + other panes in sync.
+  // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void
-  // xterm laid out a different cell box at the same grid (renderer swap, pixel-ratio change).
   onCellBoxChange?: () => void
 }
 
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
   terminalTheme?: MobileTerminalTheme
-  // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
-  // xterm fontSize alone cannot drive apparent size because fitting cancels it.
+  // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
-  // Why: only a view shown when it mounts builds its terminal before ready (one WebGL context each).
+  // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
 
-/** One init: the grid, the snapshot it replays, and the frame the grid was fitted to. */
 export type TerminalInit = {
   cols: number
   rows: number
@@ -115,25 +102,18 @@ export type TerminalInit = {
 }
 
 export type TerminalWebViewHandle = {
-  // Why: iOS can preserve the native view while discarding its JS/backing-store
-  // state; foreground recovery must wait for the document to answer before replay.
+  // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
   init: (init: TerminalInit) => void
   resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
-  // Why: reflow the local xterm buffer (scrollback included) to a new width
-  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
-  // latest output. No-op on the alternate screen.
+  // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
   reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
-  /** The grid this frame holds at the cell box the document reported; null without one at this text size. */
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void
-  // Why: lets callers await the WebView-side `init` rAF chain (term.open
-  // → renderService population → first paint → the init's cell box) so a
-  // follow-up fit reads that box. Resolves on the next 'ready' notify after
-  // the most recent init.
+  // Await the latest init’s ready notification so follow-up fitting uses its post-layout cell box.
   awaitReady: () => Promise<void>
 }

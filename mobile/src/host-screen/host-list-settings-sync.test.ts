@@ -70,7 +70,6 @@ function screenState(clientRef: ClientRef, applied: boolean[]) {
 
 type Actions = ReturnType<typeof useHostViewSettings>
 
-// One view sync: ui.get and settings.get go out together; `failing` rejects one of them.
 async function syncWith(
   settings: unknown,
   options: {

@@ -1,8 +1,4 @@
-// Why: fish enables and disables DEC mode 2031 around every prompt
-// (`src/tty_handoff.rs`), so a single PTY chunk routinely carries
-// `?2031h ... ?2031l`. Answering the sticky "an h appeared" flag replies to a
-// subscription the shell has already dropped, and the reply lands as literal
-// text at the prompt or in a child's stdin (#9993).
+// fish toggles 2031 around each prompt, often in one chunk. Acting on any subscribe instead of final state sends replies into the shell/child (#9993).
 import { describe, expect, it } from 'vitest'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
@@ -44,10 +40,9 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
   it('reports a subscribe-then-unsubscribe chunk as unsubscribed', () => {
     const scan = scanMode2031Sequences('', FISH_PROMPT_HANDOFF)
 
-    // The sticky flags stay true — both toggles really did occur.
+    // Both toggles occurred, but only finalState says whether the shell is still listening.
     expect(scan.subscribe).toBe(true)
     expect(scan.unsubscribe).toBe(true)
-    // But the shell is NOT listening by the end of the chunk.
     expect(scan.finalState).toBe('unsubscribed')
   })
 
@@ -91,8 +86,7 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
   it('does not answer a subscribe whose withdrawal straddles the chunk boundary', () => {
     const recorded = trackerRecording()
 
-    // Same bytes as FISH_PROMPT_HANDOFF, just cut mid-withdrawal by the kernel.
-    // A reply cannot be recalled, so chunk 1 must hold rather than answer-then-regret.
+    // A kernel split during withdrawal must hold the decision; an already-sent reply cannot be recalled.
     recorded.tracker.handleChunk(`${ESC}[?2031h prompt ${ESC}[?20`)
     recorded.tracker.handleChunk('31l')
 
@@ -138,12 +132,8 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
   })
 })
 
-/**
- * Real chunk boundaries captured from fish 4.7.1 over node-pty
- * (tests/tools/fish-mode2031-repro/capture-fish-mode2031-trace.mjs). One prompt-accept:
- * arm 2031 while painting the prompt, echo the typed line, withdraw 2031, exec the command.
- * Measured gap between chunks 1 and 4 in that trace: 0.57ms — shorter than a renderer IPC hop.
- */
+/** Real fish 4.7.1/node-pty prompt-accept boundaries; capture-fish-mode2031-trace.mjs records arm → paint → echo → withdraw → exec.
+ * Chunks 1–4 span 0.57ms, less than a renderer IPC hop. */
 const FISH_PROMPT_ACCEPT_CHUNKS: readonly string[] = [
   // 1. Prompt setup: capability probes plus the 2031 arm. Ends SUBSCRIBED.
   `${ESC}]0;~/orca${BEL}${ESC}[m${ESC}]11;?${ESC}\\${ESC}[6n${ESC}[0c${ESC}[?2004h${ESC}[?2031h${ESC}[>4;1m${ESC}=`,
@@ -181,8 +171,7 @@ describe('a fish prompt-accept burst is tracked, never answered (#9993)', () => 
     })
 
     expect(decisions).toEqual(['subscribed', null, null, 'unsubscribed', null])
-    // The subscription is already retired one chunk before the command starts, so a reply
-    // queued on the 'subscribed' decision cannot reach fish — only the child that replaced it.
+    // The shell withdraws before exec; a reply queued at subscribe can reach only its child.
     expect(decisions.indexOf('unsubscribed')).toBeLessThan(FISH_PROMPT_ACCEPT_CHUNKS.length - 1)
   })
 
@@ -200,8 +189,7 @@ describe('a fish prompt-accept burst is tracked, never answered (#9993)', () => 
   it('contains no color-scheme query, so silence is the whole correct answer', () => {
     const burst = FISH_PROMPT_ACCEPT_CHUNKS.join('')
 
-    // Verified over a full real session: fish never sends the protocol's query (`CSI ?996n`).
-    // It only ever subscribes, so there is nothing here that a `CSI ?997;Nn` could be a reply to.
+    // A captured full fish session subscribes but never queries CSI ?996n, so ?997;Nn would be unsolicited.
     expect(burst).toContain(`${ESC}[?2031h`)
     expect(burst).not.toContain('996')
     expect(burst).not.toContain('997')

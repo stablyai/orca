@@ -40,7 +40,7 @@ vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
-// A host the shell has not reached by default: no client, so the screen settles on `waiting`.
+// No shell client initially: the screen must settle on waiting.
 vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
@@ -56,7 +56,7 @@ afterEach(() => {
   transport.connection = { client: null, state: 'reconnecting' }
 })
 
-// One object for every render, so a re-render changes nothing the preview keys on but the client.
+// Keep identity stable so only the client changes across renders.
 const ROUTE = {
   ok: true,
   params: { hostId: 'host-a', worktreeId: 'wt-1', relativePath: 'README.md' }

@@ -5,6 +5,14 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { AGENT_SESSION_METHODS } from './rpc/methods/agent-session'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../shared/project-runtime-repair-message'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProject,
+  storeProjectGroup,
+  storeRepo,
+  type PartialRuntimeStore
+} from './runtime-store-partial-fixture'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: async () => ({
@@ -18,25 +26,29 @@ vi.mock('../opencode/opencode-model-availability', () => ({
   resolveOpenCodeDirectModelExecutable: async () => 'opencode'
 }))
 
-const repo = { id: 'r', path: 'C:\\repo', kind: 'git', projectGroupId: 'g' }
-const share = { id: 's', path: '\\\\wsl$\\Ubuntu\\s', kind: 'git', projectGroupId: 'g' }
-const folder = { id: 'f', projectGroupId: 'g', folderPath: 'C:\\work' }
-const wsl = { kind: 'wsl', distro: 'Ubuntu' }
-const store = {
-  // A WSL Terminal shell must not move the model check into WSL, as it did once.
+const repo = storeRepo({ id: 'r', path: 'C:\\repo', kind: 'git', projectGroupId: 'g' })
+const share = storeRepo({ id: 's', path: '\\\\wsl$\\Ubuntu\\s', kind: 'git', projectGroupId: 'g' })
+const folder = storeFolderWorkspace({ id: 'f', projectGroupId: 'g', folderPath: 'C:\\work' })
+const wsl = { kind: 'wsl', distro: 'Ubuntu' } as const
+const store: PartialRuntimeStore = {
+  // A WSL terminal setting must not redirect the Windows model check.
   getSettings: () => ({
     disabledTuiAgents: [],
     terminalWindowsShell: 'wsl.exe',
     terminalWindowsWslDistro: 'Ubuntu'
   }),
   getProjects: () => [
-    { id: 'p', sourceRepoIds: ['r'], localWindowsRuntimePreference: wsl },
-    { id: 'q', sourceRepoIds: ['s'], localWindowsRuntimePreference: { kind: 'windows-host' } }
+    storeProject({ id: 'p', sourceRepoIds: ['r'], localWindowsRuntimePreference: wsl }),
+    storeProject({
+      id: 'q',
+      sourceRepoIds: ['s'],
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
   ],
   getRepo: (id: string) => [repo, share].find((entry) => entry.id === id),
   getRepos: () => [repo],
   getFolderWorkspaces: () => [folder],
-  getProjectGroups: () => [{ id: 'g' }]
+  getProjectGroups: () => [storeProjectGroup({ id: 'g' })]
 }
 const scope = { id: 'f', path: 'C:\\work', connectionId: null, repo: null, folderWorkspace: folder }
 const clientOperationId = `${Date.now()}-0123456789abcdef0123456789abcdef`
@@ -47,14 +59,13 @@ const setPlatform = (value: string) =>
   Object.defineProperty(process, 'platform', { configurable: true, value })
 beforeEach(() => {
   setPlatform('win32')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only the members above.
-  runtime = new OrcaRuntimeService(store as never)
+  runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: async () => scope,
     executionOwnerSupportsAgentSessionOperation: async () => true
   })
   const launches: (string | undefined)[] = []
-  // createTerminal up to its spawn: the runtime the host planner gave each launch.
+  // Capture host-planned launch scope before spawning.
   vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector = '', opts = {}) => {
     const launchScope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
     const planned = await runtime.resolveAgentTerminalCreateOptions(launchScope, opts)
@@ -69,8 +80,7 @@ afterEach(() => {
   _resetWslCachesForTests()
 })
 
-// TEMPORARY until STA-10251: in a folder whose repo runs in WSL, OpenCode keeps main's Windows
-// runtime at every entry point (create, resume, the worker's model check), so they agree.
+// TEMPORARY until STA-10251: WSL-folder OpenCode create/resume/model checks all retain main's Windows runtime.
 it('starts, resumes and checks models for OpenCode in a WSL folder on Windows', async () => {
   await runtime.createAgentSession({ clientOperationId, worktree: 'id:f', agent: 'opencode' })
   const providerSession = { key: 'session_id', id: 'ses_1' } as const
@@ -81,7 +91,6 @@ it('starts, resumes and checks models for OpenCode in a WSL folder on Windows', 
   expect(await runtime.probeOrchestrationOpenCodeModelLaunchSupport(target)).toBe(true)
 })
 
-// W5d: a folder whose repo's distro is gone is refused before any spawn, in the settings' words.
 it('refuses an agent whose WSL distro is gone, under its own code', async () => {
   _setWslCachesForTests({ available: true, distros: ['Debian'] })
   const params = { clientOperationId, worktree: 'id:f', agent: 'codex' }
@@ -94,8 +103,7 @@ it('refuses an agent whose WSL distro is gone, under its own code', async () => 
   expect(response).toMatchObject({ error: { code: PROJECT_RUNTIME_REPAIR_REQUIRED_CODE, message } })
 })
 
-// OpenCode runs in WSL in a `\\wsl$` repo, where Orca can't verify a model yet, so picking one is
-// refused rather than checked on Windows.
+// WSL-share OpenCode runs inside WSL; refuse model selection until that host can verify it.
 it('refuses an OpenCode model in a WSL-share repo set to Windows host', async () => {
   const shareScope = { ...scope, id: 's', path: share.path, repo: share, folderWorkspace: null }
   Object.assign(runtime, { resolveTerminalWorkspaceLaunchScope: async () => shareScope })

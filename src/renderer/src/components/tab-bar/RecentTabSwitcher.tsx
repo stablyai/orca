@@ -116,9 +116,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     const onKeyDown = (event: KeyboardEvent): void => {
       const store = useAppStore.getState()
       if (matchesRecentTabSwitcherChord(event, getShortcutPlatform(), store.keybindings)) {
-        // Why: Electron's native before-input-event path is authoritative, but
-        // CDP/test-dispatched keys can reach the renderer directly. Respect the
-        // keybinding registry here too so tests do not bypass user customization.
+        // Respect configured bindings for renderer-dispatched keys that bypass Electron’s native input path.
         consumeKeyboardEvent(event)
         openOrAdvance(event.shiftKey ? -1 : 1)
         return

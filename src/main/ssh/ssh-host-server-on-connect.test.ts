@@ -13,7 +13,7 @@ import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
 import { unservedServerStatus } from './ssh-host-unserved-status'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
-// The retry decision is read under the host's lifecycle lock, so the stub's last call answers it.
+// Read the final callback because retry eligibility is decided under lifecycle lock.
 const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
   vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 
@@ -202,7 +202,7 @@ describe('which server an SSH host runs on connect', () => {
       reason: 'orcad_unavailable'
     })
     expect(preflight.recordUnavailable).toHaveBeenCalledWith(target, 'native_preflight')
-    // The conversion fenced the host first; that fence must go before the relay serves it.
+    // Release failed-conversion fences before direct source can serve again.
     expect(preflight.abandonConversion).toHaveBeenCalledWith(target)
 
     const remembered = deps({ recordedUnavailable: () => 'unsupported_host' })
@@ -501,7 +501,7 @@ describe('which server an SSH host runs on connect', () => {
           order.push('start')
           return { state: 'started' as const, boundPort: null }
         }),
-        // The restarted server's fresh daemon answers zero sessions, so the update goes ahead.
+        // Wake first so the restarted daemon can supply authoritative idle census.
         autoUpdate: vi.fn(async (_id, options) => {
           order.push('update')
           options.onUpdating()

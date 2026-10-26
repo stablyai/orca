@@ -50,7 +50,7 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCancel?: () => void
 }
 
-// Switch point: this host's window lists main's inputs; a paired web client builds its own view.
+// Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
 const useSidebarListModel =
   ORCA_SIDEBAR_INPUTS_IS_MAIN && !isPairedWebClientWindow()
     ? useMainSidebarListModel
@@ -65,7 +65,6 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
 }: WorktreeListProps) {
-  // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
@@ -159,7 +158,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
-    // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
+    // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
   }, [])
 
@@ -226,7 +225,7 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
-  // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
+  // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
   }
@@ -252,13 +251,13 @@ const WorktreeList = React.memo(function WorktreeList({
         onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       />
       <VirtualizedWorktreeViewport
-        // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
+        // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        // Why: full-page nav views aren't scoped to a worktree, so no sidebar card should look selected.
+        // Full-page Tasks/Activity views have no selected worktree card.
         activeWorktreeId={
           activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
         }

@@ -67,7 +67,7 @@ export function useNativeChatPickerState(args: {
   isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   sessionSkills?: readonly NativeChatSessionSkill[]
-  /** Each opening of the `/` or `$` menu, so a resting chat's list can be brought up to date. */
+  /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
@@ -141,9 +141,7 @@ export function useNativeChatPickerState(args: {
   )
 
   useEffect(() => {
-    // Why: suppression is per-trigger-occurrence AND per-context. The composer
-    // is reused across pane/agent switches, so a stale dismissal must clear or
-    // the picker stays closed for an in-progress token when that context returns.
+    // Reset dismissal/origin on context changes so a reused composer cannot retain a prior pane’s suppression.
     skillOriginRef.current = null
     setDismissed(null)
   }, [dismissalContext])
@@ -220,9 +218,7 @@ export function useNativeChatPickerState(args: {
       if (!dismissed || dismissed.context !== dismissalContext) {
         return
       }
-      // Why: a single edit that replaces the dismissed token wholesale (e.g.
-      // select-all + paste) is a new trigger occurrence even though a trigger
-      // character lands back on the same draft position.
+      // Whole-token replacement starts a new trigger even at the same position (select-all/paste).
       if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
         setDismissed(null)
         return

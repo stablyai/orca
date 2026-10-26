@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -48,28 +49,7 @@ const ITEMS: AgentJournalRenderItem[] = [
 ]
 
 function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: 3 },
-        nextCursor: { epoch: 'epoch-1', sequence: 4 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 3 },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return snapshotEvent({ items })
 }
 
 describe('useMobileStructuredAgentSession transcript', () => {
@@ -132,7 +112,6 @@ describe('useMobileStructuredAgentSession transcript', () => {
         ]
       })
     )
-    // The turn bars place rows by the same items, so the notice joins the cut turn.
     expect(rendered.hook?.turnJournal.items.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
 

@@ -47,12 +47,7 @@ type RunSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
-  /**
-   * Fires as soon as the agent tab/session is created, before deferred
-   * submit-after-ready prompt delivery finishes. Reversible bookkeeping only —
-   * irreversible side effects (posting host replies, resolving threads) belong in
-   * onLaunched, which only fires once the prompt actually reached the agent.
-   */
+  /** Tab creation permits reversible bookkeeping; irreversible host writes belong in onLaunched after prompt delivery. */
   onLaunchAccepted?: () => void
   /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
   onLaunchAborted?: () => void
@@ -98,8 +93,7 @@ export async function runSourceControlAgentActionStart({
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
-  // Why: `undefined` is what makes the launch fall back to the global Agents arguments;
-  // an empty string would beat that fallback and silently suppress them.
+  // Undefined selects global agent arguments; empty string would suppress that fallback.
   const launchAgentArgs = agentArgsApply ? agentArgs : undefined
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
@@ -133,8 +127,7 @@ export async function runSourceControlAgentActionStart({
     if (result?.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }
-    // Why: lets callers park launch-scoped state before submit-after-ready finishes
-    // (can take tens of seconds); host mutations still wait for delivery below.
+    // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.
     if (launched) {
       notifyLaunchAccepted()
     }
@@ -184,8 +177,7 @@ export async function runSourceControlAgentActionStart({
     try {
       await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
     } catch (error) {
-      // Why: the prompt already reached the agent; a failed recipe save must not strand the
-      // caller's accepted-launch bookkeeping (neither onLaunched nor onLaunchAborted would fire).
+      // Prompt delivery succeeded; recipe-save failure must not prevent accepted-launch callbacks from settling.
       console.error('onSaveAgentDefault failed', error)
     }
   }

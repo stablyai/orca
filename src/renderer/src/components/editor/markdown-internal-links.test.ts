@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveMarkdownLinkTarget } from './markdown-internal-links'
 
-// Tests run under happy-dom or similar; navigator.userAgent reflects the
-// test runner. The isDescendantOf containment check is therefore
-// case-insensitive on macOS/Windows runners and case-sensitive on Linux.
-// Most tests avoid case-differences so they pass on either host.
+// Path containment follows the runner platform’s case rules; fixtures avoid case differences for portability.
 
 const SOURCE = '/repo/docs/note.md'
 const ROOT = '/repo'

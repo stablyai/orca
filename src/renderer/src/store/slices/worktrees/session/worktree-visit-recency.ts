@@ -19,8 +19,7 @@ export function createMarkWorktreeVisited(
   _get: WorktreeSliceGet
 ): WorktreeSlice['markWorktreeVisited'] {
   return (worktreeId, visitedAt, executionHostId) => {
-    // Why: Cmd+J empty-query ordering needs a focus-recency signal distinct from lastActivityAt (background PTY/activity).
-    // Monotonic: CLI/IPC activations can race, so older timestamps must not regress. See docs/cmd-j-empty-query-ordering.md.
+    // Cmd+J needs user-focus recency independent of PTY activity; racing CLI/IPC timestamps must not regress (cmd-j-empty-query-ordering.md).
     set((s) => {
       const now = visitedAt ?? Date.now()
       const ownerHostId =
@@ -52,8 +51,7 @@ export function createPruneLastVisitedTimestamps(
 ): WorktreeSlice['pruneLastVisitedTimestamps'] {
   const prune = () => {
     set((s) => {
-      // Why: prune per-repo, not globally — SSH repos aren't hydrated at startup, so a global prune would wipe SSH focus-recency.
-      // Only drop for repos with a populated/authoritative list; a missing repoId means not-yet-hydrated (defer).
+      // Prune only hydrated repo entries; global pruning would erase disconnected SSH recency before its rows load.
       const validIdsByRepo = new Map<string, Set<string>>()
       const validWorktreeIds = new Set<string>()
       const validVisitKeys = new Set<string>()
@@ -103,23 +101,13 @@ export function createPruneLastVisitedTimestamps(
       if (changed) {
         patch.lastVisitedAtByWorktreeId = next
       }
-      // Why: the persisted active-worktree pointer is a `${repoId}::${path}` id
-      // that nothing else reconciles here. The main-process Store clears a stale
-      // pointer when a repo is removed (removeWorkspaceSessionOwner nulls
-      // activeWorktreeId), but the web client keeps it in localStorage and gets
-      // no such load-time GC — so a pointer to a worktree the server no longer
-      // reports lingers and can surface a phantom/duplicate workspace. Clear it
-      // once its repo is hydrated and the worktree is confirmed gone (defer while
-      // the repo is unhydrated, mirroring the timestamp rule above).
+      // Web localStorage lacks main’s stale-pointer GC; clear active worktrees only after their repo proves them gone or phantom workspaces survive.
       const activeId = s.activeWorktreeId
       if (activeId) {
         const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
         if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
           patch.activeWorktreeId = null
-          // Leaving the derived workspace key behind would keep the phantom workspace selected.
-          // Only the stale worktree's own key is dropped (same equality check as the rename path),
-          // so a folder key or a key pointing at another live worktree survives. The bare-id form
-          // predates the `worktree:` prefix and is cleared too, matching the purge path.
+          // Clear only this stale worktree’s derived/legacy key; folder and other live keys must survive.
           if (
             s.activeWorkspaceKey === worktreeWorkspaceKey(activeId) ||
             s.activeWorkspaceKey === activeId

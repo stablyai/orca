@@ -93,6 +93,12 @@ export function RemoteServerUpdateStatus({
 }
 
 export function getRemoteServerManualUpdateHelp(entry: RemoteServerUpdateEntry): string {
+  if (entry.managedOverSsh) {
+    return translate(
+      'auto.components.settings.RemoteServerUpdateStatus.managedOverSshHelp',
+      'This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers.'
+    )
+  }
   if (entry.support?.reason === 'manual-service-update-required') {
     return translate(
       'auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp',

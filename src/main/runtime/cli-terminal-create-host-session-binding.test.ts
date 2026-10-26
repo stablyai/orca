@@ -1,6 +1,4 @@
-/** A host-initiated create has no renderer session writer, so only its own
- *  durable binding and runtime ownership keep graph sync from pruning the tab
- *  out from under a live agent — including when a window is attached. */
+/** Host creates need durable binding/runtime ownership to survive graph sync without a renderer writer. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 

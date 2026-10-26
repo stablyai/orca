@@ -4,10 +4,7 @@ import { useAppStore } from '@/store'
 
 const WORKSPACE_BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
 
-// Why: the board's Escape listener is capture-phase on document, so it runs
-// before React's handlers and a text field inside the board cannot stop it.
-// Board fields own Escape and close the board themselves when they have
-// nothing left to cancel.
+// Document capture precedes React; let board text fields own Escape before dismissing the panel.
 function isWorkspaceBoardEditableTarget(target: EventTarget | null): boolean {
   return (
     isEditableTarget(target) &&
@@ -62,8 +59,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     }
     workspaceBoardOpenRef.current = true
     workspaceBoardDragPreviewOpenRef.current = false
-    // Why: opening the board is the user action; recording here avoids a
-    // post-render bookkeeping Effect in the drawer.
+    // Record the opening action here rather than in a post-render drawer effect.
     useAppStore.getState().recordFeatureInteraction('workspace-board')
     setWorkspaceBoardOpen(true)
     setWorkspaceBoardDragPreviewOpen(false)
@@ -142,8 +138,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
       if (isWorkspaceBoardEditableTarget(event.target)) {
         return
       }
-      // Why: Escape should dismiss interactive nested overlays before this
-      // companion panel, but non-interactive tooltips should not trap it.
+      // Dismiss interactive nested overlays first; tooltips must not trap Escape.
       if (document.querySelector(WORKSPACE_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR)) {
         return
       }
@@ -151,8 +146,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
       closeWorkspaceBoard()
     }
 
-    // Why: the workspace board is a non-modal companion panel, so focus may
-    // be outside the sheet when Escape should still dismiss it.
+    // The board is non-modal, so Escape can dismiss it while focus is outside the sheet.
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [closeWorkspaceBoard, workspaceBoardMenuOpen, workspaceBoardOpen])

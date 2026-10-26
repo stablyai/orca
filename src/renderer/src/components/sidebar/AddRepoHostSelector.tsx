@@ -30,7 +30,7 @@ type AddRepoHostSelectorProps = {
 }
 
 function getHostStatusDetail(host: SidebarHostOption): string {
-  // Why only the detail: "Disconnected" would read as a failure, not a switched-off feature.
+  // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
     return host.detail
   }
@@ -219,7 +219,6 @@ export function AddRepoHostSelector({
                 const canConnectHost = canConnectAddRepoHost(host)
                 const canTurnOn =
                   host.wslUnavailable === 'turned-off' && onOpenWslHostsSetting !== undefined
-                // Why one flag: either action keeps the otherwise unselectable row interactive.
                 const canConnect = canConnectHost || canTurnOn
                 const isConnecting = host.health === 'connecting'
                 return (

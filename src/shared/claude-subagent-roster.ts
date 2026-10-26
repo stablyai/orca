@@ -1,54 +1,25 @@
 import type { AgentSubagentSnapshot } from './agent-status-types'
 import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
-/** Mirrors the wire-normalization id cap in agent-status-types. Enforced at
- *  upsert so an over-long id can't gate the pane 'working' while being
- *  invisible in the emitted snapshots (which drop such ids). */
+/** Match the wire ID cap at upsert so an invisible oversized child cannot keep the pane working. */
 const CLAUDE_SUBAGENT_ID_MAX_LENGTH = 64
 
-/** Live subagents/teammates tracked for one Claude pane, keyed by the
- *  provider-assigned `agent_id` from SubagentStart/SubagentStop payloads.
- *  One-shot children (hyphen-free ids) are tracked only while working — their
- *  SubagentStop means finished and removes the row. Teammate-shaped ids are
- *  turn-based on claude 2.1.21x (`in_process_teammate`): SubagentStop /
- *  TeammateIdle fire at every TURN end while the teammate stays alive and
- *  resumable, so those rows flip to 'idle' instead of leaving; a later
- *  SubagentStart flips them back to working. Idle rows never gate the pane
- *  'working' (the #8825 idle-squat rule), and only TeammateIdle-confirmed
- *  ones survive a lead-Stop fold — see foldClaudeBackgroundTasksIntoRoster. */
+/** Track provider lifecycle IDs: one-shots leave on stop; Claude 2.1.21x teammates idle between resumable turns. Idle never gates work; only TeammateIdle-confirmed idle rows survive lead-Stop folds (#8825). */
 export type ClaudeSubagentRoster = Map<string, TrackedClaudeSubagent>
 
 export type TrackedClaudeSubagent = {
   agentType?: string
   description?: string
   startedAt: number
-  /** 'idle' = teammate between mailbox turns: alive/resumable, row stays
-   *  visible but must not gate the pane 'working'. */
+  /** Idle teammates remain visible/resumable without gating pane work. */
   state: 'working' | 'idle'
-  /** A TeammateIdle matched this id by name — proof it is a persistent
-   *  in-process teammate, not a workflow lane that merely reuses the
-   *  `a<name>-<hex>` id shape. Never cleared: identity can't change mid-life.
-   *  Unconfirmed idle rows are reaped at the next complete lead-Stop fold so
-   *  finished lanes can't rebuild the pre-#8825 idle pile. */
+  /** TeammateIdle confirms persistent identity for life. Reap unconfirmed idle workflow lanes at the next complete inventory to prevent #8825 idle piles. */
   confirmedTeammate?: true
-  /** The id came from a persisted snapshot or background_tasks, not live
-   *  lifecycle events, so it may be a phantom whose SubagentStop was never
-   *  observed (Orca restart). A present complete task list omitting it
-   *  removes it even when teammate-shaped, so it can't gate the pane
-   *  'working' forever. Cleared once live activity re-tracks the id. */
+  /** Snapshot/inventory rows lack live lifecycle proof; complete inventories may reap them even with teammate-shaped IDs. Live activity clears this. */
   backgroundTasksAuthoritative?: boolean
-  /** The row was rebuilt from a persisted snapshot at restore and no live event
-   *  has confirmed it since, so the only thing backing it is a claim written by
-   *  an agent process that may no longer exist. Cleared by any live activity on
-   *  the id. Lets a liveness check reap it when that process is gone — the
-   *  inventory reap alone needs the parent to speak, and an idle parent never
-   *  does. */
+  /** No live event confirms this restored claim. Liveness may reap it while an idle parent emits no inventory; any child activity clears this. */
   restoredFromSnapshot?: boolean
-  /** A subagent-typed background task listed this lifecycle id id-exact
-   *  (workflow/named lanes) — proof the task list tracks this id, so a later
-   *  complete list omitting it means finished/killed even though the id is
-   *  teammate-shaped. Never cleared: the listing mode of an id can't change
-   *  mid-life. */
+  /** An id-exact subagent task proves listing mode for life; later complete omission means finished/killed even with a teammate-shaped ID. */
   listedAsSubagentTask?: true
   /** The `description` of the lead's Agent call that spawned this teammate. Claude lists the
    *  teammate's `background_tasks` entry under that same description (its id is unrelated), so a
@@ -56,9 +27,7 @@ export type TrackedClaudeSubagent = {
   teammateTaskDescription?: string
 }
 
-/** Whether a hook ends one child's turn. An API error (e.g. a 429) skips the
- *  child's SubagentStop and TeammateIdle; Claude sends only a StopFailure
- *  carrying the child's `agent_id` (captured live on 2.1.280). */
+/** Claude 2.1.280 API errors can end children with only StopFailure(agent_id), skipping SubagentStop/TeammateIdle. */
 export function isClaudeChildTurnEndEvent(
   eventName: unknown,
   agentId: string | undefined
@@ -66,9 +35,7 @@ export function isClaudeChildTurnEndEvent(
   return eventName === 'SubagentStop' || (eventName === 'StopFailure' && agentId !== undefined)
 }
 
-/** Agent-team/named-agent lifecycle ids are `a<name>-<hex>` while one-shot
- *  ids are hyphen-free (`a<hex>`). Such ids are never listed as task ids in
- *  `background_tasks`, so omission from the list proves nothing for them. */
+/** Named teammate IDs use a<name>-<hex>, one-shots a<hex>. Teammate task IDs differ, so list omission alone proves nothing. */
 export function isClaudeTeammateLifecycleId(id: string): boolean {
   const separator = id.lastIndexOf('-')
   return separator > 1 && id.startsWith('a') && /^[0-9a-f]+$/i.test(id.slice(separator + 1))
@@ -88,12 +55,9 @@ export function upsertWorkingClaudeSubagent(
     existing.state = 'working'
     existing.agentType = fields.agentType ?? existing.agentType
     existing.description = fields.description ?? existing.description
-    // Why: live activity proves the lifecycle stream owns this id again;
-    // background_tasks omission must stop reaping it (teammate-shaped ids
-    // never appear there). The fold re-tags its own recreations after this.
+    // Live activity restores lifecycle ownership; teammate-shaped IDs may be absent from task inventories. Folds re-tag their own recreations.
     existing.backgroundTasksAuthoritative = undefined
-    // Why: the live event confirms the restored row, so the manual-compact reap and
-    // runtime-working checks must treat it as live child work again.
+    // Live confirmation makes restored rows count as current child work again.
     existing.restoredFromSnapshot = undefined
     return
   }
@@ -105,11 +69,7 @@ export function upsertWorkingClaudeSubagent(
   })
 }
 
-/** SubagentStop. A one-shot child is finished — the row leaves immediately.
- *  A teammate-shaped id is only ending a TURN on claude 2.1.21x (the teammate
- *  stays alive awaiting mail), so its row flips to idle instead — unless a
- *  fold proved the id is really a workflow lane (listedAsSubagentTask), whose
- *  stop is a true finish. */
+/** Stop removes one-shots and proven workflow lanes; teammate-shaped Claude 2.1.21x IDs instead idle between turns. */
 export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): void {
   const tracked = roster.get(id)
   if (!tracked) {
@@ -124,27 +84,7 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
   tracked.state = 'idle'
 }
 
-/** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.
- *
- *  The list is authoritative for subagent-typed entries only: a running
- *  one-shot/workflow lane is always listed under its lifecycle `agent_id`,
- *  foreground children cannot span a lead Stop, and finished tasks drop from
- *  the list. Teammate-typed entries prove nothing per-agent (unrelated ids,
- *  permanently "running") — but their PRESENCE proves the session has
- *  named-agent/teammate machinery, and their total absence from a complete
- *  inventory proves no teammate-shaped child can still be alive. So:
- *  - an empty list proves nothing is left alive → clear the roster;
- *  - an id-exact subagent-typed match that is running is trusted fully and
- *    tagged listedAsSubagentTask; one reported not running is removed;
- *  - an unmatched RUNNING subagent-typed entry is a one-shot this listener
- *    never saw start (Orca/relay restart mid-run) → recreate it;
- *  - an unlisted entry is finished or dead (its SubagentStop was lost) →
- *    remove it — UNLESS it is teammate-shaped, live-tracked, never
- *    subagent-listed, the list still shows teammate-typed tasks, AND it is
- *    working or TeammateIdle-confirmed: that is a named teammate whose id
- *    simply never appears, and removing it would drop the pane's done-gate
- *    (working) or its parked idle row (confirmed) — unless its spawn description is
- *    no longer listed among the teammate-typed tasks, which means it was stopped. */
+/** Complete inventories own id-exact subagent tasks: keep running matches, remove stopped/omitted rows and recreate unseen running tasks. Protect only live, never-subagent-listed teammates that work or have TeammateIdle proof; a provably omitted spawn description overrides that protection. Empty inventories clear all. */
 export function foldClaudeBackgroundTasksIntoRoster(
   roster: ClaudeSubagentRoster,
   tasks: ClaudeBackgroundAgentTask[],
@@ -171,14 +111,12 @@ export function foldClaudeBackgroundTasksIntoRoster(
         roster.delete(task.id)
         continue
       }
-      // Why: a Stop can park the row before the lead inventory confirms the
-      // same workflow lane is still running; the authoritative task wins.
+      // Inventory-confirmed running work overrides a racing stop that parked the row.
       existing.state = 'working'
       existing.agentType = task.agentType ?? existing.agentType
       existing.description = task.description ?? existing.description
       existing.listedAsSubagentTask = true
-      // Why: a live inventory listed the id as running — the restored claim is
-      // now confirmed by the current process, so liveness can't reap it.
+      // Current inventory confirms the restored claim, preventing liveness reaping.
       existing.restoredFromSnapshot = undefined
       continue
     }
@@ -207,9 +145,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
         !tracked.backgroundTasksAuthoritative &&
         tracked.listedAsSubagentTask !== true &&
         isClaudeTeammateLifecycleId(id) &&
-        // Why: an idle row that no TeammateIdle ever confirmed is a finished
-        // workflow lane wearing a teammate-shaped id — reap it here or the
-        // pre-#8825 idle pile rebuilds one lane per lead turn.
+        // Reap unconfirmed idle workflow lanes to prevent rebuilding the #8825 idle pile.
         (tracked.state === 'working' || tracked.confirmedTeammate === true) &&
         !(
           listedTeammateDescriptions !== null &&
@@ -323,22 +259,13 @@ export function claudeRosterHasRestoredSnapshotSubagent(
   return false
 }
 
-/** Whether a lifecycle agent id belongs to the named teammate. Teammate ids
- *  embed the name as `a<name>-<hex>`; requiring a hyphen-free suffix keeps
- *  teammate "rev" from matching "rev-two"'s ids (`arev-two-<hex>`), while a
- *  hyphenated name still matches its own ids exactly. */
+/** Match a<name>-<hex> with a hyphen-free suffix so rev cannot claim rev-two’s IDs while hyphenated names still match. */
 export function claudeTeammateIdMatchesName(id: string, name: string): boolean {
   const prefix = `a${name}-`
   return id.startsWith(prefix) && !id.slice(prefix.length).includes('-')
 }
 
-/** Flip a teammate's rows to idle from a TeammateIdle hook, which is keyed by
- *  name. On claude 2.1.21x idle means "turn over, awaiting mail" — the
- *  teammate is alive and resumable, so the row stays (as idle) and is marked
- *  confirmedTeammate so lead-Stop folds keep it. Named teammates embed their
- *  name in `agent_id` (`a<name>-<hex>`), which is the only unambiguous
- *  mapping. Agent types are independent of teammate names, so a type fallback
- *  could idle unrelated live work when the teammate's start hook was lost. */
+/** TeammateIdle means alive/awaiting mail on Claude 2.1.21x. Match embedded lifecycle names only; agent-type fallback could idle unrelated work after a lost start hook. Confirmation preserves idle rows across lead Stops. */
 export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: string): boolean {
   let changed = false
   for (const [id, tracked] of roster) {
@@ -353,8 +280,7 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
   return changed
 }
 
-/** Only WORKING children gate the pane 'working' — idle teammates are
- *  alive-but-parked and must not pin a finished pane's spinner (#8825). */
+/** Idle teammates are alive but must not pin the finished pane’s spinner (#8825). */
 export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | undefined): boolean {
   if (!roster) {
     return false
@@ -398,8 +324,7 @@ export function claudeRosterToSnapshots(
       description: tracked.description
     })
   }
-  // Why: hook arrival order is not stable across reconciles; sort so equal
-  // rosters serialize identically and downstream equality checks can dedupe.
+  // Sort unstable hook-arrival order so equal rosters serialize identically for downstream dedupe.
   snapshots.sort((a, b) => a.startedAt - b.startedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   return snapshots
 }

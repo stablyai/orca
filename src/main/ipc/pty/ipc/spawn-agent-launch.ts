@@ -81,6 +81,10 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
       ? request.launch
       : undefined
   const params = AgentLaunch.safeParse({ ...launch, paneKey })
+  const suppressStartupUpdatePrompt =
+    request !== null &&
+    'suppressStartupUpdatePrompt' in request &&
+    request.suppressStartupUpdatePrompt === true
   if (
     !runtime ||
     !paneKey ||
@@ -115,7 +119,8 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
     ...(launchPreferences ? { launchPreferences } : {}),
     ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {})
+    ...(intent.cwd ? { cwd: intent.cwd } : {}),
+    ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt } : {})
   })
   ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
   ctx.args = withPlannedLaunch(args, planned)

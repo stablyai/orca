@@ -33,7 +33,7 @@ export function useTaskPageStoreBindings() {
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
-  // Why: bumped after cache eviction to re-run the fetch effect — eviction alone won't, since its deps don't include workItemsCache.
+  // Eviction alone cannot restart fetch because its dependencies exclude workItemsCache.
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)

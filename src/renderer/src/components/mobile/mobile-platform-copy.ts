@@ -1,8 +1,7 @@
 import type { Platform } from './MobileHero'
 import { translate } from '@/i18n/i18n'
 
-// iOS ships two App Store tracks: the public App Store build (slower, ~weekly)
-// and the TestFlight preview build (daily). Android only ships one APK track.
+// iOS offers App Store and TestFlight tracks; Android has a single APK track.
 export type IosChannel = 'stable' | 'preview'
 
 export type InstallCopy = { ctaLabel: string; url: string }

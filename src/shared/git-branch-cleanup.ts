@@ -244,6 +244,20 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
     if (!mergeBase) {
       continue
     }
+    const branchChanges = await readOptionalGitRawStdout(runGit, [
+      'diff',
+      '--name-only',
+      mergeBase,
+      branchRef
+    ])
+    if (!branchChanges) {
+      // An unchanged tree does not prove empty or reverted commits were merged.
+      try {
+        await runGit(['merge-base', '--is-ancestor', branchRef, targetOid])
+      } catch {
+        continue
+      }
+    }
     if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true
     }

@@ -46,7 +46,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 

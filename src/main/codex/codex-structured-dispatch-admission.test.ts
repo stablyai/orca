@@ -129,7 +129,8 @@ describe('codex dispatch admission', () => {
   })
 
   it('rejects only when Codex answered and declined', async () => {
-    const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
+    const { CodexAppServerRequestError } =
+      await import('./app-server/codex-app-server-request-error')
     const codex = fakeCodexAppServer({
       'turn/start': () => {
         throw new CodexAppServerRequestError(

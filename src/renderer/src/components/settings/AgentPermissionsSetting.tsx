@@ -116,7 +116,7 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
             { value: 'yolo', label: agentPermissionModeLabel('yolo') }
           ]}
         />
-        {/* Kept mounted at zero height so it can animate; inert keeps it out of focus and a11y while hidden. */}
+        {/* Keep mounted for animation; inert excludes hidden controls from focus and accessibility. */}
         <div
           inert={!showOthers}
           aria-hidden={!showOthers}
@@ -126,7 +126,7 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
           )}
         >
           <div className="min-h-0 overflow-hidden">
-            {/* Fades in after the row has mostly opened and out before it closes, so it never shows half-clipped. */}
+            {/* Fade after opening and before closing so content never appears half-clipped. */}
             <div
               className={cn(
                 'flex items-center gap-2 whitespace-nowrap pt-1.5 transition-[opacity,translate] ease-out motion-reduce:transition-none',

@@ -1,4 +1,4 @@
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
@@ -57,8 +57,7 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
       ? row.time_updated
       : row.time_created
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-    agent: 'opencode2' as AiVaultAgent,
+    agent: 'opencode2',
     file: {
       path: buildOpenCodeSqliteCandidatePath(dbPath, row.id),
       mtimeMs,

@@ -70,8 +70,7 @@ let failedOperation: string | null = null
 let publishedSessionId: string | null = null
 const createdOperations: string[] = []
 
-/** Mirrors the host: the first attempt's RPC fails, its replay is a durable refusal, and only
- *  a new operation creates the session again. */
+/** Model failed RPC followed by durable refusal replay; only a fresh operation may recreate the session. */
 function hostCreate(envelope: AgentSessionMutationEnvelope): unknown {
   createdOperations.push(envelope.clientOperationId)
   failedOperation ??= envelope.clientOperationId

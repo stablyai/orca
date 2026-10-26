@@ -48,8 +48,7 @@ const KIMI_SESSION = {
 
 describe('AI Vault resume for Kimi', () => {
   it('keeps the cd prefix on the copied resume line', () => {
-    // Why: Kimi sessions are work-dir-scoped — resuming from the worktree root instead of the
-    // session's own cwd fails with "created under a different directory".
+    // Kimi must resume from its recorded cwd or it rejects the session as created elsewhere.
     expect(
       buildAiVaultResumeCopyCommandForWorktree({
         state: makeState(),
@@ -62,8 +61,7 @@ describe('AI Vault resume for Kimi', () => {
   })
 
   it('takes the resumable-agent startup plan so the pane claims the provider session', () => {
-    // Why: the plan branch applies Kimi's default launch args, so a resumed pane starts with the
-    // same permission flag Orca gives a fresh one.
+    // Apply Kimi’s default permission arguments to resumes as to fresh launches.
     expect(
       buildAiVaultResumeStartupForWorktree({
         state: makeState(),

@@ -23,7 +23,7 @@ It shares complete Electron distributions through the repository cache and remov
 `out/electron-dev` bundles, which development rebuilds on demand. It also removes tracked
 `.cache/vite` dependency caches unused for 30 days. With `--tests-stopped`, it also
 removes stamped historical test checkouts and shared seeds older than 30 days; tests regenerate them when needed. It leaves source files,
-worktree registrations and branches intact. The manual command also includes old dependency
+worktree registrations and branches intact. Manual and automatic cleanup also include old dependency
 installs and build output as described below. Reported sizes are
 logical file data; APFS clones and hardlinks mean actual disk savings can be smaller.
 
@@ -47,22 +47,22 @@ anything on SSH hosts. Run maintenance on the execution host when maintaining re
 
 ## Old dependency installs and build output
 
-Old generated files are included in the normal manual command. Stop apps, agents, package
-installs, builds and tests in the repository's sibling worktrees before applying:
+Old generated files are included in the normal manual command and automatic dev cleanup:
 
 ```sh
 pnpm reclaim-space
 pnpm reclaim-space --apply
 ```
 
-This manual pass retains the selected repository worktree, the invoking worktree, and any
+This pass retains the selected repository worktree, the invoking worktree, and any
 `--exclude-worktree` directory. It removes ignored, completely untracked `node_modules`, `out`,
 `dist`, and `build` directories older than 30 days. Recognized package roots are the repository
 root, `mobile`, `native/*`, `src/packages/*`, `cloud/apps/*`, and `cloud/packages/*`, each with a
 regular `package.json`. It does not search arbitrary folders or the user's home directory.
 Use `--generated-min-age-days 14` to shorten retention, or `0` to include recent generated
-directories. Age is the directory modification time, not proof that an install is unused;
-stop sibling work before applying even when its dependencies were installed long ago.
+directories. Age is the directory modification time, not proof that an install is unused.
+Old sibling installs and output can be removed while sibling work is running; reinstall
+dependencies or rebuild in that worktree if needed. Shared pnpm package data is retained.
 
 Preview leaves files in place. Apply rechecks Git tracking, parent paths, directory identity
 and modification time before deleting. Symlinked directories, symlinked package parents, nested
@@ -72,7 +72,7 @@ Source files, local changes, worktree registrations, branches, and shared pnpm s
 intact. Generated files are recreated by installing dependencies or rebuilding in that worktree.
 APFS clones and hardlinks mean directory sizes can greatly overstate the actual space reclaimed.
 
-The automatic worker never runs this pass. Machine-wide caches, Docker images/volumes, downloads and simulator data remain
+Machine-wide caches, Docker images/volumes, downloads and simulator data remain
 outside this repository-scoped command.
 
 ## Keeping installs shared
@@ -82,10 +82,14 @@ without waiting for an Electron upgrade. The manual command migrates older insta
 Read-only Electron package directories are retained and reported as skipped. Cache publication
 or copying failures are also reported as skipped rather than silently omitted.
 
-`pnpm dev` and `pnpm dev-stable-name` start an automatic repository-wide Electron and Vite cleanup worker
+`pnpm dev` and `pnpm dev-stable-name` start an automatic repository-wide cleanup worker for
+Electron, Vite caches, old dependency installs and generated output, and per-worktree dev
+profiles whose worktree was removed (a profile is kept while its app, runtime, or terminal daemon
+is still running),
 in the background after the dev process starts. It never prompts or waits before launching the app.
-The worktree being launched is excluded from Electron sharing, dev bundle removal, and Vite cleanup; active
-sibling apps and recent unfinished builds remain protected by the existing bundle checks.
+The worktree being launched is excluded from every cleanup pass. Existing bundle checks protect
+active sibling Electron bundles and recent unfinished bundles from the bundle-specific pass;
+the generated-directory pass uses its 30-day age cutoff and filesystem/Git protections.
 Background sweep output is suppressed; worker start or exit failures are reported without stopping dev. Set `ORCA_SKIP_DEV_STORAGE_RECLAIM=1` to opt out.
 The worker finishes independently if the dev app exits, and each cleanup operation has a ten-minute limit.
 

@@ -74,8 +74,7 @@ export function mergeHostWebUIState(
   local: PersistedUIState,
   incoming: PairedUiState
 ): PersistedUIState {
-  // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
-  // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
+  // All PersistedUIState members are optional; satisfies Record catches newly omitted keys that Pick would accept.
   const pinned = {
     automationHostFilter: local.automationHostFilter,
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
@@ -163,8 +162,7 @@ export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Parti
   }
 }
 
-/** Browser-saved Arguments from before the stored permission carry their flags; moved so the
- *  stored default can't add a second one. A missing key launched with the shipped default. */
+/** Move legacy browser-saved permission flags so stored defaults cannot duplicate them; missing keys used the shipped default. */
 function migrateBrowserSavedAgentPermission(stored: Partial<GlobalSettings>) {
   if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
     return {}

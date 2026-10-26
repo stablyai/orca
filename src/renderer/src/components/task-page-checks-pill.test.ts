@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getChecksLabel, getChecksPillTone } from './task-page-checks-pill'
 
 describe('task page checks pill', () => {
-  // Why: the pill's tone reads `state`, so a label branch keyed off `neutral > 0` painted a green
-  // pill that said "1 unresolved" for a PR the same summary called successful.
   it('labels a green summary carrying one neutral check as passing', () => {
     const item = {
       checksSummary: {

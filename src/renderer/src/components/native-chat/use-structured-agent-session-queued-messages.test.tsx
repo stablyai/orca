@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// The queued-message controller: which RPC each card action issues, and that a host which cannot
-// edit in place gets no Edit at all, never the old copy-and-delete.
+// Exercise card RPCs; hosts without in-place editing must offer no Edit action.
 
 import { toast } from 'sonner'
 import { act, renderHook, waitFor } from '@testing-library/react'

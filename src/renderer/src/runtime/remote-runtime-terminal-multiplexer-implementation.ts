@@ -108,9 +108,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           TerminalStreamOpcode.ClaimViewport,
           encodeTerminalStreamJson({ cols, rows })
         )
-        // Why: older runtimes ignore the claim opcode but still understand
-        // Resize. Claim first keeps new-runtime ownership precise and leaves a
-        // backwards-compatible resize immediately behind it.
+        // Claim then Resize: new hosts get precise ownership; older hosts ignore Claim but retain compatible resize.
         const resized = this.sendFrame(
           streamId,
           TerminalStreamOpcode.Resize,

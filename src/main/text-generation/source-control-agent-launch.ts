@@ -42,7 +42,7 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const spawnEnv = input.env ?? process.env
   if (process.platform === 'win32' && input.wslDistro) {
-    // Apply assignments in the guest after its login shell, not to the Windows launcher.
+    // Apply command assignments after guest login-shell setup, never to the Windows launcher.
     const assignments = Object.entries(input.commandEnv ?? {}).map(
       ([key, value]) => `${key}=${value}`
     )
@@ -78,8 +78,7 @@ function spawnWindowsAgent(
   const resolvedBinary = resolveCliCommand(input.binary, {
     pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
   })
-  // Why no cmd.exe wrapping here: process-host runs an npm/pnpm `.cmd` shim as
-  // node + script, which keeps a multi-line argv prompt intact (#28768).
+  // #28768: let process-host resolve npm shims as node + script so multiline argv survives.
   return spawnProcess({
     program: resolvedBinary,
     args: input.args,
@@ -88,7 +87,7 @@ function spawnWindowsAgent(
   })
 }
 
-// Under the provider supervisor, an Orca that quits or dies mid-run still stops the agent's group.
+// Supervisor owns the agent group so parent quit/death still stops generation.
 function spawnSupervisedAgent(
   input: SourceControlAgentSpawnInput,
   spawnEnv: NodeJS.ProcessEnv

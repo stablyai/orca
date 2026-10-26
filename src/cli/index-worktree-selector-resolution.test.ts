@@ -41,7 +41,7 @@ vi.mock('child_process', async () => {
   return createChildProcessModuleMock(spawnMock)
 })
 
-import { buildCurrentWorktreeSelector, main, normalizeWorktreeSelector } from './index'
+import { main, normalizeWorktreeSelector } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -53,12 +53,6 @@ describe('orca cli worktree awareness', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
-  })
-
-  it('builds the current worktree selector from cwd', () => {
-    expect(buildCurrentWorktreeSelector('/tmp/repo/feature')).toBe(
-      `path:${path.resolve('/tmp/repo/feature')}`
-    )
   })
 
   it('normalizes active/current worktree selectors to cwd', () => {
@@ -96,7 +90,19 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
       worktree: 'id:repo::/tmp/repo/feature'
     })
-    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(logSpy).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify(
+        okFixture('req_1', {
+          worktree: {
+            id: 'repo::/tmp/repo/feature',
+            branch: 'feature/foo',
+            path: '/tmp/repo/feature'
+          }
+        }),
+        null,
+        2
+      )
+    )
   })
 
   it('resolves the invocation cwd from ORCA_CLI_CWD when no cwd is passed', async () => {
@@ -133,36 +139,47 @@ describe('orca cli worktree awareness', () => {
     'prepares and starts Claude Agent Teams in the current Orca terminal',
     async () => {
       process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
-      queueFixtures(
-        callMock,
-        okFixture('req_agent_teams_prepare', {
-          launch: {
-            env: {
-              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
-              TMUX_PANE: '%1',
-              PATH: '/tmp/orca-shim:/usr/bin'
+      vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
+      vi.stubEnv('TMUX_PANE', '%99')
+      try {
+        queueFixtures(
+          callMock,
+          okFixture('req_agent_teams_prepare', {
+            launch: {
+              env: {
+                CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+                TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+                TMUX_PANE: '%1',
+                PATH: '/tmp/orca-shim:/usr/bin'
+              }
             }
-          }
-        })
-      )
+          })
+        )
 
-      await main(['claude-teams'], '/tmp/repo')
+        await main(['claude-teams'], '/tmp/repo')
 
-      expect(callMock).toHaveBeenCalledWith('agentTeams.prepareLaunch', {
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        prepareAuth: true,
-        env: expect.objectContaining({
-          ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+        expect(callMock).toHaveBeenCalledWith('agentTeams.prepareLaunch', {
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          prepareAuth: true,
+          env: expect.objectContaining({
+            ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+          })
         })
-      })
-      expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
-        stdio: 'inherit',
-        env: expect.objectContaining({
-          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-          TMUX_PANE: '%1'
+        expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+            TMUX_PANE: '%1',
+            PATH: '/tmp/orca-shim:/usr/bin',
+            ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+          })
         })
-      })
+        expect(callMock.mock.calls[0][1].env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+        expect(spawnMock.mock.calls[0][2].env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+      } finally {
+        vi.unstubAllEnvs()
+      }
     }
   )
 

@@ -1,23 +1,12 @@
-/**
- * Where path-hardening outcomes are announced, kept apart from the code that applies them so the
- * retry budget can report degradation and recovery without importing the Windows ACL lane.
- */
+/** Keep reporting independent of ACL application so retry budgets can announce degradation/recovery without the Windows lane. */
 export type SecurePathHardeningReport = {
   targetPath: string
-  /**
-   * `throttled` and `recovered` mark entering and leaving the rate-limited degraded state;
-   * `addon` is the native ACL module failing to load, reported once per process.
-   */
+  /** throttled/recovered bracket rate-limited degradation; addon load failure reports once per process. */
   stage: 'addon' | 'apply' | 'verify' | 'throttled' | 'recovered'
   detail: string
 }
 
-/**
- * Why a hook: hardening runs in the Electron main process, which is GUI-subsystem on Windows and
- * owns no console, so `console.warn` reaches nothing in a packaged build. The main process
- * installs a reporter that routes into the diagnostic trace; the console default keeps dev runs
- * and the CLI readable.
- */
+/** Packaged Windows main has no console; install a trace reporter there. Console fallback serves dev/CLI. */
 const consoleReporter = (entry: SecurePathHardeningReport): void => {
   if (entry.stage === 'recovered') {
     console.info('[secure-path.windows-acl] path hardening recovered', entry)

@@ -26,7 +26,6 @@ describe('getMixedHostContextLabels', () => {
     const counters = { hostIdReads: 0, identityReads: 0 }
 
     expect(getMixedHostContextLabels(items, argsFor(counters))).toBeUndefined()
-    // The label map was built for all 50 and thrown away before; now nothing is built.
     expect(counters.identityReads).toBe(0)
   })
 

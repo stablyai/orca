@@ -190,7 +190,7 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('SessionStart clears cached tool state from a prior session', () => {
+  it('SessionStart clears cached assistant text from a prior session', () => {
     _internals.normalizeHookPayload(
       'codex',
       buildBody({

@@ -38,7 +38,6 @@ afterEach(() => {
   renderer = null
 })
 
-/** The long-press sheet for `row`. */
 async function renderSheet(row: Partial<Worktree>) {
   const controller = {
     actions: {},
@@ -71,7 +70,6 @@ async function renderSheet(row: Partial<Worktree>) {
   }
 }
 
-/** The long-press sheet's action labels for `row`. */
 async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
   const { sheet } = await renderSheet(row)
   return sheet.props.actions.map((action: { label: string }) => action.label)

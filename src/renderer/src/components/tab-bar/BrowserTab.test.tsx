@@ -1,20 +1,34 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isValidElement } from 'react'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type * as StoreModule from '@/store'
 
 const reactHookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
   index: 0
 }))
 
+// Why: the shallow harness has no React dispatcher, so the store hook reads state directly.
+vi.mock('@/store', async () => {
+  const actual = await vi.importActual<typeof StoreModule>('@/store')
+  const store = actual.useAppStore
+  return {
+    ...actual,
+    useAppStore: Object.assign(
+      <T,>(selector: (state: ReturnType<typeof store.getState>) => T): T =>
+        selector(store.getState()),
+      store
+    )
+  }
+})
+
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useEffect: () => {},
-    // Why: this shallow harness calls the component as a plain function (no React
-    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
-    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    // This shallow harness has no React dispatcher; favicon tests do not need persistent refs or event handlers.
     useRef: <T,>(initial: T) => ({ current: initial }),
     useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
@@ -88,6 +102,12 @@ vi.mock('lucide-react', () => ({
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
+  },
+  Volume2: function Volume2(props: Record<string, unknown>) {
+    return { type: 'Volume2', props }
+  },
+  VolumeX: function VolumeX(props: Record<string, unknown>) {
+    return { type: 'VolumeX', props }
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }

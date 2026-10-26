@@ -449,8 +449,7 @@ describe('native skill and command picker', () => {
       '/',
       [{ name: 'dataviz' }, { name: 'ref-oss' }]
     )
-    // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
-    // offered without a scope, and sorts after the one the scan located.
+    // Keep only reported skills; unscanned reports sort after located skills without inventing scope.
     expect(items.map((item) => item.name)).toEqual(['ref-oss', 'dataviz'])
     expect(items[0]).toMatchObject({ kind: 'skill', description: 'On disk' })
     expect(items[1]).toMatchObject({ kind: 'skill', description: null, sources: [] })

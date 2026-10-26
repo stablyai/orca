@@ -37,7 +37,6 @@ vi.mock('./ssh-relay-windows-launch-command', () => ({
 
 import { censusWindowsHostRelays } from './ssh-host-relay-windows-census'
 
-// The census only hands the connection to the mocked exec and bridge.
 const conn: SshConnection = Object.create(null)
 const host = getRemoteHostPlatform('win32-x64')
 const HOME = 'C:\\Users\\dev'

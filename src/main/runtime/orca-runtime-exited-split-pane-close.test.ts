@@ -4,6 +4,7 @@ import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -53,7 +54,6 @@ function splitSession(): WorkspaceSessionState {
   }
 }
 
-/** The phone's tabs for the split, as the window publishes them. */
 function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabsSnapshot {
   const parentLayout = session.terminalLayoutsByTabId.tab!
   const pane = (leafId: string, ptyId: string, isActive: boolean) => ({
@@ -78,17 +78,17 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
   }
 }
 
-/** A runtime over one stored session, with the window's two split panes registered. */
 function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
   let session = splitSession()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit path reads only these store members.
-  const runtime = new OrcaRuntimeService({
-    getRepos: () => [LIVE_REPO],
-    getWorkspaceSession: () => session,
-    setWorkspaceSession: (next: WorkspaceSessionState) => {
-      session = next
-    }
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getRepos: () => [LIVE_REPO],
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      }
+    })
+  )
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -137,8 +137,7 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
-  // Switch-on variants (ruled behaviour): any negative code keeps the pane, as the window does;
-  // an asked-for close removes the pane through its own close command.
+  // Negative exits retain panes; explicit closes remove through the layout command.
   it('keeps a split pane on a -1 after a stop was asked for', async () => {
     const { runtime, session } = splitRuntime()
     runtime.markPtyStopRequested('pty-right')
@@ -179,7 +178,7 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
         retired: (tabs.retiredTerminalSurfaces ?? []).map((surface) => surface.leafId)
       }
     }
-    // Listing mints the panes' handles, which a retirement notice names.
+    // Listing mints the handles named by retirement notices.
     const closed = splitRuntime().runtime
     await phone(closed)
     await closed.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })

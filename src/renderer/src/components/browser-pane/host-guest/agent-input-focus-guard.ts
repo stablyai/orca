@@ -1,9 +1,6 @@
 import { webviewRegistry } from './webview-registry'
 
-// Why: an agent press on a <webview> guest moves Chromium focus into it, and CDP-only agent input
-// needs the guest focused, so either would keep the user's keyboard (#20595). Main brackets that
-// input; the pane gives focus back to the user's element when it ends.
-// See docs/reference/agent-browser-focus-isolation.md.
+// Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard. See docs/reference/agent-browser-focus-isolation.md.
 
 // Why: the input's own focus move can reach this renderer just after the end message.
 const LATE_FOCUS_RECHECK_MS = 50
@@ -11,11 +8,9 @@ const LATE_FOCUS_RECHECK_MS = 50
 const ABANDONED_GUARD_MS = 30_000
 
 const releasesByToken = new Map<string, () => void>()
-// Why: blurring an element mid-composition commits the unfinished text, which a terminal sends to
-// the shell, so agent presses are refused while the user composes (#28700).
+// Refuse agent presses during composition; blurring would commit unfinished text into the terminal shell.
 let composingElement: EventTarget | null = null
-// Why: while any agent input or its recheck is in flight, document.activeElement may be a page
-// an agent focused, not the user's choice; overlapping guards share the element seen first.
+// Overlapping guards share the first user element; later activeElement values may belong to agent-focused guests.
 let inFlight = 0
 let userElement: Element | null = null
 
@@ -38,8 +33,7 @@ export function watchUserComposition(): () => void {
   const onStart = (event: Event): void => {
     composingElement = event.target
   }
-  // Why: some IMEs send a nonempty update without a new compositionstart; Sogou/fcitx send empty
-  // ones while the candidate popup is still open, so those must not end it.
+  // Nonempty updates can begin composition without start; Sogou/fcitx empty updates do not end an open candidate popup.
   const onUpdate = (event: Event): void => {
     if (event instanceof CompositionEvent && event.data !== '') {
       composingElement = event.target
@@ -48,8 +42,7 @@ export function watchUserComposition(): () => void {
   const onEnd = (): void => {
     composingElement = null
   }
-  // Why: typing outside a composition proves none is open, so a missed compositionend cannot stick.
-  // Composition-owned input, like Cangjie's Backspace over one of several radicals, keeps it open.
+  // Non-composing input clears missed endings; composition-owned Cangjie Backspace must keep the guard active.
   const onInput = (event: Event): void => {
     if (!(event instanceof InputEvent && event.isComposing)) {
       composingElement = null

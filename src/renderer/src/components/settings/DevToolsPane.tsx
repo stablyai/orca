@@ -135,9 +135,7 @@ function showDeleteFailureToast(): void {
   })
 }
 
-// Dev-only preview of the first-party Orca Cloud sign-in. The sidebar/titlebar
-// account switcher is hidden in packaged builds while the feature is in
-// progress; this surfaces it (and its status) in dev when the env vars are set.
+// Preview Cloud auth under dev environment flags while packaged account switchers remain hidden.
 function OrcaCloudDevSubsection(): React.JSX.Element {
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
   const signOut = useAppStore((s) => s.signOutCurrentOrcaProfile)

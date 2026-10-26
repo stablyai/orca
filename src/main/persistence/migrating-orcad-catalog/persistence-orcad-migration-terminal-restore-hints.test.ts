@@ -20,7 +20,7 @@ import {
   dormantState,
   manifest as baseManifest
 } from './persistence-orcad-migration-catalog-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { createStore, testState } from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -148,7 +148,7 @@ describe('orcad migration terminal restore hints through the store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('installs hints scoped to their worktree after the durable commit, and survives a restart', async () => {
+  it('installs hints scoped to their worktree after the durable commit, and survives store reload', async () => {
     const input = manifest()
     const store = createStore()
     stageBlob(store, input, encodedHints())

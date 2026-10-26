@@ -1,16 +1,12 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 
-// Styles for the PR comments timeline (body + audience tabs + comment cards +
-// reactions). Split out of mobile-pr-sidebar-styles to keep that file under the
-// 300-line cap. Muted/monochrome to match the rest of the PR sidebar.
 export const prCommentsStyles = StyleSheet.create({
   noDescription: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontStyle: 'italic'
   },
-  // Comments header trailing count chip.
   countChip: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
@@ -24,7 +20,6 @@ export const prCommentsStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600'
   },
-  // Audience segmented control (All / Humans / Bots).
   audienceTabs: {
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
@@ -165,7 +160,6 @@ export const prCommentsStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.metaSize
   },
-  // Collapsible header for a resolved thread/comment group.
   resolvedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -192,7 +186,6 @@ export const prCommentsStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13
   },
-  // Reply / Resolve toggle row under a comment body.
   actionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -219,12 +212,10 @@ export const prCommentsStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  // Inline reply composer mounted inside a comment card.
   composer: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md
   },
-  // Root-comment composer at the foot of the timeline (open PRs only).
   rootComposer: {
     gap: spacing.sm
   },

@@ -3,7 +3,7 @@ import { exposeRun } from './run-receipt'
 import type { RunRow } from '../../../../orchestration/types'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 
-// Why: typecheck cannot see the strip because the RPC return types are loose.
+// Loose RPC return types cannot prove internal fields were stripped.
 const RUN_ROW: RunRow = {
   id: 'run_1',
   objective: 'Coordinate reviews',

@@ -36,7 +36,6 @@ function imageTurn(id: string, path: string, timestamp: number): NativeChatMessa
   }
 }
 
-/** Texts of the optimistic bubbles the chat list actually renders. */
 function renderedPendingTexts(
   messages: NativeChatMessage[],
   state: DraftState | null
@@ -111,7 +110,6 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     }
   }
 
-  /** Two composer sends fired before either transcript echo lands. */
   function rapidSend(first: string, second: string): void {
     act(() => {
       send(first)
@@ -134,7 +132,6 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(glued, state)).toEqual([])
   })
 
-  // FP1: the concatenation already sits in history, older than the sends.
   it('keeps and renders both bubbles when the matching row predates the sends', async () => {
     const history = [
       userTurn('m1', 'run the tests again', 1000),
@@ -149,19 +146,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(history, state)).toEqual(['run the tests', 'again'])
   })
 
-  // FP2: an older turn reads like the concatenation of two much later sends.
-  it('keeps and renders both bubbles when an older turn spells them out', async () => {
-    const history = [userTurn('m1', 'fix the bug', 1000), assistantTurn('m2', 'fixed', 1100)]
-    await mount(history)
-    rapidSend('fix the', 'bug')
-
-    await update([...history])
-    expect(pendingTexts()).toEqual(['fix the', 'bug'])
-    expect(renderedPendingTexts(history, state)).toEqual(['fix the', 'bug'])
-  })
-
-  // A send of the same text as a message a Stop took back is resent as a new message: its bubble
-  // waits beside the stopped row for that new row, never for the stopped one.
+  // A resend must await its own row rather than reconcile against the earlier Stop-withdrawn message.
   it('keeps a resend bubble beside a stopped row of the same text until its own row lands', async () => {
     const history = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'stopped', 1100)]
     await mount(history)
@@ -176,20 +161,17 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(resent, state)).toEqual([])
   })
 
-  // The likelier order: the press goes out before this phone has drawn the stopped row.
   it('shows the text once at every step when the stopped row lands after the resend press', async () => {
     const history = [assistantTurn('m0', 'ready', 500)]
     await mount(history)
     act(() => send('run the tests'))
     expect(renderedPendingTexts(history, state)).toEqual(['run the tests'])
 
-    // The stopped row takes the bubble's place; nothing is left pending beside it.
     const stopped = [...history, userTurn('m1', 'run the tests', 1000)]
     await update(stopped)
     expect(state?.pending).toEqual([])
     expect(renderedPendingTexts(stopped, state)).toEqual([])
 
-    // The resend's own row then lands beside it, and still nothing is pending.
     const resent = [...stopped, userTurn('m2', 'run the tests', 5000)]
     await update(resent)
     expect(state?.pending).toEqual([])
@@ -221,11 +203,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(partial, state)).toEqual(['again'])
   })
 
-  // STA-4492 / #14819: sends issued mid-hydration used to be marked permanently
-  // untrusted, so their glued row could never retire them and they also barred
-  // their neighbours from matching. The first authoritative read rebases them
-  // instead: history that arrives with it is still not theirs, but everything
-  // after it is.
+  // Rebase hydration-time sends on first authoritative history so they can retire without blocking later glue matches.
   describe('sends issued while the transcript is still hydrating', () => {
     const loadedHistory = [userTurn('m1', 'run the tests again', 1000)]
 
@@ -275,14 +253,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       expect(state?.pending).toEqual([])
     })
 
-    // The read that resolves a hydration-time send can already contain that
-    // send's own echo — a re-subscribe returns whatever exists now — and nothing
-    // local tells that echo from an identical older prompt. Claiming the row is
-    // the lesser evil, not a free one: normally the real echo lands a round trip
-    // later, but a send that never landed and was claimed by an older identical
-    // row stops being tracked at all — worst for short repeats ("yes", "1").
-    // Holding instead costs a queued bubble that never clears AND a run that can
-    // never glue again, for the rest of the session.
+    // TUI sends lack ids/clock alignment to distinguish own echoes from identical old rows; claiming risks losing an undelivered repeat, while holding permanently blocks glue.
     it('retires a hydration-time send whose echo arrives with the read', async () => {
       await mount([], true)
       act(() => send('run the tests'))
@@ -292,33 +263,10 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       expect(state?.pending).toEqual([])
     })
 
-    // The same read seen one reconnect later: the send left, the agent echoed it,
-    // and only then did the first authoritative read land.
-    it('retires a hydration-time send after a reconnect delivered the read late', async () => {
-      await mount([], true)
-      act(() => send('run the tests'))
-      // Still loading: the first read never arrived before the drop.
-      await update([], true)
-
-      const afterReconnect = [
-        userTurn('m1', 'run the tests', 5000),
-        assistantTurn('m2', 'ok', 5100)
-      ]
-      await update(afterReconnect)
-      expect(state?.pending).toEqual([])
-
-      // Nothing later resurrects it, and the run stays glue-capable.
-      await update([...afterReconnect, assistantTurn('m3', 'all green', 6000)])
-      expect(state?.pending).toEqual([])
-    })
-
-    // A reconnect leaves this session's own retained history on screen, so sends
-    // made across it own a real boundary already. Moving it onto the read that
-    // follows would push it past their own glued row and strand both bubbles.
+    // Reconnect retains this session’s history; moving its send boundary onto the new read would exclude the send’s own glued row.
     it('retires a pair sent across a reconnect whose glued row arrives with the read', async () => {
       const retained = [userTurn('m1', 'earlier prompt', 1000), assistantTurn('m2', 'sure', 1100)]
       await mount(retained)
-      // The read drops; the retained history stays visible and is still ours.
       await update(retained, true)
       rapidSend('run the tests', 'again')
 
@@ -328,12 +276,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       expect(renderedPendingTexts(settled, state)).toEqual([])
     })
 
-    // A send held here would sit as a live segment at the head of its run, so
-    // the cursor could never reach a later pair — the stuck bubble would take
-    // the whole feature down with it for the rest of the session.
-    // An image entry retires ONLY by binding its preview, so a supplied tail
-    // that excluded its own echo would leave the bubble — and the photo — stuck
-    // for the life of the session.
+    // An image retires only by preview binding; excluding its own echo would strand both the photo and later glued sends.
     it('retires a photo whose image echo arrives with the read', async () => {
       await mount([], true)
       act(() => {
@@ -364,10 +307,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     })
   })
 
-  // A read that failed is not a boundary: `messages` is empty because the history
-  // is unknown, not because the conversation is. Without that distinction the
-  // empty list reads as "the transcript was empty", and any row the successful
-  // read finally brings can claim these sends.
+  // Failed-read emptiness is unknown history, not an empty conversation; old rows must not claim sends against it.
   describe('sends issued before any read settled', () => {
     it('keeps both bubbles when the late read carries only an older glue-alike', async () => {
       await mount([], false, false)

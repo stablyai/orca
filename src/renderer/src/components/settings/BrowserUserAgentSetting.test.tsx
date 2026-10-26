@@ -68,8 +68,6 @@ describe('BrowserUserAgentSetting', () => {
     )
   })
 
-  // This is the path the retired-identity notice sends the user down: it asks them to choose, and
-  // choosing is what retires the notice for good. It had no coverage.
   it('commits the chosen mode and reports that a restart is required', async () => {
     identityGet.mockResolvedValue(statusFor('clean'))
     identitySet.mockResolvedValue({
@@ -124,8 +122,7 @@ describe('BrowserUserAgentSetting', () => {
 
     expect(await screen.findByText(/must be reset explicitly/i)).toBeTruthy()
     expect(screen.queryByRole('radiogroup')).toBeNull()
-    // Naming the escape is the whole point: the UI exposes no reset control, so without the
-    // command this state tells the user to do something with no way to do it.
+    // No reset control exists here; the command must provide a usable recovery route.
     expect(screen.getByText(/orca browser identity set --mode <mode> --reset/i)).toBeTruthy()
   })
 })

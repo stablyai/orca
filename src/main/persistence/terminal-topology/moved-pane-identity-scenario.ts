@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { agentHookServer } from '../../agent-hooks/server'
 import type { Store } from '../loading-store/store'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import { readPersistedStateJson } from '../../persistence-test-harness'
+import { readPersistedStateJson } from '../persistence-test-harness'
 import { FROM, openStore, SOURCE, WT } from './terminal-leaf-move-fixture'
 
 /** Shared by the moved-pane wiring regressions; each test file mocks `electron` first. */

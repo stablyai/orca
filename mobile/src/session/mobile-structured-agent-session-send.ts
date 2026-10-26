@@ -29,7 +29,6 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   /** Sent only when the host advertises `agent-session.send-options.v1`. */
   options?: Readonly<Record<string, string>>
   deadline?: number
-  /** The id the host records the message under. */
   clientMessageId: string
   onError: MobileNativeChatSendErrorReporter
   onAccepted?: (cursor: AgentJournalCursor | undefined) => void
@@ -45,7 +44,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     input.onError(agentSessionWriteNoticeEnglish(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
     return 'rejected'
   }
-  // Each Send is a new action, under one operation id.
+  // Use one operation id per Send action so separate taps cannot replay each other.
   const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
     client: input.client,
     method: 'agentSession.send',

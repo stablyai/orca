@@ -1,15 +1,4 @@
-/**
- * Memory-leak regression: a Claude agent-team must be evicted when its leader PTY
- * goes away naturally, not only on explicit user-close.
- *
- * `ClaudeAgentTeamsService.createLaunchEnv` adds a team (with a nested panes Map)
- * per agent-team leader launch. The only eviction was `removeTeamForLeaderHandle`,
- * called solely from `OrcaRuntimeService.closeTerminal` (the explicit user-close IPC).
- * The natural-exit teardown paths — `onPtyExit` and `dropDisconnectedPtyRecord` —
- * tore down every other per-pty map but never evicted the team. teamId is a fresh
- * `team-${randomUUID()}`, so when a leader shell exits on its own (agent finishes,
- * process dies, renderer reload) the team + nested panes Map leaked permanently.
- */
+/** Natural PTY exit/disconnect must evict leader teams too; explicit close was once the only cleanup. */
 import { describe, it, expect } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { ClaudeAgentTeamsService } from './claude-agent-teams-service'
@@ -33,7 +22,6 @@ export function registerClaudeAgentTeamsPtyExitLeakTests(): void {
       shimDir: '/tmp/orca-shim',
       shimBin: 'orca'
     })
-    // onPtyExit / dropDisconnectedPtyRecord resolve the leader handle via this map.
     handleByPtyId.set(ptyId, leaderHandle)
   }
 
@@ -75,14 +63,13 @@ export function registerClaudeAgentTeamsPtyExitLeakTests(): void {
 
       runtime.onPtyExit('pty-a', 0)
 
-      // Only team A is evicted; team B (still live) remains.
       expect(internals(runtime).claudeAgentTeams.getActiveTeamCount()).toBe(1)
     })
 
     it('is a no-op for a PTY that never launched a team', () => {
       const runtime = new OrcaRuntimeService()
       const { handleByPtyId } = internals(runtime)
-      handleByPtyId.set('pty-plain', 'handle-plain') // a normal terminal, no team
+      handleByPtyId.set('pty-plain', 'handle-plain')
       expect(internals(runtime).claudeAgentTeams.getActiveTeamCount()).toBe(0)
 
       runtime.onPtyExit('pty-plain', 0)

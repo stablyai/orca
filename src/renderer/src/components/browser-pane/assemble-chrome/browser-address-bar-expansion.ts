@@ -1,9 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
 
-// Every other browser toolbar control is shrink-0, so the address bar absorbs
-// all of the squeeze when the pane narrows and ends up as the leading globe
-// icon with a zero-width input. Below this slot width the bar overlays the
-// toolbar while focused instead, keeping the URL editable (issue #11090).
+// Overlay below this slot width so the toolbar’s shrinkable address bar remains editable when other controls squeeze it.
 export const BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH = 220
 
 export function isBrowserAddressBarCollapsed(inlineWidth: number | null): boolean {
@@ -26,8 +23,7 @@ export function useBrowserAddressBarOverlay(
   focused: boolean
 ): boolean {
   const [inlineWidth, setInlineWidth] = useState<number | null>(null)
-  // Why: the slot keeps its flex width even while the bar overlays the toolbar,
-  // so measuring it here (not the form) cannot oscillate with the overlay.
+  // Measure the stable flex slot, not the overlaying form, to avoid width oscillation.
   useEffect(() => {
     const slot = slotRef.current
     if (!slot || typeof ResizeObserver === 'undefined') {

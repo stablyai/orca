@@ -69,7 +69,7 @@ function reportPreviewBudgetExpired(
 }
 
 export function sanitizeReadError(fallback: string): string {
-  // Why: importer previews cross the IPC boundary, so filesystem paths must stay in main.
+  // Preview results cross IPC; keep filesystem paths in main.
   return fallback
 }
 

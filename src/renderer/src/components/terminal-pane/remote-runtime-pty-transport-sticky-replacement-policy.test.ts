@@ -11,7 +11,6 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -412,8 +411,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     await Promise.resolve()
 
-    // Why: the second stale response belonged to terminal-stale. Replaying it
-    // against the replacement would add another polling loop and retire it.
+    // Late stale responses belong to the old handle and must not start another polling loop against its replacement.
     expect(hostListCalls).toBe(1)
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')

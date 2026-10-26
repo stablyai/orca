@@ -1,5 +1,4 @@
-// Why: attach-time clear is only safe before bytes that draw a replacement
-// frame; metadata/control-only replay must preserve restored scrollback.
+// Clear only before replacement-frame bytes; metadata-only replay must preserve restored history.
 export function hasTerminalDisplayContent(chunk: string): boolean {
   for (let index = 0; index < chunk.length; index += 1) {
     const code = chunk.charCodeAt(index)

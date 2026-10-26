@@ -3,8 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveReasoning } from '../../../src/shared/native-chat-reasoning-row'
 
-// Why a separate file: Android has no inline selection, so the live text is copied the way a
-// finished row's is, through the message actions sheet.
+// Android lacks inline selection; exercise the message-actions copy path separately from iOS.
 vi.mock('react-native', async () => {
   const React = await import('react')
   const host =
@@ -45,7 +44,6 @@ const block: NativeChatLiveReasoning = {
   markdown: 'Weighing two approaches'
 }
 
-/** The chat as it holds the live line; `reasoning: undefined` is a finished turn with no line. */
 const chat = (reasoning: NativeChatLiveReasoning | null | undefined) =>
   createElement(
     MobileNativeChatRowOverlaysHost,
@@ -85,7 +83,6 @@ describe('MobileNativeChatLiveLine on Android', () => {
 
     act(() => byType('ReasoningBody')[0]!.props.onLongPress())
     const [sheet] = byType('MessageActionsSheet')
-    // The sheet copies and selects the message's own text: the block as it stands.
     expect(sheet?.props.message).toBe(block.message)
 
     act(() => sheet!.props.onClose())
@@ -97,7 +94,6 @@ describe('MobileNativeChatLiveLine on Android', () => {
       renderer = create(chat(block))
     })
     act(() => byType('ReasoningBody')[0]!.props.onLongPress())
-    // The turn ends while the reader copies or selects; the live line goes away.
     act(() => renderer!.update(chat(undefined)))
     expect(sheetIds()).toEqual(['r-1'])
 

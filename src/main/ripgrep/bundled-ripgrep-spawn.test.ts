@@ -45,7 +45,6 @@ describe('spawnBundledRipgrep', () => {
     expect(options.wslShellCommand).toBe('<wsl-expr>')
   })
 
-  // Why: only rg running inside the distro emits Linux paths, so only that case rewrites the command.
   it('keeps the host build when a distro routes the spawn but output stays Windows-side', () => {
     const { command, options } = spawnOnce({ cwd: 'C:\\repo', wslDistro: 'Ubuntu' })
 

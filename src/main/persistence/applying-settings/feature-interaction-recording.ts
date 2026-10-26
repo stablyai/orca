@@ -50,7 +50,7 @@ export function recordFeatureInteraction(
     ? { ...telemetryBuckets, [id]: nextBucket }
     : telemetryBuckets
   operations.scheduleSave(['ui', 'featureInteractionTelemetryBuckets'])
-  // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
+  // Count-only telemetry must not rehydrate the renderer; notify only on first sight.
   if (!existing) {
     operations.notifyUIChanged()
   }

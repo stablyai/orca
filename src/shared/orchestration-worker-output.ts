@@ -53,7 +53,6 @@ export type OrchestrationWorkerReadTranscriptResult = {
   /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
   projection?: OrchestrationFleetWorker | null
   fallbackReason: null
-  /** Additive provenance/coverage metadata. */
   sourceExact?: boolean
   contentComplete?: boolean
   clipping?: string[]
@@ -76,7 +75,6 @@ export type OrchestrationWorkerReadTerminalResult = {
   /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
   projection?: OrchestrationFleetWorker | null
   fallbackReason: OrchestrationWorkerReadFallbackReason | null
-  /** Additive provenance/coverage metadata. */
   sourceExact?: boolean
   contentComplete?: boolean
   clipping?: string[]

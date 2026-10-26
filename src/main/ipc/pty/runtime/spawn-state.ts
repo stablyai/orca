@@ -32,6 +32,7 @@ export type RuntimePtySpawnState = {
   args: RuntimePtySpawnArgs
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  spawnRequestedAt: number
   preAdoptedStablePane: AdoptStablePaneResult | null
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
@@ -167,6 +168,7 @@ export function createRuntimePtySpawnState(
     args,
     codexHomeLaunchStartedAt: undefined,
     codexHomeLaunchStartedSequence: undefined,
+    spawnRequestedAt: Date.now(),
     preAdoptedStablePane: null,
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,

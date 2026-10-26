@@ -5,7 +5,7 @@ import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import { toEditorModelUri } from './editor-model-uri'
 
-// The fragment-owner shape this URI replaced; kept here only to prove which tabs share a model.
+// Keep the prior fragment-owner URI as an oracle for which tabs share models.
 function legacyEditorModelUri(filePath: string, ownerKey = ''): string {
   const parsed = /^file:/i.test(filePath) ? URI.parse(filePath) : URI.file(filePath)
   return URI.file(parsed.fsPath)
@@ -83,7 +83,7 @@ const ROUTES = [LOCAL, SSH, RUNTIME, SSH_IN_RUNTIME, SSH_IN_OTHER_RUNTIME, null]
 
 const TABS = PATHS.flatMap((filePath, pathIndex) =>
   ROUTES.flatMap((route, routeIndex) =>
-    // Two workspaces per path and host: today they share one model unless the owner is unresolved.
+    // Resolved same-host workspace views share one model; unresolved owners remain isolated.
     ['wt-1', 'wt-2'].map((worktreeId) =>
       tab(`${worktreeId}:${pathIndex}:${routeIndex}`, filePath, route, worktreeId)
     )
@@ -112,7 +112,7 @@ describe('owner-folder model URIs', () => {
       }
     }
     expect(mismatches).toEqual([])
-    // Guards against a fixture where nothing shares and the parity holds vacuously.
+    // Require real shared pairs so an entirely isolated fixture cannot pass parity vacuously.
     expect(sharedPairs).toBeGreaterThan(PATHS.length)
   })
 

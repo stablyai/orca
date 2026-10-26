@@ -59,8 +59,7 @@ describe('RepoScanUnavailableIndicator', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
-  // Why: a non-authoritative listing without a reason is the disconnected-SSH shape, which the
-  // host header already explains; this marker is only for a scan that failed with a cause.
+  // Disconnected SSH listings lack a reason and are explained by the host header; mark only scans with a cause.
   it('renders nothing for a non-authoritative listing that carries no reason', async () => {
     useAppStore.setState({
       detectedWorktreesByRepo: {

@@ -47,12 +47,7 @@ export function collectRemovedHostTwins(
   }
 }
 
-/**
- * Closes the surfaces attributed to the removed copy through their close actions, so chats,
- * previews and shells retire as on any close. Anything unattributed (mixed tabs, reopen history,
- * tabless sleeping records) stays: a stale entry, never the survivor's data lost. Each file close
- * carries `keepEditorBuffer`, so a dirty record it closes outlives the tab.
- */
+/** Close attributed surfaces through normal actions; retain unknown/mixed state rather than lose survivor data. File closes keepEditorBuffer so dirty records survive tab removal. */
 export function closeRemovedHostTwinState(
   get: () => AppState,
   set: (patch: (state: AppState) => Partial<AppState>) => void,
@@ -98,8 +93,7 @@ export function closeRemovedHostTwinState(
       ]) {
         retiredPtyIds.add(ptyId)
       }
-      // Why killed here: the shared id resolves to no single host, so the planner marks this
-      // host's PTYs unroutable; attribution already proved they are the removed host's.
+      // Planner cannot route shared raw IDs; attribution already proves these unroutable PTYs belong to the removed host.
       const candidates = remoteCloseOwnedByHost
         ? []
         : [...plan.localOrSshPtyIds, ...plan.unroutablePtyIds, ...plan.cleanupOnlyPtyIds]

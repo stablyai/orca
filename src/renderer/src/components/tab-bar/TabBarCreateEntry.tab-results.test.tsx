@@ -13,8 +13,7 @@ import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 
-// Why: the real entry-action module pulls in runtime IPC + the app store; these
-// tests only need a controllable option list beneath the tab rows.
+// Stub only create options; preserve real tab search and selection routing.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
@@ -34,8 +33,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => null
 }))
 
-// `hold` stands in for the hook's deferred query: it pins the results to the
-// query they were built from, so later keystrokes leave them stale.
+// Pin deferred results to their originating query so newer keystrokes leave stale rows visible.
 const tabSearchMock = vi.hoisted(() => {
   const worktree = {
     id: 'wt',
@@ -47,8 +45,7 @@ const tabSearchMock = vi.hoisted(() => {
   return {
     hold: null as string | null,
     resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
-    // Retention re-checks each row against the live query with the real engines,
-    // so every registered row needs the searchable entry it came from.
+    // Retention rechecks searchable entries, including fields omitted from rendered rows.
     entries(): OpenTabSearchEntries {
       const rows = Object.values(tabSearchMock.resultsByQuery).flat()
       return {
@@ -104,8 +101,7 @@ vi.mock('./use-open-tab-search', () => ({
   }
 }))
 
-// Selection routing itself stays real, so the focus handoff and failure messages
-// under test are the shipped ones; only the palette activations are stubbed.
+// Keep shipped selection routing for focus/failure behavior; stub palette activation only.
 const activationMocks = vi.hoisted(() => ({
   workspace: vi.fn(),
   browser: vi.fn(),
@@ -191,8 +187,7 @@ function queryInput(): HTMLInputElement {
 
 function setQuery(value: string): void {
   const input = queryInput()
-  // Why: React patches the input value setter to track changes; bypass it with
-  // the native setter so the synthetic onChange actually fires.
+  // Use the native value setter to bypass React tracking and trigger synthetic onChange.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
@@ -280,7 +275,6 @@ describe('TabBarCreateEntry tab results', () => {
     setQuery('fix the flaky')
 
     expect(rowTexts()[0]).toContain('fix the flaky retry test')
-    // The unmatched sibling falls back to its own title.
     expect(rowTexts()[1]).toContain('Claude Code')
   })
 
@@ -355,7 +349,6 @@ describe('TabBarCreateEntry tab results', () => {
     setQuery('add tab')
     expect(rowTexts()[0]).toContain('Switch to tab')
 
-    // The user backspaces; the deferred search still describes 'add tab'.
     tabSearchMock.hold = 'add tab'
     setQuery('add ta')
 
@@ -375,7 +368,6 @@ describe('TabBarCreateEntry tab results', () => {
     setQuery('add tab')
     expect(rowTexts()[0]).toContain('Switch to tab')
 
-    // The user keeps typing; the deferred search still describes 'add tab'.
     tabSearchMock.hold = 'add tab'
     setQuery('add tabs')
 
@@ -444,7 +436,6 @@ describe('TabBarCreateEntry tab results', () => {
     )
     expect(rowTexts()).toHaveLength(3)
 
-    // The other tab row and the create row below it still act.
     pressKey(queryInput(), 'ArrowDown')
     submitForm()
     expect(activationMocks.workspace).toHaveBeenLastCalledWith(

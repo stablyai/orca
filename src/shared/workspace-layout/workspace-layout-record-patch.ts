@@ -1,7 +1,4 @@
-// Writes a command's effect onto the stored partition without the rest of a Serializer rewrite.
-// Load then save also normalizes records the command never touched (legacy rows, sort orders,
-// key order, carried leftovers); diffing the save before the command against the save after it
-// isolates the command, and only those records and fields are written.
+// Isolate command edits by diffing saves before/after the command; patch only those fields onto stored data so unrelated Loader normalizations remain unwritten.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -27,16 +24,10 @@ const LIST_FIELDS: Record<string, (record: Json) => unknown> = {
   browserTabsByWorktree: (record) => record.id
 }
 
-// Session maps hold records (layouts by tab, sleeping records by pane): patch down to each record's
-// fields and replace a changed field whole, as diffStoredSession reports it.
+// Patch session maps to record depth; changed record fields are replaced whole, matching diffStoredSession.
 const MAP_RECORD_DEPTH = 2
 
-/**
- * `stored` with the records the command touched (those differing between `before` and `after`)
- * written as `after` has them. A touched record the load supplied is written whole, and a folded
- * legacy row whose claim the command touched takes its loaded form; every untouched record stays
- * as stored. `stored` itself when the command changed nothing.
- */
+/** Write touched records as after has them, including whole records supplied by load and touched folded legacy rows in loaded form. Preserve untouched stored records and return stored for a no-op. */
 export function patchStoredSession(
   stored: WorkspaceSessionState,
   before: WorkspaceSessionState,
@@ -123,7 +114,7 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
     const otherIds = new Set(other.map(idOf))
     return list.map(idOf).filter((id) => otherIds.has(id))
   }
-  // Records kept their relative order: sort orders changed only to close a removal's gap.
+  // Unchanged relative order means renumbering only closed a removed record’s gap.
   const renumberedOnly = sameJson(kept(before, after), kept(after, before))
   for (const id of ids) {
     const old = beforeById.get(id)
@@ -132,8 +123,7 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
       continue
     }
     const index = result.findIndex((record) => idOf(record) === id)
-    // A record the load supplied that the command only renumbered stays unwritten (a close's
-    // siblings); writing it whole would add it where the stored partition has none.
+    // Do not materialize load-supplied siblings that the command merely renumbered.
     if (
       index === -1 &&
       renumberedOnly &&
@@ -169,7 +159,6 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
   )
 }
 
-/** After the nearest record that precedes it in `after` and is already in the list. */
 function insertionIndex(
   result: Json[],
   after: Json[],

@@ -13,9 +13,7 @@ export type TaskProjectPickerGroup = {
   sources: Repo[]
 }
 
-// Why: a repo whose identity probe has not answered (offline SSH host, cold
-// launch) is unknown, not ineligible — hiding it made non-GitHub repos vanish
-// with no explanation. Only a settled "no usable remote" is filtered out.
+// Keep unknown/offline identities eligible until probing proves no usable remote, so repos cannot vanish without explanation.
 export function getTaskEligibleRepos(repos: readonly Repo[]): Repo[] {
   return repos.filter(
     (repo) =>
@@ -99,8 +97,7 @@ function compareTaskProjectPickerCandidate(
 }
 
 function compareDefaultTaskRepoCandidate(a: Repo, b: Repo): number {
-  // Why: when the same logical project exists on multiple hosts, default to
-  // the local checkout to avoid surprising remote auth/network work on first load.
+  // Prefer local checkout among host twins to avoid unexpected remote auth/network work on first load.
   const aLocal = getRepoExecutionHostId(a) === LOCAL_EXECUTION_HOST_ID
   const bLocal = getRepoExecutionHostId(b) === LOCAL_EXECUTION_HOST_ID
   if (aLocal !== bLocal) {

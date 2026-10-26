@@ -1,23 +1,12 @@
 import { app as electronApp, type BrowserWindow } from 'electron'
 
-/**
- * Foreground policy for automated launches (E2E, benchmarks, agent-driven dev
- * validation). These runs may use the machine, but must never take the OS
- * foreground away from whatever the developer is doing.
- *
- * ORCA_BACKGROUND_LAUNCH=1 keeps automation off screen. Native-focus specs
- * can use ORCA_E2E_FOREGROUND=1 only without an explicit background request.
- * The hosted-Xvfb terminal benchmark explicitly presents after startup; see tests/AGENTS.md.
- * This policy still suppresses its automatic reveals and foreground activation.
- * orcad's browser sidecar (ORCA_ORCAD_SIDECAR=1) is held to the same explicit request.
- */
+/** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
 type ActivationPolicyApp = {
   dock?: { hide: () => void }
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
-/** Reads ORCA_BACKGROUND_LAUNCH, ORCA_ORCAD_SIDECAR, ORCA_E2E_FOREGROUND, ORCA_E2E_HEADLESS, ORCA_E2E_HEADFUL. */
 type PolicyEnv = Readonly<Record<string, string | undefined>>
 
 /** orcad's headless browser provider: a serve process on a throwaway profile that no user drives. */
@@ -48,10 +37,7 @@ export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   )
 }
 
-/**
- * macOS: a windowless run still claims a Dock tile and the menu bar as it starts
- * and exits. `accessory` drops both while leaving programmatic activation intact.
- */
+/** macOS accessory policy hides Dock/menu-bar claims during windowless launch/exit while retaining programmatic activation. */
 export function applyBackgroundActivationPolicy(
   options: {
     app?: ActivationPolicyApp

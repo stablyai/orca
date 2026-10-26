@@ -4,8 +4,7 @@ import {
   type TerminalEscapeIntroducer
 } from './terminal-escape-introducer'
 
-/** Independent restatement of the VT500 dispatch table, written from the ranges rather
- *  than the implementation, so a reordered branch in the real one shows up here. */
+/** Derive the oracle independently from VT500 byte ranges so implementation branch errors remain visible. */
 function expected(code: number): TerminalEscapeIntroducer {
   if ('[' === String.fromCharCode(code)) {
     return 'csi'

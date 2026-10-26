@@ -11,15 +11,8 @@ import type {
   RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 
-/**
- * The placement a rehydrated row carries until a host takes it back.
- *
- * A registry entry cannot exist without a placement, and a persisted row has no honest one: its
- * authority died with the previous runtime. Rather than replay a stored generation -- which would
- * be a forged authority -- rehydration stamps this sentinel. Generation 0 is below every generation
- * the counters can issue (both start at 1), so it can never collide with a live placement, and the
- * host id names no client, so no lease ever matches it by identity.
- */
+/** Persisted authority died with the prior runtime. Generation 0 and a nonexistent host
+ * represent a held page without forging a placement or colliding with live generations (which start at 1). */
 export const RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT: RuntimeBrowserClientPlacement =
   Object.freeze({
     kind: 'client',
@@ -28,14 +21,7 @@ export const RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT: RuntimeBrowserClientPlace
     pageHostGeneration: 0
   })
 
-/**
- * The execution-host key a rehydrated row carries until recovery resolves the real one.
- *
- * A route key names the runtime process that minted it, so the persisted record deliberately has
- * none. The registry still requires a key, and a sentinel is honest about that: it matches no
- * inventory entry, so a returning host's page can never be mistaken for one already placed under
- * the right host.
- */
+/** Route keys name their creating runtime; this sentinel matches no inventory until recovery resolves one. */
 export const RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY = 'restored-client-host-execution'
 
 export function isRestoredClientHostedBrowserPlacement(
@@ -55,14 +41,7 @@ export type ClientHostedBrowserPagePersistenceHost = {
   now?: () => number
 }
 
-/**
- * Rewrites one worktree's persisted rows to match the registry.
- *
- * Create, navigate, committed metadata, recovery, retirement and host quit all converge on the
- * runtime's single tab-change announcement, so this reads the registry there rather than growing a
- * write path per event. It is a no-op when the projection is unchanged, which is what makes it
- * safe to call from that hot seam.
- */
+/** Persist the registry projection at the shared tab-change seam; unchanged projections write nothing. */
 export function persistClientHostedBrowserPages(
   host: ClientHostedBrowserPagePersistenceHost,
   registry: Pick<RuntimeBrowserPageRegistry, 'listPages'>,
@@ -100,8 +79,7 @@ export function persistClientHostedBrowserPages(
       clientHostedBrowserPagesByWorktree: next
     })
   } catch {
-    // Why swallow: a worktree that no longer resolves has no partition to write to, and the row it
-    // would have carried is one rehydration already refuses to restore.
+    // Missing worktrees have no writable partition and will not rehydrate.
     return false
   }
   return true
@@ -130,21 +108,12 @@ export function buildPersistedClientHostedBrowserPages(
 }
 
 export type ClientHostedBrowserPageRehydrationSource = {
-  /** Every persisted session partition this runtime can read, in no particular order. */
   listWorkspaceSessions(): readonly WorkspaceSessionState[]
-  /** Whether the worktree the rows name still exists here; a gone one is never restored. */
   isKnownWorktree(worktreeId: string): boolean
   now?: () => number
 }
 
-/**
- * Republishes persisted rows into the page registry as held rows.
- *
- * Held is the whole point: a row with no live placement is already the state a host quit produces,
- * which the snapshot projection, the host-row projection, `browserTabClose`'s registry-hit branch
- * and reopen-on-server all handle today. Rehydration lands in that state rather than inventing a
- * restored one, so nothing downstream has to learn a new case.
- */
+/** Rehydrate as held pages, reusing the state produced by host quit and understood by existing consumers. */
 export function rehydrateClientHostedBrowserPages(
   registry: Pick<RuntimeBrowserPageRegistry, 'getPage' | 'publishClientPage'>,
   source: ClientHostedBrowserPageRehydrationSource
@@ -176,11 +145,9 @@ export function rehydrateClientHostedBrowserPages(
             pairedDeviceId: row.pairedDeviceId,
             url: row.url,
             title: row.title,
-            // Why not loading: nothing is driving this page, so a carried-over spinner would never
-            // settle -- the same reason a host-quit row reports settled.
+            // No host can finish an inherited load spinner.
             loading: false,
-            // Why never active: the returning host republishes its own focus, and claiming it here
-            // would deactivate whichever sibling that host is actually showing.
+            // The returning host owns focus; do not deactivate its actual selected sibling.
             active: false
           })
           restored.push(row.browserPageId)
@@ -196,14 +163,7 @@ export function rehydrateClientHostedBrowserPages(
   return restored
 }
 
-/**
- * Whether an otherwise-unchanged projection is old enough to rewrite.
- *
- * The equality check deliberately ignores `savedAt`, so a tab the user leaves open on one URL
- * would keep its first timestamp forever and age out of the expiry bound while its host was
- * holding it the whole time. Refreshing on a coarse interval keeps the bound meaning "nobody has
- * held this page in a month" without making the announcement write on every call.
- */
+/** Equality ignores savedAt; refresh coarse timestamps so live unchanged tabs do not expire as abandoned. */
 function needsAgeRefresh(
   existing: readonly PersistedClientHostedBrowserPage[] | undefined,
   now: number

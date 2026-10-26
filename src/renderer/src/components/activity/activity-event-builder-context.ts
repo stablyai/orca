@@ -23,9 +23,7 @@ export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
 export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
 export type ActivityTabHostIndex = Map<string, Map<string, ExecutionHostId | null>>
 
-// Why memoized on the source object: the pane build cache compares `tab` by identity, so a
-// fresh derived object per rebuild would miss the cache for every agent-session and
-// missing-tab row. Upstream keeps the source identity stable while its fields are unchanged.
+// Cache derived tab context by stable source identity so agent-session/missing-tab rows can reuse pane builds.
 const agentSessionTerminalTabs = new WeakMap<Tab, TerminalTab>()
 const attributedTabContexts = new WeakMap<AgentStatusEntry, ActivityTabContext | null>()
 
@@ -119,8 +117,7 @@ export function resolveActivityExecutionHostId(
   if (tabHostId) {
     return tabHostId
   }
-  // Why before connectionId: a runtime pane's status entry publishes connectionId: null,
-  // which would otherwise resolve to LOCAL (see dashboard-card-terminal-input's precedent).
+  // Resolve runtime PTY ownership before null connectionId can be mistaken for local.
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(terminalPtyId ?? '')
   if (runtimeEnvironmentId) {
     return toRuntimeExecutionHostId(runtimeEnvironmentId)
@@ -146,8 +143,7 @@ export function resolveActivityEventOwner(
     terminalPtyId,
     tabHostIndex
   )
-  // Why: resolution runs per pane per rebuild and the miss path scans detected worktrees;
-  // everything below depends only on worktreeId + host, so memoize per build.
+  // Memoize per build by workspace/host; misses otherwise rescan detected worktrees for each pane.
   const ownerCacheKey = `${context.worktreeId}\0${executionHostId ?? ''}`
   const cached = ownerCache.get(ownerCacheKey)
   if (cached) {

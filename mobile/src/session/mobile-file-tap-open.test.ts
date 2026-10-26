@@ -1,13 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcResponse } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { openMobileFileTap } from './mobile-file-tap-open'
 
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+type SendRequest = UnvalidatedRpcRequestPort['sendRequest']
+
+function ok(result: unknown): RpcResponse {
+  return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function createClient(responses: unknown[]) {
+function createClient(responses: RpcResponse[]) {
   return {
-    sendRequest: vi.fn(async () => responses.shift())
+    sendRequest: vi.fn<SendRequest>(async (method) => {
+      const response = responses.shift()
+      if (!response) {
+        throw new Error(`no scripted response for ${method}`)
+      }
+      return response
+    })
   }
 }
 
@@ -21,6 +31,14 @@ function activeTerminalState(activated: boolean) {
     activeTabType: 'terminal'
   }
 }
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('openMobileFileTap', () => {
   it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
@@ -130,7 +148,7 @@ describe('openMobileFileTap', () => {
     })
     await Promise.resolve()
     await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.open',
@@ -386,9 +404,9 @@ describe('openMobileFileTap', () => {
   })
 
   it('does not navigate an absolute artifact after the user leaves the source terminal', async () => {
-    let resolveRequest: (value: unknown) => void = () => {}
+    let resolveRequest: (value: RpcResponse) => void = () => {}
     const client = {
-      sendRequest: vi.fn(
+      sendRequest: vi.fn<SendRequest>(
         () =>
           new Promise((resolve) => {
             resolveRequest = resolve
@@ -457,7 +475,7 @@ describe('openMobileFileTap', () => {
           absolutePath: '/repo/src/index.ts'
         }
       }),
-      { ok: false, error: { message: 'nope' } }
+      { id: 'rpc', ok: false, error: { code: 'runtime_error', message: 'nope' } }
     ])
     const onOpenFailed = vi.fn()
 
@@ -668,7 +686,7 @@ describe('openMobileFileTap', () => {
   async function tapOnHostWithNoDesktopWindow(options: { leaveDuringOpen: boolean }) {
     let latestActivationSeq = 1
     const client = {
-      sendRequest: vi.fn(async (method: string) => {
+      sendRequest: vi.fn<SendRequest>(async (method) => {
         if (method !== 'files.open') {
           return ok({
             worktree: 'wt-1',
@@ -687,7 +705,11 @@ describe('openMobileFileTap', () => {
         if (options.leaveDuringOpen) {
           latestActivationSeq = 2
         }
-        return { ok: false, error: { code: 'runtime_error', message: 'renderer_unavailable' } }
+        return {
+          id: 'rpc',
+          ok: false,
+          error: { code: 'runtime_error', message: 'renderer_unavailable' }
+        }
       })
     }
     const pushPreviewRoute = vi.fn()
@@ -715,7 +737,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.open',

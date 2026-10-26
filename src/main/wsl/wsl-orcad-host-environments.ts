@@ -1,8 +1,4 @@
-/**
- * Which paired runtime environments are a WSL distro's orcad, so desktop-side shims (accounts)
- * know the distro behind an environment id. Fed by `WslOrcadConnectionManager`: an environment is
- * listed only while its connection is open.
- */
+/** Map currently connected runtime IDs to WSL distros for desktop account shims; connection manager removes entries on close. */
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 
 const distrosByEnvironment = new Map<string, string>()
@@ -11,7 +7,7 @@ const capabilitiesByEnvironment = new Map<string, readonly string[]>()
 
 export function registerWslOrcadHostEnvironment(environmentId: string, distro: string): void {
   distrosByEnvironment.set(environmentId, distro)
-  // Why: a reconnect may be a redeployed orcad, whose capabilities differ.
+  // Reconnect may deploy a different build; discard cached capabilities.
   capabilitiesByEnvironment.delete(environmentId)
 }
 
@@ -67,8 +63,7 @@ export function observeWslOrcadHostResponse(
 
 export type WslOrcadHostCapabilityVerdict = 'supported' | 'unsupported' | 'unknown'
 
-/** Whether the WSL orcad behind `environmentId` advertises `capability`; asks it once when no
- *  answer has been seen. A failed probe is `unknown`, never evidence of an older host. */
+/** Cache advertised capabilities until reconnect. Probe failure is unknown, never proof of an older host. */
 export async function wslOrcadHostSupports(
   environmentId: string,
   capability: string,

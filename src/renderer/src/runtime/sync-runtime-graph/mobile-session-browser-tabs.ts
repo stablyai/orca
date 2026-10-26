@@ -20,6 +20,10 @@ export function buildMobileBrowserTab(
     title,
     browserWorkspaceId: workspace.id,
     browserPageId: activePage?.id ?? workspace.activePageId ?? null,
+    browserProfileId:
+      workspace.sessionProfileId === undefined || activePage?.browserRuntimeEnvironmentId
+        ? undefined
+        : (workspace.sessionProfileId ?? 'default'),
     url: activePage?.url ?? workspace.url ?? 'about:blank',
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,

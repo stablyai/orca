@@ -10,7 +10,6 @@ import { applyAgentPermissionMode } from '../../../shared/tui-agent-permissions'
 import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
-// Simulates a profile created before the dedicated Experimental switch was persisted.
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
   const defaults = getDefaultPersistedState(homedir())
   const settings: Partial<GlobalSettings> = { ...defaults.settings }
@@ -277,7 +276,6 @@ describe('the new-chat permission setting', () => {
     expect(normalized.nativeChatPermissionMode).toBe(expected)
   })
 
-  // Seeded once: after the next save the setting is the user's, not a mirror of Agent Permissions.
   it('keeps a saved value when Agent Permissions change afterwards', () => {
     const normalized = normalizeLegacyProfile({
       nativeChatPermissionMode: 'ask',

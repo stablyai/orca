@@ -168,8 +168,6 @@ describe('DaemonActionDialog restart copy', () => {
     cleanup()
   })
 
-  // The old copy promised panes showing "Process exited" that the user reopens by hand; agents
-  // resume themselves now, so it described a product that no longer exists.
   it('names the terminal service and states only what actually happens', () => {
     render(<DaemonActionDialog api={pendingRestartApi()} />)
 

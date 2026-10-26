@@ -105,7 +105,7 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
-        // Why: mirrors the page before the user picks a host — the default host setting.
+        // Use the default host until the user selects a Settings host.
         hostScope: resolveSettingsHostScope({
           choice: null,
           defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
@@ -195,11 +195,7 @@ describe('AgentsPane', () => {
   })
 
   it('waits for host launch settings before displaying remote agent controls', () => {
-    // Repro for the "Remote Server lists local agents" bug: with an Active
-    // Server selected, the Installed list must probe that server's PATH.
-    // Why the mutation: renderToStaticMarkup makes useSyncExternalStore read
-    // the zustand SERVER snapshot (getInitialState), so setState is invisible
-    // here — patch the initial-state object itself and restore it after.
+    // SSR reads Zustand’s initial snapshot, so patch/restore it to verify remote detection uses the selected server’s PATH.
     const initialState = useAppStore.getInitialState() as unknown as {
       runtimeEnvironments: unknown
     }
@@ -754,7 +750,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
     }
   }
 
-  /** The rendered `<button>` whose label contains `label`. */
   const pillMarkup = (markup: string, label: string): string => {
     const chunk = markup.split('<button').find((part) => part.includes(label))
     expect(chunk, `no pill labelled ${label}`).toBeDefined()
@@ -762,10 +757,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   }
 
   it('does not present Auto as the active choice while an agent is stored', () => {
-    // The Auto pill's handler writes null. Rendering it pressed while
-    // `defaultTuiAgent: "claude"` is stored made the already-selected pill
-    // destructive: one click erased the setting, and later successful
-    // detection did not bring it back.
+    // A pressed Auto pill still wrote null, destructively clearing a saved agent that detection would never restore.
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
@@ -773,8 +765,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   })
 
   it('still offers the stored agent so the choice can be kept', () => {
-    // With zero detected there were no agent pills at all, so the stored value
-    // was invisible and unrecoverable through the UI.
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
@@ -782,8 +772,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   })
 
   it('keeps a Refresh control reachable when nothing is detected', () => {
-    // Refresh lived inside the Installed section, which only renders when at
-    // least one agent was found -- gone in exactly the state needing a retry.
     const markup = withEmptyDetection(() => renderPane(getDefaultSettings('/tmp')))
     expect(markup).toContain('No agents detected')
     expect(markup).toContain('Refresh')

@@ -3,10 +3,7 @@ import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-titl
 import { isDshTerminalTitle, isGeminiTerminalTitle } from './agent-title-core'
 import { getAgentLabel, resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 
-// DSH-TUI titles are `<prefix> 🐋 <session title>`: `✦` at rest, `⠂`/`⠐` while a turn
-// runs. Both halves collide with an existing agent — `✦` is Gemini CLI's WORKING glyph,
-// and the braille frames are what Claude's generic heuristic claims — so the whale has to
-// outrank both. Evidence: src/main/runtime/__fixtures__/dsh-tui-ready-no-key.txt.
+// DSH’s idle ✦ and working braille collide with Gemini/Claude; whale identity must win. Capture: src/main/runtime/__fixtures__/dsh-tui-ready-no-key.txt.
 const RESTING = '✦ \u{1F40B} dsh-demo-repo'
 const WORKING_FRAMES = ['⠂ \u{1F40B} fix the flaky test', '⠐ \u{1F40B} fix the flaky test']
 
@@ -27,8 +24,7 @@ describe('a DSH-TUI terminal title', () => {
   })
 
   it('does not report working just because it carries Gemini’s working glyph', () => {
-    // The regression this guards: a finished DSH pane reported working forever, because
-    // `✦` is DSH's REST prefix and Gemini's WORKING glyph.
+    // DSH idle ✦ must not inherit Gemini’s working state.
     expect(detectAgentStatusFromTitle(RESTING)).toBeNull()
   })
 

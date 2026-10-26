@@ -8,15 +8,7 @@ import { runProcess, spawnProcess } from '@orca/process-host'
 import { _setWindowsTaskkillLauncherForTests } from '@orca/process-host/windows-tree-kill'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
-/**
- * A loaded Windows host can take 5-18 s to finish `taskkill /t /f`. The barrier
- * must leave that taskkill running past its caller's wait, and must not kill the
- * root first: a root killed before taskkill reads the tree orphans the grandchild.
- *
- * Runs only on win32. `ORCA_WINDOWS_TREE_KILL_LOAD=1` adds CPU burners and runs
- * the unmodified taskkill too; CI runs that in its own step so the burners never
- * share the machine with other test files.
- */
+/** Loaded taskkill can outlast its caller; killing root first orphans grandchildren before tree enumeration. ORCA_WINDOWS_TREE_KILL_LOAD adds CPU burners only in isolated CI steps. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 const underLoad = process.env.ORCA_WINDOWS_TREE_KILL_LOAD === '1'
 // Longer than the caller's 5 s wait, well inside the 30 s deadline.
@@ -119,7 +111,7 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
         return taskkill
       })
       await expectBarrierKillsGrandchild(signal)
-      // Evidence only: how slow this load made taskkill (about 50 ms idle).
+      // Record measured taskkill duration under load (about 50ms idle).
       console.log(`[late-taskkill] taskkill under load: ${taskkillOutcome}`)
     },
     90_000

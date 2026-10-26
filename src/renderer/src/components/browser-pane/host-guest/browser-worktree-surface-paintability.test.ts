@@ -5,8 +5,7 @@ import {
 } from './browser-worktree-surface-paintability'
 
 describe('shouldKeepHiddenWorktreeSurfacePaintable', () => {
-  // Why this one matters most: false here renders `hidden` on a strict ancestor of every guest in
-  // the worktree, and no pane-level paintability term can reopen a display:none above it.
+  // A hidden strict ancestor stops every guest’s screencast regardless of pane-level retention.
   it('keeps the surface painting for a guest a remote client needs', () => {
     expect(
       shouldKeepHiddenWorktreeSurfacePaintable({
@@ -56,7 +55,6 @@ describe('shouldMountRetainedBrowserOverlay', () => {
     ).toBe(true)
   })
 
-  // Why: no deferral budget means the startup path mounts every tab anyway.
   it('mounts a hidden worktree that is not deferring background mounts', () => {
     expect(
       shouldMountRetainedBrowserOverlay({

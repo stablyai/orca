@@ -8,7 +8,7 @@ import {
   readPersistedStateJson,
   testState,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 
 const plugin = 'plugin:stablyai.orca-portuguese/pt-BR'
 

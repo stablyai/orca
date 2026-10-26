@@ -15,7 +15,7 @@ import {
   codexAppServerCapabilityCache,
   getCodexAppServerHostKey,
   type CodexAppServerHostKey
-} from './codex-app-server-capability-cache'
+} from './app-server/codex-app-server-capability-cache'
 import {
   writeCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,

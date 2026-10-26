@@ -124,7 +124,6 @@ describe('the phone list from the sidebar feed', () => {
 
   it('draws the shared builder’s headers, order and nesting', () => {
     const lines = outline(sectionsFor(phoneView()))
-    // The pinned parent carries its nested child.
     expect(lines[0]).toMatch(/ "Pinned" 2 pin$/)
     expect(lines.some((line) => line.includes('orca::/w/child depth=1'))).toBe(true)
     expect(lines.some((line) => line.includes('"lab"'))).toBe(true)
@@ -144,7 +143,6 @@ describe('the phone list from the sidebar feed', () => {
       updatedAt: 0,
       ...extra
     })
-    // As the desktop serves it, read by the page's own reply parser.
     const served = readServedProjectSections({
       id: 'sections',
       ok: true,
@@ -152,7 +150,7 @@ describe('the phone list from the sidebar feed', () => {
         catalog: {
           ...SERVED_SECTIONS,
           repos: [
-            // Listed against their group order, so the order must come from projectGroupOrder.
+            // Use reversed fixture order so only projectGroupOrder can produce the expected order.
             { ...SERVED_SECTIONS.repos[0]!, projectGroupId: 'pg-inner', projectGroupOrder: 1 },
             { ...SERVED_SECTIONS.repos[1]!, projectGroupId: 'pg-inner', projectGroupOrder: 0 }
           ],
@@ -168,7 +166,6 @@ describe('the phone list from the sidebar feed', () => {
     }
     const grouped = buildSidebarFeedCatalog(served.value, [], [])
     const base = feedDomains()
-    // An unpinned orca workspace, so orca draws its own header beside lab.
     const domains = feedDomains({
       workspaces: new Map([
         ...base.workspaces,
@@ -194,7 +191,6 @@ describe('the phone list from the sidebar feed', () => {
       'lab depth=2',
       'orca depth=2'
     ])
-    // Rows carry their header's depth and the folder-scanned group, so they indent as the desktop's do.
     expect(
       sections
         .slice(-2)
@@ -210,7 +206,6 @@ describe('the phone list from the sidebar feed', () => {
       outline(sections).filter((line) => line.endsWith(' ACTIVE'))
 
     it('highlights nothing while this phone has opened nothing on the host', () => {
-      // The fixture's desktop has the pinned parent selected; the phone never shows it.
       expect(active(sectionsFor(phoneView(), { lastVisited: null }))).toEqual([])
     })
 
@@ -333,7 +328,6 @@ describe('the phone list from the sidebar feed', () => {
     expect(rows.find((row) => row.worktreeId === 'lab::/w/gpu')).toMatchObject({
       hasAttachedPty: true
     })
-    // Not listed by worktree.ps yet: drawn from the feed alone.
     expect(rows.find((row) => row.worktreeId === 'orca::/w/parent')).toMatchObject({
       displayName: 'orca::/w/parent',
       liveTerminalCount: 0,
@@ -421,7 +415,6 @@ describe('the phone list from the sidebar feed', () => {
       ).find((section) => section.title === 'lab')!
     expect(creating().pendingCreations).toEqual([{ key: 'pending:c1', repoName: null }])
     expect(creating().data.map((row) => row.worktreeId)).toEqual(['lab::/w/gpu'])
-    // Once the host names a workspace it lists, only the workspace shows.
     expect(creating('lab::/w/gpu').pendingCreations).toBeUndefined()
   })
 

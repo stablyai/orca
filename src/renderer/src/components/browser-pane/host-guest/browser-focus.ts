@@ -55,8 +55,7 @@ function scheduleExpiredRequestCleanup(): void {
 export function queueBrowserFocusRequest(detail: BrowserFocusRequestDetail): void {
   const now = Date.now()
   purgeExpiredFocusRequests(now)
-  // Why: focus requests must survive the target browser pane mounting, but a
-  // removed page should not leave its id in this module-level queue forever.
+  // Keep requests through pane mounting, but expire removed page IDs from this module-level queue.
   pendingBrowserFocusByPageId.set(detail.pageId, {
     target: detail.target,
     expiresAt: now + FOCUS_REQUEST_TTL_MS

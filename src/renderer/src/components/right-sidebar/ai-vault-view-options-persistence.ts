@@ -65,7 +65,7 @@ function isAiVaultGroup(value: unknown): value is AiVaultGroup {
 export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const catalog = new Set<string>(AI_VAULT_AGENTS)
-  // Why: empty selection is intentional (Clear all agents) so users can enable only one agent.
+  // Empty selection intentionally supports Clear all before enabling one agent.
   const disabledAgents = Array.isArray(record.disabledAgents)
     ? [...new Set(record.disabledAgents)].filter(
         (agent): agent is AiVaultAgent => typeof agent === 'string' && catalog.has(agent)
@@ -120,7 +120,7 @@ export function writeAiVaultViewOptions(
     return false
   }
   try {
-    // Why: view preferences are per client, so desktop and mobile must not overwrite each other.
+    // Persist per client so desktop and mobile preferences cannot overwrite each other.
     storage.setItem(
       AI_VAULT_VIEW_OPTIONS_STORAGE_KEY,
       JSON.stringify(normalizeAiVaultViewOptions(options))

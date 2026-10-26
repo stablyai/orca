@@ -14,13 +14,9 @@ import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
 const NO_SERVER_CLIENTS: ReadonlyMap<ExecutionHostId, RpcClient> = new Map()
 
-/**
- * The desktop's repos, then each reachable server's as it answers: a slow server never holds back
- * the desktop's own list.
- */
+// List desktop repos immediately; add each reachable server’s repos as it responds.
 export function useNewWorkspaceRepositories(args: {
   client: RpcClient | null
-  /** The desktop's servers this phone can reach now, whose repos are offered too. */
   serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
   hostId?: string
   visible: boolean
@@ -46,7 +42,7 @@ export function useNewWorkspaceRepositories(args: {
         : [...desktopRepos, ...[...serverRepos.values()].flat()],
     [desktopRepos, serverRepos]
   )
-  // Why derived: the pick follows its repo's latest listing, and goes once its host stops listing it.
+  // Derive the pick so it follows updated listings and disappears when its host stops listing it.
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
     [pickedRepo, repos]

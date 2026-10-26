@@ -61,8 +61,7 @@ function canonicalResult(
 
 function realResult(values: readonly (TuiAgent | null)[], title: string, remote: boolean) {
   const [hook, siblingHook, completed, siblingCompleted, process, sleeping, launch] = values
-  // The seven slots model steady-state observations; this runtime memory bit is intentionally
-  // held true instead of adding an eighth dimension to the approved 17,496-shape table.
+  // Hold the runtime memory bit true; the approved 17,496 steady-state shapes cover seven other slots.
   return resolveTabAgentFromSignals({
     hasObservedAgentSignal: true,
     isRemote: remote,

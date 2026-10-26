@@ -119,8 +119,6 @@ describe('Orca cloud auth config', () => {
   })
 
   it('ignores dev flags in packaged builds even without NODE_ENV', () => {
-    // Why: packaged main bundles never define NODE_ENV, so packaged-ness must
-    // gate the escape hatches on its own.
     expect(allowsPlaintextOrcaCloudSession({ ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1' }, true)).toBe(
       false
     )

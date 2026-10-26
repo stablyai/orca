@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspace-worktree'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { recentStamp } from '../../../../shared/sidebar-list/stamp-order'
 import {
   buildResourceSessionBindingIndex,
   type ResourceSessionBindingInputs
@@ -22,6 +23,7 @@ export type ResourcePtyRow = {
   identity: string
   label: string
   sortName: string
+  lastActivityAt: number
   workspace: string | null
   projectId: string
   project: string | null
@@ -34,7 +36,15 @@ export type ResourcePtyRow = {
 export type ResourcePtyGroup = {
   id: string
   name: string | null
-  workspaces: { id: string; name: string | null; rows: ResourcePtyRow[] }[]
+  sortName: string
+  lastActivityAt: number
+  workspaces: {
+    id: string
+    name: string | null
+    sortName: string
+    lastActivityAt: number
+    rows: ResourcePtyRow[]
+  }[]
 }
 
 export function buildResourcePtyRows(args: {
@@ -152,6 +162,7 @@ export function buildResourcePtyRows(args: {
       identity: ptySessionIdentity(session),
       label,
       sortName: tab?.customTitle?.trim() || tab?.defaultTitle?.trim() || session.id,
+      lastActivityAt: recentStamp(workspace ?? {}),
       workspace: workspaceName,
       workspaceId: workspace?.id ?? null,
       projectId: project ? (workspace?.repoId ?? '') : '',
@@ -177,7 +188,13 @@ export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourceP
     let project = projects.get(row.projectId)
     if (!project) {
       project = {
-        group: { id: row.projectId, name: row.project, workspaces: [] },
+        group: {
+          id: row.projectId,
+          name: row.project,
+          sortName: row.project?.trim().toLocaleLowerCase() ?? '\uffff',
+          lastActivityAt: 0,
+          workspaces: []
+        },
         workspaces: new Map()
       }
       projects.set(row.projectId, project)
@@ -185,19 +202,27 @@ export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourceP
     const workspaceId = row.workspaceId ?? ''
     let workspace = project.workspaces.get(workspaceId)
     if (!workspace) {
-      workspace = { id: workspaceId, name: row.workspace, rows: [] }
+      workspace = {
+        id: workspaceId,
+        name: row.workspace,
+        sortName: row.workspace?.trim().toLocaleLowerCase() ?? '\uffff',
+        lastActivityAt: 0,
+        rows: []
+      }
       project.workspaces.set(workspaceId, workspace)
       project.group.workspaces.push(workspace)
     }
     workspace.rows.push(row)
+    workspace.lastActivityAt = Math.max(workspace.lastActivityAt, row.lastActivityAt)
+    project.group.lastActivityAt = Math.max(project.group.lastActivityAt, row.lastActivityAt)
   }
   const groups = [...projects.values()].map(({ group }) => group)
   for (const group of groups) {
     group.workspaces.sort(
       (a, b) =>
-        (a.name?.trim().toLocaleLowerCase() ?? '\uffff').localeCompare(
-          b.name?.trim().toLocaleLowerCase() ?? '\uffff'
-        ) || a.id.localeCompare(b.id)
+        b.lastActivityAt - a.lastActivityAt ||
+        a.sortName.localeCompare(b.sortName) ||
+        a.id.localeCompare(b.id)
     )
     for (const workspace of group.workspaces) {
       workspace.rows.sort(
@@ -207,8 +232,8 @@ export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourceP
   }
   return groups.sort(
     (a, b) =>
-      (a.name?.trim().toLocaleLowerCase() ?? '\uffff').localeCompare(
-        b.name?.trim().toLocaleLowerCase() ?? '\uffff'
-      ) || a.id.localeCompare(b.id)
+      b.lastActivityAt - a.lastActivityAt ||
+      a.sortName.localeCompare(b.sortName) ||
+      a.id.localeCompare(b.id)
   )
 }

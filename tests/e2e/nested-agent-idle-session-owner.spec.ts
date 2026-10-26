@@ -106,7 +106,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   await orcaPage.screenshot({ path: testInfo.outputPath('01-claude-before-nested.png') })
   expect(
     await orcaPage.evaluate(
-      (key) => window.api.agentStatus.hasVerifiableAgentProcess(key),
+      async (key) => (await window.api.agentStatus.hasVerifiableAgentProcess?.(key)) ?? false,
       descriptor.paneKey
     )
   ).toBe(true)

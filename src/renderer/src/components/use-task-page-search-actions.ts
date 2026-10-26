@@ -37,7 +37,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
       let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
-      // Why: withQualifier round-trips through parseTaskQuery so each dropdown's patch preserves prior filters and free-text.
+      // Round-trip through parseTaskQuery so dropdown patches preserve other filters and free text.
       if ('author' in change) {
         next = withQualifier(next, 'author', change.author ?? null)
       }
@@ -123,7 +123,6 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   )
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
-      // Why: the default task view is a durable preference, so persist it instead of only changing page state.
       void updateSettings({
         defaultTaskViewPreset: presetId
       }).catch(() => {

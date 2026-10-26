@@ -27,8 +27,6 @@ function createMockProxyProcess(): MockProxyProcess {
   return proc
 }
 
-// ── spawnProxyCommand ───────────────────────────────────────────────
-
 describe('spawnProxyCommand', () => {
   beforeEach(() => {
     spawnMock.mockReset()

@@ -11,9 +11,9 @@ import { join } from 'node:path'
 import {
   createStore,
   makeRepo,
-  makeTerminalTab,
   testState
-} from '../../src/main/persistence-test-harness'
+} from '../../src/main/persistence/persistence-test-harness'
+import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
 import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-row-resolution'
 

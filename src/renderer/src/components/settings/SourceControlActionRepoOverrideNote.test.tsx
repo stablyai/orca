@@ -71,8 +71,7 @@ describe('SourceControlActionRepoOverrideNote', () => {
       }))
     })
 
-    // The overflow note lives in the tooltip content, only mounted once Radix
-    // opens the tooltip — drive its pointer-move open path and flush the timer.
+    // Open Radix’s pointer-move tooltip and flush its timer before inspecting the portal-only overflow note.
     const trigger = container.querySelector('[data-slot="tooltip-trigger"]')
     await act(async () => {
       trigger?.dispatchEvent(

@@ -109,6 +109,8 @@ export type AcpDialect = {
     at: number
   ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
+  /** The agent dropped this session; only a new child can reopen it. */
+  sessionLost?(error: AcpAgentError, sessionId: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined

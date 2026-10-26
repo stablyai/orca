@@ -13,7 +13,6 @@ const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 
-/** Resume point for an incremental read of one Codex rollout file. */
 export type JsonlCursor = {
   filePath?: string
   offset: number
@@ -53,8 +52,7 @@ export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
   }
 }
 
-/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines.
- *  `lineFilter` skips JSON.parse for raw lines the caller can reject by substring. */
+/** Undefined distinguishes unreadable/vanished files from no new lines; lineFilter rejects raw substrings before JSON.parse. */
 export function readJsonlCursor(
   cursor: JsonlCursor,
   lineFilter?: (line: string) => boolean

@@ -3,12 +3,10 @@ import {
   type NativeChatSessionOptionRecord
 } from '../../../src/shared/native-chat-session-option-state'
 
-// Why: per-tab records survive chat↔terminal flips and remounts, like desktop's
-// scope cache. Bounded so long sessions across many tabs can't grow unbounded.
+// Bound per-tab records that outlive chat/terminal switches and remounts.
 const MOBILE_SESSION_OPTION_RECORD_CAP = 32
 const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
-// The catalog model id last taken from a hook report, per scope. Mobile cannot
-// read the agent's screen, so a repeat of the same report is not new evidence.
+// Repeated hook model reports are not fresh evidence: mobile cannot inspect the agent screen.
 export const appliedReportByScope = new Map<string, string>()
 
 export function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOptionRecord {
@@ -18,9 +16,7 @@ export function getScopedRecord(scopeKey: string, agent: string): NativeChatSess
   if (record !== existing) {
     appliedReportByScope.delete(scopeKey)
   }
-  // Why: delete-then-set on every read makes the touched scope most-recent, so
-  // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
-  // a long-lived active tab be the oldest key and lose its tracked model.
+  // Refresh Map order on read so eviction cannot drop a long-lived active tab’s model.
   recordsByScope.delete(scopeKey)
   recordsByScope.set(scopeKey, record)
   while (recordsByScope.size > MOBILE_SESSION_OPTION_RECORD_CAP) {

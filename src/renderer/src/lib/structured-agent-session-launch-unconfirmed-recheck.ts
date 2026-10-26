@@ -7,12 +7,7 @@ import {
   structuredLaunchStates
 } from './structured-agent-session-launch-registry'
 
-/**
- * `executionHostId` is reachable again: its full inventory just arrived on a new subscription.
- * Re-checks each launch it owns whose create was never confirmed, as Retry would, so it settles to
- * published or failed without the user. One still unconfirmed waits for the host's next return;
- * a cancelled launch reads as cancelled and is skipped.
- */
+/** On host inventory reconnect, recheck its unconfirmed launches as Retry does. Settle published/failed; still-unknown waits for the next return, and cancellation skips. */
 export function recheckUnconfirmedStructuredAgentLaunches(executionHostId: ExecutionHostId): void {
   const launches = [...structuredLaunchStates()].map(({ intent }) => ({
     worktreeId: intent.worktreeId,
@@ -36,7 +31,7 @@ export function recheckUnconfirmedStructuredAgentLaunches(executionHostId: Execu
     try {
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     } catch (error) {
-      // Why: recovery bookkeeping must not break the inventory that reported the host back.
+      // Recovery bookkeeping must not break the inventory that announced reconnection.
       console.warn('[structured-agent-launch] unconfirmed launch re-check failed', error)
     }
   }

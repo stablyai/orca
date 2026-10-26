@@ -31,9 +31,7 @@ export type WorktreeSidebarDragSession = {
   draggedCopies: DraggedWorktreeCopies
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
-  // Why: one live coordinate space for both hit testing and rendering. Stability
-  // against mid-drag card resizes comes from holding the drop *decision*
-  // (`anchor`), not from freezing this geometry.
+  // Keep live geometry for rendering/hit tests; hold the drop decision in anchor to resist mid-drag resizing.
   rects: readonly WorktreeSidebarDragRect[]
   grab: WorktreeSidebarDragGrab | null
   anchor: WorktreeSidebarDropAnchor | null
@@ -153,8 +151,7 @@ export function getWorktreeSidebarDragRectsForGroup(
     rects.push({
       worktreeId,
       groupIndex,
-      // Why: drop previews animate via row transforms. Anchor hit-testing to
-      // the virtual row's static slot so animated offsets cannot perturb it.
+      // Hit-test the static virtual slot so preview transforms cannot shift the target.
       top,
       bottom: top + rect.height
     })

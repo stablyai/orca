@@ -5,7 +5,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   restartContinuationMessage
 } from '../../../shared/agent-session-restart-continuation'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,

@@ -44,6 +44,12 @@ describe('resolveTaskPullRequestRepo', () => {
         url: 'https://github.com/acme/orca/pull/12'
       })
     ).toEqual({ owner: 'acme', repo: 'orca', host: 'github.com' })
+    expect(
+      resolveTaskPullRequestRepo({
+        prRepo: undefined,
+        url: 'https://github.example.com:8443/acme/orca/pull/12'
+      })
+    ).toEqual({ owner: 'acme', repo: 'orca', host: 'github.example.com:8443' })
   })
 })
 

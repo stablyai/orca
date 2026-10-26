@@ -261,7 +261,7 @@ beforeEach(() => {
 })
 
 describe('getAllowedRoots', () => {
-  it('stops scanning repositories when a local candidate settles each folder scope', () => {
+  it('stops scanning repositories when a local candidate settles each folder scope', async () => {
     const fixture: StoreFixture = {
       repos: Array.from({ length: 1_000 }, (_, index) =>
         makeRepo({ id: `repo-${index}`, path: `/folders/root/repo-${index}` })
@@ -274,18 +274,18 @@ describe('getAllowedRoots', () => {
     }
     const { store } = makeCountingStore(fixture)
     vi.mocked(isPathInsideOrEqual).mockClear()
-    const actual = getAllowedRoots(store)
+    const actual = await getAllowedRoots(store)
     expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100)
     vi.mocked(isPathInsideOrEqual).mockClear()
     expect(actual).toEqual(referenceAllowedRoots(store))
     expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100_000)
   })
 
-  it('reads the store once and indexes project groups once per build', () => {
+  it('reads the store once and indexes project groups once per build', async () => {
     const fixture = makeMixedFixture()
     const { store, counts } = makeCountingStore(fixture)
 
-    getAllowedRoots(store)
+    await getAllowedRoots(store)
 
     expect.soft(counts.getRepos).toBe(1)
     expect.soft(counts.getProjectGroups).toBe(1)
