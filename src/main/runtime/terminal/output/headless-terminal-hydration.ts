@@ -30,12 +30,12 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground>
 
-  private readonly trustDialogStatus = new TrustDialogStatusObserver({
+  protected readonly trustDialogStatus = new TrustDialogStatusObserver({
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     refreshForegroundAgent: (ptyId) => this.ptyForegroundAgent.refresh(ptyId),
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
-    isCurrentEmulator: (ptyId, emulator) =>
-      this.headlessTerminals.get(ptyId)?.emulator === emulator && this.ptysById.has(ptyId),
+    getEmulator: (ptyId) =>
+      this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
     readStatus: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined
@@ -253,7 +253,6 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           this.settleLostAgentSession(ptyId)
         }
         if (!pty.connectionId) {
-          // Runs every chunk: its scan tracks when the dialog leaves the screen.
           this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
           const payload =
             observeCodexCapacityTerminalStatus(
