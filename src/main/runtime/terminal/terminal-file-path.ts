@@ -5,6 +5,36 @@ import {
 } from '../../../shared/cross-platform-path'
 import { parseWslPath, toWindowsWslPath } from '../../wsl'
 
+function normalizeWindowsShellBase(
+  base: string,
+  worktreePath: string,
+  terminalFileUriHostname?: string | null
+): string {
+  if (!/^[A-Za-z]:[\\/]/.test(worktreePath) || parseWslPath(worktreePath)) {
+    return base
+  }
+  const msysDriveMatch = /^\/([A-Za-z])(?=[\\/]|$)(.*)$/.exec(base)
+  if (msysDriveMatch) {
+    const suffix = msysDriveMatch[2]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${msysDriveMatch[1]!.toUpperCase()}:/${suffix}`
+      : `${msysDriveMatch[1]!.toUpperCase()}:/`
+  }
+  const uncDriveMatch = /^(?:\\\\|\/\/)([^\\/]+)[\\/]([A-Za-z])(?=[\\/]|$)(.*)$/.exec(base)
+  if (
+    uncDriveMatch &&
+    (uncDriveMatch[2]!.toUpperCase() === worktreePath[0]?.toUpperCase() ||
+      (terminalFileUriHostname &&
+        uncDriveMatch[1]!.toLowerCase() === terminalFileUriHostname.toLowerCase()))
+  ) {
+    const suffix = uncDriveMatch[3]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${uncDriveMatch[2]!.toUpperCase()}:/${suffix}`
+      : `${uncDriveMatch[2]!.toUpperCase()}:/`
+  }
+  return base
+}
+
 export function resolveTerminalAbsolutePath(args: {
   base: string
   expanded: string
@@ -12,6 +42,7 @@ export function resolveTerminalAbsolutePath(args: {
   connectionId?: string
   terminalFileUriHostname?: string | null
 }): string {
+  const base = normalizeWindowsShellBase(args.base, args.worktreePath, args.terminalFileUriHostname)
   const expanded = normalizeLeadingSlashDrivePath(
     normalizeTerminalFileUriAuthorityPath(
       args.expanded,
@@ -22,14 +53,14 @@ export function resolveTerminalAbsolutePath(args: {
     args.worktreePath
   )
   const isWindowsDriveBase =
-    /^[A-Za-z]:[\\/]/.test(args.base) &&
+    /^[A-Za-z]:[\\/]/.test(base) &&
     /^[A-Za-z]:[\\/]/.test(args.worktreePath) &&
     !parseWslPath(args.worktreePath)
   const targetPath =
     isWindowsDriveBase && /^\/(?![\\/])/.test(expanded) ? expanded.slice(1) : expanded
   const absolutePath = isRuntimePathAbsolute(targetPath)
     ? targetPath
-    : resolveRuntimePath(args.base, targetPath)
+    : resolveRuntimePath(base, targetPath)
   if (args.connectionId) {
     return normalizeLeadingSlashDrivePath(absolutePath, args.worktreePath)
   }

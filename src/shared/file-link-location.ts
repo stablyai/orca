@@ -6,18 +6,22 @@ export type ParsedFileLinkLocation = {
 
 function collapseRepeatedTrailingFilename(pathText: string): string {
   const lastSep = Math.max(pathText.lastIndexOf('/'), pathText.lastIndexOf('\\'))
-  if (lastSep < 0) {
-    return pathText
-  }
   const basename = pathText.slice(lastSep + 1)
-  if (basename.length < 4 || basename.length % 2 !== 0) {
-    return pathText
+  if (basename.length >= 4 && basename.length % 2 === 0) {
+    const half = basename.slice(0, basename.length / 2)
+    if (basename.slice(basename.length / 2) === half && /\.[A-Za-z0-9_+-]+$/.test(half)) {
+      return `${pathText.slice(0, lastSep + 1)}${half}`
+    }
   }
-  const half = basename.slice(0, basename.length / 2)
-  if (basename.slice(basename.length / 2) !== half || !/\.[A-Za-z0-9_+-]+$/.test(half)) {
-    return pathText
+  const partialMatch = /^(.+\.[A-Za-z0-9_+-]{1,8})([^.\\/]+)$/u.exec(basename)
+  if (partialMatch) {
+    const stemWithExt = partialMatch[1]!
+    const trailingRepeat = partialMatch[2]!
+    if (trailingRepeat.length >= 2 && stemWithExt.startsWith(trailingRepeat)) {
+      return `${pathText.slice(0, lastSep + 1)}${stemWithExt}`
+    }
   }
-  return `${pathText.slice(0, lastSep + 1)}${half}`
+  return pathText
 }
 
 export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | null {

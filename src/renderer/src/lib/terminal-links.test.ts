@@ -361,5 +361,17 @@ describe('terminal path helpers', () => {
         true
       )
     })
+
+    it('collapses both full and partial repeated trailing filenames from TUI link output', () => {
+      const fullRepeat = extractTerminalFileLinks(
+        '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md第01章-验棺.md'
+      )
+      expect(fullRepeat[0]?.pathText).toBe('/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md')
+
+      const partialRepeat = extractTerminalFileLinks(
+        '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md第01章-'
+      )
+      expect(partialRepeat[0]?.pathText).toBe('/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md')
+    })
   })
 })

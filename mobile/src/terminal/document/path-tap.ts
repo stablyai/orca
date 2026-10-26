@@ -3,6 +3,7 @@ import { cellColToStringIndex, getLineText } from './cell-geometry'
 import { viewportToCell } from './viewport-cell'
 import {
   canRowContinueWrappedPath,
+  collapseRepeatedTrailingFilename,
   isFullRowPathToken,
   sliceWrappedRow,
   type TerminalWrappedLineRow
@@ -43,22 +44,6 @@ const PATH_TRAILING_TRIM: Record<string, number> = {
   ',': 1,
   ';': 1,
   '.': 1
-}
-
-function collapseRepeatedTrailingFilename(pathText: string): string {
-  const lastSep = Math.max(pathText.lastIndexOf('/'), pathText.lastIndexOf('\\'))
-  if (lastSep < 0) {
-    return pathText
-  }
-  const basename = pathText.slice(lastSep + 1)
-  if (basename.length < 4 || basename.length % 2 !== 0) {
-    return pathText
-  }
-  const half = basename.slice(0, basename.length / 2)
-  if (basename.slice(basename.length / 2) !== half || !/\.[A-Za-z0-9_+-]+$/.test(half)) {
-    return pathText
-  }
-  return pathText.slice(0, lastSep + 1) + half
 }
 
 export function parsePathLineCol(value: string): TerminalPathCandidate | null {
@@ -214,6 +199,7 @@ export function matchWrappedFilePathAtRowColumn(
   if (!tappedRow) {
     return null
   }
+  let softMatched: TerminalPathCandidate | null = null
   let softStart = tappedRowIndex
   while (softStart > 0 && rows[softStart]?.isWrapped) {
     softStart -= 1
@@ -233,12 +219,14 @@ export function matchWrappedFilePathAtRowColumn(
       }
       joinedText += segment
     }
-    const softMatched = matchFilePathAtColumn(joinedText, joinedCol)
-    if (softMatched) {
-      return softMatched
-    }
+    softMatched = matchFilePathAtColumn(joinedText, joinedCol)
   }
   const slices = rows.map((row) => sliceWrappedRow(row.text))
+  for (let i = 1; i < slices.length; i += 1) {
+    if (rows[i]?.isWrapped) {
+      slices[i]!.visualEnd += slices[i - 1]!.visualEnd
+    }
+  }
   const tappedSlice = slices[tappedRowIndex]
   if (tappedSlice && tappedCol >= tappedSlice.contentStart && tappedCol < tappedSlice.contentEnd) {
     let hardStart = tappedRowIndex
@@ -285,13 +273,15 @@ export function matchWrappedFilePathAtRowColumn(
       if (
         hardMatched &&
         (/[\\/]/.test(hardMatched.pathText) ||
-          (/[_-]/.test(hardMatched.pathText) && /\.[A-Za-z0-9]{1,8}$/.test(hardMatched.pathText)))
+          (/[_-]/.test(hardMatched.pathText) &&
+            /\.[A-Za-z0-9]{1,8}$/.test(hardMatched.pathText))) &&
+        (!softMatched || hardMatched.pathText.length >= softMatched.pathText.length)
       ) {
         return hardMatched
       }
     }
   }
-  return matchFilePathAtColumn(tappedRow.text, tappedCol)
+  return softMatched ?? matchFilePathAtColumn(tappedRow.text, tappedCol)
 }
 
 export function filePathAtViewportPoint(

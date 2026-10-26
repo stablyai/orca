@@ -401,5 +401,29 @@ describe('RuntimeFileCommands', () => {
       expect(result).toMatchObject({ relativePath: null, exists: false })
       expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
+
+    it('resolves leading-slash worktree-relative paths on Windows worktrees when Git Bash OSC 7 recorded a UNC drive cwd', async () => {
+      const resolveTerminalCwd = vi.fn(async () => '\\\\laptop-host\\d\\code\\写作')
+      const { commands } = createRuntimeFileCommands({
+        path: 'D:\\code\\写作',
+        resolveTerminalCwd
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+        null,
+        'client-a',
+        'term-1'
+      )
+
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: '小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+        exists: true,
+        isDirectory: false
+      })
+    })
   })
 })

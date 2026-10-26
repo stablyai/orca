@@ -49,21 +49,47 @@ export type FileLinkTarget = {
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
 
+function normalizeWindowsShellCwd(
+  cwd: string | null,
+  worktreePath: string,
+  hasWslDistro: boolean
+): string | null {
+  if (!cwd || hasWslDistro || !/^[A-Za-z]:[\\/]/.test(worktreePath)) {
+    return cwd
+  }
+  const msysDriveMatch = /^\/([A-Za-z])(?=[\\/]|$)(.*)$/.exec(cwd)
+  if (msysDriveMatch) {
+    const suffix = msysDriveMatch[2]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${msysDriveMatch[1]!.toUpperCase()}:/${suffix}`
+      : `${msysDriveMatch[1]!.toUpperCase()}:/`
+  }
+  const uncDriveMatch = /^(?:\\\\|\/\/)[^\\/]+[\\/]([A-Za-z])(?=[\\/]|$)(.*)$/.exec(cwd)
+  if (uncDriveMatch && uncDriveMatch[1]!.toUpperCase() === worktreePath[0]?.toUpperCase()) {
+    const suffix = uncDriveMatch[2]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${uncDriveMatch[1]!.toUpperCase()}:/${suffix}`
+      : `${uncDriveMatch[1]!.toUpperCase()}:/`
+  }
+  return cwd
+}
+
 /** Detected path text to the host path it names; null when it cannot be a link. */
 export function resolveFileLinkTarget(
   parsed: ParsedTerminalFileLink,
   host: FileLinkHost
 ): FileLinkTarget | null {
   const linkWslDistro = terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
+  const hasWslDistro = Boolean(terminalPathWslDistro(host.worktreePath, linkWslDistro))
+  const effectiveCwd = normalizeWindowsShellCwd(host.cwd, host.worktreePath, hasWslDistro)
   const isNativeWindowsCwd =
-    Boolean(host.cwd && /^[A-Za-z]:[\\/]/.test(host.cwd)) &&
-    !terminalPathWslDistro(host.worktreePath, linkWslDistro)
+    Boolean(effectiveCwd && /^[A-Za-z]:[\\/]/.test(effectiveCwd)) && !hasWslDistro
   const normalizedParsed =
     isNativeWindowsCwd && /^\/(?![\\/]|[A-Za-z]:)/.test(parsed.pathText)
       ? { ...parsed, pathText: parsed.pathText.slice(1) }
       : parsed
-  const resolved = host.cwd
-    ? resolveTerminalFileLink(normalizedParsed, host.cwd, host.homePath)
+  const resolved = effectiveCwd
+    ? resolveTerminalFileLink(normalizedParsed, effectiveCwd, host.homePath)
     : null
   if (!resolved) {
     return null

@@ -73,6 +73,26 @@ export function isFullRowPathToken(slice: WrappedRowSlice): boolean {
   return slice.leadingToken.length > 0 && slice.leadingToken.length === slice.content.length
 }
 
+export function collapseRepeatedTrailingFilename(pathText: string): string {
+  const lastSep = Math.max(pathText.lastIndexOf('/'), pathText.lastIndexOf('\\'))
+  const basename = pathText.slice(lastSep + 1)
+  if (basename.length >= 4 && basename.length % 2 === 0) {
+    const half = basename.slice(0, basename.length / 2)
+    if (basename.slice(basename.length / 2) === half && /\.[A-Za-z0-9_+-]+$/.test(half)) {
+      return pathText.slice(0, lastSep + 1) + half
+    }
+  }
+  const partialMatch = /^(.+\.[A-Za-z0-9_+-]{1,8})([^.\\/]+)$/u.exec(basename)
+  if (partialMatch) {
+    const stemWithExt = partialMatch[1]!
+    const trailingRepeat = partialMatch[2]!
+    if (trailingRepeat.length >= 2 && stemWithExt.startsWith(trailingRepeat)) {
+      return pathText.slice(0, lastSep + 1) + stemWithExt
+    }
+  }
+  return pathText
+}
+
 function canRowStartWrappedPath(slice: WrappedRowSlice): boolean {
   return (
     Boolean(slice.trailingToken) &&

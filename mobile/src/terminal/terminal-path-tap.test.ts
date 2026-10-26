@@ -427,6 +427,44 @@ describe('matchFilePathAtColumn', () => {
       column: null
     })
   })
+
+  it('joins hybrid soft-wrapped and hard-wrapped Unicode markdown paths with repeated link labels', () => {
+    const summaryRows = [
+      { text: '  /小说/三国坞堡穿越/卷一/正文/第01章-', isWrapped: false },
+      { text: '验棺.md第01章-', isWrapped: true },
+      { text: '验棺.md，补齐了「濒死闪回与当世挨', isWrapped: false },
+      { text: '  闷棍记忆强行融合」及「汉末世家宗法争印、', isWrapped: true }
+    ]
+    const expected = {
+      pathText: '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+      line: null,
+      column: null
+    }
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        summaryRows,
+        0,
+        colOf(summaryRows[0]!.text, '小说'),
+        45
+      )
+    ).toEqual(expected)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        summaryRows,
+        1,
+        colOf(summaryRows[1]!.text, '验棺'),
+        45
+      )
+    ).toEqual(expected)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        summaryRows,
+        2,
+        colOf(summaryRows[2]!.text, '验棺'),
+        45
+      )
+    ).toEqual(expected)
+  })
 })
 
 describe('injected matchFilePathAtColumn', () => {
