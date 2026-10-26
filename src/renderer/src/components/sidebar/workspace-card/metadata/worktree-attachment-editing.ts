@@ -8,7 +8,7 @@ import {
   splitGitRemoteKey
 } from '../../../../../../shared/git/remotes/git-remote-identity'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types
+import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import {
   getWorkspaceAttachments,
   workspaceAttachmentReferenceLabel

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import {
   ATTACHMENT_INPUT_KINDS,
   buildWorkspaceAttachmentEdits,
@@ -108,6 +108,14 @@ describe('isWorkspaceRepositoryAttachment', () => {
       url: 'https://github.com/acme/repo/pull/7'
     }
     expect(isWorkspaceRepositoryAttachment(foreign, repo('gitlab.corp.example'))).toBe(false)
+  })
+
+  it('still rejects another repository behind an SSH alias remote', () => {
+    const otherRepoMr: WorkspaceAttachment = {
+      ...selfHostedMr,
+      url: 'https://gitlab.corp.example/acme/other/-/merge_requests/42'
+    }
+    expect(isWorkspaceRepositoryAttachment(otherRepoMr, aliasRepo)).toBe(false)
   })
 
   it('keeps requiring a remote identity for URL-backed attachments', () => {
