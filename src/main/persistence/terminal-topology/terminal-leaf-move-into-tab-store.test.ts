@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import type { TerminalLeafIntoTabRequest } from '../../../shared/terminal-leaf-move'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
-import { makeRepo } from '../../persistence-test-harness'
+import { makeRepo } from '../persistence-test-harness'
 import {
   openProfileStateDatabaseReadOnly,
   profileStateDatabaseFile

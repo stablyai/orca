@@ -1,6 +1,4 @@
-// A headless host never loads `ipc/worktrees`, the desktop module that registers the scan-generation
-// bump, so this suite deliberately does not import it: the runtime itself must make a worktree change
-// reach the generation its listing witnesses and the scan cache that listing reads through.
+// Headless hosts never load ipc/worktrees; runtime changes must invalidate both scan generation and cache.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../shared/worktree/types'
@@ -33,6 +31,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -74,8 +73,7 @@ function makeStore() {
 }
 
 function makeRuntimeService(): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store member the local listing reaches is supplied above.
-  return new OrcaRuntimeService(makeStore() as never)
+  return new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 }
 
 function makeRuntime(): () => Promise<DetectedWorktreeListResult> {
@@ -123,7 +121,6 @@ describe('runtime worktree change invalidation', () => {
     const list = makeRuntime()
     listWorktreesStrictMock
       .mockImplementationOnce(async () => {
-        // The worktree becomes listable while this scan is in flight.
         runWorktreeChangeInvalidators(REPO_ID)
         return [row(REPO_PATH)]
       })

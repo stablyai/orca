@@ -140,8 +140,7 @@ describe('README local link check', () => {
     ])
   })
 
-  // Why: a single-quoted attribute is valid HTML and GitHub renders it, so a parser
-  // that only reads double quotes would pass a README with a broken image.
+  // Single-quoted HTML is valid; double-quote-only parsing would miss this broken image.
   it('reports a missing target in a single-quoted attribute', () => {
     const files = {
       ...validReadmes,

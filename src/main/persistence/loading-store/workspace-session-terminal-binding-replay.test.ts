@@ -52,13 +52,21 @@ const bindingRecovery = {
 }
 
 describe('workspace session terminal binding replay', () => {
-  it('retains a restorable legacy tab binding when neither snapshot has a layout', () => {
+  it('retains only restorable legacy tab bindings when neither snapshot has a layout', () => {
     const prior = session('runtime-pty')
     const incoming = session(null)
 
     preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
 
     expect(incoming.tabsByWorktree.worktree[0]!.ptyId).toBe('runtime-pty')
+
+    const unavailable = session(null)
+    preserveMissingWorkspaceSessionTerminalBindings(unavailable, prior, {
+      ...bindingRecovery,
+      getTerminalLayoutLeafIds: () => new Set<string>(),
+      isRestorablePtyBinding: () => false
+    })
+    expect(unavailable.tabsByWorktree.worktree[0]!.ptyId).toBeNull()
   })
 
   it('does not retain a tab binding whose prior leaf was removed from the layout', () => {
@@ -170,8 +178,7 @@ describe('workspace session terminal binding replay', () => {
   })
 
   it('fails closed when one tab id is duplicated inside a single worktree list', () => {
-    // Map indexing is last-wins where a linear find was first-wins; the ambiguity
-    // fence must skip these ids so the two strategies can never disagree.
+    // Map last-wins and linear first-wins differ on duplicates; ambiguous IDs must skip replay.
     const prior = session(null)
     prior.tabsByWorktree = {
       [WORKTREE_A]: [

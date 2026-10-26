@@ -28,7 +28,6 @@ function screen(term: Terminal): string[] {
   )
 }
 
-/** A Claude-like live block redrawn by cell diffs against the previous frame, so it garbles on a stale screen. */
 function liveBlockTui() {
   let prev: string[] = []
   const block = (status: string): string[] => [
@@ -65,7 +64,6 @@ function liveBlockTui() {
 
 let renderer: ReactTestRenderer | undefined
 
-/** The real foundation + subscription hooks, with xterm writes landing in a headless phone terminal. */
 function harness(phone: Terminal) {
   const handlers: ((result: unknown) => void)[] = []
   const pending: Promise<void>[] = []
@@ -172,7 +170,6 @@ async function streamEndsThenResubscribes(teardown: 'end' | 'error') {
   await live(tui.frame('Reading files'))
 
   page.emit({ type: teardown })
-  // Output the phone never sees while unsubscribed.
   await writeSync(host, tui.frame('Writing bench.ts'))
   await writeSync(host, tui.frame('Running suite'))
 

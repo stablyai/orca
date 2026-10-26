@@ -40,7 +40,6 @@ describe('orchestration worker release', () => {
     const resource = h.db.getWorkerTerminalResourceByOwner(dispatchId)
     expect(resource?.release_state).toBe('released')
     expect(resource?.ownership_state).toBe('released')
-    // Outcome is untouched by release.
     expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
   })
 
@@ -181,8 +180,7 @@ describe('orchestration worker release', () => {
     })
   })
 
-  // A stopped/abandoned worker never reaches `release_state = 'requested'`, so no archive can
-  // ever exist for it; refusing the release left the owned pane retained forever.
+  // Stopped/abandoned workers never request archives; requiring one would retain owned panes forever.
   it.each(['stopped', 'abandoned'] as const)(
     'releases a dead %s worker whose output could never be archived',
     async (state) => {
@@ -428,7 +426,6 @@ describe('orchestration worker release', () => {
       /Output could not be preserved/
     )
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    // Durable intent survives for recovery.
     expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
   })
 

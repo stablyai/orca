@@ -20,8 +20,7 @@ export type StructuredAgentLaunchOptions = {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
-  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
-   *  identity, not a preference — see `launchIdentity`. */
+  // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId

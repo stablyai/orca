@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { importsSqliteRuntime, SQLITE_MODULES } from './vitest-sqlite-runtime-scan.mjs'
 
@@ -21,4 +21,12 @@ it.each([
   ['import { type Options } from "./sync-database"', false]
 ])('classifies the runtime dependency in %s', (source, runtime) => {
   expect(importsSqliteRuntime('src/main/sqlite/example.test.ts', source)).toBe(runtime)
+})
+
+it.each([
+  'src/main/runtime/editor-view-layout-apply.test.ts',
+  'src/main/runtime/restored-editor-move-restart.test.ts',
+  'src/main/runtime/workspaces/persisted-surfaces/sweep-terminal-placement.test.ts'
+])('routes the real topology SQLite fixture consumer to Node: %s', (file) => {
+  expect(importsSqliteRuntime(file, readFileSync(file, 'utf8'))).toBe(true)
 })

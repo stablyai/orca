@@ -1,6 +1,4 @@
-// Flags Enter handling on raw text-entry surfaces that skips the shared IME guard, so the Enter
-// that confirms a CJK candidate cannot submit half-composed text. <Input>/<Textarea>/ImeInput/
-// ImeTextarea are capitalized components and never match; only intrinsic elements are checked.
+// Guard intrinsic text-entry Enter handlers against CJK composition submission; capitalized Input/Textarea/ImeInput/ImeTextarea components already own the guard.
 
 const KEY_HANDLER_PROPS = new Set([
   'onKeyDown',

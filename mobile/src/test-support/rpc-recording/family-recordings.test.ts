@@ -48,8 +48,7 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
 describe('family reply partitions and owned schedules', () => {
   const goldens = familyGoldens(input.scenarios)
   const families = [...new Set(input.scenarios.map((scenario) => scenario.family))]
-  // Read off the goldens that actually generate a test, so the census is independent of whether
-  // replyMatrixSites would throw on an empty list: the mechanism this replaced skipped families.
+  // Count sites that actually generate tests so skipped families cannot hide behind the matrix-site reader.
   const sites = goldens.flatMap((golden) => (golden.site ? [golden] : []))
   it('matrices every family in the manifest', () => {
     expect([...new Set(sites.map((golden) => golden.family))]).toEqual(families)

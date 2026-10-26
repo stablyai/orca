@@ -62,8 +62,7 @@ export type WorktreeItemRowContext = {
   onCardDragEnd: () => void
 }
 
-// Geometry differs three ways: a plain grouped row, a lineage child inheriting its parent's
-// surface, and a row inside a folder-backed project group.
+// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,

@@ -1,6 +1,3 @@
-// Why: the rows that move commits between local and remote. They share the ahead/behind counts and
-// the force-with-lease verdict, so a change to one ladder is reviewable against its siblings.
-
 import { translate } from '@/i18n/i18n'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
@@ -70,7 +67,7 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
                   : ahead === 0
                     ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
                     : describePushCount(ahead),
-    // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD and unknown review targets block.
+    // Push can set upstream and coexist with force-with-lease; detached HEAD and unknown review targets still block it.
     disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
   }
 
@@ -90,7 +87,7 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
               : shouldForcePushWithLease
                 ? forcePushTitle
                 : formatManualForcePushTitle(pushLabelCount, behind, upstreamStatus?.upstreamName),
-    // Why: same target-safety gate as Push — force-with-lease to a wrong review head is worse than blocking; stays available without an upstream.
+    // Match Push target safety; force-with-lease must not push the wrong review head.
     disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
   }
 

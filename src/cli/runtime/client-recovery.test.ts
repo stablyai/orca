@@ -74,6 +74,8 @@ describe('RuntimeClient orchestration recovery identity', () => {
   it('attaches the request and exact retry identity to a real RPC failure response', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-recovery-'))
     const endpoint = join(userDataPath, 'runtime.sock')
+    let rpcRequestId: string | undefined
+    let orchestrationRequestId: string | undefined
     const server = createServer((socket) => {
       let buffer = ''
       socket.setEncoding('utf8')
@@ -84,6 +86,15 @@ describe('RuntimeClient orchestration recovery identity', () => {
           return
         }
         const request = JSON.parse(buffer.slice(0, newline)) as { id: string; method: string }
+        if (request.method === 'orchestration.workerStart') {
+          rpcRequestId = request.id
+          if (
+            'orchestrationRequestId' in request &&
+            typeof request.orchestrationRequestId === 'string'
+          ) {
+            orchestrationRequestId = request.orchestrationRequestId
+          }
+        }
         const response =
           request.method === 'status.get'
             ? {
@@ -120,12 +131,14 @@ describe('RuntimeClient orchestration recovery identity', () => {
         response?: { id?: string; _meta?: { runtimeId?: string } }
       }
       expect(recovered).toBeInstanceOf(RuntimeRpcFailureError)
+      expect(rpcRequestId).toEqual(expect.any(String))
+      expect(orchestrationRequestId).toEqual(expect.any(String))
       expect(recovered.response).toMatchObject({
-        id: expect.any(String),
+        id: rpcRequestId,
         _meta: { runtimeId: 'runtime-1' }
       })
       expect(recovered.data).toMatchObject({
-        orchestrationRequestId: expect.any(String),
+        orchestrationRequestId,
         dispatchId: 'dispatch_1',
         originalCommand: ['orca', 'orchestration', 'worker-start', '--task', 'task_1'],
         recovery: {
@@ -144,7 +157,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
             '--task',
             'task_1',
             '--retry-request',
-            expect.any(String)
+            orchestrationRequestId
           ],
           recoveryBlocked: false
         }

@@ -8,7 +8,7 @@ import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/termi
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
-} from '../pty-hidden-delivery-gate'
+} from './delivery/pty-hidden-delivery-gate'
 import { localProvider, type ResolvedPtyHost } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
@@ -58,7 +58,7 @@ import { bindProviderListeners } from './provider/bind-listeners'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
 import { installPtyResizeVisibilityIpc } from './ipc/resize-visibility'
 import { adoptStablePane } from './pane/adopt-stable'
-import { getPtyIpc } from '../pty-host-bindings'
+import { getPtyIpc } from './pty-host-bindings'
 import {
   noCodexResumeLaunch,
   prepareCodexResumeHome,

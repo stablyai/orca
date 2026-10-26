@@ -2,7 +2,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
+import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 export function claudeProviderHandleLink(input: {
   sessionId: string

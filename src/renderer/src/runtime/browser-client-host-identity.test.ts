@@ -10,14 +10,7 @@ afterEach(() => {
 })
 
 describe('readBrowserClientHostId', () => {
-  it('reads the id its main process reports', () => {
-    vi.stubGlobal('api', { browser: { readClientHostId: () => 'browser-host-a' } })
-
-    expect(readBrowserClientHostId()).toBe('browser-host-a')
-  })
-
-  // Why the read is not repeated: every row of every session snapshot asks, and the id is fixed
-  // for the life of the process.
+  // Snapshot rows repeatedly ask; a real hosting ID is process-stable and read once.
   it('asks the bridge once and answers from the cache after that', () => {
     const readClientHostId = vi.fn(() => 'browser-host-a')
     vi.stubGlobal('api', { browser: { readClientHostId } })
@@ -39,8 +32,7 @@ describe('readBrowserClientHostId', () => {
     expect(readBrowserClientHostId()).toBeNull()
   })
 
-  // Why null is not cached: it means the answer was unavailable, not that this client will never
-  // host — a caller that asked too early must not be told "never" for the rest of the session.
+  // Null means unavailable now, not never hosting; early reads must not poison the cache.
   it('keeps asking until the bridge answers', () => {
     const readClientHostId = vi
       .fn<() => string | null>()

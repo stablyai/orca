@@ -130,7 +130,6 @@ describe('WorktreeCard pinned repo icon', () => {
           repo={makeRepo()}
           isActive={false}
           inPinnedSection
-          // grouped-by-repo hides the normal badge; the pinned icon must still show
           hideRepoBadge
         />
       )

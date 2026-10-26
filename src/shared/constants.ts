@@ -62,12 +62,7 @@ export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   manual: 'File'
 }
 
-/** Why: ProseMirror renders the whole document without virtualization. After the
- *  parser/highlighter work in #17134/#17147/#17158, M-series Electron measurements
- *  on distinct code blocks every ~600 bytes put visible mount / longest task at
- *  300 KB 0.70 / 0.66 s · 450 KB 1.09 / 1.02 s · 600 KB 1.49 / 1.41 s, with
- *  600 KB typing at 38 ms median / 39 ms p95. Bytes remain the only cheap
- *  pre-parse guard; larger files use source mode with an "Open anyway" escape hatch. */
+/** ProseMirror mounts whole documents. M-series Electron measurements at 300/450/600KB: longest tasks 0.66/1.02/1.41s; 600KB typing p95 39ms (#17134/#17147/#17158). Use cheap pre-parse byte guard, then source mode with Open anyway. */
 export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
@@ -96,8 +91,7 @@ export const REPO_COLORS = [
 
 export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
 
-/** The stock worktree root. Exported so callers can tell an untouched default apart
- *  from a workspace directory the user actually chose. */
+/** Expose the stock root so callers can distinguish an untouched default from a user-selected directory. */
 export function getDefaultWorkspaceDir(homeDir: string): string {
   const separator = homeDir.includes('\\') ? '\\' : '/'
   const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')

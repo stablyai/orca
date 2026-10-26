@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
@@ -73,7 +73,6 @@ describe('structured worker session', () => {
     releaseStructuredWorkerSession('d1')
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    // A second settlement is a no-op.
     releaseStructuredWorkerSession('d1')
     expect(dispose).toHaveBeenCalledTimes(1)
   })
@@ -82,8 +81,7 @@ describe('structured worker session', () => {
     installHost()
     let envAtSpawn: Record<string, string> | undefined
     createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
-      // `attach` is what spawns the provider child, and the child's env is read from the registry
-      // at spawn time. Registering afterwards ships a worker with no ORCA_TERMINAL_HANDLE.
+      // Register worker identity before attach reads the child environment, or ORCA_TERMINAL_HANDLE is absent.
       envAtSpawn = sealedChildEnv(args.envelope.sessionId)
       return { ok: true, value: { sessionId: args.envelope.sessionId } }
     })
@@ -135,9 +133,7 @@ describe('structured worker session', () => {
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
     }
-    // `commit` answers this after `attach` SUCCEEDED and only the tab publish failed, so the
-    // provider child is live. Reading it as "refused, nothing created" strands that child with no
-    // binding, and nothing else in the runtime ever retires it.
+    // operation_unknown after attach can leave a live provider child when only publication failed; failed start must retire it.
     createSpy.mockImplementation(async () => ({
       ok: false,
       refusal: {
@@ -324,24 +320,19 @@ describe('structured worker dispatch preamble', () => {
   })
 
   it('reports a preamble still held for an agent that outlasted the wait, without failing the start (W10)', async () => {
-    // Held, not lost: the host delivers it when the agent starts. Throwing here tore the worker
-    // down, which rejected the preamble the start was about to deliver.
+    // Pending preamble is held for the starting agent; throwing would tear it down and reject text about to be delivered.
     await expect(
       send(hostWithSubmission({ dispatchState: 'pending', reason: null }))
     ).resolves.toBe('pending')
   })
 
   it('never claims delivery for a submission the provider never acknowledged', async () => {
-    // `dispatchSafely` turns ANY thrown adapter call — provider child dead, transport dropped —
-    // into `unknown`, and `performSend` still returns ok. Reporting that as `dispatch_input:
-    // accepted` marks the worker ready with no task, and the coordinator blocks in
-    // `check --wait --types worker_done` until it times out.
+    // Adapter throws settle as unknown despite performSend returning ok; claiming readiness strands the coordinator without a delivered task.
     const error = await send(
       hostWithSubmission({ dispatchState: 'unknown', reason: 'provider child exited' })
     ).catch((thrown: unknown) => thrown)
     expect((error as { code?: string }).code).toBe('operation_unknown')
-    // The wiring, not just the throw: this is the code that makes the start receipt
-    // `outcome_unknown` with the worker-show / worker-abandon recovery commands.
+    // Verify this reaches the outcome_unknown receipt with worker-show/abandon recovery commands.
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(true)
   })
 
@@ -367,9 +358,7 @@ describe('structured worker dispatch preamble', () => {
     const error = await send(
       hostWithSubmission({ dispatchState: 'rejected', reason: 'fence moved' })
     ).catch((thrown: unknown) => thrown)
-    // A verdict, not prose. A coordinator must be able to tell "we could not send it"
-    // from `operation_unknown`'s "it may be running, go look" without parsing a message,
-    // which a bare `Error` forced it to do.
+    // A typed verdict distinguishes definite non-delivery from operation_unknown without parsing prose.
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect((error as Error).message).toMatch(/not delivered: fence moved/)
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
@@ -396,8 +385,7 @@ describe('structured worker dispatch preamble', () => {
   })
 
   it('reports a refused transport write as undelivered, never as unknown', async () => {
-    // The state a provably-unwritten frame now settles. Nothing reached the provider,
-    // so there is no running turn for a coordinator to go and look at.
+    // Provably unwritten input has no running turn to inspect; report definitive non-delivery.
     const error = await send(
       hostWithSubmission({
         dispatchState: 'rejected',

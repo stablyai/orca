@@ -26,7 +26,6 @@ import {
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
-// Switch on, main draws the window's tabs: `layout.apply` and its frames are the test's main.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -46,8 +45,7 @@ const layoutOwner: StructuredLaunchSlotOwner = {
 
 const WORKTREE_ID = 'repo-1::worktree-1'
 const SESSION_ID = 'session-close-race'
-// A paired server keeps the window's tombstone in both builds; this machine keeps one only with
-// the switch off (with it on, main hears the cancel: structured-launch-cancel-layout-owner.test.ts).
+// Paired hosts always need window tombstones; layout-owner local builds use main’s cancel fence instead.
 const SERVER_HOST = 'runtime:server-1'
 const SERVER = { kind: 'environment', environmentId: 'server-1' } as const
 
@@ -72,7 +70,6 @@ function latePublication(): RuntimeMobileSessionTabsResult {
   }
 }
 
-/** A launch whose create is on its way to `executionHostId`. */
 function setLaunch(
   executionHostId: ExecutionHostId,
   target: RuntimeClientTarget,
@@ -155,7 +152,6 @@ async function expectLatePublicationSuppressed(
 const TERMINAL = 'terminal-1'
 let main: TabsDrawnFromMain | null = null
 
-/** Switch on: the worktree, with one terminal, drawn from main's frames. */
 async function drawWorktreeFromMain(): Promise<void> {
   useAppStore.setState({
     worktreesByRepo: { 'repo-1': [makeWorktree({ id: WORKTREE_ID, repoId: 'repo-1' })] },
@@ -200,7 +196,6 @@ async function drawWorktreeFromMain(): Promise<void> {
   main = await drawTabsFromMain(useAppStore)
 }
 
-/** What the window shows of the chat, and what main's layout holds of it. */
 async function shownChat(): Promise<{ drawn: boolean; inMain: boolean; opened: boolean }> {
   await main?.settle()
   return {
@@ -363,7 +358,6 @@ describe('structured launch cancellation retirement', () => {
     }
   )
 
-  // Switch on, main holds this machine's cancel: neither inventory brings the chat back.
   it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'keeps a local cancel through an inventory that cannot list chats',
     async () => {
@@ -397,7 +391,6 @@ describe('structured launch cancellation retirement', () => {
       )
       expect(await shownChat()).toEqual(NOT_SHOWN)
 
-      // A later inventory that lists the chat (its create landed late) does not show it either.
       call.mockImplementation(() => Promise.resolve(listing(false)))
       await refreshLocalStructuredSessionTabs()
       expect(await shownChat()).toEqual(NOT_SHOWN)

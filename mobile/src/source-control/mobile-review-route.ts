@@ -12,9 +12,7 @@ export type MobileReviewRouteTarget = {
 
 export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): string {
   const params = new URLSearchParams()
-  // Why: open the tapped file first (via file/area) while keeping the full
-  // changed-file queue so next/previous still walks every file — scope is the
-  // queue filter, not the position, so it stays 'all'.
+  // Open the tapped file but keep scope all so next/previous can traverse the full changed-file queue.
   params.set('scope', 'all')
   params.set('file', target.filePath)
   params.set('area', target.area)

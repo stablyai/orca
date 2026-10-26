@@ -1,21 +1,10 @@
-/**
- * Script generators for the multi-workspace sustained typing-latency bench
- * (terminal-multi-workspace-typing-latency.spec.ts):
- *
- * - a paced agent-TUI load generator that replays the deterministic pipeline
- *   bench fixture through a real PTY at a fixed byte rate, emulating a Claude
- *   Code-style agent streaming in another workspace, and
- * - a typing echo probe that records each character and its arrival time at
- *   the pty in sidecar JSONL, so a key's total latency decomposes into
- *   input-half (CDP keydown -> pty stdin) and echo-half (pty echo -> screen).
- */
+// Generate paced PTY agent load and sidecar echo arrivals for terminal-multi-workspace-typing-latency.spec.ts.
+// Split driver→PTY receipt from receipt→polled xterm-buffer detection.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-// Why absolute file URL: the generated .mjs scripts run with the disposable
-// test repo as cwd, so the fixture builder must be imported by absolute
-// specifier (file URL keeps Windows drive-letter paths importable).
+// Import fixture builders by absolute file URL because generated scripts run in disposable repos, including Windows.
 const PIPELINE_BENCH_URL = pathToFileURL(
   path.resolve(__dirname, '..', 'tools', 'benchmarks', 'terminal-pipeline-bench.mjs')
 ).href
@@ -153,19 +142,8 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
-/**
- * Codex-shaped echo probe: same sidecar contract as the plain probe, but each
- * keystroke repaint is wrapped in a DEC 2026 synchronized frame and split so the
- * closing `\x1b[?2026l` leaves the process in a SEPARATE write from the frame
- * body. That is what a real Codex draw looks like on the wire (codex-rs
- * tui.rs `stdout().sync_update(...)`, up to 120 FPS), and it is the shape the
- * plain probe misses — it emits one unwrapped ~50 byte line per key, so it can
- * never leave xterm's synchronized-output latch open.
- *
- * `frameRows` pads the frame body to a realistic repaint size; `splitDelayMs`
- * is the gap between body and close, i.e. how long the latch stays open at the
- * source before Orca's delivery adds any of its own.
- */
+// Model Codex DEC 2026 frames with body and closing ?2026l in separate writes; the plain unwrapped echo cannot leave xterm’s latch open.
+// frameRows controls repaint size; splitDelayMs controls the source-side open-latch interval.
 function codexEchoProbeScript(
   runId: string,
   arrivalSidecarPath: string,
@@ -238,8 +216,7 @@ export function writeSustainedAgentLoadScript(
   readyFileDirectory: string
 ): void {
   mkdirSync(path.dirname(scriptPath), { recursive: true })
-  // Generated scripts concatenate with '/', which Node's fs accepts on all
-  // platforms; normalize Windows backslashes out of the baked-in directory.
+  // Normalize baked-in Windows paths because generated scripts join with forward slashes.
   writeFileSync(
     scriptPath,
     sustainedAgentLoadScript(runId, readyFileDirectory.replaceAll('\\', '/'))

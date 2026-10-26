@@ -1,8 +1,4 @@
-// The host publishes its queued drafts whole-list on the subscribe stream:
-// present = the current list, absent = unchanged since the last frame this
-// subscriber was sent, `null` = empty. History pages are ignored here — the
-// live stream is authoritative and a stale history answer must never replace
-// a newer live list.
+// Live lists are authoritative: absent means unchanged and null means empty; history pages must never replace newer queue state.
 
 import type {
   AgentSessionQueuedMessage,
@@ -16,8 +12,7 @@ export type MobileQueuedMessageFeed = AgentSessionQueuedMessage[] | null
 /** The whole queue's pause; null when it sends on its own or nothing was published. */
 export type MobileQueuePause = AgentSessionQueuePause | null
 
-/** The pause rides with the list: a frame that publishes the list states it, and one that omits
- *  the list leaves it unchanged. */
+// List and pause publish together; omitted lists preserve both.
 export function reduceMobileQueuePause(
   previous: MobileQueuePause,
   event: AgentSessionSubscribeEvent
@@ -47,7 +42,6 @@ export function reduceMobileQueuedMessageFeed(
   if (list.length === 0 && previous !== null && previous.length === 0) {
     return previous
   }
-  // Host order is authoritative; sort defensively so card order never depends
-  // on publication order.
+  // Use host positions so publication order cannot reorder cards.
   return [...list].sort((left, right) => left.position - right.position)
 }

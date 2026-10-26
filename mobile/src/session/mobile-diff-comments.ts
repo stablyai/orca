@@ -143,7 +143,6 @@ export function removeDeliveredMobileDiffComments(
   })
 }
 
-/** Unsent notes that no new-agent send is still carrying. */
 export function sendableMobileDiffComments(
   comments: readonly DiffComment[],
   sendingIds: ReadonlySet<string>

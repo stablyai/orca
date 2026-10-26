@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { partitionSelfTestLongTask, type LongTaskSample } from './runtime-graph-publication-probe'
 
-// The observer is live from probe start, so setup work lands in the array before
-// the injected busy-wait. Index 0 is the decoy a start-time cutoff would accept.
+// Setup entries precede the busy-wait; index zero is a decoy that a start-time cutoff would wrongly accept.
 const setupTask: LongTaskSample = { startEpochMs: 1_000, durationMs: 120 }
 const selfTestTask: LongTaskSample = { startEpochMs: 5_000, durationMs: 260 }
 const workloadTask: LongTaskSample = { startEpochMs: 9_000, durationMs: 80 }

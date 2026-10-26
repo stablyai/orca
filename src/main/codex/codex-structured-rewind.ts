@@ -1,7 +1,7 @@
 import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../shared/agent-session-wire'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 
 function record(value: unknown): Record<string, unknown> {

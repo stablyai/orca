@@ -11,6 +11,7 @@ import {
 
 test('drops a running terminal tab on the right edge of another tab pane, surviving two relaunches @golden', async (// oxlint-disable-next-line no-empty-pattern -- this test owns every Electron launch.
 {}, testInfo) => {
+  // Three Electron launches, each restoring the session, need more than the default timeout.
   test.setTimeout(420_000)
   const repoPath = seededRepoPath()
   const session = createRestartSession(testInfo)

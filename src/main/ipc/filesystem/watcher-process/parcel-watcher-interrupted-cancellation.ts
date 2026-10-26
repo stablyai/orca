@@ -1,6 +1,6 @@
 import { resetPendingSubscribeAttempt } from './parcel-watcher-pending-subscribe'
-import type { WatcherProcessFailure } from '../../parcel-watcher-process-failure'
-import type { WatcherProcessSubscriptionRecord } from '../../parcel-watcher-process-subscription'
+import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 
 export function cancelInterruptedWatcherSubscribe(args: {
   record: WatcherProcessSubscriptionRecord

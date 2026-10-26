@@ -21,11 +21,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     >
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabsChangedNow']>
 
-  // Why: the accepted-revision no-op gate must not fossilize preserved runtime
-  // tabs. A stored merged snapshot's tabs absent from the accepted renderer
-  // publication exist only via preservation; if any such tab no longer
-  // passes the preservation predicate (binding removed from the live PTY table
-  // and persisted session, or browser page closed), the stored snapshot is stale.
+  // Accepted renderer resends must still prune preserved runtime tabs whose live/durable binding or browser page disappeared.
   protected storedMobileSnapshotHasStalePreservedTab(
     existing: RuntimeMobileSessionTabsSnapshot,
     rendererTabIdentityKeys: ReadonlySet<string>
@@ -45,8 +41,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     const incomingIds = new Set(
       incoming?.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
     )
-    // Why: a headless-built base preserves every terminal, so a renderer publication over it
-    // (the first after a restart) must still drop the tabs the renderer durably closed (STA-4897).
+    // Even headless-built bases must drop renderer-durably-closed tabs on first publication after restart (STA-4897).
     const retiredTabIds =
       incoming && this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
         ? new Set(this.listRendererRetiredTerminalTabs(incoming, existing).map(({ tab }) => tab.id))
@@ -85,13 +80,11 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       ) {
         return true
       }
-      // Why: headless offscreen browser tabs exist only server-side, so a renderer-graph merge must keep them, not prune as "not in the graph".
+      // Offscreen browsers exist only server-side; preserve them across renderer graph merges.
       if (!this.offscreenBrowserBackend) {
         return false
       }
-      // Why: in a renderer-based merged snapshot the browser entries can also
-      // be renderer-owned, so only pages the offscreen bridge still lists are
-      // runtime-owned and preservable; a pure renderer epoch preserves none.
+      // Renderer-based merges preserve only browsers the live offscreen bridge lists; pure renderer epochs preserve none.
       return (
         this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
         (snapshot.publicationEpoch.includes(':headless-merge:') &&
@@ -105,12 +98,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     if (this.pendingMobileTerminalCreatesByKey.has(`${snapshot.worktree}::${tab.parentTabId}`)) {
       return true
     }
-    // Why: a merged renderer snapshot carries BOTH renderer-owned and
-    // runtime-owned tabs, so the epoch alone must not preserve every terminal —
-    // that resurrects renderer tabs the renderer already closed. Broad
-    // preservation applies only to genuinely headless-built snapshots; in a
-    // renderer-based one, only tabs with a live-or-persisted serve/SSH binding
-    // are runtime-owned and preservable.
+    // Broad terminal preservation applies only to headless-built snapshots; renderer-based merges require live/durable serve/SSH evidence or closed renderer tabs resurrect.
     return (
       this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
       this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
@@ -126,10 +114,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     )
   }
 
-  // Why: `:headless-merge:` only marks that runtime tabs were merged in — the
-  // BASE epoch still says who published the snapshot. A renderer-based merged
-  // snapshot must not be classified as headless-built, or its renderer tabs
-  // read as runtime-owned.
+  // Headless-merge suffixes do not change the base publisher; renderer-based snapshots must retain renderer ownership.
   protected isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
     return isHeadlessBuiltPublication(publicationEpoch)
   }
@@ -138,11 +123,9 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     snapshot: RuntimeMobileSessionTabsSnapshot,
     _preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
   ): string {
-    // Why: preserved snapshots can merge repeatedly; strip the prior merge suffix first so the publication epoch stays idempotent.
+    // Strip prior merge suffixes so repeated merges keep an idempotent epoch.
     const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
-    // The epoch identifies the publisher generation, not the merged content.
-    // Content changes are ordered by snapshotVersion, so encoding a merge hash
-    // here would make the identity oscillate and permanently fence later rows.
+    // Epoch identifies publisher generation; content changes use snapshotVersion. Content hashes would oscillate identity and fence later rows.
     return normalizedPublicationEpoch
   }
 
@@ -186,8 +169,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       this.notifyMobileSessionTabSnapshots()
       return
     }
-    // Why: every client-page mutation — create, navigate, metadata, host quit, recovery — reaches
-    // this announcement, so the host's own rows derive from it rather than from a second seam.
+    // Derive host rows from the page registry's single announcement for every mutation, including quit/recovery.
     this.clientHostedBrowserRows.publish(worktreeId)
     this.persistClientHostedBrowserPagesForWorktree(worktreeId)
     const hasClientBrowserPages =
@@ -199,7 +181,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
           ? { allowAttachedWindow: true, onlyRuntimeOwnedTerminals: true }
           : undefined
       )
-      // Why: hydrate already reconciles an existing snapshot in place; only reconcile here when it didn't (fresh build or early-returned hydrate).
+      // Reconcile only snapshots hydrate did not already update in place.
       if (!reconciled.has(worktreeId)) {
         const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
         if (existing) {
@@ -207,7 +189,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
         }
       }
     }
-    // Why: structural changes must propagate promptly; cancel any pending coalesced notify since this immediate emit supersedes it.
+    // Publish structural changes immediately and cancel superseded coalesced notices.
     this.cancelScheduledMobileSessionTabsChanged(worktreeId)
     this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
   }

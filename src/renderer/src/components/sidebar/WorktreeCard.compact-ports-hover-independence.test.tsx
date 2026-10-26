@@ -59,7 +59,6 @@ vi.mock('@/store', () => {
   }
 })
 
-// Expose hover controls to verify compact identity and metadata have one owner.
 const openChangeByRoot = new Map<HTMLElement, (open: boolean) => void>()
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({

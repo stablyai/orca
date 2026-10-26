@@ -21,7 +21,6 @@ type ClickHarness = {
   readonly unmount: () => void
 }
 
-/** `sender` decides each send's result after it is recorded, so a test can hold one in flight. */
 function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
   let activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -93,9 +92,7 @@ function change(handlers: Handlers, text: string, isComposing = false): void {
   handlers.handleLiveInputChange({ nativeEvent: { text, isComposing } })
 }
 
-// A tap on the prompt sends a click the program answers by moving its cursor. The field mirrors
-// what it typed by erasing back from the end of its own text, so after the click it must restart
-// at the new cursor, and nothing typed for the old cursor may land after the click.
+// Clicks move the TUI cursor; flush old-position input first, then restart the field mirror at the new position.
 describe('terminal live input around a click', () => {
   afterEach(() => {
     vi.useRealTimers()

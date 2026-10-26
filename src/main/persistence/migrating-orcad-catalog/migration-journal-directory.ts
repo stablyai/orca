@@ -1,8 +1,4 @@
-/**
- * One durable, owner-only JSON file per migration in a directory beside the profile. Each source
- * kind keeps its own directory, so a build that knows only one kind never reads another's records.
- * Reads fail closed: an entry that cannot be trusted throws instead of being skipped.
- */
+// Unreadable journals fail closed; source-specific directories preserve older-build compatibility.
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeSecureJsonFileWithinLimit } from '../../../shared/bounded-secure-json-file'
@@ -14,7 +10,7 @@ const JOURNAL_FILE = /^[A-Za-z0-9_-]{1,128}\.json$/
 
 export type MigrationJournalDirectory<T extends { migrationId: string }> = {
   directory: (userDataPath: string) => string
-  /** Every record; throws (the configured unreadable error) rather than skipping a file. */
+  /** Throws rather than skipping an unreadable record. */
   list: (userDataPath: string) => T[]
   /** Durable before it returns. */
   write: (userDataPath: string, record: T) => void
@@ -28,12 +24,12 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
   unreadable: (detail: string) => Error
   onChange?: (userDataPath: string) => void
 }): MigrationJournalDirectory<T> {
-  // Why: hidden-row checks run on every list call, and each record may embed a full manifest.
+  // Frequent hidden-row checks would otherwise reparse full manifests.
   const parsed = new Map<string, { key: string; records: T[] }>()
   const directory = (userDataPath: string): string => join(userDataPath, options.directoryName)
   const fileVersion = (path: string): string => {
     try {
-      // Durable writes replace the file, so size, mtime and inode change with every rewrite.
+      // Atomic replacement invalidates cached versions.
       const stat = statSync(path, { bigint: true })
       return `${stat.ino}:${stat.size}:${stat.mtimeNs}`
     } catch (error) {
@@ -56,7 +52,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
     try {
       options.onChange?.(userDataPath)
     } catch (error) {
-      // The write is already durable; a follower failing must not undo or fail it.
+      // Observer failures cannot invalidate an already-durable write.
       console.warn('[orcad-migration] Journal change follower failed:', error)
     }
   }
@@ -76,7 +72,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
       const files: { name: string; path: string }[] = []
       for (const name of names) {
         if (!name.endsWith('.json')) {
-          continue // Durable-write temporaries and foreign files carry no journal state.
+          continue // Ignore durable-write temporaries and foreign files.
         }
         if (!JOURNAL_FILE.test(name)) {
           throw options.unreadable(`unexpected entry ${name}`)
@@ -107,7 +103,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
         { durable: true }
       )
       syncDirectoryDurablySync(dir)
-      // A new directory's own entry lives in its parent; without this a crash can lose the journal.
+      // Fsync the parent too or a crash can lose the newly created directory.
       if (created) {
         syncDirectoryDurablySync(userDataPath)
       }
@@ -129,10 +125,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
   }
 }
 
-/**
- * Oldest first: the records of one source as a single chain of delta moves, each naming the
- * migration it extends. Throws `unreadable` when they fork or leave a gap.
- */
+/** Oldest-first delta chain; forks or gaps fail closed. */
 export function orderMigrationJournalChain<
   T extends { migrationId: string; supersedesMigrationId?: string }
 >(matches: readonly T[], unreadable: (detail: string) => Error, label: string): T[] {

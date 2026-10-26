@@ -9,7 +9,7 @@ import {
   createStore,
   readDataFile,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

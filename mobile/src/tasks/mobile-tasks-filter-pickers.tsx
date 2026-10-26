@@ -88,9 +88,7 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
       onSelect={(view) => {
         setGitlabView(view)
         if (view === 'todos') {
-          // Why: GitLab Todos is a server-side pending-todos stream; the
-          // runtime method has no search query, so clear item-search state
-          // when entering that view instead of carrying an invisible filter.
+          // GitLab Todos has no server search query; clear item filters instead of carrying an invisible one.
           setQuery('')
           setAppliedQuery('')
         }

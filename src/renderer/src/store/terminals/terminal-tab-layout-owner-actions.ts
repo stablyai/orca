@@ -27,11 +27,7 @@ function terminalTab(state: AppState, tabId: string) {
   return owner ? state.tabsByWorktree[owner]?.find((tab) => tab.id === tabId) : undefined
 }
 
-/**
- * A layout-owner build's terminal tab changes from any caller (CLI rename, templates, agent
- * titles, an ended launch agent): main changes its copy and its frame draws the change. The
- * window's own action runs only for a tab main is not asked about or a paired server holds.
- */
+/** Route every tab change through main’s copy/frame; run window action only when main is unasked or paired server owns the tab. */
 export function routeTerminalTabChangesThroughLayoutOwner(
   actions: RoutedActions,
   get: TerminalStoreGet
@@ -43,8 +39,7 @@ export function routeTerminalTabChangesThroughLayoutOwner(
   const recordTabsInteraction = (): void => {
     void get().recordFeatureInteraction?.('terminal-tabs')
   }
-  // Why: main derives the generated titles of the tabs it holds from the agent status it owns, so
-  // the window titles only a tab main has no tab-bar entry for or a paired server holds.
+  // Main derives owned-tab titles from its agent status; window titles only absent/server-owned tab-bar entries.
   const routeGeneratedTitles = (updates: readonly GeneratedTabTitleUpdate[]): void => {
     const state = get()
     const local = updates.filter((update) => {

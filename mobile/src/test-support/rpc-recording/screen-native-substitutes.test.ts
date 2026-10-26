@@ -14,7 +14,6 @@ function member(module: string, name: string): unknown {
   return (substitute as Record<string, unknown>)[name]
 }
 
-/** Every element a screen can render through the table, by the module it is imported from. */
 const INERT_ELEMENTS: readonly (readonly [string, string])[] = [
   ...Object.entries(reactNativeScreenMembers())
     .filter(([, value]) => typeof value === 'function')
@@ -23,11 +22,7 @@ const INERT_ELEMENTS: readonly (readonly [string, string])[] = [
 ]
 
 describe('the inert screen substitutes', () => {
-  /**
-   * The whole contract in one place: an inert element renders its children and keeps its props
-   * where a projection can read them, and does nothing else — the callbacks it is handed are never
-   * invoked, including a render callback passed as its children.
-   */
+  // Preserve children/props while never invoking device callbacks, including render-callback children.
   it.each(INERT_ELEMENTS)('renders %s.%s inertly', (module, name) => {
     let invoked = 0
     const element = member(module, name)
@@ -56,11 +51,16 @@ describe('the inert screen substitutes', () => {
     let rendered: ReturnType<typeof create> | undefined
     act(() => {
       rendered = create(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the substitute is an inert element component by construction.
-        createElement(member('react-native', 'Pressable') as ElementType, {}, () => {
-          invoked++
-          return null
-        })
+        createElement(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the substitute is an inert element component by construction.
+          member('react-native', 'Pressable') as ElementType,
+          {},
+          // @ts-expect-error -- deliberately invalid function children; asserts the substitute drops them
+          () => {
+            invoked++
+            return null
+          }
+        )
       )
     })
     expect(invoked).toBe(0)

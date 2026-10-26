@@ -1,9 +1,6 @@
 import { optionName } from './print-mode-headless-command'
 
-// Why: ZCode dispatches headlessly on `typeof values.prompt === "string"` or an explicit
-// `--target` (apps/zcode-cli/packages/cli/src/run.ts) — both run one prompt through
-// `runPrompt` and exit, so the pane never hosts the interactive TUI. `--json` and
-// `--output-format` are presentation flags on either path, so neither implies headless.
+// Prompt/target flags select one-shot runPrompt (ZCode run.ts); JSON/output-format flags affect presentation and do not imply headless.
 const ZCODE_HEADLESS_FLAGS: ReadonlySet<string> = new Set(['-p', '--prompt', '--target'])
 
 export function isZCodeHeadlessOneShotCommand(tokens: readonly string[]): boolean {

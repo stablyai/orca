@@ -326,8 +326,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       disposable.dispose()
     })
 
-    // Why pinned: the classifier strips CSI precisely so a styled header still matches. A future
-    // "just lastIndexOf the raw bytes" shortcut would pass every other test and silently break this.
+    // Styled headers need CSI stripping; raw-byte lastIndexOf would silently miss this case.
     it('still detects the Cursor Agent screen when CSI styling splits the header and the marker', async () => {
       const { connectPanePty } = await import('./pty-connection')
       enableActiveRuntimeEnvironment()
@@ -367,8 +366,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       disposable.dispose()
     })
 
-    // Why pinned: the scan reads only a bounded tail, so a header buried behind megabytes of
-    // scrollback describes a finished run, not the current screen.
+    // Bound the scan to current-screen bytes; headers buried in old scrollback must not classify the live pane.
     it('ignores a Cursor Agent screen buried beyond the payload scan tail limit', async () => {
       const { connectPanePty } = await import('./pty-connection')
       enableActiveRuntimeEnvironment()

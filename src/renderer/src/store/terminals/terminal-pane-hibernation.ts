@@ -34,8 +34,7 @@ export function createTerminalPaneHibernationActions(
       const state = get()
       const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
       const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
-      // Why: a twin-published worktree must route by the PTY's own owner; a remote PTY with no
-      // host stop to run would otherwise lose its binding while the agent keeps running.
+      // Use PTY owner for twins; losing bindings without an attributable host stop leaves unseen running agents.
       if (
         teardownOwner.kind === 'refused' ||
         (worktreeOwner.kind === 'ambiguous' &&

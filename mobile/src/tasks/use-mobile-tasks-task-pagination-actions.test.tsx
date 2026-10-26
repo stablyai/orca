@@ -103,7 +103,6 @@ describe('GitHub task page change', () => {
     act(() => {
       pending = changePage?.(1)
     })
-    // The repo picker changed: loadTasks bumps the generation and loads the new list.
     model.loadGenerationRef.current += 1
     await act(async () => {
       land({ items: oldSelectionPage, failedCount: 0 })

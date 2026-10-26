@@ -70,6 +70,7 @@ describe('browserManager', () => {
     const guest = {
       id: 1707,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -102,6 +103,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about paint holds.
+    renderer.send.mockClear()
 
     // Synchronous: a capture never waits on the desktop renderer.
     const releaseFirst = browserManager.holdPaintForCapture(guest.id)

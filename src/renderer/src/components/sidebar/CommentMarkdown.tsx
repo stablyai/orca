@@ -79,10 +79,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
   return commentMarkdownUrlTransform(value, key, node)
 }
 
-// Why: standard CommonMark collapses single newlines into spaces. The old
-// plain-text renderer used whitespace-pre-wrap which preserved them. Adding
-// remark-breaks converts single newlines to <br>, keeping backward compat
-// with existing plain-text comments that rely on newline formatting.
+// remark-breaks preserves newlines expected by existing plain-text comments; CommonMark otherwise collapses them.
 const remarkPlugins = [
   remarkGfm,
   remarkCjkFriendly,
@@ -163,8 +160,7 @@ function transformGitHubReferenceChildren(
   const nextChildren: MarkdownNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
-      // Why: generated agent comments can contain thousands of issue refs;
-      // appending iteratively avoids V8's argument-list limit.
+      // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
       for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
         nextChildren.push(part)
       }
@@ -201,14 +197,13 @@ const commentMarkdownSanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    // Why: native chat opts into file URI links after sanitize; the URL
-    // transform below still strips them for all other markdown surfaces.
+    // Allow file links through sanitize for native chat; other surfaces still strip them in URL transformation.
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
     src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'orca-jira-image']
   }
 }
 
-// Why: runs before remark-breaks so newlines inside the escaped HTML still break.
+// Escape HTML before remark-breaks so newlines inside it still break.
 const unknownHtmlAsTextRemarkPlugins = [
   remarkUnknownHtmlAsText(
     new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
@@ -216,15 +211,10 @@ const unknownHtmlAsTextRemarkPlugins = [
   ...remarkPlugins
 ]
 
-// Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
-// `<br />`). Parse it, then sanitize immediately before React renders it.
+// GitHub comments use raw HTML; parse it then sanitize before rendering.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
 
-/**
- * A surface-specific markdown addition: its own remark plugins, the element attributes those
- * plugins need to survive sanitize, and the components that render them. Keep the object stable
- * per surface; a new one rebuilds the components and remounts what they rendered.
- */
+/** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
 export type CommentMarkdownExtension = {
   remarkPlugins: RemarkPlugins
   sanitizeAttributes: Record<string, readonly string[]>
@@ -354,9 +344,7 @@ const CommentMarkdown = React.memo(
           <div
             ref={ref}
             className={cn(
-              // Reset inline-code pill styles when <code> is inside a <pre> block.
-              // The descendant selector (pre code) has higher specificity than the
-              // direct utility classes on <code>, so these overrides win reliably.
+              // Descendant pre/code selectors outrank inline-code pill utilities to reset block-code styling.
               '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
               'min-w-0 max-w-full [overflow-wrap:anywhere]',
               className

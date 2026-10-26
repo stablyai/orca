@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// With ORCA_LAYOUT_OWNER=main, this machine's host is told about a cancel instead of the window
-// keeping a tombstone; paired hosts keep the tombstone in both orders.
+// Local layout-owner main records cancellation; paired hosts retain tombstones in either build.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -190,8 +189,7 @@ describe('this machine, with main owning the layout', () => {
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
   })
 
-  // Main notes the close before anything in it can fail, so its fence refuses the late create and
-  // no chat is published to draw (structured-agent-session-close-before-create.test.ts).
+  // Main records close before fallible work, fencing late creates without publishing a chat (structured-agent-session-close-before-create.test.ts).
   it('a retire main fails is logged; no tombstone, and a late create reply revives nothing', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.closeSession.mockRejectedValueOnce(new Error('host unavailable'))

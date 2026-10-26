@@ -1,4 +1,4 @@
-import { normalizeJiraQuickFilterState } from '../../shared/jira-quick-filters'
+import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,

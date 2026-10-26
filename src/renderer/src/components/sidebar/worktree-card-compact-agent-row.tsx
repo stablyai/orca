@@ -37,7 +37,7 @@ export function getCompactAgentSecondary(
   lastAssistantMessageOverride?: string,
   presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
 ): string {
-  // Why first: a block the program reports (sign-in) is the one thing on this row that needs the user.
+  // Program-reported blocks need user attention before other row details.
   if (presentation.attention) {
     return programStatusAttentionLine(presentation.attention)
   }
@@ -45,8 +45,7 @@ export function getCompactAgentSecondary(
   if (verdictLine) {
     return verdictLine
   }
-  // Why: the only honest thing to say about a pane Orca still holds but no longer hears
-  // from is how long the silence has run; the user supplies the meaning.
+  // Silence proves only time without updates; do not infer what the pane is doing.
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
@@ -90,8 +89,7 @@ type CompactAgentRowProps = {
   agent: DashboardAgentRowData
   now: number
   onActivate: (tabId: string, paneKey: string) => void
-  // Why: send-popover target mode temporarily turns compact sidebar rows into
-  // the picker surface, matching the full DashboardAgentRow behavior.
+  // Send-target mode temporarily turns compact rows into the picker, matching full agent rows.
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   sendTargetDisabledReason?: string
   onSendTargetClick?: (paneKey: string) => void
@@ -123,19 +121,14 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
-  // Why: subagent child rows carry the child's NAME (e.g. "pr-reviewer") in agentType, which
-  // AgentTypeIcon would draw as a misleading letter. Nesting under the parent conveys identity.
+  // Child agentType contains its name, not a provider; nesting conveys identity without a misleading letter icon.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const dotState = dotStateOverride ?? getAgentDotState(agent)
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  // Keep a live row's last assistant line stable while status/tool payloads
-  // briefly omit the hook-only field between updates. Committed in an effect so a
-  // discarded concurrent render can't pin an uncommitted message and no extra render
-  // pass runs per streaming ping; a zero stateStartedAt has no per-turn identity, so
-  // those rows never cache.
+  // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
   const currentMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const turnHoldable = agent.state === 'working' && turn > 0
@@ -165,8 +158,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent child rows have no pane of their own; they focus the
-      // parent pane whose session spawned them.
+      // Child agents activate their spawning parent pane because they have no pane of their own.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
     },
     [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
@@ -202,8 +194,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </span>
   ) : null
 
-  // Why: the selected-row fill is strong enough to wash out the dimmed prompt/secondary text, so
-  // lift the lead toward full foreground when focused; an unvisited row stays bold either way.
+  // Focused fills wash out muted text; brighten the lead while preserving unread emphasis.
   const leadClassName = cn(
     isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
     isFocusedPane && !isUnvisited && 'text-foreground'
@@ -212,7 +203,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const rowBody = (
     <>
       {agent.childRow ? (
-        // Why: a child row reads through the piece the chat strip renders, so both say the same.
+        // Share chat-strip child content so both surfaces report the same state.
         <AgentChildRowContent
           row={agent.childRow}
           now={now}
@@ -225,7 +216,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         />
       ) : (
         <>
-          {/* Why: the row's actionable disabled reason must win on every hit area. */}
+          {/* Show the actionable disabled reason over every hit area. */}
           <AgentStateDot
             state={dotState}
             size="sm"

@@ -33,7 +33,6 @@ export type TaskPageLinearViewStatePreludeModel = ReturnType<
 >
 export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingModel) {
   const { selectedLinearWorkspaceId } = model
-  // Linear tab state
   const [linearMode, setLinearMode] = useState<LinearMode>('issues')
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [linearIssueLimit, setLinearIssueLimit] = useState(LINEAR_ITEM_LIMIT)

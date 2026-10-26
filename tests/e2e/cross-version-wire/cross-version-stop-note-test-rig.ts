@@ -17,8 +17,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalCursor,
   type AgentJournalItemBody,
+  type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
@@ -145,6 +147,14 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       port.runtimeStub()
     )
   }
+  /** The released client's schema decides admission; this build's guard types what it kept. */
+  function admit(item: unknown): AgentJournalRenderItem {
+    const admitted = client.AgentJournalRenderItemSchema.parse(item)
+    if (!isAdmissibleAgentJournalRenderItem(admitted)) {
+      throw new Error('released client admitted an item this build cannot read')
+    }
+    return admitted
+  }
   async function page(params: Record<string, unknown>): Promise<AgentSessionHistoryPage> {
     const reply = (await call('agentSession.history', { sessionId: SESSION, ...params }))[0]
     expect(reply?.ok).toBe(true)
@@ -155,7 +165,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     }
     return {
       ...result.page,
-      items: result.page.items.map((item) => client.AgentJournalRenderItemSchema.parse(item))
+      items: result.page.items.map(admit)
     }
   }
   async function subscribe(
@@ -173,9 +183,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
             ...event,
             batch: {
               ...event.batch,
-              items: event.batch.items.map((item) =>
-                client.AgentJournalRenderItemSchema.parse(item)
-              )
+              items: event.batch.items.map(admit)
             }
           }
         : event

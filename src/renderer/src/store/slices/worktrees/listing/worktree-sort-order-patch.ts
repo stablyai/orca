@@ -3,10 +3,7 @@ import type { WorktreeSortOrderUpdate } from '../../../../../../shared/worktree/
 import type { AppState } from '../../../types'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
 
-/**
- * Applies a host's published order save to one repo's rows in place.
- * Why sortOrderEpoch, not sortEpoch: an order save must not schedule the next live Smart re-sort (#27268).
- */
+/** Apply host order saves via sortOrderEpoch; sortEpoch would schedule another live Smart save (#27268). */
 export function patchWorktreeSortOrders(
   state: AppState,
   repoId: string,

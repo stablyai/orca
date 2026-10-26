@@ -468,9 +468,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('times out a stuck short RPC on its absolute deadline despite keepalive frames', async () => {
-    // Why: a keepalive on the shared socket is armed by an unrelated long-poll,
-    // not by this request. It must NOT extend a stuck short RPC's deadline —
-    // otherwise a hung server call hangs the caller forever (#7948).
+    // Unrelated long-poll keepalives must not extend stuck short RPC deadlines (#7948).
     const server = await createServer({
       silentMethods: ['worktree.hang'],
       sendKeepaliveBeforeResponse: true,
@@ -529,10 +527,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('detects a half-open socket via client liveness, reconnects, and tags the replayed response', async () => {
-    // Why: the server keeps the TCP connection open but stops answering —
-    // no close frame, no pongs (autoPong disabled), no responses. This is the
-    // half-open devtunnel scenario from #7718: edge-triggered reconnect never
-    // fires, so client liveness must terminate the socket itself.
+    // Half-open tunnels keep TCP open without close/pongs/responses; liveness must terminate the socket to trigger reconnect (#7718).
     const server = await createServer({ disableAutoPong: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
@@ -548,8 +543,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
     expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
 
-    // Liveness terminates the silent socket and the reconnect path replays
-    // the subscription on a fresh connection.
     await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
       timeout: 5000
     })
@@ -561,8 +554,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         ).toBeGreaterThanOrEqual(2),
       { timeout: 5000 }
     )
-    // The first response after the reconnect replay carries the replay tag so
-    // snapshot freshness gates can accept the re-emitted snapshot.
+    // Tag the first replayed response so snapshot freshness gates accept it after reconnect.
     await vi.waitFor(
       () =>
         expect(
@@ -613,8 +605,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(2)
 
     await expect(timedOut).rejects.toThrow('Timed out')
-    // Why: a single slow method is not evidence that a shared socket is dead;
-    // liveness monitoring owns connection-wide failure detection.
+    // One slow RPC does not prove shared-socket death; connection liveness owns that decision.
     expect(connection.getDiagnostics()).toMatchObject({ state: 'ready', pendingRequestCount: 1 })
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(1)
 

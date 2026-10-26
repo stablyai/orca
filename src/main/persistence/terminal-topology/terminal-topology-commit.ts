@@ -45,10 +45,7 @@ import {
   partitionsFence
 } from './closed-pane-binding-fence'
 
-// The commit boundary for terminal layout (tabs, panes, pane-to-PTY bindings). Wraps the close and
-// the pane move; the close transform still lives in runtime/ and other writers move here later.
-
-/** Bindings are not listed: `persistPtyBinding` already records `persistence.pty-binding`. */
+/** Binding writes already have their own persistence.pty-binding span. */
 type TerminalTopologyCommitKind =
   | 'close_leaf'
   | 'close_tab'
@@ -63,17 +60,16 @@ export function closeLeafOrTab(
 ): () => DurableProfileStateMutation<Error | undefined> {
   return traced(
     commit.target.kind === 'pane' ? 'close_leaf' : 'close_tab',
-    // A start under way in a pane main closed must not bring it back.
+    // Fence late spawns against resurrecting closed panes.
     fencedIfLayoutOwner(
       () => ({ sessions: commit, fences: true }),
       terminalSurfaceCloseMutation(commit)
     ),
-    // Refusals are fixed reason codes, never ids.
+    // Refusals must contain fixed codes, never IDs.
     (refusal) => refusal?.message
   )
 }
 
-/** Moves a leaf, its binding and its pane-keyed records into a new tab in one durable mutation. */
 export function moveLeaf(
   request: TerminalLeafMoveRequest,
   context: TerminalTopologyCommitContext
@@ -85,10 +81,7 @@ export function moveLeaf(
   )
 }
 
-/**
- * Writes the pane, its tab-bar entry and group before its terminal starts (design 4.1), through the
- * layout module.
- */
+/** Persist pane, tab-bar and group membership before starting the terminal. */
 export function admitPane(
   hostId: ExecutionHostId,
   admission: TerminalPaneAdmission,
@@ -96,7 +89,7 @@ export function admitPane(
 ): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
   return traced(
     'admit_pane',
-    // A pane main writes again under a closed pane's id binds as any.
+    // Explicit recreation under the same ID lifts the old pane fence.
     fencedIfLayoutOwner(
       () => partitionsFence([hostId], context.getSession, false),
       () => {
@@ -126,7 +119,7 @@ export function admitPane(
   )
 }
 
-/** Removes a pane `admitPane` wrote whose start then failed, so a failed create leaves no tab. */
+/** Remove failed-start admissions so failed creates leave no empty tabs. */
 export function withdrawPane(
   hostId: ExecutionHostId,
   pane: CommandOf<'closePane'>,
@@ -134,7 +127,7 @@ export function withdrawPane(
 ): () => DurableProfileStateMutation<LayoutRefusalCode | null> {
   return traced(
     'withdraw_pane',
-    // A start under way in a pane main took back must not bring it back.
+    // Fence late spawns against resurrecting withdrawn panes.
     fencedIfLayoutOwner(
       () => partitionsFence([hostId], context.getSession, true),
       () =>
@@ -148,10 +141,7 @@ export function withdrawPane(
   )
 }
 
-/**
- * A client's layout command (`layout.apply`), applied to each partition holding its tab, routed
- * partition first: that partition's outcome is the reply, and its refusal writes nothing.
- */
+/** Apply to all holders, routed first; its result is the reply and its refusal prevents all writes. */
 export function applyLayout(
   hostIds: readonly ExecutionHostId[],
   command: LayoutCommand,
@@ -160,7 +150,6 @@ export function applyLayout(
 ): () => DurableProfileStateMutation<LayoutApplyOutcome> {
   return traced(
     'apply_layout',
-    // Closes fence the panes they removed; creates lift the fence on the ids they write.
     fencedIfLayoutOwner(
       () => layoutCommandFence(command.type, hostIds, context.getSession),
       () =>
@@ -176,7 +165,6 @@ export function applyLayout(
   )
 }
 
-/** One disk move's editor renames, a command per partition, in one durable write of all. */
 export function applyEditorFileRenamesInPartitions(
   batches: readonly { hostId: ExecutionHostId; command: CommandOf<'renameEditorFiles'> }[],
   context: TerminalTopologyCommitContext
@@ -188,10 +176,7 @@ export function applyEditorFileRenamesInPartitions(
   )
 }
 
-/**
- * One `persistence.terminal-topology` span per commit, from admission to the in-memory write.
- * Attributes stay low-cardinality: no pane key, PTY id or path; `refusalOf` returns a fixed code.
- */
+/** Trace admission through mutation with fixed refusal codes; exclude pane/PTY IDs and paths. */
 export function traced<T>(
   kind: TerminalTopologyCommitKind,
   mutate: () => DurableProfileStateMutation<T>,
@@ -202,7 +187,7 @@ export function traced<T>(
       attributes: { kind: 'persistence', 'topology.kind': kind }
     })
     let result: DurableProfileStateMutation<T>
-    // Why only mutate(): `threw` must mean the write failed, never that tracing did.
+    // Trace failures must not be classified as mutation failures.
     try {
       result = mutate()
     } catch (error) {
@@ -243,11 +228,10 @@ export type TerminalTopologyCommitContext = {
       | 'sshRemotePtyLeases'
       | 'legacyPaneKeyAliasEntries'
   ) => void
-  /** Main's in-memory editor views; absent where a commit never changes them. */
+  /** Omitted when commits do not change in-memory editor views. */
   editorViews?: Pick<StoreRuntimeState, 'layoutEditorViews'>
 }
 
-/** The commit context over a Store's state and its session partitions. */
 export function topologyCommitContext({
   runtime,
   sessions

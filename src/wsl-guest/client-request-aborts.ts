@@ -5,17 +5,8 @@ export type ClientRequestAbortHandle = {
 }
 
 export class ClientRequestAborts {
-  // Why indexed by client instead of one flat map under composite `${clientId}:${requestId}` keys:
-  // abortClient runs on every closeClient and every setWrite, and against a flat map it had to scan
-  // every entry to find one client's. A scan with an early break cannot fix that -- the matching
-  // keys are scattered through the map, so any correct loop still visits every entry, which made a
-  // full churn of N clients cost K*N*(N+1)/2 visits. Only an index makes a teardown proportional to
-  // what that client actually owns.
-  //
-  // Why the inner key is a string: the codec only checks `jsonrpc === '2.0'`, so a request `id` can
-  // arrive as `"7"` while `rpc.cancel` coerces its `id` through `Number(...)` and looks up `7`. The
-  // flat map's template key folded both onto `"7"`; keying the raw value would file them in
-  // different buckets and silently drop the cancel. `String(...)` is the template literal's coercion.
+  // Index by client so churn teardown visits only its requests rather than every client’s entries.
+  // Coerce ids with String to preserve cancellation across wire "7" and rpc.cancel’s numeric 7.
   private readonly byClient = new Map<number, Map<string, AbortController>>()
 
   create(
@@ -42,8 +33,7 @@ export class ClientRequestAborts {
       return
     }
     requests.delete(String(key.requestId))
-    // Why drop the empty bucket: otherwise a churned client leaves an entry behind for the life of
-    // the relay, which is the retention the index exists to avoid.
+    // Delete empty buckets so client churn cannot retain entries for the relay’s lifetime.
     if (requests.size === 0) {
       this.byClient.delete(key.clientId)
     }

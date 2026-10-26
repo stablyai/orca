@@ -66,7 +66,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     unsubscribeFit()
     unregisterBinaryHandler()
     abortRendererMountWait()
-    // Why: phone presence belongs to the registration; only a desktop viewer owns a width floor here.
+    // Registration owns phone presence; only desktop viewers take width floors here.
     if (!isMobile && registeredRemoteDesktopDriver && clientId) {
       runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
     }
@@ -93,7 +93,8 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
         meta.seq
       )
     }
-    for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+    // Why text: phones before this release can't decode OutputSpan, so a span here is output they drop.
+    for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'text')) {
       sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
     }
   })
@@ -158,7 +159,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     }
     outputBatcher?.push(data, meta)
   })
-  // Why: capture live bytes before mobile-fit awaits; registering presence first would suppress main while no view held the query.
+  // Capture live bytes before fit awaits; early presence would suppress main before any view could answer queries.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
   unsubscribeData = () => {
     releaseViewSubscriber()

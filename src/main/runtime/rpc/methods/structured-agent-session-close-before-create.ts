@@ -1,14 +1,11 @@
-// A chat's close can reach main before its create: the window cancels while its create is still on
-// the way. With ORCA_LAYOUT_OWNER=main the window keeps no cancel tombstone for this machine's host,
-// so main remembers the close and refuses that create, or closes the chat as its create lands.
+// Main remembers close-before-create because its layout-owning window has no local cancel tombstone; refuse pending creates or close them on arrival.
 
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session-wire-refusals'
 import { refuseUnclassified } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { RpcContext } from '../core'
 
-// Session ids are minted per launch, so an entry only ever matches its own create; the cap bounds
-// closes whose create never came.
+// Per-launch ids prevent cross-create matches; cap entries whose create never arrives.
 const MAX_CLOSED_BEFORE_CREATE = 256
 const closedBeforeCreate = new Set<string>()
 const createsUnderWay = new Map<string, number>()

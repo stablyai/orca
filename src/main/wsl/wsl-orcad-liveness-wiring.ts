@@ -1,4 +1,4 @@
-/** The production probes behind `WslOrcadLivenessSupervisor`; C7 supplies what is user-visible. */
+/** C7 supplies visible demand; these production probes serve the WSL liveness supervisor. */
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import {

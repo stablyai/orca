@@ -27,10 +27,7 @@ export function shouldReuseCompiledWindowsRustExecutable(outputPath, fingerprint
   )
 }
 
-/**
- * The four-part numeric version Windows records in the PE. A prerelease suffix
- * survives only in ProductVersion, which is a free-form string.
- */
+// PE stores four numeric version fields; prerelease survives only in free-form ProductVersion.
 export function windowsRustExecutableFileVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(version ?? '')
   if (!match || match.slice(1).some((part) => Number(part) > 65534)) {
@@ -50,11 +47,7 @@ export function windowsRustExecutableTarget(arch) {
   return target
 }
 
-/**
- * Compiles one std-only Windows binary crate with cargo, reusing a restored build
- * whose inputs are unchanged, and refuses an output that needs the VC++
- * Redistributable.
- */
+// Reuse unchanged std-only Cargo build; require output with no VC++ Redistributable dependency.
 export function compileWindowsRustExecutable({
   repoRoot,
   crateRoot,
@@ -66,8 +59,7 @@ export function compileWindowsRustExecutable({
   buildEnv
 }) {
   if (process.platform !== 'win32') {
-    // Why: electron-builder treats a skipped native build like success and can
-    // continue toward a Windows package whose declared binary does not exist.
+    // Missing output must fail: electron-builder otherwise treats skipped native build as successful packaging.
     throw new Error(`${label} compilation requires a Windows host; refusing to package without it.`)
   }
   const manifestPath = join(crateRoot, 'Cargo.toml')
@@ -120,8 +112,7 @@ export function compileWindowsRustExecutable({
     process.kill(process.pid, result.signal)
   }
   if (result.error) {
-    // Why named explicitly: a bare ENOENT here reads as a missing source file
-    // rather than a host without the toolchain the package needs.
+    // Name missing toolchain explicitly; bare ENOENT misleadingly looks like missing source.
     throw new Error(
       `Unable to run cargo for the ${label}: ${result.error.message}. Install Rust (https://rustup.rs) and retry.`
     )

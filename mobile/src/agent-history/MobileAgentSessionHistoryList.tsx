@@ -9,9 +9,7 @@ import type { MobileAgentHistorySection } from './agent-history-sections'
 import type { MobileAgentHistoryCard } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 
-// Lazy-render at most this many preview turns when a card is tapped — the
-// scanner already bounds preview text, but rendering them only on tap keeps the
-// list cheap.
+// Render bounded preview turns only on card tap to keep list cheap.
 const PREVIEW_TURN_LIMIT = 5
 
 type Props = {

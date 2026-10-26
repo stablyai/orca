@@ -1,29 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { resolveMobileNativeChatTerminalStreamAction } from './mobile-native-chat-terminal-stream'
 
-/** Enough to ride out a transient teardown without spinning on a dead PTY. */
 const MAX_REARM_ATTEMPTS = 3
 
-/** A dead PTY's `end` follows its `subscribed` within one host round trip, so a
- *  stream still up this long after the ack is one that actually recovered. */
+// Require a stream to outlive the subscribed/end round-trip window before treating rearm as recovered.
 const HEALTHY_STREAM_PROOF_MS = 5_000
 
-/** Pauses the active terminal stream while native chat covers its mounted WebView,
- *  then resumes from a fresh scrollback snapshot when terminal view returns. */
 export function useMobileNativeChatTerminalStream(args: {
   showNativeChat: boolean
   activeHandle: string | null
   activeTabType: string | null
-  /** Reactive lease state — losing it must re-run this effect, since the refs it
-   *  reads for stream liveness are invisible to React. */
+  // Lease state must rerun reconciliation because mutable stream refs are invisible to React.
   leaseReady: boolean
-  /** Bumped whenever a covered stream is torn down. The lease alone can't carry
-   *  that signal: a dead PTY can emit `end` with no preceding `subscribed`, so
-   *  clearing an already-absent lease is a no-op and nothing would re-run. */
+  // Signal teardown even when the lease was already absent; dead PTYs may end without subscribed.
   streamRevision: number
   subscriptionsRef: MutableRefObject<Map<string, () => void>>
   subscribingRef: MutableRefObject<Set<string>>
-  /** Handles whose current subscribe went out as an input lease only. */
   leaseOnlyRef: MutableRefObject<Set<string>>
   webReadyRef: MutableRefObject<Set<string>>
   subscribe: (handle: string) => void
@@ -31,15 +23,12 @@ export function useMobileNativeChatTerminalStream(args: {
 }): {
   notifyWebReady: (handle: string, wasAlreadyReady: boolean) => void
   notifyListedHandles: (liveHandles: ReadonlySet<string>) => void
-  /** True while an exhausted, absent handle still needs a replacement tab snapshot. */
   hasTabsRecoveryNeed: () => boolean
 } {
   const coveredHandleRef = useRef<string | null>(null)
   const rearmAttemptsRef = useRef<Map<string, number>>(new Map())
-  /** Handles `terminal.list` has omitted since we last saw them. Only a handle that
-   *  actually went away and came back earns a fresh rearm budget. */
+  // Only actual list absence followed by return grants a fresh rearm budget.
   const absentSinceExhaustionRef = useRef<Set<string>>(new Set())
-  /** Pending proof that a rearmed stream outlived the dead-PTY teardown window. */
   const healthyStreamProofRef = useRef<{
     handle: string
     timer: ReturnType<typeof setTimeout>
@@ -58,10 +47,7 @@ export function useMobileNativeChatTerminalStream(args: {
   }, [])
   const notifyWebReady = useCallback(
     (handle: string, wasAlreadyReady: boolean) => {
-      // Why: ordinary WebView startups must not rerender the large session route;
-      // only readiness that can release a native-chat lease needs reconciliation.
-      // A lease-only stream counts: the route's own web-ready path bails on any live
-      // subscription, so nothing else would ever trade that lease for output.
+      // Reconcile readiness only when it can release chat’s lease-only stream; normal ready handling skips live subscriptions.
       if (
         !wasAlreadyReady &&
         (coveredHandleRef.current === handle || args.leaseOnlyRef.current.has(handle))
@@ -73,15 +59,7 @@ export function useMobileNativeChatTerminalStream(args: {
   )
   const notifyListedHandles = useCallback(
     (liveHandles: ReadonlySet<string>) => {
-      // Why: the rearm budget bounds one teardown, not the handle's lifetime. A covered
-      // handle the host drops and then reports again may have a live PTY once more, so
-      // spend a fresh budget instead of leaving the composer locked until leave-chat
-      // (#10681).
-      //
-      // The absence is required, not incidental: a dead PTY that stays listed answers
-      // every subscribe with `subscribed`+`end`, so refilling merely because the handle
-      // is present now would hand that loop a new budget on each list refresh and undo
-      // the bound this hook exists to enforce.
+      // Refill exhausted rearms only after list absence and return; still-listed dead PTYs must not renew their own loop.
       const handle = coveredHandleRef.current
       if (handle == null) {
         return
@@ -90,10 +68,7 @@ export function useMobileNativeChatTerminalStream(args: {
         absentSinceExhaustionRef.current.add(handle)
         return
       }
-      // Why: consume the absence marker only when it actually buys a refill. Spending
-      // it on a below-threshold check left the handle with nothing to trade once the
-      // budget did run out, and a still-listed handle never goes absent again — the
-      // permanent lock the marker exists to prevent.
+      // Consume absence only when it buys a refill; using it early can strand a later exhausted handle.
       if ((rearmAttemptsRef.current.get(handle) ?? 0) < MAX_REARM_ATTEMPTS) {
         return
       }
@@ -136,8 +111,7 @@ export function useMobileNativeChatTerminalStream(args: {
       webViewReady: handle != null && args.webReadyRef.current.has(handle)
     })
     const streamHolding = action === 'none' && streamActive && coveredHandleRef.current === handle
-    // Any pass that isn't "this covered stream is still up" invalidates a pending
-    // proof — the stream it was vouching for is gone or being replaced.
+    // Invalidate recovery proof whenever its covered stream is no longer the live one.
     if (!streamHolding || healthyStreamProofRef.current?.handle !== handle) {
       cancelHealthyStreamProof()
     }
@@ -145,11 +119,7 @@ export function useMobileNativeChatTerminalStream(args: {
       return
     }
     if (action === 'none') {
-      // Why: `subscribed` is the FIRST half of a dead PTY's reply (`subscribed` then
-      // `end`), and it re-runs this effect with the stream momentarily up. Clearing
-      // the budget there handed every dead-PTY pass a fresh one, so the resubscribe
-      // loop this hook exists to bound ran forever. Only a stream still up after the
-      // `end` would have landed proves the last rearm took.
+      // Subscribed can precede immediate end; refill only after sustained stream liveness proves recovery.
       if (streamHolding && !healthyStreamProofRef.current && rearmAttemptsRef.current.has(handle)) {
         healthyStreamProofRef.current = {
           handle,
@@ -162,18 +132,13 @@ export function useMobileNativeChatTerminalStream(args: {
       return
     }
     if (action === 'rearm') {
-      // Why: the host answers a handle whose PTY is gone with `subscribed`+`end`,
-      // which drops the lease again — an unbounded resubscribe loop, each pass
-      // costing a 10s host wait and a desktop tab-mount request (#10681). Give up
-      // after a few tries and leave the composer honestly locked.
+      // Bound subscribed/end rearms on dead PTYs; each otherwise spends host waits and tab-mount requests forever.
       const attempts = rearmAttemptsRef.current.get(handle) ?? 0
       if (attempts >= MAX_REARM_ATTEMPTS) {
         return
       }
       args.subscribe(handle)
-      // Why: a subscribe turned away by its own gates (no client, no webview yet)
-      // never reached the host, so charging it an attempt would spend the budget on
-      // nothing and could exhaust it before a single real rearm was tried.
+      // A locally gated subscribe never reached the host and spends no attempt.
       if (args.subscribingRef.current.has(handle) || args.subscriptionsRef.current.has(handle)) {
         rearmAttemptsRef.current.set(handle, attempts + 1)
       }
@@ -182,8 +147,7 @@ export function useMobileNativeChatTerminalStream(args: {
     if (action === 'pause') {
       coveredHandleRef.current = handle
       forgetRearmState(handle)
-      // Why: covered chat needs the input-floor lease without paying to stream
-      // duplicate PTY output. Replace any view stream with a lease-only stream.
+      // Covered chat needs the input lease without duplicate PTY output; replace view streams with lease-only ones.
       if (streamActive) {
         args.unsubscribe(handle)
       }
@@ -214,9 +178,7 @@ export function useMobileNativeChatTerminalStream(args: {
   ])
   useEffect(() => reconcileStream(), [reconcileStream])
   useEffect(() => cancelHealthyStreamProof, [cancelHealthyStreamProof])
-  // Why memoized: the session route keeps this object in callback dep arrays, and a
-  // fresh literal per render would rebuild them on every keystroke. All three members
-  // are already stable, so this reference never changes.
+  // Memoize the stable callback bundle so route dependencies do not rebuild on every keystroke.
   return useMemo(
     () => ({ notifyWebReady, notifyListedHandles, hasTabsRecoveryNeed }),
     [hasTabsRecoveryNeed, notifyListedHandles, notifyWebReady]

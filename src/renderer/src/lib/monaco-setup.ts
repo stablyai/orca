@@ -17,6 +17,7 @@ import { registerShellMarkdownAliases } from './monaco-languages/register-shell-
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerTypstLanguage } from './monaco-languages/register-typst'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { registerZigLanguage } from './monaco-languages/register-zig'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
@@ -45,18 +46,7 @@ globalThis.MonacoEnvironment = {
   }
 }
 
-// Why: Monaco here is a viewer/diff surface, not a type checker — users edit
-// real code in their own IDE. The sandboxed TS worker cannot resolve imports
-// to project files, so semantic validation produces a long tail of false
-// positives (unresolved modules 2307/2792, unused-import fades 6133/6138/
-// 6192/6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
-// 2339/2345/2571/2724, implicit-any 7006/7016/7026/7031/7053/18046/18048).
-// Syntax validation is also noisy in the diff viewer: with `renderSideBySide`
-// off (or during partial hunks), Monaco feeds the worker concatenated
-// original+modified text that isn't a valid TS program, producing fake
-// parse errors like "',' expected (1005)". Disable all three categories —
-// we keep tokenization (colorization) which is what actually gives useful
-// reading affordance here.
+// Sandboxed workers cannot resolve project imports, and inline diffs can concatenate invalid programs; disable diagnostic categories while retaining useful tokenization.
 const diagnosticsOptions = {
   noSemanticValidation: true,
   noSuggestionDiagnostics: true,
@@ -65,12 +55,7 @@ const diagnosticsOptions = {
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 
-// Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
-// in Monaco's registry (there is no separate 'typescriptreact' id), so the
-// compiler options on those defaults apply to both. Without jsx enabled, the
-// worker raises TS17004 "Cannot use JSX unless the '--jsx' flag is provided"
-// on every JSX tag. Preserve mode is enough to allow parsing without forcing
-// an emit transform (we never emit — this is a read-only language service).
+// TSX/JSX share TypeScript/JavaScript defaults; preserve JSX parsing without emission to avoid TS17004 on tags.
 monacoTS.typescriptDefaults.setCompilerOptions({
   ...monacoTS.typescriptDefaults.getCompilerOptions(),
   jsx: monacoTS.JsxEmit.Preserve
@@ -87,24 +72,21 @@ runMonacoSetupSteps([
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['Lean language registration', () => registerLeanLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
+  ['Zig language registration', () => registerZigLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
   ['peek references preview options', installMonacoPeekReferencesPreviewOptions],
-  // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
-  // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
-  // works like Cmd+V (which already works via native events).
+  // Sandboxed navigator.clipboard blocks Monaco Paste; use trusted IPC as native Cmd+V does.
   ['context-menu paste', () => installMonacoContextMenuPaste(monaco)]
 ])
 
-// Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 
 const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
 if (import.meta.hot) {
   import.meta.hot.dispose(unregisterEditorModelRegistry)
 }
-// Re-export for convenience
 export { monaco }

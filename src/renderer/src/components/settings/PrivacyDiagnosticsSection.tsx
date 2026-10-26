@@ -34,7 +34,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         setStatus(next)
       }
     } catch {
-      /* swallow — pane shows N/A while the IPC is unavailable */
+      /* Show N/A while IPC is unavailable. */
     }
   }, [])
 
@@ -60,8 +60,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         await window.api.diagnostics.discardBundlePreview(nextBundle.bundleSubmissionId)
         return
       }
-      // Why: unmount cleanup may run before a passive ref mirror would fire;
-      // keep the retained preview id in sync at the creation/clear sites.
+      // Update retained preview IDs at mutation sites; unmount cleanup can precede passive ref mirrors.
       activeBundleSubmissionIdRef.current = nextBundle.bundleSubmissionId
       setBundle(nextBundle)
       setPreviewOpened(false)

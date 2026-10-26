@@ -22,6 +22,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   coordinatorOptionsByPaneKey,
@@ -147,16 +148,16 @@ async function connectAgentPane(args: {
   transportFactoryQueue.push(transport)
   const tabId = args.tabId ?? 'tab-1'
   const paneId = args.paneId ?? 1
-  const connectArgs = [
-    createPane(paneId),
-    createManager(paneId),
-    buildPaneConnectionDeps(() => mockStoreState, {
-      tabId,
-      isVisibleRef: { current: args.visible ?? false }
-    })
-  ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
-  connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
+  connectPanePty(
+    ...mockPanePtyArgs(
+      createPane(paneId),
+      createManager(paneId),
+      buildPaneConnectionDeps(() => mockStoreState, {
+        tabId,
+        isVisibleRef: { current: args.visible ?? false }
+      })
+    )
+  )
   await vi.advanceTimersByTimeAsync(20)
   await flushAsyncTicks()
   const paneKey = makePaneKey(tabId, leafIdForPane(paneId))

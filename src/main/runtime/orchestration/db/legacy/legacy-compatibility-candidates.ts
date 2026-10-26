@@ -126,7 +126,7 @@ export function resolveLegacyCoordinatorCandidate(
     }
     return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
   }
-  // Why: the first current binding durably fences uncommitted legacy processes.
+  // The first current binding durably fences uncommitted legacy processes.
   if (
     !run ||
     run.coordinator_pane_key !== null ||
@@ -137,7 +137,7 @@ export function resolveLegacyCoordinatorCandidate(
   return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
 }
 
-// Why: caller-side fence jurisdiction. Widening this fences more callers, so keep it narrow.
+// Keep caller-side fence jurisdiction narrow; widening rejects additional callers.
 export function isLegacyCoordinatorHandle(
   this: OrchestrationDb,
   runId: string,
@@ -150,8 +150,7 @@ export function isLegacyCoordinatorHandle(
   return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
 }
 
-// Why: recipient-side permit for legacy lifecycle mail. After a takeover revokes the old principal
-// the replacement coordinator is only reachable through the Run binding.
+// After takeover, the replacement coordinator accepts legacy lifecycle mail through its Run binding.
 export function isLegacyCoordinatorDeliveryTarget(
   this: OrchestrationDb,
   runId: string,
@@ -163,8 +162,7 @@ export function isLegacyCoordinatorDeliveryTarget(
   if (this.getRunRaw(runId)?.coordinator_handle !== terminalHandle) {
     return false
   }
-  // Why: must match resolveLegacyWorkerCoordinatorDelivery's takeover test. A still-committed
-  // principal routes legacy_direct to this handle, and no reader can see that mailbox.
+  // Match the takeover test: a committed principal still routes legacy_direct here, which no reader consumes.
   return this.getLegacyCoordinatorPrincipal(runId)?.status !== 'committed'
 }
 

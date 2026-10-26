@@ -350,9 +350,7 @@ describe('runtime file client', () => {
   })
 
   it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
-    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
-    // classified the file as binary. A transport-level failure that happens to
-    // carry the same message text must propagate, not trigger a preview read.
+    // Only typed RuntimeRpcCallError(binary_file) authorizes preview fallback; matching transport-error text must propagate.
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'files.read') {
         return Promise.reject(new Error('binary_file'))

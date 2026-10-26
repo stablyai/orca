@@ -3,7 +3,7 @@ import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent
 import { optionSession } from './codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import { dispatchCodexTurn, startCodexTurn } from './codex-structured-turn-start'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 import {
   acquireReadyCodexForTest,

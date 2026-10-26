@@ -120,10 +120,10 @@ describe('pickMobileImage', () => {
       })
     )
 
-    expect(result.map((image) => image.uri)).toEqual([
-      'file:///a.jpg',
-      'file:///b.jpg',
-      'file:///c.jpg'
+    expect(result).toEqual([
+      { uri: 'file:///a.jpg', base64: 'AQ==' },
+      { uri: 'file:///b.jpg', base64: 'Ag==' },
+      { uri: 'file:///c.jpg', base64: 'Aw==' }
     ])
     expect(launchLibrary).toHaveBeenCalledWith(
       expect.objectContaining({

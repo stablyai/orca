@@ -4,15 +4,9 @@ import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
 import { downloadFraction, type DownloadProgressFeed } from './download-progress-feed'
 
-/** Long enough to read as motion between steps, short enough not to trail the caption. */
 const FILL_EASE_MS = 100
-/**
- * The feed fires per asset, often well under a frame apart, and a timing replaced that fast never
- * draws: the fill sat empty until the last one. One start per window gives each ease three frames,
- * three quarters of its step, before the next takes over from where it got to.
- */
+// Asset events can arrive within a frame; throttle timing starts so each ease paints before the next replaces it.
 const FILL_RESTART_MS = 50
-// Why: web has no native driver.
 const useNativeDriver = Platform.OS !== 'web'
 
 export function downloadedMegabytesCaption(receivedBytes: number, totalBytes: number): string {
@@ -23,11 +17,7 @@ function megabytes(bytes: number): string {
   return (bytes / 1_000_000).toFixed(1)
 }
 
-/**
- * The page bundle's download as a bar. The fill follows the feed on the native driver, so it keeps
- * moving while the JS thread is busy decoding; the byte counts are React's, for the caption and the
- * accessibility value that read them.
- */
+// Use the native driver so the bar moves while JS decodes; React still supplies caption and accessibility byte counts.
 export function DownloadProgressBar({
   feed,
   receivedBytes,
@@ -42,8 +32,7 @@ export function DownloadProgressBar({
   testID?: string
 }) {
   const [fill] = useState(() => new Animated.Value(feed.current()))
-  // Unread counts as motion allowed: the preference arrives with a React commit, which the download
-  // can hold off. Read through a ref, so its arrival never re-subscribes mid-download.
+  // Default unread motion preference to allowed; read via ref so its delayed commit cannot resubscribe mid-download.
   const reducedMotion = useReducedMotionEnabled() === true
   const reducedMotionRef = useRef(reducedMotion)
   useEffect(() => {
@@ -56,8 +45,7 @@ export function DownloadProgressBar({
     let latest = 0
     let trailing: ReturnType<typeof setTimeout> | undefined
     const follow = (fraction: number, duration: number): void => {
-      // Always the native driver, a jump included: a JS-side setValue only reaches the screen
-      // through a React commit, and the download keeps those from happening.
+      // Even jumps use the native driver; JS setValue waits for React commits that downloading can delay.
       easing = Animated.timing(fill, {
         toValue: fraction,
         duration,
@@ -81,7 +69,7 @@ export function DownloadProgressBar({
         return
       }
       latest = fraction
-      // Why: lands the last value of a burst if no later callback comes past the window to carry it.
+      // Flush the burst’s last value even if no later event arrives after the throttle window.
       trailing ??= setTimeout(() => ease(latest), wait)
     })
     return () => {

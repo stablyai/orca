@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
-// displayName is typed `string`, but crash 99657ab1 proved it arrives undefined
-// at runtime for persisted/discovered worktrees. Force that shape here.
+// Persisted/discovered rows can lack required displayName (crash 99657ab1).
 function worktree(id: string, displayName: string | undefined, lastActivityAt = 0): Worktree {
   return {
     id,

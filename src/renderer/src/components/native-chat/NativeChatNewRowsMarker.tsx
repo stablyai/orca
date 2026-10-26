@@ -7,7 +7,6 @@ import { nativeChatScrollOffsetWithin } from './use-native-chat-viewport-align'
 /** Fields in the pane that take text for something other than the conversation. */
 const NOT_THE_CONVERSATION = '[data-native-chat-typing-redirect-ignore="true"]'
 
-/** Marks where what came while the reader was away begins. */
 export function NativeChatNewRowsMarker({
   marker: { arriving, onArrived, onDismiss },
   onReveal
@@ -31,24 +30,21 @@ export function NativeChatNewRowsMarker({
       return
     }
     const top = nativeChatScrollOffsetWithin(marker, scroller)
-    // A view parked above where the new rows begin is on something else: it is the reader's.
-    // How much came is not asked: a reply is drawn short and revealed over the frames after.
+    // Preserve a reader parked above new rows; replies can still be short while paced rendering catches up.
     if (
       top === null ||
       top - (scroller.scrollTop + scroller.clientHeight) > NATIVE_CHAT_BOTTOM_THRESHOLD_PX
     ) {
       return
     }
-    // The row's top keeps the reader's prompt in view above the marker, unless the prompt is
-    // tall enough to push the marker down the screen or off it.
+    // Reveal the prompt’s row unless it would leave the marker too low in the viewport.
     const intoRow = top - (nativeChatScrollOffsetWithin(row, scroller) ?? top)
     onReveal(intoRow < scroller.clientHeight / 2 ? row : marker)
   }, [arriving, onArrived, onReveal])
 
   useEffect(() => {
     const pane = ref.current?.closest('[data-native-chat-root]')
-    // Writing to this chat is the reader moving on. Reading, scrolling, clicking and typing
-    // into a field that is not the conversation's, such as Find, are not.
+    // Only conversation input dismisses the marker; Find and other unrelated fields do not.
     const onInput = (event: Event): void => {
       if (!(event.target instanceof Element && event.target.closest(NOT_THE_CONVERSATION))) {
         onDismiss()
@@ -71,8 +67,7 @@ export function NativeChatNewRowsMarker({
   )
 }
 
-/** Tells a screen reader that the marker appeared. Always mounted: a live region that arrives
- *  with its text already in it is not announced. */
+/** Keep the live region mounted before inserting text so screen readers announce it. */
 export function NativeChatNewRowsAnnouncement({ marked }: { marked: boolean }): React.JSX.Element {
   return (
     <div aria-live="polite" className="sr-only">

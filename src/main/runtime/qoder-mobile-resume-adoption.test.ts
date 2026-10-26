@@ -36,7 +36,7 @@ it.each([
       const { electronMocks } = await import('./orca-runtime-test-mocks.spec')
       const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
       vi.mocked(detectAgentCommandsOnHost).mockResolvedValue(new Set(['qoder']))
-      // Why a copy: main's layout binds panes in this store's session; the shared store stays clean.
+      // Copy the fixture store so main-owned bindings cannot leak into shared tests.
       const runtime = new QoderAdoptionRuntime({ ...store })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       let revealedRecipe: SleepingAgentLaunchConfig | undefined
@@ -99,7 +99,7 @@ it.each([
               agentEnv: { TRUSTED: 'retained' }
             }
           }
-          // The host committed the spawn, binding its pane; only the reply to the caller is lost.
+          // Commit the spawn binding before losing only its response.
           if (args.worktreeId && args.tabId && args.leafId) {
             bindPaneFirst(runtime, {
               worktreeId: args.worktreeId,
@@ -359,7 +359,6 @@ it.each(['missing-original', 'different-agent'])(
     expect(retained.launchAgent).toBe(state === 'different-agent' ? 'codex' : null)
     expect(retained.launchToken).toBeNull()
     expect(retained.launchIncarnationId).toBeNull()
-    // The pane holding the terminal, as main's layout answers it (the record's copy with the switch off).
     expect(runtime['paneOfPty'](retained)).toMatchObject({ tabId, paneKey: originalPaneKey })
     expect(retained.runtimeSessionOwned).toBe(originalOwnership)
     expect(runtime.resolveTerminalPane(`${tabId}:${leafId}`).handle).toBe(handle)

@@ -49,15 +49,15 @@ import {
 export type OrcadMigrationSourceWorkspaceSessionInspection = {
   payload: WorkspaceSessionState | undefined
   snapshots: OrcadMigrationTerminalScrollbackSnapshot[]
-  /** Each names what blocks and how to clear it. */
+  /** Blocker names and remedies. */
   blockedItems: string[]
-  /** What a confirmed "Move anyway" leaves in this desktop's retained profile. */
+  /** Retained on this desktop after confirmed "Move anyway". */
   leftBehindItems: string[]
 }
 
 const UNREADABLE_SESSION = 'saved tabs Orca could not read'
 
-/** Fails closed: a session shape no collector expects blocks the move instead of failing connect. */
+/** Unrecognized session shapes block the move rather than failing connection. */
 export function collectOrcadMigrationSourceWorkspaceSession(
   state: PersistedState,
   source: OrcadMigrationManifestSource,
@@ -80,8 +80,7 @@ export function collectOrcadMigrationSourceWorkspaceSession(
   if (!leaveBehind || collected.blockedItems.length === 0) {
     return collected
   }
-  // "Move anyway": what still can't move leaves the whole saved session on this desktop, unless an
-  // unsaved draft would go with it. A desktop-side draft has no retained copy once the host moves.
+  // "Move anyway" can retain sessions, but desktop drafts would lose their copy and must still block.
   const drafts = desktopDrafts(state, source, catalog)
   return drafts.length > 0 || collected.blockedItems.includes(UNREADABLE_SESSION)
     ? { ...collected, blockedItems: drafts.length > 0 ? drafts : collected.blockedItems }
@@ -107,7 +106,7 @@ function collectWorkspaceSession(
   const partitions = orcadMigrationSessionPartitions(state, sourceScope).map(
     ([partitionId, saved]) => {
       const scope = orcadMigrationPartitionScope(sourceScope, partitionId)
-      // A desktop-side draft stays a refusal: only the host's own rows are kept once it moves.
+      // Only host-partition rows retain a copy after the move; desktop drafts cannot stay behind.
       const session = withoutLeftBehindSessionRows(saved, scope, leaveBehind, {
         leaveDrafts: partitionId !== LOCAL_EXECUTION_HOST_ID
       })
@@ -132,7 +131,7 @@ function collectWorkspaceSession(
       sourceTerminalTabIds
     )
     if (leaveBehind) {
-      // What the export dropped or never extracts stays behind; only a desktop-side draft refuses.
+      // Retained rows no longer block, but unsaved desktop drafts still do.
       const kept = new Set(unsupported.filter(isUnsavedDraftItem))
       blockedItems.push(...kept)
       leftBehindItems.push(
@@ -167,7 +166,7 @@ function collectWorkspaceSession(
           : null
     })
     if (!sourceHostPartition) {
-      // Client focus is not host state, so the destination never carries it.
+      // Global client focus does not belong on the destination host.
       fragment.activeWorktreeId = null
       delete fragment.activeWorkspaceKey
     }
@@ -204,7 +203,7 @@ function collectWorkspaceSession(
   )
   let moving = fragments
   if (!merged.session && leaveBehind) {
-    // "Move anyway": the host's copy moves, as the app reads it, with the desktop copy's drafts.
+    // Prefer the host copy as the app does, while preserving desktop drafts.
     const conflicting = new Set(merged.conflicts.map(normalizeWorkspaceSessionKeyToWorkspaceId))
     const resolved = resolveCopiesForHost(fragments, conflicting)
     if (resolved.clashingDrafts.length > 0) {
@@ -241,7 +240,7 @@ function collectWorkspaceSession(
   if (duplicates.length > 0) {
     return { payload: undefined, snapshots: [], blockedItems: duplicates, leftBehindItems }
   }
-  // Drafts stay on this desktop; the commit renames them to the server (orcad-source-draft-rename).
+  // Keep draft contents desktop-side; commit retargets their records to the server.
   return merged.session
     ? {
         payload: withoutOrcadMigrationDrafts(merged.session),

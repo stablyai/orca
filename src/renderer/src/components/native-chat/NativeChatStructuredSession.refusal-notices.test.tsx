@@ -46,8 +46,7 @@ afterEach(() => {
     return { code: 'agent_session_journal_unreadable', details: { reason } } as const
   }
 
-  // The host's message and code never reach the pane; it words the refusal, and says it once. The
-  // read retries on its own, which the pane does not report.
+  // Word refusals locally without host internals or automatic-read retry narration.
   it('says only that a failed read with no refusal did not load, and adds nothing of the host', () => {
     mocks.status = 'error'
     mocks.messages = []
@@ -104,7 +103,6 @@ afterEach(() => {
     expect(screen.queryByText(/keeps trying/)).toBeNull()
   })
 
-  // "This isn't available in this chat." would name nothing the reader asked for.
   it('says why the history did not load for a chat its host cannot run', () => {
     mocks.status = 'error'
     mocks.readRefusal = {

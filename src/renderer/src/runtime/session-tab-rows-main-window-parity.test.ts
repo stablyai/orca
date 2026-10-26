@@ -1,5 +1,4 @@
-// Diff, markdown-preview, conflict-review and check-details rows: main's projection of its layout model (the window's session plus
-// the editor views the window publishes) must equal the rows the window builds for the same tabs.
+// Main layout projection plus published editor views must match window-built diff/Markdown/conflict/check-detail rows.
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'

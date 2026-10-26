@@ -1,5 +1,4 @@
-// Why: the dropdown's shape is consumed by CommitArea, the composer and the action dispatcher, so it
-// lives apart from the resolver — importers of the row union should not pull in the whole state machine.
+// Keep row types independent so consumers do not import the full resolver state machine.
 
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { GitConflictOperation } from '../../../../shared/git-status-types'

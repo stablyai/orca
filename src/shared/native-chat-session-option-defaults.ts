@@ -22,8 +22,7 @@ export function resolveNativeChatSessionOptionDefaults(
   agent: AgentType
 ): Record<string, SessionOptionValue> | undefined {
   const entry = persisted?.[agent]
-  // Why: untouched settings must preserve the agent CLI's configured defaults;
-  // only a model explicitly selected by the user authorizes launch flags.
+  // Preserve CLI-configured defaults until the user explicitly selects a model that authorizes launch flags.
   const modelId = typeof entry?.model === 'string' && entry.model.trim() ? entry.model : undefined
   if (!modelId) {
     return undefined
@@ -55,13 +54,8 @@ export const STRUCTURED_LAUNCH_OPTION_IDS = [
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
 
-/** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
- *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
- *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
- *  refusal code, so the throw strands the launch with no fallback.
- *
- *  Shared with orchestration, whose `--model`/`--effort` seed a worker's session the same way a
- *  saved selection seeds the user's own chat. */
+/** Share bounded-string seed narrowing with orchestration --model/--effort. Empty results must be undefined:
+ * an empty durable map throws agent_session_options_invalid outside wire refusals and strands launch fallback. */
 export function narrowStructuredLaunchSeedOptions(
   values: Readonly<Record<string, unknown>> | null | undefined
 ): Record<string, string> | undefined {
@@ -135,9 +129,7 @@ export function structuredLaunchSeedOptions(
     : selection
 }
 
-/** Fold a settled batch of picks onto the durable record. A surface that must send the
- *  whole object back — rather than merging key by key — applies them in one pass so a
- *  later pick in the batch cannot drop an earlier one. */
+/** Apply settled picks in one pass for surfaces replacing the whole record, so later picks cannot drop earlier ones. */
 export function applyNativeChatSessionOptionPicks(args: {
   persisted: PersistedNativeChatSessionOptions | null | undefined
   agent: AgentType
@@ -170,9 +162,7 @@ export function applyNativeChatSessionOptionSettingsMutation(
   return clearNativeChatSessionOptionModel(persisted, mutation.agent)
 }
 
-/** Why: an authoritative probe proved this id gone, and a stale `model` is emitted
- *  verbatim as a launch flag — grok exits fatally on an unknown one. Dropping only
- *  `model` keeps the per-model option values for a later reselect. */
+/** Clear ids proven retired: stale launch flags pass through verbatim and Grok exits fatally. Retain model-scoped options for reselect. */
 export function clearNativeChatSessionOptionModel(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
@@ -191,10 +181,8 @@ export function updateNativeChatSessionOptionDefaults(args: {
   modelId: string
   optionId: string
   value: SessionOptionValue
-  /** Defaults to adopting, since without a `model` no launch resolves the value at all.
-   *  Only the picker surface, which can tell a probe-confirmed id from the seed's guess
-   *  at the CLI default, withholds it: adopting a guess would emit `-m <guess>` on every
-   *  later launch, fatal on an account without that model. */
+  /** Adopt by default or no launch can use the option. Picker withholds unconfirmed CLI-default guesses:
+   * adopting one would emit -m on later launches and can fail on accounts lacking that model. */
   adoptModelAsLaunchDefault?: boolean
 }): PersistedNativeChatSessionOptions {
   const currentAgent = args.persisted?.[args.agent]

@@ -147,10 +147,7 @@ function isMethodNotFound(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
 }
 
-/**
- * Asks the owning endpoint to scan the host the workspace runs on. An older server only knows how to
- * scan itself, so it is never asked: its answer would show the server's ports for the SSH workspace.
- */
+/** Ask the owning endpoint for this execution host; older servers scan only themselves and would falsely report server ports for SSH workspaces. */
 export async function scanWorkspacePortsOnExecutionHost(
   host: HostScopedPortHost
 ): Promise<WorkspacePortHostScanResult> {
@@ -216,10 +213,7 @@ export async function killWorkspacePortOnExecutionHost(
   }
 }
 
-/**
- * Whether a scanned port serves a web page, asked of the host the port is on. `null` when that
- * host's Orca predates the probe, so callers fall back to what the scan alone knows.
- */
+/** Probe web support on the port’s host; null means older host capability, so callers retain scan-only fallback. */
 export async function probeWorkspacePortPageForTarget(
   target: RuntimeClientTarget,
   request: WorkspacePortPageProbeRequest

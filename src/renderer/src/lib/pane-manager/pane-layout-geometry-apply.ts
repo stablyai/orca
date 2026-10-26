@@ -26,7 +26,7 @@ function findDividers(split: HTMLElement): HTMLElement[] {
   )
 }
 
-/** False when the DOM's tree differs from `node`, so a mismatch never applies partially. */
+/** Reject mismatched DOM trees before applying any geometry. */
 function planGeometryWrites(
   node: TerminalPaneLayoutNode,
   el: HTMLElement,
@@ -43,7 +43,7 @@ function planGeometryWrites(
   if (!first || !second || extra || !divider || extraDivider) {
     return false
   }
-  // Why: a zoomed pane hides its siblings and owns their flex; collapse restores saved styles over any write.
+  // Zoom owns sibling visibility/flex; collapse would overwrite geometry applied while zoomed.
   if (first.style.display === 'none' || second.style.display === 'none') {
     return false
   }
@@ -55,7 +55,7 @@ function planGeometryWrites(
   }
   const isVertical = node.direction === 'vertical'
   const flipOrientation = el.classList.contains('is-vertical') !== isVertical
-  // Why: replay ignores an out-of-range ratio too (wrapInSplit), leaving an equal split.
+  // Match replay’s wrapInSplit fallback to equal halves for invalid ratios.
   const ratio = node.ratio !== undefined && node.ratio > 0 && node.ratio < 1 ? node.ratio : 0.5
   const writeRatio = Math.abs(readSplitRatio(first, second) - ratio) > SPLIT_RATIO_TOLERANCE
   if (flipOrientation || writeRatio) {
@@ -81,17 +81,12 @@ function flipSplitOrientation(
   split.classList.toggle('is-vertical', isVertical)
   split.classList.toggle('is-horizontal', !isVertical)
   split.style.flexDirection = isVertical ? 'row' : 'column'
-  // Why: a divider binds its drag axis at creation, so an orientation flip needs a new one.
+  // Orientation changes need a new divider because its drag axis is bound at creation.
   disposeDivider(write.divider)
   split.replaceChild(createDivider(isVertical), write.divider)
 }
 
-/**
- * Applies split orientation and ratios from `layout` to the mounted pane tree
- * in place. Only applies when the DOM already holds exactly the layout's
- * leaves in the same tree shape, unzoomed; returns whether anything changed.
- * With `followFrameTree`, the same leaves in another shape are moved into it first.
- */
+/** Apply host orientation/ratios without replacing terminals. Require matching leaves/tree and no zoom; followFrameTree first reshapes the same leaves. Return whether geometry changed. */
 export function applyPaneLayoutGeometry(
   host: PaneManagerHost,
   layout: TerminalPaneLayoutNode,

@@ -1,5 +1,4 @@
-// Why: activity bumps, persists and sweeps repeat on every event, so an ambiguous workspace would
-// warn continuously. One line per workspace and caller is enough to diagnose it (#10634).
+// Warn once per workspace/caller to avoid flooding logs on repeated activity/persist/sweep events (#10634).
 export const ambiguousOwnerWarnedWorktreeIds = new Map<string, Set<string>>()
 
 /** Re-arms the once-per-workspace warnings; called from every worktree teardown path. */

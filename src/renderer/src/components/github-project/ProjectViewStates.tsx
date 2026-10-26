@@ -157,8 +157,7 @@ export function ProjectViewErrorState({
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
       : error.type === 'unsupported_layout'
-        ? // Why: an older paired host still reports roadmaps as unsupported, so this
-          // copy must not name the layout — the tab strip already does that.
+        ? // Older hosts may still reject roadmaps; keep the explanation independent of the requested layout.
           translate(
             'projectViews.unsupported.description',
             'Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.'
@@ -225,15 +224,7 @@ export function ProjectTableSkeleton(): React.JSX.Element {
   )
 }
 
-/**
- * Empty result for a project view, worded from the view's own filter.
- *
- * Why: an unfiltered view has no filter to blame, so "no items match this
- * view's filter" reads as data loss when a freshly populated board momentarily
- * comes back empty (#12648). `ProjectV2.items(query:)` defaults to `""`, so
- * there is no non-search request shape to fall back to — the honest remedy is
- * to name the state correctly and say the emptiness may be transient.
- */
+/** Unfiltered empty results may be transient; blaming a nonexistent filter would imply data loss. */
 export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JSX.Element {
   if (filter.trim().length > 0) {
     return (

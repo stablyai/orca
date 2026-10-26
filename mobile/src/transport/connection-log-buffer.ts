@@ -1,16 +1,9 @@
 import type { ConnectionLogEntry } from './types'
 import { redactConnectionLogEntry } from '../diagnostics/connection-log-redaction'
 
-// Why: the rpc-client's onLog entries were only wired during pairing; for
-// long-lived host connections everything went to console.log, invisible to
-// users. This buffer retains the recent lifecycle events per host so a
-// "Connection log" screen (and copy-diagnostics) can show why a connection
-// is stuck without a debug build. Module-level so the log survives client
-// swaps (forceReconnect) and provider remounts (hot reload); bounded so an
-// all-night reconnect loop can't grow memory unbounded.
+// Keep bounded per-host diagnostics across client swaps/provider remounts so reconnect failures remain inspectable.
 const MAX_ENTRIES_PER_HOST = 200
-// Why: a store that just rejected almost always rejects again on the same tick, so
-// the one retry a snapshot gets waits instead of firing back-to-back.
+// Delay the single retry; storage that just failed is unlikely to recover in the same tick.
 const PERSISTENCE_RETRY_DELAY_MS = 200
 
 export type ConnectionLogStore = {
@@ -41,9 +34,7 @@ export function createConnectionLogStore(
     string,
     { snapshot: readonly ConnectionLogEntry[]; retried: boolean; saved: boolean }
   >()
-  // Why: useSyncExternalStore compares snapshots by reference — getSnapshot
-  // must return the SAME array until the data actually changes, or React
-  // loops re-rendering. Cache per host; invalidate on append.
+  // Cache snapshot identities until append; useSyncExternalStore would otherwise rerender indefinitely.
   const snapshotByHost = new Map<string, readonly ConnectionLogEntry[]>()
   const EMPTY: readonly ConnectionLogEntry[] = []
 
@@ -64,9 +55,7 @@ export function createConnectionLogStore(
     }
   }
 
-  // Why: one in-flight save per host, re-reading the revision after each write, so
-  // slow storage retains the in-flight snapshot and the newest pending one instead
-  // of one superseded MAX_ENTRIES_PER_HOST copy per queued append.
+  // Retain only the in-flight and latest snapshots per host so slow storage cannot queue an array per append.
   const runSaveLoop = async (hostId: string, storage: ConnectionLogPersistence): Promise<void> => {
     try {
       // Yield once so a synchronous append burst collapses into a single write.
@@ -80,9 +69,7 @@ export function createConnectionLogStore(
           await storage.save(hostId, revision.snapshot)
           revision.saved = true
         } catch {
-          // At most one delayed retry per snapshot, and none at all once a newer
-          // snapshot is queued — that snapshot already carries these entries, so
-          // re-attempting this one is pure write amplification.
+          // Retry each snapshot once unless a newer one already includes its entries.
           if (!revision.retried && !dirtyHosts.has(hostId)) {
             revision.retried = true
             setTimeout(() => persist(hostId), PERSISTENCE_RETRY_DELAY_MS)
@@ -117,9 +104,7 @@ export function createConnectionLogStore(
     activeSaveByHost.set(hostId, runSaveLoop(hostId, persistence))
   }
 
-  // Why: a failed write is otherwise only retried by the next append, so the final
-  // entries explaining a disconnect are lost when the log goes quiet and the OS
-  // kills the app. Two passes: drain whatever is running, then one retry.
+  // Drain then retry once so a quiet log can persist its final failure before the OS kills the app.
   const flushHost = async (hostId: string): Promise<void> => {
     for (let pass = 0; pass < 2; pass++) {
       persist(hostId)

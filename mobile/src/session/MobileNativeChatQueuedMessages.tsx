@@ -12,29 +12,23 @@ import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 
-/** The header's in-flight keys beside the cards' message ids, which never contain NUL. */
+// Use NUL-prefixed header keys because message ids cannot contain NUL.
 const RESUME_KEY = '\u0000resume'
 const CLEAR_KEY = '\u0000clear'
 
 export type MobileNativeChatQueuedMessagesProps = {
   cards?: MobileQueuedMessageCard[]
-  /** Steer for a waiting card, the paused queue's included; plain Send for a card held on its own
-   *  (its send failed), or a returned one. */
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   onClearAll?: (messageIds: string[]) => Promise<boolean>
-  /** Opens an editor in the card; older hosts copy its text to the composer. */
+  // Older hosts cannot edit inline; copy their draft to the composer.
   onEdit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
-  /** The whole queue's pause: the header reads Paused, with Clear all and Resume. */
   pause?: MobileQueuePause
   onResume?: () => Promise<boolean>
-  /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
   steerHeld?: boolean
 }
 
-/** The host-held queued drafts, as one box of compact rows between transcript and
- *  composer — a queued message is never an optimistic transcript bubble. */
 export function MobileNativeChatQueuedMessages({
   cards,
   onSend,
@@ -46,15 +40,13 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
-  // One in-flight action per card; a second tap must not double-consume. The ref
-  // closes the same-frame double tap the disabled state cannot.
+  // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const inFlightRef = useRef(new Set<string>())
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
   const largeText = useLargeSystemText()
   if (!cards || cards.length === 0) {
-    // Collapsing is local to this queue's run: once it empties, the next card shows open.
     if (!expanded) {
       setExpanded(true)
     }
@@ -75,8 +67,7 @@ export function MobileNativeChatQueuedMessages({
   }
   const resuming = busyIds.has(RESUME_KEY)
   const clearing = busyIds.has(CLEAR_KEY)
-  // A card that drained or was removed while its menu was open closes the menu, for good: a
-  // Stop-requeued draft comes back under the same id and must not reopen it.
+  // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
   const menuCard = cards.find((card) => card.messageId === menuFor)
   if (menuFor !== null && !menuCard) {
     setMenuFor(null)
@@ -121,7 +112,7 @@ export function MobileNativeChatQueuedMessages({
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
     <View style={styles.list}>
-      {/* One box: the header is its first row, and the capped list of cards below it. */}
+      {}
       <View style={styles.box} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View

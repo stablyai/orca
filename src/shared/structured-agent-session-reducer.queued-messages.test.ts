@@ -1,6 +1,4 @@
-// The `queuedMessages` claim: live frames own it, an omitted field means
-// "unchanged", history never replaces a newer live list, and absence stays
-// absence (an older host makes no claim at all).
+// Live lists own queue state: omission means unchanged, stale history cannot overwrite them, and older-host absence stays absent.
 
 import { describe, expect, it } from 'vitest'
 import type {

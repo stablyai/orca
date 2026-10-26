@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
-import type { ShallowWatcherSubscription } from './parcel-watcher-shallow-subscription'
+import type { ShallowWatcherSubscription } from './filesystem/watcher-process/parcel-watcher-shallow-subscription'
 import { watchFileAcrossReplacement, type RebindingFileWatch } from './rebinding-file-watch'
 
 // Rebind missed replacements; Git metadata polling provides the shorter staleness backstop.

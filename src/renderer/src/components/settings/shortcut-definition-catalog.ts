@@ -42,10 +42,9 @@ export function buildShortcutDefinitionCatalog(options: {
     options.keybindings,
     {
       ignoredActionIds: ignoredConflictActionIds,
-      // Plugin defaults are external additions to Orca's conflict-free static
-      // registry, so surface their collisions even before the user customizes one.
+      // Plugin defaults can conflict with the static registry before any user customization.
       relevantActionIds: pluginDefinitions.map((definition) => definition.id),
-      // Why: warn when main claims a custom chord before it reaches the renderer action.
+      // Warn when main intercepts a custom chord before the renderer receives it.
       includeMainProcessInterception: true
     }
   )

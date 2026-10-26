@@ -7,13 +7,11 @@ import type {
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
-/** The picker surface over a structured chat's options: picks, `/`-opened pickers, snapshots. */
 export function useMobileStructuredOptionSurface(args: {
   demandModelCatalog: () => void
   lockSnapshot: (snapshot: SessionOptionDescriptor[]) => SessionOptionDescriptor[]
   optionSnapshot: SessionOptionDescriptor[]
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
-  /** The latest option state, which a settled pick's snapshot is read from. */
   optionStateRef: RefObject<StructuredAgentSessionOptionState>
 }) {
   const { optionSnapshot, optionStateRef, setStructuredOption, demandModelCatalog } = args

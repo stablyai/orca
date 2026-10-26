@@ -1,7 +1,4 @@
-/**
- * The keyboard (pane-scoped) and tab-strip (pty-scoped) close prompts must word the same
- * close the same way, so both resolve their copy through this module (#10142).
- */
+/** Keyboard pane-close and tab-strip prompts must resolve identical copy (#10142). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))

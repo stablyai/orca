@@ -10,8 +10,7 @@ import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
 
 const iconAssets: Partial<Record<string, ImageSourcePropType>> = MOBILE_AGENT_ICON_ASSETS
 
-// Why: agent branding should match the desktop/new-worktree picker everywhere
-// mobile lets users choose the agent that will own a workspace.
+// Match desktop/new-worktree agent branding across mobile pickers.
 
 function PiIcon({ size = 16 }: { size?: number }) {
   return (
@@ -27,8 +26,7 @@ function PiIcon({ size = 16 }: { size?: number }) {
 }
 
 function OmpIcon({ size = 16 }: { size?: number }) {
-  // SVG sourced from omp.sh's transparent homepage mark. Why: react-native-svg
-  // does not support the homepage's CSS oklch stops, so use its favicon hex stops.
+  // Use omp.sh transparent mark with favicon hex stops because RN SVG cannot parse homepage CSS oklch stops.
   const gradientId = `ompMarkGradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
@@ -114,8 +112,7 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
     return <Terminal size={size} color={colors.textMuted} />
   }
 
-  // Why: prefer the favicon bundled into the app over Google's favicon service,
-  // which is unreachable in some regions and offline (#8451).
+  // Use bundled favicon instead of Google service for offline/regional availability (#8451).
   const iconAgentId = agentId === 'dsb' ? 'dsh' : agentId
   const bundledIcon = iconAssets[iconAgentId]
   if (bundledIcon) {

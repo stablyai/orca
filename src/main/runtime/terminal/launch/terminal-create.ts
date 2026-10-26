@@ -7,8 +7,10 @@ import { buildRuntimeAgentTeamsLaunchPlan } from './agent-teams-launch-plan'
 import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
+import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { resolveLaunchCommandPaneAgent } from '../../runtime-agent-launch-resolution'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -28,8 +30,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       dependencies.setPairedViewerColors(callerColors)
     }
     const presentation = dependencies.resolveTerminalPresentation(opts)
-    // Why: this process starts every terminal it can place, so a slow window only delays showing
-    // it; a window-made create that timed out here still ran later, and a retry duplicated it.
+    // Start host-placeable terminals here; timing out a window-made start still ran it later and retries duplicated it.
     if (worktreeSelector !== undefined) {
       const { ptyController } = this
       if (!ptyController?.spawn) {
@@ -37,6 +38,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
       // The window's latest published active group is where its reveal places the tab.
@@ -44,8 +46,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         launchOpts.targetGroupId ??
         this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId ??
         session?.activeGroupIdByWorktree?.[workspace.id]
-      // A workspace not shown since launch has no measured group; with at most one group, its tab
-      // opens in a lone group, which every workspace sizes alike.
+      // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
       const singleGroup =
         (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
           ? this.singleGroupWorkspaceGridSize
@@ -240,21 +241,16 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (pty) {
           pty.runtimeSessionOwned = true
           if (!adoptedStablePane) {
-            if (launchOpts.title) {
-              const observedAt = this.nextTitleObservationSequence()
-              pty.title = launchOpts.title
-              pty.titleUpdatedAt = observedAt
-              this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-            } else {
-              pty.title = null
-              pty.titleUpdatedAt = null
-            }
+            seedPtyLaunchTitle(pty, launchOpts.title, launchTitleAt, (title, at) =>
+              this.setPtyManagementTitleFromObservedTitle(pty, title, at)
+            )
             pty.launchConfig = effectiveLaunchConfig
               ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)
               : null
             pty.launchToken = launchToken ?? null
             pty.launchIncarnationId = launchToken ? pty.incarnationId : null
             pty.launchAgent = launchOpts.launchAgent ?? null
+            pty.launchCommandAgent = resolveLaunchCommandPaneAgent(launchOpts.command)
           }
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }

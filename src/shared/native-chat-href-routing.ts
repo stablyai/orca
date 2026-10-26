@@ -49,9 +49,7 @@ function parseLineFragment(hash: string): number | null {
   let decoded = hash
   try {
     decoded = decodeURIComponent(hash)
-  } catch {
-    // Keep the raw fragment when decoding fails.
-  }
+  } catch {}
   const match = /^(?:L|line-?)([1-9]\d*)\b/i.exec(decoded)
   return match ? Number.parseInt(match[1]!, 10) : null
 }

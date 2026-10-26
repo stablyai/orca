@@ -3,7 +3,7 @@ import { chmodSync, existsSync } from 'node:fs'
 /** Restrict a SQLite database and its sidecars to the owning user. */
 export function hardenSqliteDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
-    // Why: Windows protects these files through Orca's current-user-only userData DACL; POSIX mode bits are inert there.
+    // Windows uses current-user userData DACLs; POSIX mode bits have no effect.
     return
   }
   for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
@@ -12,7 +12,7 @@ export function hardenSqliteDatabaseFiles(dbPath: (string & {}) | ':memory:'): v
         chmodSync(path, 0o600)
       }
     } catch {
-      // Why: best-effort — a mount that rejects chmod (SSHFS, some network shares) must not fail DB startup.
+      // Network filesystems may reject chmod; permission hardening must not prevent DB startup.
     }
   }
 }

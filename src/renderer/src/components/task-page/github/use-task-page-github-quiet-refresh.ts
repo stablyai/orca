@@ -9,9 +9,7 @@ export type TaskPageGitHubQuietRefreshPreludeModel = ReturnType<
 >
 export function useTaskPageGitHubQuietRefreshPrelude(model: TaskPageGitHubLandingRefreshModel) {
   const { githubWorkItemMutationQueryKey } = model
-  // Why: track true unmount only. The quiet-revalidate coalescing keys off the
-  // shared quietState (inFlight/trailingQueued), so a nonce-triggered re-render
-  // must NOT cancel the in-flight run's trailing bookkeeping.
+  // Nonce rerenders must preserve shared in-flight/trailing bookkeeping; track true unmount only.
   const quietRevalidateMountedRef = useMountedRef()
   const quietRevalidateOwnerRef = useRef<QuietRevalidateRunOwner>({})
   const quietRevalidateScopeRef = useRef({

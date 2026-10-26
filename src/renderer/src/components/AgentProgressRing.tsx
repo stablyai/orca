@@ -10,11 +10,7 @@ function clampPercent(percent: number): number {
   return Math.min(100, Math.max(0, Math.round(percent)))
 }
 
-/**
- * Determinate twin of AgentWorkingSpinner, filled clockwise from 12 o'clock to the program's
- * reported percentage. Sized like the state glyphs, not the spinner: the fill is the only readout.
- * Butt caps, because round ones overstate a short arc.
- */
+/** Fill clockwise from 12 o’clock at glyph size. Butt caps avoid overstating short arcs. */
 export function AgentProgressRing({
   percent,
   tone = 'working',
@@ -69,7 +65,6 @@ export function AgentProgressRing({
   )
 }
 
-/** "42%" for the ring's tooltip and accessible label. */
 export function formatAgentProgressPercent(percent: number): string {
   return `${clampPercent(percent)}%`
 }

@@ -1,29 +1,6 @@
-// Why: the protected-translation prefix is deliberately broad so a consent
-// surface added tomorrow is covered the day it lands — the lesson from
-// PluginConsentProvenance. That breadth also catches copy that carries no
-// security meaning at all: section titles, empty states, search affordances,
-// and the local development form. A language pack that cannot translate
-// "Refresh" leaves the plugins pane half-translated in every locale.
-//
-// This list is the narrow exception, and it is a list of exact paths rather
-// than a pattern on purpose: anything new stays protected until someone
-// deliberately adds it here, so the fail-safe survives.
-//
-// A path belongs here only if rewriting it cannot mislead the person deciding
-// whether to trust a plugin. That rules out, and this list therefore omits:
-//
-//   - trust badges and safety status — `PluginMarketplaceListingRow.official`,
-//     `.blocked`, `PluginSettingsRow.blocked`;
-//   - promises about what plugins may do — `PluginsSettingsSection.description`
-//     ("Plugins run on this computer"), `.systemDescription` ("Nothing runs
-//     until you review and enable it"), `.featureOff` ("stays disabled"), and
-//     `PluginDevelopmentSection.help` ("Dev plugins still require permission
-//     review"). Swapping any of these for reassuring text is the attack;
-//   - failure copy that reports a trust event — `installFailed` ("The reviewed
-//     source may have changed"). Sibling `*Failed` strings stay protected too,
-//     so the boundary is a rule rather than a judgement call per message;
-//   - destructive confirmations — `PluginRemoveDialog`, `PluginRollbackDialog`;
-//   - every dialog the existing tests already name as security copy.
+// Exact nonsecurity chrome exemptions preserve fail-closed protection for new plugin security copy. Never exempt trust badges,
+// permission claims, install/trust failures or destructive confirmations; translated reassurance could mislead consent decisions
+// (the PluginConsentProvenance extraction exposed this gap). Headings/search/local form copy may be translated.
 const TRANSLATABLE_PLUGIN_CHROME = new Set([
   // Plugins pane frame: headings and list states, no claims about behavior.
   'auto.components.settings.PluginsSettingsSection.title',
@@ -70,12 +47,7 @@ export function translatablePluginChrome(path: string): boolean {
   return TRANSLATABLE_PLUGIN_CHROME.has(path)
 }
 
-/**
- * True when a protected-prefix container holds exempt chrome somewhere below it.
- * The walk rejects a protected path as soon as it sees it, so a container has to
- * stay walkable for its exempt leaves to be reachable — every leaf inside is
- * still checked against its own full path.
- */
+/** Walk protected containers only when exempt chrome exists below; independently validate every descendant leaf’s full path. */
 export function translatablePluginChromeContainer(path: string): boolean {
   const prefix = `${path}.`
   for (const exempt of TRANSLATABLE_PLUGIN_CHROME) {

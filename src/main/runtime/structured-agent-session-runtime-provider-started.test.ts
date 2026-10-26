@@ -1,6 +1,4 @@
-// A Claude child proving its start must not wait on another session's start, and must not make
-// that start, or the session's own serialized operations, wait on the CLI: the host
-// records what the child proved from what the adapter already holds.
+// Record Claude startup evidence already held by the adapter; never block session operations on another start or a stalled CLI control read.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
@@ -42,7 +40,6 @@ describe('a Claude child proving its start', () => {
       expect(host.deps.store.getRecord(HEALTHY)?.lease.claimStatus).toBe('released')
     )
 
-    // What the child proved is still recorded, from the startup it already answered.
     await vi.waitFor(() =>
       expect(host.collaboratorsForTests().sessions.get(STALLED)?.child?.phase).toBe('ready')
     )
@@ -73,7 +70,6 @@ describe('a Claude child proving its start', () => {
     await vi.waitFor(() =>
       expect(host.collaboratorsForTests().sessions.get(STALLED)?.child?.phase).toBe('ready')
     )
-    // The other start is still where it was: reserved, with no new child.
     expect(host.deps.store.getRecord(HEALTHY)?.lease.claimStatus).toBe('reserved')
     expect(claude.children(HEALTHY)).toHaveLength(childrenWhileHung)
   })

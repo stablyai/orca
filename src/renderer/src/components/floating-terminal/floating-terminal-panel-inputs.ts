@@ -115,6 +115,5 @@ export function createFloatingTerminalPanelInputsSelector(
   }
 }
 
-// Why: the closed floating workspace retains its pane tree. Scope its one
-// subscription so ordinary workspace writes do not rerender that hidden tree.
+// Scope subscriptions so ordinary workspace writes cannot rerender the retained hidden floating tree.
 export const selectFloatingTerminalPanelInputs = createFloatingTerminalPanelInputsSelector()

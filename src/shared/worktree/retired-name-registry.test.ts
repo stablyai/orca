@@ -27,11 +27,9 @@ describe('creatureNameTier', () => {
   })
 
   it.each([
-    // A user-typed name must never be covered by a watermark, or a spent tier would silently
-    // retire names the pool has no claim on.
+    // Watermarks cover generated pool names only, never arbitrary user labels.
     ['fix-login-2'],
     ['fix-login'],
-    // The suggester never emits these, so no tier can ever complete for them.
     ['nautilus-2-3'],
     ['nautilus-1'],
     ['nautilus-0'],
@@ -160,7 +158,7 @@ describe('end-to-end retirement guarantee', () => {
   it('never suggests a name that has been retired, compacted or not', () => {
     let registry = EMPTY_RETIRED_NAME_REGISTRY
     const issued: string[] = []
-    // Two full tiers plus one, so the run crosses compaction twice and lands above the watermark.
+    // Cross compaction twice and finish above the watermark.
     for (let index = 0; index < POOL.length * 2 + 1; index += 1) {
       const name = selectSuggestedCreatureName(registry.names, pickFirst, registry.exhaustedTiers)
       expect(issued).not.toContain(name)

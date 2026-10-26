@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
 export type StaleCut = { by: 'death' } | { by: 'replaced'; fence: number } | null

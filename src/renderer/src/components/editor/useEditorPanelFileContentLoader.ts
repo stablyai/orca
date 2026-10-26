@@ -79,8 +79,7 @@ export function useEditorPanelFileContentLoader({
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
-        // Why: these tabs name a file on this client, so the worktree's SSH or runtime owner must
-        // never be inferred for them (a stamp still routes).
+        // Client-local tabs must not inherit workspace SSH/runtime ownership; explicit stamps still route.
         const isClientLocalTab = restoredOpenFile
           ? isClientLocalReadOnlyTab(restoredOpenFile)
           : false
@@ -138,15 +137,11 @@ export function useEditorPanelFileContentLoader({
           !readOwnerEnvironmentId &&
           !isWorktreeConnectionResolved(worktreeId ?? null)
         ) {
-          // Why: the backing repo hasn't hydrated yet (SSH still connecting), so
-          // we can't tell local from remote. Reading locally would deny a remote
-          // path with a terminal "access denied" (#6648); fail retryably instead.
+          // Unhydrated owners may be remote; fail retryably rather than turning a bad client-local read into terminal access denial.
           throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
         }
         if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
-          // Why: an out-of-worktree absolute path in an SSH workspace belongs to the
-          // remote host, so the resolved connection owns it even when the tab predates
-          // (or was opened outside) the terminal-link path that stamps the target id.
+          // Absolute paths in SSH workspaces belong to their resolved host, including legacy tabs without terminal-link stamps.
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isClientLocalTab ? undefined : connectionId)
@@ -177,8 +172,7 @@ export function useEditorPanelFileContentLoader({
               throw new Error('External local files are not available for remote workspaces.')
             }
             if (!externalSshOwnerId) {
-              // Why: a client-local external tab names a client path, so this read must stay off
-              // the worktree's SSH host.
+              // Client-local external tabs must stay off the workspace’s SSH host.
               readConnectionId = undefined
             }
           }
@@ -198,8 +192,7 @@ export function useEditorPanelFileContentLoader({
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced reloads must not attach to a currently registered read
-          // started before the external change landed.
+          // Forced reloads must bypass reads started before the external change.
           inFlightFileReads.delete(key)
         }
         let pending = inFlightFileReads.get(key)
@@ -250,8 +243,7 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState(),
           worktreeId ?? null
         )
-        // Why: a read through an SSH host that is still connecting failed on the connection,
-        // not the file; the retry gate waits for it rather than showing "connection dropped".
+        // Connection failures while SSH connects should wait for readiness instead of appearing as file errors.
         const hostConnecting =
           hostConnection.phase === 'connecting' &&
           readConnectionId !== undefined &&
@@ -261,8 +253,7 @@ export function useEditorPanelFileContentLoader({
           : err instanceof Error
             ? err.message
             : String(err)
-        // Why: a host may put prose on the message and the machine token on `.code`;
-        // classifiers downstream must see the token, not only its rendering (#21041).
+        // Preserve machine error codes separately because hosts may render prose-only messages.
         const loadErrorCode =
           !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
         const failure: FileContent = {

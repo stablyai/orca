@@ -12,7 +12,6 @@ export function CheckRow(props: {
   detail?: string
   indent?: boolean
   leading?: ReactNode
-  /** Pick-one rows read as radio buttons. */
   radio?: boolean
   disabled?: boolean
 }) {
@@ -45,9 +44,7 @@ export function CheckRow(props: {
   )
 }
 
-/** Rows inside one option's card, a hairline between each. */
 export function OptionRowList({ children }: { children: ReactNode }) {
-  // Children.map keys each result by its child's own key.
   return (
     <>
       {Children.map(children, (child, i) => (
@@ -81,7 +78,7 @@ export function ChoiceRows<Id extends string>(props: {
   )
 }
 
-/** A filter switch, as the desktop's switch rows; only the switch takes the tap (one write on web). */
+/* Only the switch takes the tap, avoiding duplicate writes on web. */
 export function SwitchRow(props: {
   label: string
   value: boolean
@@ -102,7 +99,6 @@ export function SwitchRow(props: {
   )
 }
 
-/** An option with its current value; tapping it opens the option's own page. */
 export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
   return (
     <Pressable

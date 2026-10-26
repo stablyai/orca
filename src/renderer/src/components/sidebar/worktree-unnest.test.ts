@@ -23,8 +23,6 @@ describe('unnestWorktrees', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  // Why: both callers fire-and-forget, so a rejection that escapes here is an unhandled rejection
-  // and the user sees nothing at all.
   it('toasts instead of rejecting when the lineage update fails', async () => {
     const updateWorktreeLineage = vi
       .fn()

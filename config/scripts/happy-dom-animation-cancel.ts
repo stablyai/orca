@@ -1,5 +1,4 @@
-// Why: the Web Animations spec marks the `finished` promise that cancel() rejects as handled, and
-// Chromium does. happy-dom rejects it unhandled, so every cancelled animation fails the test run.
+// Browsers mark cancel()’s rejected finished promise handled; patch happy-dom’s unhandled rejection or cancelled animations fail tests.
 
 const patchedPrototypes = new WeakSet<Animation>()
 

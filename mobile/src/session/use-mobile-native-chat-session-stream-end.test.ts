@@ -59,7 +59,6 @@ function testClient(subscribe: RpcClient['subscribe']): RpcClient {
   }
 }
 
-/** A client whose host is the test: every subscribe's listener is kept, in order. */
 function listenerClient(): {
   client: RpcClient
   subscribe: ReturnType<typeof vi.fn<RpcClient['subscribe']>>
@@ -73,9 +72,7 @@ function listenerClient(): {
   return { client: testClient(subscribe), subscribe, listeners }
 }
 
-/** A host that, like the runtime, keys each feed by its token: a same-token subscribe ends the feed
- *  it replaces, and an unsubscribe ends whatever holds the token. Frames queue until `deliver`, so
- *  each end lands a round trip after the request that caused it. */
+// Model host token ownership: subscribe replaces same-token feeds, unsubscribe ends the current owner, and end frames arrive on later delivery.
 function evictingHost(): {
   client: RpcClient
   subscribe: ReturnType<typeof vi.fn<RpcClient['subscribe']>>
@@ -103,7 +100,7 @@ function evictingHost(): {
     }
   })
   const deliver = async (): Promise<void> => {
-    // Bounded so a same-token fight between screens shows up as an ended feed, not a hang.
+    // Bound delivery so same-token eviction fights fail visibly instead of hanging.
     for (let round = 0; round < 10 && queued.length > 0; round += 1) {
       const frames = queued
       queued = []
@@ -117,12 +114,10 @@ function evictingHost(): {
   return { client: testClient(subscribe), subscribe, deliver }
 }
 
-/** A paired host as the phone's real stream layer sees it: requests out, replies in. */
 type TransportRig = {
   client: RpcClient
   sent: SentRequest[]
   reply: (response: RpcResponse) => void
-  /** Drops and re-authenticates the socket; only the direct transport replays its streams. */
   reconnect?: () => void
 }
 
@@ -245,7 +240,6 @@ describe('useMobileNativeChatSession host-ended stream', () => {
 
       expect(state?.status).toBe('error')
       expect(state?.transcriptLoading).toBe(false)
-      // The conversation stays on screen; nothing reopens behind the user's back.
       expect(state?.messages.map((entry) => entry.id)).toEqual(['a'])
       expect(sentWith(rig, 'nativeChat.subscribe')).toHaveLength(1)
     }
@@ -265,14 +259,12 @@ describe('useMobileNativeChatSession host-ended stream', () => {
       })
       expect(state?.status).toBe('error')
 
-      // Toggle to the terminal view and back.
       await render({ client: rig.client, agent: null })
       await render({ client: rig.client })
       const subscribes = sentWith(rig, 'nativeChat.subscribe')
       expect(subscribes).toHaveLength(2)
       expect(tokenOf(subscribes[1]!)).toMatch(/^claude:session:./)
       expect(tokenOf(subscribes[1]!)).not.toBe(tokenOf(first!))
-      // The ended feed is already gone on the host, so leaving it names nothing.
       expect(sentWith(rig, 'nativeChat.unsubscribe')).toEqual([])
       expect(state?.status).toBe('loading')
 
@@ -364,7 +356,6 @@ describe('useMobileNativeChatSession feeds across stacked screens', () => {
     await host.deliver()
     expect(states.get('under')?.status).toBe('ready')
 
-    // Resuming from agent history pushes a second screen for the same chat.
     await render(host.client, ['under', 'top'])
     await host.deliver()
     expect(states.get('under')?.status).toBe('ready')
@@ -373,7 +364,6 @@ describe('useMobileNativeChatSession feeds across stacked screens', () => {
     const [under, top] = host.subscribe.mock.calls
     expect(tokenOf(under!)).not.toBe(tokenOf(top!))
 
-    // Popping the pushed screen releases its own feed only.
     await render(host.client, ['under'])
     await host.deliver()
     expect(host.subscribe).toHaveBeenCalledTimes(2)
@@ -404,7 +394,6 @@ describe('useMobileNativeChatSession feeds across stacked screens', () => {
         ])
       }
 
-      // The older screen leaves while the newer one stays: its unsubscribe must still be sent.
       await render(rig.client, ['top'])
       expect(
         rig.sent

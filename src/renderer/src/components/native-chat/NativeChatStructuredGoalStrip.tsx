@@ -2,7 +2,6 @@ import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 
-/** A structured chat's open goal above its composer. */
 export function NativeChatStructuredGoalStrip(props: {
   sessionId: string
   threadGoal: StructuredAgentSessionThreadGoal | null | undefined

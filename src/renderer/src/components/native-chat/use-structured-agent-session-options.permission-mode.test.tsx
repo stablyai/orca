@@ -88,7 +88,6 @@ describe('the permission mode another device picks', () => {
     unmount()
   })
 
-  // A restart for a new mode moves the fence; the pill never blanks before the next read answers.
   it('keeps the mode across a fence of the same chat', async () => {
     optionsAnswering('auto')
     const { result, rerender, unmount } = renderReopened(1)

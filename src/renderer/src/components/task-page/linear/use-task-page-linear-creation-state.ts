@@ -20,7 +20,6 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     selectedLinearProject,
     availableTeams
   } = model
-  // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
   const [newLinearProjectName, setNewLinearProjectName] = useState('')
   const [newLinearProjectDescription, setNewLinearProjectDescription] = useState('')
@@ -63,7 +62,6 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     writeDraft: writeNewLinearProjectDraft
   })
 
-  // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
   const [newLinearIssueBody, setNewLinearIssueBody] = useState('')

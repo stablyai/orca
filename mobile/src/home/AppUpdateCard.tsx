@@ -2,7 +2,6 @@ import { ArrowUpFromLine, X } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 
-/** Home's update notice, drawn in the host card's frame so it reads as part of that list. */
 export function AppUpdateCard(props: {
   version: string
   onPress: () => void
@@ -42,7 +41,6 @@ export function AppUpdateCard(props: {
   )
 }
 
-// Same frame, icon well and spacing as MobileHostCard.
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',

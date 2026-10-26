@@ -142,7 +142,6 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
         ) : null}
       </View>
 
-      {/* Filter/sort/group toolbar */}
       {embedded ? (
         <View style={styles.embeddedToolbar}>
           <View style={styles.embeddedToolbarRow}>

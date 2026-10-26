@@ -131,10 +131,7 @@ async function hostSurfaceStatus(
   return surface?.type === 'terminal' ? surface.status : null
 }
 
-/** Park the fixture PTY so the host republishes its pane as a pending handle.
- *  Why: exact stop only confirms when it observes the fixture exit inside its verification
- *  window, and a loaded headless host can miss that window even though the PTY is going away.
- *  The precondition this journey needs is the parked surface, so retry until the host shows it. */
+// Retry until the host publishes the parked pending handle; stop verification can miss PTY exit under headless load.
 async function parkHostTerminal(
   page: Page,
   environmentId: string,
@@ -163,8 +160,7 @@ async function parkHostTerminal(
       expect(stop.stoppedPtyIds).toEqual([options.expectedPtyId])
       return
     }
-    // Why: the host reports a set mismatch once the target PTY is no longer live, which is the
-    // parked state this journey needs even when the stop call itself missed the exit.
+    // Set mismatch also confirms the no-longer-live PTY is parked when stop verification misses exit.
     if (
       lastError.includes('terminal_stop_pty_set_mismatch') ||
       (await hostSurfaceStatus(page, environmentId, worktreeId, parentTabId)) !== 'ready'
@@ -230,8 +226,7 @@ async function runMaterializationJourney(
   await parkHostTerminal(page, environmentId, worktreeId, created.tab.parentTabId, {
     expectedPtyId: originalTerminal.terminal.ptyId
   })
-  // Why: the stale error must land on an already-parked surface, or the journey proves nothing
-  // about materializing a pending handle.
+  // Require an already-parked surface before applying the stale error.
   await expect
     .poll(() => hostSurfaceStatus(page, environmentId, worktreeId, created.tab.parentTabId), {
       timeout: 15_000,
@@ -278,8 +273,7 @@ async function runMaterializationJourney(
     .toBe(true)
   expect(replacementHandle).not.toBeNull()
 
-  // Why: parking the host PTY can clear this client's active-worktree selection, so reselect the
-  // pane before reading the PTY it rebound to — the rebind itself is what this journey asserts.
+  // Reselect after host parking clears client selection, then read the rebound PTY.
   await page.evaluate((id) => window.__store?.getState().setActiveWorktree(id), worktreeId)
   await expect(tab).toBeVisible({ timeout: 10_000 })
   await tab.click()

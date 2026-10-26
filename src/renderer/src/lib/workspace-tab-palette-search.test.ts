@@ -7,7 +7,6 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')
@@ -135,8 +134,7 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 
 describe('workspace-tab-palette-search', () => {
   it('stamps the row execution host so activation never resolves by id alone', () => {
-    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
-    // host's workspace behind a row labelled with this one's name and branch.
+    // Host-blind activation opens the wrong same-ID workspace behind another host’s row label.
     const worktree = makeWorktree({ hostId: 'ssh:box' })
     const entries = buildEntries({ worktrees: [worktree] })
     const [result] = searchWorkspaceTabs(entries, '')
@@ -237,8 +235,7 @@ describe('workspace-tab-palette-search', () => {
     expect(searchWorkspaceTabs(entries, 'fallback')[0]?.title).toBe('Fallback Terminal')
   })
 
-  // The tab strip shows the unified label; tabsByWorktree can lag on a default
-  // "Terminal N" while the label already has the live OSC agent title.
+  // Unified labels follow visible OSC titles while terminal records can lag at Terminal N.
   it('indexes the unified label when the terminal record title is stale', () => {
     const entries = buildEntries({
       tabsByWorktree: {
@@ -521,8 +518,7 @@ describe('workspace-tab-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J receives the same possibly corrupt stored display names as workspace search.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/workspace-tab-search'
@@ -613,8 +609,15 @@ describe('workspace-tab-palette-search', () => {
   })
 
   it('rejects a query with more unique tokens than the matcher accepts', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
-    expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
+    const query = 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16'
+    const entries = buildEntries({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: query })] }
+    })
+    expect(
+      searchWorkspaceTabs(entries, 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15')
+    ).toHaveLength(1)
+    expect(searchWorkspaceTabs(entries, query)).toEqual([])
   })
 
   it('stamps grok occupancy from the idle OSC title the sidebar already shows', () => {

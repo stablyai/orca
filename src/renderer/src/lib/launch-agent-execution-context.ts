@@ -8,7 +8,6 @@ import {
 } from '@/lib/execution-host-facts'
 import type { useAppStore } from '@/store'
 
-/** Where a new-tab agent launch runs, and the quoting rules that follow from it. */
 export type AgentLaunchExecutionContext = {
   /** `undefined` means rival host rows disagree, which is not evidence of a remote. */
   worktreeSshConnectionId: string | null | undefined

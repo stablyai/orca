@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
-import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { historyRowShowsChatName } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'

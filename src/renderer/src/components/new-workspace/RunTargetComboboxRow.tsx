@@ -6,13 +6,7 @@ import { HostRowIcon } from '../host-row-icon'
 
 export { HostRowIcon }
 
-/**
- * One run-target row. Shares the Project picker's shape — 32px, label and
- * right-aligned detail on one baseline — so the two composer fields read as one
- * control. `stacked` switches to a two-line card for the Add-host choices,
- * where the description explains what you're picking rather than labelling a
- * thing you already know.
- */
+/** Match project-picker baseline rows; stacked Add-host cards add explanatory descriptions. */
 export function RunTargetRow({
   icon,
   label,
@@ -48,8 +42,7 @@ export function RunTargetRow({
       role="option"
       id={optionId}
       aria-selected={armed}
-      // `option` supports aria-haspopup but not aria-expanded, so the row
-      // announces that it opens a menu without claiming an invalid state.
+      // option supports aria-haspopup but not aria-expanded.
       aria-haspopup={submenu ? 'menu' : undefined}
       data-armed={armed || undefined}
       data-current={current ? 'true' : undefined}
@@ -63,7 +56,6 @@ export function RunTargetRow({
         current && !armed && 'bg-accent/60'
       )}
     >
-      {/* Icons are glyphs, not text, so they centre on the row. */}
       <span
         className={cn(
           'flex shrink-0 items-center',

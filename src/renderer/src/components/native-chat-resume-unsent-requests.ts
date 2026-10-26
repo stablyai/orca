@@ -1,7 +1,6 @@
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
-// A resume request that failed before the host reserved anything leaves it nothing to record, so
-// its chats are shown failed from here: by id, when it failed. Each host answer re-derives it.
+// Record requests lost before host reservation locally; reconcile their failure marks with each authoritative host answer.
 
 const unsentResumes = new Map<string, number>()
 const UNSENT_RESUME_REASON = 'agent_session_restart_request_failed'
@@ -21,8 +20,7 @@ export function forgetUnsentResumes(sessionIds: readonly string[] | undefined): 
   sessionIds.forEach((sessionId) => unsentResumes.delete(sessionId))
 }
 
-/** The host's answer with each unsent resume's chat moved from its offers to its failures. A chat
- *  the host no longer offers drops its mark, so a host failure row is never shown beside it. */
+/** Move locally unsent offers into failures; drop local marks when the host no longer offers the chat. */
 export function withUnsentResumes<T extends HostAnswer>(answer: T): T {
   const offered = new Set(answer.candidates.map((candidate) => candidate.sessionId))
   for (const sessionId of unsentResumes.keys()) {

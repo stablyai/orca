@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  MAX_QUICK_COMMANDS,
   OrcaRuntimeService,
   applyAgentStatusHooksEnabledMock,
   electronMocks
@@ -54,7 +53,7 @@ describe('OrcaRuntimeService', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
-      // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
+      // Omission silently selects overseas and reports the wrong region.
       minimaxEndpoint: 'cn'
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
@@ -172,8 +171,8 @@ describe('OrcaRuntimeService', () => {
     expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
   })
 
-  it('rejects a concurrent add after the quick command limit is reached', () => {
-    const terminalQuickCommands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
+  it('preserves concurrent additions after forty quick commands', () => {
+    const terminalQuickCommands = Array.from({ length: 40 }, (_, index) => ({
       id: `command-${index}`,
       label: `Command ${index}`,
       action: 'terminal-command' as const,
@@ -181,27 +180,25 @@ describe('OrcaRuntimeService', () => {
       appendEnter: true,
       scope: { type: 'global' as const }
     }))
-    const updateSettings = vi.fn()
+    let settings = { ...store.getSettings(), terminalQuickCommands }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
     const runtime = new OrcaRuntimeService({
       ...store,
-      getSettings: () => ({ ...store.getSettings(), terminalQuickCommands }),
+      getSettings: () => settings,
       updateSettings
     } as never)
 
-    expect(() =>
-      runtime.updateClientTerminalQuickCommands({
-        type: 'upsert',
-        command: {
-          id: 'one-too-many',
-          label: 'One too many',
-          action: 'terminal-command',
-          command: 'true',
-          appendEnter: true,
-          scope: { type: 'global' }
-        }
-      })
-    ).toThrow('Quick command limit reached')
-    expect(updateSettings).not.toHaveBeenCalled()
+    const first = { ...terminalQuickCommands[0], id: 'desktop-addition' }
+    const second = { ...terminalQuickCommands[0], id: 'mobile-addition' }
+    runtime.updateClientTerminalQuickCommands({ type: 'upsert', command: first })
+    expect(runtime.updateClientTerminalQuickCommands({ type: 'upsert', command: second })).toEqual([
+      ...terminalQuickCommands,
+      first,
+      second
+    ])
+    expect(settings.terminalQuickCommands).toEqual([...terminalQuickCommands, first, second])
   })
 
   it('accepts runtime-backed setting updates from paired clients', async () => {

@@ -40,8 +40,7 @@ export {
   type TabPaneDropData
 } from './tab-drag-data'
 
-// Why: tab activation waits for pointerup, so dnd-kit needs enough movement
-// tolerance to avoid treating ordinary click jitter as an intentional drag.
+// Allow click jitter because tab activation waits until pointerup.
 export const TAB_DRAG_ACTIVATION_DISTANCE_PX = 12
 
 export function canDropTabForPaneColumnSplit(args: {
@@ -79,9 +78,7 @@ export function useTabDragSplit({
   enabled = true
 }: {
   worktreeId: string
-  /** When false (e.g. for hidden worktrees), returns empty sensors so no
-   *  DndContext pointer listeners are registered on the document. Multiple
-   *  simultaneous DndContext instances with active sensors can interfere. */
+  /** Disable drag activation for hidden retained worktrees without changing sensor count. */
   enabled?: boolean
 }): {
   activeDrag: TabDragItemData | null
@@ -126,12 +123,7 @@ export function useTabDragSplit({
     tabInsertion
   })
 
-  // Why: hidden worktrees stay mounted so their PTYs survive worktree
-  // switches, but their DndContext should not activate drags. We use an
-  // impossible activation distance rather than switching between
-  // useSensors(ptr) / useSensors(), because dnd-kit internally spreads
-  // the sensors array into a useEffect dependency list — changing its
-  // length between renders violates React's rules of hooks.
+  // Use an impossible activation distance for hidden worktrees; changing sensor count changes dnd-kit effect dependency length.
   const activationDistance = getTabDragActivationDistance(enabled)
   // Why memoized: fresh options rebuild every tab's drag listeners and wake every tab through dnd-kit's context.
   const pointerSensorOptions = useMemo(
@@ -224,8 +216,7 @@ export function useTabDragSplit({
   )
 
   const onDragOver = useCallback((_event: DragOverEvent) => {
-    // Why: onDragMove already carries over + delta; skipping duplicate work here
-    // avoids running split/insertion resolution twice in the same frame.
+    // onDragMove already resolves split/insertion targets; avoid duplicate work in the same frame.
   }, [])
 
   const leafJoin = useMemo<LeafJoinDeps>(
@@ -256,10 +247,7 @@ export function useTabDragSplit({
     [dragGeometryRef, dropUnifiedTab, finishDrag, leafJoin, reorderUnifiedTabs, worktreeId]
   )
 
-  // Why: dnd-kit fires onDragCancel (not onDragEnd) when the user presses
-  // Escape or the drag is otherwise aborted. Without this handler the
-  // activeDrag and hoveredDropTarget state would remain stale, leaving the
-  // drop overlay visible indefinitely.
+  // Escape/aborted drags arrive here without onDragEnd; clear previews and restore the snapshot.
   const onDragCancel = useCallback(() => {
     finishDrag(true)
   }, [finishDrag])

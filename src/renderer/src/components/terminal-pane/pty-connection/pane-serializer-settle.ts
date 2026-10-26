@@ -45,8 +45,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     if (!hasPtySerializer(ptyId)) {
       session.registerPaneSerializerFor(ptyId)
     }
-    // Why: onSubscribed follows the snapshot callback, but replay drains
-    // asynchronously; join it and xterm's parser before reporting readiness.
+    // Join async snapshot replay and xterm parse after onSubscribed before declaring readiness.
     void session.replayWriteQueue
       .then(() => waitForTerminalOutputParsed(session.pane.terminal))
       .then(() => {
@@ -57,8 +56,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       .catch(() => {})
   }
 
-  // Why: startup commands are provider-owned so delivery survives renderer
-  // replacement. Only explicit terminal-paste stays renderer-owned.
+  // Providers own startup delivery across renderer replacement; only explicit terminal paste stays renderer-owned.
   session.pendingStartupCommand = session.shouldDeliverStartupViaTerminalPaste
     ? session.paneStartup?.command
       ? { command: session.paneStartup.command }
@@ -115,13 +113,11 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     startupDraftPasteSettled = true
     session.startupDraftPasteAttempted = true
     session.cleanupStartupDraftPasteTimers()
-    // Why: xterm focus reports share this transport queue. Bypassing it can
-    // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
+    // Share the transport queue with focus replies so ConPTY cannot race CSI I into the draft as a literal prefix.
     void sendAgentDraftPasteContent(ptyId, session.startupDraftPrompt, 'launch', async (data) => {
       const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
       if (accepted && !startupDraftInputRecorded) {
-        // Why: this transport write bypasses xterm's user-input signal; keep
-        // the composed draft from being discarded by later hibernation.
+        // Transport paste bypasses xterm’s input signal; record it so hibernation cannot discard the composed draft.
         startupDraftInputRecorded = true
         session.recordTerminalInputForHibernation()
       }
@@ -216,8 +212,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   }
   let sessionRestoredBannerShown: SessionRestoredBannerReason | null = null
   session.showSessionRestoredBanner = (reason: SessionRestoredBannerReason = 'restored'): void => {
-    // Why: a plain 'restored' banner must not latch out the later 'resume-unavailable'
-    // upgrade — the pane would keep claiming a session it never got back.
+    // Allow unavailable outcome to replace restored wording; an earlier plain banner cannot certify a session that failed to resume.
     if (
       sessionRestoredBannerShown === reason ||
       sessionRestoredBannerShown === 'resume-unavailable'

@@ -1,6 +1,4 @@
-// Why: a raw-byte cap is not enough. JSON escaping expands a control character sixfold and
-// binary-buffer.ts sniffs only for NUL, so control-dense content is classified as text; these
-// fixtures pin every branch of the measurement to native JSON.stringify.
+// JSON escaping can expand controls sixfold while NUL-only sniffing treats them as text; pin each budget branch to JSON.stringify.
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './git-diff-compare-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'

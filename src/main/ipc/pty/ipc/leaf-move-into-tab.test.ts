@@ -12,7 +12,7 @@ import {
   getMigrationUnsupportedPtySnapshot,
   setMigrationUnsupportedPty
 } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { noopPtyIpcSurface, setPtyHostBindings } from '../../pty-host-bindings'
+import { noopPtyIpcSurface, setPtyHostBindings } from '../pty-host-bindings'
 import {
   getPtyIdForPaneKey,
   paneKeyPtyId,

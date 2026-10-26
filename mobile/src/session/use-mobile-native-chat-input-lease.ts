@@ -13,16 +13,14 @@ export function useMobileNativeChatInputLease(args: {
   readyRef: { readonly current: boolean }
   lockReason: MobileNativeChatInputLockReason | null
   markReady: (handle: string) => void
-  /** Returns whether the clear actually dropped a lease — callers use a no-op clear
-   *  to detect a teardown React would otherwise never see (#10681). */
+  // Report synchronous no-op clears so callers can detect teardown React never observes.
   clear: (handle?: string) => boolean
 } {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   // Mirrors the state so `clear` can report synchronously whether it changed anything.
   const readyHandlesRef = useRef(readyHandles)
   const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
-  // Why: absence of an acknowledgement proves only that setup is still pending;
-  // the protocol does not report evidence that another client owns the floor.
+  // Missing acknowledgement proves only pending setup, never ownership by another client.
   const lockReason: MobileNativeChatInputLockReason | null = !args.connected
     ? 'disconnected'
     : ready
@@ -79,8 +77,7 @@ export function useMobileNativeChatInputLease(args: {
 
 const INPUT_LOCK_SETTLE_MS = 600
 
-/** A dead PTY emits subscribed→end; settle both edges so its false lease cannot
- *  flash the composer enabled. */
+// Settle subscribed/end together so dead PTYs cannot flash the composer enabled.
 export function useSettledMobileNativeChatInputLock(
   reason: MobileNativeChatInputLockReason | null | undefined
 ): MobileNativeChatInputLockReason | null {
@@ -97,11 +94,8 @@ export function useSettledMobileNativeChatInputLock(
   return lockHeld ? (rawLockReason ?? 'waiting') : null
 }
 
-/** What the composer says while the input lease blocks it, else that a message sent now runs
- *  after a Stop the chat reads as stopping, else desktop's normal prompt. */
 export function mobileNativeChatComposerPlaceholder(
   lockReason: MobileNativeChatInputLockReason | null,
-  /** While stopping: whether a message sent now is queued, or sent for the host to hold. */
   afterStop?: 'queue' | 'send'
 ): string {
   if (lockReason === 'disconnected') {

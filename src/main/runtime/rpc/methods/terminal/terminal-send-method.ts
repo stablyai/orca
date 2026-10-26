@@ -74,7 +74,7 @@ export const TERMINAL_SEND_METHODS = [
       if (replayObservation) {
         return replayObservation
       }
-      // Why: a stale handle must fail with terminal_handle_stale, not evaluate driver/lock state against the wrong PTY (#7718).
+      // Reject stale handles before evaluating driver/lock state on the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
       if (
@@ -104,8 +104,7 @@ export const TERMINAL_SEND_METHODS = [
         params.client?.type === 'desktop' &&
         params.claimViewport === true &&
         params.viewport &&
-        // Why: clients attach their viewport to every send, so a focus report or query reply
-        // would otherwise claim the PTY and start a resize war between two mirrors (#26469).
+        // Only deliberate input may claim viewport ownership; focus/query sends otherwise trigger resize wars (#26469).
         !(
           typeof params.text === 'string' &&
           isUntypedTerminalInput(params.text) &&
@@ -123,7 +122,7 @@ export const TERMINAL_SEND_METHODS = [
           'refresh',
           true
         )
-        // Why: a stream-less request can't safely create ownership, so never write at stale geometry.
+        // Without a stream, sends cannot safely claim ownership; refuse stale geometry.
         if (!claim.updated || isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
           return {
             send: {
@@ -137,7 +136,7 @@ export const TERMINAL_SEND_METHODS = [
       const hasText = typeof params.text === 'string' && params.text.length > 0
       const hasSuffix = params.enter === true || params.interrupt === true
       if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
-        // Why: guarded sends are two-phase; reject combined payload + submit so a guard flip can't cause partial delivery.
+        // Guarded sends are two-phase; combined payload/submit could partially deliver across a guard flip.
         return {
           send: {
             handle: params.terminal,
@@ -146,7 +145,7 @@ export const TERMINAL_SEND_METHODS = [
           }
         }
       }
-      // Why: recheck permission/no-agent state immediately before accepting the PTY write.
+      // Recheck permission and agent presence immediately before PTY acceptance.
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
@@ -300,7 +299,7 @@ export const TERMINAL_SEND_METHODS = [
           result
         )
       }
-      // Why: deliberate mobile input takes the floor (drives `* → mobile{clientId}`); clientless sends fall back to the current mobile driver.
+      // Deliberate mobile input claims its driver floor; clientless sends use the current mobile driver.
       return { send: result }
     }
   })

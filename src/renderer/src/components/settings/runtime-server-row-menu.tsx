@@ -36,7 +36,6 @@ type RuntimeServerRowMenuProps = {
   onRemove: () => void
 }
 
-/** Order: state change → preference → setup → destructive. */
 export function RuntimeServerRowMenuItems({
   showUpdate,
   showConnect,

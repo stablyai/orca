@@ -160,9 +160,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    // The seam, not the 14 it was: on the web an input under 16px zooms the page on focus and the
-    // keyboard seam reads that zoom as "no keyboard". Natively the seam is the theme's body size,
-    // which is what this already rendered at.
+    // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
     fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm

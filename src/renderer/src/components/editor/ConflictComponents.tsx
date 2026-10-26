@@ -156,11 +156,7 @@ export function ConflictBanner({
           </div>
         )}
       </div>
-      {/* Why: the hint is omitted here because the file is already open in the
-         editor below. Showing "Open and edit…" or similar would be confusing
-         when the user is already viewing/editing the working-tree contents.
-         The hint is still shown in ConflictPlaceholderView and the review
-         list where it provides actionable guidance. */}
+      {/* The file is already open below; reserve open/edit guidance for placeholders and the review list. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
           {translate(

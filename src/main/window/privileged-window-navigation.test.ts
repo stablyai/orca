@@ -22,8 +22,7 @@ describe('privileged window navigation policy', () => {
       willNavigate(url: string) {
         const event = { preventDefault: vi.fn() }
         const handler = handlers.get('will-navigate')
-        // Why: the allow-cases assert preventDefault was *not* called, so a missing
-        // handler would pass them vacuously.
+        // Assert handler presence or missing navigation guards pass allow-cases vacuously.
         if (!handler) {
           throw new Error('no will-navigate handler was registered')
         }
@@ -67,8 +66,7 @@ describe('privileged window navigation policy', () => {
     ).toHaveBeenCalled()
   })
 
-  // Why: the packaged file: path is the whole privilege boundary, so a foreign host or a
-  // non-file scheme that reuses it must not read as "our own document".
+  // The exact packaged file host/path defines privilege; foreign hosts and copied paths under other schemes must fail.
   it('blocks a foreign file host and a data: URL that reuse the renderer path', () => {
     const appUrl =
       'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'

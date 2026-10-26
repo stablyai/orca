@@ -34,7 +34,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.callRuntimeRpc(target, method, params)
 }))
@@ -132,14 +131,12 @@ async function settle(): Promise<void> {
 
 const chat = launchIntent('session-notes')
 
-/** What the notes menu does with a "New agent" pick: the launch, then the hold on its outcome. */
 function sendNotesToNewAgent() {
   const onDelivered = vi.fn()
   const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
     requestId: 'request-1',
     prompt: NOTES,
     promptDelivery: 'submit-after-ready',
-    // The notes keep their text until it goes out, as the notes menu's launch says.
     promptKeptByCaller: true
   })
   holdNotesForSend(
@@ -154,7 +151,6 @@ function sentMessages(): unknown[] {
   return mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'agentSession.send')
 }
 
-/** A start the host refused outright: the chat shows it failed, with Retry. */
 async function failTheStart(): Promise<void> {
   await settle()
   expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, chat.sessionId)).toBe('failed')
@@ -186,8 +182,7 @@ describe('notes sent to a new agent', () => {
     expect(isNoteInFlight('note-a')).toBe(false)
   })
 
-  // One owner of the text: the notes keep it until it goes out, so the new chat's composer never
-  // gets a copy to send a second time.
+  // Notes retain text until delivery; the chat composer must not get a duplicate copy to send.
   it("come back to the shelf, never into the new chat's composer, when the host refuses them", async () => {
     mocks.launch.mockResolvedValue({ sessionId: chat.sessionId, fence: 1 })
     mocks.callRuntimeRpc.mockResolvedValue({
@@ -201,7 +196,6 @@ describe('notes sent to a new agent', () => {
     expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(chat.sessionId))).toBe('')
   })
 
-  // The notes own the text, so they are the one place that says it did not go.
   it('report the refusal once, as a send to a chat does', async () => {
     mocks.launch.mockResolvedValue({ sessionId: chat.sessionId, fence: 1 })
     mocks.callRuntimeRpc.mockResolvedValue({

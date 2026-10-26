@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
 import { RemoteNodeRuntimeNoexecError } from '../../ssh/orcad-remote-node-runtime-report'
@@ -62,8 +62,7 @@ beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'host-server-wiring-'))
   store = createSqliteTestStore(Store, { dataFile: join(userDataPath, 'orca-data.json') })
   store.addSshTarget(TARGET)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
-  mocks.registry.current = new SshConnectionStore(store as never)
+  mocks.registry.current = new SshConnectionStore(store)
 })
 
 afterEach(async () => {

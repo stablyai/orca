@@ -23,8 +23,7 @@ import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runti
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
 import { registeredModelCatalogDiscovery } from './structured-agent-model-catalog-wiring'
 
-// The first frame a new chat paints, from the real registration list through the host service to
-// the shared picker: nothing here passes the "names its default" answer by hand.
+// Exercise registration, host catalog and shared picker together; never hand-feed the names-its-default answer.
 
 function context(): StructuredAgentModelCatalogContext {
   const unused = async (): Promise<never> => {

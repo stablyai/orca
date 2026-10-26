@@ -21,7 +21,6 @@ const FLOATING_TERMINAL_TAB = {
 const WORKTREE_TAB = { id: 'worktree-chat-1', entityId: 'session-2' }
 const SSH_HOST = 'ssh:box-1'
 
-// The shape skill discovery passes: no detected rows.
 function state(overrides: Partial<NativeChatTabDirectoryState> = {}): NativeChatTabDirectoryState {
   return {
     floatingWorkspacePath: '/home/me/changed-setting',

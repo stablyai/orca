@@ -183,9 +183,120 @@ describe('restored turns on a synced leaf', () => {
     )
   })
 
-  it('retires to done once the leaf PTY paints a newer shell title', () => {
+  // STA-12043: Done beside a shell claimed a completion nobody saw; the turn keeps only its identity.
+  it('retires to identity only once the leaf PTY paints a newer shell title', () => {
     const receivedAt = Date.now() - 60_000
     const result = project(leafWithTitle('bash'), receivedAt + 1_000, receivedAt)
+
+    expect(result.agentStatus).toEqual(
+      expect.objectContaining({
+        state: 'done',
+        prompt: '',
+        restoredUnconfirmed: true,
+        updatedAt: receivedAt + 1_000,
+        agentType: 'claude'
+      })
+    )
+  })
+})
+
+// STA-12043: after a host restore the pane runs a new shell, yet its hook rows are the old run's.
+describe('hook evidence from before the PTY process started', () => {
+  const SESSION = { key: 'session_id' as const, id: 'pre-restart-session' }
+
+  function completedRow(agentType: 'codex' | undefined, receivedAt: number): AgentStatusIpcPayload {
+    return {
+      paneKey: PANE_KEY,
+      state: 'done',
+      prompt: 'old prompt',
+      ...(agentType ? { agentType } : {}),
+      connectionId: null,
+      receivedAt,
+      stateStartedAt: receivedAt,
+      tabId: TAB_ID,
+      worktreeId: 'wt-1',
+      providerSession: SESSION
+    }
+  }
+
+  function projectAfterStart(
+    row: AgentStatusIpcPayload,
+    title: string | null,
+    processStartedAt: number | null
+  ) {
+    return buildRuntimeMobileAgentStatus(null, LEAF_TAB, 'term-1', null, () => [row], {
+      getPaneKey: () => PANE_KEY,
+      getLeaf: () => leafWithTitle(title),
+      getTrackedTitle: () => null,
+      getPtyTitleObservedAtEpochMs: (ptyId) =>
+        ptyId === PTY_ID && title && processStartedAt ? processStartedAt + 1 : null,
+      getPtyProcessStartedAtEpochMs: (ptyId) => (ptyId === PTY_ID ? processStartedAt : null)
+    })
+  }
+
+  it.each([
+    ['codex', null],
+    ['codex', 'zsh'],
+    [undefined, null],
+    [undefined, 'zsh']
+  ] as const)('keeps only identity for agent=%s title=%s', (agentType, title) => {
+    const receivedAt = Date.now() - 120_000
+    const result = projectAfterStart(
+      completedRow(agentType, receivedAt),
+      title,
+      receivedAt + 60_000
+    )
+
+    expect(result.agentStatus).toEqual(
+      expect.objectContaining({
+        restoredUnconfirmed: true,
+        updatedAt: receivedAt + 60_000,
+        stateStartedAt: receivedAt,
+        providerSession: SESSION
+      })
+    )
+    if (agentType) {
+      expect(result.agentStatus?.agentType).toBe(agentType)
+    }
+  })
+
+  it('keeps the shown turn, not a later resume-identity row, as the segment', () => {
+    const receivedAt = Date.now() - 120_000
+    const identityRow: AgentStatusIpcPayload = {
+      ...completedRow('codex', receivedAt + 30_000),
+      stateStartedAt: receivedAt + 30_000,
+      providerSessionOnly: true
+    }
+    const result = buildRuntimeMobileAgentStatus(
+      null,
+      LEAF_TAB,
+      'term-1',
+      null,
+      () => [completedRow('codex', receivedAt), identityRow],
+      {
+        getPaneKey: () => PANE_KEY,
+        getLeaf: () => leafWithTitle(null),
+        getTrackedTitle: () => null,
+        getPtyProcessStartedAtEpochMs: () => receivedAt + 60_000
+      }
+    )
+
+    expect(result.agentStatus).toEqual(
+      expect.objectContaining({ restoredUnconfirmed: true, stateStartedAt: receivedAt })
+    )
+  })
+
+  it('keeps the completed turn of a process main attached to', () => {
+    const receivedAt = Date.now() - 120_000
+    const result = projectAfterStart(completedRow('codex', receivedAt), null, null)
+
+    expect(result.agentStatus?.state).toBe('done')
+    expect(result.agentStatus).not.toHaveProperty('restoredUnconfirmed')
+  })
+
+  it('keeps a turn the current process reported', () => {
+    const startedAt = Date.now() - 120_000
+    const result = projectAfterStart(completedRow('codex', startedAt + 1_000), null, startedAt)
 
     expect(result.agentStatus?.state).toBe('done')
     expect(result.agentStatus).not.toHaveProperty('restoredUnconfirmed')

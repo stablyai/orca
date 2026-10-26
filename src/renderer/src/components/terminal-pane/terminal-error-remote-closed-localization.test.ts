@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Why a locale stand-in: the banner's own chrome is already translated, so the only way to see the
-// mixed-language regression (#9194) is to render the message through a non-English catalog.
+// Use a non-English catalog to expose mixed-language message/chrome regression (#9194).
 vi.mock('@/i18n/i18n', () => ({
   translate: (key: string, fallback: string) =>
     key === 'auto.components.terminal.pane.TerminalErrorToast.remoteTerminalClosed'

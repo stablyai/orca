@@ -39,12 +39,6 @@ function byName(tree: ReactTestRenderer, name: string): ReactTestInstance[] {
   return tree.root.findAll((node) => String(node.type) === name)
 }
 
-/**
- * Only the two fields the view reads before it decides whether to render the screen at all.
- *
- * Everything below the early return is a child this file mocks away, so no other member of the
- * controller is reachable from what these cases exercise.
- */
 function controllerWith(fields: { error: string; actionError: string }) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `HostScreenView` reads `state.error` and then hands the controller to three mocked children, so these two fields are the whole reachable surface.
   return { state: fields } as unknown as Parameters<typeof HostScreenView>[0]['controller']
@@ -63,7 +57,6 @@ function render(fields: { error: string; actionError: string }): ReactTestRender
 
 type RemovalWrites = { action: string[]; identity: string[]; confirm: boolean[] }
 
-/** One run of `handleRemoveHost` against a scripted rejection, reporting what it wrote. */
 async function runRemoval(rejection: unknown): Promise<RemovalWrites> {
   doubles.alerts.length = 0
   doubles.removalRejection = rejection
@@ -102,8 +95,7 @@ async function runRemoval(rejection: unknown): Promise<RemovalWrites> {
 
 describe('a removal that failed', () => {
   it('keeps the list, the header and the overlays on screen', () => {
-    // The confirm this failure re-opens lives in the overlays, so a screen that early-returned
-    // would be asking the user to confirm against a view that is not rendering it.
+    // The reopened confirm lives in overlays; early-returning the screen would hide the action needed to recover.
     const tree = render({ error: '', actionError: 'Could not remove host. Please try again.' })
     expect(byName(tree, 'SafeAreaView')).toHaveLength(1)
     expect(byName(tree, 'HostScreenHeader')).toHaveLength(1)
@@ -128,8 +120,7 @@ describe('a removal that failed', () => {
   })
 
   it('says where removal happens when the page refuses, and re-offers nothing', async () => {
-    // A refusal is not a failure: on the page there is no host list to remove from, so the copy
-    // names the app and the confirm this control would re-open stays shut.
+    // Page removal is unsupported, so its refusal must not reopen an unusable confirm.
     const writes = await runRemoval(new PageHostRemovalUnavailableError())
     expect(writes.action).toEqual(['Remove this host from the host list in the Orca app.'])
     expect(writes.confirm).toEqual([])

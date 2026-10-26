@@ -5,10 +5,7 @@ import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route
 /** Where a notebook's kernel would run: kernels exist only on this computer. */
 export type NotebookExecutionHost = 'local' | 'remote' | 'unresolved'
 
-/**
- * Why: a managed SSH or paired-server workspace has no SSH connection id, so "no connection id"
- * cannot mean local; running its cells here would execute a same-named local file.
- */
+/** Managed SSH/paired workspaces lack SSH IDs; treating that absence as local could execute a same-named client file. */
 export function resolveNotebookExecutionHost(
   state: WorktreeOperationRouteState,
   worktreeId: string

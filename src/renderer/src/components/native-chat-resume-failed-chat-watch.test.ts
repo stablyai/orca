@@ -24,9 +24,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
-// When the user sends in an offered or failed chat, its status bar entry must retire without the
-// user reopening anything, and nothing may run while nothing is offered or failed.
-
 const failure = {
   sessionId: 'a',
   workspaceId: 'workspace',
@@ -67,7 +64,6 @@ function offerReads(): number {
     .length
 }
 
-/** Lists one failed chat, then answers every later read with `later`. */
 async function listFailure(later: { failed: unknown[] } = { failed: [] }): Promise<void> {
   mocks.rpc
     .mockResolvedValueOnce({ sessions: [], failed: [failure] })
@@ -90,7 +86,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// The host withdraws a pending offer once the chat moves on; the status bar must not keep counting it.
 it('re-reads once when the user sends in an offered chat, and the count drops', async () => {
   const { failedAt: _failedAt, outcome: _outcome, reason: _reason, ...candidate } = failure
   mocks.rpc
@@ -142,13 +137,11 @@ it('does not re-read for an agent streaming in a failed chat or for news older t
 
   hostEmit()({ type: 'status', session: summary('idle', 'Replayed note', later + 1) })
   await vi.advanceTimersByTimeAsync(500)
-  // Still failed, so the watch stays for the user's own reply.
   expect(offerReads()).toBe(2)
   expect(mocks.unsubscribe).not.toHaveBeenCalled()
 })
 
-// Host and renderer stamp time separately, and the host can answer a list just before a reply is
-// delivered here: a change to a chat already seen is news whatever its timestamp says.
+// Known chat changes are news despite older host timestamps because list and status delivery can race.
 it('re-reads for a known failed chat that changes even when its stamp predates the list', async () => {
   await listFailure()
   hostEmit()({ type: 'snapshot', sessions: [summary('idle', 'Fix it', 1)] })
@@ -178,8 +171,6 @@ it('never lets a re-read that was already in flight bring back a dismissed failu
   expect(getNativeChatRestartOffer().failed).toEqual([])
 })
 
-// A retry changes the chat it acts on; its own answer follows, so a read mid-action would only
-// flash a half-finished list.
 it('waits for a resume in flight instead of re-reading under it', async () => {
   await listFailure({ failed: [failure] })
   const acting = Promise.withResolvers<unknown>()
@@ -194,7 +185,6 @@ it('waits for a resume in flight instead of re-reading under it', async () => {
   await vi.advanceTimersByTimeAsync(500)
   expect(offerReads()).toBe(1)
 
-  // The action reply carries the remaining list, so no extra read is needed.
   failed = []
   acting.resolve({
     sessions: [],

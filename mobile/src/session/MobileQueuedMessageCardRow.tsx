@@ -17,7 +17,6 @@ import { queuedMessageStyles as styles } from './mobile-native-chat-queued-messa
 
 type QueuedMessageCardRowProps = {
   card: MobileQueuedMessageCard
-  /** Set only on the card being edited. */
   editor?: MobileQueuedMessageInlineEditor
   busy: boolean
   editBlocked: boolean
@@ -25,11 +24,9 @@ type QueuedMessageCardRowProps = {
   onSend: () => void
   onDelete: () => void
   onMore: () => void
-  /** The edited row's place in the list, so the list can keep it in view. */
   onEditorLayout: (row: LayoutRectangle) => void
 }
 
-/** One queued card: its text and actions, or, while it is edited, the editor in their place. */
 export function MobileQueuedMessageCardRow({
   card,
   editor,
@@ -37,7 +34,6 @@ export function MobileQueuedMessageCardRow({
   ...actions
 }: QueuedMessageCardRowProps): React.JSX.Element {
   if (editor) {
-    // The editor replaces the icon, the text, the actions and the caption.
     return (
       <View
         testID="queued-card-row"
@@ -62,8 +58,6 @@ function QueuedMessageCardContents({
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
-  // "Steer" submits beside the running turn, the paused queue's cards too; a card whose own send
-  // failed, or a returned one, is sent again.
   const steers = !returned && !card.paused && !card.command
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
@@ -91,7 +85,7 @@ function QueuedMessageCardContents({
           ) : null}
         </View>
         <View style={styles.actions}>
-          {/* A command never steers: its Send shows only while the agent is idle. */}
+          {}
           {card.waitsForAgent ? null : (
             <Pressable
               accessibilityRole="button"
@@ -134,7 +128,7 @@ function QueuedMessageCardContents({
           >
             <Trash2 size={14} color={colors.textPrimary} strokeWidth={2} />
           </Pressable>
-          {/* The menu holds only Edit, which a command does not take. */}
+          {}
           {card.command ? null : (
             <Pressable
               accessibilityRole="button"

@@ -14,15 +14,7 @@ const HOST = 'host-1'
 const FILE = 'src/app.ts'
 const TERMINAL = 'terminal-1'
 
-/**
- * Everything the review screen writes: the note/review-state metadata save, the stage/unstage/
- * discard mutations, the reveal-in-session open, and the two ways review notes reach a terminal.
- *
- * One mount, because the screen composes the comment, git and send hooks into a single interaction
- * surface and they share the client and the error setter. The send arm also drives the stale-input
- * heal, whose clearing write only happens when a prior image paste marked the handle — so the
- * marker is set by an action rather than assumed.
- */
+// Compose review writes as one real surface; seed stale-input healing through the image-paste action that arms it.
 export function diffReviewActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -68,7 +60,6 @@ export function diffReviewActionMountAdapters(
       }
       let screenState: ReviewScreenState = {
         kind: 'ready',
-        // These actions never read the status; the queue item above is what they branch on.
         status: mountFixture<Extract<ReviewScreenState, { kind: 'ready' }>['status']>({
           entries: []
         }),

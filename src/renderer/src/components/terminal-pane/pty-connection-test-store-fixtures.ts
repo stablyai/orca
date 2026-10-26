@@ -33,7 +33,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     sshConnectionStates: new Map(),
     transientClearedAgentStatusConnectionIds: {},
     cacheTimerByKey: {},
-    // Why: terminalMainSideEffectAuthority false pins the legacy renderer byte-parser wiring this suite asserts on (onTitleChange/onBell); authority-on mode has its own tests.
+    // Pin legacy byte-parser wiring; main-authority facts have separate coverage.
     settings: {
       promptCacheTimerEnabled: true,
       experimentalTerminalAttention: true,

@@ -13,7 +13,6 @@ import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
 import { resetWriteQueue } from './write-queue'
 
-/** One message from the host. Every field is optional because the router reads them by type. */
 export type TerminalHostMessage = {
   id?: number
   type?: string
@@ -28,7 +27,6 @@ export type TerminalHostMessage = {
   frame?: { width: number; height: number } | null
 }
 
-/** The frame React Native laid out, sent with every grid; null when absent or without a size. */
 function hostFrameOf(msg: TerminalHostMessage) {
   const frame = msg.frame
   return frame && frame.width > 0 && frame.height > 0
@@ -36,7 +34,6 @@ function hostFrameOf(msg: TerminalHostMessage) {
     : null
 }
 
-/** Keeps the frame a grid was fitted to, for a later text-scale change to fit. */
 function holdHostFrame(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
   scope.hostFrame = hostFrameOf(msg) ?? scope.hostFrame
 }
@@ -67,8 +64,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       msg.oscLinks
     )
   } else if (msg.type === 'set-font-scale') {
-    // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
-    // currentTextScale) so the post-pinch state isn't reset; only apply changes.
+    // Ignore the host echo of a pinch value so it cannot reset post-pinch state.
     if (
       typeof msg.fontScale === 'number' &&
       msg.fontScale > 0 &&
@@ -90,7 +86,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   } else if (msg.type === 'clear') {
     scope.terminalGeneration++
     resetWriteQueue(scope)
-    resumeTerminalDataReplyAuthority(scope) // Why: clear drops the replay boundary.
+    resumeTerminalDataReplyAuthority(scope)
     scope.statusDotPendingSelector = false
     scope.afterDrainCallbacks = []
     scope.writesDraining = false

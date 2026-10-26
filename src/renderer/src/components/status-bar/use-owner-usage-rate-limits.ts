@@ -51,10 +51,7 @@ export type OwnerUsageRateLimits = {
   refreshRemote: (() => Promise<void>) | null
 }
 
-/**
- * Usage of whichever host owns the focused workspace's provider accounts. A remote owner's
- * usage comes from its own accounts snapshot, so it is read on the execution host.
- */
+/** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   const { target } = useActiveAccountOwner(LOCAL_TARGET)

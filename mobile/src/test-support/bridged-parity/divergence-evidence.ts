@@ -6,25 +6,13 @@ import type { Observation, Recording, RecordingScenario } from '../rpc-recording
 import { captureValue, type RecordedValue } from '../rpc-recording/recording-values'
 import type { ParamsMismatchEvidence } from './divergence-classes'
 
-/**
- * The facts a divergence is named from, each read off the run rather than off its message.
- *
- * Outside the recorder's directory for the reason `divergence-classes.ts` gives: none of this can
- * change what a recording records.
- */
+// Analyze recorded evidence outside the recorder so observation cannot alter capture.
 
-/** Frames the shell posted that the page's own reader drops. Read back through that same reader. */
 export function refusedFrames(posted: readonly string[]): string[] {
   return posted.filter((json) => !readBridgeHostMessage(json).ok)
 }
 
-/**
- * The same frame with a `_meta` on its reply payload, which is the one field the page's reader
- * demands and the wire the page stands in for does not. Anything that is not a reply comes back
- * untouched, so this can sit on a whole lane. The type is what decides that and not the presence of
- * a `payload`: an `event` carries one too, and the page reads it as `z.unknown()`, so stamping it
- * would put a key in a subscription's bytes that no reader asked for and none would refuse.
- */
+/** Adds counterfactual reply metadata, leaving events and other frames unchanged. */
 export function withReplyMeta(json: string): string {
   const frame: unknown = JSON.parse(json)
   if (typeof frame !== 'object' || frame === null || !('payload' in frame)) {
@@ -43,13 +31,7 @@ export function withReplyMeta(json: string): string {
   })
 }
 
-/**
- * Every `_meta` the counterfactual added, gone again.
- *
- * A reply the page accepted resolves to the caller whole, `_meta` included, so a run that was given
- * the field records it where the faithful run records nothing. Removing it is what makes the two
- * runs comparable; it is a key the recorder never sees on this corpus, so nothing else is lost.
- */
+// Remove added meta before comparing runs; this corpus never otherwise records that key.
 export function withoutRpcMeta(value: RecordedValue): RecordedValue {
   if (Array.isArray(value)) {
     return value.map(withoutRpcMeta)
@@ -64,7 +46,6 @@ export function withoutRpcMeta(value: RecordedValue): RecordedValue {
   )
 }
 
-/** A recording with the counterfactual's fingerprints removed, ready to diff against a golden. */
 export function recordingWithoutRpcMeta(recording: Recording): Recording {
   return {
     scenario: recording.scenario,
@@ -76,11 +57,7 @@ export function recordingWithoutRpcMeta(recording: Recording): Recording {
   }
 }
 
-/**
- * Every field path that differs, in the vocabulary `compareGolden` prints, and `checkpoints` when
- * the two runs did not even reach the same checkpoints. All of them, not the first: a rule that
- * needs to know whether *every* field that moved is an ordinal cannot be given only one.
- */
+// Collect every differing field; proving all changes are ordinals requires more than the first difference.
 export function divergingFields(expected: Recording, actual: Recording): string[] {
   const expectedIds = expected.checkpoints.map((checkpoint) => checkpoint.id)
   const actualIds = actual.checkpoints.map((checkpoint) => checkpoint.id)
@@ -105,7 +82,6 @@ export function divergingFields(expected: Recording, actual: Recording): string[
   return fields
 }
 
-/** A reply shape the wire itself drops: `ok` with no `result` key at all. */
 export function scriptsAbsentResultReply(scenario: RecordingScenario): boolean {
   return scenario.steps.some((step) => {
     if (!('reply' in step) || typeof step.reply !== 'object' || step.reply === null) {
@@ -115,13 +91,7 @@ export function scriptsAbsentResultReply(scenario: RecordingScenario): boolean {
   })
 }
 
-/**
- * The page refused a frame on a stream it was holding, and let the stream go because of it.
- *
- * Read as a pair and in order: `stream-failed` alone is also what an `error` frame from the shell
- * reports, and that one is the shell saying it has already retired the stream. Only a refusal
- * followed by a release is the page giving up on a stream the shell is still serving.
- */
+// Require refusal followed by stream failure; failure alone may mean the shell already retired the stream.
 export function refusalReleasedStream(diagnostics: readonly BridgeRpcClientDiagnostic[]): boolean {
   return diagnostics.some(
     (diagnostic, index) =>
@@ -129,19 +99,17 @@ export function refusalReleasedStream(diagnostics: readonly BridgeRpcClientDiagn
   )
 }
 
-/** The name the scripted transport prints for a request whose params stopped matching. */
 const REQUEST_PARAMS_MISMATCH = /^Request params mismatch: (?<method>.+)#(?<occurrence>\d+)$/
 
 function isKeyedObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** The comparison the transport itself made: `captureValue` is what it matches a step against. */
+// Use the transport’s own captureValue comparison so mismatch evidence matches its semantics.
 function sameParams(left: unknown, right: unknown): boolean {
   return JSON.stringify(captureValue(left)) === JSON.stringify(captureValue(right))
 }
 
-/** Own key paths whose value is `undefined`, in the vocabulary `firstDifference` prints. */
 function undefinedValuedPaths(value: unknown, path = ''): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((entry, index) =>
@@ -156,13 +124,7 @@ function undefinedValuedPaths(value: unknown, path = ''): string[] {
   )
 }
 
-/**
- * Every path where two params differ, all of them, and never the parent of one.
- *
- * A key present on one side alone is the difference and is not walked into: an absent key and a key
- * valued `undefined` are the same value to `captureValue` and only their presence tells them apart,
- * which is the whole difference this class exists to name.
- */
+// Preserve missing-key differences without descending: absent and undefined share a captured value but differ in key presence.
 function differingParamPaths(scripted: unknown, arrived: unknown, path = ''): string[] {
   if (sameParams(scripted, arrived)) {
     return []
@@ -184,7 +146,6 @@ function differingParamPaths(scripted: unknown, arrived: unknown, path = ''): st
   return [path]
 }
 
-/** The params of the `index`th request the page posted for `method`, absent arity included. */
 function postedRequestParams(
   posted: readonly string[],
   method: string,
@@ -200,13 +161,7 @@ function postedRequestParams(
   return { found: true, params: frame.params }
 }
 
-/**
- * What the transport refused, read off the scenario and the frames rather than off the message.
- *
- * Null for anything that is not one request's params being refused, and null again when the step it
- * names cannot be lined up with a frame the page posted — both leave the golden unclassified, which
- * is loud, rather than excluded, which is silent.
- */
+// Unalignable mismatch evidence stays unclassified and loud instead of receiving a silent exclusion.
 export function paramsMismatchEvidence(
   thrown: unknown,
   scenario: RecordingScenario | undefined,
@@ -218,8 +173,7 @@ export function paramsMismatchEvidence(
     return null
   }
   const step = `${method}#${named?.groups?.occurrence}`
-  // Among that method's own completions, because the transport's occurrence counter also counts the
-  // subscribe payloads a scenario publishes, and neither list carries the other's members.
+  // Align method completions only; the occurrence counter also includes subscriptions that are absent from request frames.
   const completions = scenario.steps.filter(
     (candidate) => 'complete' in candidate && candidate.complete.startsWith(`${method}#`)
   )

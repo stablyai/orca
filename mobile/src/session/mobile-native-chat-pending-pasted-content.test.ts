@@ -10,7 +10,6 @@ const boundary: NativeChatMessage = {
   source: 'transcript'
 }
 
-// An old host still sends Claude's raw paste envelope; the shared normalizer must match it.
 it('retires an echo against an old-host wrapped row and keeps the second identical send', () => {
   const text = 'one\ntwo'
   const echo: NativeChatMessage = {

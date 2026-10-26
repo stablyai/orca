@@ -44,8 +44,7 @@ export function mergeLineageForHost(
   lineage: Readonly<Record<string, WorktreeLineage>>,
   lineageAtRequestStart?: Readonly<Record<string, WorktreeLineage>>
 ): Readonly<Record<string, WorktreeLineage>> {
-  // Why per-row and not just per-key: any local write that landed after this request started
-  // outranks the reply — a create, a parent reassignment, or a delete the reply would restore.
+  // Any per-row write since request start wins, including creates, reassignment and deletes the reply would undo.
   const writtenSinceRequestStart = (worktreeId: string): boolean =>
     lineageAtRequestStart !== undefined &&
     lineageAtRequestStart[worktreeId] !== state.worktreeLineageById[worktreeId]

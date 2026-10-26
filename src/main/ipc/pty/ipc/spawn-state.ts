@@ -10,8 +10,8 @@ import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-regis
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
-import type { PtySpawnTiming } from '../../pty-spawn-timing'
-import { createPtySpawnTiming } from '../../pty-spawn-timing'
+import type { PtySpawnTiming } from '../pty-spawn-timing'
+import { createPtySpawnTiming } from '../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
@@ -26,6 +26,7 @@ export type PtyIpcSpawnState = {
   spawnTiming: PtySpawnTiming
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  spawnRequestedAt: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
   prevalidatedCwd: string | undefined
@@ -110,6 +111,7 @@ export function createPtyIpcSpawnState(
     spawnTiming: createPtySpawnTiming(),
     codexHomeLaunchStartedAt: undefined,
     codexHomeLaunchStartedSequence: undefined,
+    spawnRequestedAt: Date.now(),
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
     prevalidatedCwd: undefined,

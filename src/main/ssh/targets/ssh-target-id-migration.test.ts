@@ -59,7 +59,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
 
     const tabs = session.tabsByWorktree['r1::/wt']
     expect(tabs[0].ptyId).toBe(`ssh:${NEW_ID}@@pty-3`)
-    // Local and other-target pty ids must be untouched.
     expect(tabs[1].ptyId).toBe('local-pty-7')
     expect(tabs[2].ptyId).toBe(`ssh:other-target@@pty-1`)
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({

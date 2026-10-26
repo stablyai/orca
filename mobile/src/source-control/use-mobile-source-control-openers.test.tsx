@@ -3,7 +3,6 @@ import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
-import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
 const route = vi.hoisted(() => {
@@ -23,6 +22,7 @@ vi.mock('../navigation/route-handoff', () => ({ useRouteHandoff: () => route.rou
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSelection: vi.fn() }))
 
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const ENTRY = { path: 'src/app.ts', status: 'modified', area: 'unstaged' } as const
 
@@ -45,8 +45,7 @@ async function tapChangedFile(args: {
     }
     return args.openDiffReply
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the opener reaches `sendRequest` and nothing else on the client.
-  const client = { sendRequest } as RpcClient
+  const client = stubRpcClient({ sendRequest })
   const held: { openFile: ((entry: typeof ENTRY) => Promise<void>) | null } = { openFile: null }
   function Probe(): null {
     held.openFile = useMobileSourceControlOpeners({

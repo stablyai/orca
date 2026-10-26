@@ -1,5 +1,4 @@
-// Desktop words for a failure fact: each piece of the shared sentence translated whole, with the
-// shared English as its fallback, so the host's row and desktop's notice never say it differently.
+// Translate shared failure sentence pieces whole with shared English fallbacks to keep host and desktop wording aligned.
 
 import { translate } from '@/i18n/i18n'
 import {

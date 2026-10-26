@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -374,9 +373,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    // Why: the beforeEach host advertises host-authority.v1 but not the Kimi gate, and it answers
-    // the widened ensureAgentSession enum with invalid_argument — not a fallback code. Only the
-    // per-agent probe keeps the pane alive.
+    // Baseline host authority lacks Kimi enum support; only the per-agent probe avoids fatal invalid_argument.
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'terminal.ensureAgentSession' })
     )

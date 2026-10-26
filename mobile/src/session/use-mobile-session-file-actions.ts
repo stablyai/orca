@@ -26,7 +26,6 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     nativeChatSendError,
     fetchSessionTabs
   } = scope
-  // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
     client,
     hostId,
@@ -46,7 +45,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   })
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
-  // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
+  // Capture the active tab before awaiting openDiff so focus retries cannot override a later user switch.
   const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
   const handleFileOpenStart = useCallback(() => {
     fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
@@ -58,7 +57,6 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
 
       let activated = false
       const activateOpenedTab = async (): Promise<void> => {
-        // Route matching through the shared helper so the repro test exercises the same logic production runs.
         const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
           relativePath,
           activeTabIdAtTap,

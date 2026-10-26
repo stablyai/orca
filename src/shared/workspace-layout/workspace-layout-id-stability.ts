@@ -6,10 +6,8 @@ import type {
   WorkspaceLayoutViolation
 } from './workspace-layout-rule-types'
 
-// An update must keep the id of every pane, tab and group it did not create or remove; a new id
-// for the same entity remounts its view.
+// Changing an existing pane, tab or group ID remounts its view.
 
-/** A partition's panes and groups, from the disk format or the model. */
 export type LayoutEntities = {
   owners: PaneOwner[]
   groups: readonly { id: string; tabOrder: readonly string[] }[]

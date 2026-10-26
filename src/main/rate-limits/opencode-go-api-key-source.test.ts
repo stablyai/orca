@@ -20,7 +20,7 @@ vi.mock('../opencode/opencode-credential-backend', () => ({
   detectOpenCodeCredentialBackend: vi.fn()
 }))
 
-// Placeholder values only — a real key must never reach a fixture.
+// Use placeholders only; never put real credentials in fixtures.
 const SETTINGS_KEY = 'settings-placeholder-key'
 const ENVIRONMENT_KEY = 'environment-placeholder-key'
 const AUTH_FILE_KEY = 'auth-file-placeholder-key'
@@ -33,7 +33,7 @@ const ENVIRONMENT_KEYS = [
   'OPENCODE_AUTH_CONTENT'
 ] as const
 
-// Lets a test fail the data-directory listing with an error the host filesystem cannot portably produce.
+// Inject listing failures that host filesystems cannot produce portably.
 const readdirFailure = vi.hoisted((): { error: unknown } => ({ error: null }))
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const actual = await importOriginal<typeof WslTranscriptFsAccess>()
@@ -81,7 +81,7 @@ describe('resolveOpenCodeGoApiKey', () => {
     process.env.XDG_DATA_HOME = dataHome
     delete process.env.OPENCODE_API_KEY
     delete process.env.OPENCODE_AUTH_CONTENT
-    // Keeps the credential-database tier from touching the developer's own store.
+    // Isolate credential DB access from the developer's store.
     process.env.OPENCODE_DB = ':memory:'
   })
 

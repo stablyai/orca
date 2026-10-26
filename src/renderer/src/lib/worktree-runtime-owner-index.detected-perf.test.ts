@@ -69,7 +69,7 @@ const publishedWorktreesByRepo: Record<string, OwnerRecord[]> = Object.fromEntri
   ])
 )
 
-// Only the detected catalog changes identity: that is what isolates the collection under test.
+// Only detected-catalog identity changes, isolating this collection’s invalidation.
 function buildOwnerState(detectedWorktreesByRepo: DetectedByRepo): WorktreeRuntimeOwnerState {
   return {
     repos: publishedRepos,

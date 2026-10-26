@@ -59,13 +59,14 @@ export function BrowserNewTabServerRow({
       icon={
         <BrowserFavicon
           faviconUrl={faviconDataUrl}
-          className="size-4"
+          className="size-5"
           fallbackClassName="text-muted-foreground"
         />
       }
       title={title ?? port.processName ?? address}
       detail={
         <>
+          <span className="mr-1.5 inline-block size-1.5 rounded-full bg-status-success align-middle" />
           <span className="font-mono">{address}</span>
           {context ? ` · ${context}` : null}
         </>

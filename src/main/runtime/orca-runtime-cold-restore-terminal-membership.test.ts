@@ -39,7 +39,7 @@ type RestoreHost = {
   hostId: ExecutionHostId
   connectionId: string | null
   ptyIds: { left: string; right: string }
-  /** An SSH relaunch has not bound its PTY into the saved session yet. */
+  /** SSH relaunch can register before its persisted PTY binding. */
   persistsPtyBindings: boolean
 }
 
@@ -63,8 +63,7 @@ const RUNTIME_HOST: RestoreHost = {
   hostId: 'runtime:env-1'
 }
 
-// A cold restore: the saved split survives, and an earlier incarnation change left the repo's
-// terminal membership host-authoritative, but no PTY has registered yet.
+// Restore saved split and host-authoritative membership before any PTY registers.
 function makeColdRestoredSession(host: RestoreHost): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
@@ -166,7 +165,7 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
   const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
     [host.hostId, makeColdRestoredSession(host)]
   ])
-  // The desktop window is live, so main must not rebuild the list from the saved session.
+  // Live windows own tab publications; main must not rebuild them from persistence.
   const liveWindow = {
     isDestroyed: () => false,
     webContents: { isDestroyed: () => false, send: () => {} }
@@ -193,7 +192,6 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
       setWorkspaceSession: (next: WorkspaceSessionState, hostId?: ExecutionHostId) => {
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, next)
       },
-      // A layout-owner build's own layout write, as the Store applies it to the routed partition.
       applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly ExecutionHostId[]) => {
         const hostId = hostIds[0] ?? LOCAL_EXECUTION_HOST_ID
         const change = applyCommandToSession(
@@ -207,7 +205,7 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
         return change.value
       },
       flushPendingOrThrowAsync: async () => {},
-      // The production store commits asynchronously; a synchronous flush on these paths is a bug.
+      // Production commits asynchronously; fail if these paths synchronously flush.
       flushOrThrow: () => {
         throw new Error('synchronous flush')
       }
@@ -217,7 +215,7 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
   return { runtime, sessions }
 }
 
-/** As the PTY host's spawn commit: binds the pane in the host's partition, then registers. */
+/** Bind in the host partition before registration, matching PTY spawn commit. */
 function registerBound(
   runtime: OrcaRuntimeService,
   hostId: ExecutionHostId,
@@ -245,7 +243,6 @@ async function listedSurfaces(runtime: OrcaRuntimeService): Promise<string[]> {
   return surfaces(await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`))
 }
 
-// The session-tabs notify coalescer's max wait (mobile-session-tabs-notify-coalescer.ts).
 const COALESCED_PUSH_MS = 250
 
 describe('a restored terminal published before its PTY registers', () => {
@@ -273,7 +270,7 @@ describe('a restored terminal published before its PTY registers', () => {
     registerLeaf(runtime, host, 'left')
     vi.advanceTimersByTime(COALESCED_PUSH_MS)
 
-    // Registration alone reaches clients: no renderer frame or graph change follows it here.
+    // No later renderer/graph event can rescue a missing registration push.
     expect(surfaces(published.at(-1))).toEqual([
       `tab::${LEFT}:ready`,
       `tab::${RIGHT}:pending-handle`
@@ -325,7 +322,7 @@ describe('a restored terminal published before its PTY registers', () => {
     registerLeaf(runtime, LOCAL_HOST, 'left')
     registerBound(runtime, LOCAL_EXECUTION_HOST_ID, 'pty-other', null, {
       tabId: 'tab-other',
-      // Main's layout keys a pane by leaf id alone and remints a repeat, so there it is a new leaf.
+      // Main remints repeated leaf ids, making this a distinct pane.
       leafId: ORCA_LAYOUT_OWNER_IS_MAIN ? '44444444-4444-4444-8444-444444444444' : RIGHT,
       incarnationId: 'incarnation-other'
     })
@@ -333,7 +330,6 @@ describe('a restored terminal published before its PTY registers', () => {
     expect(await listedSurfaces(runtime)).toEqual([
       `tab::${LEFT}:ready`,
       `tab::${RIGHT}:pending-handle`,
-      // Main lists the other terminal's own tab from its layout, with or without the window's frame.
       ...(ORCA_LAYOUT_OWNER_IS_MAIN
         ? ['tab-other::44444444-4444-4444-8444-444444444444:ready']
         : [])
@@ -356,7 +352,6 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
       type: 'leaf',
       leafId: RIGHT
     })
-    // A lagging renderer still lists the exited pane, at a newer version.
     publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 2 }))
     expect(await listedSurfaces(runtime)).not.toContain(`tab::${LEFT}:ready`)
     expect(await listedSurfaces(runtime)).not.toContain(`tab::${LEFT}:pending-handle`)
@@ -364,7 +359,7 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
 
   it('after its last pane exits from a runtime-host partition an older copy still lists', async () => {
     const { runtime, sessions } = coldRestoredRuntime(RUNTIME_HOST)
-    // Left behind in another partition before the catalog owner rotated.
+    // Retain an older same-id copy in another host partition.
     sessions.set(LOCAL_EXECUTION_HOST_ID, makeColdRestoredSession(RUNTIME_HOST))
     registerLeaf(runtime, RUNTIME_HOST, 'left')
     registerLeaf(runtime, RUNTIME_HOST, 'right')
@@ -372,7 +367,7 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-left')
     await runtime.onPtyExit('pty-right', 0, 'incarnation-right')
-    // Emptying the owner's partition re-routes reads to the older copy.
+    // Emptying the owner partition exposes the older copy.
     expect(sessions.get(RUNTIME_HOST.hostId)?.tabsByWorktree[WORKTREE_ID]).toEqual([])
 
     publishRendererFrame(runtime, makeRendererFrame(RUNTIME_HOST, { version: 2 }))
@@ -398,12 +393,12 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
   })
 })
 
-// An SSH worktree: the phone closes a tab while a relaunched sibling tab has not registered yet.
+// Phone closes one SSH tab before a relaunched sibling registers.
 const SSH_PTY_X = 'ssh:ssh-1@@pty-x'
 const SSH_PTY_Y = 'ssh:ssh-1@@pty-y'
 
 function makeSshSession(tabIds: readonly ('tab-x' | 'tab-y')[]): WorkspaceSessionState {
-  // tab-x's relaunched PTY has not bound yet, so only tab-y saves a relay binding.
+  // The unbound relaunched tab-x has no persisted relay binding yet.
   const specs = {
     'tab-x': { leafId: LEFT, ptyId: null },
     'tab-y': { leafId: RIGHT, ptyId: SSH_PTY_Y }
@@ -484,12 +479,11 @@ describe('a surface the host retired stays retired when a restored sibling regis
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path uses only these two relays.
     runtime.setNotifier({
       closeTerminal: vi.fn(),
-      // The renderer durably retires the tab and acks; its pruned frame is still in flight.
+      // Renderer persistence commits before its pruned frame arrives.
       closeTerminalTab: vi.fn(async () => {
         sessions.set(SSH_HOST.hostId, makeSshSession(['tab-x']))
       })
     } as never)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path kills and inventories only; the remote kill lands asynchronously.
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -497,7 +491,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
         [SSH_PTY_X, SSH_PTY_Y].map((id) => ({ id, cwd: '/worktree', title: 'shell' }))
       ),
       getForegroundProcess: async () => null
-    } as never)
+    })
     publishSshRendererFrame(runtime)
     registerBound(runtime, SSH_HOST.hostId, SSH_PTY_Y, 'ssh-1', {
       tabId: 'tab-y',
@@ -545,8 +539,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
   })
 })
 
-// A phone creates a terminal while the desktop's frame still lacks it: the spawn registered and the
-// host published the tab itself, as it does for a create the desktop has not published yet.
+// Paired create has registered/published, but the desktop frame still lacks it; preserve this in-flight tab.
 const PHONE_LEAF = '33333333-3333-4333-8333-333333333333'
 
 async function runtimeWithUnpublishedPhoneCreate(): Promise<OrcaRuntimeService> {

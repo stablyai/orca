@@ -3,7 +3,6 @@ import type { useMobileStructuredAgentSession } from './use-mobile-structured-ag
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
 
-/** Select the lane's existing card actions and apply terminal-only presentation dismissal. */
 export function useMobileNativeChatPromptCards({
   terminal,
   structured,

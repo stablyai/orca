@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { TerminalLeafIntoTabResult } from '../../../shared/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { makeTerminalTab } from '../../persistence-session-fixtures'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import {
   A,
   B,

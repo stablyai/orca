@@ -2,7 +2,7 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../shared/runtime-file-contracts'
-import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
+import type { JiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation

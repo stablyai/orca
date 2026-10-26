@@ -182,9 +182,7 @@ function renderEmojiField(value: string, onValueChange: (value: string) => void)
   return input
 }
 
-// Why: the guard must short-circuit before the `open && rows.length > 0`
-// row-select branch, so drive the field into that state — smart mode with a
-// typed value synchronously yields a highlighted "use this name" row.
+// Open the highlighted smart-name row so IME suppression must precede the row-select branch.
 function openSourcePopover(input: HTMLInputElement): void {
   const event = new Event('pointerdown', { bubbles: true, cancelable: true })
   act(() => {
@@ -247,8 +245,6 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
 
     pressEnter(input, { isComposing: true })
 
-    // The guard runs before the row-select branch, so neither the row commit
-    // (onValueChange) nor the fall-through (onPlainEnter) should fire.
     expect(onValueChange).not.toHaveBeenCalled()
     expect(onBranchSelect).not.toHaveBeenCalled()
     expect(onPlainEnter).not.toHaveBeenCalled()
@@ -263,10 +259,7 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
 
     pressEnter(input)
 
-    // With the popover open and a highlighted "use this name" row, a plain
-    // Enter commits that row (onValueChange) and does NOT fall through to
-    // onPlainEnter — proving the composition case above was really suppressed
-    // at the row-select branch, not merely inert.
+    // Plain Enter must commit the same highlighted row, proving the IME case suppressed an active path.
     expect(onValueChange).toHaveBeenCalledWith('배포')
     expect(onPlainEnter).not.toHaveBeenCalled()
   })

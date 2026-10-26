@@ -9,9 +9,7 @@ import {
   shouldInjectJcodeRuntimeDir
 } from './jcode-runtime-dir'
 
-// Why: unix socket paths are capped at SUN_LEN (104 bytes); the socket file is
-// `<runtimeDir>/jcode.sock`, so the runtime dir itself must stay far below it
-// even on machines with long TMPDIR values.
+// runtimeDir/jcode.sock must fit the 104-byte Unix socket bound even with long TMPDIR.
 const SUN_LEN_LIMIT = 104
 
 describe('shared jcode-runtime-dir', () => {
@@ -49,7 +47,6 @@ describe('shared jcode-runtime-dir', () => {
     const env = await ensureJcodeRuntimeDir(paneKey, 'darwin')
     expect(env).toEqual({ [JCODE_RUNTIME_DIR_ENV_KEY]: dir })
     expect((await stat(dir)).isDirectory()).toBe(true)
-    // Why: unsupported platforms must stay no-ops (no dir, no env).
     expect(await ensureJcodeRuntimeDir(paneKey, 'win32')).toBeUndefined()
     await rm(dir, { recursive: true, force: true })
   })

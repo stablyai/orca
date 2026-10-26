@@ -72,8 +72,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       return
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
-      // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
-      // empty. Delete this capability check once every supported host advertises it.
+      // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
       void runtimeEnvironmentSupportsCapability(
         runtimeEnvironmentId,
         SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY

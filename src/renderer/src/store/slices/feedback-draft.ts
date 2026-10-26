@@ -1,15 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
-/** In-progress "Send Feedback" report. Session-only (never `persist`-wrapped,
- *  no disk surface): the dialog renders inside the sidebar subtree, which
- *  unmounts whenever the sidebar collapses, and a failed submit is precisely
- *  when the user still needs what they typed (orca#22466). Cleared on a
- *  confirmed delivery or app restart.
- *
- *  Image drafts deliberately stay in the dialog: they hold object URLs and
- *  Uint8Arrays that the unmount cleanup has to revoke, so they cannot outlive
- *  it without leaking the underlying blobs. */
+/** Keep text feedback in session memory across sidebar/dialog unmount and failed submits (#22466); clear on delivery/restart. Images remain dialog-owned because unmount must revoke object URLs/blob buffers. */
 export type FeedbackDraft = {
   feedback: string
   submitAnonymously: boolean
@@ -17,13 +9,11 @@ export type FeedbackDraft = {
 
 export type FeedbackDraftSlice = {
   feedbackDraft: FeedbackDraft
-  /** Shallow-merge the patch into the current draft. */
   setFeedbackDraft: (patch: Partial<FeedbackDraft>) => void
   clearFeedbackDraft: () => void
 }
 
-// Why a shared constant is safe here (unlike newIssueDraft's factory): every
-// field is a primitive, so no caller can mutate one draft into another's state.
+// All fields are primitives, so sharing defaults cannot mutate another draft.
 const EMPTY_FEEDBACK_DRAFT: FeedbackDraft = { feedback: '', submitAnonymously: false }
 
 export const createFeedbackDraftSlice: StateCreator<AppState, [], [], FeedbackDraftSlice> = (

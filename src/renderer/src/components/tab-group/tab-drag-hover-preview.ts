@@ -36,10 +36,7 @@ function isSameLeafTarget(a: TabDragLeafTarget | null, b: TabDragLeafTarget | nu
   )
 }
 
-/** Derives the in-flight hover state of a tab drag: the live preview tab to
- *  activate (deduped through private memo refs), the hovered pane-column split
- *  target, and the pane edge a terminal tab would join. Tab-strip insertion is
- *  delegated to the injected tabInsertion. */
+/** Derive preview activation, pane-column targeting and pane-edge join targeting; keep insertion policy in the injected tabInsertion. */
 export function useTabDragHoverPreview({
   worktreeId,
   preDragActivationSnapshotRef,

@@ -53,8 +53,7 @@ export function createWorkspaceTabCloseCommands({
       return
     }
     if (item.contentType === 'terminal') {
-      // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
-      // empty check has to run on the actual close — never on cancel.
+      // Run the empty check only after deferred pin/process confirmations actually close the tab.
       closeTerminalTab(item.entityId, {
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
@@ -63,8 +62,7 @@ export function createWorkspaceTabCloseCommands({
     }
     if (item.contentType === 'browser') {
       const plan = closeWorkspaceBrowserTab(worktreeId, item.entityId, item.id)
-      // Why: the empty check below answers "the user emptied this worktree". Unwinding a create
-      // that never finished is not that — it must leave the selection as the click found it.
+      // Unwinding an unfinished create must preserve selection rather than count as emptying the workspace.
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
         return
       }

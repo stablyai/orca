@@ -60,8 +60,7 @@ describe('hashedAsset', () => {
   })
 
   it('refuses an extension with no registered content type', () => {
-    // A type the phone has no rule for would otherwise reach the manifest and be served as
-    // whatever the shell guessed, which is the one thing a content-addressed tree cannot allow.
+    // Unknown content type must fail rather than leave phone guessing how to serve addressed bytes.
     expect(() => hashedAsset(Buffer.from('body'), 'wasm')).toThrow(/no content type registered/)
   })
 })

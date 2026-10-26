@@ -13,8 +13,7 @@ import {
 import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
 import { createWorkerThreadChildProcessTestEntry } from './worker-thread-child-process-worker.test-fixtures'
 
-// Both halves joined by a real MessageChannel, so every event crosses structured
-// clone exactly as it does between the main thread and the worker.
+// Use a real MessageChannel so protocol tests include structured-clone behavior.
 const openPorts: MessagePort[] = []
 const terminations: number[] = []
 
@@ -49,8 +48,7 @@ function waitForSpawn(child: WorkerThreadChildProcess): Promise<number> {
   )
 }
 
-// Why the zombie check: libuv reaps a child only through its own loop's handle, so
-// once the worker's loop is gone an exited POSIX child stays a zombie until Orca exits.
+// After worker-loop death libuv can no longer reap POSIX children; zombies persist until Orca exits.
 async function isRunning(pid: number): Promise<boolean> {
   try {
     process.kill(pid, 0)
@@ -136,7 +134,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
     })
     const stdout: string[] = []
     const stderr: string[] = []
-    // Data must arrive as a Buffer: the RPC reader calls chunk.toString().
+    // Convert cloned bytes back to Buffer for RPC readers using toString.
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk.toString()))
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString()))
     const closed = waitForClose(child)
@@ -267,8 +265,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
   }, 20_000)
 })
 
-// Why a real worker: only a real thread's death closes the child's pipes, which is
-// the graceful stop an abandoned probe relies on instead of a pid-addressed kill.
+// Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''
   let entryPath = ''

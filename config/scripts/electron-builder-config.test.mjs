@@ -150,10 +150,7 @@ describe('electron-builder config', () => {
     }
   })
 
-  // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
-  // anything without an explicit `!` entry — examples/ landed without one and shipped
-  // hostile-panel, the adversarial containment fixture, into 1.4.160-rc.3's app.asar.
-  // Drive the real matcher: pinning the pattern string cannot prove it excludes the tree.
+  // All-negation lists implicitly include **/*; missing examples exclusion shipped hostile-panel in 1.4.160-rc.3. Exercise real matcher, not pattern spelling.
   it('keeps plugin authoring examples out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     // copyFiles() prepends this itself once the pattern list is all-negation.
@@ -173,8 +170,7 @@ describe('electron-builder config', () => {
     expect(packs('out/main/examples/index.js')).toBe(true)
   })
 
-  // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
-  // CI never creates it, so only a local package would have hit this -- silently, as bulk.
+  // CI never creates ~270MB/branch out/electron-dev caches; only local packages exposed this bloat.
   it('keeps cached dev Electron bundles and Vite dependencies out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -195,9 +191,7 @@ describe('electron-builder config', () => {
     expect(packs('out/renderer/index.html')).toBe(true)
   })
 
-  // Why: an AV verdict on the bundled relay.js used to take app.asar with it as a
-  // compound object, gutting the install (#20966). resources/relay is the only copy
-  // a packaged build resolves, so the asar copy was 14MB of pure blast radius.
+  // Duplicated relay.js added 14MB to asar and AV quarantine gutted the entire archive (#20966); packaged app uses resources/relay.
   it('keeps the relay bundles out of app.asar and ships them only through extraResources', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -327,11 +321,7 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.win.extraResources.map((r) => r.to)).not.toContain(serveSimTarget)
   })
 
-  // Why: the Windows CLI shim is delivered only via extraResources to
-  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
-  // source tree is also packed into app.asar it gets extracted by
-  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
-  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  // Source shim unpacked under resources/win32/bin lacks adjacent orca.exe (#7351); only extraResources/bin copy works.
   it('keeps the Windows CLI shim source tree out of app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining(['!resources/win32{,/**/*}'])
@@ -347,8 +337,7 @@ describe('electron-builder config', () => {
     )
   })
 
-  // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
-  // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
+  // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; ship under MacOS (#7929).
   it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
     expect(electronBuilderConfig.mac.extraFiles).toEqual(
       expect.arrayContaining([
@@ -383,8 +372,7 @@ describe('electron-builder config', () => {
     )
   })
 
-  // Why: without the unpacked entry the watcher client silently falls back to
-  // in-process @parcel/watcher, reintroducing the #7547 main-process crash.
+  // Missing unpacked entry silently restores in-process watcher and #7547 main crashes.
   it('unpacks the forked parcel-watcher process entry', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
@@ -396,8 +384,7 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
   })
 
-  // Why: the CLI runs this entry under ELECTRON_RUN_AS_NODE, which cannot read
-  // app.asar, so a packed copy sends every `orca serve` to Electron (#27307).
+  // CLI Node mode cannot read asar; packed entry sends orca serve to Electron (#27307).
   it('unpacks the orcad serve-selection entry the CLI runs', async () => {
     const sharedSource = await readFile(
       join(REPO_ROOT, 'src', 'shared', 'orcad-local-serve-selection.ts'),
@@ -418,8 +405,7 @@ describe('electron-builder config', () => {
     ).toBe(true)
   })
 
-  // Why: opening a packed file reads a one-time /tmp extract; once a /tmp sweep removes it, the
-  // web client answers an empty 500 and phone bundle reads fail until restart (#27976).
+  // Swept one-time /tmp asar extracts cause web-client 500s and phone bundle failures until restart (#27976).
   it('unpacks the web and mobile bundles a host serves by opening their files', () => {
     const matcher = new FileMatcher(
       '/app',
@@ -577,9 +563,7 @@ describe('arch-aware packaging guard', () => {
   const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
   const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
 
-  // beforePack also hash-verifies the mobile web bundle, which the unit-test job never builds.
-  // Point it at a real bundle built into a temp dir: these tests are about the native-variant
-  // guard, and the bundle guard has its own suite.
+  // Native tests need valid mobile bundle for beforePack; use temp build, leaving bundle verification to its own suite.
   let scratch
   let bundleDir
   beforeAll(async () => {

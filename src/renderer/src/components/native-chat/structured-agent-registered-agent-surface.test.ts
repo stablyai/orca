@@ -43,7 +43,6 @@ describe('a host-registered agent on the structured chat surface', () => {
   it("renders a registered agent's chat tab, including after a reload", () => {
     expect(isStructuredTab(reloadedTab('grok'))).toBe(true)
     expect(isStructuredTab(reloadedTab('claude'))).toBe(true)
-    // A malformed id degrades to no agent, which mounts no chat pane.
     expect(isStructuredTab(reloadedTab('not an agent!'))).toBe(false)
   })
 

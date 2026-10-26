@@ -84,7 +84,6 @@ export class SessionHostPartitionOperations {
     return [...hostIds]
   }
 
-  /** Drops a removed host's whole session partition; local's session is never dropped. */
   removeWorkspaceSessionHost(hostId: ExecutionHostId): void {
     const runtime = this[sessionHostPartitionOperationsContext].runtime
     const partitions = runtime.state.workspaceSessionsByHostId
@@ -158,13 +157,11 @@ export function removeWorkspaceSessionOwnerInPartition(
   if (!session) {
     return
   }
-  // Why: a session was the last thing pinning some dangling metadata row; releasing it is the
-  // evidence the metadata prune waits for, and there is no other signal that it happened (#17775).
+  // Releasing session ownership may unblock metadata pruning; no other signal covers this write.
   invalidateLocalWorktreeMetadataPruneInputs()
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {
-    // Host scoping matters because identical repo/path ids may exist on two servers.
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
       ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
       [resolved]: session
@@ -206,12 +203,11 @@ export function setHostWorkspaceSession(
   const persisted =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   const prior = persisted ? withRequiredWorkspaceSessionMaps(persisted) : undefined
-  // Host slices omit empty maps; retirement and rebasing need them before inspecting membership.
+  // Empty host slices omit maps that retirement/rebase checks iterate.
   session = withRequiredWorkspaceSessionMaps(session)
-  // Why here and not at the callers: the before-unload stage path writes the renderer's payload
-  // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
+  // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
+  // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = preserveMissingWorkspaceSessionTerminalBindings(
     session,
@@ -222,8 +218,7 @@ export function setHostWorkspaceSession(
       executionHostId: hostId
     }
   )
-  // Why here too: the load-side drop only survives until the next full snapshot write. A renderer
-  // or runtime payload that still carries local's globals would re-inject them into this partition.
+  // Strip redundant globals on every write so stale snapshots cannot reinject local-owned data.
   const pruned = withoutRedundantGlobalFields(
     pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(
@@ -244,10 +239,7 @@ export function setHostWorkspaceSession(
   )
 }
 
-/**
- * The renderer splits a full snapshot per host and leaves out maps a host has no rows in, so a
- * host partition written as sent lacks maps the type requires and every reader iterates.
- */
+/** Restore required maps omitted by the renderer's sparse host split. */
 export function withRequiredWorkspaceSessionMaps(
   session: WorkspaceSessionState
 ): WorkspaceSessionState {

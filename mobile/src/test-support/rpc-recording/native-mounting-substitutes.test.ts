@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 
 /** TypeScript's emitted interop helper, verbatim: what every `import X from` in a mounted module runs. */
-function importDefault(module: unknown): { default: unknown } {
+function importDefault(module: unknown): { default?: unknown } {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mirrors the emit, which reads the marker off an untyped module record.
   const record = module as { __esModule?: unknown; default?: unknown }
   return record?.__esModule ? record : { default: module }

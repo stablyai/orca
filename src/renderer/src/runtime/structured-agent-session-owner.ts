@@ -33,8 +33,7 @@ export function resolveStructuredAgentSessionOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string
 ): ExecutionHostId | null {
-  // Why resolveOwner's twin rule: an id-only check missed folder twins and an active twin with no
-  // host picked, and the fallback below reads both as this machine.
+  // Owner resolution detects folder twins and active twins lacking host choice; default-local fallback would misroute them.
   if (
     !namedHostForOwnerRef(state, { workspaceId: worktreeId }) &&
     isTwinWorkspace(state, worktreeId)

@@ -68,8 +68,7 @@ export function getRouteForLocalPathOpenOwner(owner: ExecutionHostId | 'unresolv
 }
 
 export function showLocalPathOpenBlockedToast(): void {
-  // Why: local OS reveal/open actions receive client filesystem paths. Remote
-  // runtime and SSH paths belong to another machine, not this client.
+  // Local OS reveal/open needs this client’s filesystem; remote runtime/SSH paths belong to another machine.
   toast.error(
     translate(
       'auto.lib.local.path.open.guard.edc1908653',

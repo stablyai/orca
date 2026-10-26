@@ -1,7 +1,4 @@
-// Picks the authoritative PR number to resolve for the sidebar. The hosted-review
-// branch hint (open reviews) wins; otherwise we fall back to the worktree's persisted
-// linkedPR, which is how a CLOSED or MERGED linked PR still gets fetched and shown
-// (desktop's linkedGitHubPR behavior). Pure + unit-tested.
+// Prefer the branch’s open review; persisted linkedPR still resolves closed/merged reviews.
 export function resolveLinkedPrNumber(
   branchHint: number | null | undefined,
   worktreeLinkedPR: number | null | undefined

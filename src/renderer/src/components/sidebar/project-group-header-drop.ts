@@ -70,8 +70,7 @@ export function mapSidebarProjectGroupDropIndexToSiblingInsertIndex(args: {
   sourceIndex: number
   siblingCount: number
 }): number {
-  // Why: sidebar drop indices include the dragged header, but tabOrder is
-  // computed against the sibling list after that header is removed.
+  // Convert the row-model insertion slot to the sibling list with the dragged header removed.
   const adjustedDropIndex =
     args.sourceIndex >= 0 && args.sidebarDropIndex > args.sourceIndex
       ? args.sidebarDropIndex - 1
@@ -111,8 +110,7 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
     if (!group) {
       continue
     }
-    // Why: legacy groups can all have tabOrder=0, so a one-row midpoint update
-    // cannot express an insertion inside that equal-rank block.
+    // Equal legacy ranks require updating the full order to represent an interior insertion.
     if (group.tabOrder !== index) {
       updates.push({ groupId, tabOrder: index })
     }

@@ -6,10 +6,7 @@ import {
 } from './remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from './remote-runtime-shared-control-types'
 
-// Why: a keepalive frame on the shared-control socket is armed by an unrelated
-// long-poll, not by any given pending short RPC. These fake-timer tests pin the
-// deadline semantics: keepalives must NOT keep a stuck short RPC alive forever,
-// but MAY extend a long-poll that opted into the short-RPC path.
+// Unrelated long-poll keepalives must extend only opted-in requests, never stuck short RPCs.
 describe('shared control keepalive timeout refresh semantics', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -30,13 +27,12 @@ describe('shared control keepalive timeout refresh semantics', () => {
       method: 'git.status',
       params: undefined,
       timeoutMs: 1000,
-      // ensureReady resolves immediately; the request is "in flight" but the
-      // server never answers, modelling a genuinely stuck server-side call.
+      // Resolve readiness but never answer, modelling a stuck server call.
       ensureReady: () => Promise.resolve(),
       send: () => undefined,
       refreshTimeoutOnKeepalive: options.refreshTimeoutOnKeepalive
     })
-    // Swallow the eventual rejection so unhandled-rejection noise doesn't leak.
+    // Avoid unhandled rejection before the timeout assertion.
     promise.catch(() => undefined)
     return { pendingRequests, promise }
   }
@@ -44,8 +40,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
   it('times out a stuck short RPC even while keepalive frames keep arriving', async () => {
     const { pendingRequests, promise } = startRequest()
 
-    // Periodic keepalives arrive faster than the 1000ms deadline — as they
-    // would while a long-poll subscription streams over the same socket.
+    // Model unrelated long-poll keepalives arriving faster than the short-RPC deadline.
     for (let elapsed = 0; elapsed < 1000; elapsed += 200) {
       await vi.advanceTimersByTimeAsync(200)
       refreshSharedControlPendingRequestTimeouts(pendingRequests)
@@ -61,8 +56,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
       refreshTimeoutOnKeepalive: true
     })
 
-    // Same keepalive cadence, but this request opted in, so each keepalive
-    // pushes the deadline out and it never fires.
+    // Opted-in requests extend their deadline on each keepalive.
     for (let elapsed = 0; elapsed < 3000; elapsed += 200) {
       await vi.advanceTimersByTimeAsync(200)
       refreshSharedControlPendingRequestTimeouts(pendingRequests)
@@ -70,7 +64,6 @@ describe('shared control keepalive timeout refresh semantics', () => {
 
     expect(pendingRequests.size).toBe(1)
 
-    // It still resolves normally once the server finally answers.
     const [requestId] = pendingRequests.keys()
     resolveSharedControlPendingResponse(pendingRequests, requestId!, {
       id: requestId!,

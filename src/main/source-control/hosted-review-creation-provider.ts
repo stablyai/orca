@@ -24,14 +24,13 @@ async function isGitHubAuthenticated(
   connectionId: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  // Why: a non-null enterprise slug already means gh is authenticated there, so skip a redundant probe (#8312).
+  // Enterprise resolution already proved host authentication; avoid a redundant probe (#8312).
   if (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options)) {
     return true
   }
   await acquire()
   try {
-    // Why: `host` scopes any rate-limit breaker trip to github.com — the host
-    // this probe actually targets — instead of a GH_HOST-derived scope.
+    // Scope rate-limit breaker to the probed github.com host, independent of GH_HOST.
     await ghExecFileAsync(
       ['auth', 'status', '--hostname', 'github.com'],
       connectionId
@@ -128,12 +127,10 @@ export async function isProviderAuthenticated(
     return isGiteaReviewCreationAuthenticated()
   }
   if (provider === 'bitbucket') {
-    // Why: falling through to the GitHub check made Create PR unusable for
-    // anyone with Bitbucket connected but no `gh auth login`.
+    // Bitbucket authentication must not fall through to GitHub login requirements.
     return isBitbucketReviewCreationAuthenticated()
   }
-  // Only the CLI-backed probes read a host: `gh` and `glab` run here, and the SSH target only
-  // routes the git reads under them. The token-backed forges never touch the repository at all.
+  // Only CLI-backed providers need host-routed Git reads; their CLIs run here. Token-backed providers do not touch the repo.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
   if (provider === 'gitlab') {
     return isGitLabAuthenticated(repoPath, connectionId, options)

@@ -65,7 +65,7 @@ function diffTab(id: string): OpenFile {
   return { id, mode: 'diff', filePath: `/repo/${id}.ts` } as OpenFile
 }
 
-/** The pre-fix shape: one full registry scan, with both URI renderings, per owned prefix. */
+/** Baseline quadratic scan: enumerate the full registry once per owned prefix in both URI forms. */
 function disposeByPrefixPerTab(registry: FakeRegistry, prefixes: readonly string[]): void {
   for (const prefix of prefixes) {
     for (const model of registry.editor.getModels()) {
@@ -85,10 +85,7 @@ function disposeByPrefixPerTab(registry: FakeRegistry, prefixes: readonly string
   }
 }
 
-/**
- * 100 closed diff tabs, of which 60 still hold retained models (some with a large-diff generation
- * suffix, some attached), plus 200 unrelated retained models from other tabs.
- */
+/** Mix closed-tab models, attached models, generation suffixes and unrelated retained models. */
 function buildScenario(): {
   closedTabs: OpenFile[]
   models: FakeModel[]
@@ -113,7 +110,6 @@ function buildScenario(): {
     }
   }
 
-  // Still-open tabs and plain edit models the sweep must not touch.
   for (let i = 0; models.length < RETAINED_MODEL_COUNT; i += 1) {
     const stillOpen = getDiffViewerMonacoModelPaths({
       modelKey: `open-tab-${i}`,
@@ -142,7 +138,6 @@ describe('disposeClosedEditorModels', () => {
     const perTabRegistry = createRegistry(perTab.models)
     disposeByPrefixPerTab(perTabRegistry, perTab.prefixes)
 
-    // Pre-fix: 2 scans per closed tab, each rendering both URI forms for every retained model.
     expect(perTabRegistry.counters.getModelsCalls).toBe(CLOSED_DIFF_TAB_COUNT * 2)
     expect(perTabRegistry.counters.uriToStringCalls).toBe(
       CLOSED_DIFF_TAB_COUNT * 2 * perTab.models.length * 2
@@ -167,17 +162,13 @@ describe('disposeClosedEditorModels', () => {
 
     expect(disposedPaths(batched.models)).toEqual(disposedPaths(perTab.models))
     expect(disposedPaths(batched.models).length).toBeGreaterThan(0)
-    // Attached models survive, as does everything owned by a still-open tab.
     expect(batched.models.filter((m) => m.attached).every((m) => !m.disposed)).toBe(true)
     expect(
       batched.models.filter((m) => m.path.includes('open-tab-')).every((m) => !m.disposed)
     ).toBe(true)
   })
 
-  // Why this is not covered by the parity test above: `buildScenario` closes tab-0..tab-99, so
-  // tab-10 is in the closed batch too. Prefix bleed from tab-1 would dispose tab-10's models, but
-  // the per-tab oracle disposes them as well via tab-10's own prefix, so the two agree and the
-  // assertion still passes. Isolating it needs a still-OPEN tab whose id extends a closed one.
+  // Parity alone misses prefix bleed when both tab-1 and tab-10 close; keep the longer ID open to expose accidental disposal.
   it('does not dispose a still-open tab whose id extends a closed tab id', () => {
     const closed = getDiffViewerMonacoModelPaths({ modelKey: 'tab-1', generationSuffix: '' })
     const stillOpen = getDiffViewerMonacoModelPaths({ modelKey: 'tab-10', generationSuffix: '' })
@@ -188,8 +179,7 @@ describe('disposeClosedEditorModels', () => {
       createModel(stillOpen.modifiedModelPath)
     ]
 
-    // Batched entry point on purpose: the owned prefixes become a Set probed at the URI's own `:`
-    // boundaries, which is a different predicate from the pre-batch per-prefix `startsWith`.
+    // Exercise batched URI-boundary matching rather than the baseline’s per-prefix startsWith.
     disposeClosedEditorModels(createRegistry(models), [diffTab('tab-1'), diffTab('tab-2')])
 
     expect(models.filter((m) => m.disposed).map((m) => m.path)).toEqual([

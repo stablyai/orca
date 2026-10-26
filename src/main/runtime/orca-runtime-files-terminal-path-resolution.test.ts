@@ -179,9 +179,7 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    // The host was `runtime:env-a` until this process stopped dispatching runtime hosts at all
-    // (see runtime-file-target-execution-host.test.ts); an SSH host proves the same scoping on a
-    // host this process actually serves.
+    // This process serves SSH, not runtime hosts; exercise host-scoped lookup on an actually served host.
     it('scopes sibling lookup to the selected worktree execution host', async () => {
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => null)
       const { commands } = createRuntimeFileCommands({
@@ -205,8 +203,7 @@ describe('RuntimeFileCommands', () => {
       )
     })
 
-    // Why: clients predating crossWorkspace (mobile <=0.0.36) reuse their own worktree
-    // id for files.open, so they must keep the pre-sibling-resolution contract.
+    // Mobile <=0.0.36 reuses its workspace id without crossWorkspace; preserve legacy resolution.
     it('keeps the caller worktree and a null relativePath when crossWorkspace is not requested', async () => {
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
         worktree: {

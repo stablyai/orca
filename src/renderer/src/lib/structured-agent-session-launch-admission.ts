@@ -178,13 +178,7 @@ export function declinedTerminalCanOpen(
   return inventory.state !== 'successful' || inventory.ids?.includes(agent) !== false
 }
 
-/**
- * Asks the host that would run a chat, this machine or a paired server, before committing any of it
- * here: no tab, launch record, queued prompt or focus intent exists until it answers. Admitted opens
- * the chat; declined opens the caller's terminal (a resume, which has no terminal equivalent,
- * fails); an unreachable server opens nothing and says so. There is nothing to undo either way.
- * This machine's "can't answer" or "not resolvable yet" opens the chat, whose own create reports.
- */
+/** Ask the executing host before creating tabs/records/prompts/focus intent. Admission opens chat; refusal uses caller terminal (resume without equivalent fails); unreachable server opens nothing. Local unable-to-answer/unresolvable opens chat for its own create to report. */
 export function beginHostAdmittedStructuredLaunch(args: {
   plan: AgentSessionLaunchPlan & { agent: TuiAgent }
   hooks: StructuredAgentLaunchHooks
@@ -241,8 +235,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
         resolveDelivery(NOT_DELIVERED)
         return { kind: 'cancelled', sessionId: null }
       }
-      // A server that cannot resolve the workspace yet keeps its terminal fallback; this machine has
-      // no connection to lose, so its "can't answer" leaves the report to the chat's own create.
+      // Unresolvable servers keep terminal fallback; local unable-to-answer can safely defer reporting to chat create.
       const admission: StructuredLaunchAdmission =
         asked.kind !== 'workspace-unresolved'
           ? asked
@@ -309,7 +302,6 @@ export function beginHostAdmittedStructuredLaunch(args: {
       void (admitted.promptDeliveryResult ?? Promise.resolve(DELIVERED)).then(resolveDelivery, () =>
         resolveDelivery(NOT_DELIVERED)
       )
-      // Not awaited: the hold ends when the chat opens, not when it settles.
       return admitted.settlement
     } finally {
       releaseHold()

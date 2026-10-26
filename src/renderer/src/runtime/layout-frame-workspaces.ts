@@ -1,5 +1,4 @@
-// Main's latest frame copy of a workspace, for readers outside the frame sync (a reopen checking
-// whether main already holds what it would send). Its own module so they do not pull the sync in.
+// Expose latest main-framed workspaces for reopen checks without importing frame sync.
 
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 

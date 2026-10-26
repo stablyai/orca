@@ -3,8 +3,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import { useMobileNativeChatPromptDismiss } from './use-mobile-native-chat-prompt-dismiss'
 
-/** Acknowledged answers hide, and the user's Collapse folds, a terminal card without changing
- *  host status. */
+// Hide/collapse terminal cards locally without changing host prompt status.
 export function useMobileNativeChatPromptPresentation({
   permission,
   question,

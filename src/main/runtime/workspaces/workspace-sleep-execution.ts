@@ -1,4 +1,4 @@
-import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session-workspace-sleep'
+import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -174,11 +174,7 @@ async function stopChats(
   return stops
 }
 
-/**
- * One workspace's sleep, in order: the window hides it, its terminals stop on their host, every
- * host stops its chats, then (once the whole batch's chats settled) its VM suspends — unless it
- * was reopened meanwhile.
- */
+/** Hide panes/browsers, stop host-owned terminals and chats, then await all batch chats before suspending VMs; reopening keeps the VM alive. */
 async function sleepWorkspace(
   deps: WorkspaceSleepDeps,
   target: WorkspaceSleepTarget,
@@ -237,10 +233,7 @@ async function sleepWorkspace(
   }
 }
 
-/**
- * Sleeps a batch, each workspace as a command in its own queue. A workspace whose command a delete
- * cancelled, the queue refused, or a pause holds back releases the batch's VM wait.
- */
+/** Queue each workspace separately; cancelled/refused/paused targets must release the batch VM wait. */
 export async function sleepWorkspaces(
   deps: WorkspaceSleepDeps,
   queue: WorkspaceSleepQueue,

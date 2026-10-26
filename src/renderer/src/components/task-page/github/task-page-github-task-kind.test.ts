@@ -35,8 +35,6 @@ describe('isPRFocusedTaskView', () => {
     { query: 'is:issue is:open', expected: false },
     { query: 'assignee:@me', expected: false },
     { query: 'flaky login', expected: false },
-    // characterization: current behavior — is:issue plus is:pr widens scope to
-    // 'all', which is not PR-focused on its own.
     { query: 'is:issue is:pr', expected: false }
   ]
 
@@ -120,25 +118,19 @@ describe('scopeGitHubTaskSearch', () => {
   })
 
   it('lets a parsed pr scope override the caller kind', () => {
-    // characterization: current behavior — `is:draft` implies a pr scope, so the
-    // issues kind is overridden even though no literal is:pr token is present.
     expect(scopeGitHubTaskSearch('is:draft', 'issues')).toBe('is:pr is:draft')
   })
 
   it('keeps the caller kind when the parsed scope stays all', () => {
-    // `no:assignee` sets no scope, so nothing overrides the caller kind.
     expect(scopeGitHubTaskSearch('no:assignee', 'prs')).toBe('is:pr no:assignee')
   })
 
   it('lets a parsed issue scope override the caller kind', () => {
-    // characterization: quoting hides `is:issue` from the literal-scope regex but
-    // not from the tokenizer, so the parsed issue scope beats the prs caller kind.
+    // Quoting hides scope from the literal regex, but parsed scope still overrides the caller kind.
     expect(scopeGitHubTaskSearch('is:"issue"', 'prs')).toBe('is:"issue"')
   })
 
   it('re-prefixes a merged-state query with the caller kind', () => {
-    // characterization: current behavior — `is:merged` sets state, not scope, so
-    // the caller kind decides the prefix.
     expect(scopeGitHubTaskSearch('is:merged', 'prs')).toBe('is:pr is:merged')
   })
 })

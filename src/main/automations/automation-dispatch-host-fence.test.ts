@@ -10,7 +10,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
 import { resolveAutomationRunTarget } from './run-target-resolution'
 import { AutomationService } from './service'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: {

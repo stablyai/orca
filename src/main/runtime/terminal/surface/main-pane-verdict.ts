@@ -1,5 +1,3 @@
-// Layout-owner builds: the liveness a main-owned pane's terminal.list row reports.
-
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -15,10 +13,7 @@ export type MainPaneBinding = {
   starting: boolean
 }
 
-/**
- * The host's verdict on the pane's terminal. `exited` needs proof: the local inventory answered
- * without it, or the registry holds its exit. A pane with a status is never live.
- */
+/** Exited needs local-inventory absence or recorded exit proof; any pane status prevents live. */
 export function mainPaneVerdict(
   pane: MainPaneBinding,
   host: RuntimePtyRegistryView & {
@@ -58,10 +53,7 @@ function provenAbsent(
   )
 }
 
-/**
- * Switch-on, a disconnected terminal main's layout still binds may run through a host's listing
- * gap, as the window kept it connected; a certified exit, or the host saying it cannot tell, ends it.
- */
+/** Main-bound disconnected PTYs can survive listing gaps; certified exit or host-unverifiable evidence ends this retained-live claim. */
 export function mainBindsUnendedTerminal(
   runtime: SurfacesOwner,
   ptyId: string,

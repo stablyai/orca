@@ -50,8 +50,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
     closeModal()
     activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
     const state = useAppStore.getState()
-    // Why: open the browser into the worktree's active group so it lands beside
-    // the user's current work rather than spawning a detached surface.
+    // Open beside the current work in its active group.
     const groupId =
       state.activeGroupIdByWorktree[targetWorktree.id] ??
       state.groupsByWorktree[targetWorktree.id]?.[0]?.id
@@ -91,8 +90,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   )
 }
 
-// Scope the shared feature setup to just browser use — the grab→agent flow only
-// needs the Orca CLI and browser skill, not Computer Use or orchestration.
+// Browser grab-to-agent needs only the CLI and browser skill.
 const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   browserUse: true,
   computerUse: false,
@@ -100,8 +98,6 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   linearTickets: false
 }
 
-// The grab→agent flow relies on the browser skill, so offer the same install action
-// the agent skills step uses, scoped to just browser use.
 function BrowserSkillInstallButton(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [busy, setBusy] = useState(false)

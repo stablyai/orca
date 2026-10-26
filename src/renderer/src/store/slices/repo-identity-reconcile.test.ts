@@ -14,8 +14,7 @@ describe('reconcileFetchedRepos', () => {
   })
 
   it('reconciles repos whose nested records were rebuilt by hydration and IPC', () => {
-    // Why: main's hydrateRepo reconstructs hookSettings on every list and structured-clone
-    // rebuilds the rest, so a reference compare would report every real repo as changed.
+    // IPC clones nested records and main rebuilds hookSettings; reference comparison alone falsely changes all repos.
     const nested = (): Partial<Repo> => ({
       hookSettings: { mode: 'auto', scripts: { setup: 'echo hi', archive: '' } },
       gitRemoteIdentity: {
@@ -163,8 +162,7 @@ describe('reuseEqualRecordMap', () => {
   })
 
   it('returns a new map when a key is swapped for a same-count replacement', () => {
-    // Why: equal key counts alone must not read as unchanged — the replacement key misses the
-    // previous lookup, which is why no second pass over the previous keys is needed.
+    // Same counts can hide replaced keys; next-key misses detect removals without another previous-key pass.
     const previous = { a: row('a'), b: row('b') }
     const result = reuseEqualRecordMap(previous, { a: row('a'), c: row('b') })
     expect(result).not.toBe(previous)

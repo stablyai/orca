@@ -169,7 +169,7 @@ function ownerExited(owner: AccessOwner): boolean {
     return hasCode(error, 'ESRCH')
   }
   const recordedStart = owner.processStartIdentity
-  // GetProcessTimes records an absolute creation time, so it also detects reuse after reboot.
+  // Absolute Windows creation times also detect PID reuse across reboots.
   const canCompareStart = sameBoot || (process.platform === 'win32' && sameMachine && sameHost)
   const actualStart =
     !canCompareStart || recordedStart == null ? null : profileStateAccessProcessIdentity(owner.pid)
@@ -211,7 +211,7 @@ function removeEmptyOwnerDirectory(path: string): void {
   }
 }
 
-/** Only remove immutable entries whose owner is positively known to have exited. */
+/** Reclaim immutable entries only with positive owner-exit proof. */
 export function reclaimExitedOwner(path: string): void {
   let entries: string[]
   try {
@@ -241,7 +241,7 @@ export function reclaimExitedOwner(path: string): void {
     }
     removeOwnerEntry(join(path, entry))
   }
-  // A replacement owner keeps the directory nonempty, even if our observation is stale.
+  // A replacement owner prevents removal even if this observation is stale.
   removeEmptyOwnerDirectory(path)
 }
 

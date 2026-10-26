@@ -183,9 +183,7 @@ afterEach(() => {
 
 describe('Automation list row selection', () => {
   it('does not open local detail when a quick-action menu item is chosen', async () => {
-    // Radix portals the menu out of the row's DOM, but React bubbles its
-    // clicks back through the component tree. Selecting Delete must not call
-    // onSelect (which opens the detail page behind the confirm dialog).
+    // React bubbles portaled Delete clicks through the row; onSelect must not open detail behind confirmation.
     const onSelect = vi.fn()
     const onDelete = vi.fn()
     renderLocalRows({ onSelect, onDelete })
@@ -221,9 +219,7 @@ describe('Automation list row selection', () => {
   })
 
   it('opens the actions menu on keyboard activation without selecting the row', async () => {
-    // The row handles Enter/Space for its own activation. Those keys bubble
-    // from the actions trigger too, so an unguarded row handler would
-    // preventDefault the button's native activation and open detail instead.
+    // Guard Enter/Space from the actions trigger so row activation cannot veto the button and open detail.
     const onSelect = vi.fn()
     renderLocalRows({ onSelect })
     const user = userEvent.setup()

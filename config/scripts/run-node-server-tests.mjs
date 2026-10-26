@@ -37,8 +37,7 @@ const packageDir = join(root, 'out', 'orcad')
 const runtimePath = artifact
   ? packagedNodeRuntimePath(packageDir, target)
   : await ensurePinnedNodeExecutable({ target })
-// Tests that launch the packaged runtime themselves find it here. A lane's named inputs are
-// required: their tests fail on a missing input instead of passing as a skip.
+// Require lane-declared packaged runtime inputs; their tests must fail on absence instead of silently skipping.
 const env = {
   ...process.env,
   ORCA_BACKGROUND_LAUNCH: '1',
@@ -93,9 +92,7 @@ run(runtimePath, [
 ])
 
 function defaultTestArgs() {
-  // Why: vitest 5 drops CLI --exclude for inline projects, so the selectors' substring matches
-  // are resolved to files here and filtered before vitest sees them.
-  // Electron probes run in desktop jobs; headless compatibility containers have no display.
+  // Vitest 5 ignores CLI --exclude for inline projects; resolve/filter substring selectors first. Electron probes belong in desktop jobs, not displayless containers.
   const selectors = nodeServerTestPaths({ artifact, crossRuntime })
   const skipped = new Set(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS)
   return globSync(UNIT_INCLUDE, { cwd: root })

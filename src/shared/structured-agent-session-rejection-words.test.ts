@@ -1,5 +1,3 @@
-// What a rejection puts on the reader's screen: the desktop row, the phone and a returned card.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
@@ -82,7 +80,6 @@ describe('what a rejection with a typed fact shows the reader', () => {
   })
 })
 
-// The line under a message the host recorded and then rejected, on the desktop and the phone.
 describe('the line under a recorded rejection', () => {
   const signedOut: AgentSessionFailureFact = { kind: 'notSignedIn' }
   const recorded = (reason: string | null, rejection?: AgentSessionFailureFact) =>

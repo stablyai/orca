@@ -67,8 +67,7 @@ export function handleAgentCompletionInspectionResult(args: {
   }
   if (remote) {
     const evidence = result.foregroundProcessEvidence
-    // Remote identity is host-authoritative. Compatibility names and unverifiable observations
-    // never mutate routing state or synthesize process exit.
+    // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
     const ptyId = options.getPtyId()
     const bindingKey = `${ptyId ?? ''}\0${expectedIncarnationId ?? ''}`

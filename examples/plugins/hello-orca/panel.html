@@ -3,8 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      /* The host injects Orca design tokens as CSS custom properties, so
-         panels can match the app without any access to it. */
+      /* The host injects Orca design tokens as CSS custom properties. */
       body {
         margin: 0;
         padding: 12px;
@@ -59,8 +58,7 @@
         return new Promise(function (resolve) {
           var requestId = 'req-' + ++seq
           pending.set(requestId, resolve)
-          // The panel frame is an opaque origin, so '*' is the only usable
-          // targetOrigin; the host verifies the sending window instead.
+          // Opaque-origin frames require '*'; the host verifies the sending window.
           window.parent.postMessage(
             { type: 'orca-panel-action', requestId: requestId, action: action, params: params },
             '*'

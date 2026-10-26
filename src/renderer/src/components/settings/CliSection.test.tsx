@@ -165,7 +165,6 @@ describe('CliSection project runtime defaults', () => {
       wslDistro: 'Ubuntu'
     })
     expect(capturedPanel.props?.target).toBeNull()
-    // An install re-copies, so the panel reuses the install names as its update.
     expect(capturedPanel.props?.installedSkillNames).toBeUndefined()
     expect(capturedPanel.props?.onBeforeInstall).toBeUndefined()
     expect(getWslInstallStatus).not.toHaveBeenCalled()

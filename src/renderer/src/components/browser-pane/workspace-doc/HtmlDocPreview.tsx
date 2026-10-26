@@ -70,9 +70,7 @@ export function HtmlDocPreview({
 
   const history = useDocPreviewWebviewHistory(webviewRef)
   const { sync: syncHistory, reset: resetHistory } = history
-  // Why wrapped rather than a second control: guest history cannot survive a conversion (the
-  // guest was replaced), so once it runs out Back returns across the conversion — and Forward
-  // re-crosses it — instead of dying.
+  // Guest replacement loses history; exhausted history crosses the document/browser conversion in both directions.
   const historyWithConversionCrossings = useMemo(
     () =>
       convertedFrom || convertedTo
@@ -127,8 +125,6 @@ export function HtmlDocPreview({
     containerRef,
     toolsReady: state === 'ready' && !isUnavailable
   })
-  // Not `document`: shadowing the global inside a component is how a stray DOM call silently
-  // starts reading a plain object.
   const previewDocument = useMemo(
     () => ({ filePath, relativePath, worktreeId, runtimeEnvironmentId, externalSshTargetId }),
     [externalSshTargetId, filePath, relativePath, runtimeEnvironmentId, worktreeId]
@@ -175,15 +171,13 @@ export function HtmlDocPreview({
         disposed = true
       }
     }
-    // Why: an unreadable document answers with a status the guest renders as text, so the reason
-    // arrives out-of-band. Subscribe before minting so the entry document's failure cannot be missed.
+    // Subscribe before minting: entry failures arrive out-of-band while the guest paints the error body as text.
     let boundGrantId: string | null = null
     const unsubscribeFailure = window.api.docPreview?.onLoadFailure?.((payload) => {
       if (disposed || payload.grantId !== boundGrantId) {
         return
       }
-      // Why first: a refused download is the fences answering for the reader, not the document
-      // failing to load, so it can never take the page away — and it names no file to compare.
+      // A blocked download is a policy response without a file path, not a document-load failure.
       if (payload.reason === 'download-blocked') {
         setDownloadBlocked(true)
         return
@@ -237,8 +231,7 @@ export function HtmlDocPreview({
         detach = attached.detach
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
-        // Why only now: main binds this grant to the guest on its first commit, so the tools have
-        // nothing to name until the webview exists and is pointed at it.
+        // Main binds the grant on first commit; tools need the attached guest pointed at it.
         setGrant(handle)
       })
       .catch(() => {
@@ -274,8 +267,7 @@ export function HtmlDocPreview({
     }
   }, [isActive, previewId])
 
-  // The dropdown's doc-history source: opening a document is a visit, once per document per mount
-  // (a hard reload re-mints the grant but is not a new visit).
+  // Record one visit per document mount; re-minting on hard reload is not a new visit.
   useEffect(() => {
     useAppStore
       .getState()
@@ -290,9 +282,7 @@ export function HtmlDocPreview({
     remintCount
   })
 
-  // Why: a grant is pinned to the owner ids resolved when it was minted, so after a pairing or
-  // SSH reconnect the old one reads nothing and reloading the guest would just refetch the
-  // failure. Drop it and mint against today's ids instead of making the user close the tab.
+  // Reconnect changes the grant’s pinned owner IDs; mint a new grant rather than reloading the same failure.
   const handleHardReload = useCallback(() => {
     releaseDocPreviewGrant(previewId)
     setRemintCount((count) => count + 1)

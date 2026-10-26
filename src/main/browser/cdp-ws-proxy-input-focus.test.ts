@@ -5,6 +5,7 @@ import {
   createMockWebContents,
   getSendCommandCalls,
   getSendCommandMethods,
+  mockAsWebContents,
   sendAndReceive
 } from './cdp-ws-proxy-test-harness'
 
@@ -24,8 +25,7 @@ describe('CdpWsProxy agent input focus guard', () => {
     )
     const mock = createMockWebContents()
     mock.webContents.getType.mockReturnValue('webview')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    const proxy = new CdpWsProxy(mock.webContents as never, () => () => {}, guardFocus)
+    const proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {}, guardFocus)
     const client = await connect(await proxy.start())
     mock.webContents.debugger.sendCommand.mockClear()
     const replies: unknown[] = []
@@ -70,8 +70,7 @@ describe('CdpWsProxy agent input focus guard', () => {
     mock.webContents.getType.mockReturnValue('webview')
     const release = vi.fn()
     const proxy = new CdpWsProxy(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-      mock.webContents as never,
+      mockAsWebContents(mock),
       () => () => {},
       async () => release
     )
@@ -96,8 +95,7 @@ describe('CdpWsProxy agent input focus guard', () => {
   it('forwards presses on pages outside an Orca window without a guard', async () => {
     const mock = createMockWebContents()
     const guardFocus = vi.fn(async () => () => {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    const proxy = new CdpWsProxy(mock.webContents as never, () => () => {}, guardFocus)
+    const proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {}, guardFocus)
     const client = await connect(await proxy.start())
 
     await sendAndReceive(client, {
@@ -124,8 +122,7 @@ describe('CdpWsProxy agent input focus guard', () => {
     })
     const release = vi.fn()
     const proxy = new CdpWsProxy(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-      mock.webContents as never,
+      mockAsWebContents(mock),
       () => () => {},
       async () => release
     )
@@ -148,8 +145,7 @@ describe('CdpWsProxy agent input focus guard', () => {
     const mock = createMockWebContents()
     mock.webContents.getType.mockReturnValue('webview')
     const proxy = new CdpWsProxy(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-      mock.webContents as never,
+      mockAsWebContents(mock),
       () => () => {},
       async () => {
         throw new Error('focus guard unavailable')

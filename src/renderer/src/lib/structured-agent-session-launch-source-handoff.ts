@@ -4,8 +4,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 
-/** A joiner without the terminal pane must not fail when that pane closes: the unsent create hands
- *  off now and resumes by conversation id, as a History click does. */
+// Joiners without the source terminal survive its close: hand off unsent create to conversation-ID resume, as History does.
 export function releaseStructuredLaunchSource(state: StructuredLaunchState): void {
   const { intent } = state
   const handoff = intent.beforeCreate

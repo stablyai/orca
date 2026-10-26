@@ -23,8 +23,7 @@ describe('the keys a page may read and write', () => {
   })
 
   it('refuses the rest of the namespace', () => {
-    // Everything the app stores lives under `orca:`, so a page that could write any of it could
-    // rewrite the app's pairings and push registrations.
+    // A broad orca: prefix would let pages rewrite native pairings and push registrations.
     for (const key of [
       'orca:remotePushHostRegistrations',
       'orca:pushServiceNotificationsEnabled',
@@ -66,15 +65,13 @@ describe('the keys a page may read and write', () => {
       'orca:terminalLiveInputDisabled:host-1:wt-1',
       'orca:terminalDrafts:host-1:wt-1'
     ])
-    // A route that carries a worktree segment and declares no key of its own gets none.
     expect(pageStorageKeysForRoute('host-1', '/h/host-1/files/wt-1')).toEqual(
       pageStorageKeysForRoute('host-1', HOST_ROUTE)
     )
   })
 
   it('stays inside the entry count init is allowed to carry', () => {
-    // The handed list is what `init` is built from, and its schema refines on this number: a list
-    // that outgrew it would take the whole frame down rather than one key.
+    // Exceeding the init entry bound rejects the whole frame.
     expect(pageStorageKeysForRoute('host-1', SESSION_ROUTE).length).toBeLessThanOrEqual(
       PAGE_STORAGE_MAX_ENTRIES
     )
@@ -83,8 +80,7 @@ describe('the keys a page may read and write', () => {
   it('drops a workspace key whose id pushes it past the key cap, rather than handing one over', () => {
     const long = 'w'.repeat(PAGE_STORAGE_MAX_KEY_CHARS)
     const keys = pageStorageKeysForRoute('host-1', `/h/host-1/session/${long}`)
-    // Every key `init` carries is one the page's own schema will take; without the filter the two
-    // long ones are in this list and the page refuses the frame.
+    // Filter keys by the page’s schema too; one overlong key would reject all of init.
     expect(keys.filter((key) => !isPageStorageKey(key))).toEqual([])
     expect(keys).toEqual(pageStorageKeysForRoute('host-1', HOST_ROUTE))
   })
@@ -118,7 +114,6 @@ describe('the workspace a route names', () => {
   })
 
   it('answers null for a stray percent rather than throwing inside the init build', () => {
-    // `decodeURIComponent('%zz')` throws, and this runs while the shell is building `init`.
     expect(pageRouteWorkspace('/h/host-1/session/%zz')).toBeNull()
   })
 })
@@ -136,8 +131,7 @@ describe('the allowlist narrowed to one session', () => {
   })
 
   it("refuses another workspace's chat tabs, which the shape check alone admits", () => {
-    // One level in from the host rule above, and the reason the route is threaded at all: a page
-    // opened on one workspace must not rewrite the chat tabs of the one beside it.
+    // Scope workspace keys so a page cannot rewrite its neighbor’s chat tabs.
     expect(isPageStorageKey('orca:nativeChatTabs:host-1:wt-2')).toBe(true)
     expect(
       isPageStorageKeyForRoute('orca:nativeChatTabs:host-1:wt-2', 'host-1', SESSION_ROUTE)
@@ -179,7 +173,6 @@ describe('what init may carry', () => {
       Object.fromEntries(Object.entries(held).slice(0, PAGE_STORAGE_MAX_ENTRIES))
     )
     expect(dropped).toEqual(Object.keys(held).slice(PAGE_STORAGE_MAX_ENTRIES))
-    // Room, not size: the page may write any of these four itself, so none is refused (33.6).
     expect(oversize).toEqual([])
   })
 })

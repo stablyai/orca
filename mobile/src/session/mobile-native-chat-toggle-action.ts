@@ -7,7 +7,6 @@ type ToggleTab = MobileNativeChatTab & {
   terminal: string | null
 }
 
-/** Builds the optional terminal/chat switch shown in a terminal's long-press menu. */
 export function getMobileNativeChatToggleActions(args: {
   terminalHandle: string | null
   tabs: readonly ToggleTab[]

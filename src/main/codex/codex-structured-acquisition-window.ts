@@ -1,4 +1,4 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 
 // Bound events retained before a session can route them.

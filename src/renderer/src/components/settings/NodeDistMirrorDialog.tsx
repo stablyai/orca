@@ -32,7 +32,7 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
   const [text, setText] = useState(NODE_DIST_MIRROR_SUGGESTION)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // Why: the modal slot has no trigger element for the dialog to hand focus back to.
+  // The modal slot has no trigger to restore focus to automatically.
   const [returnFocusTo] = useState(() =>
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
@@ -45,7 +45,7 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
     setError(null)
     const result = await saveNodeDistMirrorAndRetry(targetId, text)
     if (result.outcome === 'retrying') {
-      // Why before the mounted check: another modal may have replaced this one mid-save.
+      // Handle retry rejection even if another modal replaced this one during save.
       result.retry.catch((cause: unknown) =>
         toastSshConnectFailure(
           targetId,

@@ -1,4 +1,4 @@
-import type { PtyIpcSurface } from './pty-host-bindings'
+import type { PtyIpcSurface } from './pty/pty-host-bindings'
 import {
   handleMock,
   onMock,

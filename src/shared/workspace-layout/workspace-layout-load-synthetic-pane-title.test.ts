@@ -1,5 +1,4 @@
-// A single-pane tab whose stored pane title only repeats its tab's own name: the window drops it on
-// load, so with main owning the layout the Loader drops it too, or the window's next save does.
+// Main must drop a lone pane title that repeats its tab name, matching window restore and its next save.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'

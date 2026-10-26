@@ -1,10 +1,6 @@
 import { normalizeTypedName } from './typed-name-normalization'
 
-/**
- * The saved server another server's name would be confused with.
- * Why: `--environment <name>` resolves names with normalizeTypedName and refuses a name two
- * servers share, so saving `Build` beside `build` makes both unreachable by name.
- */
+/** Typed-name normalization makes Build/build collide; reject saves that would make both names unresolvable. */
 export function findCollidingEnvironmentName<T extends { name: string }>(
   environments: readonly T[],
   name: string

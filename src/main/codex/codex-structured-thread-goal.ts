@@ -1,6 +1,6 @@
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 
 type CodexThreadGoalRequest = {

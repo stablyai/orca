@@ -8,13 +8,11 @@ function sendMode2031Reply(
   transport: Mode2031ReplyTransport,
   mode: TerminalColorSchemeMode
 ): boolean {
-  // Why: fish stops reading mode-2031 replies quickly; remote input batching
-  // can otherwise deliver this terminal response after the shell regains input.
+  // Send replies promptly: fish can stop reading before remote batches arrive, leaking the response into shell input.
   return transport.sendInputImmediate(mode2031SequenceFor(mode))
 }
 
-// Appearance updates include font and opacity changes, so only report actual
-// color-mode flips to programs that still have mode 2031 enabled.
+// Appearance updates include non-color changes; report only color-mode flips while mode 2031 remains enabled.
 export function maybePushMode2031Flip(
   paneId: number,
   mode: TerminalColorSchemeMode,

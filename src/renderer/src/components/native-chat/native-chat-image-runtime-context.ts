@@ -45,8 +45,7 @@ type OwnerState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-// Keep the subscription limited to fields that can change image ownership. The
-// derived context is computed during render, after Zustand has filtered updates.
+// Subscribe only to ownership inputs; derive context after Zustand filters unrelated updates.
 export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
   return {
     settings: state.settings,
@@ -76,8 +75,7 @@ const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
   route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
-// Why stable: consumers compare by identity, so an unrelated store update must not read as a
-// new image owner.
+// Keep target identity stable so unrelated store changes cannot look like an image-owner change.
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 const environmentTargets = new Map<string, RuntimeClientTarget>()
 

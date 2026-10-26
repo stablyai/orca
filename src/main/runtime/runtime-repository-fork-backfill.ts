@@ -34,10 +34,8 @@ export class RuntimeRepositoryForkBackfill {
       }
       let changed = false
       for (const repo of store.getRepos()) {
-        // Why the resolved SSH target and not the raw `connectionId`: this backfill runs `gh`/git
-        // in this process, so any row whose files sit on an SSH host must be skipped — including
-        // one that carries only `executionHostId: ssh:…`, which the raw field reads as local.
-        // A repo a WSL move is taking keeps `upstream` unset, so the next startup retries it.
+        // Resolve executionHostId too: raw connectionId misses SSH-only rows, whose gh/Git must never run here.
+        // WSL-move-fenced repos keep upstream unset for next startup retry.
         if (
           repo.upstream !== undefined ||
           repo.kind === 'folder' ||
@@ -56,7 +54,7 @@ export class RuntimeRepositoryForkBackfill {
           upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
             ? await detectGitHubAvatarIcon(repo.path, LOCAL_EXECUTION_HOST_ID, upstream)
             : null
-        // By id and host: a WSL move leaves a hidden local row beside the host's same-id row.
+        // Qualify by host: WSL moves leave hidden local rows beside same-id host rows.
         const hostId = getRepoExecutionHostId(repo)
         const current = store
           .getRepos()

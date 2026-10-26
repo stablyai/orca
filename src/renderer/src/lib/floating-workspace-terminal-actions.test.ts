@@ -468,7 +468,6 @@ describe('createFloatingWorkspaceTerminalTab', () => {
       undefined,
       { id: expect.any(String) }
     )
-    // Why: createTab itself activates the new tab within the floating group.
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
@@ -491,7 +490,6 @@ describe('createFloatingWorkspaceTerminalTab', () => {
       'pwsh',
       { id: expect.any(String) }
     )
-    // Why: createTab itself activates the new tab within the floating group.
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
@@ -751,7 +749,6 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
 
   it('ignores non-close shortcuts and non-empty floating workspaces', () => {
     vi.stubGlobal('window', { dispatchEvent: vi.fn() })
-    // A DOM a frame behind the store still shows the empty state it rendered before.
     vi.stubGlobal('document', { querySelector: vi.fn().mockReturnValue({}) })
     const nonCloseEvent = {
       altKey: false,

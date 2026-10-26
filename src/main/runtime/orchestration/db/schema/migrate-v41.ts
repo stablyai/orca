@@ -1,8 +1,6 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-// Why: eligibility comes from unread membership, so a fully read but unacknowledged batch must not
-// block the next insert. The index keeps its pre-v41 name and predicate so downgraded binaries'
-// IF NOT EXISTS create and schema probes still pass; only uniqueness is dropped.
+// Drop uniqueness so read-but-unacked batches cannot block new mail; retain the index name/predicate for downgrade probes.
 export const OUTSTANDING_MAILBOX_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS idx_deliveries_one_outstanding
     ON deliveries(mailbox_handle) WHERE status = 'outstanding' AND mailbox_handle != '';

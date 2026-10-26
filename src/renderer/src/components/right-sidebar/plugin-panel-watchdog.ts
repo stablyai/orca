@@ -4,13 +4,7 @@ import {
 } from '../../../../shared/plugins/plugin-panel-bridge'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 
-/**
- * Panel responsiveness watchdog: pings the sandboxed frame on an interval
- * and demotes the panel to an errored badge when a pong misses its deadline.
- * The busy-loop guarantee depends on Chromium assigning the sandboxed frame
- * a separate renderer, which the Electron containment test gates explicitly.
- * Pure timer logic keeps deadline behavior deterministic in unit tests.
- */
+/** Ping/pong deadlines mark unresponsive panels; busy-loop containment requires a separate Chromium renderer, gated by Electron tests. */
 
 export type PanelWatchdogOptions = {
   sendPing: (pingId: number) => void
@@ -48,10 +42,7 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       // A ping is already outstanding; its deadline will fire first.
       return
     }
-    // Why: an "unresponsive" badge on a hidden panel is invisible — detect it on resume
-    // before the user can interact. getWindowParkVisible, not raw visibilityState: macOS can
-    // wedge the latter at 'hidden' with no further visibilitychange, which would park the
-    // watchdog for the rest of the session.
+    // Pause hidden pings; use park visibility because macOS can wedge raw visibilityState at hidden indefinitely.
     if (!getWindowParkVisible()) {
       return
     }
@@ -77,16 +68,14 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       if (active) {
         return
       }
-      // React StrictMode intentionally runs effect setup → cleanup → setup.
-      // A stopped watchdog must be reusable by the second real setup.
+      // StrictMode restarts effects after cleanup; stopped watchdogs must support reuse.
       generation += 1
       active = true
       awaitedPingId = null
       clearDeadline()
       pingTimer = setInterval(ping, pingIntervalMs)
       unsubscribeVisibility?.()
-      // Why: the interval is never stopped, so without this a resume waits out the remaining
-      // interval before the first ping the hidden window skipped.
+      // Ping immediately on resume instead of waiting out the interval that kept ticking while hidden.
       unsubscribeVisibility = subscribeWindowParkVisibility(() => {
         if (getWindowParkVisible()) {
           ping()

@@ -11,6 +11,7 @@ import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, clampUsedPercent } from './tooltip'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { getUsageRosterRowState } from './usage-roster-row-state'
 import { translate } from '@/i18n/i18n'
 
 export function InlineUsageBars({
@@ -49,6 +50,11 @@ export function InlineUsageBars({
         }
       : null
   ].filter((window): window is { key: string; used: number; label: string } => window !== null)
+  // Why: a lapsed token or failed refresh is not a sign-out; ask for a sign-in only when one is confirmed.
+  const emptyState =
+    usageWindows.length === 0 && limits.status === 'error'
+      ? getUsageRosterRowState(limits, false)
+      : null
 
   return (
     <div
@@ -71,9 +77,11 @@ export function InlineUsageBars({
           </span>
         </div>
       ))}
-      {usageWindows.length === 0 && limits.status === 'error' ? (
+      {emptyState ? (
         <span className="text-[10px] text-muted-foreground">
-          {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
+          {emptyState.kind === 'sign-in'
+            ? translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
+            : emptyState.statusLabel}
         </span>
       ) : null}
     </div>

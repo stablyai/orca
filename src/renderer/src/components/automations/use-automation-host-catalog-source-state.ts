@@ -8,13 +8,7 @@ import type {
   AutomationHostCatalogSource
 } from './automation-host-catalog-source'
 
-/**
- * Reads the mirrored SSH and runtime state the catalog projects from.
- *
- * Split out of `use-automation-host-catalog` so the store subscriptions stay in
- * one place: every map here is a live store reference whose identity changes on
- * each write, and the catalog memo below depends on all of them.
- */
+/** Centralize live mirrored SSH/runtime subscriptions whose reference identities drive catalog memoization. */
 
 type AutomationHostCatalogSourceStateInput = {
   /** Desktop SSH registration generations, mirrored by the store alongside the maps below. */
@@ -64,8 +58,7 @@ export function useAutomationHostCatalogSourceState({
         return {
           environmentId: environment.id,
           label: environment.name,
-          // Mirrors the owner ref's own rule: creation time stands in until the
-          // server reports a revision, so a re-pair still changes the value.
+          // Use creation time until a pairing revision exists, matching owner refs so re-pairs still change identity.
           pairingRevision: environment.pairingRevision ?? environment.createdAt,
           status: status ? { status: status.status } : undefined,
           ssh: bucket

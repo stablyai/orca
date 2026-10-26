@@ -94,8 +94,7 @@ export function isCmdJPaletteQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-// Why not a module constant: translate() must run at call time, and the localized word is
-// the same one the palette stamps on these rows — a zh user searching `设置` types the badge.
+// Translate at call time; localized users can search the same Settings word displayed on row badges.
 function settingsWord(): string {
   return translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings').toLowerCase()
 }
@@ -105,8 +104,7 @@ function keywordParts(section: SettingsNavSection): string[] {
   const idWords = baseId.replace(/-/g, ' ')
   const paneLevelEntries = section.searchEntries.filter((entry) => !entry.targetSectionId)
   const localized = settingsWord()
-  // Why keep the English forms alongside the localized ones: section titles stay English in
-  // some catalogs, and a user on a localized build still types `terminal settings` freely.
+  // Keep English aliases too; catalog titles may remain English and users can still type English queries.
   const suffixed = [`${section.title} settings`, `${idWords} settings`]
   if (localized !== 'settings') {
     suffixed.push(`${section.title} ${localized}`, `${idWords} ${localized}`, localized)
@@ -167,9 +165,7 @@ export function buildCmdJSettingsResults(
 }
 
 export function buildCmdJActionResults(actions: readonly CmdJQuickAction[]): CmdJActionResult[] {
-  // Why fold here, like the settings path above: the query is folded before ranking, so
-  // a raw `Format Document` keyword can never satisfy the exact-intent rules and the
-  // command sinks below any workspace that merely prefix-matches.
+  // Fold keywords like queries or raw-cased commands miss exact intent and sink below workspace prefixes.
   return actions.map((action, order) => ({
     ...action,
     order,
@@ -192,8 +188,7 @@ function rankingForCandidate(
     return null
   }
 
-  // Why: the shortcut rules below only inspect the head and tail of the query, so coverage has
-  // to gate all of them — otherwise "new terminal <junk> browser settings" still wins on rule 3.
+  // Gate head/tail shortcut rules on full coverage so unmatched middle words cannot produce exact intent.
   const values =
     candidate.kind === 'settings'
       ? [candidate.title, ...candidate.configKeywords]

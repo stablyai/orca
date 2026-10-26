@@ -47,9 +47,7 @@ export const pairScanStyles = StyleSheet.create({
     borderRadius: radii.camera,
     overflow: 'hidden'
   },
-  // Why: holds the layout slot while the camera is unmounted during
-  // paste, so the bottom action button doesn't snap up to fill the
-  // empty space.
+  // Reserve the camera slot during paste mode so the bottom action cannot jump upward.
   cameraPlaceholder: {
     flex: 1,
     backgroundColor: colors.bgPanel,

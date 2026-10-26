@@ -1,12 +1,4 @@
-// Regression guard: bound the volume of cadence process inspections a visible,
-// idle terminal with NO agent evidence drives on hosts where each inspection is
-// expensive — local Windows forks a powershell.exe/CIM whole-process-table scan
-// (the scan-cost analogue of #6288), and a remote/SSH pane pays a host round
-// trip plus a host-side foreground scan. Pre-fix a single visible idle shell
-// inspected every 2s forever (~30 scans/min); with the no-evidence tier it
-// inspects every 15s, and pane activity (output/title/hook) or agent evidence
-// re-arms the hot cadence so agent-start detection stays event-driven and
-// agent-finish detection is unchanged.
+// Bound costly-host idle scans without relaxing active-agent completion detection; pane activity re-arms hot cadence.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAgentCompletionCoordinator,
@@ -50,8 +42,7 @@ function createCoordinator(
 describe('agent completion no-evidence inspection cadence', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    // Math.random = 0.5 makes the ±10% jitter factor exactly 1.0, so tick
-    // counts below are exact.
+    // Pin jitter to 1.0 so poll counts are exact.
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
   })
 
@@ -69,7 +60,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // 60s / 15s = 4. Pre-fix (2s idle cadence) this was 30.
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
@@ -82,7 +72,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // 60s / 2s = 30: local POSIX panes (cheap `ps`) must not be relaxed.
     expect(inspectProcess).toHaveBeenCalledTimes(30)
   })
 
@@ -200,7 +189,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     // The error backoff ceiling (10s) must not undercut the 15s tier: erroring
-    // scans would otherwise poll MORE often than healthy ones (15s → 10s).
+    // Error backoff must not undercut the slower no-evidence tier and increase failing scan frequency.
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
@@ -212,7 +201,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // ~60s / 750ms ≈ 78: agent-finish detection must not be relaxed.
     expect(inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(70)
   })
 
@@ -229,8 +217,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(inspectProcess).toHaveBeenCalled()
 
-    // Agent exits with no completion title/hook — only the poll can notice.
-    // Two consecutive idle samples at the 750ms active cadence confirm it.
+    // With no title/hook end signal, sustained process absence must still confirm completion at active cadence.
     foregroundProcess = null
     const callsAtExit = inspectProcess.mock.calls.length
     await vi.advanceTimersByTimeAsync(3_000)
@@ -264,8 +251,7 @@ describe('isAgentProcessInspectionCostly', () => {
     expect(isAgentProcessInspectionCostly(MAC_UA, null)).toBe(false)
   })
 
-  // Why: a bare "ssh:" id names no connection, so it is not evidence the
-  // inspection crosses a link (see remote-execution-host-pty.test.ts).
+  // A bare ssh: prefix proves no host round trip because it names no relay PTY.
   it('does not relax a POSIX pane for an ssh-prefixed id carrying no relay pty id', () => {
     expect(isAgentProcessInspectionCostly(MAC_UA, 'ssh:target-1')).toBe(false)
   })

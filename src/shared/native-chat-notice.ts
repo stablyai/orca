@@ -1,6 +1,4 @@
-// How a chat draws a row the agent did not write in its own words: compaction and clear markers,
-// command output, host status, plans, and warnings or errors. Desktop translates these words (they
-// are its fallbacks); the phone shows them as they are.
+// Shared host/command/plan notice presentation: desktop translates the copy; mobile renders it directly.
 
 import {
   isAgentSessionHostStatusPresentation,

@@ -28,25 +28,20 @@ const BUTTON_GAP = spacing.xs
 const TOUCH_TARGET_HEIGHT = 44
 const TARGET_OVERHANG = (TOUCH_TARGET_HEIGHT - FIELD_MIN_HEIGHT) / 2
 
-/** The editor that replaces a queued card's row: the composer's text field, with an X and a
- *  checkmark beside it, so it needs no line of its own for Cancel and Save. */
 export function MobileNativeChatQueuedMessageEditor({
   editor,
   attribution
 }: {
   editor: MobileQueuedMessageInlineEditor
-  /** The card's "From <name>" line, kept above the text. */
   attribution: string | null
 }): React.JSX.Element {
   const input = useRef<TextInput>(null)
-  // Grows from one line to four, then scrolls inside.
   const contentHeight = useTextInputContentHeight(input, editor.text)
   const [focused, setFocused] = useState(false)
   useEffect(() => {
     input.current?.focus()
   }, [])
   const saveDisabled = editor.saving || !editor.canSave
-  // Saving keeps the light fill behind the spinner; only an unsavable edit dims the checkmark.
   const saveOff = !editor.canSave && !editor.saving
   return (
     <View style={styles.editor} testID="queued-card-editor">
@@ -111,7 +106,6 @@ export function MobileNativeChatQueuedMessageEditor({
   )
 }
 
-/** A 28pt square drawn inside a taller, invisible touch target. */
 function EditorButton({
   label,
   disabled,
@@ -131,7 +125,7 @@ function EditorButton({
   onPress: () => void
   children: React.ReactNode
 }): React.JSX.Element {
-  // Pressable only styles its own box, which here is the invisible target, not the square.
+  // Style the inner square separately because Pressable owns the larger invisible target.
   const [pressed, setPressed] = useState(false)
   return (
     <Pressable
@@ -154,7 +148,6 @@ function EditorButton({
 }
 
 const styles = StyleSheet.create({
-  // No row fill: the field's own fill marks the edit, as the composer's field does in its bar.
   editor: {
     paddingVertical: spacing.sm,
     paddingLeft: spacing.md,
@@ -166,15 +159,14 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: typography.metaSize + spacing.xs
   },
-  // Bottom-aligned: the buttons stay beside the cursor's last line as the field grows. The line
-  // overhangs into the editor's padding so the targets fit inside it at full height.
+  // Bottom-align with the last text line and keep overhanging targets inside editor padding.
   line: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     marginVertical: -TARGET_OVERHANG,
     marginRight: -spacing.sm
   },
-  // One line, then four before it scrolls; a constant border width so focus never shifts the text.
+  // Keep border width constant so focus cannot shift text.
   field: {
     minHeight: FIELD_MIN_HEIGHT,
     maxHeight: FIELD_MAX_HEIGHT,
@@ -189,12 +181,10 @@ const styles = StyleSheet.create({
   fieldFocused: {
     borderColor: colors.accentBlue
   },
-  // As tall as a one-line field plus both overhangs, so the square sits centred on that field.
   target: {
     height: TOUCH_TARGET_HEIGHT,
     justifyContent: 'center'
   },
-  // Each target reaches its neighbours: the field, the middle of the gap, the editor's edge.
   cancelTarget: {
     paddingLeft: FIELD_GAP,
     paddingRight: BUTTON_GAP / 2
@@ -218,7 +208,6 @@ const styles = StyleSheet.create({
   cancelPressed: {
     backgroundColor: colors.bgPanel
   },
-  // The composer's Send and the old Save pill's light fill.
   save: {
     backgroundColor: colors.textPrimary
   },

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { nativeChatTurnFold } from '../../../shared/native-chat-turn-fold'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 

@@ -89,7 +89,11 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
-          if (!notificationStatus) {
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (
+            !notificationStatus ||
+            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+          ) {
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification

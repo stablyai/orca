@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
 
-/**
- * Notice rows reuse one host vocabulary: monitor for local, server for remote,
- * with the worktree card's "Project on …" tooltip copy.
- */
 import { act, cloneElement, type ReactElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -99,8 +95,7 @@ describe('NoticeHostGlyph', () => {
   })
 
   it('does not call a host disconnected before its first probe answers', async () => {
-    // No entry means "not asked yet", not "asked and unreachable" — collapsing the two
-    // painted every remote row destructive between launch and the first probe.
+    // An absent first probe is not evidence of disconnection; avoid destructive styling during launch.
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
@@ -141,18 +136,15 @@ describe('NoticeHostGlyph', () => {
 
     const glyph = (container: HTMLDivElement): string =>
       container.querySelector('svg')?.getAttribute('class') ?? ''
-    // The same vocabulary the run-target rows use: this computer vs a server.
     expect(glyph(local)).toContain('lucide-monitor')
     expect(glyph(remote)).toContain('lucide-server')
-    // Same size and tone tokens, so neither row reads as decorated.
     const tokens = (value: string): string[] =>
       value.split(' ').filter((entry) => !entry.startsWith('lucide'))
     expect(tokens(glyph(local))).toEqual(tokens(glyph(remote)))
   })
 
   it('keeps its copy in the English catalog', async () => {
-    // A key referenced only in the component silently falls back to its inline
-    // default and never reaches translators.
+    // Component-only fallback keys never reach translators.
     expect(en.auto.components.sidebar.NoticeHostGlyph).toMatchObject({
       hostDisconnected: '{{hostName}} disconnected',
       sshHostProject: 'Project on SSH host {{hostName}}',

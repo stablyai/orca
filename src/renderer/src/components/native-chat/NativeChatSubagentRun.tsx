@@ -26,15 +26,7 @@ const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
   unverifiable: 'bg-muted-foreground'
 }
 
-/**
- * The group's identity glyph, fixed across every state — a settling row must not
- * appear to change identity. State is carried by {@link StatusDot} and the tone
- * of the words beside it.
- *
- * SWAP POINT: once the shared category-icon component lands (PR #18760), this
- * whole component becomes that component asked for the `bot` category, which is
- * the same glyph the individual `subAgentActivity` rows use.
- */
+/** Keep the identity glyph fixed as state changes; convey status through the dot and text. */
 function SubagentGlyph(): React.JSX.Element {
   return (
     <span className="flex size-4 shrink-0 items-center justify-center text-chat-foreground-faint">
@@ -43,8 +35,7 @@ function SubagentGlyph(): React.JSX.Element {
   )
 }
 
-/** `pulsing` is separate from `state` so a group that is still working can show
- *  a failed sibling's colour without losing its in-flight cue. */
+/** Keep failure color independent of pulsing so a failed sibling cannot hide ongoing work. */
 export function StatusDot({
   state,
   pulsing = false
@@ -79,8 +70,7 @@ function SubagentElapsed({
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
-/** A roster's entries, one per child. A child with a section is its head: its entry
- *  opens and closes it, and its rows follow the entry. */
+/** Each child entry controls its section; the transcript inserts its rows after the entry. */
 export function NativeChatSubagentEntries({
   agents,
   sections,
@@ -144,20 +134,7 @@ export function NativeChatSubagentEntries({
   )
 }
 
-/** One spawn group: how many children are working, their settled verdict, and
- *  the tokens they consumed. Each child is one entry here; the child's own rows
- *  are never the conversation's. A child the session spawned shows them under its
- *  entry, open while the running session's newest output is part of delegating to
- *  it; the entry is where the reader overrides that. This row draws its entries
- *  through the first open one; the transcript draws that child's rows, then the rest.
- *
- *  Every state is drawn exactly as the journal recorded it. Turn state is NOT
- *  consulted: `spawn_agent` children outlive the turn that spawned them and keep
- *  reporting into this group long after a newer turn opened, so a turn boundary
- *  is a fact about the turn and never evidence that contact with a child was
- *  lost. Only a host can say that, and one does: `CodexSubagentRoster.settleSession`
- *  when the provider goes away, and `staleSubagentRosterRevisions` on the next
- *  journal open when the host itself died mid-flight. */
+/** Trust journal child states: children outlive their spawning turn, and only host/provider settlement proves lost contact. */
 export function NativeChatSubagentRun({
   block,
   open: heldOpen,
@@ -202,9 +179,7 @@ export function NativeChatSubagentRun({
           {verdict}
           {alert === null ? null : ` +${alert}`}
           {clockStartedAt !== null ? (
-            // The row is a live region, and this clock reticks every second: left
-            // exposed it announces a new duration every second and buries the
-            // state changes worth hearing. Readable again once it stops moving.
+            // Hide ticking durations from live announcements; expose them once settled.
             <span aria-hidden={working || undefined}>
               {' · '}
               <SubagentElapsed

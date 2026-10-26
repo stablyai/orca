@@ -2,8 +2,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// The page's module graph: react-native-web's own `Keyboard` (no `metrics`, an inert
-// `addListener`) and the web sibling of the keyboard seam, as the page bundler resolves them.
+// Match page graph: RN Web Keyboard has no metrics and inert listener; web keyboard seam observes shell resize.
 vi.mock('react-native', async () => {
   const React = await import('react')
   const { default: Keyboard }: { default: unknown } =

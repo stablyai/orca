@@ -179,10 +179,7 @@ describe('onboarding feature setup runner', () => {
   })
 
   it('keeps main’s skill selection but skips permissions when the Computer Use helper is unavailable', async () => {
-    // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
-    // all permissions set to not-granted when the helper app is missing (e.g.
-    // a dev build that never ran `pnpm build:computer-macos`). The runner must
-    // not call openSetup in that case, or the IPC handler throws.
+    // Missing helpers report every permission ungranted; do not call openSetup, which would throw.
     const unavailableStatus: ComputerUsePermissionStatusResult = {
       platform: 'darwin',
       helperAppPath: null,

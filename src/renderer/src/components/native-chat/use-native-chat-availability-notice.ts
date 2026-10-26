@@ -7,7 +7,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { inSendOrder } from '../../../../shared/native-chat-send-order'
+import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
@@ -37,8 +37,7 @@ type NoticeSubmission = Pick<
   'clientMessageId' | 'dispatchState' | 'rejection' | 'submittedAt' | 'submittedSequence'
 >
 
-/** Why the newest send was turned away, while that send's own line on screen says so: its row is
- *  loaded and carries the line. */
+/** Return the newest rejection reason only while its loaded message and delivery line are visible. */
 function shownRejectionReason(
   submissions: readonly NoticeSubmission[],
   shownLines: ReadonlyMap<string, unknown>,
@@ -54,9 +53,7 @@ function shownRejectionReason(
     : null
 }
 
-/** The host's verdict on why no chat can start here, as a notice that never holds Send: the
- *  verdict can be wrong while a send would work. Dismissed per verdict, so a changed or returning
- *  one shows again; left out while the chat's failed start or newest send already says it. */
+/** Advisory host verdicts never block Send; dismiss per verdict and omit reasons already explained by a failed start or newest send. */
 export function useNativeChatAvailabilityNotice(input: {
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType

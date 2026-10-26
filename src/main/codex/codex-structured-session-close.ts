@@ -1,6 +1,6 @@
 import { settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
-import type { CodexAppServerConnection } from './codex-app-server-connection-types'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import {
   cancelCodexAcquisitionAttempt,

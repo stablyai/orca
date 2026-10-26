@@ -13,6 +13,7 @@ import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_TYPECHECK_PROJECTS,
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
   planTypecheckBatches,
@@ -133,7 +134,7 @@ describe('workspace package test typecheck', () => {
 })
 
 describe('local and CI compiler selection', () => {
-  it('selects the supported local compiler by default while CI explicitly selects Bun', () => {
+  it('defaults to automatic compiler selection while CI explicitly selects Bun', () => {
     expect(parseTypecheckOptions([]).compiler).toBe('auto')
     const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
     expect(manifest.scripts['typecheck:ci']).toContain('--compiler=bun')
@@ -194,10 +195,14 @@ describe('local and CI compiler selection', () => {
       TYPECHECK_PROJECTS[0]
     ])
     expect(parseTypecheckOptions([]).projects).toEqual(TYPECHECK_PROJECTS)
+    expect(parseTypecheckOptions(['--project=mobile/tsconfig.test.json']).projects).toEqual([
+      MOBILE_TYPECHECK_PROJECTS[1]
+    ])
+    expect(TYPECHECK_PROJECTS).not.toContainEqual(MOBILE_TYPECHECK_PROJECTS[0])
     expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
   })
 
-  it('runs the resolved Bun and refuses to silently fall back when it is missing', () => {
+  it('selects the resolved Bun path and rejects a missing executable', () => {
     expect(
       selectTypecheckCompiler('bun', {
         root: repoRoot,

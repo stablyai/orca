@@ -1,7 +1,4 @@
-// Ordinary messages Orca proves the agent never received, owed to it at most once: derived from the
-// journal on each handover (host only), and carried at the front of the person's next send that
-// opens a turn, for every agent. One is covered by a carrier's `carries` unless that carrier was
-// refused before anything reached the agent. Words only: a stopped message's images are not replayed.
+// Replay proven-unreceived ordinary message text (never images) at the next human turn, at most once. A carrier's carries covers it unless refused before provider delivery; derive from the host journal each handover.
 
 import { readAgentSessionFailureFact, type SubmissionRejectionKind } from './agent-session-failure'
 import type {
@@ -32,8 +29,7 @@ export type OwedStoppedMessage = {
   words: string
 }
 
-/** A person's ordinary message: not a command, a goal, mail another agent sent, or a typed slash
- *  command, which only reads right as the start of a prompt. */
+/** Exclude commands/goals/agent mail and slash commands whose wording only works at the prompt start. */
 function isOrdinaryPersonMessage(
   body: AgentJournalItemBody | null | undefined
 ): body is AgentJournalMessageItem {
@@ -59,8 +55,7 @@ function withdrawnUnwritten(submission: AgentJournalSubmission): boolean {
   )
 }
 
-// Raised by Orca before any byte of a words-only send reached the agent; any other kind may follow
-// a provider write.
+// Only words-only pre-write refusal proves zero bytes reached the agent; other kinds may follow provider writes.
 const REFUSED_BEFORE_WRITE: ReadonlySet<SubmissionRejectionKind> = new Set([
   'queueFull',
   'writeFailed'
@@ -71,8 +66,7 @@ function refusedBeforeWrite(carrier: AgentJournalSubmission): boolean {
   if (carrier.dispatchState !== 'rejected' || carrier.answeredInTurn) {
     return false
   }
-  // Proven unwritten where it was refused: a Stop's withdrawal, a child gone before the write, or a
-  // sign-in Pi checks before recording the prompt.
+  // Accept explicit unwritten proof from Stop, pre-write child exit or Pi sign-in checks.
   if (readAgentSessionFailureFact(carrier.rejection)?.neverReachedAgent === true) {
     return true
   }
@@ -97,8 +91,7 @@ function deliveryBytes(words: string): number {
   return wordsBytes(words) + STOPPED_MESSAGE_FRAMING_BYTES
 }
 
-/** The stopped messages owed to the agent, in the order they were sent. One too large to deliver
- *  beside even a one-letter send is not owed, so it never holds the others back. */
+/** Owe stopped messages in send order; exclude ones too large to fit beside a one-letter send so they cannot block others. */
 export function agentSessionStoppedHistoryOwed(
   journal: StoppedHistoryJournal
 ): OwedStoppedMessage[] {
@@ -141,10 +134,7 @@ function messageWords(body: AgentJournalMessageItem): string {
     .join('\n')
 }
 
-/** One delivery: the newest owed message, and older ones while they fit, in the order sent. With
- *  the send's own words they never exceed what one send can hold (`MAX_PROMPT_BYTES`), so the agent
- *  is handed nothing larger than a send the person could make; if the newest doesn't fit, all stay
- *  owed. It covers every owed message, those left out included, so none arrives after a newer one. */
+/** Deliver newest owed text then older text while total fits MAX_PROMPT_BYTES; if newest cannot fit, all remain owed. Cover even omitted messages so none arrives after newer ones. */
 export type StoppedHistoryDelivery = {
   messages: OwedStoppedMessage[]
   covers: string[]
@@ -181,8 +171,7 @@ export function agentSessionSendDeliversStoppedHistory(
   return persons && isOrdinaryPersonMessage(body)
 }
 
-/** Whether this send can carry stopped messages: words only, so the carried words can never take
- *  it past an agent's limits, which its attachments' unread size could. */
+/** Carry history only on words-only sends; unread attachment size could exceed agent limits. */
 export function agentSessionSendCarriesStoppedHistory(body: AgentJournalMessageItem): boolean {
   return body.blocks.every((block) => block.type === 'text') && messageWords(body).length > 0
 }

@@ -5,9 +5,7 @@ import {
 } from './structured-agent-session-launch-registry'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
-// Why: coalescing stops one user action delivered twice racing into two chats. Any other action, a
-// failed or unconfirmed launch, or a Retry/re-check of one is not that race: a new start opens a new
-// chat carrying its own text. A resume keeps holding: the host refuses a second adoption.
+// Coalesce re-delivery of one action only. Other actions and failed/unconfirmed retries open independent chats/text; conversation resumes still hold because hosts refuse duplicate adoption.
 function holdsLaunchIdentity(
   state: StructuredLaunchState,
   requestId?: AgentLaunchRequestId

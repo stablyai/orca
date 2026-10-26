@@ -30,7 +30,6 @@ describe('resolveSshHostRemoval', () => {
       ['repo-a::/wt/feature', 'repo-b::/wt/x'].sort()
     )
     expect(result.hostRepoIds.sort()).toEqual(['repo-a', 'repo-b'])
-    // 2 child worktrees + 2 root repos.
     expect(result.workspaceCount).toBe(4)
     expect(result.isConnected).toBe(false)
   })
@@ -58,22 +57,21 @@ describe('resolveSshHostRemoval', () => {
 
   it('dedupes duplicate repo and worktree rows so the count is not inflated', () => {
     const result = resolveSshHostRemoval({
-      // Store transiently holds duplicate rows (e.g. mid host merge).
+      // Model transient duplicate rows during host merge.
       targetId: 'ssh-1',
       repos: [
         { id: 'repo-a', connectionId: 'ssh-1' },
-        { id: 'repo-a', connectionId: 'ssh-1' } // duplicate repo row
+        { id: 'repo-a', connectionId: 'ssh-1' }
       ],
       worktrees: [
         { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false },
-        { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false }, // duplicate
-        { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false } // triplicate
+        { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false },
+        { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false }
       ],
       sshConnectionStates: new Map()
     })
     expect(result.hostRepoIds).toEqual(['repo-a'])
     expect(result.workspaceWorktreeIds).toEqual(['repo-a::/wt/x'])
-    // 1 root repo + 1 unique child worktree.
     expect(result.workspaceCount).toBe(2)
   })
 })

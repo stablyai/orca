@@ -10,6 +10,7 @@ import {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
+import { isValidBrowserGrabRect } from '../../shared/browser-annotation-viewport-report'
 import {
   isBrowserSiteColorScheme,
   type BrowserPageSiteDisplay
@@ -33,6 +34,8 @@ function isPagePoint(value: unknown): value is { x: number; y: number } {
 
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:closeDevTools')
+  ipcMain.removeHandler('browser:setDevToolsDockBounds')
   ipcMain.removeHandler('browser:addWordToDictionary')
   ipcMain.removeHandler('browser:copyImageAt')
   ipcMain.removeHandler('browser:setViewportOverride')
@@ -44,6 +47,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:getPageSiteDisplay')
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
+  ipcMain.removeHandler('browser:setPageAudioMuted')
 
   // Page/session operations exclude document previews.
   const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
@@ -96,14 +100,50 @@ export function registerBrowserGuestViewHandlers(): void {
   )
 
   ipcMain.handle(
+    'browser:setPageAudioMuted',
+    (event, args: { browserPageId: string; muted: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || typeof args.muted !== 'boolean') {
+        return false
+      }
+      guest.setAudioMuted(args.muted)
+      return true
+    }
+  )
+
+  ipcMain.handle(
     'browser:openDevTools',
-    (event, args: { browserPageId: string; inspectAt?: unknown }) => {
+    (event, args: { browserPageId: string; inspectAt?: unknown; detach?: unknown }) => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
       return browserManager.openDevTools(
         args.browserPageId,
-        isPagePoint(args.inspectAt) ? args.inspectAt : undefined
+        isPagePoint(args.inspectAt) ? args.inspectAt : undefined,
+        { detach: args.detach === true }
+      )
+    }
+  )
+
+  ipcMain.handle('browser:closeDevTools', (event, args: { browserPageId: unknown }): void => {
+    if (isTrustedBrowserRenderer(event.sender) && typeof args?.browserPageId === 'string') {
+      browserManager.closeDevTools(args.browserPageId)
+    }
+  })
+
+  ipcMain.handle(
+    'browser:setDevToolsDockBounds',
+    (
+      event,
+      args: { browserPageId: unknown; bounds: unknown; snapshot?: unknown }
+    ): Promise<string | null> | null => {
+      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
+        return null
+      }
+      return browserManager.setDevToolsDockBounds(
+        args.browserPageId,
+        isValidBrowserGrabRect(args.bounds) ? args.bounds : null,
+        args.snapshot === true
       )
     }
   )

@@ -155,7 +155,6 @@ export function resultOf(response: unknown): Record<string, unknown> {
   return response.result
 }
 
-/** The `id` of a row a receipt carries. */
 export function idOf(row: unknown): string {
   if (!isRecord(row) || typeof row.id !== 'string') {
     throw new Error(`expected a row with an id, got ${JSON.stringify(row)}`)

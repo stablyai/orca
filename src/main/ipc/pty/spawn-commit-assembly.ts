@@ -9,7 +9,7 @@ import { markNativeWindowsConptyPty } from '../../runtime/terminal-model-query-a
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import type { PtySpawnTiming } from '../pty-spawn-timing'
+import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {
   codexReattachedHomeRouteField,
@@ -71,6 +71,8 @@ export type PtySpawnCommitState = {
   codexSelectionTarget: CodexAccountSelectionTarget
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  /** Before the provider started anything, so no output of this spawn's process predates it. */
+  spawnRequestedAt?: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null

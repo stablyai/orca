@@ -3,20 +3,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript-api'
 
-/**
- * The host-route patterns the mobile app navigates to, read from its navigation call sites.
- *
- * Call sites, not every `/h/...` string the sources contain: a route also appears in the screen
- * that mounts it, in a `pathname === ...` comparison and in a template type, and harvesting those
- * makes every declared route "reachable" through its own mount. A census built on that answers
- * "is this route declared", which it already knows, instead of "does anything hop to it".
- *
- * Resolved one step past the literal, because the two hops that matter are not written as one:
- * the files explorer is pushed as `{ pathname: descriptor.pathname }` and the preview as
- * `push(createMobileFilePreviewHref(...))`. So a local binding or a call is followed to the
- * function that returns the pathname. A target it still cannot read is reported rather than
- * dropped.
- */
+// Collect navigation call targets, not every /h literal: counting mounts/comparisons/types would prove declarations reach themselves.
+// Follow one binding/builder step for descriptor.pathname and preview hrefs; report unreadable targets rather than shrinking census silently.
 
 const MOBILE_ROOT = join(fileURLToPath(new URL('../..', import.meta.url)), 'mobile')
 
@@ -43,7 +31,6 @@ function each(node, visit) {
   ts.forEachChild(node, (child) => each(child, visit))
 }
 
-/** Past the annotations a href picks up on its way to the call. */
 function unwrap(node) {
   let current = node
   while (
@@ -247,13 +234,7 @@ function resolveTarget(expression, builders, bound) {
   return found
 }
 
-/**
- * Every host route the app navigates to, and the call sites whose target could not be read.
- *
- * `unresolved` is mostly navigation away from `/h` altogether (pairing, settings) and the shell's
- * own forwarding of a href it was handed; it is returned rather than swallowed so a new indirection
- * is visible instead of quietly shrinking the census.
- */
+// Return unresolved calls too (usually non-host navigation/shell forwarding) so new indirection cannot silently shrink route census.
 export function mobileAppNavigationTargets() {
   const parsed = parseSources()
   const builders = routeBuilders(parsed)

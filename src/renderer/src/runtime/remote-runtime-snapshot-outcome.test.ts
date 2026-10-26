@@ -15,9 +15,7 @@ import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// Why: the client used to collapse every unusable snapshot reply to `null`, so a slow
-// host and a genuinely empty pane were indistinguishable. These tests pin the reason
-// each reply now carries, and pin that the legacy `serializeBuffer` result is unchanged.
+// Unusable snapshots once collapsed to null, hiding slow-host versus empty-pane differences. Pin reasons and unchanged legacy serializeBuffer output.
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void

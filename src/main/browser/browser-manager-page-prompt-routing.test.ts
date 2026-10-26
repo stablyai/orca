@@ -71,6 +71,7 @@ describe('browserManager page prompt routing', () => {
     const guest = {
       id: 107,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => 'https://trusted.example/home'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -162,6 +163,7 @@ describe('browserManager page prompt routing', () => {
     const guest = {
       id: 108,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -206,6 +208,7 @@ describe('browserManager page prompt routing', () => {
     const guest = {
       id: 109,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => ''),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,

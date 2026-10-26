@@ -1,19 +1,6 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-/**
- * Subscriber-driven daemon attach (never-activated tab ingestion).
- *
- * Invariant: on a remote-server host, a daemon-backed terminal whose tab was
- * never activated in the host UI must still stream to paired clients and be
- * readable via `terminal read`. The daemon only emits data for sessions this
- * app has ATTACHED, and attach historically happened only via renderer pane
- * mount — so a never-activated tab produced blank paired panes and empty CLI
- * tails while the PTY was alive.
- *
- * Harness: real OrcaRuntimeService + real TERMINAL_METHODS multiplex handler,
- * with an injected pty controller modeling a daemon provider whose data events
- * are deliverable ONLY after attach(id). No window is ever attached — every
- * assertion also holds for headless `orca serve`.
- */
+/** Paired subscriptions must attach never-activated daemon sessions so headless terminal read/streams receive bytes.
+ * Exercise real runtime/multiplex with controller data gated on attach; no renderer is present. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'

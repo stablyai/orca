@@ -11,6 +11,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore, storeRepo } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -24,7 +25,6 @@ const ALIAS = 'repo::G:/git/example'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const TAB = `tab::${LEAF}`
 
-/** Uses stable tab and leaf IDs so both path spellings must recover the same terminal. */
 function snapshot(
   worktree = WORKTREE,
   ptyId = 'pty-existing',
@@ -61,7 +61,7 @@ function snapshot(
   }
 }
 
-/** Keeps the renderer authoritative so alias tests cannot pass through saved-session hydration. */
+/** Keep renderer authority so alias tests cannot pass through saved-session hydration. */
 function liveRuntime(
   worktree = WORKTREE,
   additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = []
@@ -72,7 +72,6 @@ function liveRuntime(
   return runtime
 }
 
-/** Publishes tab, leaf, and mobile views together to match an actual renderer graph update. */
 function publishGraph(
   runtime: OrcaRuntimeService,
   worktree = WORKTREE,
@@ -104,7 +103,6 @@ function publishGraph(
   })
 }
 
-/** registerPty as the host's spawn commit runs it: main's layout on the repo's host binds the pane first. */
 function registerBoundPty(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -133,12 +131,13 @@ describe('session tab workspace path aliases', () => {
   )(
     'keeps live alias adoption within the execution host: %j',
     async ({ connectionId, ptyConnectionId, ownsSession, binding }) => {
-      const repo = { id: 'repo', path: 'G:\\git\\example', connectionId }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture only needs the registered repository's execution host.
-      const runtime = new OrcaRuntimeService({
-        getRepo: () => repo,
-        getRepos: () => [repo]
-      } as never)
+      const repo = storeRepo({ id: 'repo', path: 'G:\\git\\example', connectionId })
+      const runtime = new OrcaRuntimeService(
+        partialRuntimeStore({
+          getRepo: () => repo,
+          getRepos: () => [repo]
+        })
+      )
       runtime.attachWindow(1)
       const ptyId = ptyConnectionId
         ? toAppSshPtyId(ptyConnectionId, 'pty-existing')
@@ -187,17 +186,18 @@ describe('session tab workspace path aliases', () => {
   )(
     'keeps runtime aliases in the owning environment without trusting nested SSH names: %j',
     async ({ ptyId, ownsSession, binding }) => {
-      const repo = {
+      const repo = storeRepo({
         id: 'repo',
         path: 'G:\\git\\example',
         executionHostId: 'runtime:env-a',
         connectionId: 'nested-target'
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the runtime-owned repo row; no remote services are called.
-      const runtime = new OrcaRuntimeService({
-        getRepo: () => repo,
-        getRepos: () => [repo]
-      } as never)
+      })
+      const runtime = new OrcaRuntimeService(
+        partialRuntimeStore({
+          getRepo: () => repo,
+          getRepos: () => [repo]
+        })
+      )
       runtime.attachWindow(1)
       runtime.registerPty(ptyId, WORKTREE, null, { tabId: 'tab', leafId: LEAF })
       if (binding !== 'unpublished') {
@@ -211,8 +211,7 @@ describe('session tab workspace path aliases', () => {
         const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
         expect(listed.worktree).toBe(WORKTREE)
         if (ORCA_LAYOUT_OWNER_IS_MAIN && binding === 'unpublished') {
-          // A paired server's workspace: its terminals run on that server, which publishes them;
-          // no local record can stand for one, so nothing is rescued from this host's registry.
+          // Server-owned terminals cannot be rescued from this desktop's local registry.
           expect(listed.tabs).not.toContainEqual(expect.objectContaining({ id: TAB }))
         } else {
           expect(listed.tabs).toContainEqual(expect.objectContaining({ id: TAB }))
@@ -229,12 +228,13 @@ describe('session tab workspace path aliases', () => {
   )
 
   it('refuses alias adoption when repository rows disagree about the execution host', async () => {
-    const local = { id: 'repo', path: 'G:\\git\\example' }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: duplicate repo rows model an ambiguous host without any external services.
-    const runtime = new OrcaRuntimeService({
-      getRepo: () => local,
-      getRepos: () => [local, { ...local, connectionId: 'ssh-host' }]
-    } as never)
+    const local = storeRepo({ id: 'repo', path: 'G:\\git\\example' })
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getRepo: () => local,
+        getRepos: () => [local, { ...local, connectionId: 'ssh-host' }]
+      })
+    )
     runtime.attachWindow(1)
     publishGraph(runtime)
     await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(
@@ -267,8 +267,7 @@ describe('session tab workspace path aliases', () => {
     'recovers a surviving renderer PTY without pinning an empty alias (discovered during refresh: %s)',
     async (duringRefresh) => {
       // Why a store: main's layout binds the surviving pane in the store's workspace session.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no repository rows; the fixture binds the session methods main's layout reads.
-      const runtime = new OrcaRuntimeService({ getRepos: () => [] } as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore({ getRepos: () => [] }))
       runtime.attachWindow(1)
       const register = async () => {
         registerBoundPty(runtime, 'pty-existing', null)
@@ -339,8 +338,7 @@ describe('session tab workspace path aliases', () => {
     runtime.cleanupSubscriptionsForConnection('alias-connection')
   })
 
-  // Why: clients file frames by their `worktree`, so one stream switching spellings splits a
-  // workspace's tabs across two keys.
+  // Stream frames must use one workspace spelling or clients split tabs across alias keys.
   it('names an early alias subscriber stream by one spelling for its whole life', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
@@ -440,14 +438,15 @@ describe('session tab workspace path aliases', () => {
           ]
         }
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only repository and saved-session reads are reached; no process controller or filesystem scan is installed.
-      const runtime = new OrcaRuntimeService({
-        getRepo: (id: string) => (id === repo.id ? repo : undefined),
-        getRepos: () => [repo],
-        getWorkspaceSessionHostIds: () => ['local', 'ssh:ssh-host'],
-        getWorkspaceSession: (hostId = 'local') =>
-          hostId === persistedHostId ? session : getDefaultWorkspaceSession()
-      } as never)
+      const runtime = new OrcaRuntimeService(
+        partialRuntimeStore({
+          getRepo: (id: string) => (id === repo.id ? repo : undefined),
+          getRepos: () => [repo],
+          getWorkspaceSessionHostIds: () => ['local', 'ssh:ssh-host'],
+          getWorkspaceSession: (hostId = 'local') =>
+            hostId === persistedHostId ? session : getDefaultWorkspaceSession()
+        })
+      )
 
       const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
 
@@ -469,9 +468,10 @@ describe('session tab workspace path aliases', () => {
   })
 
   it('refuses alias adoption of an unattributed remote PTY for a local repository', async () => {
-    const repo = { id: 'repo', path: 'G:\\git\\example' }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture only needs the local repository row.
-    const runtime = new OrcaRuntimeService({ getRepo: () => repo, getRepos: () => [repo] } as never)
+    const repo = storeRepo({ id: 'repo', path: 'G:\\git\\example' })
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({ getRepo: () => repo, getRepos: () => [repo] })
+    )
     runtime.attachWindow(1)
     publishGraph(runtime, WORKTREE, [], toRemoteRuntimePtyId('term_1'))
     await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(

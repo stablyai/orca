@@ -22,8 +22,7 @@ import { isOverlayPageRoute } from '../../src/new-workspace/overlay-page-route'
 const MIN_DETAIL_WIDTH = 320
 const RESIZE_EDGE_WIDTH = 24
 
-// Clamp a sidebar width to the bounds and to the current window, so a width
-// saved on a larger device can't starve the detail pane on a narrower one.
+// Clamp restored sidebar width to current window so a smaller device retains usable detail space.
 function clampSidebarToWindow(width: number, windowWidth: number): number {
   const hardMax = Math.max(
     HOST_SIDEBAR_MIN_WIDTH,
@@ -41,15 +40,13 @@ export default function HostGroupLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
 
-  // Refs keep the once-created PanResponder reading live values without
-  // re-creating its handlers on every width/window change.
+  // Refs keep once-created PanResponder handlers reading current widths.
   const widthRef = useRef(sidebarWidth)
   widthRef.current = sidebarWidth
   const windowWidthRef = useRef(windowWidth)
   windowWidthRef.current = windowWidth
   const dragStartRef = useRef(sidebarWidth)
 
-  // Restore the user's last sidebar width, clamped to the current window.
   useEffect(() => {
     let stale = false
     void loadHostSidebarWidth().then((saved) => {
@@ -62,8 +59,7 @@ export default function HostGroupLayout() {
     }
   }, [])
 
-  // Re-clamp when the window shrinks (fold, rotation, split-screen) so the
-  // detail pane keeps at least MIN_DETAIL_WIDTH.
+  // Re-clamp on fold/rotation/split-screen to preserve MIN_DETAIL_WIDTH.
   useEffect(() => {
     setSidebarWidth((current) => clampSidebarToWindow(current, windowWidth))
   }, [windowWidth])
@@ -79,20 +75,15 @@ export default function HostGroupLayout() {
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
 
-  // Why: the base host route's detail pane is only a placeholder, so a hidden
-  // sidebar there would leave nothing useful.
+  // Base host detail is a placeholder; hiding its sidebar would leave nothing useful.
   useEffect(() => {
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
     }
   }, [detailHasContent, showSidebar])
 
-  // Why: the resizer lives on a dedicated edge handle (a leaf overlay at the
-  // sidebar's right border), NOT on the sidebar container. On Android a child
-  // ScrollView/FlatList claims the native touch responder, so a parent-View
-  // PanResponder never sees the move events and the drag silently no-ops; a
-  // dedicated handle on top of the content captures the gesture on both
-  // platforms. It claims on start (capture too) since nothing sits under it.
+  // Use an overlaid leaf drag handle: Android ScrollView/FlatList captures touches before a parent PanResponder.
+  // Claim start/capture because nothing lies beneath the handle; keep it off the sidebar container.
   const resizer = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -115,9 +106,7 @@ export default function HostGroupLayout() {
     })
   ).current
 
-  // The detail Stack stays at a stable position in the tree across width
-  // changes so a fold/rotation doesn't remount the navigator and reset the
-  // navigation stack — only the sidebar pane toggles in and out.
+  // Keep detail Stack at a stable tree position so fold/rotation cannot remount navigation.
   return (
     <HostProtocolGate hostId={hostId} transparentWhilePending={overlayRoute}>
       <View style={[styles.row, overlayRoute && styles.transparent]}>
@@ -128,7 +117,7 @@ export default function HostGroupLayout() {
               hostId={hostId}
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
             />
-            {/* Dedicated drag handle straddling the right border — see resizer note. */}
+            {/* Edge drag handle captures Android gestures above the list. */}
             <View style={styles.resizeHandle} {...resizer.panHandlers} />
           </View>
         ) : null}
@@ -159,8 +148,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
   },
-  // Invisible grab strip over the sidebar's right edge. Absolute + elevated so it
-  // sits above the worktree list and reliably owns the drag on Android.
+  // Elevated edge strip must sit above list to own Android drags.
   resizeHandle: {
     position: 'absolute',
     top: 0,

@@ -317,8 +317,7 @@ function applyMissingEnglishEntries(catalog, missing) {
   return changed
 }
 
-// Why: #12113 — parity checks pass while repair-locale-catalog rewrites translated generic terms
-// back to English, so drift only surfaces when someone regenerates the catalog.
+// Check repair policy too: parity passed while repair rewrote translated generic terms into English (#12113).
 export function collectGenericTermRegressions(enEntries, localeEntries, localeName) {
   const renderings = canonicalGenericRenderings(localeName)
   if (renderings.length === 0) {
@@ -363,8 +362,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
     collectLocaleParityIssues(enCatalog, localeCatalog)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
 
-  // Why: feature PRs own English declarations; absent target leaves deliberately
-  // use i18next's existing English fallback until a localization PR supplies them.
+  // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
   console.log(
     `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} translated, ${missingInLocale.length} missing.`
   )
@@ -461,8 +459,7 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   if (interpolationMismatches.length > 0) {
     console.log(formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20)))
   }
-  // Why: absent plugin translations safely fall back to English, but a present
-  // value with different variables can render broken or misleading UI.
+  // Missing plugin translation can fall back; mismatched variables in present value can mislead or break UI.
   return interpolationMismatches.length > 0 ? 1 : 0
 }
 

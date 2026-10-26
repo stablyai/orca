@@ -60,9 +60,7 @@ export function useWorktreeListKeyboardNavigation(args: {
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
-      // Why: cycle over the rows the sidebar actually rendered — collapsing a group
-      // means "not now", and a rebuilt near-copy would drift from what is on screen
-      // (host sections, pinned placement, folder workspaces).
+      // Cycle actual rendered rows so collapse, pins, hosts and folder workspaces stay aligned with the screen.
       const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
       const anchorWorktreeId = resolveCycleAnchorWorktreeId({

@@ -33,10 +33,7 @@ export function getRevealInFileManagerLabel(): string {
   }
 }
 
-/**
- * The host that owns a workspace file. A route that reads as local is confirmed against the
- * catalog row, because a server workspace whose tab carries no owner stamp also reads as local.
- */
+/** Resolve file owner from route and catalog: an unstamped server tab can appear local by route alone. */
 export function getWorkspaceFileRevealOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined,

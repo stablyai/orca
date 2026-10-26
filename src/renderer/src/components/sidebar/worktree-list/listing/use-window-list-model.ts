@@ -6,7 +6,6 @@ import { useSidebarWorktreeSortOrder } from './use-sort-order'
 import { useOrderHeldWhileEngaged } from './use-order-hold'
 import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 
-/** The list the window derives from its own store; the only one a switch-off build has. */
 export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarListModel {
   const { filterState, sortBy, repoMap, repos, defaultHostId } = args
   const sortedIds = useOrderHeldWhileEngaged(

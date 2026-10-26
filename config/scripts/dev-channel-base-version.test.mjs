@@ -10,8 +10,7 @@ describe('dev channel base version', () => {
     expect(resolveDevChannelBaseVersion('1.4.168', [])).toBe('1.4.168')
   })
 
-  // The bug this exists for: main sat at 1.4.165-rc.0 for twenty hours while three
-  // stables shipped, so hourlies claimed a version their users had already passed.
+  // Stale main RC claimed 1.4.165 after three stable patches had already shipped.
   it('climbs past stables that shipped while main stood still', () => {
     expect(
       resolveDevChannelBaseVersion('1.4.165-rc.0', [
@@ -23,26 +22,20 @@ describe('dev channel base version', () => {
     ).toBe('1.4.168')
   })
 
-  // Why +1 on a stable but not on a prerelease: 1.4.167 is spent, so the next dev
-  // build is 1.4.168. But 1.4.168-rc.1 means 1.4.168 is still being built toward,
-  // which is what main holds — claiming 1.4.169 would jump a release nobody cut.
+  // Stable 1.4.167 is spent; RC 1.4.168 still targets 1.4.168, not an uncut 1.4.169.
   it('takes the patch above a shipped stable and holds at an open prerelease', () => {
     expect(resolveDevChannelBaseVersion('1.4.167', ['v1.4.167'])).toBe('1.4.168')
     expect(resolveDevChannelBaseVersion('1.4.168-rc.1', ['v1.4.168-rc.1'])).toBe('1.4.168')
   })
 
-  // Why max and not most-recent: a hotfix on an old line published today would
-  // otherwise drag every subsequent hourly backwards.
+  // Recent old-line hotfix must not drag hourly versions backward; take max.
   it('reads the highest tag, not the last one listed', () => {
     expect(resolveDevChannelBaseVersion('1.4.160', ['v1.4.167', 'v1.3.99', 'v1.4.120'])).toBe(
       '1.4.168'
     )
   })
 
-  // 2026-09-14: v1.4.202's GitHub release was deleted for a bug after hourlies
-  // had already shipped as 1.4.203. Without the channel tags as a floor, the
-  // next hourlies would have been 1.4.202-hourly, which electron-updater will
-  // not install over 1.4.203-hourly.
+  // Deleted v1.4.202 release once reset hourlies below installed 1.4.203; channel tags retain the floor.
   it('does not drop below an already-published channel version', () => {
     expect(
       resolveDevChannelBaseVersion('1.4.197', [
@@ -57,8 +50,7 @@ describe('dev channel base version', () => {
     expect(resolveDevChannelBaseVersion('1.5.0-rc.0', ['v1.4.167'])).toBe('1.5.0')
   })
 
-  // Why skipped rather than fatal: the main repo carries legacy tags, and one
-  // unparseable entry must not fail every hourly build.
+  // Legacy unparseable tags must not fail every hourly build.
   it('ignores tags it cannot parse', () => {
     expect(resolveDevChannelBaseVersion('1.4.160', ['nightly', '', 'v1.4.167', 'latest'])).toBe(
       '1.4.168'

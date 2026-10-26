@@ -62,10 +62,7 @@ export type AgentLaunchSettings = {
   autoPermissionMode?: true
   /** With Auto on: the combined mode of agents Auto doesn't cover. Absent from older hosts. */
   nonAutoPermissionMode?: 'manual' | 'yolo' | 'mixed'
-  /**
-   * The stored permission and each agent's own Arguments without Orca's flag. `agentDefaultArgs`
-   * keeps the flag for older clients. Absent from hosts that store the permission as text.
-   */
+  /** Stored permission and user Arguments exclude Orca flags; agentDefaultArgs retains them for older clients. Absent on hosts storing permissions as text. */
   agentPermission?: {
     default: AgentPermissionChoice
     overrides: Partial<Record<TuiAgent, AgentPermissionChoice>>

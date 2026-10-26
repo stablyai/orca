@@ -138,8 +138,6 @@ export function useGitLabPrimaryActions(
     }
     setCommentSubmitting(true)
     try {
-      // Why: the IPC for issue comments takes `number`, MR takes `iid`.
-      // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
           ? await gitLabApiFor(repoSelector).addMRComment({

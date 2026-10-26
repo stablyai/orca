@@ -51,7 +51,6 @@ type Harness = {
 
 let now = 1_000
 
-/** The delivery policy only asks a window whether it is focused. */
 function makeFocusedWindowStub(): BrowserWindow {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only isFocused(); a full BrowserWindow cannot be constructed outside Electron.
   return { isFocused: () => true } as unknown as BrowserWindow
@@ -143,7 +142,6 @@ describe('createNotificationDeliveryService', () => {
     )
     expect(harness.deliverNative).not.toHaveBeenCalled()
 
-    // Other machines, and requests whose machine is unknown, still notify.
     expect(
       service.dispatch(
         makeRequest({ notificationSourceId: 'local', worktreeId: 'wt-2', worktreeLabel: 'wt-2' })
