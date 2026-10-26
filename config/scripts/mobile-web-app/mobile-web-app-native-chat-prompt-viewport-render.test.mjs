@@ -82,9 +82,10 @@ async function openPrompt(viewport, query = '') {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${origin}/${query}`)
-  await page
-    .getByText(query.includes('short') ? 'Continue?' : PROMPT_QUESTION, { exact: true })
-    .waitFor()
+  const prompt = query.includes('terminal')
+    ? page.getByRole('button', { name: 'Answer in terminal' })
+    : page.getByText(query.includes('short') ? 'Continue?' : PROMPT_QUESTION, { exact: true })
+  await prompt.waitFor()
   return { page, errors }
 }
 
@@ -187,6 +188,47 @@ const INSET_CASES = [
 ]
 
 describeRender('native chat question cards in a constrained viewport', () => {
+  it.each([
+    { width: 375, height: 350, keyboard: 0, bottom: 0, chrome: 0 },
+    { width: 375, height: 650, keyboard: 300, bottom: 34, chrome: 88 }
+  ])(
+    'keeps terminal-only prompts above the composer at $height with keyboard $keyboard',
+    async ({ width, height, keyboard, bottom, chrome }) => {
+      const { page, errors } = await openPrompt(
+        { width, height },
+        `?terminal&keyboard=${keyboard}&bottom=${bottom}&chrome=${chrome}`
+      )
+      try {
+        const button = page.getByRole('button', { name: 'Answer in terminal' })
+        const layout = await button.evaluate((node) => {
+          const card = node.parentElement.getBoundingClientRect()
+          const composer = document
+            .querySelector('[data-testid="native-chat-composer-inset"]')
+            .getBoundingClientRect()
+          return {
+            top: card.top,
+            bottom: card.bottom,
+            buttonBottom: node.getBoundingClientRect().bottom,
+            composerTop: composer.top,
+            documentHeight: document.documentElement.scrollHeight
+          }
+        })
+        await recordLayout(page, `terminal-${height}-keyboard-${keyboard}`, layout)
+        expect(
+          layout.bottom,
+          'the non-scrollable terminal card clears the composer'
+        ).toBeLessThanOrEqual(layout.composerTop)
+        expect(layout.buttonBottom).toBeLessThanOrEqual(layout.composerTop)
+        expect(layout.documentHeight).toBeLessThanOrEqual(height)
+        await button.click()
+        expect(await page.evaluate(() => globalThis.__orcaPromptViewportTerminalOpens)).toBe(1)
+        expect(errors).toEqual([])
+      } finally {
+        await page.close()
+      }
+    }
+  )
+
   it.each([24, 43, 45])(
     'accounts for question tabs with %i units left for the body',
     async (bodySpace) => {

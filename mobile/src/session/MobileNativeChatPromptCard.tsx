@@ -98,7 +98,9 @@ export function MobileNativeChatPromptCard({
   // Hide without remounting so a collapsed prompt keeps partial selections.
   return (
     <>
-      <View style={[ask && styles.ask, collapsedPrompt && styles.collapsed]}>{card}</View>
+      <View style={[ask && !requiresTerminal && styles.ask, collapsedPrompt && styles.collapsed]}>
+        {card}
+      </View>
       {collapsedPrompt ? (
         <MobileNativeChatPromptStrip
           title={collapsedPrompt.title}

@@ -70,6 +70,10 @@ function PromptViewportFixture() {
           onComposerTextChange={setDraft}
           agent="claude"
           ask={prompt}
+          askRequiresTerminal={params.has('terminal')}
+          onAnswerInTerminal={() => {
+            globalThis.__orcaPromptViewportTerminalOpens = (globalThis.__orcaPromptViewportTerminalOpens ?? 0) + 1
+          }}
           askKey="fixture-ask"
           onAnswerAsk={async (_, selections) => {
             globalThis.__orcaPromptViewportAnswers = selections
