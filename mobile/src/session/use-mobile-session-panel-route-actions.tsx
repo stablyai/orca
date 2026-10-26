@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
-import { getCachedWorktrees } from '../cache/worktree-cache'
+import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   useWorkspaceExecutionHost,
@@ -16,7 +15,15 @@ import {
   activateMobileSessionTab,
   setPendingCrossWorktreeTabTarget
 } from './mobile-session-tab-activation'
-import { recentCardSnapshotTabs } from './mobile-terminal-tab-agent'
+import {
+  recentCardSnapshotTabs,
+  subscribeCatalogWorktreesForTabStatus
+} from './mobile-terminal-tab-agent'
+import {
+  isUnpublishedSnapshot,
+  recentCardWorktrees,
+  type RecentCardWorktree
+} from './session-tab-catalog-agent-status'
 import {
   getVisibleRecentSessionCards,
   readAllRecentSessionCardsSync,
@@ -32,45 +39,6 @@ import {
   panelRouteDescriptor
 } from './session-panel-host'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
-
-type RecentCardWorktree = {
-  worktreeId: string
-  displayName?: string
-  isArchived?: boolean
-}
-
-function recentCardWorktrees(rows: readonly unknown[] | undefined): RecentCardWorktree[] {
-  return (rows ?? []).flatMap((row) =>
-    typeof row === 'object' &&
-    row !== null &&
-    'worktreeId' in row &&
-    typeof row.worktreeId === 'string' &&
-    row.worktreeId.length > 0
-      ? [
-          {
-            worktreeId: row.worktreeId,
-            displayName:
-              'displayName' in row && typeof row.displayName === 'string'
-                ? row.displayName
-                : undefined,
-            isArchived:
-              'isArchived' in row && typeof row.isArchived === 'boolean'
-                ? row.isArchived
-                : undefined
-          }
-        ]
-      : []
-  )
-}
-
-function isUnpublishedSnapshot(snapshot: unknown): boolean {
-  return (
-    typeof snapshot === 'object' &&
-    snapshot !== null &&
-    'publicationEpoch' in snapshot &&
-    snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-  )
-}
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const executionHost = useWorkspaceExecutionHost()
@@ -220,25 +188,29 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   const recentCardsPollInFlightRef = useRef(false)
   const [, setRecentCardsRevision] = useState(0)
   useEffect(() => subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1)), [])
+  useEffect(
+    () => subscribeCatalogWorktreesForTabStatus(() => setRecentCardsRevision((rev) => rev + 1)),
+    []
+  )
   const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
     () => recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
   )
   useEffect(() => {
-    if (
-      !client ||
-      connState !== 'connected' ||
-      (!showHeaderMoreActions && !showRecentSessionCards)
-    ) {
+    if (!client || connState !== 'connected') {
       return
     }
     let cancelled = false
     const pollRecentCards = async () => {
       let catalogRows: readonly unknown[] | undefined = getCachedWorktrees(hostId) ?? undefined
+      recentCardWorktrees(catalogRows)
       try {
         const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
         const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
-        if (catalog?.accepted) {
+        if (catalog?.accepted && Array.isArray(catalog.value.worktrees)) {
           catalogRows = catalog.value.worktrees
+          if (hostId) {
+            setCachedWorktrees(hostId, catalog.value.worktrees, { proven: true })
+          }
           const next = recentCardWorktrees(catalogRows)
           if (next.length > 0) {
             setRecentCardsWorktrees(next)
@@ -247,7 +219,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       } catch {
         // A refused catalog leaves the cached rows in place.
       }
-      if (!hostId || cancelled) {
+      if (!hostId || cancelled || (!showHeaderMoreActions && !showRecentSessionCards)) {
         return
       }
       const ids = Array.from(
@@ -255,7 +227,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           readAllRecentSessionCardsSync()
             .filter(
               (item) =>
-                item.hostId === hostId && (item.worktreeId !== worktreeId || sessionTabs.length === 0)
+                item.hostId === hostId &&
+                (item.worktreeId !== worktreeId || sessionTabs.length === 0)
             )
             .map((item) => item.worktreeId)
         )
@@ -266,10 +239,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           const snapshot = !cancelled && reply.ok ? sessionTabsListRead.interpret(reply) : null
           const liveTabs =
             snapshot !== null && !isUnpublishedSnapshot(snapshot)
-              ? recentCardSnapshotTabs(snapshot, {
-                  worktreeId: targetId,
-                  worktrees: catalogRows
-                })
+              ? recentCardSnapshotTabs(snapshot, { worktreeId: targetId, worktrees: catalogRows })
               : null
           if (liveTabs !== null) {
             reconcileRecentSessionCardsForWorktree({
@@ -295,9 +265,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       }
     }
     void tick()
-    const timer = setInterval(() => {
-      void tick()
-    }, 2000)
+    const timer = setInterval(() => void tick(), 2000)
     return () => {
       cancelled = true
       clearInterval(timer)

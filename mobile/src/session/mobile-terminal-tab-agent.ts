@@ -5,6 +5,14 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import {
+  clearCatalogWorktreesForTabStatusForTests,
+  reconcileTerminalAgentStatusWithCatalog,
+  setCatalogWorktreesForTabStatus,
+  subscribeCatalogWorktreesForTabStatus
+} from './session-tab-catalog-agent-status'
+
+export { setCatalogWorktreesForTabStatus, subscribeCatalogWorktreesForTabStatus }
 
 export {
   buildRecentSessionCardFromTab,
@@ -129,6 +137,7 @@ const tabCompletionTracker = new Map<string, TabCompletionTrackerEntry>()
 
 export function clearTabCompletionTrackerForTests(): void {
   tabCompletionTracker.clear()
+  clearCatalogWorktreesForTabStatusForTests()
 }
 
 function isInTurnDotState(state: AgentDotState | null | undefined): boolean {
@@ -242,15 +251,27 @@ export function resolveTrackedTabCompletionState(args: {
 
 export function resolveRawSessionTabDotState(
   tab: {
+    id?: string
+    parentTabId?: string | null
+    leafId?: string | null
     type?: MobileSessionTab['type']
     agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
     chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
   },
   now = Date.now()
 ): AgentDotState | undefined {
-  // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
-  if (tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed) {
-    return agentDotState(tab.agentStatus, now)
+  if (tab.type === 'terminal') {
+    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
+      tabId: tab.id,
+      parentTabId: tab.parentTabId,
+      leafId: tab.leafId,
+      now
+    })
+    // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
+    if (status && !status.restoredUnconfirmed) {
+      return agentDotState(status, now)
+    }
+    return undefined
   }
   if (tab.type === 'agent-session' && tab.chatStatus) {
     return agentDotState(tab.chatStatus, now)
@@ -259,12 +280,20 @@ export function resolveRawSessionTabDotState(
 }
 
 export function resolveTabDoneStamp(tab: {
+  id?: string
+  parentTabId?: string | null
+  leafId?: string | null
   type?: MobileSessionTab['type']
   agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
   chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
 }): number | undefined {
-  if (tab.type === 'terminal' && tab.agentStatus) {
-    return tab.agentStatus.stateStartedAt ?? tab.agentStatus.updatedAt
+  if (tab.type === 'terminal') {
+    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
+      tabId: tab.id,
+      parentTabId: tab.parentTabId,
+      leafId: tab.leafId
+    })
+    return status ? (status.stateStartedAt ?? status.updatedAt) : undefined
   }
   if (tab.type === 'agent-session' && tab.chatStatus) {
     return tab.chatStatus.updatedAt
@@ -275,6 +304,8 @@ export function resolveTabDoneStamp(tab: {
 export function resolveMobileSessionTabDotState(
   tab: {
     id?: string
+    parentTabId?: string | null
+    leafId?: string | null
     terminal?: string | null
     isActive?: boolean
     type?: MobileSessionTab['type']

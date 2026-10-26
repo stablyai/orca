@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
 import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -10,7 +10,8 @@ import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
   resolveMobileSessionTabDotState,
-  resolveMobileTerminalTabAgentId
+  resolveMobileTerminalTabAgentId,
+  subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
@@ -64,7 +65,13 @@ export function MobileSessionTabStrip({
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const now = useNow(60_000)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  useEffect(
+    () => subscribeCatalogWorktreesForTabStatus(() => setCatalogRevision((rev) => rev + 1)),
+    []
+  )
   const tabStates = useMemo(() => {
+    void catalogRevision
     const states = new Map<string, AgentDotState>()
     for (const tab of visibleTabs) {
       const state = resolveMobileSessionTabDotState(tab, now, {
@@ -75,7 +82,7 @@ export function MobileSessionTabStrip({
       }
     }
     return states
-  }, [visibleTabs, now, activeSessionTabId])
+  }, [visibleTabs, now, activeSessionTabId, catalogRevision])
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {
     const next = resolveTabStripHiddenTabs({

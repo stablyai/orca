@@ -10,10 +10,7 @@ import {
   resolveTabDoneStamp,
   resolveTrackedTabCompletionState
 } from './mobile-terminal-tab-agent'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
+import { reconcileTerminalAgentStatusWithCatalog } from './session-tab-catalog-agent-status'
 
 export type LiveRecentCardTab = {
   id: string
@@ -90,74 +87,32 @@ export function syncRecentCardWithLiveTab(
   return nextState ? { ...rest, agentState: nextState } : rest
 }
 
-function findSnapshotCatalogAgentRow(
-  worktrees: readonly unknown[] | undefined,
-  worktreeId: string | undefined,
-  paneKey: string | null
-): Record<string, unknown> | null {
-  if (!worktrees || !worktreeId || !paneKey) {
-    return null
-  }
-  for (const wt of worktrees) {
-    if (!isRecord(wt)) {
-      continue
-    }
-    const wtId =
-      typeof wt.worktreeId === 'string' ? wt.worktreeId : typeof wt.id === 'string' ? wt.id : null
-    if (wtId !== worktreeId || !Array.isArray(wt.agents)) {
-      continue
-    }
-    for (const row of wt.agents) {
-      if (isRecord(row) && row.paneKey === paneKey) {
-        return row
-      }
-    }
-  }
-  return null
-}
-
 function resolveSnapshotSessionTabDotState(
   item: Record<string, unknown>,
   now = Date.now(),
   options?: { worktreeId?: string; worktrees?: readonly unknown[] }
 ): { agentState: AgentDotState | null; doneStamp?: number } {
-  let raw =
-    item.type === 'terminal'
-      ? item.agentStatus
-      : item.type === 'agent-session'
-        ? item.chatStatus
-        : null
-  if (item.type === 'terminal' && options?.worktrees && options.worktreeId) {
-    const rawObj = isRecord(raw) ? raw : null
-    const promptEmpty = !rawObj || rawObj.prompt === ''
-    if (promptEmpty) {
-      const paneKey =
-        (rawObj && typeof rawObj.paneKey === 'string' && rawObj.paneKey) ||
-        (typeof item.parentTabId === 'string' && typeof item.leafId === 'string'
-          ? `${item.parentTabId}:${item.leafId}`
-          : null)
-      const catalogRow = findSnapshotCatalogAgentRow(options.worktrees, options.worktreeId, paneKey)
-      if (catalogRow && typeof catalogRow.updatedAt === 'number') {
-        const rawUpdatedAt =
-          rawObj && typeof rawObj.updatedAt === 'number' ? rawObj.updatedAt : -Infinity
-        const rawStateStartedAt =
-          rawObj && typeof rawObj.stateStartedAt === 'number' ? rawObj.stateStartedAt : undefined
-        const catalogStateStartedAt =
-          typeof catalogRow.stateStartedAt === 'number' ? catalogRow.stateStartedAt : undefined
-        const predatesStart =
-          rawStateStartedAt !== undefined &&
-          catalogRow.updatedAt < rawStateStartedAt &&
-          (catalogStateStartedAt === undefined || catalogStateStartedAt < rawStateStartedAt)
-        if (
-          !predatesStart &&
-          (catalogRow.updatedAt >= rawUpdatedAt ||
-            (rawObj?.state === 'done' && catalogRow.state !== 'done'))
-        ) {
-          raw = catalogRow
-        }
-      }
+  if (item.type === 'terminal') {
+    const status = reconcileTerminalAgentStatusWithCatalog(item.agentStatus, {
+      worktreeId: options?.worktreeId,
+      worktrees: options?.worktrees,
+      tabId: typeof item.id === 'string' ? item.id : null,
+      parentTabId: typeof item.parentTabId === 'string' ? item.parentTabId : null,
+      leafId: typeof item.leafId === 'string' ? item.leafId : null,
+      now
+    })
+    if (!status) {
+      return { agentState: null }
+    }
+    if (status.restoredUnconfirmed === true) {
+      return { agentState: 'idle' }
+    }
+    return {
+      agentState: agentDotState({ ...status, mirroredEvidenceReceivedAt: now }, now),
+      doneStamp: status.stateStartedAt ?? status.updatedAt
     }
   }
+  const raw = item.type === 'agent-session' ? item.chatStatus : null
   if (
     typeof raw !== 'object' ||
     raw === null ||
@@ -167,13 +122,6 @@ function resolveSnapshotSessionTabDotState(
     typeof raw.updatedAt !== 'number'
   ) {
     return { agentState: null }
-  }
-  if (
-    item.type === 'terminal' &&
-    'restoredUnconfirmed' in raw &&
-    raw.restoredUnconfirmed === true
-  ) {
-    return { agentState: 'idle' }
   }
   if (
     raw.state !== 'working' &&

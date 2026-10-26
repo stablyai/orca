@@ -10,7 +10,8 @@ import {
 } from './mobile-session-tab-activation'
 import {
   recentCardSnapshotTabs,
-  resolveMobileSessionTabDotState
+  resolveMobileSessionTabDotState,
+  setCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage-keys'
 import {
@@ -620,6 +621,45 @@ describe('buildRecentSessionCardFromTab', () => {
         doneStamp: 90
       }
     ])
+
+    setCatalogWorktreesForTabStatus(worktrees, 200)
+    const liveShellMaskedTab = {
+      type: 'terminal' as const,
+      id: 'tab-other::leaf-1',
+      parentTabId: 'tab-other',
+      leafId: 'leaf-1',
+      terminal: 'pty-other',
+      isActive: true,
+      agentStatus: {
+        state: 'done' as const,
+        prompt: '',
+        paneKey: 'tab-other:leaf-1',
+        stateHistory: [],
+        updatedAt: 205,
+        stateStartedAt: 90
+      }
+    }
+    expect(
+      resolveMobileSessionTabDotState(liveShellMaskedTab, 205, { isActiveOnScreen: true })
+    ).toBe('working')
+    recordRecentSessionCardVisit(
+      card({
+        hostId: 'host-1',
+        worktreeId: 'wt-2',
+        tabId: 'tab-other::leaf-1',
+        terminalHandle: 'pty-other',
+        agentState: 'working',
+        lastVisitedAt: 200
+      })
+    )
+    expect(
+      getVisibleRecentSessionCards({
+        hostId: 'host-1',
+        currentWorktreeId: 'wt-2',
+        currentTabId: 'tab-fg',
+        currentWorktreeTabs: [liveShellMaskedTab]
+      })
+    ).toEqual([expect.objectContaining({ tabId: 'tab-other::leaf-1', agentState: 'working' })])
 
     const hugeTitle = 'x'.repeat(800)
     for (let i = 0; i < 30; i += 1) {
