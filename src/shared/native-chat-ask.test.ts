@@ -80,7 +80,7 @@ describe('extractPendingAsk', () => {
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
-  it("clears the ask when its own result arrives, keeping the newest ask's identity", () => {
+  it('keeps the newest ask when an older call receives its result', () => {
     const first = { questions: [{ question: 'First?', options: [] }] }
     const pending = extractPendingAsk([
       message('m1', [

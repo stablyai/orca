@@ -133,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Fuente",
+        "fontFamilyDescription": "Fuente de los mensajes, la actividad y el cuadro de mensaje.",
+        "inheritFont": "Misma fuente que el IDE",
+        "fontPreviewLabel": "Vista previa de la fuente del chat",
+        "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
         "title": "Chat",
         "textSize": "Tamaño del texto",
         "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",

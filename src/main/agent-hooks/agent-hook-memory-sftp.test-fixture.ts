@@ -19,6 +19,7 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
     code: 2,
     message: `ENOENT ${path}`
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this in-memory fixture implements only the SFTP operations reached by the installer tests.
   const sftp = {
     readFile: (path: string, _encoding: string, done: (error: unknown, data?: string) => void) => {
       const data = fs.files.get(path)
@@ -42,6 +43,22 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
     },
     rename: (source: string, target: string, done: (error: unknown) => void) => {
       const content = fs.files.get(source)
+      if (content === undefined && fs.dirs.has(source)) {
+        for (const [path, data] of fs.files) {
+          if (path.startsWith(`${source}/`)) {
+            fs.files.set(`${target}${path.slice(source.length)}`, data)
+            fs.files.delete(path)
+          }
+        }
+        for (const path of fs.dirs) {
+          if (path === source || path.startsWith(`${source}/`)) {
+            fs.dirs.add(`${target}${path.slice(source.length)}`)
+            fs.dirs.delete(path)
+          }
+        }
+        done(null)
+        return
+      }
       if (content === undefined) {
         done(missing(source))
         return

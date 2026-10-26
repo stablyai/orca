@@ -522,8 +522,8 @@ describe('LocalPtyProvider', () => {
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
-          env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
-          env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          env.MIMOCODE_CONFIG_DIR = '/tmp/orca-mimocode-overlay'
+          env.ORCA_MIMOCODE_CONFIG_DIR = '/tmp/orca-mimocode-overlay'
           return env
         }
       })

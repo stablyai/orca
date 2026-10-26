@@ -12,6 +12,10 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  ariaLabel?: string
+  disabled?: boolean
+  commitMode?: 'change' | 'blur'
+  defaultOptionLabel?: string
   onRequestSuggestions?: () => void
   /** Preview the highlighted font without committing; null clears the preview when nothing is highlighted or the menu closes. */
   onPreviewFontFamily?: (font: string | null) => void
@@ -22,6 +26,10 @@ export function FontAutocomplete({
   suggestions,
   onChange,
   placeholder = 'SF Mono',
+  ariaLabel,
+  disabled = false,
+  commitMode = 'change',
+  defaultOptionLabel,
   onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
@@ -32,6 +40,7 @@ export function FontAutocomplete({
   const [isFilteringQuery, setIsFilteringQuery] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const lastCommittedValueRef = useRef(value)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const listboxId = useId()
 
@@ -49,10 +58,16 @@ export function FontAutocomplete({
 
   if (value !== prevValue) {
     setPrevValue(value)
+    lastCommittedValueRef.current = value
     setQuery(value)
     if (value !== query) {
       setIsFilteringQuery(false)
     }
+  }
+  if (disabled && open) {
+    setOpen(false)
+    setQuery(value)
+    setIsFilteringQuery(false)
   }
 
   const requestSuggestions = useCallback((): void => {
@@ -71,13 +86,23 @@ export function FontAutocomplete({
 
   const normalizedQuery = query.trim().toLowerCase()
   const normalizedValue = value.trim().toLowerCase()
+  const allSuggestions = useMemo(() => {
+    if (!defaultOptionLabel) {
+      return suggestions
+    }
+    const fonts = suggestions.filter(Boolean)
+    if (value && !fonts.includes(value)) {
+      fonts.push(value)
+    }
+    return ['', ...fonts]
+  }, [defaultOptionLabel, suggestions, value])
   const filteredSuggestions = useMemo(
-    () => filterFontSuggestions(suggestions, query),
-    [suggestions, query]
+    () => filterFontSuggestions(allSuggestions, query, defaultOptionLabel),
+    [allSuggestions, query, defaultOptionLabel]
   )
   // Opening with the committed font must still show all fonts rather than filter by its name.
   const visibleSuggestions =
-    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
+    !isFilteringQuery && normalizedQuery === normalizedValue ? allSuggestions : filteredSuggestions
   const renderedSuggestions = useMemo(
     () => getRenderedFontSuggestions(visibleSuggestions, highlightedIndex),
     [visibleSuggestions, highlightedIndex]
@@ -108,17 +133,31 @@ export function FontAutocomplete({
     if (!onPreviewFontFamily) {
       return
     }
-    if (!open || highlightedIndex < 0) {
+    if (!open || disabled) {
       onPreviewFontFamily(null)
       return
     }
-    onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
-  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
+    onPreviewFontFamily(
+      highlightedIndex >= 0
+        ? (visibleSuggestions[highlightedIndex] ?? null)
+        : commitMode === 'blur'
+          ? query.trim()
+          : null
+    )
+  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open, disabled, commitMode, query])
 
   const commitValue = (nextValue: string): void => {
-    setQuery(nextValue)
+    const trimmed = commitMode === 'blur' ? nextValue.trim() : nextValue
+    const committed =
+      defaultOptionLabel && trimmed.toLowerCase() === defaultOptionLabel.trim().toLowerCase()
+        ? ''
+        : trimmed
+    setQuery(committed)
     setIsFilteringQuery(false)
-    onChange(nextValue)
+    if (commitMode === 'change' || committed !== lastCommittedValueRef.current) {
+      lastCommittedValueRef.current = committed
+      onChange(committed)
+    }
     setOpen(false)
   }
 
@@ -133,18 +172,22 @@ export function FontAutocomplete({
 
   return (
     <div ref={setRootNode} className="relative max-w-sm">
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
         <PopoverAnchor asChild>
           <div className="relative">
             <Input
               ref={inputRef}
               value={query}
+              disabled={disabled}
+              aria-label={ariaLabel}
               onChange={(e) => {
                 const next = e.target.value
                 requestSuggestions()
                 setQuery(next)
                 setIsFilteringQuery(true)
-                onChange(next)
+                if (commitMode === 'change') {
+                  onChange(next)
+                }
                 setOpen(true)
               }}
               onFocus={() => {
@@ -152,8 +195,16 @@ export function FontAutocomplete({
                 setIsFilteringQuery(false)
                 setOpen(true)
               }}
+              onBlur={() => {
+                if (commitMode === 'blur' && !disabled) {
+                  commitValue(query)
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
+                  if (commitMode === 'blur') {
+                    setQuery(lastCommittedValueRef.current)
+                  }
                   if (open) {
                     e.preventDefault()
                     setOpen(false)
@@ -184,12 +235,19 @@ export function FontAutocomplete({
                   return
                 }
 
+                if (e.key === 'Enter' && e.nativeEvent.isComposing) {
+                  return
+                }
+
                 if (e.key === 'Enter' && open && highlightedIndex >= 0) {
                   const highlightedFont = visibleSuggestions[highlightedIndex]
-                  if (highlightedFont) {
+                  if (highlightedFont !== undefined) {
                     e.preventDefault()
                     commitValue(highlightedFont)
                   }
+                } else if (e.key === 'Enter' && commitMode === 'blur') {
+                  e.preventDefault()
+                  commitValue(query)
                 }
               }}
               placeholder={placeholder}
@@ -208,11 +266,10 @@ export function FontAutocomplete({
               {query ? (
                 <button
                   type="button"
+                  disabled={disabled}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    setQuery('')
-                    setIsFilteringQuery(false)
-                    onChange('')
+                    commitValue('')
                     setOpen(true)
                     focusInput()
                   }}
@@ -231,6 +288,7 @@ export function FontAutocomplete({
               ) : null}
               <button
                 type="button"
+                disabled={disabled}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   const nextOpen = !open
@@ -300,7 +358,7 @@ export function FontAutocomplete({
                         : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="truncate">{font}</span>
+                    <span className="truncate">{font || defaultOptionLabel}</span>
                     {font === value ? <Check className="ml-3 size-4 shrink-0" /> : null}
                   </button>
                 ))

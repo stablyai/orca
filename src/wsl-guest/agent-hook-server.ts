@@ -66,6 +66,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey = new Map<string, CachedPaneEnvelopeMeta>()
   private forward: RelayHookForward
+  private readonly forwardClaudeAgentView: RelayHookServerOptions['forwardClaudeAgentView']
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private getAgentLaunchToken: (paneKey: string) => string | undefined
   private fixedToken: string | undefined
@@ -85,6 +86,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.fixedToken = options.token
     this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
+    this.forwardClaudeAgentView = options.forwardClaudeAgentView
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
     this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
     this.configureCanonicalHooks(
@@ -134,6 +136,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
         handleRelayHookRequest(req, res, {
           isCurrent,
           token: this.token,
+          forwardClaudeAgentView: this.forwardClaudeAgentView,
           env: this.env,
           state: this.state,
           providerNormalization: this.providerNormalization,

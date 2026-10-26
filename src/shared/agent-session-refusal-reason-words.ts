@@ -91,7 +91,7 @@ const REASON_WORDS = {
     turnActive: causeWords('turnActive', 'wait', 'waitForTurn'),
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),
     backgroundTasksRunning: causeWords('backgroundTasksRunning', 'wait', 'waitForBackgroundTasks'),
-    messagesUnsettled: causeWords('messagesUnsettled', 'actFirst', 'settleEarlierMessage'),
+    messagesUnsettled: causeWords('agentStillWorking', 'wait', 'waitForTurn'),
     queueTooLarge: causeWords('queueTooLarge', 'actFirst', 'shrinkQueue'),
     // The rewind control words its own refusals; anywhere else says only that it did not happen.
     rewindRefused: codeWords('hostFinding'),

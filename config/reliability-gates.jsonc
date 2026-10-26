@@ -17092,6 +17092,9 @@
           "assertions": [
             "recovers small live output when the deadline interrupts an answered snapshot",
             "recovers partially covered live output when the deadline interrupts an answered snapshot",
+            "recovers split escape live output when the deadline interrupts an answered snapshot",
+            "recovers styled live output when the deadline interrupts an answered snapshot",
+            "recovers styled gap live output when the deadline interrupts an answered snapshot",
             "recovers unmapped live output when the deadline interrupts an answered snapshot",
             "recovers unhide gap live output when the deadline interrupts an answered snapshot",
             "recovers fresh snapshot gap live output when the deadline interrupts an answered snapshot",

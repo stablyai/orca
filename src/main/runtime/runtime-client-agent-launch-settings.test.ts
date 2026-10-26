@@ -261,3 +261,7 @@ describe('execution-host agent launch settings', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

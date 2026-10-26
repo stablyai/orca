@@ -360,6 +360,13 @@
         }
       },
       "chat": {
+        "fontFamily": "Font family",
+        "fontFamilyDescription": "Font used for messages, activity, and the message box.",
+        "fontKeywordTypeface": "typeface",
+        "fontKeywordTypography": "typography",
+        "inheritFont": "Same as IDE font",
+        "fontPreviewLabel": "Chat font preview",
+        "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
@@ -463,7 +470,6 @@
     },
     "agents": {
       "permissionsTitle": "Permissions",
-      "permissionsResetExplanation": "Picking a mode here resets agents you set separately.",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
       "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",
@@ -526,7 +532,17 @@
       "permissionSameAsAll": "Same as all agents",
       "permissionChipRemove": "Remove {{flag}} and use {{agent}}'s own settings",
       "permissionChipTooltip": "Added by Permissions. Remove it to use {{agent}}’s own settings.",
-      "permissionResetsOwnChoices": "Choosing a mode here resets the agents marked as set separately."
+      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
+      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
+      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
+      "permissionOverrideFollows": "{{agent}} now follows {{mode}}",
+      "permissionOverrideMore": "and {{count}} more",
+      "permissionOverrideMore_one": "and {{count}} more",
+      "permissionOverrideMore_other": "and {{count}} more",
+      "permissionOverridesUse": "Use {{mode}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1441,6 +1457,13 @@
             }
           }
         }
+      },
+      "claudeAgentRowView": {
+        "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required.",
+        "permissionPrompt": "Answer Claude’s permission prompt before switching agents.",
+        "agentUnavailable": "Claude cannot open this agent. It may no longer be available.",
+        "closeDialog": "Claude did not switch views. Close any open dialog and try again.",
+        "hostUnavailable": "Subagent navigation is unavailable on this host. Update Orca and restart Claude in this pane."
       }
     },
     "hooks": {
@@ -2383,6 +2406,12 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
+        "serverTitle": "{{machine}} restarted",
+        "serverBody": "These chats were working when Orca on {{machine}} restarted. Resuming restores each one where it stopped and asks the agent to carry on. Your own prompt is not re-sent.",
+        "serverDismiss": "Dismiss",
+        "serverResumeAll": "Resume all {{count}} on {{machine}}",
+        "serverResumeHereOne": "Resume 1 chat started here",
+        "serverResumeHere": "Resume {{count}} chats started here",
         "title": "Resume interrupted chats?",
         "body": "These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
         "updateBody": "These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
@@ -13103,7 +13132,9 @@
           "nodeDownloadBlockedNoMirror": "Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.",
           "nodeDownloadBlockedMirrorTried": "Neither this computer nor this host could download Node.js, including from the Node.js download mirror. Check the mirror setting, then connect again.",
           "reassurance": "Runs on {{host}}, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to {{host}}.",
-          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}"
+          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}",
+          "windowsBuildUnsupported": "This host runs a version of Windows older than Windows 10 and Windows Server 2016, so it can’t run Orca’s server. Use a host with a newer version of Windows, or a Linux or macOS host.",
+          "windowsNoExtractor": "This Windows host has neither tar.exe nor PowerShell’s Expand-Archive, so Orca can’t unpack its server there. Install Windows PowerShell 5.1 on the host, then connect again."
         },
         "ZcodeCliSetupSection": {
           "title": "Use GLM with ZCode",
@@ -13452,6 +13483,17 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "claudeSubagentNavigation": {
+          "title": "Claude subagent navigation",
+          "description": "Open Claude subagents from the sidebar. Adds a shortcut to Claude’s keybindings.json and loads an Orca mod in new Orca panes. Requires Claude 2.1.300+ and status hooks. Turning off removes Orca’s shortcut; shortcuts you delete stay deleted.",
+          "search": {
+            "subagent": "subagent",
+            "navigation": "navigation",
+            "plugin": "plugin",
+            "mod": "mod",
+            "shortcut": "shortcut"
+          }
         }
       },
       "right": {
@@ -18815,6 +18857,11 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "ClaudeAgentViewIndicator": {
+        "viewing": "Currently viewing",
+        "viewingChild": "Viewing subagent {{name}}",
+        "returnHint": "Click the parent row to return. Esc stops this subagent. Enter sends your draft to this subagent."
       }
     },
     "i18n": {

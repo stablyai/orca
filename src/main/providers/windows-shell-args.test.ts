@@ -125,7 +125,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
-    const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
+    const mimocodeRestoreIndex = command.indexOf(
+      '$env:MIMOCODE_CONFIG_DIR = $env:ORCA_MIMOCODE_CONFIG_DIR'
+    )
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')

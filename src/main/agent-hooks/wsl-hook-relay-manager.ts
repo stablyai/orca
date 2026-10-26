@@ -82,6 +82,12 @@ export class WslHookRelayManager {
       ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
       : null
   }
+  getClaudeAgentView(distro: string | null): { pluginDir: string; configDir: string } | null {
+    const state = this.stateFor(distro)
+    return state?.claudeAgentViewDir && state.claudeConfigDir
+      ? { pluginDir: state.claudeAgentViewDir, configDir: state.claudeConfigDir }
+      : null
+  }
   getOpenCodeOverlayDir(
     distro: string | null,
     agent: 'opencode' | 'opencode2' = 'opencode'
@@ -171,6 +177,8 @@ export class WslHookRelayManager {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
+      claudeAgentViewDir: existing?.claudeAgentViewDir,
+      claudeConfigDir: existing?.claudeConfigDir,
       opencodeOverlayDir: existing?.opencodeOverlayDir,
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
@@ -227,6 +235,8 @@ export class WslHookRelayManager {
       child,
       distro: state.distro,
       ingest: this.deps.ingest,
+      receiveClaudeAgentView: (body) =>
+        isWslHookRelayAllowed(this.deps) ? (this.deps.receiveClaudeAgentView?.(body) ?? {}) : {},
       warn: this.deps.warn,
       onDead: (reason) => {
         if (this.disposed || state.mux !== mux) {

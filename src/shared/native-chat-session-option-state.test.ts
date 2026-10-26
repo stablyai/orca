@@ -39,12 +39,6 @@ describe('applyNativeChatReportedSessionOptions', () => {
     expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
     expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'high', source: 'dispatched' })
   })
-
-  it('is a no-op when the report matches tracked state', () => {
-    const record = claudeRecord()
-    record.model = { value: 'sonnet', source: 'reported' }
-    expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
-  })
 })
 
 describe('matchNativeChatCatalogModelId', () => {

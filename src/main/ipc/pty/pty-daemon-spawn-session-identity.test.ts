@@ -5,7 +5,7 @@ import { createPaneBindingStore, launchRacePane } from '../pty-launch-race-test-
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { describe, expect, it, vi } from 'vitest'
 import { openCodeClearPtyMock, piBuildPtyEnvMock, piClearPtyMock } from '../pty-ipc-mock-registry'
-import { awaitExplicitPiOmpGuestReadiness } from '../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from '../pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './register-handlers'
@@ -59,8 +59,8 @@ vi.mock('../../codex/codex-pane-account-registry', () =>
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-vi.mock('../../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
-  awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
+vi.mock('../../agent-hooks/wsl-agent-plugin-readiness', () => ({
+  awaitExplicitAgentPluginGuestReadiness: vi.fn(async () => true)
 }))
 
 class ProducerRuntime extends OrcaRuntimeService {
@@ -556,11 +556,11 @@ describe('registerPtyHandlers', () => {
 
     it('both daemon lanes run the WSL Pi/OMP guest readiness wait once', async () => {
       const lanes = startLanes()
-      vi.mocked(awaitExplicitPiOmpGuestReadiness).mockClear()
+      vi.mocked(awaitExplicitAgentPluginGuestReadiness).mockClear()
       await lanes.spawn('window', { env: {}, command: 'pi' })
-      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledOnce()
+      expect(vi.mocked(awaitExplicitAgentPluginGuestReadiness)).toHaveBeenCalledOnce()
       await lanes.spawn('host', { env: {}, command: 'pi' })
-      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(awaitExplicitAgentPluginGuestReadiness)).toHaveBeenCalledTimes(2)
     })
 
     it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {

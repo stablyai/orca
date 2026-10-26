@@ -43,7 +43,7 @@ ${WSL_MANAGED_CLI_PATH_RESTORE}
 # Restore Orca-managed config after user startup files may override it.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 ${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
+[[ -n "\${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="\${ORCA_MIMOCODE_CONFIG_DIR}"
 ${getPosixOmpShellWrapper()}
 # Profile scripts must not replace Orca's runtime CODEX_HOME.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"

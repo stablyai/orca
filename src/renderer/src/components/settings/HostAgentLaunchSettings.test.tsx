@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { StrictMode } from 'react'
+import { toast } from 'sonner'
+import { permissionNotice } from './__fixtures__/permission-notice-test-fixture'
+import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import userEvent from '@testing-library/user-event'
 import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings
@@ -14,6 +16,8 @@ import { AgentPermissionsSetting, AgentsPane } from './AgentsPane'
 import { useAppStore } from '@/store'
 import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() } }))
 
 const transport = vi.hoisted(() => ({
   read: vi.fn(),
@@ -63,6 +67,7 @@ const pane = (revision: number) => (
 
 afterEach(cleanup)
 beforeEach(() => {
+  vi.mocked(toast.success).mockClear()
   transport.read.mockReset().mockResolvedValue(host())
   transport.mutate.mockReset().mockResolvedValue(host())
   transport.detection.mockClear()
@@ -519,4 +524,38 @@ describe('host launch settings form', () => {
     await screen.findByDisplayValue('--host-marker')
     expect(transport.read.mock.calls.at(-1)?.[1].aborted).toBe(false)
   })
+})
+
+it('shows vanished and retained overrides together and only makes the retained agent inherit', async () => {
+  const before = {
+    agentPermissionDefault: 'full-access' as const,
+    agentPermissionOverrides: { codex: 'full-access' as const, claude: 'full-access' as const }
+  }
+  transport.read.mockResolvedValue(projectAgentLaunchSettings(before))
+  transport.mutate
+    .mockResolvedValueOnce(
+      projectAgentLaunchSettings({
+        ...before,
+        agentPermissionDefault: 'ask',
+        agentPermissionOverrides: { claude: 'full-access' }
+      })
+    )
+    .mockResolvedValueOnce(projectAgentLaunchSettings({ agentPermissionDefault: 'ask' }))
+  render(pane(17))
+  await screen.findByRole('button', { name: 'Permissions' })
+  await userEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: /Ask for approval/ }))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe(
+    '1 agent still uses their own permission setting:'
+  )
+  const { details, follow } = permissionNotice()
+  expect(details.textContent).toContain('Claude · Full access')
+  expect(details.textContent).toContain('Codex now follows Ask for approval')
+  await follow()
+  await waitFor(() => expect(transport.mutate).toHaveBeenCalledTimes(2))
+  expect(transport.mutate.mock.calls.map((call) => call[1])).toEqual([
+    { type: 'permission', choice: 'ask' },
+    { type: 'permission', agent: 'claude', choice: 'default' }
+  ])
 })

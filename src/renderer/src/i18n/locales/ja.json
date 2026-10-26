@@ -133,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "フォント",
+        "fontFamilyDescription": "メッセージ、アクティビティ、入力欄に使用するフォント。",
+        "inheritFont": "IDE と同じフォント",
+        "fontPreviewLabel": "チャットフォントのプレビュー",
+        "fontPreview": "この文章でチャットのフォントを確認できます。",
         "title": "チャット",
         "textSize": "テキストサイズ",
         "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",

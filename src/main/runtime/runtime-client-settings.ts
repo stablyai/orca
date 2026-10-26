@@ -1,4 +1,5 @@
 import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -63,6 +64,7 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
@@ -127,6 +129,7 @@ export class RuntimeClientSettingsController {
       { notifyListeners: true }
     )
     const settings = this.store.getSettings()
+    await getClaudeAgentViewService().reconcile(settings)
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
     }

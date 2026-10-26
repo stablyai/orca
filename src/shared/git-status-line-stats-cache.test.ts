@@ -24,7 +24,7 @@ describe('git status line stats cache', () => {
     clearGitStatusLineStatsCache()
   })
 
-  it('reuses counts only for an exact head and status-entry identity', () => {
+  it('reuses counts for matching entries and rejects a changed head', () => {
     storeGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries: cachedEntries })
     const matchingEntries = [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }]
 

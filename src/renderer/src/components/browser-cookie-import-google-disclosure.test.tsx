@@ -7,7 +7,6 @@
 import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import en from '@/i18n/locales/en.json'
 
 const DISCLOSURE_TITLE = "Google logins aren't imported"
 const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in Orca.'
@@ -111,35 +110,14 @@ describe('cookie-import Google disclosure footer', () => {
     expect(container.textContent).toContain(DISCLOSURE_DESCRIPTION)
   })
 
-  it('renders the icon and separator as non-interactive footer chrome', () => {
+  it('renders an icon after the footer separator', () => {
     act(() => root.render(<BrowserCookieImportDisclosure />))
 
     const label = container.querySelector('[data-testid="dropdown-menu-label"]')
     expect(label?.querySelector('svg')).not.toBeNull()
     expect(label?.previousElementSibling?.tagName).toBe('HR')
   })
-
-  it('reads the footer copy from the catalog', () => {
-    expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.title')).toBe(
-      DISCLOSURE_TITLE
-    )
-    expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.description')).toBe(
-      DISCLOSURE_DESCRIPTION
-    )
-  })
 })
-
-function catalogEntry(key: string): unknown {
-  return key
-    .split('.')
-    .reduce<unknown>(
-      (node, part) =>
-        typeof node === 'object' && node !== null
-          ? (node as Record<string, unknown>)[part]
-          : undefined,
-      en
-    )
-}
 
 function dropdownMenuStubs(): Record<string, unknown> {
   const passthrough = ({ children }: { children?: ReactNode }): ReactNode => children

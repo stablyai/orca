@@ -51,7 +51,7 @@ function harness(options: { startupTerminal?: Record<string, unknown> | null } =
     ),
     getTerminalPtyIdForHandle: vi.fn((_handle: string) => 'pty-prev'),
     deliverStartupFollowup: vi.fn(
-      async (_handle: string, _followup: { expectedProcess: string; prompt: string }) => true
+      async (_handle: string, _followup: { agent: string; prompt: string }) => true
     )
   }
   return runtime
@@ -172,7 +172,7 @@ describe('headless automation agent launch', () => {
     )
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_existing', {
-      expectedProcess: 'aider',
+      agent: 'aider',
       prompt: 'fix the flaky test'
     })
     finishDelivery(true)
@@ -221,7 +221,7 @@ describe('headless automation agent launch', () => {
     expect(runtime.createManagedWorktree.mock.calls[0]![0]).not.toHaveProperty('startupPrompt')
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_new', {
-      expectedProcess: 'goose',
+      agent: 'goose',
       prompt: 'fix the flaky test'
     })
   })

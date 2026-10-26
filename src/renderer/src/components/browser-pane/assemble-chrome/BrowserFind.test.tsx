@@ -47,7 +47,15 @@ describe('BrowserFind session flags', () => {
   it('starts a new find session when the query changes', () => {
     const { findInPage } = openFindWithQuery('needle')
 
-    expect(findInPage).toHaveBeenLastCalledWith('needle', { findNext: true })
+    expect(findInPage).toHaveBeenCalledExactlyOnceWith('needle', { findNext: true })
+    findInPage.mockClear()
+
+    fireEvent.change(screen.getByPlaceholderText('Find in page...'), {
+      target: { value: 'replacement' }
+    })
+    act(() => vi.advanceTimersByTime(250))
+
+    expect(findInPage).toHaveBeenCalledExactlyOnceWith('replacement', { findNext: true })
   })
 
   it('advances forward as a follow-up request, not a new session', () => {

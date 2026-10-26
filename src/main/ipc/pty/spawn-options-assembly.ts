@@ -1,3 +1,6 @@
+import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -127,7 +130,19 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {})
   })
   const env = openCodeLaunch.env
-  const launchCommand = openCodeLaunch.command
+  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const shell = resolveStartupShell(
+    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform: process.platform,
+      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
+      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
+    })
+  )
+  const launchCommand =
+    pluginDir && openCodeLaunch.command
+      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
+      : openCodeLaunch.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,

@@ -73,11 +73,12 @@ export class JournalSubmissionWriter {
   resolveDispatch(
     input: ResolveDispatchInput,
     /** Plan card changes on the write lane. */
-    cards?: () => JournalQueuePlan
+    cards?: () => JournalQueuePlan,
+    receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     const dispatch = journalDispatchRowBuilder(this.deps.state, input)
     if (!cards) {
-      return this.deps.rowWriter.append(dispatch)
+      return this.deps.rowWriter.append(dispatch, receipt)
     }
     let planned: JournalQueuePlan | undefined
     return this.deps.rowWriter
@@ -87,8 +88,14 @@ export class JournalSubmissionWriter {
           return [dispatch, ...planned.rows]
         },
         {
-          write: (db) => planned?.receipt.write(db),
-          committed: () => planned?.receipt.committed()
+          write: (db, row) => {
+            planned?.receipt.write(db)
+            receipt?.write(db, row)
+          },
+          committed: () => {
+            planned?.receipt.committed()
+            receipt?.committed()
+          }
         },
         (rows) => rows[0]
       )
