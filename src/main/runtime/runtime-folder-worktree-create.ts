@@ -64,6 +64,8 @@ export async function createRuntimeFolderWorktree(args: {
   deps: RuntimeFolderWorktreeCreateDeps
 }): Promise<CreateWorktreeResult> {
   const { request, repo, deps } = args
+  const callerOwnsFirstSurface =
+    args.promisedAgentChat === true || request.callerProvidesSurface === true
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
@@ -198,7 +200,7 @@ export async function createRuntimeFolderWorktree(args: {
         : args.startup && !didSpawnStartup
           ? args.startup
           : undefined,
-      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
+      ...(callerOwnsFirstSurface && !args.startup ? ([true] as const) : [])
     )
   }
   if (
@@ -208,7 +210,7 @@ export async function createRuntimeFolderWorktree(args: {
       // Failed agents retain their panes; do not seed a shell beside them.
       hasPrimarySurface: didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
       // Background attribution-only creates have historically omitted the shell.
-      callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
+      callerProvidesSurface: callerOwnsFirstSurface || args.createdWithAgent !== undefined
     })
   ) {
     try {

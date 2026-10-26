@@ -148,10 +148,17 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
+    const startupAgent = getOptionalStartupAgent(flags)
+    const noTerminal = flags.get('no-terminal') === true
+    if (noTerminal && startupAgent) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose either --agent or --no-terminal, not both: the agent is the first surface.'
+      )
+    }
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
-    const startupAgent = getOptionalStartupAgent(flags)
     // Read before any request, so a bad prompt, model or effort creates nothing.
     const agentLaunch = startupAgent
       ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
@@ -207,6 +214,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
       ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
       noParent,
+      // Older hosts drop this and seed the first terminal, as before the flag existed.
+      ...(noTerminal ? { callerProvidesSurface: true } : {}),
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}

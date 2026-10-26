@@ -84,6 +84,7 @@ export function buildManagedWorktreeCreateArgs(
     }),
     setupDecision: params.setupDecision,
     ...(params.setupOnly !== undefined ? { setupOnly: params.setupOnly } : {}),
+    ...(params.callerProvidesSurface === true ? { callerProvidesSurface: true } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
     // Only user-visible creates offer offline fallback; automation retains the network error.

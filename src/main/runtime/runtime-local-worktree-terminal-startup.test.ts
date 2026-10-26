@@ -3,6 +3,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import {
+  provisionWorktreeTerminals,
+  type WorktreeTerminalProvisioningHost
+} from './runtime-worktree-terminal-provisioning'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -170,6 +174,73 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     if (expectedCalls > 0) {
       expect(createTerminal).toHaveBeenCalledWith(`id:${worktree.id}`, { surfaceOwner: false })
     }
+  })
+
+  describe('when the caller provides the first surface', () => {
+    function createProvisioningPorts() {
+      const { createTerminal, ports } = createPorts()
+      const host: WorktreeTerminalProvisioningHost = {
+        canSpawn: () => true,
+        createTerminal,
+        setTabTitle: vi.fn(async () => {}),
+        setTabColor: vi.fn(async () => {}),
+        getPtyId: () => undefined,
+        recordSetupCompletionToken: vi.fn()
+      }
+      ports.provision = (options) => provisionWorktreeTerminals(host, options)
+      return { createTerminal, ports }
+    }
+
+    it('seeds no primary shell', async () => {
+      const { createTerminal, ports } = createProvisioningPorts()
+      await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: repo.id, name: 'quiet', callerProvidesSurface: true },
+        repo,
+        worktree,
+        ports
+      })
+      expect(createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('still runs Setup, without a shell beside it', async () => {
+      const { createTerminal, ports } = createProvisioningPorts()
+      await startRuntimeLocalWorktreeTerminals({
+        request: {
+          repoSelector: repo.id,
+          name: 'quiet',
+          callerProvidesSurface: true,
+          awaitTerminalProvisioning: true
+        },
+        repo,
+        worktree,
+        setup: { runnerScriptPath: '/repo/setup.sh', envVars: {} },
+        ports
+      })
+      expect(createTerminal.mock.calls.map(([, options]) => options.title)).toEqual(['Setup'])
+    })
+
+    it('tells an activated window not to seed one either', async () => {
+      const { ports } = createProvisioningPorts()
+      await startRuntimeLocalWorktreeTerminals({
+        request: {
+          repoSelector: repo.id,
+          name: 'quiet',
+          callerProvidesSurface: true,
+          activate: true
+        },
+        repo,
+        worktree,
+        ports
+      })
+      expect(ports.activate).toHaveBeenCalledWith(
+        repo.id,
+        worktree.id,
+        undefined,
+        undefined,
+        undefined,
+        true
+      )
+    })
   })
 
   it('hands failed startup and defaults to renderer before host provisioning', async () => {

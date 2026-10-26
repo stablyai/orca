@@ -117,6 +117,8 @@ orca worktree create --name hidden-setup --setup inherit --json
 
 `--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
 
+`--no-terminal` skips the plain first terminal when your script opens the first surface itself, for example `orca worktree create --repo id:<repoId> --name task --no-parent --no-terminal --json`. Setup and `orca.yaml` default tabs still open. It cannot be combined with `--agent`.
+
 Link issues and reviews using the existing workspace metadata:
 
 ```bash

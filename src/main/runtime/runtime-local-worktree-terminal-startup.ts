@@ -181,7 +181,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : startup && !didSpawnStartup ? startup : undefined,
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : failedSetup,
         undefined,
-        ...(args.promisedAgentChat && !startup ? ([true] as const) : [])
+        ...(callerOwnsFirstSurface(args) && !startup ? ([true] as const) : [])
       )
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
@@ -261,11 +261,17 @@ function callerProvidesInitialSurface(
 ): boolean {
   // Background agent creates already leave their initial surface to the caller.
   return (
-    args.promisedAgentChat === true ||
+    callerOwnsFirstSurface(args) ||
     (args.createdWithAgent !== undefined &&
       args.request.activate !== true &&
       args.request.runHooks !== true)
   )
+}
+
+function callerOwnsFirstSurface(
+  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
+): boolean {
+  return args.promisedAgentChat === true || args.request.callerProvidesSurface === true
 }
 
 function setupPlatform(
