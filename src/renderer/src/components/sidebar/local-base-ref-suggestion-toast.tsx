@@ -10,7 +10,10 @@ import { translate } from '@/i18n/i18n'
 
 type SuggestionToastDeps = {
   updateSettings: AppState['updateSettings']
-  getSettings: () => AppState['settings']
+  getSettings: () => Pick<
+    NonNullable<AppState['settings']>,
+    'refreshLocalBaseRefOnWorktreeCreate'
+  > | null
   openSettingsPage: AppState['openSettingsPage']
   openSettingsTarget: AppState['openSettingsTarget']
 }

@@ -19,6 +19,15 @@ export type WorktreeVisibilityDefaultsByHost = Partial<
 export async function readRuntimeWorktreeVisibilityDefaults(
   environmentId: string
 ): Promise<WorktreeVisibilityDefaults | null | undefined> {
+  const settings = await readRuntimeWorktreeSettings(environmentId)
+  return settings === undefined
+    ? undefined
+    : (normalizeWorktreeVisibilityDefaults(settings.worktreeVisibilityDefaults) ?? null)
+}
+
+async function readRuntimeWorktreeSettings(
+  environmentId: string
+): Promise<Partial<GlobalSettings> | undefined> {
   try {
     const result = await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
       { kind: 'environment', environmentId },
@@ -26,7 +35,7 @@ export async function readRuntimeWorktreeVisibilityDefaults(
       undefined,
       { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
     )
-    return normalizeWorktreeVisibilityDefaults(result.settings.worktreeVisibilityDefaults) ?? null
+    return result.settings
   } catch {
     return undefined
   }
@@ -35,8 +44,14 @@ export async function readRuntimeWorktreeVisibilityDefaults(
 export async function readRuntimeWorktreeVisibilitySnapshot(environmentId: string): Promise<{
   defaults: WorktreeVisibilityDefaults | null | undefined
   sourceDefaultsSupported: boolean
+  refreshLocalBaseRefOnWorktreeCreate: boolean
+  localBaseRefSuggestionDismissed: boolean
 }> {
-  const defaults = await readRuntimeWorktreeVisibilityDefaults(environmentId)
+  const settings = await readRuntimeWorktreeSettings(environmentId)
+  const defaults =
+    settings === undefined
+      ? undefined
+      : (normalizeWorktreeVisibilityDefaults(settings.worktreeVisibilityDefaults) ?? null)
   const sourceDefaultsSupported =
     defaults !== undefined &&
     (await runtimeEnvironmentSupportsCapability(
@@ -44,7 +59,12 @@ export async function readRuntimeWorktreeVisibilitySnapshot(environmentId: strin
       WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
       15_000
     ).catch(() => false))
-  return { defaults, sourceDefaultsSupported }
+  return {
+    defaults,
+    sourceDefaultsSupported,
+    refreshLocalBaseRefOnWorktreeCreate: settings?.refreshLocalBaseRefOnWorktreeCreate === true,
+    localBaseRefSuggestionDismissed: settings?.localBaseRefSuggestionDismissed === true
+  }
 }
 
 export async function hydrateOwnerWorktreeVisibilityDefaults(
@@ -75,9 +95,9 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
   const ownerDefaultsByHost = localDefaults
     ? { ...defaultsByHost, [LOCAL_EXECUTION_HOST_ID]: localDefaults }
     : defaultsByHost
-  const { defaults, sourceDefaultsSupported } = await readRuntimeWorktreeVisibilitySnapshot(
-    target.environmentId
-  )
+  const { defaults, sourceDefaultsSupported, ...baseRefSettings } =
+    await readRuntimeWorktreeVisibilitySnapshot(target.environmentId)
+  settings = { ...settings, ...baseRefSettings }
   if (defaults) {
     return {
       settings: { ...settings, worktreeVisibilityDefaults: defaults },

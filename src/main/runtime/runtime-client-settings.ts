@@ -87,6 +87,8 @@ export class RuntimeClientSettingsController {
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
+      refreshLocalBaseRefOnWorktreeCreate: settings.refreshLocalBaseRefOnWorktreeCreate === true,
+      localBaseRefSuggestionDismissed: settings.localBaseRefSuggestionDismissed === true,
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
