@@ -180,8 +180,8 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
           }
         }
         expect(list).toHaveBeenCalledTimes(sizes.C)
-        expect(recordVisits).toBe(sizes.C * (sizes.R - 1))
-        expect(linkVisits).toBe(sizes.C * (sizes.P + sizes.R - 2))
+        expect(recordVisits).toBe(2 * sizes.C * (sizes.R - 1))
+        expect(linkVisits).toBe(sizes.C * (sizes.R - 1 + 2 * (sizes.P + sizes.R - 2)))
         expect(rowVisits).toBe(2 * sizes.L * sizes.C)
         expect(scan).toHaveBeenCalledOnce()
         await store.setConversationName(HOST_TEST_SESSION, `Before ${n}`)
