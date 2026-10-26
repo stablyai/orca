@@ -253,7 +253,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
         session: session({ title: 'Resume me' }),
         hostPlatform: 'darwin'
       }).title
-    ).toBe('Resume me')
+    ).toBe(null)
   })
 
   it('keeps managed-home Codex resumes free of env deletion', () => {
