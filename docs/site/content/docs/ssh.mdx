@@ -41,6 +41,8 @@ On the first connect, Orca installs itself on the host over your own SSH connect
 
 Open **Settings → SSH**, edit a target, and expand **Advanced Connection** when the host needs a proxy, jump host, or SSH multiplexing override. Orca enables **Reuse SSH connection for faster setup** by default, which uses OpenSSH connection reuse on macOS and Linux so setup commands do not each pay a fresh SSH handshake. Turn it off only for hosts whose SSH policy rejects multiplexed sessions.
 
+**Reconnect on launch** is on by default: hosts that were connected when you quit reconnect when Orca starts. Turn it off for a host you only want on demand, such as a machine that is often asleep or off the network. Orca then leaves it, and any Orca server reached through it, disconnected at launch, and its workspaces show **Connect** until you connect it. Scheduled automations on that host are skipped until then.
+
 ## Passphrases
 
 Passphrases are held in memory for the life of the Orca session. Closing Orca clears them. You can opt into a longer TTL under SSH settings.

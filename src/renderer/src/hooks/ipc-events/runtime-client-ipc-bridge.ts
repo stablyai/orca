@@ -3,7 +3,10 @@ import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/term
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
+import {
+  refreshRuntimeEnvironmentCatalog,
+  setRuntimeEnvironmentCatalogRefresher
+} from '@/runtime/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
@@ -205,6 +208,13 @@ export function registerRuntimeClientIpcBridge(
     useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
   })
   unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  // `orca environment add/rm` edits the registry without any renderer request (#25251).
+  const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
+    void refreshRuntimeEnvironmentCatalog()
+  })
+  if (stopCatalogChanged) {
+    unsubs.push(stopCatalogChanged)
+  }
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),

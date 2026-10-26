@@ -5,6 +5,7 @@ import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
+import type { SshTarget } from '../../../shared/ssh-types'
 import {
   clearSshUserDisconnected,
   clearSshUserDisconnectedForEnvironment,
@@ -96,6 +97,32 @@ export async function liftSshUserDisconnectForEnvironment(
     return
   }
   clearSshUserDisconnectedForEnvironment(environment)
+}
+
+let launchReconnectOptOutsHeld = false
+
+/** Opted-out hosts start each launch as if the user had disconnected them: nothing dials them, servers included, until Connect. Once per process, before server status probes start. */
+export function holdLaunchReconnectOptOuts(
+  targets: readonly Pick<SshTarget, 'id' | 'reconnectOnLaunch'>[],
+  userDataPath: string = appUserDataPath()
+): void {
+  if (launchReconnectOptOutsHeld) {
+    return
+  }
+  launchReconnectOptOutsHeld = true
+  for (const target of targets) {
+    if (target.reconnectOnLaunch !== false) {
+      continue
+    }
+    recordSshUserDisconnected(target.id)
+    for (const environment of environmentsReachedThrough(userDataPath, target.id)) {
+      markRuntimeEnvironmentManuallyDisconnected(environment.id)
+    }
+  }
+}
+
+export function resetLaunchReconnectOptOutsForTests(): void {
+  launchReconnectOptOutsHeld = false
 }
 
 /** Explicit host Connect lifts its servers; resume their status checks only after connection settles. */

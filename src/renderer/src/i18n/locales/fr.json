@@ -5745,7 +5745,9 @@
           "51001182e3": "Répertoire vide",
           "971d85cc84": "S'ouvre comme projet sur cet hôte · {{value0}}",
           "00c4235c10": "Aucun résultat pour « {{value0}} »",
-          "largeInputNoMatches": "Aucun résultat pour cette saisie longue"
+          "largeInputNoMatches": "Aucun résultat pour cette saisie longue",
+          "entriesLabel": "Éléments du dossier",
+          "inputLabel": "Filtre ou chemin"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -9125,6 +9127,8 @@
           "editDescription": "Mettez à jour les détails de connexion de cette machine. Les modifications s'appliquent à la prochaine connexion.",
           "addDescription": "Ajoutez une machine permanente sur laquelle vous pouvez vous connecter en SSH.",
           "editingPrefix": "Modification",
+          "reconnectOnLaunch": "Se reconnecter au lancement",
+          "reconnectOnLaunchHelp": "Si désactivé, Orca laisse cet hôte, et tout serveur Orca joint par son intermédiaire, déconnecté au démarrage jusqu'à ce que vous le connectiez.",
           "allowRemoteCliControl": "Autoriser l'orca CLI de cet hôte à contrôler Orca",
           "allowRemoteCliControlHelp": "Activé par défaut pour les nouveaux hôtes. Permet aux commandes orca exécutées sur cet hôte d'ouvrir et de piloter des onglets du navigateur Orca sur ce bureau, uniquement dans les espaces de travail de cet hôte et uniquement tant qu'il est connecté, et aux terminaux lancés par une ancienne version d'Orca sur cet hôte d'exécuter des commandes d'orchestration (check, inbox, send, ask, reply) pour leur propre travail supervisé. Elles ne peuvent pas lire vos fichiers, votre presse-papiers ni vos cookies. Lorsque cette option est désactivée, elles n'atteignent que le serveur Orca de cet hôte.",
           "addHost": "Ajouter un hôte"

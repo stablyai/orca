@@ -5592,6 +5592,8 @@
           "editDescription": "Atualize os detalhes de conexão desta máquina. As alterações se aplicam na próxima conexão.",
           "addDescription": "Adicione uma máquina persistente na qual você pode entrar via SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar ao iniciar",
+          "reconnectOnLaunchHelp": "Quando desativado, o Orca deixa este host, e qualquer servidor Orca acessado por ele, desconectado ao iniciar até você conectá-lo.",
           "allowRemoteCliControl": "Permitir que a CLI orca deste host controle o Orca",
           "allowRemoteCliControlHelp": "Ativado por padrão para novos hosts. Permite que comandos orca executados neste host abram e controlem abas do navegador Orca neste computador, apenas nos espaços de trabalho deste host e enquanto ele estiver conectado. Também permite que terminais iniciados por um Orca mais antigo neste host executem comandos de orquestração (check, inbox, send, ask, reply) para seu próprio trabalho supervisionado. Eles não podem ler seus arquivos, área de transferência ou cookies. Quando desativado, eles acessam apenas o próprio servidor Orca deste host.",
           "addHost": "Adicionar host"

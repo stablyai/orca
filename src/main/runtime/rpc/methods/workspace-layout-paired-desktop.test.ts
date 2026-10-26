@@ -1,6 +1,6 @@
 // Layout-owner servers offer intents to desktops only, while retaining every legacy session.tabs mutation.
 
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
 import {
@@ -43,12 +43,6 @@ function request(method: string, params?: unknown): RpcRequest {
 function errorCode(response: RpcResponse): string | null {
   return response.ok ? null : response.error.code
 }
-
-// The first import transforms the whole runtime graph (22-30+ s on a loaded CI shard); later
-// switchedBuild calls reset modules but reuse those transforms, so pay it once outside any test.
-beforeAll(async () => {
-  await switchedBuild(true)
-}, 120_000)
 
 afterEach(() => {
   layoutOwner.isMain = true
