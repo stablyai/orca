@@ -61,15 +61,17 @@ export function MobilePdfHandoff(props: Props) {
         if (controller.signal.aborted) {
           return
         }
-        const safeName = (relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
+        const rawName = (relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
           /[^a-zA-Z0-9._-]/g,
           '_'
         )
+        const ext = rawName.toLowerCase().endsWith('.pdf') ? '.pdf' : ''
+        const stem = ext ? rawName.slice(0, -ext.length) : rawName
         const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        const file = new FileSystem.File(
-          FileSystem.Paths.cache,
-          `orca-pdf-handoff-${unique}-${safeName}`
-        )
+        const prefix = `orca-pdf-handoff-${unique}-`
+        const maxStemLength = Math.max(1, 255 - prefix.length - ext.length)
+        const safeName = `${stem.slice(0, maxStemLength)}${ext}`
+        const file = new FileSystem.File(FileSystem.Paths.cache, `${prefix}${safeName}`)
         file.create({ overwrite: true })
         file.write(bytes)
         fileUri = file.uri
