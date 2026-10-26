@@ -54,7 +54,6 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   } = args
   const {
-    activeChatAgent,
     activeChatAgentConfirmed,
     activeChatAgentRef,
     activeChatResolution,
@@ -75,22 +74,20 @@ export function useMobileNativeChatController(args: {
 
   // Fixed hook order mounts the lane before drafts; defer Edit’s append through a ref and delete nothing until copying succeeds.
   const appendComposerTextRef = useRef<(text: string) => boolean>(() => false)
-  const { structuredSession: structuredNativeChat, session: nativeChatSession } =
-    useMobileNativeChatSessionLane({
-      client,
-      structured: activeChatStructured,
-      agent: activeChatAgent,
-      resolvedAgent: activeChatResolution?.agent ?? null,
-      transcriptPath: activeChatResolution?.transcriptPath ?? null,
-      sessionId: activeChatSessionId,
-      sourceIdentity,
-      enabled: showNativeChat,
-      connState,
-      hostSupport: agentSessionHostSupport,
-      appendComposerTextRef,
-      onSendError,
-      onActionResolved: onSendResolved
-    })
+  const nativeChatLane = useMobileNativeChatSessionLane({
+    client,
+    hostId,
+    structured: activeChatStructured,
+    resolution: activeChatResolution,
+    sourceIdentity,
+    enabled: showNativeChat,
+    connState,
+    hostSupport: agentSessionHostSupport,
+    appendComposerTextRef,
+    onSendError,
+    onActionResolved: onSendResolved
+  })
+  const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
@@ -207,6 +204,7 @@ export function useMobileNativeChatController(args: {
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent,
+    sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -317,6 +315,7 @@ export function useMobileNativeChatController(args: {
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
+    nativeChatSessionCommands: nativeChatLane.sessionCommands,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
   }
 }

@@ -12,6 +12,7 @@ import {
 } from './pty/pane/spawn-reservation'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import {
   agentSessionRecordFixture,
@@ -225,8 +226,8 @@ describe('a window view of a pane main is starting', () => {
       })
     )
     const records: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-    const list = vi.fn(() => [chat])
-    records.listRecords = list
+    const list = vi.fn(() => [agentSessionConversationView(chat)])
+    records.listConversations = list
     records.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: [chat.sessionId] })
     const capture = vi.spyOn(runtime, 'readSavedResumeSource').mockResolvedValue(saved)
     const cleanup = vi.spyOn(runtime, 'forgetRefusedSavedResume').mockResolvedValue()

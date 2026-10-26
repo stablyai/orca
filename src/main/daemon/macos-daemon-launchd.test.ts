@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import type * as TimerPromises from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
-import { DAEMON_V8_FLAGS } from './daemon-launched-child-spawn'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const { state, runProcessMock, materializeMock, ensureWithinMock, disconnectMock, recoverMock } =
@@ -233,7 +232,7 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
       : []
   expect(args.slice(0, 5)).toEqual([
     helperExec(),
-    ...DAEMON_V8_FLAGS,
+    '--max-semi-space-size=4',
     helperEntry(),
     '--socket',
     options.socketPath

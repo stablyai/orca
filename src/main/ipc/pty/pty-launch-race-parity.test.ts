@@ -31,6 +31,7 @@ import {
   type LaunchRaceLane
 } from '../pty-launch-race-test-fixture'
 
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   agentSessionRecordFixture,
@@ -757,7 +758,7 @@ describe('launch race parity, both spawn lanes', () => {
           })
         )
         const records: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-        records.listRecords = () => [chat]
+        records.listConversations = () => [agentSessionConversationView(chat)]
         records.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: [chat.sessionId] })
         const forget = vi.fn(async () => {})
         const remember = vi.fn()

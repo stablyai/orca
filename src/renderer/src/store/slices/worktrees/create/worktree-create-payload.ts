@@ -11,6 +11,7 @@ import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/type
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
@@ -68,6 +69,7 @@ function sharedCreateFields(
     baseBranch: request.baseBranch,
     ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {}),
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
+    ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,

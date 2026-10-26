@@ -1,14 +1,9 @@
 import type { Dir, Stats } from 'node:fs'
-import { lstat, mkdir, opendir, rm } from 'node:fs/promises'
+import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 const SWEEP_CONCURRENCY = 8
-const REMOVE_OPTIONS = {
-  recursive: true,
-  force: true,
-  maxRetries: 3,
-  retryDelay: 100
-} as const
 
 type CleanupResult = 'failed' | 'fresh' | 'ignored' | 'removed'
 
@@ -104,7 +99,7 @@ export async function sweepExpiredOwnedDirectories(
 }
 
 export async function removeOwnedDirectory(directory: string): Promise<void> {
-  await rm(directory, REMOVE_OPTIONS)
+  await removeTree(directory)
 }
 
 async function cleanupDirectory(

@@ -6,6 +6,7 @@ import type { WslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-state'
+import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { WSL_ORCAD_RECONNECT_DELAYS_MS } from './wsl-orcad-reconnect-backoff'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
@@ -29,6 +30,7 @@ function harness(options: { visible?: boolean } = {}) {
     identity: WslGuestIdentity | null
     watchSignal: WslOrcadWatch['signal']
     ensureFails: number
+    ensureError?: Error
   } = {
     visible: options.visible ?? true,
     running: { status: 'confirmed', distros: ['Ubuntu'] },
@@ -48,7 +50,7 @@ function harness(options: { visible?: boolean } = {}) {
       }
       if (state.ensureFails > 0) {
         state.ensureFails -= 1
-        throw new Error('relaunch failed')
+        throw state.ensureError ?? new Error('relaunch failed')
       }
       connection = {
         distro,
@@ -170,24 +172,52 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.watches).toHaveLength(1)
   })
 
-  it('marks terminals exited and recovers when a user-visible distro is confirmed stopped', async () => {
+  it('keeps a confirmed-stopped distro down even with visible work, until it runs again (E9)', async () => {
     const h = harness({ visible: true })
     await h.supervisor.connect('Ubuntu')
     h.state.running = { status: 'confirmed', distros: [] }
     h.lastWatch().exit(1)
-    await h.advance(0)
-    expect(h.statuses[0]).toEqual({
-      state: 'distro-stopped',
-      terminals: 'exited',
-      recovering: true
-    })
+    await h.advance(60_000)
+    expect(h.statuses).toEqual([
+      { state: 'distro-stopped', terminals: 'exited', recovering: false }
+    ])
     expect(h.readIdentity).toHaveBeenCalledTimes(1) // never exec'd into the stopped distro
+    expect(h.ensure).toHaveBeenCalledTimes(1)
+    expect(h.deferred).toHaveLength(1)
+    // Started by someone else: relaunch into the running distro.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
     h.state.identity = { distroInstance: 'boot:2', orcad: 'orcad:101' }
-    await h.advance(WSL_ORCAD_RECONNECT_DELAYS_MS[0] * 2)
+    h.deferred[0]()
+    await h.advance(5_000)
     expect(h.ensure).toHaveBeenCalledTimes(2)
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: CENSUS })
-    expect(h.watches).toHaveLength(2)
+  })
+
+  it('reports settling right after an exit, while the running list may be stale (E9)', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(false)
+    // WSL still lists the stopping distro as running.
+    h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
+    h.lastWatch().exit(1)
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(true)
+    h.state.running = { status: 'confirmed', distros: [] }
+    await h.advance(60_000)
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(false)
+  })
+
+  it('re-verifies after a no-boot connect is refused, so the distro still gets a verdict (E9)', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    h.state.running = { status: 'confirmed', distros: [] }
+    h.state.ensureFails = 1
+    h.state.ensureError = new WslDistroNotRunningError('Ubuntu')
+    await expect(h.supervisor.connect('Ubuntu', { noBoot: true })).rejects.toBeInstanceOf(
+      WslDistroNotRunningError
+    )
+    await h.advance(60_000)
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
   })
 
   it('never boots a stopped distro for background work; the gate resumes it once running', async () => {

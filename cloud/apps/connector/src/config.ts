@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseSlackConfig, type SlackConfig } from './slack-config.js'
 
 const OptionalTextSchema = z.string().min(1).optional()
 
@@ -25,6 +26,7 @@ export type ConnectorConfig = {
   authIssuer: string
   jwksUrl: string
   trustedProxyHops: number
+  slack?: SlackConfig
 }
 
 function secureUrl(value: string, name: string): URL {
@@ -44,11 +46,11 @@ function canonicalOrigin(value: string, name: string): string {
 }
 
 export function loadConnectorConfig(env: NodeJS.ProcessEnv = process.env): ConnectorConfig {
-  const parsed = EnvSchema.parse(
-    Object.fromEntries(
-      Object.entries(env).map(([key, value]) => [key, value?.trim() === '' ? undefined : value])
-    )
+  const present = Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [key, value?.trim() === '' ? undefined : value])
   )
+  const parsed = EnvSchema.parse(present)
+  const slack = parseSlackConfig(present)
   return {
     mode: parsed.ORCA_CONNECTOR_MODE,
     port: parsed.PORT,
@@ -61,6 +63,7 @@ export function loadConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conne
     authIssuer: canonicalOrigin(parsed.ORCA_CONNECTOR_AUTH_ISSUER, 'ORCA_CONNECTOR_AUTH_ISSUER'),
     // The signing keys come from here, so plain HTTP would let anyone on the path mint tokens.
     jwksUrl: secureUrl(parsed.ORCA_CONNECTOR_JWKS_URL, 'ORCA_CONNECTOR_JWKS_URL').href,
-    trustedProxyHops: parsed.ORCA_CONNECTOR_TRUSTED_PROXY_HOPS
+    trustedProxyHops: parsed.ORCA_CONNECTOR_TRUSTED_PROXY_HOPS,
+    ...(slack === undefined ? {} : { slack })
   }
 }

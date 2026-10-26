@@ -18,16 +18,21 @@ export class ConnectorHosts {
     private readonly now: () => number
   ) {}
 
-  // Under the host lock. The highest revision wins (a delayed older hello changes nothing); held polls
-  // wake to find theirs stale, the next poll lists what was received but never settled, and a new
-  // revision restarts the events mark.
+  // Under the host lock. Each hello gets the next revision, so acks and events naming an earlier one change
+  // nothing; held polls wake to find theirs stale, the next poll lists what was received but never
+  // settled, and the events mark starts over.
   async recordHello(
     transaction: CloudDatabase,
     host: { hostId: string; accountId: string },
     hello: ConnectorHelloRequest
-  ): Promise<void> {
+  ): Promise<number> {
     const now = this.now()
-    const [recorded] = await transaction.query(
+    const [row] = await transaction.query(
+      'SELECT hello_rev FROM connector_hosts WHERE host_id = ?',
+      [host.hostId]
+    )
+    const helloRev = (row ? Number(row.hello_rev) : 0) + 1
+    await transaction.query(
       `INSERT INTO connector_hosts
        (host_id, account_id, host_name, platform, runtime, orca_version, hello_rev, hello,
         unsettled_due, first_seen_at, last_seen_at)
@@ -36,9 +41,7 @@ export class ConnectorHosts {
          platform = excluded.platform, runtime = excluded.runtime,
          orca_version = excluded.orca_version, hello_rev = excluded.hello_rev,
          hello = excluded.hello, unsettled_due = 1, last_seen_at = excluded.last_seen_at,
-         events_seq = CASE WHEN connector_hosts.hello_rev = excluded.hello_rev
-           THEN connector_hosts.events_seq END
-       WHERE connector_hosts.hello_rev <= excluded.hello_rev`,
+         events_seq = NULL`,
       [
         host.hostId,
         host.accountId,
@@ -46,33 +49,27 @@ export class ConnectorHosts {
         hello.platform,
         hello.runtime,
         hello.orcaVersion,
-        hello.helloRev,
+        helloRev,
         JSON.stringify(hello),
         now,
         now
       ]
     )
-    if (Number(recorded?.changes ?? 0) > 0) {
-      await this.inbox.wake(transaction, host.hostId)
-    }
+    await this.inbox.wake(transaction, host.hostId)
+    return helloRev
   }
 
-  // Under the host lock: a request's hello is the machine's current one, an older one, or one the
-  // cloud has no record of (the machine must send it).
-  async helloStatus(
+  // Under the host lock: whether a request names the machine's current hello.
+  async isCurrentHello(
     transaction: CloudDatabase,
     hostId: string,
     helloRev: number
-  ): Promise<'current' | 'older' | 'unknown'> {
+  ): Promise<boolean> {
     const [row] = await transaction.query(
       'SELECT hello_rev FROM connector_hosts WHERE host_id = ?',
       [hostId]
     )
-    const current = row ? Number(row.hello_rev) : null
-    if (current === helloRev) {
-      return 'current'
-    }
-    return current !== null && helloRev < current ? 'older' : 'unknown'
+    return row !== undefined && Number(row.hello_rev) === helloRev
   }
 
   // Under the host lock: true once per hello, for the poll that lists unsettled deliveries.

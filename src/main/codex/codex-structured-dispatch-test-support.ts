@@ -1,5 +1,6 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -95,6 +96,7 @@ export async function acquiredCodexAdapter(input: {
   settlements: LateSettlement[]
   sink?: StructuredAgentSessionEventSink
   requestTimeoutMs?: number
+  permissionMode?: AgentChatPermissionChoice
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -121,6 +123,7 @@ export async function acquiredCodexAdapter(input: {
     identity,
     fence: 7,
     spawnToken: 'spawn-9',
+    ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
     events: input.sink ?? recordingSink()
   })
   return adapter

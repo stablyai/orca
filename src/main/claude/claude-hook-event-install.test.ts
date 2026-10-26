@@ -53,6 +53,37 @@ function expectUserSettingsKept(config: HooksConfig): void {
 }
 
 describe('Claude managed hook events by resolved version', () => {
+  it.each([true, false])(
+    'keeps a managed hook async=%s across reinstall and migration',
+    (async) => {
+      const userAsyncHook = { type: 'command' as const, command: 'echo user', async: !async }
+      const oldManagedHook = {
+        type: 'command' as const,
+        command: '/bin/sh',
+        args: ['/old/.orca/agent-hooks/claude-hook.sh'],
+        async
+      }
+      const written = install(
+        {
+          hooks: {
+            PreToolUse: [{ hooks: [userAsyncHook, oldManagedHook] }],
+            PostToolUse: [{ hooks: [userAsyncHook] }]
+          }
+        },
+        '2.1.32'
+      )
+      expect(written.hooks?.PreToolUse).toEqual([
+        { hooks: [userAsyncHook] },
+        { matcher: '*', hooks: [{ ...managedHook, async }] }
+      ])
+      expect(written.hooks?.PostToolUse).toEqual([
+        { hooks: [userAsyncHook] },
+        { matcher: '*', hooks: [managedHook] }
+      ])
+      expect(install(written, '2.1.32')).toEqual(written)
+    }
+  )
+
   it.each(Object.keys(enums))('writes only events Claude %s knows', (version) => {
     const written = install({ hooks: {} }, version)
     const unknown = Object.keys(written.hooks ?? {}).filter(

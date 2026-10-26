@@ -1,5 +1,20 @@
+import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import type {
+  OpenedStructuredAgentSessionConversation,
+  StructuredAgentSessionConversationOpenOptions
+} from './structured-agent-session-conversation-open'
+import type { createStructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
+import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
 import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
 import type { StructuredAgentSessionRequestFailure } from './structured-agent-session-request-failures'
+import type { StructuredAgentSessionCommandHandoverContext } from './structured-agent-session-command-turn'
+import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
+import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
+import type {
+  StructuredAgentSessionAdmitHostInput,
+  StructuredAgentSessionContinueInput
+} from './structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
@@ -143,7 +158,9 @@ export type StructuredAgentSessionHostDeps = {
   idleSweep?: { intervalMs?: number; idleMs?: number }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
-  hasOpenDispatch?: (record: AgentSessionRecord) => boolean
+  hasOpenDispatch?: (
+    record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
+  ) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
@@ -184,4 +201,41 @@ export type StructuredAgentSessionConversationNaming = {
     name: string,
     write: AgentSessionUserNameWrite
   ) => Promise<{ name: string | null; applied: boolean } | null>
+}
+
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  admitFreshInput?: StructuredAgentSessionAdmitHostInput
+  continueInput?: StructuredAgentSessionContinueInput
+  acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
+  deliveryOrder?: StructuredAgentSessionDeliveryOrder
+  workChanged?: () => void
+  holdClosedInput?: (
+    clientMessageId: string,
+    fence: number,
+    cause: UnsentSendHold['cause']
+  ) => Promise<void>
+  settleEndedInput?: (owner: () => void) => Promise<void>
+  /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
+  recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
+}
+
+export type StructuredAgentSessionConversationLifetime = ReturnType<
+  typeof createStructuredAgentSessionConversationLifetime
+>
+
+export type StructuredAgentSessionConversationDelivery = {
+  loop: StructuredAgentSessionDeliveryLoop
+  open: (
+    sessionId: string,
+    options?: StructuredAgentSessionConversationOpenOptions
+  ) => Promise<StructuredAgentSessionHostSession | null>
+  /** Queue commit wakes under serialization so they cannot race a loop’s stopping decision. */
+  afterCommit: (sessionId: string, journal: AgentSessionJournal) => void
+  /** Settle edges affect status/steer holds without rows or renewed idle activity. */
+  afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
+  dispose: () => void
+  adoptOpened: (
+    sessionId: string,
+    opened: OpenedStructuredAgentSessionConversation
+  ) => Promise<void>
 }

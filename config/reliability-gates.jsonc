@@ -2652,15 +2652,15 @@
       "invariant": "Title-sync publications must not enumerate unchanged session collections, while title identity, provider availability, active pane, stored title and effective execution-host changes retain their previous invalidation decisions.",
       "oracle": "Fifty live heartbeat publications with 500 retained and 500 sleeping records cause zero unchanged-map enumerations and no extra scheduled reconciliations. Provider identity, additions/removals, agent/pane ownership, effective host, active pane and stored title changes still invalidate.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status/agent-status.test.ts src/renderer/src/store/slices/agent-status/agent-status-manual-sleep-capture.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
-        "src/renderer/src/store/slices/agent-status-batch.test.ts",
-        "src/renderer/src/store/slices/agent-status-provider-session.test.ts",
-        "src/renderer/src/store/slices/agent-status.test.ts",
-        "src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
+        "src/renderer/src/store/slices/agent-status/agent-status-batch.test.ts",
+        "src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts",
+        "src/renderer/src/store/slices/agent-status/agent-status.test.ts",
+        "src/renderer/src/store/slices/agent-status/agent-status-manual-sleep-capture.test.ts"
       ],
       "assertionRefs": [
         {
@@ -2679,6 +2679,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status/agent-status.test.ts src/renderer/src/store/slices/agent-status/agent-status-manual-sleep-capture.test.ts",
           "result": "passed",
           "durationSeconds": 2.8954373749999998,
           "summary": "The current retained gate command passed 82 tests across 6 files. Historical pre-consolidation receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-09-07\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts\",\"result\":\"passed\",\"durationSeconds\":5.35,\"summary\":\"69 tests passed across six files, including actual subscriber scheduling and producer identity contracts.\"}] No new E2E or hosted run is claimed."
@@ -5286,7 +5287,7 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457",
         "https://github.com/stablyai/orca/issues/9563"
@@ -5296,7 +5297,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/single-instance-lock.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
@@ -5308,7 +5309,6 @@
         "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
-        "src/main/startup/window-all-closed-quit-policy.test.ts",
         "src/cli/runtime-client.test.ts",
         "src/cli/runtime/websocket-transport.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
@@ -5361,12 +5361,6 @@
           "assertions": [
             "serve never skips the single-instance lock even in development",
             "the isolated E2E profile can opt into the production ownership path"
-          ]
-        },
-        {
-          "file": "src/main/startup/window-all-closed-quit-policy.test.ts",
-          "assertions": [
-            "a promoted serve owner remains alive after an ordinary window close but exits after a committed quit"
           ]
         },
         {
@@ -7634,30 +7628,25 @@
       "providers": ["remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, immediate SOCKS5 setup with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, arbitrary initial-navigation denial, and fail-closed per-guest WebRTC policy through delayed or failed cleanup. The production client-page executor prepares, registers, and grants the exact route page. A real Electron A/B capture proves HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and a `.test` hostname traverse SOCKS with no direct target connection. A two-launch control proves immediate setProxy routes a forced persisted-worker wake and later worker fetch. A separate capture proves the protected guest sends zero direct STUN packets. A further capture proves non-WebRTC UDP is also contained: a WebTransport session and a fetch forced onto QUIC both reach the desktop directly in the control arm and emit zero datagrams through the route partition, and the shipped disable-features list hides the Direct Sockets constructors whose mere construction kills a control-arm renderer. DNS prefetch is a tripwire over an accepted residual rather than a guard: Electron 43 inherits Chromium's PrefetchDNS, so a `<link rel=\"dns-prefetch\">` host resolves on the desktop resolver outside the tunnel, and a source census keeps any DoH host-resolver mode from widening that leak. Network-service restart and WSL provider journeys remain uncovered. Four Linux Docker SSH browser baseline scenarios passed: direct-host routing, unavailable-host local escape, forwarding refusal, and paired client-hosted reconnect. All four scenarios subsequently passed three repetitions each (12 passes, no skips or retries) in Linux CI run 34040309638, with unchanged assertions and timeouts.",
+      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, immediate SOCKS5 setup with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, arbitrary initial-navigation denial, and fail-closed per-guest WebRTC policy through delayed or failed cleanup. The production client-page executor prepares, registers, and grants the exact route page. Archived standalone Electron experiments measured TCP routing and a forced persisted-worker wake using fixture-owned proxy setup; they did not exercise production route preparation and are no longer current test coverage. A separate capture proves the protected guest sends zero direct STUN packets. A further capture proves non-WebRTC UDP is also contained: a WebTransport session and a fetch forced onto QUIC both reach the desktop directly in the control arm and emit zero datagrams through the route partition, and the shipped disable-features list hides the Direct Sockets constructors whose mere construction kills a control-arm renderer. An archived DNS-prefetch experiment observed an accepted Electron 43 residual: prefetched hostnames resolved on the desktop outside the tunnel. It asserted the leak and was removed; current production-path TCP, persisted-worker, and DNS-prefetch egress coverage remains incomplete. Network-service restart and WSL provider journeys remain uncovered. Four Linux Docker SSH browser baseline scenarios passed: direct-host routing, unavailable-host local escape, forwarding refusal, and paired client-hosted reconnect. All four scenarios subsequently passed three repetitions each (12 passes, no skips or retries) in Linux CI run 34040309638, with unchanged assertions and timeouts.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews",
         "https://github.com/stablyai/orca/actions/runs/34039986047",
         "https://github.com/stablyai/orca/actions/runs/34040309638"
       ],
       "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint. Fixed SOCKS5 setup starts immediately after Session creation, before policy installation can yield or a persisted worker is awakened; no partition enters the webview allowlist until browser policy is installed, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only. Its exact WebContents is quarantined before applying non-proxied WebRTC denial and remains navigation- and popup-denied if policy application or cleanup fails. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded. No UDP transport a route-partition page can reach — WebRTC, WebTransport, or forced QUIC — emits a datagram to the desktop, the Direct Sockets constructors stay absent from every guest so no page can kill its renderer, and the process never enables a DoH host-resolver mode.",
-      "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require setProxy with <-loopback> to be invoked immediately after getSession and before policy setup, then closeAllConnections and exact SOCKS5 resolveProxy while isAllowedPartition remains false; only then may it become live. Under real Electron, require direct controls for HTTP, HTTPS, WebSocket, redirects, subresources, and downloads, then require the fixed SOCKS session to route every equivalent request plus an otherwise-unresolvable `.test` hostname with zero direct target connections. Across two Electron launches, require immediate setProxy to route a forced worker wake and post-verification fetch. Reject DIRECT, endpoint retargeting, and capacity overflow. Require quarantine before disable_non_proxied_udp and admission; under real Electron require the unprotected control to emit STUN and the protected guest to emit zero direct UDP packets. Under real Electron require a direct control to emit WebTransport and forced-QUIC datagrams and the SOCKS partition to emit none, require an explicitly enabled Direct Sockets control to expose the constructors and die on construction, and require the shipped disable-features list to leave them undefined with the renderer alive. Capture a route partition's netLog across a dns-prefetch load and require the prefetched host to appear on a local resolver task while an unreferenced control host appears nowhere; require no source file to set a non-'off' secureDnsMode.",
+      "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require setProxy with <-loopback> to be invoked immediately after getSession and before policy setup, then closeAllConnections and exact SOCKS5 resolveProxy while isAllowedPartition remains false; only then may it become live. Reject DIRECT, endpoint retargeting, and capacity overflow. Require quarantine before disable_non_proxied_udp and admission; under real Electron require the unprotected control to emit STUN and the protected guest to emit zero direct UDP packets. Under real Electron require a direct control to emit WebTransport and forced-QUIC datagrams and the SOCKS partition to emit none, require an explicitly enabled Direct Sockets control to expose the constructors and die on construction, and require the shipped disable-features list to leave them undefined with the renderer alive.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts"
       ],
       "testFiles": [
         "src/main/browser/browser-route-identity.test.ts",
         "src/main/browser/browser-route-partition-binding-store.test.ts",
         "src/main/browser/browser-route-session-registry.test.ts",
-        "src/main/browser/browser-route-persisted-worker-egress.electron.test.ts",
-        "src/main/browser/browser-route-tcp-egress.electron.test.ts",
         "src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "src/main/browser/browser-route-h3-egress.electron.test.ts",
-        "src/main/browser/browser-route-dns-prefetch.electron.test.ts",
         "src/main/browser/browser-route-webcontents-registry.test.ts",
         "src/main/browser/browser-session-registry.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
@@ -7695,23 +7684,6 @@
           ]
         },
         {
-          "file": "src/main/browser/browser-route-persisted-worker-egress.electron.test.ts",
-          "assertions": [
-            "a forced persisted-worker wake before proxy setup reaches the direct desktop control endpoint",
-            "getAllRunning is empty immediately after persistent Session creation in either arm",
-            "invoking setProxy before the forced wake routes it through SOCKS with no direct target request",
-            "a later worker message fetch remains routed after exact proxy verification"
-          ]
-        },
-        {
-          "file": "src/main/browser/browser-route-tcp-egress.electron.test.ts",
-          "assertions": [
-            "the unprotected Electron control reaches HTTP, HTTPS, WebSocket, redirect, subresource, and download targets directly",
-            "the fixed SOCKS session routes every equivalent TCP surface with zero direct target connections",
-            "an otherwise-unresolvable `.test` hostname is carried to SOCKS rather than desktop DNS"
-          ]
-        },
-        {
           "file": "src/main/browser/browser-route-webrtc-egress.electron.test.ts",
           "assertions": [
             "the unprotected SOCKS-partition control emits direct STUN packets",
@@ -7726,14 +7698,6 @@
             "an explicit --enable-features exposes the Direct Sockets constructors in the control arm",
             "constructing a TCPSocket in the control arm kills the guest renderer",
             "the shipped disable-features list leaves every Direct Sockets constructor undefined and the renderer alive"
-          ]
-        },
-        {
-          "file": "src/main/browser/browser-route-dns-prefetch.electron.test.ts",
-          "assertions": [
-            "a dns-prefetch hostname in a SOCKS route partition still opens a local host-resolver job",
-            "that job runs as a system or built-in DNS task, neither of which traverses the partition proxy",
-            "a hostname the page never references produces no host-resolver events"
           ]
         },
         {
@@ -7752,24 +7716,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-08-17",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
-          "result": "passed",
-          "durationSeconds": 1,
-          "summary": "The real Electron direct control reached all six TCP request surfaces; the fixed SOCKS session carried HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and remote DNS with zero direct target connections."
-        },
-        {
-          "date": "2026-08-16",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
-          "result": "passed",
-          "durationSeconds": 10,
-          "summary": "Three files passed 28 tests. The two-launch worker control reached desktop localhost before proxy setup; immediate setProxy invocation routed the same wake and a later worker fetch through SOCKS with path-attributed direct counts remaining zero. Both resolved and rejected proxy setup keep failed-policy retries joined through connection cleanup. The protected WebRTC guest emitted zero direct UDP packets."
-        },
         {
           "date": "2026-08-16",
           "runner": "local",
@@ -7799,7 +7745,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The TCP A/B control first reached all six target paths directly, while the fixed SOCKS arm routed the same HTTP, HTTPS, WebSocket, redirect, subresource, and download traffic plus remote DNS with zero direct target connections. The two-launch worker control reached desktop localhost before setProxy; immediate setProxy routed the same wake and later fetch through SOCKS. The WebRTC control emitted four direct STUN packets until disable_non_proxied_udp reduced the capture to zero. Non-WebRTC UDP and network-service restart remain explicit residuals. Historical receipts before removing the source-only tests, preserved verbatim with their originally executed commands (the narrowed commands were not rerun here): [{\"date\":\"2026-08-20\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts\",\"result\":\"passed\",\"durationSeconds\":21,\"summary\":\"The direct control emitted 5 WebTransport and 6 forced-QUIC datagrams while the SOCKS route partition emitted zero of each. With Direct Sockets explicitly enabled the control exposed TCPSocket/UDPSocket/TCPServerSocket and constructing one killed the guest renderer; the shipped disable-features list left all three undefined and the renderer alive. The dns-prefetch tripwire recorded HOST_RESOLVER_SYSTEM_TASK for the prefetched host with zero events for an unreferenced control host, documenting the accepted local-resolution residual.\",\"notes\":\"The dns-prefetch expectation intentionally asserts the leak. Flip it to an empty event list when the upstream Electron PrefetchDNS fix lands.\"}]"
+        "evidence": "The TCP A/B control first reached all six target paths directly, while the fixed SOCKS arm routed the same HTTP, HTTPS, WebSocket, redirect, subresource, and download traffic plus remote DNS with zero direct target connections. The two-launch worker control reached desktop localhost before setProxy; immediate setProxy routed the same wake and later fetch through SOCKS. The WebRTC control emitted four direct STUN packets until disable_non_proxied_udp reduced the capture to zero. Non-WebRTC UDP and network-service restart remain explicit residuals. Historical receipts before removing the source-only tests, preserved verbatim with their originally executed commands (the narrowed commands were not rerun here): [{\"date\":\"2026-08-20\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts\",\"result\":\"passed\",\"durationSeconds\":21,\"summary\":\"The direct control emitted 5 WebTransport and 6 forced-QUIC datagrams while the SOCKS route partition emitted zero of each. With Direct Sockets explicitly enabled the control exposed TCPSocket/UDPSocket/TCPServerSocket and constructing one killed the guest renderer; the shipped disable-features list left all three undefined and the renderer alive. The dns-prefetch tripwire recorded HOST_RESOLVER_SYSTEM_TASK for the prefetched host with zero events for an unreferenced control host, documenting the accepted local-resolution residual.\",\"notes\":\"The dns-prefetch expectation intentionally asserts the leak. Flip it to an empty event list when the upstream Electron PrefetchDNS fix lands.\"}] Archived provider-experiment receipts after removing the standalone TCP and persisted-worker suites, preserved verbatim with their originally executed commands (remaining and narrowed commands were not rerun here): [\n        {\n          \"date\": \"2026-08-17\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 1,\n          \"summary\": \"The real Electron direct control reached all six TCP request surfaces; the fixed SOCKS session carried HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and remote DNS with zero direct target connections.\"\n        },\n        {\n          \"date\": \"2026-08-16\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 10,\n          \"summary\": \"Three files passed 28 tests. The two-launch worker control reached desktop localhost before proxy setup; immediate setProxy invocation routed the same wake and a later worker fetch through SOCKS with path-attributed direct counts remaining zero. Both resolved and rejected proxy setup keep failed-policy retries joined through connection cleanup. The protected WebRTC guest emitted zero direct UDP packets.\"\n        }\n      ]"
       },
       "performanceBudget": {
         "required": true,
@@ -7814,7 +7760,7 @@
       ],
       "knownGaps": [
         "The production client-page executor calls preparePage before renderer mounting and navigation grant.",
-        "A forced persisted worker is routed once setProxy is invoked immediately after Session creation; spontaneous background-event wake timing beyond the two-launch oracle still needs cross-platform soak evidence.",
+        "Archived standalone experiments routed a manually forced persisted-worker wake after fixture-owned setProxy invocation; production-path TCP routing, spontaneous worker wake timing, and DNS-prefetch containment still require direct application coverage across platforms.",
         "The route partition permits only blank initial attachment; the production executor registers and grants only the exact main-observed WebContents.",
         "Network-service recovery, speculative requests, and popup traffic remain incompletely captured.",
         "QUIC, DoH, WebTransport, and non-WebRTC UDP/direct-network paths are not yet disabled or proven fail closed.",
@@ -21306,7 +21252,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["daemon"],
-      "coverageNotes": "Signed arm64 macOS evidence; other platforms and hosts keep the existing launcher. See docs/reference/macos-daemon-tcc-attribution.md.",
+      "coverageNotes": "Signed arm64 macOS evidence; other platforms and hosts keep the existing launcher.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/13921"],
       "invariant": "A packaged macOS daemon runs from the verified signed helper copy for its build, which the updater never touches, and never beside a job that may own the endpoint; the fork fallback still fits the startup gate. A copy is deleted only when lsof proves it unused.",
       "oracle": "Deterministic launch, fallback-deadline, per-build copy, retirement and status tests, plus the signed launcher validation recorded in #25848.",
@@ -21508,7 +21454,7 @@
         "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-process-presence-probe.test.ts src/shared/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/server-start-failure-lifecycle.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/wsl-guest/agent-hook-server.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts --maxWorkers=2"
@@ -21595,7 +21541,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status-tool-assistant-fields.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-nested-resume.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
           "result": "passed",
           "durationSeconds": 8.75,
           "summary": "132 tests across 13 files passed after review and CI boundary fixes, including actual mobile transcript selection, renderer Claude resume argv, host/workspace collision replacement, WSL transport equivalence, legacy unstamped local renderer entries, Pi identity-only boundaries, clock rollback and provider-isolated relay HTTP/spool/reconnect/teardown."

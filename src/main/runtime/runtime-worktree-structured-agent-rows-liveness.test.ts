@@ -102,7 +102,7 @@ async function awaitingApproval() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {

@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session-conversation-view'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
@@ -28,7 +28,7 @@ export async function admitChatAssignee(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   sessionId: OrcaSessionId,
   db: OrchestrationDb
-): Promise<AgentSessionRecord> {
+): Promise<AgentSessionConversationView> {
   // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const store = readAgentSessionRecordStore()

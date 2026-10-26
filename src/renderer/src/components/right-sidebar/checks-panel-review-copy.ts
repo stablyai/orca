@@ -248,6 +248,18 @@ const SKIPPED_COPY: Partial<
     },
     recovery: []
   },
+  'host-off': {
+    title: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.host_off.title',
+      fallback: 'WSL host is off'
+    },
+    body: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.host_off.body',
+      fallback:
+        'Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh.'
+    },
+    recovery: []
+  },
   remote: {
     title: {
       key: 'auto.components.right.sidebar.checks.panel.review.skipped.remote.title',

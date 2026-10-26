@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   structuredWorkerOpenTaskTitle,
@@ -366,7 +367,10 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       const failure = state.handle.failure(id)
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map(),
-        getRecord: state.getRecord,
+        getConversation: () => {
+          const record = state.getRecord()
+          return record ? agentSessionConversationView(record) : null
+        },
         now: () => 100,
         logger: state.deps.logger,
         namingActiveSessionIds: state.handle.activeSessionIds

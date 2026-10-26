@@ -143,6 +143,13 @@ export async function openCodexStructuredSession(
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,
     historyMode: opened.historyMode,
+    permissions: {
+      acquiredMode: input.permissionMode ?? 'ask',
+      ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
+      launchSandboxIntact: true,
+      cwd: launch.cwd,
+      ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
+    },
     activeTurnIds: new Set(),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,

@@ -21,7 +21,7 @@ import type { AgentPointerInput } from './browser-agent-activity'
 /** Shows the agent's pointer at an input's point and resolves once it has landed. */
 export type ShowAgentPointer = (input: AgentPointerInput) => Promise<void>
 
-/** Protect user focus while routing CDP input (docs/reference/agent-browser-focus-isolation.md). */
+/** Protect user focus while routing CDP input. */
 export class CdpPageInputCommands {
   private inputQueue: Promise<void> = Promise.resolve()
 

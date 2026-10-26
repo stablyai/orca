@@ -471,11 +471,17 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(undefined, {
         CLAUDE_CODE_CHILD_SESSION: '1',
         CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
-        CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
+        CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa',
+        CLAUDECODE: '1',
+        CLAUDE_CODE_EXECPATH: '/old/claude',
+        CLAUDE_CODE_ENTRYPOINT: 'cli'
       })
       expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
       expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
+      expect(env.CLAUDECODE).toBeUndefined()
+      expect(env.CLAUDE_CODE_EXECPATH).toBeUndefined()
+      expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
     })
     it('strips an inherited agent session id so a pane never claims that session', async () => {
       // Inherited structured-session IDs must not make every pane claim the parent orchestration caller.

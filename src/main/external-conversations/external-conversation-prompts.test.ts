@@ -213,7 +213,12 @@ describe('ExternalConversationSeam watch', () => {
     expect(seen.map((event) => event.kind)).toEqual(['turn-started', 'prompt', 'turn-ended'])
     expect(seen[0]).toMatchObject({ conversation: KEY, at: 100 })
     expect(seen[1]).toMatchObject({ prompt: { kind: 'approval' } })
-    expect(seen[2]).toMatchObject({ stopReason: 'success', lastAssistantMessage: 'Done.', at: 300 })
+    expect(seen[2]).toMatchObject({
+      stopReason: 'success',
+      lastAssistantMessage: 'Done.',
+      at: 300,
+      turnId: 100
+    })
   })
 
   it('ends a turn the user stopped with its recorded verdict, never the caller’s', async () => {

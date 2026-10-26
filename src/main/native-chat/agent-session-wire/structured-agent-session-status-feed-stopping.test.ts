@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +48,7 @@ describe("the status feed's Stopping", () => {
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, session]]),
       statusSink: () => ({ publish: (summary) => published.push(summary), forget: () => {} }),
-      getRecord: () => agentSessionRecordFixture(),
+      getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
       now: () => 1_000
     })
     await journal.appendItem(
@@ -85,7 +86,7 @@ describe("the status feed's Stopping", () => {
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
       statusSink: () => ({ publish: (summary) => published.push(summary), forget: () => {} }),
-      getRecord: () => agentSessionRecordFixture(),
+      getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
       now: () => 1_000
     })
     const turn = { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1' } as const
@@ -130,7 +131,7 @@ describe("the status feed's Stopping", () => {
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
       statusSink: () => ({ publish: (summary) => published.push(summary), forget: () => {} }),
-      getRecord: () => agentSessionRecordFixture(),
+      getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
       now: () => 1_000
     })
     await journal.appendItem(

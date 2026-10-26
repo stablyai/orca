@@ -4,7 +4,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 
 /** Prove local unsent history; adoption, prior turns, rewind or a replacement journal defeat proof. */
 export function structuredAgentSessionNeverSent(
-  record: AgentSessionRecord | null,
+  record: Pick<AgentSessionRecord, 'providerHandleChain' | 'rewind'> | null,
   journal: Pick<AgentSessionJournal, 'submissions' | 'visitItems' | 'wroteBeforeOpen'>
 ): boolean {
   if (

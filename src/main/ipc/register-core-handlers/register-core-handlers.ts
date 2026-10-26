@@ -130,6 +130,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
+  onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -235,7 +236,8 @@ export function registerCoreHandlers(
   registerOrcaProfileHandlers(store, {
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
+    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut,
+    onAfterSignOut: lifecycleOptions.onAfterOrcaProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers(store)

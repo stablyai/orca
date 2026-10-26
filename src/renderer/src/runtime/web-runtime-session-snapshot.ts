@@ -23,6 +23,25 @@ import { recoverMirroredTerminalOrphansBeforeApply } from './web-session-tabs-sy
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
 
+function importSessionTabsApplyModules() {
+  return Promise.all([
+    import('./web-session-tabs-sync/snapshot-api'),
+    import('./web-session-tabs-sync/store-patch'),
+    import('./web-session-tabs-sync/tracking-decisions'),
+    import('./web-session-tabs-sync/tracking-lifecycle')
+  ])
+}
+let sessionTabsApplyModules: ReturnType<typeof importSessionTabsApplyModules> | null = null
+
+// Concurrent refreshes share one load: vitest hands overlapping imports of a vi.mock'd module the real one.
+function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApplyModules> {
+  sessionTabsApplyModules ??= importSessionTabsApplyModules().catch((error: unknown) => {
+    sessionTabsApplyModules = null
+    throw error
+  })
+  return sessionTabsApplyModules
+}
+
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string,
@@ -43,28 +62,22 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     { applyWebSessionTabsSnapshot },
     { applyWebSessionTabsStorePatch },
     { decideWebSessionTabsSnapshot },
-    { getWebSessionTabsTrackingGeneration }
-  ] = await Promise.all([
-    import('./web-session-tabs-sync/snapshot-api'),
-    import('./web-session-tabs-sync/store-patch'),
-    import('./web-session-tabs-sync/tracking-decisions'),
-    import('./web-session-tabs-sync/tracking-lifecycle')
-  ])
+    trackingLifecycle
+  ] = await loadSessionTabsApplyModules()
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
     getRuntimeEnvironmentConnectionGeneration(environmentId)
-  const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
+  const expectedTrackingGeneration =
+    trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
   )
   try {
     if (options.acceptCurrentSnapshot) {
-      const { acceptReplayedWebSessionTabsSnapshot } =
-        await import('./web-session-tabs-sync/tracking-lifecycle')
       // Publication can beat structured create; reaccept its version after the exact provisional handoff is known.
-      acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+      trackingLifecycle.acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
     const listSessionTabs =
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight

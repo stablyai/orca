@@ -14,7 +14,11 @@ import {
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from './agent-session/ownership/agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 import { setAgentSessionTabVisibility } from './agent-session/agent-session-tab-table'
 
 /** Use create admission without requiring owner acquisition. */
@@ -39,10 +43,11 @@ export function commitAgentSessionFounding(
       reason: 'requestMalformed'
     })
   }
-  if (state.unreadableRecords.has(request.sessionId)) {
-    throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
   }
-  if (state.records.has(request.sessionId)) {
+  if (selected.kind === 'writable') {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   try {

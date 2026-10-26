@@ -29,7 +29,11 @@ function splitWords(node: Root | Element): void {
         properties: { dataWordGroup: '' },
         children: [{ type: 'text', value: child.value }]
       }
-    } else if (child.type === 'element' && !UNSPLIT_TAGS.has(child.tagName)) {
+    } else if (
+      child.type === 'element' &&
+      !UNSPLIT_TAGS.has(child.tagName) &&
+      !(Array.isArray(child.properties.className) && child.properties.className.includes('katex'))
+    ) {
       splitWords(child)
     }
   }

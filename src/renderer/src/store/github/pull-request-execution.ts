@@ -19,6 +19,8 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
+import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge'
+import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
   findUniqueWorktreeById,
@@ -72,6 +74,12 @@ export function startPullRequestLookup(args: {
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), { repoId, repoPath }, requestTarget)
+      if (runtimeRepo && isWslHostOffForForge(get(), runtimeRepo.target.environmentId)) {
+        if (prRequestGenerations.get(cacheKey) === generation) {
+          set((s) => withForgeHostOffSkip(s.prRefreshStates, cacheKey))
+        }
+        return cached?.data ?? null
+      }
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId)
         : null
@@ -106,14 +114,8 @@ export function startPullRequestLookup(args: {
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
               executionHostId: repo?.executionHostId ?? null,
-              cachedFetchedAt: cached?.fetchedAt ?? null,
-              cachedHeadOid: cached?.fetchedHeadOid ?? cached?.data?.headSha ?? null,
               isSelected: options?.worktreeId === get().activeWorktreeId,
-              cachedHasPR: cached?.data ? true : cached ? false : null,
-              cachedPRState: cached?.data?.state ?? null,
-              cachedChecksStatus: cached?.data?.checksStatus ?? null,
-              cachedMergeable: cached?.data?.mergeable ?? null,
-              cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
+              ...cachedPRCandidateFields(cached)
             }
             const response = window.api.gh.refreshPRNow
               ? await window.api.gh.refreshPRNow({

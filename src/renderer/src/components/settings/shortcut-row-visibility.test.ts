@@ -41,6 +41,21 @@ const baseOptions = {
 } as const
 
 describe('buildShortcutRowVisibility', () => {
+  it('shows a suppressed implicit toggle as unassigned without a modified/reset obligation', () => {
+    const item = getKeybindingDefinition('terminal.toggleNativeChat')
+    if (!item) {
+      throw new Error('Missing toggle definition')
+    }
+    const result = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups: [{ title: 'Chat', items: [item] }],
+      keybindings: { 'worktree.navigateDown': ['Mod+Shift+J'] }
+    })
+    expect(result.shortcutRows[0]).toMatchObject({ effective: [], modified: false })
+    expect(result.filterCounts.modified).toBe(0)
+    expect(result.filterCounts.unassigned).toBe(1)
+  })
+
   it('hides client-impossible creation shortcuts without hiding terminal or markdown', () => {
     const result = buildShortcutRowVisibility({
       groups: [creationGroup()],

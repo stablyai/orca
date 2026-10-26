@@ -2,6 +2,7 @@ import { createElement, Fragment, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
+import { INLINE_ACTION_CLASS_NAMES } from './ui/sonner'
 
 export type RestartContinuationOutcome = {
   sessionId: string
@@ -67,12 +68,6 @@ function descriptionFrom(lines: readonly string[]): ReactNode {
         null,
         ...lines.map((line) => createElement('span', { key: line, className: 'block' }, line))
       )
-}
-
-// Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
-const INLINE_ACTION_CLASS_NAMES = {
-  content: '!basis-0',
-  actionButton: '!m-0 !self-center'
 }
 
 // A lone title centres with the taller button; a description keeps the icon on the title's line.

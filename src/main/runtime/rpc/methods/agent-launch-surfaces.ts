@@ -16,7 +16,7 @@ import type { RpcContext } from '../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
-import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
+import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
@@ -54,15 +54,24 @@ export function agentLaunchSurfaceFactory(
       options,
       sessionId: requested,
       tabId,
-      withoutPrompt
+      withoutPrompt,
+      firstMessage,
+      signal
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
-      const seeded = narrowStructuredLaunchSeedOptions(options)
+      const definition = structuredAgentRuntimeMetadata(agent)?.definition
+      const supported = Object.fromEntries(
+        Object.entries(narrowStructuredLaunchSeedOptions(options) ?? {}).filter(([key]) =>
+          definition?.restingOptions.acceptsKey(key)
+        )
+      )
+      const seeded = Object.keys(supported).length > 0 ? supported : undefined
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
-        withoutPrompt === true &&
-        context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
-          true
+        firstMessage !== undefined ||
+        (withoutPrompt === true &&
+          context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
+            true)
       const created = await createStructuredAgentSessionForWorktree({
         runtime: context.runtime,
         ensureHost: async () => {
@@ -85,6 +94,8 @@ export function agentLaunchSurfaceFactory(
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
+        ...(firstMessage ? { firstMessage } : {}),
+        ...(signal ? { signal } : {}),
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
@@ -103,19 +114,10 @@ export function agentLaunchSurfaceFactory(
         sessionId: created.value.sessionId,
         handle: structuredAgentSessionTabId(created.value.sessionId),
         fence: created.value.fence,
+        ...(created.value.firstMessage ? { firstMessage: created.value.firstMessage } : {}),
         ...(created.value.tabId ? { tabId: created.value.tabId } : {})
       }
     },
-    deliverStructuredPrompt: async ({ sessionId, fence, prompt }) =>
-      commitStructuredAgentSessionLaunchPrompt({
-        host: getStructuredAgentSessionHost(),
-        caller: operationCallerKey
-          ? { callerKey: operationCallerKey }
-          : structuredCallerFor(context),
-        sessionId,
-        fence,
-        text: prompt.text
-      }),
     createTerminalAgent: async ({
       worktreeId,
       agent,

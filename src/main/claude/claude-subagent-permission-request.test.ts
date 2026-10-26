@@ -153,7 +153,7 @@ async function pipeline() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now,
     statusSink: () => ({
       publish: (summary, subject) => {
