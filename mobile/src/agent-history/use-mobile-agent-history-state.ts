@@ -20,7 +20,6 @@ import type {
 } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
-import { structuredChatDisplayName } from '../../../src/shared/structured-chat-row-name'
 import {
   agentHistoryHostStatusRead,
   agentHistorySessionScan
@@ -285,13 +284,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       sessions: current
         ? screenState.sessions.map((session) => {
             const id = session.structuredSession?.sessionId
-            // The phone has no tab alias for history rows; the host-saved name wins over the row label.
-            const title = structuredChatDisplayName(
-              null,
-              id ? names.get(id)?.conversationName : null,
-              session.title
-            )
-            return title === session.title ? session : { ...session, title }
+            const title = id ? names.get(id)?.conversationName : null
+            return title ? { ...session, title } : session
           })
         : screenState.sessions
     }
