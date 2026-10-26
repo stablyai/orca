@@ -1,4 +1,9 @@
-import { createNonSecureContextUuid } from '../shared/non-secure-context-uuid'
+// Why not crypto.randomUUID: plain-HTTP pages lack it, and the sandboxed preload can't import shared code.
+function createElementToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+}
 
 /**
  * Random per-document handles for page objects. Kept in the isolated world, never written onto
@@ -34,7 +39,7 @@ export function createBrowserPasswordElementTokens<
       if (targetByToken.size >= PRUNE_THRESHOLD) {
         prune()
       }
-      const token = createNonSecureContextUuid()
+      const token = createElementToken()
       tokenByTarget.set(target, token)
       targetByToken.set(token, new WeakRef(target))
       return token
