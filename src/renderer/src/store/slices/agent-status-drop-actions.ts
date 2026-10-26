@@ -3,11 +3,11 @@ import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions
-} from './agent-status-contract'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+} from './agent-status/agent-status-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
-import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status/agent-status-drop-reducer'
+import { pruneMigrationUnsupportedEntries } from './agent-status/agent-status-migration-unsupported-entries'
 import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive

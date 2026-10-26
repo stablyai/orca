@@ -70,7 +70,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     executeRpc: async (method, params, signal) => {
       const response = await browserClientAutomationDispatcher.dispatch(
         { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
-        { signal }
+        // Why: forwarded automation comes from a remote agent's CLI; the cursor and tab badge key off it.
+        { signal, caller: { kind: 'local-cli' } }
       )
       if (!response.ok) {
         throw new BrowserClientPageCommandError(response.error.code)

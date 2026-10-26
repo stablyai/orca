@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { ChevronDown, LoaderCircle, Check, UserRound, FolderKanban, Tag } from 'lucide-react'

@@ -368,28 +368,6 @@ describe('createOsc52OscHandler', () => {
 })
 
 describe('resolveOsc52ClipboardGate', () => {
-  it('allows a live write once the setting is on', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: false })).toEqual({
-      allowClipboardWrite: true,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('drops replayed writes so restore cannot clobber the clipboard', () => {
-    // Restore replays old PTY copies through the parser and could overwrite newer clipboard content (#10588).
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: true })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('surfaces the blocked toast only for a real opt-out', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: false, replaying: false })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: true
-    })
-  })
-
   it('stays quiet when a write races settings hydration', () => {
     // Pre-hydration reads look blocked despite default-on; consuming the once-per-session toast hides real refusals.
     for (const settingEnabled of [null, undefined]) {

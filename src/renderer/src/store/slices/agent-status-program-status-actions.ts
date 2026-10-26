@@ -1,4 +1,4 @@
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import {
   programStatusFacetsEqual,

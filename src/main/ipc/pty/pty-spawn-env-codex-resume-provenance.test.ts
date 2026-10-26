@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { spawnMock } from '../pty-ipc-mock-registry'
+import { spawnMock, noChatsRuntimeMembers } from '../pty-ipc-mock-registry'
 import { posixOnlyIt, TEST_MANAGED_ROOT } from '../pty-ipc-test-constants'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { prepareCodexSessionResume } from '../../codex/codex-session-resume-preparation'
@@ -347,6 +347,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupResumeDaemonProvider()
         const runtime = {
           setPtyController: vi.fn(),
+          ...noChatsRuntimeMembers(),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),

@@ -38,7 +38,7 @@ export function isKiroHooksConfigSupported(config: Record<string, unknown>): boo
   )
 }
 
-/** Kiro has no global hook config and no editable built-in agent; patch each user-owned global agent file. */
+/** Kiro V2 has no global hook config and no editable built-in agent; patch each user-owned global agent file. */
 export function getKiroAgentsDir(): string {
   return join(resolveKiroHomeDir(), 'agents')
 }

@@ -20,7 +20,7 @@ import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import {
-  useChatSettingsTypedPermissions,
+  useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/structured-agent-session-host-capability'
 import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
@@ -126,7 +126,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     })
   )
   const nativeChatEnabled = settings?.experimentalNativeChat === true
-  const typedChatPermissions = useChatSettingsTypedPermissions()
+  const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()

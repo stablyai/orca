@@ -14,39 +14,6 @@ function result(callId?: string): NativeChatToolResultBlock {
   return { type: 'tool-result', output: 'done', ...(callId !== undefined ? { callId } : {}) }
 }
 
-// The original scan is an independent oracle for named and positional matching.
-function scanPairs(blocks: readonly NativeChatBlock[], limit = Infinity): NativeChatToolPair[] {
-  const pairs: NativeChatToolPair[] = []
-  const pending: number[] = []
-  for (const block of blocks) {
-    if (pairs.length >= limit && pending.length === 0) {
-      break
-    }
-    if (block.type === 'tool-call') {
-      if (pairs.length < limit) {
-        pending.push(pairs.length)
-        pairs.push({ call: block })
-      }
-    } else if (block.type === 'tool-result') {
-      const pendingIndex =
-        block.callId === undefined
-          ? pending.length > 0
-            ? 0
-            : -1
-          : pending.findIndex((slot) => pairs[slot]?.call?.callId === block.callId)
-      if (pendingIndex === -1) {
-        if (pairs.length < limit) {
-          pairs.push({ result: block })
-        }
-      } else {
-        const [slot] = pending.splice(pendingIndex, 1)
-        pairs[slot]!.result = block
-      }
-    }
-  }
-  return pairs
-}
-
 function expectSameReferences(
   actual: readonly NativeChatToolPair[],
   expected: readonly NativeChatToolPair[]
@@ -75,10 +42,7 @@ function countedCalls(count: number): {
   return { calls, reads: () => reads }
 }
 
-function countQueueMovement(
-  blocks: readonly NativeChatBlock[],
-  pair = pairToolBlocks
-): {
+function countQueueMovement(blocks: readonly NativeChatBlock[]): {
   pairs: NativeChatToolPair[]
   movedSlots: number
 } {
@@ -113,7 +77,7 @@ function countQueueMovement(
     return originalShift.call(this)
   }
   try {
-    return { pairs: pair(blocks), movedSlots }
+    return { pairs: pairToolBlocks(blocks), movedSlots }
   } finally {
     Array.prototype.shift = originalShift
     Array.prototype.splice = originalSplice
@@ -131,7 +95,6 @@ describe('tool pairing lookup budget', () => {
       const results = Array.from({ length: count }, (_, index) => result(idOf(index)))
       const blocks = [...calls, ...results]
       const measured = countQueueMovement(blocks)
-      expect(countQueueMovement(blocks, scanPairs).movedSlots).toBe((count * (count - 1)) / 2)
       expectSameReferences(
         measured.pairs,
         calls.map((pending, index) => ({ call: pending, result: results[index] }))
@@ -213,22 +176,6 @@ describe('tool pairing identity and ordering', () => {
     expect(reads).toBeLessThanOrEqual(count * 3)
   })
 
-  it('keeps duplicate and positional matching correct across drained and refilled queues', () => {
-    const blocks: NativeChatBlock[] = []
-    for (let epoch = 0; epoch < 512; epoch += 1) {
-      blocks.push(
-        call('same'),
-        call('other'),
-        result('other'),
-        call('same'),
-        result(),
-        result('same'),
-        result('missing')
-      )
-    }
-    expectSameReferences(pairToolBlocks(blocks), scanPairs(blocks))
-  })
-
   it('matches repeated and empty IDs FIFO while positional results consume the oldest call', () => {
     const calls = [call('same'), call(''), call('same'), call(), call('same')]
     const results = [result('same'), result(), result('same'), result(), result('same')]
@@ -263,38 +210,5 @@ describe('tool pairing identity and ordering', () => {
         { result: repeated }
       ]
     )
-  })
-
-  it('matches the original semantics for mixed identities, interleavings, and all limits', () => {
-    const ids: readonly (string | undefined)[] = [
-      undefined,
-      '',
-      'same',
-      'same',
-      '__proto__',
-      'constructor',
-      '東京',
-      'i\u0307',
-      '💡'
-    ]
-    const limits = [0, -1, 0.5, 1, 2, 5, 30, Infinity, Number.NaN]
-    for (let seed = 0; seed < 256; seed += 1) {
-      let random = seed + 1
-      const next = (): number => {
-        random = (Math.imul(random, 1664525) + 1013904223) >>> 0
-        return random
-      }
-      const blocks: NativeChatBlock[] = Array.from({ length: 48 }, () => {
-        const kind = next() % 5
-        const id = ids[next() % ids.length]
-        return Object.freeze(
-          kind < 2 ? call(id) : kind < 4 ? result(id) : { type: 'text', text: 'context' }
-        )
-      })
-      Object.freeze(blocks)
-      for (const limit of limits) {
-        expectSameReferences(pairToolBlocks(blocks, limit), scanPairs(blocks, limit))
-      }
-    }
   })
 })

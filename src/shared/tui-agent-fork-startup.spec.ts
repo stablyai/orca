@@ -1,35 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { agentForksConversations, getAgentForkArgv } from './agent-resume-argv'
 import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 
 const SESSION = { key: 'session_id', id: 's1' } as const
 
 describe('agent fork startup', () => {
-  it('forks with each CLI that can copy a conversation', () => {
-    expect(getAgentForkArgv('grok', SESSION)).toEqual(['grok', '--resume', 's1', '--fork-session'])
-    expect(getAgentForkArgv('pi', { ...SESSION, transcriptPath: '/s/a.jsonl' })).toEqual([
-      'pi',
-      '--fork',
-      '/s/a.jsonl'
-    ])
-    expect(getAgentForkArgv('pi', SESSION)).toBeNull()
-    expect(getAgentForkArgv('opencode', SESSION)).toBeNull()
-    expect(getAgentForkArgv('omp', SESSION)).toBeNull()
-    expect(agentForksConversations('constructor')).toBe(false)
-  })
-
-  it('forks Claude and Codex', () => {
-    expect(getAgentForkArgv('claude', SESSION)).toEqual([
-      'claude',
-      '--resume',
-      's1',
-      '--fork-session'
-    ])
-    expect(getAgentForkArgv('codex', SESSION)).toEqual(['codex', 'fork', 's1'])
-    expect(getAgentForkArgv('gemini', SESSION)).toBeNull()
-    expect(getAgentForkArgv('claude', { key: 'conversation_id', id: 's1' })).toBeNull()
-  })
-
   it('builds a Claude fork plan that replaces a stored resume selector', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'claude',

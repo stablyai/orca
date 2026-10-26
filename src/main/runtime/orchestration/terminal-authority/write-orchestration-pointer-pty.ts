@@ -2,7 +2,10 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from '../../runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -17,12 +20,14 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { OrchestrationMailboxLeaf } from '../mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox-pointer-submit'
+import { ptyMailboxLeaf } from '../pty-mailbox-leaf'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
+  protected abstract headlessMailboxLaneAdmitsPty(pty: RuntimePtyWorktreeRecord): boolean
 
   protected writeOrchestrationPointerPty(
     ptyId: string,
@@ -55,14 +60,10 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ? pty?.connected &&
         pane?.tabId === stagedLeaf.tabId &&
         isTerminalLeafId(stagedLeaf.leafId) &&
-        pane.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId)
-        ? {
-            ...stagedLeaf,
-            writable: true,
-            lastAgentStatus: pty.lastAgentStatus,
-            lastAgentStatusObservedLive: pty.lastAgentStatusObservedLive,
-            lastOscTitle: pty.lastOscTitle
-          }
+        pane.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId) &&
+        // Re-checked at Enter: a second claimant may have appeared since the pointer was staged.
+        this.headlessMailboxLaneAdmitsPty(pty)
+        ? { ...stagedLeaf, ...ptyMailboxLeaf(stagedLeaf, pty) }
         : null
       : currentLeaf.ptyId === ptyId
         ? currentLeaf

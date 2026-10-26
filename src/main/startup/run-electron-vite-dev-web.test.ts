@@ -230,6 +230,8 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
+      // The pairing build runs beside electron-vite instead of before it.
+      await waitFor(() => existsSync(viteFile))
       expect(readFileSync(viteFile, 'utf8')).toContain('build')
 
       const trackedPids = trackPidFile(pidFile)

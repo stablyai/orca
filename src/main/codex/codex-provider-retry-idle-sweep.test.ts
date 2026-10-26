@@ -135,7 +135,7 @@ describe('a Codex reconnecting a dropped stream', () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await host.collaboratorsForTests().lifetime.idleSweep.tick()
     await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(host.hasSession(SESSION)).toBe(false)
     })
   })

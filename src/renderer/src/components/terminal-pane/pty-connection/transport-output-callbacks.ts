@@ -1,3 +1,9 @@
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
+import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
+import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal-attachment-launch-result'
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
@@ -12,8 +18,10 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
   const ownerErrors = new Set<string>()
   session.captureTransportOutputCallbacks = (
     onError: (message: string) => void,
-    startup: PtyPaneStartup
+    startup: PtyPaneStartup,
+    savedStartup: ColdRestoreAgentResumeStartup | PtyPaneStartup = session.paneStartup
   ) => {
+    const launchContext = captureTerminalLaunchContext(session, savedStartup)
     // New stream generations drop old replay fit continuations and release live-data waiters.
     session.pendingHiddenSnapshotFit?.cancel()
     session.pendingHiddenSnapshotFit = null
@@ -38,7 +46,18 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     })
     return {
       generation,
+      launchContext,
       callbacks: {
+        onLaunchResult: (result: TerminalAttachmentLaunchResult): void => {
+          if (
+            isCurrent() &&
+            (!session.remotePtyIncarnationId ||
+              session.remotePtyIncarnationId === result.incarnationId)
+          ) {
+            session.remotePtyIncarnationId = result.incarnationId
+            applyTerminalLaunchResult(session, result, launchContext, 'observer')
+          }
+        },
         onReattachDetermined: (): void => {
           if (isCurrent()) {
             session.beginReattachLiveDataDeferralIfUnowned(generation)

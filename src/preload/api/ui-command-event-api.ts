@@ -16,6 +16,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
@@ -36,7 +37,8 @@ import type { KeybindingActionId } from '../../shared/keybindings'
 import type { BrowserFindSource } from '../../shared/browser-find-source'
 import type {
   BrowserHistoryNavigateCommand,
-  BrowserPageCommandTarget
+  BrowserPageCommandTarget,
+  BrowserPageTabShortcut
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
@@ -104,9 +106,6 @@ export type UiCommandEventApi = {
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
-  onNewBrowserTab: (callback: () => void) => () => void
-  onNewMarkdownTab: (callback: () => void) => () => void
-  onNewSimulatorTab: (callback: () => void) => () => void
   onRequestTabCreate: (
     callback: (data: {
       requestId: string
@@ -141,7 +140,7 @@ export type UiCommandEventApi = {
     error?: string
     code?: 'browser_tab_not_found'
   }) => void
-  onNewTerminalTab: (callback: () => void) => () => void
+  onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
@@ -149,6 +148,7 @@ export type UiCommandEventApi = {
   onBrowserHistoryNavigate: (
     callback: (command: BrowserHistoryNavigateCommand) => void
   ) => () => void
+  onBrowserPagePointerDown: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onZoomBrowserPage: (callback: (command: BrowserPageZoomCommand) => void) => () => void
   onScrollBrowserPage?: (
     callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
@@ -157,10 +157,7 @@ export type UiCommandEventApi = {
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
-  onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
-  onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
-  onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
@@ -218,6 +215,7 @@ export type UiCommandEventApi = {
   onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
   onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onSplitTerminal: (

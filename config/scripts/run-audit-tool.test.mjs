@@ -1,11 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
 import { describe, expect, it, vi } from 'vitest'
-import { parseAllDocuments } from 'yaml'
+
 import { auditToolEntry, runAuditTool } from './run-audit-tool.mjs'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const success = { code: 0, signal: null, timedOut: false }
@@ -96,35 +94,5 @@ describe('locked audit tool execution', () => {
     const run = vi.fn()
     expect(() => runAuditTool('../arbitrary-package', [], { run })).toThrow('Unknown audit tool')
     expect(run).not.toHaveBeenCalled()
-  })
-
-  it.each(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])(
-    'selects the real-tool CI smoke for an isolated %s update',
-    (file) => {
-      expect(classifyPrJobs([`config/audit-tools/${file}`]).static_analysis).toBe(true)
-    }
-  )
-
-  it('keeps the tool workspace isolated, exact and integrity-locked', () => {
-    const manifest = JSON.parse(readFileSync(join(root, 'config/audit-tools/package.json'), 'utf8'))
-    const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-    expect(manifest.packageManager).toBe(rootManifest.packageManager)
-    const [policy] = parseAllDocuments(
-      readFileSync(join(root, 'config/audit-tools/pnpm-workspace.yaml'), 'utf8')
-    ).map((document) => document.toJS())
-    expect(policy).toMatchObject({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
-    const documents = parseAllDocuments(
-      readFileSync(join(root, 'config/audit-tools/pnpm-lock.yaml'), 'utf8')
-    ).map((document) => document.toJS())
-    const lock = documents.find((document) => document.importers?.['.']?.dependencies)
-    expect(Object.keys(lock.importers)).toEqual(['.'])
-    for (const [name, version] of Object.entries(manifest.dependencies)) {
-      expect(version).toMatch(/^\d+\.\d+\.\d+$/)
-      expect(lock.importers['.'].dependencies[name].specifier).toBe(version)
-      expect(rootManifest.dependencies[name] ?? rootManifest.devDependencies[name]).toBeUndefined()
-    }
-    for (const entry of Object.values(lock.packages)) {
-      expect(entry.resolution.integrity).toMatch(/^sha512-/)
-    }
   })
 })

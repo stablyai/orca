@@ -1,3 +1,4 @@
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { startCodexHooks } from '../codex/codex-hook-reconcile'
 import { adoptLoginShellAgentHomes } from '../agent-hooks/agent-home-login-shell'
@@ -18,7 +19,10 @@ export function startOrcadManagedAgentHooks(
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): void {
   let stopping = false
+  const agentView = getClaudeAgentViewService()
+  void agentView.reconcile(store.getSettings())
   const removeSettingsListener = store.onSettingsChanged((updates, settings) => {
+    void agentView.reconcile(settings)
     if ('agentStatusHooksEnabled' in updates) {
       setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
     }

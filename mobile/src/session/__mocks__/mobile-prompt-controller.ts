@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { Pressable, Text } from 'react-native'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
-import type { MobileNativeChatTab } from '../mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
@@ -75,7 +75,7 @@ vi.mock('../MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('../MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../MobileNativeChatComposerMenu', () => ({
+vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerMenu: 'Suggestions',
   composerMenuInsertText: () => ''
 }))
@@ -113,7 +113,7 @@ vi.mock('../use-mobile-session-view-mode', () => ({
 vi.mock('../use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession: structured })
 }))
-vi.mock('../use-mobile-native-chat-drafts', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => ({
     composerText: 'ordinary message',
     setComposerText: vi.fn(),
@@ -139,11 +139,11 @@ vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
 vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-vi.mock('../use-mobile-native-chat-composer-tray', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))
-vi.mock('../use-mobile-native-chat-streaming-bubble', () => ({
+vi.mock('../native-chat/use-mobile-native-chat-streaming-bubble', () => ({
   useMobileNativeChatStreamingBubble: () => null
 }))
 

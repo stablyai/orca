@@ -2,13 +2,14 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
-import { historyRowShowsChatName } from '../../shared/structured-chat-row-name'
+import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
+  terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
@@ -104,12 +105,10 @@ function ownedRow(rowAgent: string, ownership: StructuredProviderSessionOwnershi
     sessionId: ownership.sessionId,
     workspaceId: ownership.workspaceId
   }
-  return historyRowShowsChatName(rowAgent)
-    ? {
-        title: ownership.conversationName ?? defaultAgentChatLabel(ownership.provider),
-        structuredSession
-      }
-    : { structuredSession }
+  const title =
+    ownership.conversationName ??
+    (historyRowFallsBackToChatLabel(rowAgent) ? defaultAgentChatLabel(ownership.provider) : null)
+  return title === null ? { structuredSession } : { title, structuredSession }
 }
 
 // Build one lookup per projection to avoid scanning all chat records for every row.
@@ -122,18 +121,16 @@ function ownershipLookup():
   const byProviderSession = new Map<string, StructuredProviderSessionOwnership>()
   for (const ownership of listOwnership()) {
     const key = `${ownership.provider}\0${ownership.providerSessionId}`
-    if (!byProviderSession.has(key)) {
+    const kept = byProviderSession.get(key)
+    if (!kept || (kept.role !== 'head' && ownership.role === 'head')) {
       byProviderSession.set(key, ownership)
     }
   }
   return (row) => {
-    for (const owner of historyRowOwners(row.agent)) {
-      const ownership = byProviderSession.get(`${owner}\0${row.sessionId}`)
-      if (ownership) {
-        return ownership
-      }
-    }
-    return null
+    const found = historyRowOwners(row.agent).flatMap(
+      (owner) => byProviderSession.get(`${owner}\0${row.sessionId}`) ?? []
+    )
+    return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
   }
 }
 
@@ -154,9 +151,9 @@ function historyRowOwners(rowAgent: string): readonly StructuredAgentId[] {
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
   // A fork writes a new conversation, and preparing its home never writes this one.
-  const ownership = args.fork ? null : findResumeOwnership(args)
-  if (ownership) {
-    refuseLegacyWriter(ownership)
+  const blocking = args.fork ? undefined : resumeOwnerships(args).find(terminalResumeBlocked)
+  if (blocking) {
+    refuseLegacyWriter(blocking)
   }
 }
 
@@ -169,12 +166,11 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
     return
   }
   await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return
-  }
   for (const ownership of listOwnership()) {
-    if (invocations.some((invocation) => resumesOwnedSession(invocation, ownership))) {
+    if (
+      terminalResumeBlocked(ownership) &&
+      invocations.some((invocation) => resumesOwnedSession(invocation, ownership))
+    ) {
       refuseLegacyWriter(ownership)
     }
   }
@@ -183,19 +179,25 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
 export function findResumeOwnership(
   args: Pick<AiVaultPrepareSessionResumeArgs, 'agent' | 'sessionId' | 'filePath'>
 ): StructuredProviderSessionOwnership | null {
+  return resumeOwnerships(args)[0] ?? null
+}
+
+/** Every link naming the row, those matched by id first. */
+function resumeOwnerships(
+  args: Pick<AiVaultPrepareSessionResumeArgs, 'agent' | 'sessionId' | 'filePath'>
+): StructuredProviderSessionOwnership[] {
   const owners = new Set(historyRowOwners(args.agent))
   if (owners.size === 0) {
-    return null
+    return []
   }
   const owned = listOwnership().filter((ownership) => owners.has(ownership.provider))
   const fileName = args.filePath.split(/[\\/]/).at(-1) ?? ''
-  return (
-    (args.sessionId
-      ? owned.find((ownership) => ownership.providerSessionId === args.sessionId)
-      : undefined) ??
-    owned.find((ownership) => fileName.includes(ownership.providerSessionId)) ??
-    null
-  )
+  return [
+    ...(args.sessionId
+      ? owned.filter((ownership) => ownership.providerSessionId === args.sessionId)
+      : []),
+    ...owned.filter((ownership) => fileName.includes(ownership.providerSessionId))
+  ]
 }
 
 function listOwnership(): StructuredProviderSessionOwnership[] {

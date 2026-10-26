@@ -174,8 +174,9 @@ export function selectTypecheckProjects(files) {
 
 function listRatchetChecks(scriptsDir) {
   const scripts = new Set(listRatchetScripts(scriptsDir))
-  // `pnpm lint` runs it although CI gives it a dedicated step outside run-ratchets.mjs.
+  // `pnpm lint` runs these although CI checks them in their own steps outside run-ratchets.mjs.
   scripts.add('check-main-sync-spawn-ratchet.mjs')
+  scripts.add('check-flaky-test-pattern-ratchet.mjs')
   return [...scripts].sort().map((script) => ({
     name: script.replace(/^check-|\.mjs$/g, ''),
     args: [`config/scripts/${script}`],

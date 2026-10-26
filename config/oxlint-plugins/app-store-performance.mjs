@@ -82,6 +82,7 @@ function unwrapShallowSelector(selector, state) {
   if (
     selector?.type === 'CallExpression' &&
     selector.callee.type === 'Identifier' &&
+    state.hookNames.has(selector.callee.name) &&
     state.shallowHooks.has(variableFor(selector.callee, state))
   ) {
     return { selector: selector.arguments[0], shallow: true }
@@ -201,6 +202,7 @@ function createRuleState(sourceCode) {
   return {
     appStoreHooks: new Set(),
     shallowHooks: new Set(),
+    hookNames: new Set(),
     sourceCode,
     deferredCalls: []
   }
@@ -213,20 +215,22 @@ function recordImports(node, state) {
       continue
     }
     const imported = identifierName(specifier.imported)
-    const variable = variableFor(specifier.local, state)
-    if (!imported || !variable) {
-      continue
-    }
-    if (source === 'zustand/react/shallow' && imported === 'useShallow') {
-      state.shallowHooks.add(variable)
-    }
+    const shallow = source === 'zustand/react/shallow' && imported === 'useShallow'
     // useAppStore is the app store wherever it is re-exported from; sibling
     // stores are trusted by naming convention only when they come from this codebase.
-    if (
-      STORE_HOOK_NAME.test(imported) &&
+    const store =
+      STORE_HOOK_NAME.test(imported ?? '') &&
       !NON_STORE_HOOKS.has(imported) &&
       (imported === 'useAppStore' || isLocalModuleSource(source))
-    ) {
+    // Why: getScope builds the whole scope tree, so only resolve bindings this rule tracks.
+    const variable = shallow || store ? variableFor(specifier.local, state) : null
+    if (!variable) {
+      continue
+    }
+    state.hookNames.add(specifier.local.name)
+    if (shallow) {
+      state.shallowHooks.add(variable)
+    } else {
       state.appStoreHooks.add(variable)
     }
   }
@@ -235,6 +239,7 @@ function recordImports(node, state) {
 function isAppStoreCall(node, state) {
   return (
     node.callee.type === 'Identifier' &&
+    state.hookNames.has(node.callee.name) &&
     state.appStoreHooks.has(variableFor(node.callee, state)) &&
     node.optional !== true
   )
@@ -349,8 +354,14 @@ function noNestedFreshUnderShallowRule(sourceCode) {
   })
 }
 
+// Files that never name a use<Name>Store hook cannot match; returning no visitors skips AST transfer.
+const STORE_HOOK_TEXT = /use[A-Z][A-Za-z0-9]*Store/
+
 function bindContext(createVisitors) {
   return (context) => {
+    if (!STORE_HOOK_TEXT.test(context.sourceCode.text)) {
+      return {}
+    }
     const visitors = createVisitors(context.sourceCode)
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)

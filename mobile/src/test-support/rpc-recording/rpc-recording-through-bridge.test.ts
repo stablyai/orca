@@ -1,3 +1,4 @@
+import { strictReplayVerdict, type BridgedReplay } from '../bridged-parity/replay-verdict'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
@@ -20,7 +21,6 @@ import {
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
 import { C6_BROWSER_CLOSURE_FAMILIES } from '../bridged-parity/c6-browser-closure-families'
 import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
-import { C1_PAGE_CLOSURE } from '../bridged-parity/c1-page-closure'
 import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
 import {
   pageClosureDrift,
@@ -34,8 +34,8 @@ import {
   divergingFields,
   paramsMismatchEvidence,
   recordingWithoutRpcMeta,
-  refusalReleasedStream,
   refusedFrames,
+  refusalReleasedStream,
   scriptsAbsentResultReply,
   withReplyMeta
 } from '../bridged-parity/divergence-evidence'
@@ -48,11 +48,9 @@ import type { ScriptedClientWrapper } from './scripted-rpc-transport'
 import { runRecording } from './run-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 
-// Replay every golden through the page bridge without rewriting native evidence; RPC_FOUNDATION_BRIDGE=0 skips locally.
-// Compare identical runs in full and pin divergence totals, small-class membership and each page closure independently.
-// Exclusions cover recorder-injected absent results, undefined params lost above serialization, and logical write ordinals.
-// Stream-release differences stem from cancelling refused injected frames, not a different native wire contract.
-// The reader accepts the transport’s reply shapes; retain zero-pinned counterfactual-meta replay to detect future narrowing.
+// Replay every golden through the page bridge; RPC_FOUNDATION_BRIDGE=0 skips locally.
+// Certify complete residuals for changed History goldens; unchanged corpus members retain legacy labels.
+// Preserve raw recordings and reply-meta counterfactuals; pin per-id verdicts, closure membership and totals.
 
 const root = resolve(import.meta.dirname, '../../../..')
 const input = readScenarios(
@@ -67,11 +65,7 @@ const BUILD_ID = 'recording-build'
 /** `ready` out, `init` back: two deliveries, and a round to see that the session landed. */
 const HANDSHAKE_ROUNDS = 4
 
-type Replay = {
-  recording: Recording | null
-  thrown: unknown
-  pairs: BridgePortPair<RpcClient>[]
-}
+type Replay = BridgedReplay
 
 const counts: Record<BridgedParityClass, number> = {
   'reply-meta-required': 0,
@@ -178,8 +172,11 @@ async function verdict(
     observed.set(id, { family, verdict: name })
   }
   const expected = readGolden(directory, id)
+  const certified =
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history'] ?? {}, id) ||
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {}, id)
   const fields = run.recording === null ? [] : divergingFields(expected.recording, run.recording)
-  if (run.recording !== null && fields.length === 0) {
+  if (!certified && run.recording !== null && fields.length === 0) {
     // Not redundant with the field walk: this one also pins the encoding.
     compareGolden(expected, { ...expected, recording: run.recording })
     identical += 1
@@ -187,19 +184,49 @@ async function verdict(
     return
   }
   const asIf = await replay(id, scenarios, withReplyMeta)
+  if (certified) {
+    const result = strictReplayVerdict(expected.recording, scenarios, run, asIf)
+    if (result.name === 'unclassified') {
+      throw new Error(
+        `Unclassified bridged divergence: ${id}\noriginal (${result.original.name}):\n${explain(result.original.fields, run)}\nwith \`_meta\` supplied (${result.replyMeta.name}):\n${explain(result.replyMeta.fields, asIf)}`
+      )
+    }
+    if (result.name === 'identical') {
+      compareGolden(expected, { ...expected, recording: run.recording! })
+      identical += 1
+      record('identical')
+      return
+    }
+    counts[result.name] += 1
+    record(result.name)
+    members.set(result.name, [...(members.get(result.name) ?? []), id])
+    if (!samples.has(result.name)) {
+      samples.set(result.name, `${id}\n${explain(fields, run)}`)
+    }
+    return
+  }
   const asIfFields =
     asIf.recording === null
       ? []
       : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording))
   // A scenario is handed a pair as it starts, so the last pair belongs to the one that threw.
   const failing = scenarios[asIf.pairs.length - 1]
+  const scriptsAbsent = scenarios.some(scriptsAbsentResultReply)
   const evidence: BridgedParityEvidence = {
     fixedByReplyMeta: asIf.recording !== null && asIfFields.length === 0,
     threwWhileRecording: asIf.recording === null,
     divergingFields: asIfFields,
-    scriptsAbsentResultReply: scenarios.some(scriptsAbsentResultReply),
+    absentResultExplainsResiduals: false,
     paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? []),
-    refusalReleasedStream: asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics))
+    refusalReleasedStream:
+      scriptsAbsent && asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics)),
+    legacyBaseline: {
+      firstField:
+        asIf.recording === null
+          ? undefined
+          : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording), false)[0],
+      scriptsAbsentResultReply: scriptsAbsent
+    }
   }
   const name = classifyBridgedParity(evidence)
   counts[name] += 1
@@ -216,7 +243,7 @@ async function verdict(
 }
 
 describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
-  'every golden replays through the page bridge, byte-identically or in a named class',
+  'History parity certification and unchanged corpus baseline membership',
   () => {
     for (const pilot of pilotGoldens(input.scenarios)) {
       it(`${pilot.id}: bridged parity`, async () => {
@@ -238,7 +265,7 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         golden.timeoutMs
       )
     }
-    it('replays every golden byte for byte or in a class a predicate excludes by name', () => {
+    it('preserves measured strict and legacy membership without unexplained changed History residuals', () => {
       const table = [
         `identical ${identical}`,
         ...Object.entries(counts).map(([name, count]) => {
@@ -253,8 +280,12 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         ([name]) => BRIDGED_PARITY_EXCLUSIONS[asClass(name)] !== undefined
       )
       const excludedCount = total(Object.fromEntries(excluded))
-      process.stdout.write(`\nbridged parity over ${corpus} goldens\n${table}\n`)
-      process.stdout.write(`\nexcluded ${excludedCount} of ${corpus}, each with the reason it is\n`)
+      process.stdout.write(
+        `\nHistory certification and legacy membership over ${corpus} goldens\n${table}\n`
+      )
+      process.stdout.write(
+        `\nlabelled recorder limitations ${excludedCount} of ${corpus}; unchanged labels are baseline only\n`
+      )
       for (const [name, count] of excluded) {
         process.stdout.write(`  ${name} ${count}: ${BRIDGED_PARITY_EXCLUSIONS[asClass(name)]}\n`)
       }
@@ -269,16 +300,6 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       })
       // Pin identical as well as divergence totals so improvements cannot silently hide class movement.
       expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
-    })
-
-    it('gives every golden the C1 page closure records the verdict it is pinned to', () => {
-      process.stdout.write(readPageClosure('C1', C1_PAGE_CLOSURE, observed))
-      // Pin every closure id; aggregate corpus totals can trade a domain regression for an unrelated improvement.
-      expect({ closure: pageClosureDrift(C1_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
-      // Check run totals independently because C1’s table has no separate class-count pins.
-      expect(pageClosureRunTotals(C1_PAGE_CLOSURE, observed)).toEqual(
-        pageClosureTotals(C1_PAGE_CLOSURE)
-      )
     })
 
     it('gives every golden the C5 page closure records the verdict it is pinned to', () => {

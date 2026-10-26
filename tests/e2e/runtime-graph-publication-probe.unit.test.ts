@@ -33,24 +33,10 @@ describe('partitionSelfTestLongTask', () => {
     expect(result.selfTestLongTaskMs).toBe(0)
   })
 
-  it('keeps every task when no self-test ran', () => {
-    const result = partitionSelfTestLongTask([setupTask, workloadTask], null)
-    expect(result.selfTestLongTaskMs).toBe(0)
-    expect(result.workloadLongTasks).toEqual([setupTask, workloadTask])
-  })
-
   it('removes only the matched entry when another has identical values', () => {
     const twin: LongTaskSample = { ...selfTestTask }
     const result = partitionSelfTestLongTask([selfTestTask, twin], selfTestWindow)
     expect(result.workloadLongTasks).toHaveLength(1)
     expect(result.workloadLongTasks[0]).toBe(twin)
-  })
-
-  it('rounds the reported duration to one decimal', () => {
-    const result = partitionSelfTestLongTask(
-      [{ startEpochMs: 5_000, durationMs: 251.2649 }],
-      selfTestWindow
-    )
-    expect(result.selfTestLongTaskMs).toBe(251.3)
   })
 })

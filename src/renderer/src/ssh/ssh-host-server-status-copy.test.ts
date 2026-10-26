@@ -183,6 +183,24 @@ describe('SSH host server status line', () => {
     expect(line?.text).not.toContain('older version')
   })
 
+  it('names the Windows host’s blocker instead of advising a retry or an older Orca', () => {
+    const line = (detail: string) =>
+      sshHostServerStatusLine(plain, {
+        managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail }
+      })
+    expect(line('windows_build_unsupported')).toMatchObject({
+      tone: 'destructive',
+      text: expect.stringContaining('older than Windows 10 and Windows Server 2016')
+    })
+    expect(line('windows_no_extractor')).toMatchObject({
+      tone: 'destructive',
+      text: expect.stringContaining('Install Windows PowerShell 5.1 on the host')
+    })
+    for (const detail of ['windows_build_unsupported', 'windows_no_extractor']) {
+      expect(line(detail)?.text).not.toMatch(/older version of Orca|Try connecting again/)
+    }
+  })
+
   it('says plainly when neither port forwarding nor the SSH session reaches the server', () => {
     const live = sshHostServerStatusLine(plain, {
       managedServer: {

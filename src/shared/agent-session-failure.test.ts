@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  agentSessionFailureDetailText,
   providerDiagnostic,
   providerDiagnosticOf,
   agentSessionFailureFact,
@@ -45,6 +46,16 @@ describe('provider diagnostics', () => {
       providerDiagnosticOf(new Error('claude stream-json exited (code 1): not signed in'))
     ).toBe(undefined)
     expect(providerDiagnosticOf('a string')).toBeUndefined()
+  })
+
+  it("puts a start's log tail behind Details, but not the raw frame a retry row already shows", () => {
+    const tail = { text: '(code 1)\nclaude: unknown option', audience: 'log' as const }
+    expect(agentSessionFailureDetailText({ kind: 'providerStartFailed', detail: tail })).toBe(
+      tail.text
+    )
+    expect(agentSessionFailureDetailText({ kind: 'providerRetrying', detail: tail })).toBe(
+      undefined
+    )
   })
 })
 

@@ -10,7 +10,7 @@ import {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
 } from './inventory-refresh'
-import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { scheduleRetiredEpochRepair } from './retired-epoch-repair'
 import {
   applyStructuredSessionTabSnapshots,

@@ -3,12 +3,12 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
-import { isActionableStructuredAgentSessionPrompt } from '../../../src/shared/structured-agent-session-live-turn'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import type { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 export function useMobileNativeChatRowRenderer({
+  scope,
   rowKeyOf,
   runOwners,
   taskListPredecessors,
@@ -21,6 +21,7 @@ export function useMobileNativeChatRowRenderer({
   receipts,
   actionablePromptIds
 }: {
+  scope: string
   rowKeyOf: (message: NativeChatMessage) => string
   runOwners: ReadonlyMap<string, string>
   /** The last plan each task-list tool wrote before each row, by row id. */
@@ -38,36 +39,37 @@ export function useMobileNativeChatRowRenderer({
     () => mobileNativeChatUnsentNotices(turnJournal, agent),
     [turnJournal, agent]
   )
-  return useCallback(
-    ({ item, index }) => (
-      <MobileNativeChatMessage
-        message={item}
-        rowKey={rowKeyOf(item)}
-        // Depend on stable calls, not their rebuilt containing record, so row memoization survives.
-        previousTodoWrite={taskListPredecessors.get(item.id)?.todowrite}
-        previousUpdatePlan={taskListPredecessors.get(item.id)?.update_plan}
-        fontScale={fontScale}
-        onOpenFile={onOpenFile}
-        structuredActivityUi={structuredActivityUi}
-        onToggleTurn={turns.onToggleTurn}
-        unsentNotice={item.unsent ? unsentNotices.get(item.id) : undefined}
-        receipt={receipts?.get(item.id)}
-        awaiting={isActionableStructuredAgentSessionPrompt(item.id, actionablePromptIds)}
-        {...turns.resolveRow(index, item)}
-        runOwner={runOwners.get(item.id)}
-      />
-    ),
+  const { resolveRow: resolveTurnRow, onToggleTurn } = turns
+  const lookups = useMemo(
+    () => ({
+      rowKeyOf,
+      runOwners,
+      taskListPredecessors,
+      unsentNotices,
+      receipts,
+      actionablePromptIds,
+      resolveTurnRow
+    }),
     [
       rowKeyOf,
       runOwners,
       taskListPredecessors,
-      fontScale,
-      onOpenFile,
-      structuredActivityUi,
-      turns,
       unsentNotices,
       receipts,
-      actionablePromptIds
+      actionablePromptIds,
+      resolveTurnRow
     ]
+  )
+  return useCallback(
+    ({ item, index }) => (
+      <MobileNativeChatRow
+        key={`${scope}\0${rowKeyOf(item)}`}
+        message={item}
+        index={index}
+        lookups={lookups}
+        {...{ scope, fontScale, onOpenFile, structuredActivityUi, onToggleTurn }}
+      />
+    ),
+    [scope, rowKeyOf, lookups, fontScale, onOpenFile, structuredActivityUi, onToggleTurn]
   )
 }

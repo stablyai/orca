@@ -167,7 +167,13 @@ export default function CombinedDiffViewer({
 
   const toggleSection = useCallback(
     (index: number) => {
-      const shouldLoadAfterExpand = registry.sectionsRef.current[index]?.collapsed ?? false
+      const section = registry.sectionsRef.current[index]
+      const shouldLoadAfterExpand = section?.collapsed ?? false
+      const anchor = restore.scrollAnchorRef.current
+      if (section && !section.collapsed && anchor?.key === section.key) {
+        // The offset points into the body being removed; restore would land on later sections.
+        anchor.offset = 0
+      }
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
@@ -175,7 +181,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({

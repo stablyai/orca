@@ -4,7 +4,10 @@ import type { AgentJournalDispatchRejection } from '../../shared/agent-session-f
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionOptionsReportedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionOptionsReportedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -159,7 +162,12 @@ export type ClaudeSession = {
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  reportedOptions: {
+    model?: string
+    effort?: string
+    fastMode?: boolean
+    reportedPermissionMode?: string | null
+  }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
@@ -341,6 +349,15 @@ export async function cancelClaudeAcquisitionAttempt(
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
+}
+
+export type ClaudeSessionAcquisitionInput = {
+  input: StructuredAgentSessionAcquireInput
+  deps: ClaudeStructuredSessionAdapterDeps
+  sessions: Map<string, ClaudeSession>
+  acquisitions: ClaudeAcquisitionRegistry
+  exits: Map<string, ClaudeSessionExit>
+  callbacks: ClaudeAcquireCallbacks
 }
 
 export type ClaudeAcquireCallbacks = {

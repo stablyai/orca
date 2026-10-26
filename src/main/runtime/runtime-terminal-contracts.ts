@@ -40,6 +40,8 @@ export type TerminalCreateOptions = {
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
+  resumeOrigin?: 'saved'
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent

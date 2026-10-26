@@ -18,8 +18,7 @@ import {
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import { seedResumeLaunchIdentityFromSpawn } from './pane/resume-launch-identity'
 import { recordPtySpawnTelemetry } from './pane/spawn-telemetry'
-import { noteRuntimePaneCreateResult, resolvePaneSpawnReservation } from './pane/spawn-reservation'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnCommitInput, PtySpawnCommitState } from './spawn-commit-assembly'
 
 /** Window migration inputs: legacy and reminted spawn keys alias the pane's proven key. */
@@ -30,9 +29,7 @@ export type PtySpawnPaneKeyAliases = {
 }
 
 /** Everything a registered spawn publishes, in one order for both lanes; nothing here awaits. */
-export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply>
-): Reply {
+export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOutcome {
   const { state } = input
   const { deps, args, result } = state
   const runtime = deps.runtime
@@ -67,7 +64,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   commitAttachedPtySize({
     result,
     requested: { cols: args.cols, rows: args.rows },
-    cachedBeforeAttach: state.sessionSizeBeforeAttach,
+    cachedBeforeAttach: state.provisionalPtySize?.cachedBeforeAttach,
     reflowHeadlessTerminalToPtyGrid: runtime?.reflowHeadlessTerminalToPtyGrid?.bind(runtime)
   })
   if (state.effectiveSessionAppId !== undefined && state.effectiveSessionAppId !== result.id) {
@@ -92,7 +89,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   registerPty({
     ptyId: result.id,
     worktreeId: input.registration.worktreeId ?? null,
-    sessionId: input.memorySessionId,
+    sessionId: result.id,
     paneKey: rememberedPaneKey,
     pid:
       typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
@@ -128,16 +125,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
-  resolvePaneSpawnReservation(
-    state.paneSpawnReservationKey,
-    state.paneSpawnReservation,
-    input.joinPayload.reservation
-  )
-  // A view waiting on this create attaches to the accepted result before its waiter resumes.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    noteRuntimePaneCreateResult(state.paneSpawnReservationKey, input.joinPayload.reservation)
-  }
-  return input.joinPayload.reply
+  return { kind: 'committed', result: input.response }
 }
 
 function markRendererScopedHiddenAtCommit(state: PtySpawnCommitState): void {

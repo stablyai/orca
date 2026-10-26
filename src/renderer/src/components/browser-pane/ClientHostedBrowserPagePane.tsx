@@ -1,4 +1,5 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
@@ -31,7 +32,6 @@ import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
-import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
@@ -94,7 +94,7 @@ export function ClientHostedBrowserPagePane({
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
-  const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
+  const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     ...shortcutOwner,
     addressBarInputRef,
     guestFocus
@@ -137,6 +137,12 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValue
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
+  // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
+  const getAgentCursorHost = useCallback(
+    () => webviewRef.current?.parentElement ?? null,
+    [webviewRef]
+  )
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
@@ -273,8 +279,6 @@ export function ClientHostedBrowserPagePane({
     runtimeEnvironmentId,
     setAddressBarValueFromPage
   ])
-
-  useClientHostedGuestActivationFocus({ isActive, guestFocus, keepAddressBarFocusRef })
 
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({

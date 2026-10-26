@@ -7,6 +7,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
+import { activateCycledTabOnOwner } from '@/lib/cycled-tab-owner-activation'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -76,6 +77,7 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     }
     store.setActiveTabType('editor', worktreeId)
   }
+  activateCycledTabOnOwner(worktreeId, next)
 }
 
 /** Cycle the current type. Fresh installs use Cmd/Ctrl+Alt+[ / ]; migrated bindings may retain the inverse and remain rebindable. */
@@ -324,5 +326,6 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   }
   store.setActiveTab(next.id)
   store.setActiveTabType('terminal', worktreeId)
+  activateCycledTabOnOwner(worktreeId, next)
   return true
 }

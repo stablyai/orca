@@ -16,8 +16,11 @@ import {
 // Preserve pendingEscapeTailAnsi through SnapshotStart (#7329); after reset, missing partial escapes make subsequent live bytes render literally.
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     ...overrides
   } as OrcaRuntimeService
 }

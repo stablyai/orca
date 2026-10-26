@@ -1,4 +1,5 @@
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
+import { skipOpenEscapeContinuation } from '../../../../../shared/terminal-partial-escape-tail'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -17,7 +18,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
 
   session.abandonHiddenOutputRestoreAndDrainPendingForeground = function (
     expectedPtyId: string,
-    opts: { quiet?: boolean; rearmRemote?: boolean } = {}
+    opts: { quiet?: boolean; rearmRemote?: boolean; preserveReplayState?: boolean } = {}
   ): void {
     if (
       session.transport.getPtyId() !== expectedPtyId ||
@@ -68,19 +69,31 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
       session.clearHiddenOutputRestoreFloodRepaintTimer()
       session.writeRestoreUnavailableWarning()
     }
-    // Only quiet flood abandonment lacks another grounding path; warning and remote re-arm already ground before drain.
-    else if (!rearmedRemoteRestore) {
+    // Intact replay tails must reach queued live bytes without a parser or rendition reset.
+    else if (!rearmedRemoteRestore && !opts.preserveReplayState) {
       session.writeAbandonedRestoreGap()
     }
     if (hadPendingOverflow) {
       return
     }
     const replayedSeq = typeof replayingSnapshot?.seq === 'number' ? replayingSnapshot.seq : null
+    // The reset above aborted any open escape, so a chunk main labels as resuming inside one must skip its tail (#33766).
+    const followsByteGap = !opts.quiet || !opts.preserveReplayState
+    let openEscape = ''
     let pendingData = ''
     for (const chunk of pendingChunks) {
       const sliced =
         replayedSeq === null ? chunk.data : session.getChunkDataAfterSnapshot(chunk, replayedSeq)
-      pendingData += sliced ?? chunk.data
+      let data = sliced ?? chunk.data
+      if (followsByteGap && chunk.gapEscapeState && data === chunk.data) {
+        openEscape = chunk.gapEscapeState
+      }
+      if (openEscape) {
+        const skipped = skipOpenEscapeContinuation(openEscape, data)
+        data = skipped.rest
+        openEscape = skipped.stillOpen
+      }
+      pendingData += data
     }
     if (replayingSnapshot && replayedSeq !== null) {
       session.setRestoredSnapshotBaseline(

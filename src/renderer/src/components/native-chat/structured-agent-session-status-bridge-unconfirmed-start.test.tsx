@@ -2,6 +2,7 @@
 
 // Lost create replies remain unmarked and recheck on reconnect; only confirmed failures earn failure marks.
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -64,15 +65,29 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: vi.fn((prior: unknown) => prior),
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -84,9 +99,9 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-agent-session-launch-persistence'
-import { recheckUnconfirmedStructuredAgentLaunches } from '@/lib/structured-agent-session-launch-unconfirmed-recheck'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { recheckUnconfirmedStructuredAgentLaunches } from '@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,

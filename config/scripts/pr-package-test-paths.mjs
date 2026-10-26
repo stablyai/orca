@@ -56,6 +56,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/omp-fresh-launch-cmd.win32.test.ts',
+  'src/shared/windows-batch-spawn.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
@@ -106,7 +107,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
   'src/main/skills/skill-windows-rename-contention.integration.test.ts',
   'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/plan-selection.test.ts',
+  'src/main/ipc/filesystem/filesystem-read-dir-unc-drive.test.ts',
+  'src/main/ipc/filesystem/filesystem-file-content-unc-drive.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [

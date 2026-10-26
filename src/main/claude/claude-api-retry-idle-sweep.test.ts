@@ -127,7 +127,7 @@ describe('a Claude retrying a refused request', () => {
 
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(host.hasSession(SESSION)).toBe(false)
     })
   })

@@ -1,3 +1,4 @@
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
@@ -13,6 +14,39 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it.each([
+    ['workspaceWrite', 'auto'],
+    ['readOnly', 'read-only'],
+    ['read-only', 'read-only']
+  ])('leaves own policy omitted on start/resume and reports %s', async (sandboxType, expected) => {
+    const request = vi.fn(async () => ({
+      thread: { id: 'own-thread' },
+      approvalPolicy: 'on-request',
+      sandbox: { type: sandboxType },
+      approvalsReviewer: 'auto_review'
+    }))
+    for (const resumeThreadId of [null, 'own-thread']) {
+      const opened = await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId },
+        2_000
+      )
+      expect(opened.reportedPermissionMode).toBe(expected)
+    }
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      'thread/start',
+      { cwd: '/workspace' },
+      { timeoutMs: 2_000 }
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      'thread/resume',
+      { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
+      { timeoutMs: 2_000 }
+    )
+  })
+
   it('applies the resolved permission policy when starting and resuming a thread', async () => {
     const request = vi.fn(async (method: string) => ({
       thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
@@ -96,6 +130,7 @@ describe('openCodexThread', () => {
       openCodexThread(connectionFor(standard), { cwd: '/workspace', resumeThreadId: null }, 2_000)
     ).resolves.toEqual({
       threadId: 'thread-standard',
+      reportedPermissionMode: null,
       thread: { id: 'thread-standard' },
       serviceTier: null
     })
@@ -315,4 +350,44 @@ describe('openCodexThread', () => {
       }
     })
   })
+})
+
+it('keeps an exact active-writer refusal typed through cleanup wrapping', async () => {
+  const error = new CodexAppServerRequestError(
+    'thread/resume',
+    -32600,
+    'thread C already has an active writer'
+  )
+  const request = vi.fn().mockRejectedValue(error)
+  let refused: unknown
+  try {
+    await openCodexThread(connectionFor(request), { cwd: '/workspace', resumeThreadId: 'C' }, 2_000)
+  } catch (caught) {
+    refused = caught
+  }
+  expect(refused).toMatchObject({ reason: 'conversationOpenElsewhere' })
+  expect(providerStartupFailureFact(new AggregateError([refused], 'cleanup failed'))).toMatchObject(
+    {
+      kind: 'conversationOpenElsewhere',
+      detail: { text: error.message, audience: 'log' }
+    }
+  )
+  expect(request).toHaveBeenCalledOnce()
+})
+
+it.each([
+  ['thread/resume', -32600, 'thread D already has an active writer'],
+  ['thread/start', -32600, 'thread C already has an active writer'],
+  ['thread/resume', -32600, 'thread C is archived'],
+  ['thread/resume', -32600, 'unrelated invalid request'],
+  ['thread/resume', -1, 'thread C already has an active writer']
+] as const)('does not broaden writer refusal for %s/%s/%s', async (method, code, message) => {
+  const error = new CodexAppServerRequestError(method, code, message)
+  await expect(
+    openCodexThread(
+      connectionFor(vi.fn().mockRejectedValue(error)),
+      { cwd: '/workspace', resumeThreadId: 'C' },
+      2_000
+    )
+  ).rejects.toBe(error)
 })

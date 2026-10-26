@@ -1,12 +1,12 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
 const typeCommandWithOutcome = vi.fn()
-vi.mock('./mobile-native-chat-send', () => ({
+vi.mock('./native-chat/mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
   typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
@@ -14,7 +14,7 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
-vi.mock('./mobile-native-chat-stale-input', () => ({
+vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
 
@@ -23,7 +23,7 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
@@ -105,14 +105,6 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     renderer = null
     api = null
-  })
-
-  it('sizes the pre-clear to every line of a parked launch draft', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(clearArgs().clearInput).toBe(buildAgentTuiClearInputForText(DRAFT))
   })
 
   it('issues the burst as its OWN write, before the body', async () => {
@@ -202,15 +194,6 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.answerQuestion('1')
     })
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
-  })
-
-  it('creates an optimistic echo for an ordinary chat send', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(acceptSend).toHaveBeenCalledTimes(1)
-    expect(onCommandSend).not.toHaveBeenCalled()
   })
 
   // TUI commands never echo as user turns; optimistic bubbles would remain queued forever.

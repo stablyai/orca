@@ -256,6 +256,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
 
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
+    this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
     // Graph-only changes affect mobile handles/titles/liveness too; fan out the union on the same 50ms trailing edge, reading latest state at emission.
     for (const worktreeId of this.collectMobileVisibleGraphChangedWorktrees(

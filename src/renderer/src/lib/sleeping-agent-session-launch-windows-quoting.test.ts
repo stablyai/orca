@@ -6,6 +6,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 const mockCreateTab = vi.fn()
 
 const store = {
+  agentStatusByPaneKey: {},
   settings: {
     agentCmdOverrides: {},
     agentDefaultArgs: {} as Record<string, string>,

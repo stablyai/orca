@@ -14,6 +14,7 @@ import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import type { RuntimeStore } from './runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
 export const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -114,6 +115,8 @@ export function createRuntime(
   options: {
     connectionId?: string
     isWsl?: boolean
+    /** A headless serve: no window, only the empty headless graph. */
+    headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent
@@ -156,6 +159,10 @@ export function createRuntime(
     options.isWsl
   )
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
+  if (options.headless) {
+    publishHeadlessRuntimeGraph(runtime)
+    return { runtime, write }
+  }
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [

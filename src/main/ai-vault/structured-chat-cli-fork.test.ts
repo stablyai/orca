@@ -8,6 +8,7 @@ import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-ty
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
+import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
 import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
 import { AiVaultPrepareSessionResumeParams } from '../../shared/rpc-contract/ai-vault-params'
 
@@ -97,6 +98,43 @@ it('locates the current Codex rollout in its recorded home and materializes the 
     cwd: root
   })
 })
+
+it.runIf(process.platform === 'win32')(
+  'maps an extended-length Windows rollout path into the prepared home (#27200)',
+  async () => {
+    root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', root)
+    const home = join(root, 'codex-runtime-home', 'home')
+    const system = join(root, 'system')
+    const record = agentSessionRecordFixture()
+    record.provider = 'codex'
+    record.accountHome = { variable: 'CODEX_HOME', path: home }
+    record.providerHandleChain = [
+      {
+        ...record.providerHandleChain[0]!,
+        handle: { transport: 'codex-app-server', agent: 'codex', nativeId: 'current-conversation' }
+      }
+    ]
+    const relative = join('2026', '10', '15', 'rollout-2026-10-15-current-conversation.jsonl')
+    await mkdir(join(home, 'sessions', '2026', '10', '15'), { recursive: true })
+    await writeFile(join(home, 'sessions', relative), '{"saved":true}\n')
+    vi.spyOn(
+      structuredAgentRuntimeRegistration('codex')!.transcriptImport!,
+      'findTranscript'
+    ).mockResolvedValueOnce(`\\\\?\\${join(home, 'sessions', relative)}`)
+    install(record)
+    const result = await prepareStructuredChatCliFork(request, async (args) => ({
+      ...(await prepareLegacySharedCodexSessionResume(args, {
+        isHostSystemDefaultRealHomeSelected: () => true,
+        legacyCodexHomePath: home,
+        systemCodexHomePath: system
+      })),
+      useRealCodexHome: false,
+      substituteCodexHome: system
+    }))
+    expect(result.cliForkSource?.filePath).toBe(join(system, 'sessions', relative))
+  }
+)
 
 it('copies OpenCode directly from the selected record and preserves its typed account and copy id', async () => {
   root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))

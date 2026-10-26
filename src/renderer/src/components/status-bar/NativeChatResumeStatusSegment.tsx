@@ -3,12 +3,14 @@ import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-g
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import {
-  reopenNativeChatRestartOffer,
+  localNativeChatRestartStore,
   useNativeChatRestartOffer,
-  useNativeChatRestartRun
+  useNativeChatRestartRun,
+  type NativeChatRestartStore
 } from '../native-chat-resume-on-restart-store'
+import { useNativeChatRestartRuntimes } from '../native-chat-restart-runtimes'
 import { resumeRunInFlight } from '../native-chat-resume-run'
-import { resumeRunView } from '../native-chat-resume-run-view'
+import { resumeRunFailures, resumeRunView } from '../native-chat-resume-run-view'
 
 // Keep offers and in-flight/results visible after dialog snooze; statusBarItems must not hide the remaining resume surface.
 
@@ -18,7 +20,9 @@ function Segment({
   ariaLabel,
   tooltip,
   iconOnly,
-  count
+  count,
+  onOpen,
+  machineName
 }: {
   icon: React.ReactNode
   label: string
@@ -26,22 +30,26 @@ function Segment({
   tooltip: string
   iconOnly: boolean
   count: number
+  onOpen: () => Promise<void>
+  machineName?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => void reopenNativeChatRestartOffer()}
+          onClick={() => void onOpen()}
           className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={ariaLabel}
+          aria-label={machineName ? `${machineName}: ${ariaLabel}` : ariaLabel}
         >
           {icon}
-          <span className="text-[11px]">{iconOnly ? count : label}</span>
+          <span className="text-[11px]">
+            {iconOnly ? count : machineName ? `${machineName}: ${label}` : label}
+          </span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
-        {tooltip}
+        {machineName ? `${machineName}: ${tooltip}` : tooltip}
       </TooltipContent>
     </Tooltip>
   )
@@ -165,11 +173,43 @@ export function NativeChatResumeStatusSegment({
   iconOnly
 }: {
   iconOnly: boolean
+}): React.JSX.Element {
+  const enabled = useNativeChatRestartOfferEnabled()
+  const runtimes = useNativeChatRestartRuntimes()
+  return (
+    <>
+      <NativeChatRuntimeResumeStatusSegment
+        iconOnly={iconOnly}
+        store={localNativeChatRestartStore}
+        offerEnabled={enabled}
+      />
+      {runtimes.map(({ environment, store }) => (
+        <NativeChatRuntimeResumeStatusSegment
+          key={environment.id}
+          iconOnly={iconOnly}
+          store={store}
+          machineName={environment.name}
+          offerEnabled
+        />
+      ))}
+    </>
+  )
+}
+
+function NativeChatRuntimeResumeStatusSegment({
+  iconOnly,
+  store,
+  machineName,
+  offerEnabled
+}: {
+  iconOnly: boolean
+  store: NativeChatRestartStore
+  machineName?: string
+  offerEnabled: boolean
 }): React.JSX.Element | null {
-  const offerEnabled = useNativeChatRestartOfferEnabled()
-  const { candidates, failed } = useNativeChatRestartOffer(offerEnabled)
-  const run = useNativeChatRestartRun()
-  const failureBySession = new Map(failed.map((entry) => [entry.sessionId, entry]))
+  const { candidates, failed } = useNativeChatRestartOffer(offerEnabled, store)
+  const run = useNativeChatRestartRun(store)
+  const failureBySession = resumeRunFailures(run, failed)
   const view = run ? resumeRunView(run, candidates, (id) => failureBySession.get(id), 'all') : null
   if (!offerEnabled) {
     return null
@@ -178,7 +218,7 @@ export function NativeChatResumeStatusSegment({
   // Count the selection once until the action publishes the host's remaining list.
   const running = run !== null && resumeRunInFlight(run)
   const inRun = new Set(running ? run.entries.map((entry) => entry.candidate.sessionId) : [])
-  const waiting = failed.filter((failure) => !inRun.has(failure.sessionId))
+  const waiting = [...failureBySession.values()].filter((failure) => !inRun.has(failure.sessionId))
   const pending = candidates.filter((candidate) => !inRun.has(candidate.sessionId)).length
   const failures = waiting.length
   // An unconfirmed chat may be working, so "failed" would invite a duplicate "continue".
@@ -195,6 +235,8 @@ export function NativeChatResumeStatusSegment({
     <>
       {running && (
         <Segment
+          onOpen={store.reopenNativeChatRestartOffer}
+          machineName={machineName}
           iconOnly={iconOnly}
           count={view?.counts.total ?? 0}
           icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
@@ -203,6 +245,8 @@ export function NativeChatResumeStatusSegment({
       )}
       {pending > 0 && (
         <Segment
+          onOpen={store.reopenNativeChatRestartOffer}
+          machineName={machineName}
           iconOnly={iconOnly}
           count={pending}
           icon={<RotateCcw className="size-3 text-muted-foreground" />}
@@ -239,6 +283,8 @@ export function NativeChatResumeStatusSegment({
       {failures > 0 && (
         // Report failed outcomes separately from the remaining offer, using the shared failure-warning tone.
         <Segment
+          onOpen={store.reopenNativeChatRestartOffer}
+          machineName={machineName}
           iconOnly={iconOnly}
           count={failures}
           icon={<AlertCircle className="size-3 text-status-warning" />}
@@ -247,6 +293,8 @@ export function NativeChatResumeStatusSegment({
       )}
       {resumed > 0 && (
         <Segment
+          onOpen={store.reopenNativeChatRestartOffer}
+          machineName={machineName}
           iconOnly={iconOnly}
           count={resumed}
           icon={<CheckCircle2 className="size-3 text-status-success" />}

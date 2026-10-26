@@ -21,7 +21,8 @@ export type MultiplexPublishedInitialState = {
 export async function publishMultiplexInitialSnapshot(
   state: TerminalMultiplexConnection,
   request: MultiplexSubscribeRequest,
-  stream: TerminalMultiplexStream
+  stream: TerminalMultiplexStream,
+  incarnationId = state.runtime.getPtyExecutionHostMetadata(stream.ptyId).incarnationId
 ): Promise<MultiplexPublishedInitialState | null> {
   const { runtime, emit } = state
   const { ptyId } = stream
@@ -55,7 +56,23 @@ export async function publishMultiplexInitialSnapshot(
   const layoutSeq = runtime.getLayout(ptyId)?.seq
   // Why: layout versions and output offsets are different sequence domains.
   const snapshotOutputSeq = serialized?.seq
+  // Snapshot awaits may outlive the handle binding or the physical shell.
+  if (
+    runtime.resolveLiveLeafForHandle(request.terminal)?.ptyId !== ptyId ||
+    runtime.getPtyExecutionHostMetadata(ptyId).incarnationId !== incarnationId
+  ) {
+    throw new Error('terminal_handle_stale')
+  }
+  let launchResult: ReturnType<typeof runtime.getTerminalLaunchResult>
+  try {
+    launchResult = runtime.getTerminalLaunchResult(ptyId)
+  } catch (error) {
+    console.warn('Terminal launch result unavailable', error)
+  }
   emit({
+    ...(incarnationId && launchResult
+      ? { launchResult: { ...launchResult, ptyId, incarnationId } }
+      : {}),
     type: 'subscribed',
     streamId: request.streamId,
     terminal: request.terminal,

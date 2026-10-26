@@ -22,7 +22,7 @@ import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
 } from './launch-structured-agent-session'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,
   StructuredAgentSessionCreateAbandonedError,

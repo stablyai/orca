@@ -135,6 +135,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
     expect(spawnCommand(spawn, 1)).toContain('--dangerously-skip-permissions')
     expect(spawnCommand(spawn, 1)).toContain(SESSION_ID)
+    expect(spawn.mock.calls[1]?.[0]).toHaveProperty('resumeOrigin', 'saved')
   })
 
   it.each([

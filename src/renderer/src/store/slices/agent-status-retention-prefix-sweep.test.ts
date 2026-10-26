@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 describe('agent status retention + prefix sweep', () => {

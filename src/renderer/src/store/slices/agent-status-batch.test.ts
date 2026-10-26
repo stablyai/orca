@@ -4,11 +4,12 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
-import {
-  MAX_LIVE_AGENT_STATUSES,
-  type AgentStatusBatchUpdate,
-  type RetainedAgentEntry
-} from './agent-status'
+import './agent-status'
+import { MAX_LIVE_AGENT_STATUSES } from './agent-status/agent-status-capacity-eviction'
+import type {
+  AgentStatusBatchUpdate,
+  RetainedAgentEntry
+} from './agent-status/agent-status-contract'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 import { createTestStore, makeTab, makeUnifiedTab } from './store-test-helpers'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

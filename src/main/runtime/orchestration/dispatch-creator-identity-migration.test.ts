@@ -39,6 +39,8 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     seed.close()
 
     const raw = new Database(dbPath)
+    // The current mail-routing trigger reads creator_handle; the next open recreates it.
+    raw.exec('DROP TRIGGER trg_messages_route_coordinator_mail')
     for (const column of CREATOR_COLUMNS) {
       raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
     }

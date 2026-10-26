@@ -150,13 +150,9 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
       )
     }
     Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
-    // Read-only host capability: syncRuntimeBackedSettings never writes it back, so web reflects host enforcement.
-    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
-      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
-    }
-    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
-      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
-    }
+    // Read-only host capability; a host without a sharing service omits it, which must not keep a stale local grant.
+    runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled === true
+    runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled === true
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
     return settingsForActiveVisibilityOwner(next)

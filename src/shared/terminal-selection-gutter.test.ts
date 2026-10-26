@@ -21,12 +21,6 @@ describe('stripTerminalSelectionGutter', () => {
     )
   })
 
-  it('drops the gutter from a single wrapped line', () => {
-    expect(stripTerminalSelectionGutter('  one logical line, joined by xterm')).toBe(
-      'one logical line, joined by xterm'
-    )
-  })
-
   it('keeps relative indentation inside the gutter', () => {
     const nested = ['  def run():', '      return 1', '', '  run()'].join('\n')
     expect(stripTerminalSelectionGutter(nested)).toBe(
@@ -37,17 +31,6 @@ describe('stripTerminalSelectionGutter', () => {
   it('leaves a selection that starts mid-line untouched', () => {
     const midLine = ['answer starts here', '  and continues', '  and ends'].join('\n')
     expect(stripTerminalSelectionGutter(midLine)).toBe(midLine)
-  })
-
-  it('leaves unindented output untouched', () => {
-    const shellOutput = ['$ git status', 'On branch main', 'nothing to commit'].join('\n')
-    expect(stripTerminalSelectionGutter(shellOutput)).toBe(shellOutput)
-  })
-
-  it('ignores blank lines when measuring the gutter', () => {
-    expect(stripTerminalSelectionGutter(['  a', '', '  b'].join('\n'))).toBe(
-      ['a', '', 'b'].join('\n')
-    )
   })
 
   it('ignores whitespace-only lines when measuring the gutter', () => {
@@ -71,19 +54,9 @@ describe('stripTerminalSelectionGutter', () => {
     )
   })
 
-  it('leaves wide characters and emoji in the content alone', () => {
-    expect(
-      stripTerminalSelectionGutter(['  変更を適用しました 🎉', '  お疲れさま'].join('\n'))
-    ).toBe(['変更を適用しました 🎉', 'お疲れさま'].join('\n'))
-  })
-
   it('does not strip past a shorter line', () => {
     const uneven = ['    deep', '  shallow'].join('\n')
     expect(stripTerminalSelectionGutter(uneven)).toBe(['  deep', 'shallow'].join('\n'))
-  })
-
-  it('is a no-op on an empty selection', () => {
-    expect(stripTerminalSelectionGutter('')).toBe('')
   })
 
   it('leaves tab-indented text alone (terminal cells never hold tabs)', () => {

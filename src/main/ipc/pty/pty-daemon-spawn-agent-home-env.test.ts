@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock } from '../pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, noChatsRuntimeMembers } from '../pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import {
   type DaemonSpawnCall,
@@ -127,6 +127,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupDaemonAdapter()
         const runtime = {
           setPtyController: vi.fn(),
+          ...noChatsRuntimeMembers(),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
@@ -512,6 +513,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupDaemonAdapter()
         const runtime = {
           setPtyController: vi.fn(),
+          ...noChatsRuntimeMembers(),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
@@ -546,6 +548,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupDaemonAdapter()
         const runtime = {
           setPtyController: vi.fn(),
+          ...noChatsRuntimeMembers(),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
@@ -578,6 +581,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupDaemonAdapter()
         const runtime = {
           setPtyController: vi.fn(),
+          ...noChatsRuntimeMembers(),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),

@@ -2,6 +2,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
@@ -13,7 +14,14 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
     )
   }
   // Keep IPC wrappers in stored errors for classifiers; strip them only for display.
-  return displayIpcErrorMessage(message) ?? message
+  const displayed = displayIpcErrorMessage(message) ?? message
+  if (isFileTooLargeCodeMessage(displayed)) {
+    return translate(
+      'editor.fileLoad.remoteTooLarge',
+      'This file is too large to open from its host.'
+    )
+  }
+  return displayed
 }
 
 // Leave close to the tab strip: this view also serves synthetic conflict rows and cannot enforce pin, shared-reference or unsaved-change rules.

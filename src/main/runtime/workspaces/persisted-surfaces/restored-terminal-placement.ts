@@ -29,6 +29,7 @@ import {
 } from '../../terminal/recovery/foreign-pane-bindings'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500
 
@@ -162,6 +163,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         if (pty && pane) {
           // This claim has no graph standing; a later window graph wins.
           recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          followExportedPaneKeys(this.ptysById.values(), (record) => this.paneOfPty(record).paneKey)
         }
       }
     })

@@ -149,7 +149,8 @@ jobs:
     name: WSL2 distro (${{ matrix.family }})
     needs: [template, container-rootfs]
     runs-on: windows-2025
-    timeout-minutes: 45
+    # Healthy runs take 4-11 min; a runner frozen during WSL2 setup is only reaped here (retried by wsl-orcad-e2e-frozen-runner-retry.yml).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -320,7 +321,7 @@ jobs:
             "$name=$path" >> $env:GITHUB_ENV
           }
       - name: 'Phase 1: deploy, RPC, kill orcad, terminate distro'
-        timeout-minutes: 20
+        timeout-minutes: 10
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: launch
@@ -331,7 +332,7 @@ jobs:
           if ($global:LASTEXITCODE -ne 0) { throw "launch phase failed: $global:LASTEXITCODE" }
       # A new process: the holders must have kept both distros Running since phase 1 exited.
       - name: 'Phase 2: holders survive, chat, reconnect, teardown'
-        timeout-minutes: 15
+        timeout-minutes: 8
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: survive

@@ -1,4 +1,4 @@
-import { createContext } from 'react'
+import { createContext, type ContextType } from 'react'
 import { z } from 'zod'
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -27,6 +27,10 @@ const READ_TIMEOUT_MS = 30_000
 export const MobileNativeChatItemSourceContext = createContext<
   (MobileNativeChatVisualSource & { messageDetail?: MobileNativeChatMessageDetail | null }) | null
 >(null)
+
+// Live publication and selected row values use separate contexts to avoid root fanout below memo.
+export const MobileNativeChatRootItemSourceContext =
+  createContext<ContextType<typeof MobileNativeChatItemSourceContext>>(null)
 
 // Null means the item is gone; transport/refusal still rejects.
 export async function readMobileNativeChatItem(

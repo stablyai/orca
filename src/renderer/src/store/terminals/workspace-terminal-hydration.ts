@@ -161,6 +161,9 @@ export function createWorkspaceTerminalHydrationActions(
           ...(options?.contestedPrimaryHostBySessionKey
             ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
             : {}),
+          ...(options?.hydratedRuntimeSessionHostIds
+            ? { hydratedRuntimeSessionHostIds: options.hydratedRuntimeSessionHostIds }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,

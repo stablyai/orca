@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { provenancePathCandidate, resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
 

@@ -86,7 +86,7 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     expect(isKnownHarnessInjectedUserTurnText('   ')).toBe(false)
   })
 
-  it('classifies from a bounded head so multi-KB pastes stay cheap', () => {
+  it('classifies harness and user prefixes in multi-KB pastes', () => {
     const largePrompt = `<task-notification>done</task-notification>\n${'x'.repeat(20_000)}`
     expect(isKnownHarnessInjectedUserTurnText(largePrompt)).toBe(true)
     expect(isKnownHarnessInjectedUserTurnText(`fix login ${'y'.repeat(20_000)}`)).toBe(false)

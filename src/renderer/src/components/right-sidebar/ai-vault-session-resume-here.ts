@@ -20,7 +20,7 @@ import {
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredLaunchConversationOwner } from '@/lib/structured-agent-session-launch-failure'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'

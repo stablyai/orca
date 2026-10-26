@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { normalizeTaskRepoSelection } from '@/components/task-page/task-page-default-repo-selection'

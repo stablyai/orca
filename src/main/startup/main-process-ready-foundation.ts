@@ -60,8 +60,11 @@ import { reportProfileStateSaveDelay } from './profile-state-save-delay'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
-  // Background automation must not claim the macOS Dock/menu bar.
-  applyBackgroundActivationPolicy({ warn: console.warn })
+  // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
+  applyBackgroundActivationPolicy({
+    serveWithoutDesktopWindow: state.isServeMode,
+    warn: console.warn
+  })
   installElectronProxyRequestGuard(session.defaultSession)
   app.on('login', (event, webContents, details, authInfo, callback) => {
     handleElectronProxyLogin(

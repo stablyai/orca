@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
 import { StrictMode } from 'react'
+import { toast } from 'sonner'
+import { permissionNotice } from './__fixtures__/permission-notice-test-fixture'
+import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -14,18 +17,22 @@ import { useAppStore } from '@/store'
 import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() } }))
+
 const transport = vi.hoisted(() => ({
   read: vi.fn(),
   mutate: vi.fn(),
   detection: vi.fn(),
   auto: vi.fn(),
-  native: vi.fn()
+  native: vi.fn(),
+  own: vi.fn()
 }))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
   hostSupportsAutoPermissions: transport.auto,
-  hostSupportsNativeChatPermissions: transport.native
+  hostSupportsNativeChatPermissions: transport.native,
+  hostSupportsOwnChatPermissions: transport.own
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -60,14 +67,35 @@ const pane = (revision: number) => (
 
 afterEach(cleanup)
 beforeEach(() => {
+  vi.mocked(toast.success).mockClear()
   transport.read.mockReset().mockResolvedValue(host())
   transport.mutate.mockReset().mockResolvedValue(host())
   transport.detection.mockClear()
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
+  transport.own.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
+  it.each([false, true])(
+    'describes Own for the selected host capability: %s',
+    async (supported) => {
+      transport.own.mockResolvedValue(supported)
+      transport.read.mockResolvedValue(
+        projectAgentLaunchSettings({ agentPermissionDefault: 'own' })
+      )
+      render(pane(17))
+      await screen.findByText("Each agent's own settings")
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Permissions' }))
+      await screen.findByText(
+        supported
+          ? 'Terminals and chats follow the agent’s own permission settings.'
+          : 'Orca adds no permission flag in terminals; chats use Settings → Chat.'
+      )
+      expect(transport.own).toHaveBeenCalledWith({ environmentId: 'ssh-host', pairingRevision: 17 })
+    }
+  )
+
   it('shows resolved launch defaults in a collapsed legacy host row', async () => {
     transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
     render(pane(17))
@@ -496,4 +524,38 @@ describe('host launch settings form', () => {
     await screen.findByDisplayValue('--host-marker')
     expect(transport.read.mock.calls.at(-1)?.[1].aborted).toBe(false)
   })
+})
+
+it('shows vanished and retained overrides together and only makes the retained agent inherit', async () => {
+  const before = {
+    agentPermissionDefault: 'full-access' as const,
+    agentPermissionOverrides: { codex: 'full-access' as const, claude: 'full-access' as const }
+  }
+  transport.read.mockResolvedValue(projectAgentLaunchSettings(before))
+  transport.mutate
+    .mockResolvedValueOnce(
+      projectAgentLaunchSettings({
+        ...before,
+        agentPermissionDefault: 'ask',
+        agentPermissionOverrides: { claude: 'full-access' }
+      })
+    )
+    .mockResolvedValueOnce(projectAgentLaunchSettings({ agentPermissionDefault: 'ask' }))
+  render(pane(17))
+  await screen.findByRole('button', { name: 'Permissions' })
+  await userEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: /Ask for approval/ }))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe(
+    '1 agent still uses their own permission setting:'
+  )
+  const { details, follow } = permissionNotice()
+  expect(details.textContent).toContain('Claude · Full access')
+  expect(details.textContent).toContain('Codex now follows Ask for approval')
+  await follow()
+  await waitFor(() => expect(transport.mutate).toHaveBeenCalledTimes(2))
+  expect(transport.mutate.mock.calls.map((call) => call[1])).toEqual([
+    { type: 'permission', choice: 'ask' },
+    { type: 'permission', agent: 'claude', choice: 'default' }
+  ])
 })

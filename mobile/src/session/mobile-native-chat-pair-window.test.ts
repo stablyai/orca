@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { applyMobileNativeChatStreamFrame } from './mobile-native-chat-stream-frame'
+import { applyMobileNativeChatStreamFrame } from './native-chat/mobile-native-chat-stream-frame'
 
 function row(id: string, role: NativeChatMessage['role'] = 'assistant'): NativeChatMessage {
   return { id, role, source: 'transcript', timestamp: 1, blocks: [{ type: 'text', text: id }] }

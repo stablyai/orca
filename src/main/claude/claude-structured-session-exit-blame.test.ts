@@ -7,6 +7,7 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 
 async function startedClaude(sink: StructuredAgentSessionEventSink) {
   const claude = fakeClaude()
@@ -33,6 +34,23 @@ describe('what a started Claude session says ended it', () => {
     expect(await ended()).toMatchObject({
       cause: 'unexpected-exit',
       failure: { kind: 'providerExited' }
+    })
+  })
+
+  it("names Claude's root refusal of Full access rather than a bare exit", async () => {
+    const { connection, ended } = await startedClaude({
+      appendItem: () => {},
+      appendTombstone: () => {},
+      publish: () => {}
+    })
+    const refusal =
+      '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
+
+    connection.handlers.onExit?.(claudeStreamJsonExitError(refusal, { code: 1, signal: null }))
+
+    expect(await ended()).toMatchObject({
+      cause: 'unexpected-exit',
+      failure: { kind: 'fullAccessAsRoot', detail: { text: `(code 1)\n${refusal}` } }
     })
   })
 

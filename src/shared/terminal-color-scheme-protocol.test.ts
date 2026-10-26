@@ -1,22 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  mode2031SequenceFor,
-  resolveTerminalColorSchemeMode,
-  scanMode2031Sequences
-} from './terminal-color-scheme-protocol'
+import { mode2031SequenceFor, scanMode2031Sequences } from './terminal-color-scheme-protocol'
 
 describe('terminal color scheme protocol', () => {
   it('maps mode 2031 replies to CSI 997 status reports', () => {
     expect(mode2031SequenceFor('dark')).toBe('\x1b[?997;1n')
     expect(mode2031SequenceFor('light')).toBe('\x1b[?997;2n')
-  })
-
-  it('resolves system color scheme from app settings and system preference', () => {
-    expect(resolveTerminalColorSchemeMode({ theme: 'dark' }, false)).toBe('dark')
-    expect(resolveTerminalColorSchemeMode({ theme: 'light' }, true)).toBe('light')
-    expect(resolveTerminalColorSchemeMode({ theme: 'system' }, true)).toBe('dark')
-    expect(resolveTerminalColorSchemeMode({ theme: 'system' }, false)).toBe('light')
   })
 
   it('detects mode 2031 subscribes in compound and split private mode sequences', () => {

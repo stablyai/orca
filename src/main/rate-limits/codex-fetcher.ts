@@ -11,7 +11,10 @@ import {
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
+import {
+  hasCodexStateDbBackfillRecoveryGivenUp,
+  startCodexStateDbBackfillRecoveryInBackground
+} from '../codex/codex-state-db-backfill-recovery'
 import { spawnProcessOnWorkerThread } from '../worker-thread-child-process/worker-thread-child-process'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { getMainHttpClient } from '../network/http-client'
@@ -28,10 +31,7 @@ import {
   supplementCodexRateLimitResetCredits
 } from './codex-reset-credit-client'
 import { readCodexRateLimitsViaRpc } from './codex-rpc-rate-limit-probe'
-import {
-  getHiddenRateLimitWslCwdSetupCommands,
-  resolveHiddenRateLimitPtyCwd
-} from './hidden-rate-limit-pty-cwd'
+import { getHiddenProbeWslCwdSetupCommands, resolveHiddenProbeCwd } from './hidden-probe-cwd'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
@@ -51,7 +51,7 @@ function buildWslCodexCommand(
     return null
   }
   const setupCommands = [
-    ...getHiddenRateLimitWslCwdSetupCommands(),
+    ...getHiddenProbeWslCwdSetupCommands(),
     `export CODEX_HOME=${quotePosixShell(wslInfo.linuxPath)}`
   ].join(' && ')
   const execSuffix = `${args.map(quotePosixShell).join(' ')} <&3 >&4 3<&- 4>&-`
@@ -96,7 +96,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     // wsl.exe holds cwd busy for ~60s; keep probes outside profile folders (#29845).
-    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenRateLimitPtyCwd(),
+    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenProbeCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       // WSL probes keep the guest's own proxy env; a Windows proxy address may not resolve there.
@@ -190,8 +190,18 @@ export async function fetchCodexRateLimits(
 
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
+    // HTTP usage never opens the state DB, so it cannot contend with the backfill (#15741).
+    const backendResult = isWslHome ? null : await fetchBackendUsage(options)
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
+    if (backendResult) {
+      return backendResult
+    }
     return codexUnavailable(
-      'Codex is rebuilding its session index; usage will refresh when recovery finishes',
+      hasCodexStateDbBackfillRecoveryGivenUp(options.codexHomePath)
+        ? `Codex could not rebuild its session index in ${options.codexHomePath}; restart Orca to retry (a codex wrapper that sets CODEX_HOME can cause this)`
+        : 'Codex is rebuilding its session index; usage will refresh when recovery finishes',
       'error'
     )
   }

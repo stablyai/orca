@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
-  isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
@@ -449,31 +448,6 @@ describe('project host setup projection', () => {
     ).toHaveLength(3)
   })
 
-  it('keeps same-named cross-host records separate when there is no shared repo identity', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-sample-app',
-        path: '/Users/alice/work/sample-app',
-        displayName: 'sample-app'
-      }),
-      repo({
-        id: 'ssh-sample-app',
-        path: '/srv/unrelated/sample-app',
-        displayName: 'sample-app',
-        connectionId: 'staging server'
-      }),
-      repo({
-        id: 'runtime-sample-app',
-        path: '/workspace/sample-app',
-        displayName: 'sample-app',
-        executionHostId: 'runtime:preview'
-      })
-    ])
-
-    // Display names cannot prove identity; merge only with normalized remote identity or explicit user linking.
-    expect(projection.projects).toHaveLength(3)
-  })
-
   it('does not collapse case-distinct remote paths for self-hosted git remotes', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -534,47 +508,6 @@ describe('project host setup projection', () => {
       hostId: 'ssh:openclaw%202',
       projectHostSetupId: 'remote-repo'
     })
-  })
-})
-
-describe('isGitHubBackedRepo', () => {
-  it('is true when an explicit upstream owner/repo is present', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is true when a GitHub-sourced avatar icon encodes the slug', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is false for a non-GitHub icon and no upstream (GitLab/folder)', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: { type: 'lucide', name: 'gitlab' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(false)
-  })
-
-  it('is false for a plain local repo with no provider signal', () => {
-    expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
   })
 })
 

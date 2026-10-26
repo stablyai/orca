@@ -677,6 +677,7 @@ describe('getPiTitlebarExtensionSource', () => {
     await old.callHook('agent_end')
     await other.callHook('agent_start')
     const replacement = createHarness({ globals })
+    await replacement.callHook('session_start', { reason: 'reload' })
     expect(vi.getTimerCount()).toBe(1)
     await replacement.callHook('agent_start')
     const oldCount = old.titles.length
@@ -688,10 +689,25 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(replacement.lastTitle()).toMatch(BRAILLE_RE)
     expect(other.lastTitle()).toMatch(BRAILLE_RE)
     const third = createHarness({ globals })
+    await third.callHook('session_start', { reason: 'new' })
     expect(vi.getTimerCount()).toBe(1)
     await third.callHook('agent_start')
     await replacement.callHook('session_shutdown')
     expect(vi.getTimerCount()).toBe(2)
+  })
+
+  it('keeps the lead spinner when an in-process subagent session starts', async () => {
+    const globals = {}
+    const lead = createHarness({ globals, isIdle: () => false })
+    await lead.callHook('agent_start')
+    const child = createHarness({ globals })
+    await child.callHook('session_start', { reason: 'startup' })
+    await child.callHook('agent_start')
+    const before = lead.titles.length
+    vi.advanceTimersByTime(160)
+    expect(lead.titles.length).toBeGreaterThan(before)
+    expect(child.titles).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(1)
   })
 
   it('stops spinner, prompt reassertion and idle recheck together on invalidation', async () => {

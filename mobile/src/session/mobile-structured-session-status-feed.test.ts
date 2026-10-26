@@ -83,6 +83,19 @@ describe("the phone's status stream", () => {
     expect(listener).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps a retrying host owned and starting until readiness, then revokes ownership on disconnect', () => {
+    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
+    const starting = { ...summary(false), hostExecutionPhase: 'starting' as const }
+    frames[0]?.({ type: 'snapshot', sessions: [starting] })
+    frames[0]?.({ type: 'status', session: starting })
+    expect(read()).toMatchObject({ hostExecutionOwned: true, hostExecutionPhase: 'starting' })
+    frames[0]?.({ type: 'status', session: { ...starting, hostExecutionPhase: 'ready' } })
+    expect(read()).toMatchObject({ hostExecutionOwned: true, hostExecutionPhase: 'ready' })
+    connection('reconnecting')
+    expect(read()?.hostExecutionOwned).toBeUndefined()
+    expect(read()?.hostExecutionPhase).toBeUndefined()
+  })
+
   it('drops Stopping when the host ends the stream, and opens it again on the next connection', () => {
     mobileStructuredSessionStatusFeed(client).subscribe(() => {})
     frames[0]?.({ type: 'snapshot', sessions: [summary(true)] })

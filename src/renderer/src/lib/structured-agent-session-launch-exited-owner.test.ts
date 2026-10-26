@@ -52,8 +52,8 @@ import {
 import {
   getStructuredAgentSessionLaunchFailure,
   resetStructuredAgentLaunchRegistryForTests
-} from './structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 
 const WORKTREE = 'wt-1'

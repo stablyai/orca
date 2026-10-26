@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { homedir, userInfo } from 'node:os'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { expandIdentityFileTokens } from './ssh-identity-file-tokens'
 
 export type SshResolvedConfig = {
   hostname: string
@@ -204,7 +205,7 @@ export async function resolveWithSshG(host: string): Promise<SshResolvedConfig |
 
 export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const map = new Map<string, string>()
-  const identityFiles: string[] = []
+  const rawIdentityFiles: string[] = []
 
   for (const line of stdout.split('\n')) {
     const spaceIdx = line.indexOf(' ')
@@ -214,12 +215,19 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
-      identityFiles.push(resolveSshConfigHomePath(value))
+      // `IdentityFile none` loads no key; it is not a path.
+      if (value.toLowerCase() !== 'none') {
+        rawIdentityFiles.push(value)
+      }
     } else {
       map.set(key, value)
     }
   }
 
+  // Tokens need hostname/user/port, which ssh -G may print after identityfile lines.
+  const identityFiles = rawIdentityFiles.map((value) =>
+    resolveSshConfigHomePath(expandIdentityFileTokens(value, map))
+  )
   return buildSshResolvedConfig(map, identityFiles)
 }
 

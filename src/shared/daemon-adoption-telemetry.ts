@@ -44,6 +44,13 @@ export function isMacTccFolderClass(cwdClass: DaemonPtyCwdClass): cwdClass is Ma
   return MAC_TCC_FOLDER_CLASSES.some((name) => name === cwdClass)
 }
 
+export function classifyDaemonAppVersionMatch(
+  daemonAppVersion: string | null | undefined,
+  appVersion: string
+): DaemonAdoptedAppVersionMatch {
+  return !daemonAppVersion ? 'unknown' : daemonAppVersion === appVersion ? 'same' : 'different'
+}
+
 export function classifyDaemonSpawnerPath(
   spawnerExecPath: string | null,
   exists: (path: string) => boolean,

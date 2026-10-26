@@ -15,7 +15,10 @@ import {
   saveStructuredAgentSessionStartReadbackListing
 } from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
-import { noteStructuredAgentSessionReportedOptions } from './structured-agent-session-ran-options'
+import {
+  noteStructuredAgentSessionRuntimePermission,
+  noteStructuredAgentSessionReportedOptions
+} from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -82,6 +85,8 @@ export async function settleStructuredAgentSessionProviderStarted(
       return null
     }
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
+    noteStructuredAgentSessionRuntimePermission(session.child, event.reportedOptions, true)
+    context.publishStatus?.(event.sessionId)
     await noteStructuredAgentSessionReportedOptions(
       context,
       event.sessionId,
@@ -221,7 +226,14 @@ export async function settleStructuredAgentSessionOptionsReported(
   event: StructuredAgentSessionOptionsReportedEvent
 ): Promise<void> {
   const child = context.sessions.get(event.sessionId)?.child
-  if (child?.phase === 'starting') {
+  if (
+    !child ||
+    !sameProviderChild(child, { generation: event.acquisitionGeneration, fence: event.fence })
+  ) {
+    return
+  }
+  noteStructuredAgentSessionRuntimePermission(child, event.reportedOptions)
+  if (child.phase === 'starting') {
     const readiness = context.runtimeState.startupAttempts.readiness(event.sessionId, {
       generation: event.acquisitionGeneration,
       fence: event.fence
@@ -230,6 +242,10 @@ export async function settleStructuredAgentSessionOptionsReported(
       return
     }
   }
+  if (context.sessions.get(event.sessionId)?.child !== child) {
+    return
+  }
+  context.publishStatus?.(event.sessionId)
   await noteStructuredAgentSessionReportedOptions(
     context,
     event.sessionId,

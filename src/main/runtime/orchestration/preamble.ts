@@ -121,6 +121,11 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
   ${cli} orchestration check --terminal ${params.workerHandle} --json
+
+  # After processing every message, ack the returned deliveryId; this also reads
+  # the next batch. Repeat until count is 0, then resume. Unacked batches replay
+  # and hide newer mail.
+  ${cli} orchestration check --terminal ${params.workerHandle} --ack <delivery_id> --json
 \`\`\`
 
 ${postDoneInstructions}`

@@ -35,6 +35,7 @@ function ChromeHarness({
   workspaceId = WORKSPACE_ID,
   chromeShortcutScope,
   hasGuest = true,
+  inputLocked = false,
   testId = 'a'
 }: {
   isActive?: boolean
@@ -42,6 +43,7 @@ function ChromeHarness({
   workspaceId?: string
   chromeShortcutScope?: BrowserChromeShortcutScope
   hasGuest?: boolean
+  inputLocked?: boolean
   testId?: string
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -53,7 +55,8 @@ function ChromeHarness({
     isActive,
     chromeShortcutScope: chromeShortcutScope ?? (isActive ? 'focused' : 'inactive'),
     addressBarInputRef,
-    guestFocus
+    guestFocus,
+    inputLocked
   })
   return (
     <div data-browser-overlay-tab-id={workspaceId}>
@@ -163,6 +166,88 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => flushFrames())
 
     expect(document.activeElement).toBe(guest())
+  })
+
+  it('hands the page the keyboard when its tab is switched to (#20533)', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive />)
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('leaves the keyboard alone when a page activates in a split the user is not in', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('leaves the keyboard alone for splits that only own their target, as floating ones do', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="owned-target" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('focuses a page whose guest attaches a frame after the tab activates', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('lets a late guest leave focus the user moved while it attached', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    act(() => addressBar().focus())
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('keeps the desktop keyboard off a page a phone is driving', () => {
+    const view = render(<ChromeHarness isActive={false} inputLocked />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive inputLocked />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('still focuses a guest that attaches long after the tab activates', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    act(() => flushFrames(30))
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('drops a pending activation focus once the user focuses another split', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    view.rerender(<ChromeHarness isActive hasGuest={false} chromeShortcutScope="inactive" />)
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).not.toBe(guest())
   })
 
   it('ignores a pending request while the pane is not the active surface', () => {
@@ -337,7 +422,8 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => flushFrames(2))
     view.rerender(<ChromeHarness hasGuest={false} isActive={false} />)
     act(() => addressBar().focus())
-    view.rerender(<ChromeHarness />)
+    // Why an unfocused split: switching back to a focused split's tab focuses its page anyway (#20533).
+    view.rerender(<ChromeHarness chromeShortcutScope="inactive" />)
     act(() => flushFrames())
 
     expect(document.activeElement).toBe(addressBar())

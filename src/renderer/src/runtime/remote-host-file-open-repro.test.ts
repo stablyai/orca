@@ -12,7 +12,7 @@ import { shouldRetryFileLoadError } from '@/components/editor/useEditorPanelFile
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
-// Mirrors src/main/ipc/filesystem-auth.ts PATH_ACCESS_DENIED_MESSAGE.
+// Mirrors src/main/ipc/filesystem/filesystem-auth.ts PATH_ACCESS_DENIED_MESSAGE.
 const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
 

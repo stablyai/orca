@@ -3264,3 +3264,79 @@ html.native-shell .app-layout {
     transition: transform var(--reference-title-duration) linear 400ms;
   }
 }
+
+/* Agent cursor over a browser page: it never takes input and only moves by transform/opacity. */
+.browser-agent-cursor-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.browser-agent-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+
+.browser-agent-cursor-glyph {
+  --browser-agent-cursor-fill: var(--foreground);
+  --browser-agent-cursor-outline: var(--background);
+  transition: opacity 0.6s ease;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ai-action-accent) 85%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--ai-action-accent) 45%, transparent));
+}
+
+.browser-agent-cursor-ring {
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: 2px solid var(--ai-action-accent);
+  background: color-mix(in srgb, var(--ai-action-accent) 18%, transparent);
+  opacity: 0;
+}
+
+/* While an agent drives the page, a soft inner glow breathes at its edge. */
+.browser-agent-cursor-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 35%, transparent),
+    inset 0 0 32px color-mix(in srgb, var(--ai-action-accent) 30%, transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.browser-agent-cursor-layer[data-agent-active]::before {
+  opacity: 1;
+  animation: browser-agent-glow-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes browser-agent-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-agent-cursor-glyph,
+  .browser-agent-cursor-layer::before {
+    transition: none;
+  }
+
+  .browser-agent-cursor-layer[data-agent-active]::before {
+    animation: none;
+  }
+}

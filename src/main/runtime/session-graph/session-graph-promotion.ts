@@ -130,6 +130,8 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     ...args: Parameters<RecordPtyWorktreeMethods['recordPtyWorktree']>
   ): ReturnType<RecordPtyWorktreeMethods['recordPtyWorktree']>
 
+  protected abstract followExportedPaneKeys(): void
+
   protected abstract scheduleMobileSessionTabsChanged(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['scheduleMobileSessionTabsChanged']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['scheduleMobileSessionTabsChanged']>

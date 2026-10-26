@@ -10,13 +10,13 @@ import {
   agentSessionWriteNoticeEnglish
 } from '../../../src/shared/agent-session-refusal-notice'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient

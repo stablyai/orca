@@ -1102,18 +1102,25 @@ function Get-OrcaClickModifierVirtualKeys([string]$Modifiers) {
     @($parts | ForEach-Object { Get-OrcaModifierVirtualKey $_ })
 }
 
-function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+function ConvertTo-OrcaSendKeysHotkey([string]$KeySpec) {
     $parts = @($KeySpec.Split("+") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($parts.Count -eq 0) { throw "Unsupported key: $KeySpec" }
     $key = $parts[$parts.Count - 1]
     $prefix = ""
     if ($parts.Count -gt 1) {
+        # SendKeys adds Shift for an uppercase letter, turning Ctrl+A into Ctrl+Shift+A.
+        if ($key.Length -eq 1) { $key = $key.ToLowerInvariant() }
         foreach ($modifier in $parts[0..($parts.Count - 2)]) {
             $prefix += ConvertTo-OrcaSendKeysModifier $modifier
         }
     }
+    $prefix + (ConvertTo-OrcaSendKeysKey $key)
+}
+
+function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+    $keys = ConvertTo-OrcaSendKeysHotkey $KeySpec
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
-    [System.Windows.Forms.SendKeys]::SendWait($prefix + (ConvertTo-OrcaSendKeysKey $key))
+    [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 
 function ConvertTo-OrcaSendKeysText([string]$Text) {

@@ -73,11 +73,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { notifyStructuredLaunchListeners } from '@/lib/structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import {
   writeStructuredAgentLaunchRecord,
   deleteStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import {
   getStructuredAgentSessionStatusFeed,

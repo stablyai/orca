@@ -16,7 +16,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
   attachJournal,
@@ -81,7 +81,7 @@ export type AttachFlowInput = {
   startupOptions?: Readonly<Record<string, string>>
   launchPermissionMode?: (
     record: AgentSessionRecord
-  ) => Promise<AgentChatPermissionMode | undefined>
+  ) => Promise<AgentChatPermissionChoice | undefined>
   /** Publish journal before new-owner sends; distinguish newly starting, retained live and resting owners. */
   onAttached: (
     attached: AttachedJournal,
@@ -95,6 +95,9 @@ export type AttachFlowInput = {
   eventSink?: StructuredAgentSessionEventSink
   /** Prevent acquisition-window events from reaching superseded journals. */
   onAcquiring?: () => Promise<void> | void
+  /** Refuses the spawn while a terminal may still be writing the record's conversation. */
+  assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
+  /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
   /** Adopt the conversation’s journal; attach never owns its open. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>

@@ -6,6 +6,10 @@ import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-clie
 import { translate } from '@/i18n/i18n'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
+import {
+  describeSharedDropFailureReason,
+  describeSharedDropSkipReason
+} from '@/lib/drop-skip-reason-copy'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
   captureFileExplorerOperationGuard,
@@ -133,7 +137,8 @@ export function useFileExplorerImport({
               'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
               'Failed to import {{value0}} {{value1}}.',
               { value0: failed.length, value1: noun }
-            )
+            ),
+            { description: describeSharedDropFailureReason(failed) }
           )
         } else if (skipped.length > 0 && imported.length === 0) {
           const noun = skipped.length === 1 ? 'file' : 'files'
@@ -142,7 +147,8 @@ export function useFileExplorerImport({
               'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
               'Skipped {{value0}} {{value1}}.',
               { value0: skipped.length, value1: noun }
-            )
+            ),
+            { description: describeSharedDropSkipReason(skipped) }
           )
         }
       } catch (err) {

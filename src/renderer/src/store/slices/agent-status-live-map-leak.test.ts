@@ -5,7 +5,8 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import { MAX_LIVE_AGENT_STATUSES } from './agent-status'
+import './agent-status'
+import { MAX_LIVE_AGENT_STATUSES } from './agent-status/agent-status-capacity-eviction'
 import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
 

@@ -1,4 +1,8 @@
-import type { RuntimeHeadlessTerminal } from '../../runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimePtyWorktreeRecord
+} from '../../runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
 import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
@@ -6,17 +10,44 @@ import {
   observeCodexCapacityTerminalStatus,
   observeCodexReconnectFailure
 } from '../../codex-notice-terminal-status'
+import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
+import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
 } from '../../../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
+import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
   protected abstract markPaneLiveTitlesDirty(): void
   protected abstract settleLostAgentSession(ptyId: string): void
+  abstract readLaunchedAgentForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground>
+
+  protected readonly trustDialogStatus = new TrustDialogStatusObserver({
+    getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+    refreshForegroundAgent: (ptyId) => this.ptyForegroundAgent.refresh(ptyId),
+    readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
+    getEmulator: (ptyId) =>
+      this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
+    readStatus: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined
+    },
+    publish: (ptyId, payload) =>
+      this.emitTerminalAgentStatusEvents(
+        ptyId,
+        { cleanData: '', payloads: [payload], lastPayloadCleanOffset: null },
+        undefined,
+        false
+      )
+  })
 
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
   maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null {
@@ -84,6 +115,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
+        if (typeof rendered.seq === 'number') {
+          state.rendererSeedSeq = rendered.seq
+        }
         const ptyDims = this.getTerminalSize(ptyId)
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
@@ -148,6 +183,34 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     })
   }
 
+  /** True when this PTY's queries go unanswered unless its single receiving remote view answers them. */
+  isSoleRemoteTerminalQueryOwner(ptyId: string): boolean {
+    return (
+      this.terminalViewSubscribers.remoteReceivingOutputCount(ptyId) === 1 &&
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId,
+        settings: this.store?.getSettings(),
+        hasRemoteViewSubscriber: false
+      })
+    )
+  }
+
+  /** Answer stateless queries a sole remote view owned at ingestion but will never receive. */
+  answerYieldedTerminalQueries(ptyId: string, statelessQueryData: string): void {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    state.writeChain = state.writeChain
+      .then(async () => {
+        // Why drop, not retry: injecting mid-escape corrupts live parsing, and a deferred reply risks arriving after the query timed out.
+        if (state.emulator.partialEscapeTailAnsi === '') {
+          await state.emulator.write(statelessQueryData, { forwardQueryReplies: true })
+        }
+      })
+      .catch(() => {})
+  }
+
   protected trackHeadlessTerminalData(
     ptyId: string,
     data: string,
@@ -159,6 +222,22 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     const completion = state.writeChain.then(async () => {
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
+      if (state.rendererSeedSeq !== undefined) {
+        if (outputSequence <= state.rendererSeedSeq) {
+          state.rendererSeedEscapeTail = advancePartialEscapeTail(
+            state.rendererSeedEscapeTail ?? '',
+            data
+          )
+          state.outputSequence = outputSequence
+          return
+        }
+        const escapeTail = state.rendererSeedEscapeTail
+        state.rendererSeedSeq = undefined
+        state.rendererSeedEscapeTail = undefined
+        if (escapeTail) {
+          await state.emulator.write(escapeTail)
+        }
+      }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
@@ -166,12 +245,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           continue
         }
         const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
-        const readStatus = () => {
-          const paneKey =
-            this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
-            this.paneOfPty(pty).paneKey
-          return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
-        }
+        const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
         // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
         if (
           observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)
@@ -179,6 +253,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           this.settleLostAgentSession(ptyId)
         }
         if (!pty.connectionId) {
+          this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
           const payload =
             observeCodexCapacityTerminalStatus(
               state.emulator,
@@ -205,5 +280,15 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       state.outputSequence = outputSequence
     })
     state.writeChain = completion.catch(() => {})
+  }
+
+  private readPtyAgentStatusRow(
+    ptyId: string,
+    pty: RuntimePtyWorktreeRecord
+  ): AgentStatusIpcPayload | undefined {
+    const paneKey =
+      this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
+      this.paneOfPty(pty).paneKey
+    return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
   }
 }
