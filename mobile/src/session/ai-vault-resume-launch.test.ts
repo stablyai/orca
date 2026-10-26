@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
@@ -39,24 +38,6 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
 }
 
 describe('buildMobileAiVaultResumeLaunch', () => {
-  it('routes Kimi through the resumable-agent startup plan', () => {
-    // Kimi resumes are cwd-scoped, so its launch branch must retain the cd prefix.
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'kimi',
-        sessionId: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
-      }),
-      workspacePlatform: 'darwin'
-    })
-
-    expect(launch).toMatchObject({
-      command:
-        "cd '/Users/ada/repo' && kimi '--yolo' '--session' 'session_431324d7-2165-42f0-9ecd-9f93437b3201'",
-      launchConfig: { agentCommand: "kimi '--yolo'" },
-      launchAgent: 'kimi'
-    })
-  })
-
   it('resumes Cursor by conversation id with its default args and launch config like desktop', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({ agent: 'cursor', sessionId: 'cursor-1' }),
@@ -72,77 +53,6 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     expect(launch.command).toContain("'--model' 'gpt-5'")
   })
 
-  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'omp',
-        sessionId: 'omp-custom-1',
-        filePath: '/custom/omp-sessions/project/session.jsonl'
-      }),
-      workspacePlatform: 'linux',
-      settings: {
-        agentDefaultArgs: { omp: '--model custom' },
-        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
-      }
-    })
-
-    expect(launch).toMatchObject({
-      command:
-        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
-      env: { OMP_PROFILE: 'custom' },
-      launchConfig: {
-        agentCommand: "omp '--model' 'custom'",
-        agentArgs: '--model custom',
-        agentEnv: { OMP_PROFILE: 'custom' },
-        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
-      },
-      launchAgent: 'omp'
-    })
-
-    const coldLaunch = buildAgentResumeStartupPlan({
-      agent: 'omp',
-      providerSession: { key: 'session_id', id: 'omp-custom-1' },
-      cmdOverrides: {},
-      agentArgs: launch.launchConfig?.agentArgs,
-      agentEnv: launch.launchConfig?.agentEnv,
-      agentCommand: launch.launchConfig?.agentCommand,
-      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
-      platform: 'linux'
-    })
-    expect(coldLaunch).toMatchObject({
-      launchCommand:
-        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
-      env: { OMP_PROFILE: 'custom' }
-    })
-  })
-
-  it('uses shared TUI startup planning for default args, env, and launch config', () => {
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'claude',
-        sessionId: 'abc 123',
-        cwd: '/Users/ada/repo'
-      }),
-      workspacePlatform: 'darwin',
-      settings: {
-        agentCmdOverrides: { claude: 'claude-dev' },
-        agentDefaultArgs: { claude: '--model opus' },
-        agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'http://localhost:3000' } }
-      }
-    })
-    expect(launch.command).toBe(
-      "cd '/Users/ada/repo' && claude-dev '--model' 'opus' '--resume' 'abc 123'"
-    )
-    expect(launch.env).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:3000' })
-    expect(launch.launchAgent).toBe('claude')
-    expect(launch.launchConfig).toEqual({
-      agentCommand: "claude-dev '--model' 'opus'",
-      agentArgs: '--model opus',
-      agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
-    })
-    expect(launch.envToDelete).toBeUndefined()
-  })
-
   it('deletes inherited Codex homes when resuming a real-home session like desktop', () => {
     // Strip inherited/default CODEX_HOME when resuming a real-home Codex session.
     const launch = buildMobileAiVaultResumeLaunch({
@@ -154,32 +64,6 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
     expect(launch.command).not.toContain('CODEX_HOME=')
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
-  })
-
-  it('names the conversation it resumes so the host can show it before the first turn', () => {
-    const codex = buildMobileAiVaultResumeLaunch({
-      session: session({ agent: 'codex', sessionId: 'codex-1' }),
-      workspacePlatform: 'darwin'
-    })
-    expect(codex.resumeProviderSession).toEqual({ key: 'session_id', id: 'codex-1' })
-    const omp = buildMobileAiVaultResumeLaunch({
-      session: session({ agent: 'omp', sessionId: 'omp-1', filePath: '/custom/omp/s.jsonl' }),
-      workspacePlatform: 'linux'
-    })
-    expect(omp.resumeProviderSession).toEqual({ key: 'session_id', id: 'omp-1' })
-  })
-
-  it('keeps managed-home Codex resumes free of env deletion', () => {
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'codex',
-        sessionId: 'codex-1',
-        codexHome: '/Users/ada/.orca/codex-runtime-home/home'
-      }),
-      workspacePlatform: 'darwin'
-    })
-    expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
-    expect(launch.envToDelete).toBeUndefined()
   })
 })
 

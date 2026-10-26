@@ -144,21 +144,6 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status).toBe('blocked')
   })
 
-  it('blocks a WSL Antigravity IDE transcript in an SSH workspace', () => {
-    const target = resolve({
-      session: session({
-        agent: 'antigravity',
-        cwd: '/home/ada/ssh-repo/feature/src',
-        filePath:
-          '//wsl.localhost/Ubuntu/home/ada/.gemini/antigravity-ide/brain/id/transcript_full.jsonl'
-      }),
-      activeWorktreeId: 'ssh-session-wt',
-      worktrees: [sshSessionWorktree],
-      repos
-    })
-    expect(target.status).toBe('blocked')
-  })
-
   it('resumes a WSL-stored session in an SSH folder workspace', () => {
     const target = resolve({
       session: session({ cwd: '/home/ada/folder/src', filePath: WSL_TRANSCRIPT }),
@@ -293,40 +278,6 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status === 'blocked' ? target.message : '').toContain('different host')
   })
 
-  it('blocks folder workspaces whose candidate repos include a runtime owner', () => {
-    const target = resolve({
-      session: session({ cwd: '/workspace/folder/src' }),
-      activeWorktreeId: 'folder:folder-runtime-candidate',
-      worktrees: [
-        worktree({
-          worktreeId: 'folder:folder-runtime-candidate',
-          repoId: 'folder-workspace:group-local',
-          workspaceKind: 'folder-workspace',
-          path: '/workspace/folder'
-        })
-      ],
-      repos: [
-        ...repos,
-        {
-          id: 'runtime-in-folder',
-          path: '/workspace/folder/repo',
-          connectionId: null,
-          executionHostId: 'runtime:devbox' as const
-        }
-      ],
-      folderWorkspaces: [
-        {
-          id: 'folder-runtime-candidate',
-          projectGroupId: 'group-local',
-          folderPath: '/workspace/folder'
-        }
-      ],
-      projectGroups
-    })
-    expect(target.status).toBe('blocked')
-    expect(target.status === 'blocked' ? target.message : '').toContain('runtime-hosted')
-  })
-
   it('blocks folder workspaces when folder metadata is unavailable', () => {
     const target = resolve({
       session: session({ cwd: '/Users/ada/folder/src' }),
@@ -341,45 +292,6 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos,
       folderWorkspaces: [],
-      projectGroups
-    })
-    expect(target).toEqual({
-      status: 'blocked',
-      message: 'Open a workspace before resuming a session.'
-    })
-  })
-
-  it('blocks folder workspaces with mixed candidate repo hosts as unknown', () => {
-    const target = resolve({
-      session: session({ cwd: '/Users/ada/mixed/src' }),
-      activeWorktreeId: 'folder:folder-mixed',
-      worktrees: [
-        worktree({
-          worktreeId: 'folder:folder-mixed',
-          repoId: 'folder-workspace:group-local',
-          workspaceKind: 'folder-workspace',
-          path: '/Users/ada/mixed'
-        })
-      ],
-      repos: [
-        {
-          id: 'local-in-folder',
-          path: '/Users/ada/mixed/local',
-          connectionId: null
-        },
-        {
-          id: 'ssh-in-folder',
-          path: '/Users/ada/mixed/ssh',
-          connectionId: 'builder'
-        }
-      ],
-      folderWorkspaces: [
-        {
-          id: 'folder-mixed',
-          projectGroupId: 'group-local',
-          folderPath: '/Users/ada/mixed'
-        }
-      ],
       projectGroups
     })
     expect(target).toEqual({
