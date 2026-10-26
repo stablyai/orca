@@ -91,6 +91,15 @@ export type AntigravityNativeCredential = {
   refreshToken: string | null
 }
 
+/** The bearer token of a credential that already parsed; never put it in logs or returned state. */
+export function readAntigravityAccessToken(contents: string): string {
+  const value: unknown = JSON.parse(contents)
+  if (!isRecord(value) || !isRecord(value.token) || typeof value.token.access_token !== 'string') {
+    throw invalidCredential()
+  }
+  return value.token.access_token
+}
+
 export function parseAntigravityNativeCredential(contents: string): AntigravityNativeCredential {
   if (Buffer.byteLength(contents) > MAX_CREDENTIAL_BYTES) {
     throw invalidCredential()

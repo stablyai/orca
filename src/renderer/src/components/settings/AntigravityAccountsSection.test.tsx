@@ -85,6 +85,55 @@ describe('native Antigravity Accounts', () => {
     }
   )
 
+  describe('Save current account for a credential without an id_token', () => {
+    const unidentified = (identityResolvable?: boolean): AntigravityAccountState => ({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      currentAccount: {
+        email: null,
+        subject: null,
+        authMethod: 'consumer',
+        identityKnown: false,
+        ...(identityResolvable === undefined ? {} : { identityResolvable })
+      }
+    })
+
+    it('is enabled when the host can ask Google who the account is', async () => {
+      vi.mocked(callAntigravityAccounts).mockResolvedValue(unidentified(true))
+      render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+      await screen.findByText('Signed-in identity unavailable')
+      expect(screen.getByRole('button', { name: 'Save current account' })).toBeEnabled()
+    })
+
+    it.each([
+      ['the host reports it cannot resolve the identity', false],
+      ['an older host omits the flag', undefined]
+    ])('stays disabled when %s', async (_label, resolvable) => {
+      vi.mocked(callAntigravityAccounts).mockResolvedValue(unidentified(resolvable))
+      render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+      await screen.findByText('Signed-in identity unavailable')
+      expect(screen.getByRole('button', { name: 'Save current account' })).toBeDisabled()
+    })
+
+    it('saves through the same Save action and shows the confirmed account', async () => {
+      vi.mocked(callAntigravityAccounts)
+        .mockResolvedValueOnce(unidentified(true))
+        .mockResolvedValueOnce(state)
+      render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+      await screen.findByText('Signed-in identity unavailable')
+      await userEvent.click(screen.getByRole('button', { name: 'Save current account' }))
+      await screen.findByText('Native account')
+      expect(vi.mocked(callAntigravityAccounts)).toHaveBeenLastCalledWith(
+        owner,
+        target,
+        'AddCurrent',
+        undefined
+      )
+      expect(screen.getAllByText('synthetic@example.invalid').length).toBeGreaterThan(0)
+    })
+  })
+
   it('clears previous quota when an identity changes during a new usage refresh', async () => {
     vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
     render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
