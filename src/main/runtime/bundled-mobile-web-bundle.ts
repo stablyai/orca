@@ -78,9 +78,12 @@ export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
     return cachedBundle
   }
 
-  cachedBundle = readBundledMobileWebBundle(root)
-  cachedMtimeMs = mtimeMs
-  cachedRoot = root
+  const nextBundle = readBundledMobileWebBundle(root)
+  if (nextBundle !== null || cachedBundle === undefined) {
+    cachedBundle = nextBundle
+    cachedMtimeMs = mtimeMs
+    cachedRoot = root
+  }
   return cachedBundle
 }
 
