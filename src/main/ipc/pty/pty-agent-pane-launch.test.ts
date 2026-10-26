@@ -3,8 +3,7 @@ import { createLaunchRaceRuntime } from '../pty-launch-race-test-fixture'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentPaneLaunchRequest } from '../../../shared/agent-pane-launch-request'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
-import { classifyErrorMock } from '../pty-ipc-mock-registry'
-import { statSyncMock } from '../pty-ipc-mock-registry'
+import { classifyErrorMock, statSyncMock } from '../pty-ipc-mock-registry'
 import { registerPtyHandlers } from './register-handlers'
 import {
   isAgentLaunchRunningIn,

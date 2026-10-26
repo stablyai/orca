@@ -4,7 +4,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
-import { statSyncMock } from '../pty-ipc-mock-registry'
+import { statSyncMock, forgetRefusedPaneResumeMock } from '../pty-ipc-mock-registry'
 import {
   spawnBoth,
   startParityLanes,
@@ -36,7 +36,6 @@ import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import { forgetRefusedPaneResumeMock } from '../pty-ipc-mock-registry'
 
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
