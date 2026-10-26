@@ -10,7 +10,8 @@ import {
   SendParams,
   isDispatchMutationMessageType,
   isWorkerReportOutcome,
-  parseRemoteWorkerPayload
+  parseRemoteWorkerPayload,
+  parseMessageTaskId
 } from '../schemas'
 import { resolveMessageRun } from '../routing'
 import {
@@ -88,7 +89,14 @@ export const ORCHESTRATION_SEND_METHODS = [
       })
       const senderPaneKey = sender.paneKey ?? undefined
       // Why: a session caller was already bound to its own identity at the dispatch entry.
-      if (isDispatchMutationMessageType(params.type) && !orchestrationCaller) {
+      const dispatchScopedStatus =
+        (params.type ?? 'status') === 'status' &&
+        parseMessageTaskId(params.payload) !== undefined &&
+        typeof parseRemoteWorkerPayload(params.payload).dispatchId === 'string'
+      if (
+        (isDispatchMutationMessageType(params.type) || dispatchScopedStatus) &&
+        !orchestrationCaller
+      ) {
         assertLifecycleCallerIsNotAnotherParty(runtime, {
           from,
           fromPaneKey: senderPaneKey,
