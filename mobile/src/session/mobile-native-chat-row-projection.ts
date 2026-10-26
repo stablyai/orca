@@ -1,69 +1,69 @@
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { MobileNativeChatRowContentProps } from './MobileNativeChatRowItemSource'
 
 type Fields = Readonly<Record<string, unknown>>
-type Row = Fields & { message: NativeChatMessage }
-
-function isProjectionContainer(value: unknown): value is Fields {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const prototype: unknown = Object.getPrototypeOf(value)
-  return Array.isArray(value) || prototype === Object.prototype || prototype === null
-}
-
-// Fetch/recovery freshness keys retain identity even when their previews compare equal.
-function isRecoveryFreshnessKey(value: Fields, field?: string): boolean {
-  return field === 'raw' || (value.type === 'tool-result' && value.fullOutputItemId !== undefined)
-}
-
-// Compare rebuilt projection containers; opaque state and callbacks must retain identity.
-function unchanged(previous: unknown, next: unknown, depth: number, field?: string): boolean {
-  if (previous === next) {
-    return true
-  }
-  if (depth < 0 || !isProjectionContainer(previous) || !isProjectionContainer(next)) {
-    return false
-  }
-  if (isRecoveryFreshnessKey(previous, field) || isRecoveryFreshnessKey(next, field)) {
-    return false
-  }
-  if (Array.isArray(previous) || Array.isArray(next)) {
-    return (
-      Array.isArray(previous) &&
-      Array.isArray(next) &&
-      previous.length === next.length &&
-      previous.every((value, index) => unchanged(value, next[index], depth - 1))
-    )
-  }
-  const keys = Object.keys(previous)
+function sameFields(
+  a: Fields,
+  b: Fields,
+  equal = (_key: string, x: unknown, y: unknown) => Object.is(x, y)
+): boolean {
+  const keys = Object.keys(a)
   return (
-    keys.length === Object.keys(next).length &&
-    keys.every(
-      (key) => Object.hasOwn(next, key) && unchanged(previous[key], next[key], depth - 1, key)
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => Object.hasOwn(b, key) && equal(key, a[key], b[key]))
+  )
+}
+function sameSequence<T>(
+  a: readonly T[] | undefined,
+  b: readonly T[] | undefined,
+  equal: (a: T, b: T) => boolean
+): boolean {
+  return (
+    a === b ||
+    (!!a && !!b && a.length === b.length && a.every((value, index) => equal(value, b[index]!)))
+  )
+}
+function sameBlock(a: NativeChatBlock, b: NativeChatBlock): boolean {
+  // Fetch/recovery keys, including full-output result bodies, are identity-only.
+  return (
+    a === b ||
+    (a.type === b.type && (a.type === 'text' || a.type === 'image-ref') && sameFields(a, b))
+  )
+}
+function sameMessage(a: NativeChatMessage, b: NativeChatMessage): boolean {
+  return (
+    a === b ||
+    sameFields(a, b, (key, x, y) =>
+      key === 'blocks' ? sameSequence(a.blocks, b.blocks, sameBlock) : Object.is(x, y)
     )
   )
 }
-
-export type MobileNativeChatRowProjection<T extends Row> = {
-  rows: readonly T[]
-  byId: ReadonlyMap<string, T>
-}
-
-export function projectMobileNativeChatRows<T extends Row>(
-  rows: T[],
-  previous?: MobileNativeChatRowProjection<T>
-): MobileNativeChatRowProjection<T> {
-  const next = rows.map((row) => {
-    const prior = previous?.byId.get(row.message.id)
-    // Row -> work run -> message -> blocks -> block fields; deeper values retain identity.
-    return prior && unchanged(prior, row, 4) ? prior : row
+export function equalMobileNativeChatRowContent(
+  a: MobileNativeChatRowContentProps,
+  b: MobileNativeChatRowContentProps
+): boolean {
+  return sameFields(a, b, (key, x, y) => {
+    if (Object.is(x, y)) {
+      return true
+    }
+    if (key === 'message') {
+      return sameMessage(a.message, b.message)
+    }
+    if (key === 'workRun') {
+      return sameSequence(a.workRun, b.workRun, sameMessage)
+    }
+    if (key === 'turnStatus') {
+      return !!a.turnStatus && !!b.turnStatus && sameFields(a.turnStatus, b.turnStatus)
+    }
+    if (key === 'source' && a.source && b.source) {
+      return sameFields(a.source, b.source, (field, left, right) =>
+        field === 'details'
+          ? sameSequence(a.source!.details, b.source!.details, (before, after) =>
+              sameFields(before, after)
+            )
+          : Object.is(left, right)
+      )
+    }
+    return false
   })
-  if (
-    previous &&
-    next.length === previous.rows.length &&
-    next.every((row, at) => row === previous.rows[at])
-  ) {
-    return previous
-  }
-  return { rows: next, byId: new Map(next.map((row) => [row.message.id, row])) }
 }

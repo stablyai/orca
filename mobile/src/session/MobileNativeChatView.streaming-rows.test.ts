@@ -16,9 +16,7 @@ import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
-import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
-import { projectMobileNativeChatRows } from './mobile-native-chat-row-projection'
+import { MobileNativeChatRowContent } from './MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => {
   return {
@@ -44,35 +42,44 @@ vi.mock('react-native-gesture-handler', () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
+  Brain: 'Brain',
+  ChevronRight: 'ChevronRight',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
+vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 const itemReads = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-native-chat-item-read', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileNativeChatItemReadModule>()),
   readMobileNativeChatItem: itemReads
 }))
-const operations = vi.hoisted(() => ({ resolve: 0, raw: 0, state: 0 }))
+const operations = vi.hoisted(() => ({
+  resolve: new Array<string>(),
+  compare: new Array<string>(),
+  raw: new Array<string>(),
+  state: new Array<string>()
+}))
 vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./use-mobile-native-chat-row-props')>()
-  const React = await import('react')
   return {
     ...actual,
-    useMobileNativeChatRowProps(
-      ...[messages, lookups, scope]: Parameters<typeof actual.useMobileNativeChatRowProps>
+    resolveMobileNativeChatRowProps(
+      ...args: Parameters<typeof actual.resolveMobileNativeChatRowProps>
     ) {
-      const counted = React.useMemo(
-        () => ({
-          ...lookups,
-          resolveTurnRow: (...args: Parameters<typeof lookups.resolveTurnRow>) => {
-            operations.resolve++
-            return lookups.resolveTurnRow(...args)
-          }
-        }),
-        [lookups]
-      )
-      return actual.useMobileNativeChatRowProps(messages, counted, scope)
+      operations.resolve.push(args[1].id)
+      return actual.resolveMobileNativeChatRowProps(...args)
+    }
+  }
+})
+vi.mock('./mobile-native-chat-row-projection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./mobile-native-chat-row-projection')>()
+  return {
+    equalMobileNativeChatRowContent(
+      ...args: Parameters<typeof actual.equalMobileNativeChatRowContent>
+    ) {
+      operations.compare.push(args[1].message.id)
+      return actual.equalMobileNativeChatRowContent(...args)
     }
   }
 })
@@ -83,52 +90,69 @@ vi.mock('./use-mobile-native-chat-message-detail', async (importOriginal) => {
     useMobileNativeChatMessageDetail(
       ...args: Parameters<typeof actual.useMobileNativeChatMessageDetail>
     ) {
-      const result = actual.useMobileNativeChatMessageDetail(...args)
-      const detail = result.detail
-      return detail === null
-        ? result
-        : {
+      const result = actual.useMobileNativeChatMessageDetail(...args),
+        detail = result.detail
+      return detail
+        ? {
             ...result,
             detail: {
               ...detail,
               raw: (id: string) => {
-                operations.raw++
+                operations.raw.push(id)
                 return detail.raw(id)
               },
               state: (id: string) => {
-                operations.state++
+                operations.state.push(id)
                 return detail.state(id)
               }
             }
           }
+        : result
     }
   }
 })
 const rendered = vi.hoisted(() => new Map<string, number>())
 vi.mock('./MobileNativeChatMessage', async () => {
   const React = await import('react')
-  const { useMobileNativeChatFullMessage } = await import('./MobileNativeChatFullContent')
-  const { MobileNativeChatVisualContext } = await import('./mobile-native-chat-visual-context')
-  const { MobileNativeChatReplyRevealsContext } = await import('./mobile-native-chat-reply-reveals')
-  const { MobileNativeChatDisclosureContext } =
-    await import('./mobile-native-chat-disclosure-store')
-  const { MobileNativeChatRowOverlaysContext } = await import('./mobile-native-chat-row-overlays')
-  const { MobileNativeChatGrowthHoldContext } = await import('./mobile-native-chat-growth-hold')
+  const { useMobileNativeChatFullMessage, MobileNativeChatToolOutput } =
+    await import('./MobileNativeChatFullContent')
+  const { MobileNativeChatGroupedThought } = await import('./MobileNativeChatReasoningRow')
   return {
-    MobileNativeChatMessage: React.memo((props: { message: NativeChatMessage }) => {
-      const full = useMobileNativeChatFullMessage(props.message)
-      React.useContext(MobileNativeChatVisualContext)
-      React.useContext(MobileNativeChatReplyRevealsContext)
-      React.useContext(MobileNativeChatDisclosureContext)
-      React.useContext(MobileNativeChatRowOverlaysContext)
-      React.useContext(MobileNativeChatGrowthHoldContext)
-      rendered.set(props.message.id, (rendered.get(props.message.id) ?? 0) + 1)
-      return React.createElement(
-        'ChatMessage',
-        { ...props, recovery: full.recovery },
-        full.showFull
-      )
-    })
+    MobileNativeChatMessage: React.memo(
+      (props: { message: NativeChatMessage; workRun?: NativeChatMessage[] }) => {
+        const full = useMobileNativeChatFullMessage(props.message)
+        rendered.set(props.message.id, (rendered.get(props.message.id) ?? 0) + 1)
+        return React.createElement(
+          'ChatMessage',
+          { ...props, recovery: full.recovery },
+          full.showFull,
+          ...(props.workRun ?? [])
+            .filter((member) => member.role === 'reasoning')
+            .map((member) =>
+              React.createElement(MobileNativeChatGroupedThought, {
+                key: member.id,
+                message: member,
+                fontScale: 1,
+                expanded: true,
+                onToggle: () => {}
+              })
+            ),
+          ...(props.workRun ?? [props.message]).flatMap((member) =>
+            member.blocks.flatMap((body, index) =>
+              body.type === 'tool-result' && body.fullOutputItemId
+                ? React.createElement(MobileNativeChatToolOutput, {
+                    key: index,
+                    body,
+                    type: {},
+                    rootIdentity: 'run',
+                    positionKey: 'output'
+                  })
+                : []
+            )
+          )
+        )
+      }
+    )
   }
 })
 vi.mock('./MobileNativeChatPromptCard', () => ({ MobileNativeChatPromptCard: 'PromptCard' }))
@@ -170,8 +194,13 @@ const stable = {
 }
 
 const itemSource = { client: stubRpcClient(), sessionId: 'session' }
-const openFile = () => {}
-function Harness({ items }: { items: AgentJournalRenderItem[] }) {
+function Harness({
+  items,
+  source = itemSource
+}: {
+  items: AgentJournalRenderItem[]
+  source?: typeof itemSource | null
+}) {
   const messages = useMemo(() => projectStructuredAgentSessionMessages(items, [], []), [items])
   const timing = useMobileStructuredAgentTurnTiming(
     { items, submissions: [], working: true },
@@ -184,8 +213,8 @@ function Harness({ items }: { items: AgentJournalRenderItem[] }) {
     nativeChatAgent: 'claude',
     nativeChatStructured: true,
     nativeChatAgentWorking: true,
-    nativeChatItemSource: itemSource,
-    nativeChatVisualSource: itemSource,
+    nativeChatItemSource: source,
+    nativeChatVisualSource: source,
     nativeChatSettledTurns: timing.settledTurns,
     nativeChatTurnJournal: timing.turnJournal,
     nativeChatWorkingStartedAt: timing.workingStartedAt,
@@ -198,7 +227,7 @@ function Harness({ items }: { items: AgentJournalRenderItem[] }) {
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
-    onOpenFile: openFile,
+    onOpenFile: stable.onComposerTextChange,
     images: {
       attachments: [],
       isAttaching: false,
@@ -214,8 +243,8 @@ function Harness({ items }: { items: AgentJournalRenderItem[] }) {
     inputLockReason: null,
     sendErrorMessage: null,
     onClearSendError: () => {},
-    sendSurfaceId: stable.sendSurfaceId,
-    sessionId: 'session',
+    sendSurfaceId: source?.sessionId ?? stable.sendSurfaceId,
+    sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
     keyboardInset: 0
   })
@@ -277,13 +306,27 @@ function journal(turns: number, text: string): AgentJournalRenderItem[] {
   return items
 }
 
+const listeners = new Map<string, () => void>()
+const scroller = {
+  scrollTop: 0,
+  scrollHeight: 10000,
+  clientHeight: 500,
+  addEventListener: (type: string, callback: () => void) => listeners.set(type, callback),
+  removeEventListener: (type: string) => listeners.delete(type),
+  querySelectorAll: () => [],
+  getBoundingClientRect: () => ({ top: 0, bottom: 500 })
+}
+const nodeMock = (element: { type: unknown }) =>
+  element.type === 'ScrollView'
+    ? { getScrollableNode: () => scroller, getInnerViewNode: () => null }
+    : null
 let renderer: ReactTestRenderer | null = null
 function showElement(element: ReactElement) {
   act(() => {
     if (renderer) {
       renderer.update(element)
     } else {
-      renderer = create(element)
+      renderer = create(element, { createNodeMock: nodeMock })
     }
   })
 }
@@ -292,41 +335,27 @@ afterEach(() => {
   renderer = null
   rendered.clear()
   itemReads.mockReset()
+  vi.useRealTimers()
 })
 
-function measure(turns: number) {
-  // Retain every loaded row by reaching the page's scroll-driven draw expansion.
-  const scroller = {
-    scrollTop: 0,
-    scrollHeight: 100,
-    clientHeight: 100,
-    addEventListener() {},
-    removeEventListener() {},
-    querySelectorAll: () => []
-  }
+function measure(turns: number, all: boolean) {
+  scroller.scrollHeight = all ? 100 : 10000
+  scroller.clientHeight = all ? 100 : 500
   const items = journal(turns, 'hello')
-  act(() => {
-    renderer = create(createElement(Harness, { items }), {
-      createNodeMock: (element) =>
-        element.type === 'ScrollView'
-          ? { getScrollableNode: () => scroller, getInnerViewNode: () => null }
-          : null
-    })
-  })
+  showElement(createElement(Harness, { items }))
   expect(renderer!.root.findAllByType(MobileNativeChatPageList)).toHaveLength(1)
   const mounted = renderer!.root.findAll((node) => Object.is(node.type, 'ChatMessage'))
-  expect(mounted.length).toBe(
+  const total =
     foldMobileNativeChatMessages(projectStructuredAgentSessionMessages(items, [], []), 'claude')
       .length + 1
+  expect(mounted.length).toBe(all ? total : 24)
+  const mountedIds = new Set(mounted.map((node) => node.props.message.id))
+  const members = new Set(
+    mounted.flatMap((node) =>
+      (node.props.workRun ?? [node.props.message]).map((member: NativeChatMessage) => member.id)
+    )
   )
-  expect(mounted.some((node) => node.props.workRun?.length > 1)).toBe(true)
-  expect(
-    mounted.filter((node) => node.props.turnStatus?.workedSeconds === 4).length
-  ).toBeGreaterThanOrEqual(turns)
-  const preview = mounted.find((node) => node.props.message.id === 'user-0')!
-  expect(preview.props.message.blocks).toContainEqual({ type: 'image-ref', url: 'local:preview' })
-  expect(mounted.some((node) => node.props.message.id === 'pending')).toBe(true)
-  const maximum = { resolve: 0, raw: 0, state: 0 }
+  const maximum = { resolve: 0, compare: 0, raw: 0, state: 0 }
   for (let batch = 0; batch < 20; batch++) {
     rendered.clear()
     const updated = items.map((item) =>
@@ -338,36 +367,47 @@ function measure(turns: number) {
           }
         : item
     )
-    Object.assign(operations, { resolve: 0, raw: 0, state: 0 })
+    Object.values(operations).forEach((ids) => ids.splice(0))
     act(() => renderer!.update(createElement(Harness, { items: updated })))
     expect([...rendered.keys()]).toEqual(['live-answer'])
-    expect(operations.resolve).toBeLessThanOrEqual(mounted.length)
-    for (const key of ['resolve', 'raw', 'state'] as const) {
-      maximum[key] = Math.max(maximum[key], operations[key])
+    for (const key of ['resolve', 'compare', 'raw', 'state'] as const) {
+      expect(
+        operations[key].every((id) =>
+          (key === 'resolve' || key === 'compare' ? mountedIds : members).has(id)
+        )
+      ).toBe(true)
+      expect(operations[key].length).toBeLessThanOrEqual(
+        key === 'resolve' || key === 'compare' ? mounted.length : 2 * mounted.length
+      )
+      maximum[key] = Math.max(maximum[key], operations[key].length)
     }
-    // Work-run members appear in the owner's details and their own row.
-    expect(operations.raw).toBeLessThanOrEqual(2 * mounted.length)
-    expect(operations.state).toBeLessThanOrEqual(2 * mounted.length)
   }
   return maximum
 }
 
-it('bounds streaming row renders and upstream lookup work at N and 10N', () => {
-  const small = measure(10)
+it.each([false, true])('bounds final work at mounted rows only, all history: %s', (all) => {
+  const small = measure(10, all)
   act(() => renderer?.unmount())
   renderer = null
-  const large = measure(100)
-  for (const operation of ['resolve', 'raw', 'state'] as const) {
-    expect(large[operation]).toBeLessThanOrEqual(10 * small[operation])
+  const large = measure(100, all)
+  for (const operation of ['resolve', 'compare', 'raw', 'state'] as const) {
+    expect(large[operation]).toBeLessThanOrEqual(all ? 10 * small[operation] : small[operation])
   }
 })
 it('reuses footer rows during a command and returns them to the list afterward', () => {
+  const base = journal(0, 'hello').map((item) =>
+    item.body.kind === 'message' && item.body.role === 'user'
+      ? { ...item, body: { ...item.body, command: { name: 'compact' } } }
+      : item
+  )
   const show = (text: string, holding = true) =>
     act(() => {
-      const items = journal(0, text).map((item) =>
-        item.body.kind === 'message' && item.body.role === 'user' && holding
-          ? { ...item, body: { ...item.body, command: { name: 'compact' } } }
-          : item
+      const items = base.map((item) =>
+        item.itemId === 'live-answer'
+          ? { ...item, body: textBody('assistant', text) }
+          : !holding && item.body.kind === 'message'
+            ? { ...item, body: { ...item.body, command: undefined } }
+            : item
       )
       const held: NativeChatMessage = {
         id: 'held',
@@ -404,58 +444,134 @@ it('reuses footer rows during a command and returns them to the list afterward',
   expect(listed()).toContain('held')
 })
 
-it('loads full row text without redrawing other rows and fences a replaced shortened row', async () => {
-  const items = journal(2, 'hello').map((item) =>
-    item.itemId === 'answer-0' ? { ...item, shortened: true as const } : item
-  )
-  const show = (batch: AgentJournalRenderItem[]) =>
-    showElement(createElement(Harness, { items: batch }))
-  const answer = () =>
-    renderer!.root.find(
-      (node) => Object.is(node.type, 'ChatMessage') && node.props.message.id === 'answer-0'
+it.each([false, true])(
+  'recovers held text and fences equal-preview replacement, grouped: %s',
+  async (grouped) => {
+    const target = grouped ? 'reason-0' : 'answer-0'
+    const head = grouped ? 'tool-0' : target
+    const short = grouped ? 'checking' : 'finished'
+    const items = journal(2, 'hello').map((item) =>
+      item.itemId === target ? { ...item, shortened: true as const } : item
     )
-  const complete: AgentJournalRenderItem = {
-    itemId: 'answer-0',
-    sequence: 4,
-    observedAt: 4,
-    revision: 2,
-    body: textBody('assistant', 'finished FULL TAIL')
-  }
-  show(items)
-  expect(answer().props.recovery.load).toBe('idle')
-  itemReads.mockResolvedValueOnce(complete)
-  rendered.clear()
-  await act(async () => {
-    answer().props.recovery.onPress()
-  })
-  expect(itemReads).toHaveBeenCalledOnce()
-  expect(answer().props.message.blocks[0].text).toBe('finished FULL TAIL')
-  expect(answer().props.recovery).toBeNull()
-  expect([...rendered.keys()]).toEqual(['answer-0'])
+    let source: typeof itemSource | null = itemSource
+    const show = (batch: AgentJournalRenderItem[]) =>
+      showElement(createElement(Harness, { items: batch, source }))
+    const answer = () =>
+      renderer!.root.find(
+        (node) => Object.is(node.type, 'ChatMessage') && node.props.message.id === head
+      )
+    const recovery = () => {
+      if (!grouped) {
+        return answer().props.recovery
+      }
+      const button = answer().findAll(
+        (node) =>
+          Object.is(node.type, 'Pressable') &&
+          node.findAll(
+            (child) => Object.is(child.type, 'Text') && child.children.includes('Show full message')
+          ).length > 0
+      )[0]
+      return button
+        ? { load: button.props.disabled ? 'loading' : 'idle', onPress: button.props.onPress }
+        : null
+    }
+    const shown = () =>
+      (grouped
+        ? answer().props.workRun.find((member: NativeChatMessage) => member.id === target)
+        : answer().props.message
+      ).blocks[0].text
+    const complete: AgentJournalRenderItem = {
+      itemId: target,
+      sequence: 4,
+      observedAt: 4,
+      revision: 2,
+      body: textBody(grouped ? 'reasoning' : 'assistant', short + ' FULL TAIL')
+    }
+    scroller.scrollHeight = 10000
+    vi.useFakeTimers()
+    show(items)
+    act(() => renderer!.root.findByType(MobileNativeChatPageList).props.onEndDistance(200, true))
+    act(() => {
+      listeners.get('pointerdown')!()
+      listeners.get('pointerup')!()
+    })
+    expect(recovery().load).toBe('idle')
+    itemReads.mockResolvedValueOnce(complete)
+    rendered.clear()
+    await act(async () => {
+      recovery().onPress()
+    })
+    expect(itemReads).toHaveBeenCalledOnce()
+    expect(shown()).toBe(short)
+    expect(recovery()).toBeNull()
+    expect([...rendered.keys()]).toEqual(grouped ? [head, target] : [head])
+    act(() => vi.advanceTimersByTime(400))
+    expect(shown()).toBe(short + ' FULL TAIL')
 
-  const replaced = items.map((item) =>
-    item.itemId === 'answer-0' ? { ...item, revision: 3 } : item
-  )
-  show(replaced)
-  const pending = Promise.withResolvers<AgentJournalRenderItem>()
-  itemReads.mockReturnValueOnce(pending.promise)
-  await act(async () => {
-    answer().props.recovery.onPress()
-  })
-  expect(answer().props.recovery.load).toBe('loading')
-  show(replaced.map((item) => (item.itemId === 'answer-0' ? { ...item, revision: 4 } : item)))
-  expect(answer().props.recovery.load).toBe('idle')
-  await act(async () => {
-    pending.resolve(complete)
-    await pending.promise
-  })
-  expect(answer().props.message.blocks[0].text).toBe('finished')
-  expect(answer().props.recovery).not.toBeNull()
-})
+    const replaced = items.map((item) => (item.itemId === target ? { ...item, revision: 3 } : item))
+    show(replaced)
+    const pending = Promise.withResolvers<AgentJournalRenderItem>()
+    itemReads.mockReturnValueOnce(pending.promise)
+    await act(async () => {
+      recovery().onPress()
+    })
+    expect(recovery().load).toBe('loading')
+    show(replaced.map((item) => (item.itemId === target ? { ...item, revision: 4 } : item)))
+    expect(recovery().load).toBe('idle')
+    await act(async () => {
+      pending.resolve(complete)
+      await pending.promise
+    })
+    expect(shown()).toBe(short)
+    expect(recovery()).not.toBeNull()
+    for (const next of [
+      { ...itemSource, client: stubRpcClient() },
+      { ...itemSource, sessionId: 'other' }
+    ]) {
+      act(() => {
+        listeners.get('pointerdown')!()
+        listeners.get('pointerup')!()
+      })
+      const old = Promise.withResolvers<AgentJournalRenderItem>()
+      itemReads.mockReturnValueOnce(old.promise)
+      await act(async () => recovery().onPress())
+      const previous = source
+      source = next
+      show(items)
+      expect(shown()).toBe(short)
+      expect(recovery().load).toBe('idle')
+      await act(async () => {
+        old.resolve(complete)
+        await old.promise
+      })
+      expect(recovery()).not.toBeNull()
+      itemReads.mockResolvedValueOnce(complete)
+      await act(async () => recovery().onPress())
+      expect(
+        itemReads.mock.calls.slice(-2).map((call) => [call[0].client, call[0].sessionId])
+      ).toEqual([
+        [previous!.client, previous!.sessionId],
+        [next.client, next.sessionId]
+      ])
+      expect(recovery()).toBeNull()
+      source = null
+      show(items)
+      expect(recovery()).toBeNull()
+      act(() => vi.advanceTimersByTime(400))
+      source = next
+      show(items)
+    }
+    show(items.filter((item) => item.itemId !== target))
+    expect(
+      renderer!.root.findAll(
+        (node) => Object.is(node.type, 'ChatMessage') && node.props.message.id === target
+      )
+    ).toHaveLength(0)
+  }
+)
 
 const clipped = (): NativeChatToolResultBlock => ({
   type: 'tool-result',
-  callId: 'call',
   fullOutputItemId: 'tool-item',
   output: 'same preview\n… (1000 bytes)'
 })
@@ -466,40 +582,22 @@ const message = (id: string, body: NativeChatToolResultBlock): NativeChatMessage
   timestamp: 1,
   blocks: [body]
 })
-type Row = { message: NativeChatMessage; workRun?: NativeChatMessage[] }
-
 it.each([false, true])(
   'fences replaced equal tool previews, nested work run: %s',
   async (nested) => {
     const pending = Promise.withResolvers<AgentJournalRenderItem | null>()
     itemReads.mockReturnValueOnce(pending.promise)
-    let previous: ReturnType<typeof projectMobileNativeChatRows<Row>> | undefined
+    const source = { ...itemSource, details: [], load: async () => {} }
+    const head = message('head', { type: 'tool-result', output: 'head' })
     const replace = () => {
       const row = message('row', clipped())
-      previous = projectMobileNativeChatRows<Row>(
-        [
-          nested
-            ? { message: message('head', { type: 'tool-result', output: 'head' }), workRun: [row] }
-            : { message: row }
-        ],
-        previous
-      )
-      const shown = nested ? previous.rows[0]!.workRun![0]! : previous.rows[0]!.message
-      const body = shown.blocks[0]
-      if (body?.type !== 'tool-result') {
-        throw new Error('Expected projected tool output')
-      }
       showElement(
-        createElement(
-          MobileNativeChatItemSourceContext.Provider,
-          { value: itemSource },
-          createElement(MobileNativeChatToolOutput, {
-            body,
-            type: {},
-            rootIdentity: 'run',
-            positionKey: 'output'
-          })
-        )
+        createElement(MobileNativeChatRowContent, {
+          scope: 'chat',
+          source,
+          message: nested ? head : row,
+          workRun: nested ? [row] : undefined
+        })
       )
     }
     replace()
@@ -530,5 +628,7 @@ it.each([false, true])(
     await act(async () => button().props.onPress())
     expect(itemReads).toHaveBeenCalledTimes(2)
     expect(JSON.stringify(renderer!.toJSON())).toContain('current full output')
+    replace()
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('current full output')
   }
 )
