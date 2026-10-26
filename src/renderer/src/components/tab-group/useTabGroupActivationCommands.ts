@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
@@ -96,9 +97,9 @@ export function useTabGroupActivationCommands({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      if (item.contentType === 'simulator') {
-        setActiveTabType('simulator', worktreeId)
-        // simulator has no editor file entity
+      if (isLiveSurfaceContentType(item.contentType)) {
+        setActiveTabType(item.contentType, worktreeId)
+        // live surfaces have no editor file entity
       } else {
         setActiveFile(item.entityId, worktreeId)
         setActiveTabType('editor', worktreeId)

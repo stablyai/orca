@@ -81,7 +81,7 @@ function resolveSimulatorScreenContentRect(rect: RectLike, streamSize: StreamSiz
   return { left: contentLeft, top: contentTop, width: contentWidth, height: contentHeight }
 }
 
-function normalizeWheelDelta(
+export function normalizeWheelDelta(
   delta: number,
   deltaMode: number | undefined,
   pageSize: number

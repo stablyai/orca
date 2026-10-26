@@ -5,6 +5,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
+  | 'new-desktop-app'
   | 'new-browser'
   | 'new-markdown'
   | 'new-simulator'
@@ -25,6 +26,7 @@ export type TabCreateMenuOptionsContext = {
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
+  hasDesktopApp?: boolean
   simulatorIsGoTo: boolean
   terminalOnly: boolean
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
@@ -161,6 +163,24 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.8a580f88cf', 'iphone'),
         translate('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
         translate('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
+      ]
+    })
+  }
+
+  if (context.hasDesktopApp) {
+    options.push({
+      id: 'new-desktop-app',
+      kind: 'new-desktop-app',
+      label: translate(
+        'auto.components.tab.bar.tab.create.menu.options.c9e8df95d8',
+        'New Desktop App'
+      ),
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.d0b6a5b6ff', 'desktop app'),
+        translate('auto.components.tab.bar.tab.create.menu.options.f05611f5bd', 'app window'),
+        translate('auto.components.tab.bar.tab.create.menu.options.5a1b0e2d40', 'native app'),
+        translate('auto.components.tab.bar.tab.create.menu.options.cd5b036f44', 'window'),
+        translate('auto.components.tab.bar.tab.create.menu.options.d364c9667c', 'computer use')
       ]
     })
   }

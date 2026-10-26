@@ -4,6 +4,7 @@ import { TerminalRestoringPlaceholder } from './terminal-pane/TerminalRestoringP
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldMountBackgroundWorktreeTab } from './terminal/background-terminal-worktree-mount'
 import type { TerminalController } from './use-terminal-controller'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 
 export function TerminalLegacyTerminalPanes({
   controller
@@ -33,7 +34,7 @@ export function TerminalLegacyTerminalPanes({
       className={`relative flex-1 min-h-0 overflow-hidden ${
         (activeTabType === 'editor' && worktreeFiles.length > 0) ||
         (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
-        activeTabType === 'simulator'
+        isLiveSurfaceContentType(activeTabType)
           ? 'hidden'
           : ''
       }`}

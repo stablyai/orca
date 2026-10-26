@@ -87,6 +87,12 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
     case 'setValue': {
       return await provider.action('setValue', params)
     }
+    case 'listDesktopWindows':
+    case 'desktopInput': {
+      // Why: each provider owns its platform's window bridge; Linux Wayland and other
+      // unsupported setups answer unsupported_capability from the runtime itself.
+      return await provider.desktopApp(method, params)
+    }
     default:
       throw new RuntimeClientError(
         'invalid_argument',

@@ -1,3 +1,4 @@
+import ctypes
 from contextlib import ExitStack
 import importlib.util
 import json
@@ -42,6 +43,9 @@ def load_runtime():
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    # Why: the Desktop App tools must run without gi, so importing the module may not touch it.
+    assert module.Atspi is None
+    module.load_accessibility_bindings()
     return module
 
 
@@ -414,6 +418,147 @@ class RuntimeRenderTest(unittest.TestCase):
         self.assertEqual(records[-1]["name"], f"Depth {runtime.MAX_DEPTH}")
         self.assertTrue(truncation["truncated"])
         self.assertTrue(truncation["maxDepthReached"])
+
+
+class DesktopAppRuntimeTest(unittest.TestCase):
+    def test_wayland_degrades_with_unsupported_capability(self):
+        for environ in ({"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}, {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}):
+            reason = runtime.desktop_app_unsupported_reason(environ)
+            self.assertTrue(reason.startswith("unsupported capability:"))
+            self.assertIn("Wayland", reason)
+
+    def test_x11_session_is_supported_and_missing_display_degrades(self):
+        self.assertIsNone(runtime.desktop_app_unsupported_reason({"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}))
+        self.assertIsNone(runtime.desktop_app_unsupported_reason({"XDG_SESSION_TYPE": "x11", "WAYLAND_DISPLAY": "w", "DISPLAY": ":0"}))
+        self.assertIn("DISPLAY", runtime.desktop_app_unsupported_reason({"XDG_SESSION_TYPE": "x11"}))
+
+    def test_desktop_tools_report_wayland_instead_of_crashing(self):
+        original = dict(runtime.os.environ)
+        runtime.os.environ.update({"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"})
+        try:
+            for operation in (
+                {"tool": "list_desktop_windows"},
+                {"tool": "desktop_input", "pid": 7, "windowId": 9, "input": {"kind": "text", "text": "a"}},
+            ):
+                with self.assertRaisesRegex(RuntimeError, "^unsupported capability:"):
+                    runtime.run_operation(operation)
+        finally:
+            runtime.os.environ.clear()
+            runtime.os.environ.update(original)
+
+    def test_input_rejects_bad_targets_before_opening_the_display(self):
+        with self.assertRaisesRegex(ValueError, "pid must be a positive integer"):
+            runtime.desktop_input({"pid": 0, "windowId": 9, "input": {"kind": "text"}})
+        with self.assertRaisesRegex(ValueError, "windowId must be a positive integer"):
+            runtime.desktop_input({"pid": 7, "windowId": True, "input": {"kind": "text"}})
+        with self.assertRaisesRegex(ValueError, "^invalid_argument:"):
+            runtime.desktop_input({"pid": 7, "windowId": 9})
+
+    def test_point_must_stay_inside_the_window(self):
+        self.assertEqual(runtime.desktop_app_point_in_bounds(400, 300, 10.4, 20.6), (10, 21))
+        with self.assertRaisesRegex(ValueError, "^invalid_argument:"):
+            runtime.desktop_app_point_in_bounds(400, 300, 400, 1)
+        with self.assertRaisesRegex(ValueError, "x must be a finite number"):
+            runtime.desktop_app_point_in_bounds(400, 300, float("nan"), 1)
+
+    def test_scroll_maps_pixels_to_wheel_buttons(self):
+        self.assertEqual(runtime.desktop_app_scroll_buttons(0, 120), [(5, 2)])
+        self.assertEqual(runtime.desktop_app_scroll_buttons(-30, -10), [(4, 1), (6, 1)])
+        self.assertEqual(runtime.desktop_app_scroll_buttons(0.2, 0.4), [])
+        self.assertEqual(runtime.desktop_app_scroll_buttons(0, 1e9), [(5, runtime.DESKTOP_APP_MAX_SCROLL_STEPS)])
+
+    def test_key_spec_maps_primary_modifier_to_control(self):
+        self.assertEqual(runtime.desktop_app_key_spec("shift+cmd+A"), ("a", runtime.X_SHIFT_MASK | runtime.X_CONTROL_MASK))
+        self.assertEqual(runtime.desktop_app_key_spec("pagedown"), ("pagedown", 0))
+        with self.assertRaisesRegex(ValueError, "unsupported modifier"):
+            runtime.desktop_app_key_spec("hyper+a")
+
+    def test_keysyms_follow_the_x11_unicode_rule(self):
+        self.assertEqual(runtime.desktop_app_keysym_for_char("a"), 0x61)
+        self.assertEqual(runtime.desktop_app_keysym_for_char("\u00e9"), 0xE9)
+        self.assertEqual(runtime.desktop_app_keysym_for_char("\u20ac"), 0x010020AC)
+
+    def test_blocklist_and_event_layout(self):
+        self.assertTrue(runtime.desktop_app_is_blocked("Bitwarden", None, "Vault"))
+        self.assertFalse(runtime.desktop_app_is_blocked("gedit", "gedit", "notes.txt"))
+        if ctypes.sizeof(ctypes.c_void_p) == 8:
+            # XEvent is a union padded to 24 longs; a smaller struct would let XSendEvent read past it.
+            self.assertEqual(ctypes.sizeof(runtime.XEvent), 192)
+            self.assertEqual(ctypes.sizeof(runtime.XWindowAttributes), 136)
+
+
+class FakePointerSession:
+    display = None
+    root = 1
+
+    def __init__(self, masks):
+        self.masks = masks
+        self.sent = []
+
+    def child_at(self, window, root_x, root_y):
+        return 7, root_x - 100, root_y - 50, [window, 7]
+
+    def event_masks(self, window):
+        return self.masks.get(window, 0)
+
+    def send(self, window, event, mask):
+        self.sent.append(event.input.type)
+
+
+class DesktopAppPointerTest(unittest.TestCase):
+    record = {"windowId": 5, "bounds": {"x": 100, "y": 50, "width": 400, "height": 300}}
+
+    def test_double_click_sends_one_press_per_mouseup(self):
+        session = FakePointerSession({5: runtime.X_BUTTON_PRESS_MASK})
+        for count in (1, 2):
+            runtime.desktop_app_click(session, self.record, {"x": 10, "y": 10, "button": "left", "clickCount": count})
+        self.assertEqual(session.sent.count(runtime.X_BUTTON_PRESS), 2)
+
+    def test_clicks_fail_loudly_when_no_window_selects_core_buttons(self):
+        session = FakePointerSession({})
+        with self.assertRaisesRegex(RuntimeError, "unsupported capability"):
+            runtime.desktop_app_click(session, self.record, {"x": 10, "y": 10, "button": "left", "clickCount": 1})
+        with self.assertRaisesRegex(RuntimeError, "unsupported capability"):
+            runtime.desktop_app_scroll(session, self.record, {"x": 10, "y": 10, "deltaX": 0, "deltaY": 120})
+        self.assertEqual(session.sent, [])
+
+    def test_keys_fail_loudly_when_the_top_level_window_selects_no_key_events(self):
+        session = FakePointerSession({})
+        with self.assertRaisesRegex(RuntimeError, "unsupported capability"):
+            runtime.desktop_app_send_key(session, self.record, 0x71, 0, group=0)
+        self.assertEqual(session.sent, [])
+
+
+class DesktopAppKeycodeTest(unittest.TestCase):
+    def session(self, levels, groups=None, keycodes=None):
+        # keycodes: keycode -> {group: [level 0, level 1, ...]}
+        keycodes = keycodes or {24: groups or {0: levels}}
+
+        def keysym_at(_display, keycode, group, level):
+            row = keycodes.get(keycode, {}).get(group, [])
+            return row[level] if level < len(row) else 0
+
+        x = types.SimpleNamespace(XKeysymToKeycode=lambda _display, _keysym: 24, XkbKeycodeToKeysym=keysym_at)
+        return types.SimpleNamespace(x=x, display=None, keycode_range=lambda: (8, 255))
+
+    def test_uses_shift_only_for_the_shifted_level(self):
+        self.assertEqual(runtime.desktop_app_keycode(self.session([0x71, 0x51]), 0x71), (24, False))
+        self.assertEqual(runtime.desktop_app_keycode(self.session([0x71, 0x51]), 0x51), (24, True))
+
+    def test_rejects_a_keysym_that_needs_altgr(self):
+        self.assertIsNone(runtime.desktop_app_keycode(self.session([0x71, 0x51, 0x40]), 0x40))
+
+    def test_looks_up_the_active_layout_group(self):
+        session = self.session([], {0: [0x71, 0x51], 1: [0x6CA, 0x6EA]})
+        self.assertIsNone(runtime.desktop_app_keycode(session, 0x6CA))
+        self.assertEqual(runtime.desktop_app_keycode(session, 0x6CA, 1), (24, False))
+        self.assertEqual(runtime.desktop_app_keycode(session, 0x6EA, 1), (24, True))
+
+    def test_finds_another_keycode_that_has_the_keysym_in_the_group(self):
+        session = self.session([], keycodes={24: {0: [0x71], 1: [0x6CA]}, 38: {1: [0x71, 0x51]}})
+        self.assertEqual(runtime.desktop_app_keycode(session, 0x71, 0), (24, False))
+        self.assertEqual(runtime.desktop_app_keycode(session, 0x51, 1), (38, True))
+        self.assertIsNone(runtime.desktop_app_keycode(session, 0x40, 1))
 
 
 if __name__ == "__main__":
