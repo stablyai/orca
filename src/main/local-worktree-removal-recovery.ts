@@ -5,6 +5,8 @@ import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { formatWorktreeRemovalError, isOrphanedWorktreeError } from './ipc/worktree-logic'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
+import { normalizeLocalBranchRef } from './git/worktree-operation-options'
+import { deleteBranchOfUnregisteredWorktree } from './git/worktree-removal'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 
@@ -127,13 +129,27 @@ export async function recoverPartialLocalWorktreeRemoval(
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
-  return removeRequiredGitWorktreeRegistration(args, args.force)
+  // Git already dropped the row; a repo-wide prune could unregister checkouts on unmounted drives.
+  await verifyGitWorktreeRegistrationRemoved(
+    args.repoPath,
+    args.localWorktreeGitOptions,
+    args.canonicalWorktreePath,
+    args.force
+  )
+  const { branch, head } = args.registeredWorktree
+  // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
+  return deleteBranchOfUnregisteredWorktree(
+    args.repoPath,
+    args.canonicalWorktreePath,
+    args.deleteBranch && branch ? { name: normalizeLocalBranchRef(branch), head } : null,
+    args.localWorktreeGitOptions
+  )
 }
 
 async function isRecoverablePartialRemovalFailure(
   args: LocalPartialRemovalRecoveryArgs
 ): Promise<boolean> {
-  // An orphan error means Git refused before deleting, so the missing row proves nothing here.
+  // Leave English orphan errors (Git refused before deleting) to the proven-orphan cleanup.
   if (
     typeof args.error !== 'object' ||
     args.error === null ||

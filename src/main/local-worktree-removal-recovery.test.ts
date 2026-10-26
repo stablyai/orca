@@ -74,15 +74,15 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
         {},
         undefined
       )
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
-        cwd: 'C:/repo'
-      })
-      expect(result).toEqual({
-        preservedBranch: {
-          branchName: 'delete-e2e-held-cwd',
-          head: 'abc123'
-        }
-      })
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+        ['worktree', 'prune'],
+        expect.anything()
+      )
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['branch', '-d', '--', 'delete-e2e-held-cwd'],
+        expect.objectContaining({ cwd: 'C:/repo' })
+      )
+      expect(result).toEqual({})
     })
   })
 
@@ -109,15 +109,15 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
         {},
         undefined
       )
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
-        cwd: 'C:/repo'
-      })
-      expect(result).toEqual({
-        preservedBranch: {
-          branchName: 'delete-e2e-held-cwd',
-          head: 'abc123'
-        }
-      })
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+        ['worktree', 'prune'],
+        expect.anything()
+      )
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['branch', '-d', '--', 'delete-e2e-held-cwd'],
+        expect.objectContaining({ cwd: 'C:/repo' })
+      )
+      expect(result).toEqual({})
     })
   })
 
@@ -256,7 +256,11 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
         '/Users/dev/orca/workspaces/feature',
         {}
       )
-      expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'abc123' } })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['branch', '-d', '--', 'feature'],
+        expect.objectContaining({ cwd: '/Users/dev/repo' })
+      )
+      expect(result).toEqual({})
     })
   })
 
