@@ -72,10 +72,10 @@ vi.mock('../MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer:
 vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('../MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('../MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../MobileNativeChatComposerMenu', () => ({
+vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerMenu: 'Suggestions',
   composerMenuInsertText: () => ''
 }))
@@ -83,7 +83,7 @@ vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionS
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
 export const visible = { value: true }
 const session = { messages: [], folded: [], status: 'ready', transcriptLoading: false }
-const structured = {
+const structuredSession = {
   session,
   isWorking: false,
   turnId: null,
@@ -102,6 +102,7 @@ const structured = {
   setStructuredOption: vi.fn(),
   invokeStructuredOption: vi.fn()
 }
+const sessionCommands = { commands: undefined, refresh: vi.fn() }
 vi.mock('../use-mobile-session-view-mode', () => ({
   useMobileSessionViewMode: () => ({
     isTabChatView: () => visible.value,
@@ -111,9 +112,9 @@ vi.mock('../use-mobile-session-view-mode', () => ({
   })
 }))
 vi.mock('../use-mobile-native-chat-session-lane', () => ({
-  useMobileNativeChatSessionLane: () => ({ session, structuredSession: structured })
+  useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
-vi.mock('../use-mobile-native-chat-drafts', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => ({
     composerText: 'ordinary message',
     setComposerText: vi.fn(),
@@ -130,7 +131,7 @@ vi.mock('../use-mobile-native-chat-drafts', () => ({
     holdUnconfirmedSend: vi.fn()
   })
 }))
-vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
+vi.mock('../native-chat/input/use-mobile-native-chat-session-option-controller', () => ({
   useMobileNativeChatSessionOptionController: () => ({
     nativeChatSessionOptions: undefined,
     recordCommand: vi.fn()
@@ -139,7 +140,7 @@ vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
 vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-vi.mock('../use-mobile-native-chat-composer-tray', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))

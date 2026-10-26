@@ -10,7 +10,7 @@ export async function restoreStructuredAgentSessionRead(
   deps: StructuredAgentSessionConversationOpenDeps,
   sessionId: string
 ): Promise<OpenedStructuredAgentSessionConversation | null> {
-  const record = deps.store.getRecord(sessionId)
+  const record = deps.store.getConversation(sessionId)
   if (!record) {
     return null
   }

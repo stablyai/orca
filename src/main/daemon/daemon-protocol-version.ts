@@ -1,5 +1,5 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v52 starts new terminals on a fresh daemon whose patched Node recovers lost macOS worker wake-ups.
+// v52 rolls the daemon-side terminal fixes since v1.4.240 (ConPTY, teardown, spawn pane keys) into a fresh daemon.
 // v51 checks terminal identity, ownership and attachments before reserving teardown.
 // v50 makes the `codex` function keep Orca's terminal identity under a filtering shell_environment_policy.
 // v49 makes the `claude` function follow the selection over the user's own CLAUDE_CONFIG_DIR.

@@ -9,6 +9,7 @@ import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
+const POWERSHELL_STARTUP_COMMAND_C_MARK = '[Console]::Write("$([char]27)]133;C$([char]7)")'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
   'if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
 
@@ -125,7 +126,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
-    const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
+    const mimocodeRestoreIndex = command.indexOf(
+      '$env:MIMOCODE_CONFIG_DIR = $env:ORCA_MIMOCODE_CONFIG_DIR'
+    )
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')
@@ -198,6 +201,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain('function Global:prompt')
     expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+    // Without the mark, the first prompt after the agent exits withholds 133;D (#18180).
+    expect(command).toContain(
+      `${POWERSHELL_STARTUP_COMMAND_C_MARK}; $Global:__OrcaOsc133State.HasSeenPrompt = $true }\n& 'codex' '--no-alt-screen'`
+    )
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
@@ -228,9 +235,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
-    expect(decodePowerShellCommand(result)).toContain(
-      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
-    )
+    const command = decodePowerShellCommand(result)
+    expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
+    // Stdin-typed commands get readline's 133;C; an early latch would emit a false 133;D.
+    expect(command).not.toContain(POWERSHELL_STARTUP_COMMAND_C_MARK)
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {

@@ -3,7 +3,7 @@ import type {
   AgentStatusEntry,
   AgentStateHistoryEntry
 } from '../../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   buildActivityEvents,

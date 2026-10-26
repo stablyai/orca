@@ -8,6 +8,8 @@ function makeStatusState(): StatusState {
   return {
     tabsByWorktree: {},
     browserTabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},

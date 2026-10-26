@@ -3,7 +3,7 @@ import { isAntigravityReferenceSession } from '../../../../shared/antigravity-se
 
 import { isWslStoredAiVaultSessionFile } from '@/lib/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
@@ -67,8 +67,10 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   if (session.structuredSession) {
     return { available: false, reason: 'already-structured' }
   }
+  const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
   if (
-    session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    !recordingHost ||
+    (recordingHost.kind !== 'local' && recordingHost.kind !== 'runtime') ||
     isWslStoredAiVaultSessionFile(session.filePath)
   ) {
     return { available: false, reason: 'remote' }

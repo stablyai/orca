@@ -27,7 +27,7 @@ import {
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-continue-interrupted-capability'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
-import { useNativeChatRestartResuming } from '../native-chat-resume-on-restart-store'
+import { useNativeChatTargetRestartResuming } from '../native-chat-restart-runtimes'
 import { useNativeChatLaunchResumePending } from '../native-chat-launch-resume-decision'
 import type { NativeChatComposerNoticeContent } from './native-chat-composer-notice'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -74,7 +74,7 @@ export function useNativeChatInterruptedContinuation(input: {
   )
   // Suppress continuation during local launch resume; paired servers own their own chats.
   const launchPending = useNativeChatLaunchResumePending() && target.kind === 'local'
-  const resuming = useNativeChatRestartResuming().includes(sessionId) || launchPending
+  const resuming = useNativeChatTargetRestartResuming(target).includes(sessionId) || launchPending
   const cut = useMemo(
     () => latestNativeChatOrcaStopCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]

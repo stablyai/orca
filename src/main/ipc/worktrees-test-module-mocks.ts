@@ -1,4 +1,5 @@
 import { type Mock, vi } from 'vitest'
+import type { describeCreatedWorktree } from '../git/worktree'
 import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
@@ -30,7 +31,7 @@ export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
 export const removeHandlerMock: ModuleMock = vi.fn()
 export const listWorktreesMock: StringArgMock = vi.fn()
-export const describeCreatedWorktreeMock: ModuleMock = vi.fn()
+export const describeCreatedWorktreeMock = vi.fn<typeof describeCreatedWorktree>()
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output

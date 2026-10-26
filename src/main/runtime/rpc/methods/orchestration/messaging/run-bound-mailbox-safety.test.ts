@@ -503,7 +503,9 @@ describe('Run-bound lead mailbox boundaries', () => {
       runId: leadRun.id,
       messages: [{ subject: 'Run report' }]
     })
-    await expect(check({ run: dispatch.run_id })).rejects.toMatchObject({ code: 'consumer_fenced' })
+    await expect(check({ run: dispatch.run_id })).rejects.toMatchObject({
+      code: 'worker_cannot_coordinate_own_run'
+    })
     expect(state.db.getMessageById(pending.id)?.read).toBe(0)
   })
 

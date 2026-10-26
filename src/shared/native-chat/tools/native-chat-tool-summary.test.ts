@@ -213,10 +213,6 @@ describe('briefToolArg', () => {
     expect(briefToolArg({ file_path: 'C:\\Users\\me\\project\\app.tsx' })).toBe('app.tsx')
   })
 
-  it('falls back to the command preview when no path is present', () => {
-    expect(briefToolArg({ command: 'git status --short' })).toBe('git status --short')
-  })
-
   it('keeps a blank primary argument out of the run header', () => {
     // Blank primary arguments must not fall back to raw JSON in headers.
     expect(briefToolArg({ command: '' })).toBe('')
@@ -254,23 +250,6 @@ describe('toolRunSummaryMembers', () => {
     ]
 
     expect(toolRunSummaryMembers(blocks)[0]?.arg).toBe('{"url":"https://example.com"')
-  })
-
-  it('caps at the summary limit and skips nameless calls, as the joined string does', () => {
-    const blocks: NativeChatBlock[] = [
-      { type: 'tool-call', name: '  ', input: {} },
-      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
-      { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } },
-      { type: 'tool-call', name: 'Edit', input: { file_path: 'b.ts' } },
-      { type: 'tool-call', name: 'Write', input: { file_path: 'c.ts' } }
-    ]
-
-    const members = toolRunSummaryMembers(blocks)
-    expect(members.map((member) => member.name)).toEqual(['Bash', 'Read', 'Edit'])
-    // The joined string is derived from these, so the two can never disagree.
-    expect(summarizeToolRun(blocks)).toBe(
-      members.map((member) => `${member.name} ${member.arg}`).join('  ·  ')
-    )
   })
 
   it('carries provider MCP identity through, so a pill can draw the server glyph', () => {

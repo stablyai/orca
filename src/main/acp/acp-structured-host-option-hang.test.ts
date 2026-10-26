@@ -1,3 +1,4 @@
+import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/structured-agent-session-handing-over'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -6,7 +7,13 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
-import { framesOf, openAttachedHostRig, send, stop } from './acp-structured-host.test-support'
+import {
+  framesOf,
+  hello,
+  openAttachedHostRig,
+  send,
+  stop
+} from './acp-structured-host.test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { STOP_NOTE_CANCELLATION_REQUESTED } from '../native-chat/agent-session-wire/structured-agent-session-turn-stop-notes'
 
@@ -56,12 +63,37 @@ describe('a Grok model pick Grok never answers during send', () => {
       script: (agent) => agent.on('session/set_config_option', () => {})
     })
     expect(await pick(host, 'grok-4.6')).toMatchObject({ ok: true })
-    await send(host, 'hello')
+    const dispatch = vi.spyOn(rig.adapter, 'dispatch')
+    const sending = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body: hello }),
+      body: hello,
+      userSend: true
+    })
+    if (!sending.ok) {
+      throw new Error(JSON.stringify(sending.refusal))
+    }
+    const id = sending.value.clientMessageId
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
+    const original = structuredAgentSessionHandingOver(journal).get(id)?.input
     await expect(host.close(SESSION, 'user-close')).resolves.toBeUndefined()
+    await original?.finalization.completion
+    await Promise.allSettled(dispatch.mock.results.map((result) => result.value))
     const [frame] = framesOf(rig.child(), 'session/set_config_option')
     rig.child().agent.reply(frame!, { configOptions: GROK_CONFIG_OPTIONS })
+    await rig.settle()
+    await host.flushStreamedEvents(SESSION)
+    await journal['queue'].drain()
     expect(framesOf(rig.child(), 'session/prompt')).toEqual([])
+    expect(original).toBeDefined()
+    expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
+    expect(journal.queuedMessages.list()).toMatchObject([
+      { messageId: id, body: { blocks: [{ text: 'hello' }] } }
+    ])
+    expect(journal.submission(id)).toMatchObject({
+      keptAsQueuedMessageId: id,
+      rejection: { kind: 'chatClosed' }
+    })
   })
 
   it('re-establishes opening A after uncertain B without adopting B’s late reply', async () => {

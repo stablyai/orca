@@ -25,6 +25,7 @@ import {
 } from '../../../../shared/project-host-setup-target'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { AppState } from '../types'
+import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'
 
 export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
@@ -156,13 +157,17 @@ export async function prepareProjectHostSetupMutation<T extends ProjectHostSetup
   setups: readonly ProjectHostSetup[],
   args: T
 ): Promise<{ target: RuntimeClientTarget; hostArgs: T }> {
-  const setup = setups.find(
+  const matches = setups.filter(
     (entry) =>
       entry.id === args.setupId && (args.hostId === undefined || entry.hostId === args.hostId)
   )
+  const setup = findSoleHostCopy(matches, (entry) => entry.hostId)
   if (!setup && args.hostId !== undefined) {
     // Why: an id-only fallback could land on a same-id setup of another host.
     throw new Error(`Project host setup not found on ${args.hostId}: ${args.setupId}`)
+  }
+  if (!setup && matches.length > 0) {
+    throw new Error(`Project host setup ${args.setupId} exists on several hosts; name one`)
   }
   const target = setup ? getProjectSetupRuntimeTarget(setup.hostId) : { kind: 'local' as const }
   await assertProjectHostSetupMutationRuntimeCapabilities(target)

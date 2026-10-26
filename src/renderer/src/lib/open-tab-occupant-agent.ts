@@ -1,4 +1,4 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'

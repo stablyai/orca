@@ -3,6 +3,7 @@ import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLa
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { NotificationCardStack } from '../components/NotificationCardStack'
 import { Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -12,7 +13,7 @@ import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePic
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
-import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
@@ -347,28 +348,32 @@ export function AppRootSurfaces(props: {
       >
         <CrashReportDialog />
       </RecoverableRenderErrorBoundary>
-      {onboardingGate.onboarding && onboardingGate.shouldRender ? (
-        <Suspense fallback={null}>
-          <RecoverableRenderErrorBoundary
-            boundaryId="modal.onboarding"
-            surface="modal"
-            title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
-            description={translate(
-              'auto.App.221a95ba38',
-              'Retry onboarding or close it and continue in the app.'
-            )}
-          >
-            {languageReady ? (
-              <OnboardingFlow
-                onboarding={onboardingGate.onboarding}
-                onOnboardingChange={onboardingGate.setOnboarding}
-              />
-            ) : (
-              <OnboardingLanguageLoading />
-            )}
-          </RecoverableRenderErrorBoundary>
-        </Suspense>
-      ) : null}
+      {onboardingGate.onboarding && onboardingGate.shouldRender
+        ? createPortal(
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.onboarding"
+                surface="modal"
+                className="fixed inset-0 z-40 bg-background"
+                title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
+                description={translate(
+                  'auto.App.221a95ba38',
+                  'Retry onboarding or close it and continue in the app.'
+                )}
+              >
+                {languageReady ? (
+                  <OnboardingFlow
+                    onboarding={onboardingGate.onboarding}
+                    onOnboardingChange={onboardingGate.setOnboarding}
+                  />
+                ) : (
+                  <OnboardingLanguageLoading />
+                )}
+              </RecoverableRenderErrorBoundary>
+            </Suspense>,
+            document.body
+          )
+        : null}
       {shouldMountDictationController ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.dictation" resetKey={activeView}>

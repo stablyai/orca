@@ -252,8 +252,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       const ptyId = session.transport.getPtyId()
       return !isRemoteExecutionHostPtyId(ptyId)
     },
-    isProcessInspectionCostly: () =>
-      isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
+    isProcessInspectionCostly: () => isAgentProcessInspectionCostly(session.transport.getPtyId()),
     isLive: () => {
       if (session.disposed) {
         return false

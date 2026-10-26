@@ -212,6 +212,27 @@ describe('RuntimeFileCommands file watching', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('closes Windows removal watchers without reauthorizing a path Git already unregistered', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const rootPath = 'C:\\projects\\repo-feature'
+    const watcher = createWindowsWatcher(() => {
+      queueMicrotask(() => watcher.emit('close'))
+    })
+    watchMock.mockReturnValue(watcher)
+    resolveAuthorizedPathMock.mockResolvedValue(rootPath)
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const { commands } = createRuntimeFileCommands(rootPath)
+    await commands.watchFileExplorer('id:wt-1', vi.fn())
+    resolveAuthorizedPathMock.mockRejectedValue(
+      new Error('Access denied: path resolves outside allowed directories')
+    )
+
+    await expect(commands.closeFileExplorerWatchersForPath(rootPath)).resolves.toBeUndefined()
+
+    expect(watcher.close).toHaveBeenCalledTimes(1)
+    expect(closeWatcherInWatcherProcessMock).not.toHaveBeenCalled()
+  })
+
   it('retains Windows close ownership until late physical exit without retry leaks', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const watcher = createWindowsWatcher(() => undefined)

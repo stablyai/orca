@@ -5,6 +5,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
@@ -76,7 +77,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
         throw new Error('records unavailable')
       }
       const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-      store.listRecords = () => [chat]
+      store.listConversations = () => [agentSessionConversationView(chat)]
       store.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: openTabs })
       return store
     })

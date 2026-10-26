@@ -109,7 +109,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     const relaunch = fakeRelaunch()
     const focusIntent = { request: vi.fn(), cancel: vi.fn() }
 
-    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, relaunch)
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(relaunch).not.toHaveBeenCalled()
@@ -162,11 +162,10 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     }
     const relaunch = vi.fn((_relaunched: LaunchAgentInNewTabArgs) => ({
       surface: { kind: 'local-terminal' as const, tabId: 'tab-1' },
-      startupPlan,
       pasteDraftAfterLaunch: false
     }))
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, args, relaunch)
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -231,7 +230,7 @@ describe("a new tab during startup, before this computer's runtime answered", ()
       const route = awaitingRoute(agent)
       const relaunch = fakeRelaunch()
 
-      const result = launchOnceHostAnswered(route, { ...args, agent }, startupPlan, relaunch)
+      const result = launchOnceHostAnswered(route, { ...args, agent }, relaunch)
       // The failed probe has answered; the launch is still waiting for one that lands.
       await vi.advanceTimersByTimeAsync(20)
       expect(relaunch).not.toHaveBeenCalled()
@@ -248,20 +247,21 @@ describe("a new tab during startup, before this computer's runtime answered", ()
     }
   )
 
-  it('opens the terminal chat after the cap when they never arrive, and says why', async () => {
+  it('keeps an awaited terminal refusal notified without claiming a surface opened', async () => {
     vi.useFakeTimers()
     const route = awaitingRoute('claude')
-    const relaunch = fakeRelaunch()
+    const refused = { delivered: false, failureNotified: true }
+    const relaunch = vi.fn((_next: LaunchAgentInNewTabArgs) => ({ refused }))
 
     const result = launchOnceHostAnswered(
       route,
-      { ...args, agent: 'claude' },
-      startupPlan,
+      { ...args, agent: 'claude', prompt: 'keep this prompt' },
       relaunch
     )
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
+    expect((await result?.promptDeliveryResult)?.failureNotified).toBe(true)
 
     await expect(result?.structuredSettlement).resolves.toEqual({
       kind: 'cancelled',

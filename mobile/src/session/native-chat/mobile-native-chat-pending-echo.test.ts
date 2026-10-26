@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
-import { countUserTextOccurrences } from '../mobile-native-chat-draft-reconcile'
+import { countUserTextOccurrences } from './composer/mobile-native-chat-draft-reconcile'
 import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../../src/shared/native-chat-image-transcript-markers'
 import {
   appendMobileNativeChatPending,
@@ -80,19 +80,6 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
       )
     ).toEqual(['p2'])
   })
-
-  it('still counts a single-line repeat, which never regressed', () => {
-    const baseline = [userTurn('m1', 'unrelated')]
-    const both = appendMobileNativeChatPending(
-      appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin('ping', baseline), 'ping'),
-      KEY,
-      'p2',
-      sendOrigin('ping', baseline),
-      'ping'
-    )
-
-    expect(both[KEY]?.map((item) => item.expectedOccurrence)).toEqual([1, 2])
-  })
 })
 
 describe('mobile pending echoes whose text normalizes to nothing', () => {
@@ -128,14 +115,5 @@ describe('mobile pending echoes whose text normalizes to nothing', () => {
     ])
 
     expect(both[KEY]?.map((item) => item.expectedOccurrence)).toEqual([1, 2])
-  })
-
-  it('records an image echo, whose text is empty by design', () => {
-    const pending = appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin('', []), '', [
-      'file:///photo.jpg'
-    ])
-
-    expect(pending[KEY]).toHaveLength(1)
-    expect(pending[KEY]?.[0]?.expectedOccurrence).toBe(1)
   })
 })

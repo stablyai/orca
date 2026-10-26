@@ -5,6 +5,9 @@ import {
 } from '../../shared/pty-fenced-termination'
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
+import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import { isWslBridgeDistroLost, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
+import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
@@ -215,16 +218,49 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
-        this.clearExitedSessionState(
-          event.sessionId,
-          event.payload.code,
-          event.payload.incarnationId
-        )
-        emitPtyListeners(this.exitListeners, (listener) =>
-          listener(createPtyExitPayload(event.sessionId, event.payload))
-        )
+        const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)
+        if (wslDistro && isProvenProcessExit(event.payload.code)) {
+          const exitAt = performance.now()
+          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, exitAt)
+          return
+        }
+        this.finishExit(event.sessionId, event.payload)
       }
     })
+  }
+
+  private finishExit(sessionId: string, exit: Omit<DaemonPtyRouterExitEvent, 'id'>): void {
+    this.clearExitedSessionState(sessionId, exit.code, exit.incarnationId)
+    emitPtyListeners(this.exitListeners, (listener) =>
+      listener(createPtyExitPayload(sessionId, exit))
+    )
+  }
+
+  /** A bridge pane whose distro went away is host loss: it keeps its tab and restorable history. */
+  private async finishWslBridgeExit(
+    sessionId: string,
+    exit: Omit<DaemonPtyRouterExitEvent, 'id'>,
+    wslDistro: string,
+    exitAt: number
+  ): Promise<void> {
+    const lost = await isWslBridgeDistroLost(wslDistro, exitAt, this.readRunningWslDistros)
+    // A spawn that replaced this incarnation meanwhile owns the session now.
+    const current = this.sessionIncarnations.get(sessionId)
+    if (current !== undefined && current !== exit.incarnationId) {
+      return
+    }
+    if (!lost) {
+      this.finishExit(sessionId, exit)
+      return
+    }
+    const hostLoss = { code: WSL_DISTRO_LOSS_EXIT_CODE, incarnationId: exit.incarnationId }
+    this.hostLossSessionIds.add(sessionId)
+    this.clearExitedSessionState(sessionId, hostLoss.code, hostLoss.incarnationId, {
+      closeHistory: false
+    })
+    emitPtyListeners(this.exitListeners, (listener) =>
+      listener(createPtyExitPayload(sessionId, hostLoss))
+    )
   }
 
   async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {

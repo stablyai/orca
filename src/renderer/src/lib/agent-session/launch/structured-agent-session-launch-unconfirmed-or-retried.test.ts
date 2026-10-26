@@ -232,7 +232,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       trimmedCommandInput: 'Fix the failing check',
       agentArgs: '',
       agentArgsApply: false,
-      commandTemplate: '{basePrompt}',
+      recipe: { commandInputTemplate: '{basePrompt}' },
       saveTargetValue: 'none',
       actionId: 'resolveComments',
       settings: null,
@@ -342,5 +342,18 @@ describe('a new start beside an unconfirmed or retried chat', () => {
         .sessionId
     ).toBe(unconfirmed.sessionId)
     expect(mocks.createIntent).toHaveBeenCalledOnce()
+  })
+
+  it('never joins a resume of the same conversation id running on another host', async () => {
+    await leaveFirstLaunchUnconfirmed({ resume: true })
+
+    const remote = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-9',
+      resumeFrom,
+      executionHostId: 'runtime:server-1'
+    })
+
+    expect(remote.sessionId).not.toBe(unconfirmed.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
   })
 })

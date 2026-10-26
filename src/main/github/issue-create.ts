@@ -48,32 +48,25 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const createArgs = (issueBody: string) => {
-      const args = [
-        'api',
-        '-X',
-        'POST',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-        '--raw-field',
-        `title=${trimmedTitle}`,
-        '--raw-field',
-        `body=${issueBody}`
-      ]
-      for (const label of fields?.labels ?? []) {
-        args.push('--raw-field', `labels[]=${label}`)
-      }
-      for (const assignee of fields?.assignees ?? []) {
-        args.push('--raw-field', `assignees[]=${assignee}`)
-      }
-      return args
-    }
+    const issuesEndpoint = `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`
+    // Why: stdin keeps large inline-image bodies off argv, which Windows caps at 32K chars.
+    const createIssueRequest = (issueBody: string) =>
+      ghExecFileAsync(['api', '-X', 'POST', issuesEndpoint, '--input', '-'], {
+        ...ghOptions,
+        stdin: JSON.stringify({
+          title: trimmedTitle,
+          body: issueBody,
+          ...(fields?.labels?.length ? { labels: fields.labels } : {}),
+          ...(fields?.assignees?.length ? { assignees: fields.assignees } : {})
+        })
+      })
 
     const parseIssue = (stdout: string) =>
       JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
 
     let data: { number?: number; html_url?: string; url?: string }
     try {
-      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      const { stdout } = await createIssueRequest(body)
       data = parseIssue(stdout)
     } catch (err) {
       const message = githubIssueErrorMessage(err)
@@ -82,7 +75,7 @@ export async function createIssue(
       }
 
       // GitHub can accept a body on update that it rejects during creation; establish the issue first.
-      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      const { stdout } = await createIssueRequest('')
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {
         return { ok: false, error: 'Unexpected response from GitHub' }
@@ -90,15 +83,8 @@ export async function createIssue(
 
       try {
         await ghExecFileAsync(
-          [
-            'api',
-            '-X',
-            'PATCH',
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
-            '--raw-field',
-            `body=${body}`
-          ],
-          ghOptions
+          ['api', '-X', 'PATCH', `${issuesEndpoint}/${data.number}`, '--input', '-'],
+          { ...ghOptions, stdin: JSON.stringify({ body }) }
         )
       } catch (patchErr) {
         const patchMessage = githubIssueErrorMessage(patchErr)

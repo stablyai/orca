@@ -185,11 +185,23 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request(
-      'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
-      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
-    )
+    try {
+      await this.client.request(
+        'kill',
+        { sessionId: id, immediate: opts.immediate ?? false },
+        remainingDaemonRequestTimeoutMs(opts.deadlineMs)
+      )
+    } catch (error) {
+      // Only a session this adapter turned into host loss is known gone; any other id may still
+      // live in a legacy daemon sharing the history dir, so its history must not be removed.
+      if (
+        opts.keepHistory ||
+        !(error instanceof SessionNotFoundError) ||
+        !this.hostLossSessionIds.has(id)
+      ) {
+        throw error
+      }
+    }
     await this.completeShutdownWithHistoryLock(id, opts)
   }
 
@@ -199,6 +211,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     opts: { keepHistory?: boolean }
   ): Promise<void> {
     this.activeSessionIds.delete(id)
+    this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {

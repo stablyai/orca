@@ -226,16 +226,6 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
-  it('keeps idle-means-done for an agent that never reports, after its start window', async () => {
-    const pane = createPane({ idle: true, tail: ['summary written', '$'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
   it("never reads an agent's own tool output as its command missing", async () => {
     const tail = ['running tests', 'bash: pytest: command not found', 'fell back to unittest', '$']
     const run = observe(createPane({ idle: true, tail }))
@@ -263,6 +253,20 @@ describe('observing a run with agent evidence', () => {
 
     pane.report()
     pane.becomeIdle()
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
+  it("completes on the agent's own done when the screen never reads idle (#34064)", async () => {
+    // A finished pane whose title and screen lost their rest evidence, e.g. after a stream gap.
+    const pane = createPane({ idle: false, tail: ['done', '❯'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(5_000)
+    pane.report()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(run.settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(60_000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })

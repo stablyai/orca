@@ -1,5 +1,4 @@
 // The signed `com.stablyai.orca` helper that runs the terminal daemon on the pinned Node.
-// See docs/reference/macos-daemon-tcc-attribution.md.
 const { spawnSync } = require('node:child_process')
 const {
   chmodSync,
@@ -294,10 +293,10 @@ async function loadNodeRuntimePin() {
 }
 
 async function pinnedDarwinNode(arch) {
-  const { ensureDarwinTerminalNode } = await import(
-    pathToFileURL(resolve(__dirname, 'build-darwin-terminal-node.mjs')).href
+  const { ensurePinnedNodeExecutable } = await import(
+    pathToFileURL(resolve(__dirname, 'pinned-node-downloads.mjs')).href
   )
-  return ensureDarwinTerminalNode({ arch })
+  return ensurePinnedNodeExecutable({ target: `darwin-${arch}` })
 }
 
 /**

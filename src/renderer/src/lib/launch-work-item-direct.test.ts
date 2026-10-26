@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
+import * as inventory from './agent-detection-target-inventory'
+import * as localCapabilities from '@/runtime/local-runtime-capabilities'
+import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import type { AppState } from '@/store'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
@@ -133,13 +137,8 @@ import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-dire
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 
-const mockApi = {
-  worktrees: {
-    resolvePrBase: mocks.resolvePrBase
-  }
-}
-
 describe('launchWorkItemDirect', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('window', {
@@ -222,8 +221,6 @@ describe('launchWorkItemDirect', () => {
     ])
     mocks.store.sshStateByEnvironment = new Map()
     mocks.store.runtimeStatusByEnvironmentId = new Map()
-    // @ts-expect-error -- test shim
-    globalThis.window = { api: mockApi }
   })
 
   it('rejects invalid per-launch CLI arguments before creating a workspace', async () => {
@@ -245,7 +242,7 @@ describe('launchWorkItemDirect', () => {
     ).resolves.toBe(false)
 
     expect(mocks.createWorktree).not.toHaveBeenCalled()
-    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.ensureDetectedAgents).toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
       'CLI arguments are invalid: Unclosed quote in command template.'
     )
@@ -616,6 +613,7 @@ describe('launchWorkItemDirect', () => {
       openModalFallback: vi.fn(),
       agentOverride: 'claude',
       agentArgs: '--model opus',
+      resolveAgentArgs: () => '--verbose --model opus',
       launchPlatform: 'linux',
       promptDelivery: 'submit-after-ready',
       item: {
@@ -630,7 +628,7 @@ describe('launchWorkItemDirect', () => {
     expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
       expect.objectContaining({
         declinedTerminal: {
-          agentArgs: '--model opus',
+          agentArgs: '--verbose --model opus',
           launchPlatform: 'linux',
           launchSource: 'task_page'
         }
@@ -821,5 +819,44 @@ describe('launchWorkItemDirect', () => {
     expect(activationOptions.startup.command).toContain(
       `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
     )
+  })
+  it('uses prospective native facts to ignore hidden args before create', async () => {
+    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
+      agents: ['codex'],
+      workspaceKind: 'git-worktree',
+      executionContext: {
+        kind: 'host',
+        projectRuntime: resolveProjectExecutionRuntime({
+          appPlatform: 'darwin',
+          projectId: 'p1'
+        })
+      }
+    })
+    vi.spyOn(localCapabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockReturnValue(
+      RUNTIME_CAPABILITIES
+    )
+    mocks.store.settings = Object.assign({}, mocks.store.settings, { experimentalNativeChat: true })
+    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
+      completed: true,
+      structuredLaunch: true,
+      primaryTabId: null
+    })
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      agentArgs: '--model "unterminated',
+      resolveSessionOptions: () => ({ model: 'chosen' }),
+      item: {
+        type: 'issue',
+        number: 42,
+        title: 'Fix',
+        url: 'https://github.com/acme/repo/issues/42'
+      }
+    })
+    expect(mocks.createWorktree).toHaveBeenCalledOnce()
+    expect(
+      vi.mocked(beginDirectWorkItemStructuredLaunch).mock.calls.at(-1)?.[0].plan?.launchOptions
+    ).toEqual({ model: 'chosen' })
   })
 })

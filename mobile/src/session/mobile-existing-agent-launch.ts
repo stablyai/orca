@@ -1,5 +1,6 @@
 // Send launch intent to the host, which selects terminal versus structured execution and prompt delivery.
 
+import { AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import type {
   AgentLaunchPlacement,
   AgentLaunchPrompt,
@@ -76,6 +77,9 @@ export async function launchAgentInExistingWorkspace(args: {
   worktreeId: string
   agent: TuiAgent
   prompt?: AgentLaunchPrompt
+  /** Model and effort the host applies on whichever route it picks. */
+  sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
@@ -89,6 +93,11 @@ export async function launchAgentInExistingWorkspace(args: {
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
+    ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
+    ...(args.chatOptions &&
+    args.hostCapabilities?.includes(AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY)
+      ? { chatOptions: args.chatOptions }
+      : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),
     ...(args.reservation

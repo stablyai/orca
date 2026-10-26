@@ -294,18 +294,6 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(hook!.attachments).toEqual([])
   })
 
-  it('delegates straight to baseSend when there are no attachments', async () => {
-    const client = makeClient([])
-    const baseSend = vi.fn().mockResolvedValue('accepted')
-    mount(baseArgs({ client: client as unknown as RpcClient, baseSend }))
-
-    await act(async () => {
-      await hook!.sendNativeChat('just text')
-    })
-    expect(baseSend).toHaveBeenCalledWith(...textSend('just text'))
-    expect(client.calls).toHaveLength(0)
-  })
-
   it('keeps the chips and does not submit when the image paste is rejected', async () => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([

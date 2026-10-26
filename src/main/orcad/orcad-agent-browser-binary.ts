@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync } from 'node:fs'
 import { arch, platform } from 'node:os'
 import { dirname, join } from 'node:path'
+import { ORCAD_AGENT_BROWSER_DRIVER_ENV } from '../../shared/orcad-agent-browser-name'
 
 export function orcadAgentBrowserNativeName(
   platformName: NodeJS.Platform,
@@ -10,11 +11,15 @@ export function orcadAgentBrowserNativeName(
   return `agent-browser-${platformName}-${architecture}${ext}`
 }
 
-export function resolveOrcadAgentBrowserBinary(): string | null {
+export function resolveOrcadAgentBrowserBinary(
+  environment: NodeJS.ProcessEnv = process.env
+): string | null {
   const name = orcadAgentBrowserNativeName(platform(), arch())
+  const appDriver = environment[ORCAD_AGENT_BROWSER_DRIVER_ENV]
   const candidates = [
     join(dirname(process.argv[1] ?? __filename), name),
-    join(process.cwd(), 'node_modules', 'agent-browser', 'bin', name)
+    join(process.cwd(), 'node_modules', 'agent-browser', 'bin', name),
+    ...(appDriver ? [appDriver] : [])
   ]
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {

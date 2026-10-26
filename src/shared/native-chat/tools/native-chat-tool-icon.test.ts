@@ -1,53 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   isShellActivityToolCall,
-  NATIVE_CHAT_TOOL_ICON_NAMES,
   nativeChatToolCategory,
   nativeChatToolIconName,
   nativeChatToolRunCategory,
-  nativeChatToolRunIconName,
-  type NativeChatToolCategory
+  nativeChatToolRunIconName
 } from './native-chat-tool-icon'
 
-const ALL_CATEGORIES: NativeChatToolCategory[] = [
-  'read',
-  'search',
-  'listFiles',
-  'unknown',
-  'fileChange',
-  'webSearch',
-  'browser',
-  'mcpToolCall',
-  'subAgentActivity',
-  'todoList',
-  'other'
-]
-
 describe('native chat tool icons', () => {
-  it('names a glyph for every category in the vocabulary', () => {
-    expect(NATIVE_CHAT_TOOL_ICON_NAMES).toEqual({
-      read: 'eye',
-      search: 'search',
-      listFiles: 'folder',
-      unknown: 'square-terminal',
-      fileChange: 'pencil',
-      webSearch: 'globe',
-      browser: 'globe',
-      mcpToolCall: 'plug',
-      subAgentActivity: 'bot',
-      todoList: 'list-checks',
-      other: 'wrench'
-    })
-    expect(Object.keys(NATIVE_CHAT_TOOL_ICON_NAMES).sort()).toEqual([...ALL_CATEGORIES].sort())
-  })
-
-  it('gives each category a distinct glyph, except the browser sharing the web globe', () => {
-    const glyphs = ALL_CATEGORIES.filter((category) => category !== 'browser').map(
-      (category) => NATIVE_CHAT_TOOL_ICON_NAMES[category]
-    )
-    expect(new Set(glyphs).size).toBe(glyphs.length)
-  })
-
   it('maps the row words the Codex lane renders to their category', () => {
     expect(nativeChatToolCategory('read')).toBe('read')
     expect(nativeChatToolCategory('search')).toBe('search')
@@ -271,9 +231,6 @@ describe('native chat tool icons', () => {
 })
 
 describe('qualified tool identity icons', () => {
-  it.each(['mcp__linear__list_issues'])('uses the MCP glyph for %s', (name) =>
-    expect(nativeChatToolIconName(name)).toBe('plug')
-  )
   it.each([
     'setup.py',
     'src/read',

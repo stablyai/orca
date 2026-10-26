@@ -1,9 +1,16 @@
 import { z } from 'zod'
-import type { TerminalLaunchResult } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig, TerminalLaunchResult } from './agent-session-resume'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { ResumeProviderSessionParam } from './rpc-contract/terminal-unary-params'
 import { sleepingAgentLaunchConfigBaseSchema } from './workspace-session-sleeping-agents'
+
+/** A launch recipe for a pane the window was not shown; the reveal otherwise carries it. */
+export type PaneLaunchRecipe = Pick<TerminalLaunchResult, 'launchToken' | 'launchAgent'> & {
+  tabId: string
+  leafId: string
+  launchConfig: SleepingAgentLaunchConfig
+}
 
 export type TerminalAttachmentLaunchResult = TerminalLaunchResult & {
   ptyId: string

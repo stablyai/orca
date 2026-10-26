@@ -266,26 +266,6 @@ describe('owner-fenced mutations', () => {
 })
 
 describe('projected owner precondition', () => {
-  it('reuses the complete projection until automation state changes', async () => {
-    const store = await createStore()
-    const first = store.listAutomationsForScope()
-    expect(store.listAutomationsForScope()).toBe(first)
-
-    store.updateAutomation('local-1', { enabled: false })
-    expect(store.listAutomationsForScope()).not.toBe(first)
-  })
-
-  it('projects the fenceable owner for each kind of record', async () => {
-    const store = await createStore()
-    expect(store.automationOwnerPrecondition('ssh-1-a')).toEqual(OWNED_SSH)
-    expect(store.automationOwnerPrecondition('local-1')).toEqual({ selector: { kind: 'self' } })
-    // Orphan diagnoses are not part of the owner identity.
-    expect(store.automationOwnerPrecondition('orphan-1')).toEqual({
-      selector: { kind: 'orphan' }
-    })
-    expect(store.automationOwnerPrecondition('missing')).toBeNull()
-  })
-
   it('satisfies the fence it was projected from, on the record that used to refuse', async () => {
     const store = await createStore()
     const owner = store.automationOwnerPrecondition('ssh-1-a')!

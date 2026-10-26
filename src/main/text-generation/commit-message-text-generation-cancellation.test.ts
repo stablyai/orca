@@ -392,8 +392,9 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       expect(outcome).toBe('canceled')
       expect(listeners.has('stdout:data')).toBe(false)
       expect(listeners.has('stderr:data')).toBe(false)
-      expect(listeners.has('error')).toBe(false)
-      expect(listeners.has('close')).toBe(false)
+      expect(listeners.has('error')).toBe(true)
+      expect(listeners.has('close')).toBe(true)
+      listeners.get('close')?.(null)
     } finally {
       vi.useRealTimers()
     }
@@ -437,7 +438,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
   })
 
-  it('releases the Codex home lock when the child exits with a descendant holding its stdio', async () => {
+  it('releases the Codex home on root exit when a descendant holds stdio open', async () => {
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
     spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)

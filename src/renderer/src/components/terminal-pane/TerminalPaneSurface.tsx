@@ -214,6 +214,7 @@ export function TerminalPaneSurface({
               onOpenNewTerminal={() => {
                 openTerminalBesideTab(tabId)
               }}
+              onClosePane={() => handleRequestClosePane(activePane.id)}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`

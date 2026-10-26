@@ -93,7 +93,7 @@ export function launchSleepingAgentSession(
           : {})
       },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),

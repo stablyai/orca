@@ -3,6 +3,7 @@ import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-
 // serialization for startup/readiness/provider calls so acceptance and Stop stay responsive.
 // Recover earlier-process queued sends before any handover; running commands block input.
 
+import { beginStructuredAgentSessionInputHandover } from './structured-agent-session-input-handover'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
@@ -12,10 +13,7 @@ import {
   recordStructuredAgentSessionStartFailure,
   startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
-import {
-  beginSubmissionHandover,
-  type StructuredAgentSessionPendingHandover
-} from './structured-agent-session-handover'
+import type { StructuredAgentSessionPendingHandover } from './structured-agent-session-handover'
 import { structuredAgentSessionNextHandover } from './structured-agent-session-opening-send'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
@@ -136,10 +134,7 @@ export class StructuredAgentSessionDeliveryLoop {
         if (handed !== 'continue') {
           // Track the external provider call and settlement so quit waits after abort.
           await this.deps.trackStart(
-            handed
-              .dispatch()
-              .then((resolve) => this.deps.serialize(sessionId, resolve))
-              .finally(() => handed.release?.())
+            handed.run((resolve) => this.deps.serialize(sessionId, resolve))
           )
         }
       }
@@ -268,27 +263,13 @@ export class StructuredAgentSessionDeliveryLoop {
     ) {
       return this.stop(sessionId)
     }
-    const pending = await beginSubmissionHandover(
-      {
-        sessionId,
-        journal: session.journal,
-        fence: awaitedChild.fence,
-        adapter: this.deps.adapter,
-        agents: this.deps.agents,
-        failureTextContext: this.deps.failureTextContext(sessionId),
-        record: () => this.deps.record(sessionId),
-        currentWork: () => this.deps.currentWork(sessionId),
-        childWork: () => this.deps.readChildWork(sessionId),
-        childWorkOpen: () => this.deps.childWorkOpen(sessionId),
-        now: this.deps.now,
-        acquireAborts: this.deps.acquireAborts,
-        deliveryOrder: this.deps.deliveryOrder,
-        workChanged: () => this.deps.workChanged?.(sessionId),
-        recordRanOptions: this.deps.recordRanOptions?.(sessionId, awaitedChild.fence)
-      },
+    const pending = await beginStructuredAgentSessionInputHandover(
+      this.deps,
+      sessionId,
+      session,
+      awaitedChild,
       next,
-      // Recheck child identity immediately before the external provider write.
-      () => this.deps.sessions.get(sessionId)?.child === awaitedChild && !awaitedChild.close
+      () => this.disposed
     )
     return pending ?? 'continue'
   }

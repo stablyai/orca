@@ -118,6 +118,7 @@ export function refreshAgentModelCatalogListing(input: {
 
 export function scopedAgentModelCatalogLister(input: {
   legacy?: boolean
+  canList: () => boolean
   admission: PrioritySemaphore
   signal: AbortSignal
   resolved: AgentModelCatalogResolvedProbe | undefined
@@ -133,6 +134,9 @@ export function scopedAgentModelCatalogLister(input: {
     const timer = legacy ? setTimeout(() => deadline.abort(), 30_000) : undefined
     const attemptSignal = AbortSignal.any([signal, deadline.signal])
     try {
+      if (!input.canList()) {
+        throw new AgentModelCatalogListingStoppedError('catalog scope unavailable')
+      }
       if (resolved) {
         return await resolved.run(attemptSignal)
       }

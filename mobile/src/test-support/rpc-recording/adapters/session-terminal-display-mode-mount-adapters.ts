@@ -41,7 +41,10 @@ export function sessionTerminalDisplayModeMountAdapters(
             nativeChatInputLeaseReady: false,
             showNativeChat: false,
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle })
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            }
           })
         )
       }, effect)

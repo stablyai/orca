@@ -1,4 +1,6 @@
 import * as permissionArgs from './agent-permission-args'
+import { getDefaultSettings } from './constants'
+import { legacyChatPermissionWrite } from '../main/persistence/applying-settings/legacy-chat-permission-write'
 import { measureSettingsWork, expectSettingsWorkScale } from './global-settings-test-fixture'
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
 import {
@@ -18,8 +20,16 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from './tui-agent-launch-defaults'
-import { applyAllAgentsPermission, resolveAgentPermission } from './tui-agent-permission-choice'
-import { agentArgsSetPermission, migrateAgentPermissionChoice } from './tui-agent-permission-lift'
+import {
+  agentPermissionArgs,
+  applyAllAgentsPermission,
+  resolveAgentPermission
+} from './tui-agent-permission-choice'
+import {
+  agentArgsSetPermission,
+  liftAgentPermissionArgs,
+  migrateAgentPermissionChoice
+} from './tui-agent-permission-lift'
 
 const legacy = (
   args: Record<string, string>,
@@ -30,6 +40,16 @@ const legacy = (
 })
 
 describe('one-time move of permission flags out of Arguments', () => {
+  it('lifts the canonical read-only Codex Ask and uses it for stored Ask choices', () => {
+    const recipe = '-a on-request -s read-only -c approvals_reviewer=user'
+    expect(agentPermissionArgs('codex', 'ask')).toBe(recipe)
+    expect(liftAgentPermissionArgs('codex', `${recipe} --search`)).toEqual({
+      choice: 'ask',
+      args: '--search'
+    })
+    expect(resolveTuiAgentLaunchArgs('codex', { agentPermissionDefault: 'ask' })).toBe(recipe)
+  })
+
   it('imports Grok modes from recorded 1.0.62 help without taking ownership of other modes', () => {
     // Installed 1.0.62 (1474f9cbdd91) --help, permission-mode excerpt; not captured argv.
     const recordedHelp = `      --permission-mode <MODE>
@@ -137,6 +157,45 @@ describe('terminal launch composes the stored choice', () => {
     expect(resolveAgentPermission('gemini', next).choice).toBe('full-access')
   })
 })
+
+it.each(['typed', 'legacy', 'chat'] as const)(
+  'keeps migration-owned and hand-set choices across global writes (%s)',
+  (path) => {
+    const settings = {
+      ...getDefaultSettings('/synthetic'),
+      ...migrateAgentPermissionChoice(legacy({ gemini: '', grok: '' }))
+    }
+    settings.agentPermissionOverrides.codex = 'ask'
+    const original = { ...settings.agentPermissionOverrides }
+    expect(Object.values(original).filter((value) => value === 'own').length).toBeGreaterThan(1)
+    for (const choice of ['ask', 'auto', 'auto', 'full-access'] as const) {
+      const mode = choice === 'ask' ? 'manual' : choice === 'auto' ? 'auto' : 'yolo'
+      const before = { ...settings.agentPermissionOverrides }
+      Object.assign(
+        settings,
+        path === 'chat'
+          ? legacyChatPermissionWrite(settings, { nativeChatPermissionMode: choice })
+          : agentLaunchSettingsMutationUpdates(
+              settings,
+              path === 'legacy' ? { type: 'permissions', mode } : { type: 'permission', choice },
+              'linux'
+            )
+      )
+      expect(settings.agentPermissionOverrides).toMatchObject(original)
+      expect(settings.agentPermissionOverrides).toMatchObject(before)
+    }
+    expect(
+      applyAllAgentsPermission({ agentPermissionDefault: 'auto' }, 'auto').agentPermissionOverrides
+    ).toEqual({})
+    expect(() =>
+      agentLaunchSettingsMutationUpdates(
+        settings,
+        { type: 'permission', agent: 'gemini', choice: 'ask' },
+        'linux'
+      )
+    ).toThrow('This agent does not offer that permission')
+  }
+)
 
 describe('older clients against a host with the stored choice', () => {
   const host = {
@@ -611,8 +670,9 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     }
     const ask = { ...upgraded, ...applyAllAgentsPermission(upgraded, 'ask') }
     for (const agent of agents) {
+      const expected = agent === 'antigravity' ? 'ask' : 'own'
       expect(resolveTuiAgentLaunchArgs(agent, ask)).toBe('')
-      expect(newChatPermissionModeForSettings(agent, ask)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, ask)).toBe(expected)
       const edited = {
         ...ask,
         ...agentLaunchSettingsMutationUpdates(
@@ -621,7 +681,7 @@ describe('permission carrier ownership across save, reload and consumers', () =>
           'linux'
         )
       }
-      expect(newChatPermissionModeForSettings(agent, edited)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, edited)).toBe(expected)
     }
     const own = { ...ask, agentPermissionOverrides: { omp: 'own' as const } }
     const auto = { ...own, ...applyAllAgentsPermission(own, 'auto') }
@@ -673,7 +733,8 @@ it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
         providerSession: { key: 'session_id', id: 's' }
       })
     )
-    expect(plan?.launchConfig.agentCommand).toBe(`claude ${raw}`)
+    // Restart records surviving raw pins; the provider restores the generated model seed.
+    expect(plan?.launchConfig.agentCommand).toBe(resume ? 'claude' : `claude ${raw}`)
     expect(plan?.launchCommand).toBe(`claude ${resume ? "'--model' 'opus' '--resume' 's'" : raw}`)
     expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
     expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])

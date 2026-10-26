@@ -21,6 +21,7 @@ import type { LegacyRestoreDetails } from './legacy-restore-records'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
+import { sharedPromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { recordSessionSpawnPaneKey } from './terminal-host-session-listing'
@@ -145,9 +146,12 @@ async function spawnAndPublishSession(
   onPublished: (sessionId: string, isAlive: boolean) => void
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
-  // Probe the requested cwd before the shell can fall back to another path.
+  // Only macOS needs the TCC probe; other hosts must not pin extra filesystem workers.
   const cwdReadableByDaemon =
-    opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
+    process.platform === 'darwin' && opts.cwd && !wslDistro
+      ? await isCwdReadableByThisProcess(opts.cwd, opts)
+      : null
+  deps.assertCreateAllowed()
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -310,6 +314,21 @@ function describeAgentRestore(
 }
 
 // TCC may reject directory enumeration despite successful access(); only explicit permission denial counts.
-async function isCwdReadableByThisProcess(cwd: string): Promise<boolean> {
-  return (await enumerateDirectoryOnce(cwd)) !== 'denied'
+async function isCwdReadableByThisProcess(
+  cwd: string,
+  opts: Pick<InternalCreateOrAttachOptions, 'sessionId' | 'cancelSignal'>
+): Promise<boolean | null> {
+  const outcome = await sharedPromiseSettlementWaiters(enumerateDirectoryOnce(cwd))
+    .wait({
+      timeoutMs: 1_000,
+      signal: opts.cancelSignal,
+      createAbortError: () => new TerminalAttachCanceledError(opts.sessionId)
+    })
+    .catch((error: unknown) => {
+      if (error instanceof TerminalAttachCanceledError) {
+        throw error
+      }
+      return null
+    })
+  return outcome === null ? null : outcome !== 'denied'
 }

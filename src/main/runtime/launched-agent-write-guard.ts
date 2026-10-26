@@ -10,7 +10,12 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
   OrcaRuntimeService,
   'readLaunchedAgentForeground' | 'subscribeToTerminalData'
 > &
-  Partial<Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent'>>
+  Partial<
+    Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent' | 'launchedAgentHostProvesShellAlone'>
+  >
+
+/** refuse: write only on agent proof. write-unless-shell: permit unknown. write-if-shell-provable: permit unknown only where a lone shell is provable. */
+export type UnprovableHostPolicy = 'refuse' | 'write-unless-shell' | 'write-if-shell-provable'
 
 export type LaunchedAgentWriteGuard = {
   beforeWrite: (ptyId: string) => Promise<void>
@@ -22,8 +27,7 @@ export type LaunchedAgentWriteGuard = {
 export function createLaunchedAgentWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
   agent: TuiAgent,
-  /** Windows compatibility: write-unless-shell permits unknown; only proven shell refuses. */
-  { unprovableHost = 'refuse' }: { unprovableHost?: 'refuse' | 'write-unless-shell' } = {}
+  { unprovableHost = 'refuse' }: { unprovableHost?: UnprovableHostPolicy } = {}
 ): LaunchedAgentWriteGuard {
   let cleared: { ptyId: string; shellMayHaveReturned: boolean; unsubscribe: () => void } | null =
     null
@@ -61,7 +65,9 @@ export function createLaunchedAgentWriteGuard(
     if (
       foreground === 'shell' ||
       unprovableHost === 'refuse' ||
-      runtime.launchedAgentHostProvesAgent?.(ptyId) !== false
+      runtime.launchedAgentHostProvesAgent?.(ptyId) !== false ||
+      (unprovableHost === 'write-if-shell-provable' &&
+        runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true)
     ) {
       throw new Error('agent_not_in_foreground')
     }

@@ -50,6 +50,7 @@ export function buildWindowApi(args: {
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},

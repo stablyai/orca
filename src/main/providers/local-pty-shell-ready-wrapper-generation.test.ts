@@ -299,7 +299,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
     const mimoRestoreLine =
-      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+      '[[ -n "${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="${ORCA_MIMOCODE_CONFIG_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
@@ -397,6 +397,27 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
     expectBashOsc133Lifecycle(output)
   })
+
+  itWithBash(
+    'starts the next command after its prompt when the DEBUG trap is removed at a legacy prompt',
+    () => {
+      // Why: force the bash <= 5.0 scalar PROMPT_COMMAND dispatch on any bash.
+      const gate = 'BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)'
+      const rcfile = getBashShellReadyRcfileContent()
+      expect(rcfile).toContain(gate)
+      const legacyRcfile = rcfile.replaceAll(gate, '0')
+      writeFileSync(join(userDataPath, '.bash_profile'), "PS1='ORCA_PS1> '\n")
+      const input = 'trap - DEBUG\nfalse\nexit 0\n'
+      const output = runInteractiveBashRcfile(legacyRcfile, userDataPath, input)
+      const startBeforePrompt = new RegExp(
+        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+      )
+
+      expect(output).toContain('ORCA_PS1> ')
+      expect(output).not.toMatch(startBeforePrompt)
+      expectBashOsc133Lifecycle(output)
+    }
+  )
 
   itWithBash('composes an inherited PROMPT_COMMAND ending in separators', () => {
     writeFileSync(

@@ -15,6 +15,7 @@ import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 import { buildAiVaultResumeShellCommand } from './ai-vault-resume-command'
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
+import { dropRecordedAgentPermissionArgs } from './tui-agent-permission-lift'
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -48,12 +49,18 @@ export function buildAgentResumeStartupPlan(args: {
       ? [resumeArgv[0], '-c', 'tui.resume_cwd=current', ...resumeArgv.slice(1)]
       : resumeArgv
   const shell = resolveStartupShell(args.platform, args.shell)
-  const resolvedAgentCommand = args.agentCommand?.trim()
+  // Why: Codex restores a resumed thread's saved permissions unless the launch passes one, so
+  // replaying Orca's launch-time flag would undo a change made inside the session (#10886).
+  const recorded =
+    args.agent === 'codex' && !args.fork
+      ? dropRecordedAgentPermissionArgs(args.agent, args, shell)
+      : args
+  const resolvedAgentCommand = recorded.agentCommand?.trim()
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,
         command: resolvedAgentCommand,
-        commandWithoutSessionOptions: resolvedAgentCommand,
+        resumeLaunch: { agentCommand: resolvedAgentCommand },
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
@@ -61,7 +68,7 @@ export function buildAgentResumeStartupPlan(args: {
         cmdOverrides: args.cmdOverrides,
         platform: args.platform,
         shell,
-        agentArgs: args.agentArgs,
+        agentArgs: recorded.agentArgs,
         sessionOptions: args.sessionOptions,
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote
@@ -71,7 +78,8 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    agentArgs: recorded.agentArgs,
+    ...baseCommand.resumeLaunch
   })
   const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const agentCwd = args.providerSession.cwd

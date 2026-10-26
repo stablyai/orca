@@ -8,6 +8,8 @@ export type WslRelayDistroState = {
   guestHome?: string
   codexHomePath?: string
   guestEndpointFilePath?: string
+  claudeAgentViewDir?: string
+  claudeConfigDir?: string
   opencodeOverlayDir?: string
   opencode2OverlayDir?: string
   piAgentDir?: string

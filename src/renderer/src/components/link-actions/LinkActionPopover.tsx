@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -64,6 +64,23 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const dismissOnOutsidePointerDown = useEffectEvent((event: PointerEvent): void => {
+    if (!request || (event.target instanceof Node && contentRef.current?.contains(event.target))) {
+      return
+    }
+    onPointerDownOutside?.(event)
+    onClose(request)
+  })
+  useEffect(() => {
+    if (!request) {
+      return
+    }
+    // Why: Radix defers outside dismissal to the click and skips it when the click's
+    // propagation is stopped, which hover cards and sidebar cards both do.
+    document.addEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+    return () => document.removeEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+  }, [request])
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -133,6 +150,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
       <PopoverAnchor virtualRef={virtualRef} />
       {request ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           side="top"
           sideOffset={6}
@@ -143,7 +161,6 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => request.restoreFocus()}
-          onPointerDownOutside={onPointerDownOutside}
         >
           <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             <span

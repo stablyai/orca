@@ -99,6 +99,8 @@ export type TerminalState = {
   contestedHostWorkspaceSessions: HostSessionSlices
   /** Partition each restored session key was read from, so a write returns its rows there. */
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
+  /** Runtime partitions the startup read loaded; only these may receive emptied host-keyed fields. */
+  hydratedRuntimeSessionHostIds: ExecutionHostId[]
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean

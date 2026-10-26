@@ -4,7 +4,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,

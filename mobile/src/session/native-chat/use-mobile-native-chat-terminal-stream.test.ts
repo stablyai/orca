@@ -11,13 +11,14 @@ describe('useMobileNativeChatTerminalStream', () => {
   const leaseOnlyRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
   let subscribeOpensLeaseOnly = false
-  const registerSubscription = (handle: string): void => {
+  const registerSubscription = (handle: string): boolean => {
     subscriptionsRef.current.set(handle, () => {})
     if (subscribeOpensLeaseOnly) {
       leaseOnlyRef.current.add(handle)
     } else {
       leaseOnlyRef.current.delete(handle)
     }
+    return true
   }
   const subscribe = vi.fn(registerSubscription)
   const unsubscribe = vi.fn((handle: string) => {
@@ -229,27 +230,30 @@ describe('useMobileNativeChatTerminalStream', () => {
     expect(unsubscribe).not.toHaveBeenCalled()
   })
 
-  it('stops rearming a handle whose stream never comes back (#10681)', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness, { showNativeChat: true }))
-    })
-    subscribe.mockClear()
-    // Dead PTYs answer subscribed/end repeatedly; rearm must stop rather than loop through host waits.
-    for (let revision = 1; revision <= 6; revision += 1) {
-      subscriptionsRef.current.delete('terminal-1')
+  it.each([true, false])(
+    'stops rearming a handle whose stream never comes back (covered: %s, #10681)',
+    async (showNativeChat) => {
       await act(async () => {
-        renderer?.update(
-          createElement(Harness, {
-            showNativeChat: true,
-            leaseReady: false,
-            streamRevision: revision
-          })
-        )
+        renderer = create(createElement(Harness, { showNativeChat }))
       })
-    }
+      subscribe.mockClear()
+      // Dead PTYs answer subscribed/end repeatedly; rearm must stop rather than loop through host waits.
+      for (let revision = 1; revision <= 6; revision += 1) {
+        subscriptionsRef.current.delete('terminal-1')
+        await act(async () => {
+          renderer?.update(
+            createElement(Harness, {
+              showNativeChat,
+              leaseReady: false,
+              streamRevision: revision
+            })
+          )
+        })
+      }
 
-    expect(subscribe.mock.calls.length).toBeLessThanOrEqual(3)
-  })
+      expect(subscribe.mock.calls.length).toBeLessThanOrEqual(3)
+    }
+  )
 
   it('does not charge the rearm budget for a subscribe its own gates turned away', async () => {
     try {
@@ -258,7 +262,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       })
       subscribe.mockClear()
       // Locally rejected subscribes never reached the host and must not spend real attempts.
-      subscribe.mockImplementation(() => {})
+      subscribe.mockImplementation(() => false)
       for (let revision = 1; revision <= 5; revision += 1) {
         subscriptionsRef.current.delete('terminal-1')
         await act(async () => {
@@ -278,44 +282,74 @@ describe('useMobileNativeChatTerminalStream', () => {
     }
   })
 
-  it('refills the rearm budget when terminal.list reports the handle again (#10681)', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness, { showNativeChat: true }))
-    })
-    for (let revision = 1; revision <= 5; revision += 1) {
-      subscriptionsRef.current.delete('terminal-1')
+  it('charges the rearm budget for a subscribe the bridge refused before returning', async () => {
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { showNativeChat: false }))
+      })
+      subscribe.mockClear()
+      // A synchronous refusal ends the stream inside subscribe, so no ref ever shows it was sent.
+      subscribe.mockImplementation(() => true)
+      for (let revision = 1; revision <= 5; revision += 1) {
+        subscriptionsRef.current.delete('terminal-1')
+        await act(async () => {
+          renderer?.update(
+            createElement(Harness, {
+              showNativeChat: false,
+              leaseReady: false,
+              streamRevision: revision
+            })
+          )
+        })
+      }
+
+      expect(subscribe).toHaveBeenCalledTimes(3)
+    } finally {
+      subscribe.mockImplementation(registerSubscription)
+    }
+  })
+
+  it.each([true, false])(
+    'refills the rearm budget when terminal.list reports the handle again (covered: %s, #10681)',
+    async (showNativeChat) => {
+      await act(async () => {
+        renderer = create(createElement(Harness, { showNativeChat }))
+      })
+      for (let revision = 1; revision <= 5; revision += 1) {
+        subscriptionsRef.current.delete('terminal-1')
+        await act(async () => {
+          renderer?.update(
+            createElement(Harness, {
+              showNativeChat,
+              leaseReady: false,
+              streamRevision: revision
+            })
+          )
+        })
+      }
+      subscribe.mockClear()
       await act(async () => {
         renderer?.update(
-          createElement(Harness, {
-            showNativeChat: true,
-            leaseReady: false,
-            streamRevision: revision
-          })
+          createElement(Harness, { showNativeChat, leaseReady: false, streamRevision: 6 })
         )
       })
+      expect(subscribe).not.toHaveBeenCalled()
+
+      // Still-listed dead handles must not refill on every inventory refresh.
+      await act(async () => {
+        notifyListedHandlesRef.current(new Set(['terminal-1']))
+        notifyListedHandlesRef.current(new Set(['terminal-1']))
+      })
+      expect(subscribe).not.toHaveBeenCalled()
+
+      await act(async () => {
+        notifyListedHandlesRef.current(new Set())
+        notifyListedHandlesRef.current(new Set(['terminal-1']))
+      })
+
+      expect(subscribe).toHaveBeenCalledWith('terminal-1')
     }
-    subscribe.mockClear()
-    await act(async () => {
-      renderer?.update(
-        createElement(Harness, { showNativeChat: true, leaseReady: false, streamRevision: 6 })
-      )
-    })
-    expect(subscribe).not.toHaveBeenCalled()
-
-    // Still-listed dead handles must not refill on every inventory refresh.
-    await act(async () => {
-      notifyListedHandlesRef.current(new Set(['terminal-1']))
-      notifyListedHandlesRef.current(new Set(['terminal-1']))
-    })
-    expect(subscribe).not.toHaveBeenCalled()
-
-    await act(async () => {
-      notifyListedHandlesRef.current(new Set())
-      notifyListedHandlesRef.current(new Set(['terminal-1']))
-    })
-
-    expect(subscribe).toHaveBeenCalledWith('terminal-1')
-  })
+  )
 
   it('rearms on a teardown the lease cannot report (#10681)', async () => {
     await act(async () => {

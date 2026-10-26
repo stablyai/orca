@@ -157,7 +157,9 @@ export class LocalPtyProvider implements IPtyProvider {
         childProcessEvidence: 'unverifiable'
       }
     }
-    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
+      ? confirmLocalPtyForegroundProcess(id, true)
+      : getLocalPtyForegroundProcess(id))
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     const childProcessEvidence = await inspectLocalPtyChildProcesses(
       id,

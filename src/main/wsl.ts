@@ -184,7 +184,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 }
 
 export async function listRunningWslDistrosAsync(
-  options: { requireConfirmed?: boolean } = {}
+  options: { requireConfirmed?: boolean; startedAfter?: number } = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []

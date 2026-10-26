@@ -20,6 +20,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
@@ -59,6 +60,20 @@ export async function performThreadGoalChange(
     return goalsUnsupported()
   }
   const { change } = input
+  const captured =
+    change.kind === 'set' || (change.kind === 'status' && change.status === 'active')
+      ? captureStructuredExecutionOptions({
+          ...ctx,
+          persistedOptions: Object.fromEntries(
+            Object.entries(ctx.persistedOptions ?? {}).filter(
+              ([key]) => key === 'model' || key === 'effort'
+            )
+          )
+        })
+      : { options: undefined }
+  if ('refusal' in captured) {
+    return { ok: false, refusal: captured.refusal }
+  }
   const identity = objectiveIdentity(input.clientOperationId)
   let replacesGoal = false
   if (change.kind === 'set') {
@@ -96,6 +111,7 @@ export async function performThreadGoalChange(
     fence: ctx.fence,
     change,
     replacesGoal,
+    executionOptions: captured.options,
     signal: input.signal
   })
   if (!result.ok) {

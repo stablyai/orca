@@ -1,5 +1,5 @@
 /** Adoption order by Session History row agent; registration tests require a transcript importer for every target.
- * Offer only local conversations, whose adopting host runs this build and therefore agrees with the map. */
+ * Conversations stay on their recording host, which validates importer availability before adoption. */
 export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   claude: ['claude'],
   codex: ['codex'],

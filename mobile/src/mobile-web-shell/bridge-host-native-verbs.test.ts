@@ -172,6 +172,19 @@ describe('a native method the page asks for', () => {
     expect(reachedTheDesktop(bridge)).toEqual([])
   })
 
+  it('opens only PDFs, so the page cannot have the shell download and hand off other files', async () => {
+    const bridge = harness({ ready: true })
+    for (const relativePath of ['notes.docx', 'archive.pdf.zip', 'pdf']) {
+      bridge.host.receive(
+        request('native.pdf.view', { action: 'open', worktreeId: 'w', relativePath })
+      )
+      await flushBridge()
+      expect(refusal(bridge)?.code, relativePath).toBe('native_verb_params')
+    }
+    expect(bridge.nativeCalls).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
+  })
+
   it('refuses a result the verb does not declare, rather than passing it to the page', async () => {
     // Validate results against the verb table before an arbitrary handler reply reaches the page.
     const bridge = harness({ serveNativeVerb: () => Promise.resolve({ nonsense: 1 }) })

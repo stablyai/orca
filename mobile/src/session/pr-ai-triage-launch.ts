@@ -11,6 +11,7 @@ import {
   loadMobileAgentLaunchContext
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
+import { resolveSourceControlActionSessionOptions } from '../../../src/shared/source-control-action-launch-preferences'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
@@ -68,11 +69,15 @@ export async function launchAgentWithPrompt(args: {
         "This action's saved prompt is empty. Update Source Control AI settings on your computer."
     }
   }
+  const sessionOptions = recipe
+    ? resolveSourceControlActionSessionOptions(recipe, resolved.agent)
+    : undefined
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: resolved.agent,
+    ...(sessionOptions ? { chatOptions: sessionOptions } : {}),
     // Leave agent arguments to host defaults because applicability depends on the host-selected route and shell.
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource

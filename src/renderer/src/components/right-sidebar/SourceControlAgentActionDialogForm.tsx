@@ -13,14 +13,18 @@ import {
 } from '@/components/ui/select'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
+} from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
-import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
+import { describeSourceControlActionModel } from '../settings/source-control-action-model-copy'
+import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
 
@@ -41,6 +45,7 @@ type SourceControlAgentActionDialogFormProps = {
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
   agentArgsApply: boolean
+  recipe: SourceControlActionRecipe
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -87,6 +92,7 @@ export function SourceControlAgentActionDialogForm({
   statusCopy,
   agentArgs,
   agentArgsApply,
+  recipe,
   commandTemplate,
   savedCommandInputTemplate,
   saveLaunchRecipe,
@@ -110,19 +116,13 @@ export function SourceControlAgentActionDialogForm({
 }: SourceControlAgentActionDialogFormProps): React.JSX.Element {
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
-  const selectedRecipe = selectedAgent
-    ? {
-        agentId: selectedAgent,
-        commandInputTemplate: commandTemplate,
-        agentArgs
-      }
-    : null
+  const selectedRecipe = recipe
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
   // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
     selectedRecipe &&
     selectedSaveTarget &&
-    sourceControlActionRecipeMatchesTarget({
+    sourceControlActionRecipeSaveMatchesTarget({
       actionId,
       target: selectedSaveTarget,
       recipe: selectedRecipe,
@@ -186,6 +186,10 @@ export function SourceControlAgentActionDialogForm({
             <p className="flex items-start gap-1.5 text-[11px] text-destructive">
               <TriangleAlert className="mt-px size-3 shrink-0" />
               <span>{statusCopy}</span>
+            </p>
+          ) : selectedAgent && selectedRecipe.launchPreferences?.agentId === selectedAgent ? (
+            <p className="text-[11px] text-muted-foreground">
+              {describeSourceControlActionModel(selectedAgent, selectedRecipe.launchPreferences)}
             </p>
           ) : null}
         </div>

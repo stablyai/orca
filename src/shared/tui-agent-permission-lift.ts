@@ -12,6 +12,7 @@ import {
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
 import { permissionRecipeCut } from './agent-permission-args'
+import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-startup-shell'
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
 
@@ -31,6 +32,29 @@ export function liftAgentPermissionArgs(
     }
   }
   return { choice: null, args: original }
+}
+
+/** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
+export function dropRecordedAgentPermissionArgs(
+  agent: TuiAgent,
+  recorded: { agentArgs?: string | null; agentCommand?: string | null },
+  shell: AgentStartupShell
+): { agentArgs?: string | null; agentCommand?: string | null } {
+  const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
+  if (!lifted.choice) {
+    return recorded
+  }
+  const command = recorded.agentCommand?.trim()
+  if (!command) {
+    return { ...recorded, agentArgs: lifted.args }
+  }
+  const before = planAgentCliArgsSuffix(recorded.agentArgs, shell)
+  const after = planAgentCliArgsSuffix(lifted.args, shell)
+  if (!before.ok || !after.ok || !command.endsWith(` ${before.suffix}`)) {
+    return recorded
+  }
+  const head = command.slice(0, -before.suffix.length).trimEnd()
+  return { agentArgs: lifted.args, agentCommand: after.suffix ? `${head} ${after.suffix}` : head }
 }
 
 /** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */

@@ -865,6 +865,23 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
   overflow: hidden;
 }
 
+/* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'], > [data-onboarding-overlay])
+  .app-layout
+  > :not(.window-controls) {
+  filter: blur(2px);
+}
+
+body
+  > :is(
+    [data-slot='dialog-content'],
+    [data-slot='command-dialog-content'],
+    [data-slot='sheet-content'],
+    [data-onboarding-overlay]
+  ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
+  filter: blur(2px);
+}
+
 /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
 html.native-shell,
 html.native-shell body,

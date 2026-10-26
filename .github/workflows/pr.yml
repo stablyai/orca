@@ -50,7 +50,6 @@ jobs:
       windows_process_probe: ${{ steps.filter.outputs.windows_process_probe }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       layout_oracle: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.layout_oracle }}
-      darwin_terminal_node: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.darwin_terminal_node }}
       dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
@@ -77,7 +76,6 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
-            /config/scripts/pr-darwin-terminal-node-route.mjs
             /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
@@ -222,6 +220,22 @@ jobs:
         with:
           bun-version-file: config/.bun-version
 
+      # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
+      - name: Plan unit selection
+        if: '!cancelled()'
+        id: unit-plan
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          # Five shards use fewer runner minutes; the repository variable can request 2 to 10.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/ci-unit-plan.mjs
+
       # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
         if: '!cancelled()'
@@ -273,7 +287,7 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
           node_modules/.bin/ast-grep test --config config/sgconfig.yml --skip-snapshot-tests
-          node_modules/.bin/ast-grep scan --config config/sgconfig.yml --min-severity warning --format github src config tests mobile
+          node config/scripts/ast-grep-gates.mjs --format=github
 
       # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
       - name: Check formatting
@@ -345,6 +359,27 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           pnpm run typecheck:ci --bun-concurrency=2 --bun-threads=2
 
+      # Starts with the compiler so its ~16s pass overlaps the serial checks below.
+      # Extract sorted evidence to isolated temp paths with one normalized platform-independent AST pass; use preflight’s pinned Bun.
+      - name: Verify localization extraction
+        if: '!cancelled()'
+        id: localization-extraction
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          # Detection failures run the full check; renames retain the removed input path.
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
+            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            echo "Localization extraction inputs are unchanged."
+          else
+            bun config/scripts/verify-localization-extraction.mjs
+          fi
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
@@ -390,33 +425,21 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-node-runtime-pin.mjs
 
+      # A ~7s single-threaded tree walk; it overlaps the remaining checks.
       - name: Check every test file has a runner
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-test-file-runners.mjs
-
-      - name: Check root and mobile lock the same shared dependencies
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
-
-      # Extract sorted evidence to isolated temp paths with one normalized platform-independent AST pass; use preflight’s pinned Bun.
-      - name: Verify localization extraction
         if: '!cancelled()'
-        id: localization-extraction
+        id: test-file-runners
         background: true
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          # Detection failures run the full check; renames retain the removed input path.
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
-          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
-            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
-            echo "Localization extraction inputs are unchanged."
-          else
-            bun config/scripts/verify-localization-extraction.mjs
-          fi
+          node config/scripts/check-test-file-runners.mjs
+
+      - name: Check root and mobile lock the same shared dependencies
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
 
       - name: Decide whether the orcad terminal smoke runs
         id: orcad-smoke-scope
@@ -500,22 +523,6 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/verify-macos-entitlements.mjs
 
-      # Planning shares setup and stays off the compiler's critical path.
-      - name: Plan unit selection
-        if: '!cancelled()'
-        id: unit-plan
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Five shards use fewer runner minutes; the repository variable can still request ten.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/ci-unit-plan.mjs
-
       - wait: typecheck
 
       - wait: process-host-imports
@@ -525,6 +532,8 @@ jobs:
       - wait: js-plugin-lint
 
       - wait: unit-plan
+
+      - wait: test-file-runners
 
       - uses: actions/upload-artifact@v7
         if: needs.code_paths.outputs.typecheck == 'true'
@@ -1080,10 +1089,7 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/browser-route-tcp-egress.electron.test.ts
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
-          src/main/browser/browser-route-h3-egress.electron.test.ts
-          src/main/browser/browser-route-dns-prefetch.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/popup-origin-chrome.electron.test.ts
           src/main/browser/browser-link-materialization.electron.test.ts
@@ -1496,34 +1502,6 @@ jobs:
             *) echo "node_modules/zod is not in the isolated store"; exit 1 ;;
           esac
 
-  darwin_terminal_node:
-    name: mac terminal worker wakeup (${{ matrix.os }})
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() && needs.preflight.result == 'success' &&
-      needs.code_paths.outputs.darwin_terminal_node == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-      - uses: actions/cache@v5
-        with:
-          path: out/node-runtime-cache
-          key: darwin-terminal-node-${{ runner.arch }}-${{ hashFiles('src/shared/node-runtime-pin.ts', 'config/node-runtime-patches/**', 'config/scripts/build-darwin-terminal-node.mjs', 'config/scripts/pinned-node-downloads.mjs', 'config/scripts/update-node-runtime-pin.mjs', 'config/scripts/macos-terminal-host-bundle.cjs') }}
-      - name: Build and verify the shipping terminal runtime
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs
-
   verify:
     name: PR checks passed
     # Publish an explicit result after every required dependency settles.
@@ -1541,7 +1519,6 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
-      - darwin_terminal_node
       - layout_oracle
       - dependency_isolation
     # Report settled results without competing with the GitHub-hosted test queue.
@@ -1578,8 +1555,6 @@ jobs:
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
-          DARWIN_TERMINAL_NODE: ${{ needs.darwin_terminal_node.result }}
-          DARWIN_TERMINAL_NODE_SHOULD_RUN: ${{ needs.code_paths.outputs.darwin_terminal_node }}
           LAYOUT_ORACLE: ${{ needs.layout_oracle.result }}
           LAYOUT_ORACLE_SHOULD_RUN: ${{ needs.code_paths.outputs.layout_oracle }}
           DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
@@ -1625,7 +1600,6 @@ jobs:
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
-          check_job darwin_terminal_node "$DARWIN_TERMINAL_NODE" "$DARWIN_TERMINAL_NODE_SHOULD_RUN"
           check_job layout_oracle "$LAYOUT_ORACLE" "$LAYOUT_ORACLE_SHOULD_RUN"
           check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"

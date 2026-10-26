@@ -18,6 +18,7 @@ import type { PendingSmartGitHubSubmitResolution } from './source-selection-deci
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
   const {
     branchAutoNameRef,
+    branchIntent,
     branchNameOverridePreservesNameEdits,
     checkedHooksContextKey,
     commitHookCheckIfCurrent,
@@ -194,6 +195,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
+        branchIntent:
+          smartGitHubResolution.kind === 'none' && effectiveBranchNameOverride
+            ? branchIntent
+            : undefined,
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -202,6 +207,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     },
     [
       branchNameOverridePreservesNameEdits,
+      branchIntent,
       checkedHooksContextKey,
       commitHookCheckIfCurrent,
       enableIssueAutomation,

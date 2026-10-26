@@ -1,6 +1,5 @@
 // Project host journals for all session lists, retaining settled rows across idle eviction and renderer reload.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -22,7 +21,7 @@ import {
   retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
-import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
+import { structuredStatusChildWorkFields } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
@@ -65,7 +64,7 @@ export class StructuredAgentSessionStatusFeed {
   /** Opens with every session this host has projected, live ones re-read, then only changes. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
     // Naming completion must be observable even if a held journal cannot be read.
-    if (this.deps.namingActiveSessionIds || this.deps.listRecords) {
+    if (this.deps.namingActiveSessionIds || this.deps.listConversations) {
       this.emit(subscriber, structuredAgentSessionNamingSnapshot(this.deps))
     }
     // Reproject before registering: existing readers get changes; the new reader gets one snapshot.
@@ -172,7 +171,9 @@ export class StructuredAgentSessionStatusFeed {
   ): StructuredAgentSessionJournalProjection | null {
     const session = this.deps.sessions.get(sessionId)
     const source = journal ?? session?.journal
-    return source ? this.projections.read(source, this.deps.getRecord(sessionId), session) : null
+    return source
+      ? this.projections.read(source, this.deps.getConversation(sessionId), session)
+      : null
   }
 
   publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
@@ -181,7 +182,7 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const source = journal ?? session.journal
-    const record = this.deps.getRecord(sessionId)
+    const record = this.deps.getConversation(sessionId)
     const projection = this.projections.read(source, record, session)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
@@ -244,16 +245,7 @@ export class StructuredAgentSessionStatusFeed {
     sessionId: string,
     provider: StatusFeedSession['params']['provider']
   ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
-    }
+    return structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
   }
 
   /** Publish evidence then refold parent/summary; sink failure must not block other publications. */
@@ -320,7 +312,7 @@ export class StructuredAgentSessionStatusFeed {
 
   private sink(
     summary: AgentSessionStatusSummary,
-    location?: AgentSessionRecord['location']
+    location?: StatusFeedSession['params']['location']
   ): void {
     try {
       this.ownership.publish(summary, location)

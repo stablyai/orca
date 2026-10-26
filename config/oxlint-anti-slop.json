@@ -4,7 +4,7 @@
   "jsPlugins": [
     {
       "name": "anti-slop",
-      "specifier": "../.anti-slop-plugin/index.ts"
+      "specifier": "./oxlint-plugins/anti-slop-prefilter.mjs"
     }
   ],
   "categories": {

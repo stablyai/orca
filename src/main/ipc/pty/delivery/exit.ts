@@ -101,7 +101,8 @@ function preparePtyExitForRenderer(
             remaining.startSeq,
             remaining.containsBackgroundOutput,
             remaining.rawLength,
-            remaining.transformed
+            remaining.transformed,
+            remaining.gapEscapeState
           )
         )
       }

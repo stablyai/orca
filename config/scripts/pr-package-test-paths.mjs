@@ -6,10 +6,7 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/popup-origin-chrome.electron.test.ts',
   'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
@@ -44,10 +41,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/package-electron-runtime-contract.test.mjs',
   'config/scripts/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
@@ -56,6 +50,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/omp-fresh-launch-cmd.win32.test.ts',
+  'src/shared/windows-batch-spawn.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
@@ -106,7 +101,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
   'src/main/skills/skill-windows-rename-contention.integration.test.ts',
   'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/plan-selection.test.ts',
+  'src/main/ipc/filesystem/filesystem-read-dir-unc-drive.test.ts',
+  'src/main/ipc/filesystem/filesystem-file-content-unc-drive.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [

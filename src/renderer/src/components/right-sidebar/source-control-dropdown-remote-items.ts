@@ -165,15 +165,34 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
   const rebase: DropdownItem = {
     kind: 'rebase_base',
-    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
+    label: rebaseBaseLabel
+      ? translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromNamedBase',
+          'Rebase from {{baseRef}}',
+          { baseRef: rebaseBaseLabel }
+        )
+      : translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromBase',
+          'Rebase from Base'
+        ),
     title: ((): string => {
       if (!rebaseBaseLabel || !hasRemoteBaseRef) {
-        return 'Choose a remote base branch to rebase from'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.rebaseChooseRemoteBase',
+          'Choose a remote base branch to rebase from'
+        )
       }
       if (hasDirtyLocalChanges) {
-        return 'Try rebasing; git may require committing or stashing local changes first'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.rebaseDirtyHint',
+          'Try rebasing; git may require committing or stashing local changes first'
+        )
       }
-      return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.rebaseWithLatestFrom',
+        'Rebase current branch with latest commits from {{baseRef}}',
+        { baseRef: rebaseBaseLabel }
+      )
     })(),
     disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
   }

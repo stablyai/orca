@@ -1,3 +1,5 @@
+import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
+import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
@@ -38,8 +40,9 @@ export type RuntimePtyController = {
     connectionId: string | null
     tabId: string
     leafId: string
-  }): () => void
+  }): RuntimePaneCreateClaim
   adoptStablePane?(opts: {
+    onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
     signal?: AbortSignal
     spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
     cols: number

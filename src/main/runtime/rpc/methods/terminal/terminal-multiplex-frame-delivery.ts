@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import { settleDeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
@@ -112,6 +113,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (!sent) {
       return false
     }
+    settleDeliveredYieldedQueries(stream, chunk.seq)
     if (stream.ackOutput) {
       stream.ackInFlightBytes += chunk.bytes.byteLength
       state.ackTotalInFlightBytes += chunk.bytes.byteLength

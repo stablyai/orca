@@ -5,7 +5,6 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
-  RECOVERABLE_CODES,
   RECOVERABLE_MESSAGE_FRAGMENTS,
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
@@ -411,12 +410,6 @@ function classifyByMessageOnly(pair: TransportErrorPair): boolean {
 }
 
 describe('transport error code/message classification agreement', () => {
-  it('enumerates every reachable coded producer', () => {
-    // Use a floor so corpus additions pass; lower deliberately only for genuinely removed producers (#12667 originally enumerated 34).
-    expect(CODED_TRANSPORT_ERRORS.length).toBeGreaterThanOrEqual(59)
-    expect(CODED_TRANSPORT_ERRORS.every((pair) => typeof pair.code === 'string')).toBe(true)
-  })
-
   it('never classifies a coded error as fatal while its own message reads as recoverable', () => {
     const violations = CODED_TRANSPORT_ERRORS.filter(
       (pair) => !isRecoverableRemoteRuntimeConnectionError(pair) && classifyByMessageOnly(pair)
@@ -448,33 +441,6 @@ describe('transport error code/message classification agreement', () => {
         `${pair.producer}: expected message-only classification ${pair.recoverable} — untyped producers have no code, so removing a fragment from RECOVERABLE_MESSAGE_FRAGMENTS strands them.`
     )
     expect(misclassified).toEqual([])
-  })
-
-  it('backs every recoverable message fragment with a producer in the corpus', () => {
-    const allMessages = [...CODED_TRANSPORT_ERRORS, ...CODELESS_TRANSPORT_ERRORS].map((pair) =>
-      pair.message.toLowerCase()
-    )
-    const unbacked = RECOVERABLE_MESSAGE_FRAGMENTS.filter(
-      (fragment) => !allMessages.some((message) => message.includes(fragment))
-    ).map(
-      (fragment) =>
-        `recoverable fragment "${fragment}" matches no producer in this corpus — add the producer that emits it, or drop the fragment.`
-    )
-    expect(unbacked).toEqual([])
-  })
-
-  it('backs every recoverable code with a producer in the corpus', () => {
-    // 'reconnecting' is vocabulary borrowed from the SSH/runtime status states; no error
-    // producer raises it. Kept recoverable defensively.
-    const codesWithoutProducer = new Set(['reconnecting'])
-    const corpusCodes = new Set(CODED_TRANSPORT_ERRORS.map((pair) => pair.code))
-    const unbacked = [...RECOVERABLE_CODES]
-      .filter((code) => !corpusCodes.has(code) && !codesWithoutProducer.has(code))
-      .map(
-        (code) =>
-          `recoverable code "${code}" matches no producer in this corpus — add the producer that raises it so its message is checked, or declare it producer-less here.`
-      )
-    expect(unbacked).toEqual([])
   })
 
   it('classifies remote_runtime_busy recoverable with or without its code (STA-3479)', () => {

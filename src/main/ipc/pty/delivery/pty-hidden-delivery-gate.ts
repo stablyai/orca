@@ -1,5 +1,10 @@
 /** Drop hidden renderer delivery after model ingestion; reveal restores a snapshot, while sidecar interest keeps raw bytes flowing. */
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  _resetPtyGapEscapeStateForTest,
+  clearPtyGapEscapeState,
+  markPtyRendererStreamGap
+} from './pty-gap-escape-state'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
@@ -104,6 +109,7 @@ export function recordHiddenRendererPtyDataDrop(
 ): { shouldEmitRestoreMarker: boolean; hiddenDropEpisode: number } {
   droppedHiddenDeliveryChars += chars
   droppedHiddenDeliveryChunks += 1
+  markPtyRendererStreamGap(id)
   const latch = droppedSinceHiddenPtys.get(id)
   if (latch?.state === 'unrevealed') {
     return { shouldEmitRestoreMarker: false, hiddenDropEpisode: latch.episode }
@@ -131,6 +137,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  clearPtyGapEscapeState(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -159,5 +166,6 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  _resetPtyGapEscapeStateForTest()
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

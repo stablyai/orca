@@ -18,6 +18,7 @@ import {
   admissibleHeapGib,
   planTypecheckBatches,
   resolveProjectCompiler,
+  resolveTypecheckCommand,
   parseTypecheckOptions,
   selectTypecheckCompiler,
   typecheckBatches,
@@ -230,9 +231,25 @@ describe('local and CI compiler selection', () => {
     '--bun-concurrency=0',
     '--bun-threads=NaN',
     '--bun-concurrency=5',
+    '--checkers=0',
+    '--checkers=two',
     '--project'
   ])('rejects unsafe or unknown options: %s', (argument) => {
     expect(() => parseTypecheckOptions([argument])).toThrow()
+  })
+
+  it('passes a checker cap to the native compiler only when one is requested', () => {
+    const command = (checkers) =>
+      resolveTypecheckCommand('config/tsconfig.node.json', {
+        compiler: 'native',
+        checkers,
+        root: repoRoot
+      }).args
+    expect(command(parseTypecheckOptions(['--checkers=4']).checkers).slice(-2)).toEqual([
+      '--checkers',
+      '4'
+    ])
+    expect(command(parseTypecheckOptions([]).checkers)).not.toContain('--checkers')
   })
 
   it('bounds Bun project concurrency and reserves memory for overlapping checks', () => {

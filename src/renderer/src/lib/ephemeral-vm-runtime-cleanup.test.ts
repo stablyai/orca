@@ -8,6 +8,7 @@ globalThis.window = { api: { ephemeralVm: { listRuntimes, cleanup } } }
 
 import { cleanupEphemeralVmRuntimesForDeleted } from './ephemeral-vm-runtime-cleanup'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
 
 function runtime(overrides: Record<string, unknown>): Record<string, unknown> {
   return { id: 'rt', cleanupStatus: 'not_started', ...overrides }
@@ -33,6 +34,24 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
       destroyedSshTargetIds: ['runtime-ssh-a'],
       retainedSshTargetIds: []
     })
+  })
+
+  it("re-reads the server catalog once a cleanup may have forgotten the VM's server (#33805)", async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({ id: 'rt-a', workspaceId: 'wt-1', runtimeEnvironmentId: 'env-a' })
+    ])
+    const refresher = vi.fn(async () => {})
+    setRuntimeEnvironmentCatalogRefresher(refresher)
+    try {
+      await cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })
+    } finally {
+      setRuntimeEnvironmentCatalogRefresher(null)
+    }
+
+    expect(refresher).toHaveBeenCalledTimes(1)
+    expect(refresher.mock.invocationCallOrder[0]).toBeGreaterThan(
+      cleanup.mock.invocationCallOrder[0]
+    )
   })
 
   it('cleans only the confirmed host runtime when another host owns the same workspace id', async () => {

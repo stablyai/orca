@@ -148,7 +148,7 @@ describe('structured session cursor/body regression', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1_000,
         onStatusChanged: (summary) => {
           hostSummary = summary

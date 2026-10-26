@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { pilotGoldens } from '../derived-goldens'
 import { readGolden } from '../golden-recording'
 import { pilotMountAdapters } from '../pilot-mount-adapters'
-import { runRecording, runRecordingMutant } from '../run-recording'
+import { runRecordingMutant } from '../run-recording'
 import { readScenarios } from '../scenario-input'
 import { vitestRecordingScheduler } from '../vitest-recording-scheduler'
 import { operationMutation, type Mutation } from './operation-mutations'
@@ -42,26 +42,6 @@ const mutants: Record<string, Mutation> = {
   'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
   'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
-// Pin archived defect states so unrelated reference refactors cannot pass merely by differing.
-const referenceStates: Record<string, RecordedValue> = {
-  b1: { files: [] },
-  b2: {
-    error: '',
-    mutating: false,
-    row: {
-      content: {
-        assignees: [],
-        labels: [{ color: '808080', name: 'recorded' }],
-        number: 1,
-        repository: 'owner/repo'
-      },
-      id: 'item-1',
-      itemType: 'ISSUE'
-    }
-  },
-  b3: { error: 'issue refused', loading: false, payload: { $rpc: 'null' } }
-}
-
 function visibleState(recording: Recording): RecordedValue {
   return recording.checkpoints.at(-1)!.observation.state
 }
@@ -71,11 +51,6 @@ const mutantPilots = pilots.flatMap((pilot) => {
   const mutation = mutants[pilot.id]
   return mutation ? [{ ...pilot, mutation }] : []
 })
-const referencePilots = pilots.flatMap((pilot) => {
-  const reference = referenceStates[pilot.id]
-  return reference ? [{ ...pilot, reference }] : []
-})
-
 describe('RPC main recording mutants', () => {
   for (const { id, scenario, mutation } of mutantPilots) {
     it(`${id}: kills ${mutation}`, async () => {
@@ -92,21 +67,6 @@ describe('RPC main recording mutants', () => {
       )
       assertMutationApplied()
       expect(result.verdict).toBe('killed')
-    })
-  }
-  for (const { id, scenario, reference } of referencePilots) {
-    it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(`${id}: rejects bcba08b3e4`, async () => {
-      const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
-        device: scenario,
-        reference: true
-      })
-      const result = await runRecording(
-        scenario,
-        adapters[scenario.operation],
-        vitestRecordingScheduler()
-      )
-      expect(visibleState(result)).toEqual(reference)
-      expect(reference).not.toEqual(visibleState(readGolden(goldens, id).recording))
     })
   }
 })

@@ -131,9 +131,10 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       }
       // A painted snapshot awaiting fit proves recovery answered, regardless of live queue size.
       const replayed = session.hiddenOutputRestoreReplayingSnapshot
+      let preserveReplayState = false
       if (replayed) {
         session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
-        if (
+        const needsRepaint =
           session.hiddenOutputRestorePendingOverflow ||
           session.hiddenOutputRestoreFreshSnapshotNeeded ||
           (session.hiddenOutputRestoreUnhideSeq !== null &&
@@ -142,12 +143,14 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
             (chunk: PendingHiddenOutputRestoreChunk) =>
               session.getChunkDataAfterSnapshot(chunk, replayed.seq) === null
           )
-        ) {
+        preserveReplayState = !needsRepaint
+        if (needsRepaint) {
           session.noteHiddenOutputRestoreFloodBackpressure()
         }
       }
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
-        quiet: replayed !== null
+        quiet: replayed !== null,
+        preserveReplayState
       })
     }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
   }

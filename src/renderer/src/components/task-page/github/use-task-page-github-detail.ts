@@ -8,13 +8,13 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   selectTaskPageWorkItemsCacheEntries,
   findTaskPageDialogWorkItem
-} from '@/components/task-page-cache-selectors'
+} from '@/components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import {
   getTaskPageRepoCacheInput,
   getTaskPageRepoSourceContext
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(

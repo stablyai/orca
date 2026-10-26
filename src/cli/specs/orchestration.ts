@@ -16,13 +16,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'run-use'],
-    summary: 'Bind this coordinator to an existing Run',
+    summary: 'Resume coordinating a Run',
     usage:
       'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
+      'A worker cannot bind its own or ancestor Run or use --takeover-legacy. --takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
     ]
   },
   {
@@ -41,8 +41,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-show'],
     summary: 'Show one lightweight orchestration Run',
-    usage: 'orca orchestration run-show --id <run_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id']
+    usage: 'orca orchestration run-show --id <run_id> [--removed] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'removed', 'cursor']
   },
   {
     path: ['orchestration', 'send'],

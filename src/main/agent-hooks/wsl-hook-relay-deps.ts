@@ -1,3 +1,4 @@
+import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from '../claude/agent-view-mod-source'
 import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -52,6 +53,7 @@ export type WslHookRelayManagerDeps = {
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  receiveClaudeAgentView?: (body: unknown) => unknown
   bindInterruptReconciliation?: (
     mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
     connectionId: string,
@@ -79,6 +81,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
   remoteHooksEnabled: () => isWslAgentHookRelayEnabled(),
   hookCoordsEnv: () => agentHookServer.buildPtyEnv(),
+  receiveClaudeAgentView: (body) => agentHookServer.claudeAgentViews.receive(body),
   // A restart-stable endpoint namespace lets surviving agents rediscover this instance.
   instanceKey: () => {
     const source = agentHookServer.endpointFilePath
@@ -111,6 +114,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     }),
   managedHookSettings: () => null,
   pluginSources: () => ({
+    claudeAgentViewSource: CLAUDE_AGENT_VIEW_MOD_SOURCE,
     opencodePluginSource: getOpenCodePluginSource(),
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),

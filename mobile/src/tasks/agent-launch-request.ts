@@ -61,12 +61,16 @@ export function agentLaunchExistingParams(args: {
   paneKey?: string
   sessionId?: string
   placement?: AgentLaunchPlacement
+  sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
+    ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatOptions ? { chatOptions: { ...args.chatOptions } } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
     ...(args.sessionId ? { sessionId: args.sessionId } : {}),

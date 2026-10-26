@@ -101,7 +101,7 @@ function renderTray(currentUrl?: string): {
 }
 
 describe('BrowserPageAnnotationTray edit mode', () => {
-  it('attributes a retained note to its captured page while preserving edit and delete controls', () => {
+  it('attributes a retained note to its captured page while preserving deletion', () => {
     const { handleDeleteBrowserAnnotation } = renderTray('https://example.com/next')
     expect(screen.getByTitle('https://example.com')).toHaveTextContent('https://example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Delete annotation 1' }))

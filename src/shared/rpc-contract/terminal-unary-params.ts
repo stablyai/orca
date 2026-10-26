@@ -40,6 +40,12 @@ export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
 
+export const TerminalViewClaudeAgent = TerminalHandle.extend({
+  sessionId: z.string().min(1).max(256),
+  agentId: z.string().min(1).max(256).optional(),
+  client: z.object({ id: z.string().min(1).max(256), type: z.literal('desktop') })
+})
+
 /** `terminal.reveal` takes no handle: a pane a paired server owns has none on this host. */
 export const TerminalReveal = z.object({
   worktreeId: requiredString('Missing worktree id').pipe(z.string().max(1024)),

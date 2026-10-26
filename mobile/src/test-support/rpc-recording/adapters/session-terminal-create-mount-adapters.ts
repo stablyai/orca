@@ -116,7 +116,10 @@ export function sessionTerminalCreateMountAdapters(
               initializedHandlesRef.current.delete(handle)
               effect('unsubscribe-terminal', { handle })
             },
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            },
             fetchSessionTabs: async () => {
               effect('fetch-session-tabs', {})
             }

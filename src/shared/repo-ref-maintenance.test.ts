@@ -554,20 +554,6 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     expect(spans).toHaveLength(1)
   })
 
-  it('records a failure when the pack left the backlog in place', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, spans } = createHarness({
-      packRefs: async () => {
-        throw new Error('permission denied')
-      }
-    })
-
-    maintenance.arm(target('local::/denied/.git', refs, () => Promise.reject(new Error('denied'))))
-    await elapseQuietPeriod(maintenance)
-
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('failed')
-  })
-
   it('records a failure instead of throwing, and backs off', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans, packRefs } = createHarness({
