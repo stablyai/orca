@@ -4,6 +4,15 @@ import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-meth
 // Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
+// Group metadata and membership only; nested discovery/import accepts arbitrary host paths.
+export const PROJECT_GROUP_MANAGEMENT_METHODS = [
+  'projectGroup.create',
+  'projectGroup.delete',
+  'projectGroup.list',
+  'projectGroup.moveProject',
+  'projectGroup.update'
+] as const
+
 export const EXECUTION_HOST_METHODS = [
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
@@ -146,7 +155,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.unsubscribe',
   // Mobile reports takeover out of band, matching desktop renderer signaling.
   'orchestration.workerTerminalUserInput',
-  'projectGroup.list',
+  ...PROJECT_GROUP_MANAGEMENT_METHODS,
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
