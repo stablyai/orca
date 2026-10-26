@@ -1,5 +1,4 @@
 import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
-import type { ComponentProps } from 'react'
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 // Compare live merged hooks/list output after every frame with a newly opened chat, including own echoes and host Stopping. Native row rendering, controller input construction and reconnects are outside this proof.
 
@@ -116,7 +115,7 @@ type DrawnRowProps = {
 }
 
 function drawnRow(row: ReactNode): unknown {
-  if (!isValidElement<DrawnRowProps & ComponentProps<typeof MobileNativeChatRow>>(row)) {
+  if (!isValidElement<DrawnRowProps & Parameters<typeof MobileNativeChatRow>[0]>(row)) {
     return row ?? null
   }
   const { message, turnStatus, activeTurnIsWorking } =
