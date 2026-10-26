@@ -3,6 +3,7 @@ import { printResult } from '../../format'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../../flags'
 import {
@@ -36,7 +37,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal: getPresentStringFlag(flags, 'terminal')
     })
     printResult(result, json, (value) => {
       if (value.count === 0) {
