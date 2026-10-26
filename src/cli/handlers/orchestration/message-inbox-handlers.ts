@@ -42,7 +42,6 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       if (value.count === 0) {
         return 'No messages.'
       }
-      // Why: default output omits body/payload for at-a-glance sweeps; --full prints them for auditing.
       return value.messages
         .map((message) => {
           const head = `${message.id}${formatMessageReadOnlyTag(message)} ${message.from_handle} -> ${message.to_handle ?? '?'}: "${message.subject}"`

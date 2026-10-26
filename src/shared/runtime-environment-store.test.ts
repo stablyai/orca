@@ -13,12 +13,16 @@ import {
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
-function pairingCode(endpoint = 'ws://127.0.0.1:6768', pairedDeviceId?: string): string {
+function pairingCode(
+  endpoint = 'ws://127.0.0.1:6768',
+  pairedDeviceId?: string,
+  keyFill = 1
+): string {
   return encodePairingOffer({
     v: 2,
     endpoint,
     deviceToken: 'device-token',
-    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(keyFill)).toString('base64'),
     ...(pairedDeviceId ? { pairedDeviceId } : {})
   })
 }
@@ -104,7 +108,7 @@ describe('runtime environment store', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'dev box',
-        pairingCode: pairingCode('ws://192.0.2.10:6768')
+        pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])
@@ -123,7 +127,7 @@ describe('runtime environment store', () => {
       expect(() =>
         addEnvironmentFromPairingCode(userDataPath, {
           name,
-          pairingCode: pairingCode('ws://192.0.2.10:6768')
+          pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
         })
       ).toThrow('A server named "build" already exists.')
     }
@@ -176,7 +180,7 @@ describe('runtime environment store', () => {
 
     const direct = addEnvironmentFromPairingCode(userDataPath, {
       name: 'direct box',
-      pairingCode: pairingCode('ws://192.0.2.11:6768'),
+      pairingCode: pairingCode('ws://192.0.2.11:6768', undefined, 2),
       connectionDependency: 'ssh-tunnel'
     })
     expect(direct).not.toHaveProperty('connectionDependency')
@@ -190,18 +194,15 @@ describe('runtime environment store', () => {
       pairingCode: pairingCode()
     })
 
-    // First use persists (lastUsedAt started null).
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 1_000 })
     expect(listEnvironments(userDataPath)[0]).toMatchObject({
       lastUsedAt: 1_000,
       runtimeId: 'runtime-1'
     })
 
-    // A second use shortly after, same runtime, is skipped — lastUsedAt stays put.
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 5_000 })
     expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(1_000)
 
-    // Once the throttle window elapses, it persists again.
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 61_000 })
     expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(61_000)
   })
@@ -233,7 +234,7 @@ describe('runtime environment store', () => {
     })
     const legacy = addEnvironmentFromPairingCode(userDataPath, {
       name: 'legacy box',
-      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2),
       now: 1_000
     })
 
@@ -270,7 +271,7 @@ describe('runtime environment store', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'x'.repeat(MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES),
-        pairingCode: pairingCode('ws://192.0.2.10:6768')
+        pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])

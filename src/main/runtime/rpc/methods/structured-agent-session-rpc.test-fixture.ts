@@ -1,6 +1,4 @@
-// The `agentSession.*` dispatcher harness, shared by the suites that exercise the wire
-// boundary. `hostCalls` and `runtimeCalls` keep one identity for the process and are
-// repopulated per test, so a suite can read `hostCalls.close` without re-importing it.
+// Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
@@ -21,6 +19,7 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 
 export const SESSION = 'session-alpha'
 export const FINGERPRINT = 'f'.repeat(64)
@@ -101,12 +100,15 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), itemFence() and runningTurn() of a journal with no sends.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             stopMarks: { latest: () => null, revision: () => 0 },
             snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
+            item: ((itemId) =>
+              STATUS_ITEMS.find((item) => item.itemId === itemId) ??
+              null) satisfies AgentSessionJournal['item'],
             itemFence: () => undefined,
             runningTurn: () => null
           } as unknown as AgentSessionJournal,
@@ -202,17 +204,16 @@ export function hostStub(): StructuredAgentSessionHost {
       submissions: []
     })),
     subscribe: vi.fn(() => () => undefined),
-    // A real feed, so the snapshot this method hands back is a genuine projection rather
-    // than a shape the stub restated.
+    // Use a real projected feed rather than restating its shape in the stub.
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
     subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn()
   })
+  const store = { getOperationRow: vi.fn(() => null), getRecord: vi.fn(() => null) }
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  const logger = recordingStructuredAgentSessionLogger().logger
-  Reflect.set(hostCalls, 'deps', { logger, store: { getOperationRow: vi.fn(() => null) } })
+  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger, store })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
@@ -257,14 +258,11 @@ export function dispatcher(
     ...runtimeCalls,
     ...runtimeOverrides
   }
-  return new RpcDispatcher({
-    runtime: runtime as unknown as OrcaRuntimeService,
-    methods
-  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial runtime supplies the dispatcher methods under test and runtimeOverrides; a missing access fails the test.
+  return new RpcDispatcher({ runtime: runtime as unknown as OrcaRuntimeService, methods })
 }
 
-/** The reply path is the only one that carries a client's negotiated identity,
- *  which is exactly what the capability gate reads. */
+/** Reply transport carries the negotiated client identity the capability gate reads. */
 export async function call(
   method: string,
   params: unknown,
@@ -322,6 +320,8 @@ export const STRUCTURED_MOBILE_CLIENT = {
 
 /** Every suite wants the same lifecycle: a fresh stub per test, no host left installed. */
 export function installStructuredHostStub(): void {
+  // A switch-on close remembers the session, refusing its later create; each test starts clean.
+  resetStructuredAgentSessionClosesBeforeCreateForTests()
   setStructuredAgentSessionHost(hostStub())
 }
 

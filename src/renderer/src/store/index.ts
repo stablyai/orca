@@ -1,3 +1,4 @@
+import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -49,11 +50,13 @@ import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import {
   registerHttpLinkStoreAccessor,
+  registerHttpLinkGroupActionAvailability,
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
@@ -62,6 +65,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import { attachEditorBufferIdentityEvents } from './editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
@@ -69,18 +73,18 @@ import {
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/windows-path-access'
 
-// Why dev-only: nothing in the app arms the churn probe, so a shipped build would
-// pay its wrapper frame on every write for a diagnostic it can never read. The
-// cascade probe stays unconditional because crash telemetry arms it in the field.
+// Dev-only churn probe cannot be armed in shipped builds; avoid its per-write wrapper. Cascade probe stays enabled for field crash telemetry.
 const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
   import.meta.env.DEV || e2eConfig.exposeStore
     ? withStoreIdentityChurnProbe(createState)
     : createState
 
+// Why buffer records outermost: the probes must see each caller's own partial and frame.
+// Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-  withDevelopmentStoreProbes(
-    withReactCommitCascadeWriteProbe(
-      withEditorBufferRecords((...a) => {
+  withEditorBufferRecords(
+    withDevelopmentStoreProbes(
+      withReactCommitCascadeWriteProbe((...a) => {
         // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
         // Switch point: the stamp-sorted list reads no settled epoch.
         if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
@@ -136,38 +140,62 @@ export const useAppStore = create<AppState>()(
           ...createRemoteServerUpdatesSlice(...a),
           ...createTerminalQuickCommandHostsSlice(...a),
           ...createStructuredSessionLaunchDirectorySlice(...a),
+          ...createStructuredChatSleptAtSlice(...a),
           ...createWorkspaceAttentionSlice(...a)
         }
       })
-    )
+    ),
+    import.meta.env.DEV || e2eConfig.exposeStore
   )
 )
 
-registerHttpLinkStoreAccessor(() => useAppStore.getState())
+registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
+registerHttpLinkGroupActionAvailability((request) =>
+  canOfferHttpLinkGroupAction(useAppStore.getState(), request)
+)
+attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
-  const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
-  await openWorkspaceBrowserTab(request)
+  const { openWorkspaceBrowserTab, openWorkspaceBrowserTabForLink } =
+    await import('@/lib/workspace-browser-tab-open')
+  if (request.linkContext) {
+    const outcome = await openWorkspaceBrowserTabForLink({
+      ...request,
+      linkContext: request.linkContext
+    })
+    if (
+      outcome.status === 'failed' ||
+      (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
+    ) {
+      const { intentPresentation } = await import('@/lib/workspace-browser-tab-presentation')
+      throw new Error(intentPresentation(request.intent, request.url).error)
+    }
+    if (
+      request.linkContext.linkIntent?.targetGroupId &&
+      (outcome.status === 'refused' || outcome.status === 'unsupported')
+    ) {
+      const { showOpenInGroupRefusedToast } =
+        await import('@/components/terminal-pane/terminal-file-open-in-group-toast')
+      showOpenInGroupRefusedToast(request.url)
+    }
+    return outcome.status === 'opened' ? outcome.result.browserPageId : null
+  }
+  return openWorkspaceBrowserTab(request)
 })
 
-// Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
-// so OOM crash reports identify what grew without a local repro.
+// Name largest slices in renderer_memory_highwater breadcrumbs so OOM reports identify growth without local repro.
 registerRendererMemoryProfileContributor('store', () =>
   summarizeStateCollectionSizes(useAppStore.getState(), 20)
 )
 
-// Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
-// its biggest slice grew by 4 entries); sampled KB names what got FAT.
+// Sample bytes too: value-weight leaks can add ~700MB through only four entries (97b9e86d).
 registerRendererMemoryProfileContributor('storeKB', () =>
   estimateStateCollectionKB(useAppStore.getState(), 16)
 )
 
 export type { AppState } from './types'
 
-// Why: exposes the Zustand store on window for console debugging (dev) and
-// E2E tests (VITE_EXPOSE_STORE). The E2E suite reads store state directly
-// to avoid fragile DOM scraping. Harmless — the store is already reachable
-// via React DevTools in any environment.
+// Expose store for dev console or VITE_EXPOSE_STORE E2E assertions, avoiding fragile DOM scraping.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore

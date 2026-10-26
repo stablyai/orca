@@ -31,7 +31,7 @@ import {
 
 const posix = getRemoteHostPlatform('linux-x64')
 
-// Linux hosts often run dash as /bin/sh; its builtins differ from bash's (`kill -- -pgid`).
+// Use /bin/sh to catch dash/BusyBox builtin differences from bash.
 const SHELL = process.env.ORCA_TEST_POSIX_SHELL ?? '/bin/sh'
 
 async function sh(command: string, env?: NodeJS.ProcessEnv): Promise<string> {
@@ -73,7 +73,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
       const forwarded = Buffer.from(wrapped)
         .subarray(0, 10 * 1_024)
         .toString()
-      // The affected gateway both truncates exec requests and merges stderr into stdout.
+      // Model both command truncation and stderr merging by the affected gateway.
       return sh(`${forwarded} 2>&1`)
     }
 
@@ -119,7 +119,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
   it('captures on a BusyBox before 1.30, whose timeout only takes `-t SECS`', async () => {
     const bin = join(base, 'bin')
     mkdirSync(bin)
-    // Old BusyBox reads a bare `900` as the program to run.
+    // Older BusyBox timeout needs -t; bare seconds would be treated as the program.
     writeFileSync(
       join(bin, 'timeout'),
       '#!/bin/sh\n[ "$1" = "-t" ] || exit 127\nshift 2\n[ "$1" = "-s" ] && shift 2\nexec "$@"\n'
@@ -150,7 +150,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
 
   it('reruns cleanly after a restore interrupted between removal and replacement', async () => {
     await sh(captureOrcadStateSnapshotCommand(posix, root, snapshot, remoteBase))
-    // Simulates a crash that left the stage behind and the live members already removed.
+    // Model a crash after live members were removed but before stage cleanup.
     mkdirSync(join(root, '.orcad-state-restore-stage', 'profiles'), { recursive: true })
     rmSync(join(root, 'profiles'), { recursive: true })
 
@@ -165,7 +165,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
   it('fails a restore whose member cannot move in, then reruns cleanly from the archive', async () => {
     await sh(captureOrcadStateSnapshotCommand(posix, root, snapshot, remoteBase))
     writeFileSync(join(root, 'profiles', 'p.json'), 'migrated')
-    // A `mv` that refuses only the profiles member, so the restore stops part way through.
+    // Fail only the profiles move to interrupt restore after partial replacement.
     const bin = join(base, 'bin')
     mkdirSync(bin)
     const mvPath = (await runProcess({ program: SHELL, args: ['-c', 'command -v mv'] })).stdout
@@ -199,7 +199,6 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
     writeFileSync(join(root, 'profiles', 'p.json'), 'current')
     const lock = join(remoteBase, 'orcad-state-mutation.lock')
     mkdirSync(lock)
-    // This test process is alive, so it reads as a restore still running.
     writeFileSync(join(lock, 'pid'), String(process.pid))
 
     const output = await sh(restoreOrcadStateSnapshotCommand(posix, root, snapshot, remoteBase))
@@ -243,7 +242,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
     utimesSync(lock, new Date(), new Date())
     expect(await restore()).toBe('STATE_MUTATION_BUSY')
 
-    // A dead pid and three missed beats: nothing of that run is provably left.
+    // Dead PID plus missed heartbeats proves the stale mutation no longer holds the lock.
     utimesSync(lock, old, old)
     expect(parseOrcadSnapshotRestore(await restore())).toBe('restored')
     expect(existsSync(lock)).toBe(false)
@@ -312,7 +311,7 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
     const ownGroup = Number((await sh(posixProcessGroupCommand(String(process.pid)))).trim())
     expect(ownGroup).toBeGreaterThan(1)
     let group = 0
-    // The child's receipt proves it started; lock publication alone precedes the workload.
+    // Wait for workload receipt; publishing the lock alone precedes the actual mutation.
     const run = spawnProcess({
       program: SHELL,
       args: ['-c', serializedStateMutationCommand(remoteBase, workload, 1)]

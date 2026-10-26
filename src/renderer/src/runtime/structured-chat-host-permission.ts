@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   agentChatPermissionModes,
   newChatPermissionModeForSettings
@@ -70,13 +70,12 @@ export async function readStructuredChatHostPermissionVerdict(
 export function useStructuredChatHostPermissionVerdict(
   target: RuntimeClientTarget,
   agent: string
-): StructuredChatHostPermissionVerdict | { kind: 'checking' } {
+): (StructuredChatHostPermissionVerdict | { kind: 'checking' }) & { checkAgain: () => void } {
   const gated = target.kind === 'environment' && agentChatPermissionModes(agent) !== null
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const requested = useAppStore((state) => newChatPermissionModeForSettings(agent, state.settings))
   const [contact, setContact] = useState(0)
-  // Contact is part of the key: a host back from a restart may be an older build, so a verdict from
-  // before it never stands in for the fresh one.
+  // Contact keys fresh probes: restarted hosts can be older, so pre-restart permission proof cannot stand.
   const key = `${environmentId ?? 'local'}\0${agent}\0${String(requested)}\0${contact}`
   const [answer, setAnswer] = useState<{
     key: string
@@ -84,6 +83,7 @@ export function useStructuredChatHostPermissionVerdict(
   } | null>(null)
   // Not in the key: a held chat stays held while it asks again.
   const [recheck, setRecheck] = useState(0)
+  const checkAgain = useCallback(() => setRecheck((n) => n + 1), [])
   const held = answer?.key === key && answer.verdict.kind !== 'allowed'
   useEffect(() => {
     if (!held) {
@@ -117,7 +117,7 @@ export function useStructuredChatHostPermissionVerdict(
     }
   }, [agent, contact, environmentId, gated, key, recheck, requested])
   if (!gated) {
-    return { kind: 'allowed' }
+    return { kind: 'allowed', checkAgain }
   }
-  return answer?.key === key ? answer.verdict : { kind: 'checking' }
+  return { ...(answer?.key === key ? answer.verdict : { kind: 'checking' as const }), checkAgain }
 }

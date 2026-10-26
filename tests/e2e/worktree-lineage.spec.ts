@@ -88,9 +88,7 @@ test.describe('Worktree Lineage', () => {
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      // Why: this test covers lineage row rendering. Clearing through the
-      // store keeps it focused on the render contract instead of nested
-      // context-menu hit testing.
+      // Clear via store to isolate lineage rendering from nested context-menu hit testing.
       await store.getState().updateWorktreeLineage(childId, { noParent: true })
     }, childId)
     await expect
@@ -251,7 +249,6 @@ test.describe('Worktree Lineage', () => {
           }))
         }
       })
-      window.api.ephemeralVm.suspendWorkspace = async () => null
     })
 
     await worktreeOption(orcaPage, parentId).click({ button: 'right' })

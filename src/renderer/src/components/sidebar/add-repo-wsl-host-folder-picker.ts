@@ -8,7 +8,6 @@ import { translate } from '@/i18n/i18n'
 
 export type DroppedHostPath = { hostId: ExecutionHostId; path: string }
 
-/** The `droppedHostPath` a sidebar drop put in the add-project modal's data, checked. */
 export function readDroppedHostPath(modalData: Record<string, unknown>): DroppedHostPath | null {
   const value = modalData.droppedHostPath
   if (typeof value !== 'object' || value === null || !('hostId' in value) || !('path' in value)) {
@@ -26,10 +25,7 @@ type WslHostFolderPickerDeps = {
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
 }
 
-/**
- * Windows' folder picker over a WSL host's distro: opens at `\\wsl.localhost\<distro>\<home>` and
- * returns the Linux path of the pick, or null (cancelled, or refused with a toast saying why).
- */
+/** Browse the distro through Windows UNC paths, returning Linux paths or null on cancel/refusal. */
 export async function pickWslHostFolder(
   access: WindowsPathAccess,
   deps: WslHostFolderPickerDeps

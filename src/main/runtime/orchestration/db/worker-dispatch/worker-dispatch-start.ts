@@ -41,6 +41,8 @@ export function createStartingWorkerDispatch(
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
+    /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
+    requiredCreatorDispatchId?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -85,7 +87,7 @@ export function createStartingWorkerDispatch(
           })
         : undefined
     if (!task) {
-      // Why: `--spec` creates the Task inline, so a missing row here always names an explicit id.
+      // An inline spec already creates its Task; missing rows here imply an explicit id.
       const taskId = params.taskId ?? ''
       throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
@@ -103,7 +105,7 @@ export function createStartingWorkerDispatch(
           prior.failure_count
         )
       }
-      // Why: a context-only Dispatch has no worker row, so its settled state lives on the Dispatch row.
+      // Context-only Dispatches have no worker row; read settlement from the Dispatch itself.
       const priorSettled = priorWorker
         ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
         : prior?.status === 'failed'
@@ -133,6 +135,16 @@ export function createStartingWorkerDispatch(
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
+    if (
+      params.requiredCreatorDispatchId !== undefined &&
+      creatorDispatchId !== params.requiredCreatorDispatchId
+    ) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${params.requiredCreatorDispatchId} is no longer this caller's active work, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.mutationReceipt) {
       this.db
         .prepare(

@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { isUnprovenServerSshRoute } from './resolve-owner'
-import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type WorktreeSortOrderHostGroup = {
@@ -10,22 +10,14 @@ export type WorktreeSortOrderHostGroup = {
   rowHostIds: string[]
 }
 
-/** Split a worktree sort order into per-owner-host groups (preserving relative
- *  order within each host).
- *
- *  Why: persisted `sortOrder` lives in each host's `worktreeMeta` and is enriched
- *  onto worktrees from their owner host. Stamping the full cross-host id list on
- *  only the focused host loses other hosts' ordering and pollutes the focused
- *  host with foreign ids, so persist each host's ids on that host. Ids no host can be
- *  proven to own are left out.
- */
+/** Persist each host’s IDs in its own worktreeMeta, preserving within-host order. Writing all IDs only to focused host loses other owners’ order and pollutes that host; omit unproven owners. */
 export function splitWorktreeSortOrderByHost(
   state: WorktreeRuntimeOwnerState,
   orderedIds: readonly string[]
 ): WorktreeSortOrderHostGroup[] {
   const groups = new Map<string, { orderedIds: string[]; rowHostIds: string[] }>()
   for (const id of orderedIds) {
-    const owner = resolveOwnerWithLegacyFallback(state, { workspaceId: id })
+    const owner = resolveOwnerOrLocal(state, { workspaceId: id })
     // Why: a twin names no host to write to, and an unproven server route may be another machine.
     if (owner.kind !== 'resolved' || isUnprovenServerSshRoute(state, id, owner.owner)) {
       continue

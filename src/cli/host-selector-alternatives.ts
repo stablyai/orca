@@ -10,7 +10,6 @@ export type SshTargetSummary = {
 }
 export type EnvironmentSummary = { id: string; name: string }
 
-/** The name `orca host list` prints for its own `--host local` row. */
 export const LOCAL_HOST_LIST_NAME = 'this machine'
 
 export type HostAlternatives = {
@@ -18,9 +17,6 @@ export type HostAlternatives = {
   environments: readonly EnvironmentSummary[]
 }
 
-// Why: SSH target ids are machine-generated (`ssh-<timestamp>-<random>`), so the name a person
-// or an agent actually knows is the label. Looking a name up as an id alone reports "not found"
-// for a target that is sitting right there.
 export function findSshTargetByName(
   targets: readonly SshTargetSummary[],
   name: string
@@ -30,14 +26,9 @@ export function findSshTargetByName(
     return byId
   }
   const byLabel = matchesByLabel(targets, name)
-  // Why: two targets can share a label. Picking the first would silently choose a machine for
-  // the caller — the failure this whole selector path exists to prevent — so an ambiguous name
-  // resolves to nothing and the caller is told to use an id.
   return byLabel.length === 1 ? byLabel[0] : undefined
 }
 
-// Why: cmd.exe passes single quotes through literally, so `--host 'my box'` from a POSIX habit
-// arrives quoted; a host or project name never legitimately starts and ends with the same quote.
 export { normalizeTypedName, stripWrappingQuotes }
 
 function matchesByLabel(targets: readonly SshTargetSummary[], name: string): SshTargetSummary[] {
@@ -62,8 +53,6 @@ export function findEnvironmentByName(
     return byId
   }
   const byName = matchesByEnvironmentName(environments, name)
-  // Why: the environment store itself refuses an ambiguous name rather than guessing; resolving
-  // one here would quietly reintroduce the guess it exists to prevent.
   return byName.length === 1 ? byName[0] : undefined
 }
 
@@ -83,9 +72,6 @@ export function ambiguousEnvironments(
   return byName.length > 1 ? byName : []
 }
 
-// Why: a paired Orca server and an SSH target are different machines reached different ways, but
-// a caller only knows "the machine called X". When X misses on one axis, the useful answer is
-// almost always that it exists on the other — so say which, and give the exact flag.
 export function crossKindNextSteps(
   name: string,
   alternatives: HostAlternatives,
@@ -107,11 +93,7 @@ export function crossKindNextSteps(
   return steps
 }
 
-/**
- * The host's SSH target summaries; throws what the host reports. Why the fallback: hosts
- * predating listTargetSummaries still answer listTargets from the same summariser, and without it
- * an old host looks like one with no SSH targets, rejecting a target id that is valid there.
- */
+/** Older hosts expose summaries through listTargets; propagate errors other than method_not_found. */
 export async function fetchSshTargetSummaries<T extends { id: string }>(
   client: RuntimeClient
 ): Promise<{ targets: T[]; legacy: boolean }> {
@@ -127,8 +109,7 @@ export async function fetchSshTargetSummaries<T extends { id: string }>(
   }
 }
 
-// Why: only display identity crosses this boundary — the RPC deliberately withholds addresses
-// and credentials — and an enumeration failure must never mask the error we are explaining.
+// Best-effort discovery avoids replacing selector errors with SSH enumeration failures.
 export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
   try {
     const { targets, legacy } = await fetchSshTargetSummaries<SshTargetSummary>(client)
@@ -166,19 +147,11 @@ async function enrichLegacySshTargetStates(
   )
 }
 
-// Why: `--host ssh:<id>` was never validated, so an unknown target answered ok:true with an
-// empty list — the same silent wrong-machine answer that `runtime:` ids used to give. And since
-// target ids are machine-generated (`ssh-<timestamp>-<random>`), the label a caller actually
-// knows never matches one, so this fires on the common spelling rather than a rare typo.
-// Resolving the label and naming the alternative is what makes the failure recoverable.
-// `flagSpelling` names the flag the way the caller typed it, so a bare `--host trader-local`
-// is not echoed back as `--host ssh:trader-local` — a spelling they did not use.
 export async function resolveSshHostTargetId(
   client: RuntimeClient,
   targetId: string,
   environments: readonly EnvironmentSummary[],
   flagSpelling = `--host ssh:${targetId}`,
-  // A bare name was also tried as this machine and as a paired server, so say "host".
   bareName = false
 ): Promise<string> {
   const targets = await listSshTargets(client)

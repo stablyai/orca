@@ -11,6 +11,7 @@ import {
   reviewRefreshIntervalMs,
   REVIEW_REFRESH_COOLDOWN_MS
 } from '../../../shared/review-refresh-policy'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function visibleReviewWorktreeIdsForState(state: AppState): string[] {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])
@@ -109,7 +110,7 @@ export function createVisibleReviewReportIdentitySelector(): (state: AppState) =
       rightSidebarTab: state.rightSidebarTab,
       visibleReviewCardWorktreeIds: state.visibleReviewCardWorktreeIds,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(state),
       settings: state.settings,
       sshConnectionStates: state.sshConnectionStates,
       sshConnectedGeneration: state.sshConnectedGeneration,

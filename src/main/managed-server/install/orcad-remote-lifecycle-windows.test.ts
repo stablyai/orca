@@ -1,9 +1,6 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import type * as TerminalBarrier from '../lifecycle/orcad-rollback-terminal-barrier'
-/**
- * The deploy and rollback drivers end to end against a Windows host whose every host op is answered by a
- * fake: no POSIX command, no `-EncodedCommand` and no PowerShell hop on the orcad path.
- */
+// Fake Windows lifecycle host must reject POSIX/encoded commands and PowerShell hops on orcad operations.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RecordFile from './orcad-remote-record-file'
 
@@ -16,14 +13,14 @@ vi.mock('./remote-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
 vi.mock('./remote-install-transfers', () => ({
-  uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
-  writeRelayFile: vi.fn().mockResolvedValue(undefined)
+  uploadRemoteInstallDirectory: vi.fn().mockResolvedValue(undefined),
+  writeRemoteInstallFile: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
   ...(await importOriginal<typeof RecordFile>()),
   writeAtomicOrcadRemoteRecord: vi.fn().mockResolvedValue(undefined)
 }))
-// The managed stop's Windows commands are covered by orcad-remote-windows-decommission.test.ts.
+// Dedicated Windows decommission tests exercise the real stop commands.
 vi.mock('../lifecycle/orcad-rollback-terminal-barrier', async (importOriginal) => ({
   ...(await importOriginal<typeof TerminalBarrier>()),
   readOrcadRollbackBarrierTarget: async (_options: unknown, version: string) => ({
@@ -150,7 +147,7 @@ function scriptWindowsHost(log: string[], activeRecord: string | null = null): v
     if (text.includes('--windows-breakaway-launch')) {
       return 'ORCA_ORCAD_LAUNCH {"method":"breakaway","pid":4242,"inJob":false}\r\n'
     }
-    // The relay's shared install fence is the one pre-existing PowerShell site left on this path.
+    // Shared relay install fences retain this pre-existing PowerShell path.
     if (text.startsWith('powershell.exe ')) {
       return 'OPEN'
     }
@@ -172,6 +169,7 @@ function options(): OrcadDeployOptions {
     port: 7777,
     census,
     recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {},
     readinessTimeoutMs: 1_000,
     sleep: async () => {},
     now: () => new Date('2026-10-02T00:00:00.000Z')
@@ -235,7 +233,6 @@ describe('deployOrcad on a Windows host', () => {
     const ops = log.map(
       (command) => /\.js (?:--fence \S+ \S+ )?([a-z-]+)/u.exec(command)?.[1] ?? command
     )
-    // The target starts only after its state is back.
     expect(ops).toEqual([
       'record-read',
       'snapshot-probe',
@@ -244,7 +241,7 @@ describe('deployOrcad on a Windows host', () => {
       'snapshot-capture',
       'snapshot-restore',
       'slot-runtime',
-      // A command the host script does not run is fence-checked by one op just before it.
+      // Commands outside the host script require a separate fence check immediately before dispatch.
       'fence-check',
       '--windows-breakaway-launch',
       'readiness-wait',

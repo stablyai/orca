@@ -8,7 +8,7 @@ import type {
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, getSshTargetIdForExecutionHost } from '../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepoAsync } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
@@ -93,13 +93,12 @@ export class RuntimeNestedRepoImport {
           })
           continue
         }
-        // Why not SSH: an SSH row can sit at the same path, and this import adds native rows. A
-        // paired host stamps its native rows `runtime:<env>`, so those still match.
+        // Import native rows only; SSH may share the path string. Paired hosts stamp native rows runtime:<env>, which still match.
         const existing = store
           .getRepos()
           .find(
             (repo) =>
-              getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo)) === null &&
+              getRepoDialableSshTargetId(repo) === null &&
               normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
           )
         const group = groupResolver.getGroupForRepo(repoPath)

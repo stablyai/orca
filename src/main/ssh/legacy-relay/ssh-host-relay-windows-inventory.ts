@@ -1,12 +1,4 @@
-/**
- * Every relay pipe on a Windows host, and which of this account's relay instances owns each.
- *
- * A pipe name hashes its version directory and the instance's socket name, and the socket name
- * hashes the target id of whichever desktop launched it, so deriving names from this desktop's
- * target id misses every other desktop's relay. Windows does list named pipes, though: `\\.\pipe\`
- * names every relay pipe on the machine, and each instance leaves a credential file (and its pipe
- * marker) in its version directory, which maps a listed pipe back to the instance that serves it.
- */
+/** Map machine-wide relay pipes to this account's version-directory credentials/markers. Deriving pipe names from this desktop's target id misses other desktops' relays. */
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { commandWithNodePath } from '../ssh-remote-commands'
 import {
@@ -20,11 +12,9 @@ import {
 } from '../../managed-server/install/remote-install-model'
 import { joinRemotePath, type RemoteHostPlatform } from '../ssh-remote-platform'
 
-/** The instance that serves a pipe: its version directory and the credential its bridge presents. */
-export type WindowsRelayPipeOwner = { dir: string; credentialFile: string }
+type WindowsRelayPipeOwner = { dir: string; credentialFile: string }
 
-export type WindowsRelayInventory = {
-  /** Every `orca-relay-*` pipe on the machine, as full `\\.\pipe\` paths. */
+type WindowsRelayInventory = {
   pipes: string[]
   /** Pipes this account's version directories account for, keyed by lower-cased path. */
   owners: Map<string, WindowsRelayPipeOwner>
@@ -33,7 +23,7 @@ export type WindowsRelayInventory = {
 const MARKER_PREFIX = '.windows-active-pipe-'
 const CREDENTIAL_SUFFIX = '.credential'
 
-// Why ES5 and stdout JSON: the census runs this on whichever Node the host has.
+// Use ES5/stdout JSON for whichever Node the host provides.
 export const WINDOWS_RELAY_INVENTORY_JS = [
   'var fs=require("fs"),path=require("path");var base=process.argv[1];',
   'var out={pipes:null,dirs:null};',
@@ -58,7 +48,7 @@ export function windowsRelayInventoryCommand(
     host,
     nodePath,
     remoteHome,
-    // Why native args: PowerShell strips a native argument's inner quotes, which the script has.
+    // Encode native arguments because PowerShell strips the script's inner quotes.
     `& ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(WINDOWS_RELAY_INVENTORY_JS)} ${powerShellNativeArg(baseDir)}`
   )
 }
@@ -75,10 +65,7 @@ function isDirEntry(entry: unknown): entry is { credentials: unknown[]; markers:
   )
 }
 
-/**
- * Null when the host could not be fully inventoried: the pipe listing or a version directory could
- * not be read, so a relay instance may exist that nothing here accounts for.
- */
+/** Null on any unreadable pipe/version listing: unknown relay instances cannot prove absence. */
 export function parseWindowsRelayInventory(
   host: RemoteHostPlatform,
   remoteHome: string,
@@ -135,8 +122,7 @@ export function parseWindowsRelayInventory(
   return { pipes, owners }
 }
 
-// Why the error code: a pipe another Windows account owns refuses this account's connect with
-// EACCES or EPERM, and one gone since the listing answers ENOENT; anything else stays unknown.
+// Only EACCES/EPERM proves foreign ownership and ENOENT proves disappearance; all other pipe failures stay unknown.
 export const WINDOWS_PIPE_ACCESS_JS = [
   'var net=require("net");var pipes=process.argv.slice(1);var out={};var i=0;',
   'function next(){if(i>=pipes.length){process.stdout.write(JSON.stringify(out));return}',

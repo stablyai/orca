@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
 
@@ -25,8 +26,7 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
-// The host's sign-in verdict as a chat holds it: kept until the next answer replaces it, read
-// again on window focus only while it is said, and cleared by a failed read.
+// Retain sign-in verdicts until replaced; refetch on focus only while shown, and treat failed reads as unknown.
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const SIGNED_OUT = { reason: 'notSignedIn', account: 'system' } as const
@@ -40,8 +40,7 @@ const HOST_CATALOG = {
   fetchedAt: 1_000
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no test here sends a pick, so mutate is never called.
-const mutate = vi.fn(async () => null) as unknown as StructuredAgentSessionMutate
+const mutate: StructuredAgentSessionMutate = vi.fn(async () => null)
 
 let sessionId = ''
 let sessionCount = 0
@@ -71,7 +70,6 @@ function renderOptions() {
 
 type Answer = { resolve: (value: unknown) => void; reject: (error: unknown) => void }
 
-/** Every catalog read waits for the test to answer it, in order. */
 function catalogReads() {
   const pending: Answer[] = []
   mocks.call.mockImplementation((_target: unknown, method: string) =>
@@ -102,7 +100,6 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
   return descriptor.kind.type === 'select' ? descriptor.kind.choices.map((c) => c.value) : []
 }
 
-/** The model pill is open for a pick: settable, not disabled, and offering `choice`. */
 function expectPickerUsable(snapshot: readonly SessionOptionDescriptor[], choice: string): void {
   const model = snapshot.find((entry) => entry.id === 'model')
   expect(model?.settable).toBe(true)
@@ -137,7 +134,6 @@ describe("a chat's sign-in verdict", () => {
     await reads.answer(1, { ...HOST_CATALOG, unavailable: SIGNED_OUT })
     await focusWindow()
     expect(reads.count()).toBe(3)
-    // The notice does not flicker off while the re-read is out.
     expect(result.current.unavailable).toEqual(SIGNED_OUT)
     await reads.answer(2, HOST_CATALOG)
     expect(result.current.unavailable).toBeNull()
@@ -150,12 +146,10 @@ describe("a chat's sign-in verdict", () => {
     await act(async () => rerender({ turnId: 'turn-1' }))
     expect(reads.count()).toBe(2)
     await reads.answer(1, { ...HOST_CATALOG, unavailable: SIGNED_OUT })
-    // The turn ending reads once more.
     await act(async () => rerender({ turnId: null }))
     expect(reads.count()).toBe(3)
   })
 
-  // A verdict the agent's own start gave ends with that agent: the idle sweep stopping it is read.
   it("reads again when the chat's agent stops or starts", async () => {
     const reads = catalogReads()
     const { result, rerender } = renderOptions()

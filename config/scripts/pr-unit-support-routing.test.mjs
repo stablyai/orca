@@ -23,7 +23,13 @@ const unitHarnesses = [
 ]
 const supportBridges = new Set([
   'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
-  'src/renderer/src/components/editor/editor-model-lifetime-fixture.ts'
+  'src/renderer/src/components/editor/editor-model-lifetime-fixture.ts',
+  // Autosave suites' store rig; it takes the editor harness's tab-layout maps.
+  'src/renderer/src/components/editor/editor-autosave-controller-test-fixture.ts',
+  // Closed-saving-view save suites' rig; it builds on the autosave rig above.
+  'src/renderer/src/components/editor/editor-save-closed-view.test-fixture.ts',
+  // Browser suites' store with main drawing their tabs; it takes the browser harness's store.
+  'src/renderer/src/store/slices/browser-slice-drawn-from-main.test-fixture.ts'
 ])
 
 function productConsumers(file, graph, unitFiles) {

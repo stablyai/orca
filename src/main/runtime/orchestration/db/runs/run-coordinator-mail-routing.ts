@@ -27,13 +27,7 @@ export function rememberRunCoordinatorHandle(
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
 const NEW_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('NEW')
 
-/**
- * Remembers every address the coordinator has, as bindRun does: its handle and its session address,
- * so every reader of this cache matches either by string equality and neither takes precedence.
- * Recreated on every open, after migrate: the address prefix is compiled into the trigger body,
- * so a trigger stamped once would keep an older build's prefix. The static createTables SQL stays
- * handle-only (see create-core-tables-sql), since it must compile against a pre-v42 runs table.
- */
+/** Cache both coordinator addresses; rebuild triggers on open for prefix skew, after migration supplies session-id columns. */
 export function createRunCoordinatorAddressTriggers(db: Database.Database): void {
   db.exec('BEGIN IMMEDIATE')
   try {

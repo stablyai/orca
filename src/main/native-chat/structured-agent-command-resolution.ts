@@ -36,15 +36,12 @@ function resolveOverride(
     : null
 }
 
-// Windows starts .exe/.com directly and .cmd/.bat through Orca's shim handling; an extensionless
-// file would fail to spawn with no word about the setting.
+// Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca’s shim handling.
 function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
   return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
-/** Re-read the existing setting for every session acquisition and catalog probe. A set Command
- *  that names no runnable program refuses the start rather than quietly running the stock CLI.
- *  Without one, `stock` names the agent's own binary (the agent id by default). */
+/** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
@@ -52,7 +49,7 @@ export function resolveStructuredAgentCommand(
   stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
 ): string {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
-    // Why: inside a WSL guest the inherited PATH ends in /mnt/<drive> dirs holding Windows shims.
+    // WSL PATH may contain drive-mounted Windows shims after native entries.
     const pathEnv = guestNativePathEnv(options.pathEnv)
     return (stock.resolve ?? resolveCliCommand)(
       stock.command ?? agent,
@@ -61,7 +58,6 @@ export function resolveStructuredAgentCommand(
   }
   const command = resolveOverride(agent, settings, options)
   if (!command || !spawnableOn(options.platform ?? process.platform, command)) {
-    // The value stays out of the message: a saved command line can carry a secret.
     throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
       reason: 'agentCommandNotRunnable'
     })
@@ -69,15 +65,12 @@ export function resolveStructuredAgentCommand(
   return command
 }
 
-/** What a lookup searched: the env whose PATH it used, and the directory its program starts in. */
 export type ProgramSearch<T> = {
   env: (resolved: T) => NodeJS.ProcessEnv | undefined
-  /** Orca's own working directory when absent. */
   cwd?: () => Promise<string> | string
 }
 
-/** Whether a lookup found nothing. A bare name back may still be in a relative PATH entry (a
- *  workspace `bin`), which the spawn searches from its own directory and the lookup did not. */
+/** Bare names may resolve only at spawn through a relative PATH entry under the launch cwd. */
 async function foundNothing<T extends { command: string }>(
   resolved: T,
   search: ProgramSearch<T>
@@ -101,10 +94,7 @@ async function foundNothing<T extends { command: string }>(
   return !isAbsolute(found)
 }
 
-/** Resolves a launch's program from the shell snapshot. When nothing is found there (see
- *  `foundNothing`, or a Command setting naming no program), waits for a reread that started after
- *  this lookup did and resolves once more, so an agent installed before it starts. A found
- *  program never waits. */
+/** On a miss, await a shell refresh started after this lookup and retry once; found programs never wait. */
 export async function resolveAgainAfterRefreshOnMissingProgram<T extends { command: string }>(
   resolve: () => Promise<T>,
   refreshAfterMiss: ((askedAt: number) => Promise<void>) | undefined,

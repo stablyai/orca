@@ -3,18 +3,24 @@
 import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({ detectedIds: ['claude', 'codex'] })
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-vi.mock('@/store', () => {
+vi.mock('@/store', async () => {
+  const { makeWorktree, TEST_REPO } = await vi.importActual<typeof WorktreeFixtures>(
+    '@/store/slices/worktrees-slice-test-fixtures'
+  )
   const state = {
     settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] },
-    worktreesByRepo: {},
-    repos: [],
+    worktreesByRepo: {
+      [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
+    },
+    repos: [TEST_REPO],
     activeWorktreeId: 'worktree-1',
     tabsByWorktree: { 'worktree-1': [{ id: 'starting-tab', ptyId: null }] },
     ptyIdsByTabId: {},
@@ -66,7 +72,7 @@ import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
 
@@ -134,7 +140,7 @@ it('shows the existing inventory failure alongside truthful disabled chat rows',
       }}
     />
   )
-  expect(document.body.textContent).toContain('reach this workspace')
+  expect(document.body.textContent).toContain('list terminal agents for this workspace')
   expect(document.body.textContent).toContain('Couldn’t check chat availability')
   expect(document.querySelector('[title]')).toBeNull()
 })
@@ -196,7 +202,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
   afterEach(cleanup)
 
-  // Each pick is its own request, so a chat starting, failing or retrying never blocks one.
   it('keeps every agent launchable while chats start, fail or retry', () => {
     registerLaunch('claude', 'pending')
     registerLaunch('codex', 'failed')
@@ -306,7 +311,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  // The notes keep their text, so they are the one place that says it did not go.
   it('tells the notes menu once why its notes did not reach the new agent', async () => {
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
@@ -336,7 +340,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  // Why: the pane's own spawn reports a real failure; a terminal still starting is not one.
   it("says nothing while a new tab's terminal is still starting", async () => {
     vi.useFakeTimers()
     try {

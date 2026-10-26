@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { AppState } from '../types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
 
 const mocks = vi.hoisted(() => ({

@@ -1,8 +1,7 @@
 // Finds account identifiers and credentials in a captured PTY transcript before it is committed.
 import os from 'node:os'
 
-// Why same-length replacements: a transcript's value is its exact wrapping and column
-// alignment. Shortening a redacted span reflows the screen and destroys the evidence.
+// Preserve span length: shorter redaction reflows captured wrapping/columns and destroys evidence.
 const EMAIL_DOMAIN = '@example.com'
 const PLACEHOLDER_UUID = '00000000-0000-4000-8000-000000000000'
 
@@ -17,8 +16,7 @@ function buildPatterns() {
     { kind: 'vendor-key', re: /\b(?:sk-|ghp_|gho_|github_pat_|xoxb-|xoxp-)[A-Za-z0-9_-]{16,}/g },
     { kind: 'bearer-token', re: /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/gi },
     { kind: 'email', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
-    // Why a UUID counts: agy prints a resumable conversation id on exit, and installation and
-    // project ids look the same. They identify the operator's session, not just its shape.
+    // UUIDs can identify resumable agy sessions, projects or installations, so redact operator identifiers too.
     { kind: 'uuid', re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi },
     { kind: 'opaque-token', re: /\b[A-Za-z0-9_-]{40,}\b/g }
   ]
@@ -60,8 +58,7 @@ export function scanTranscriptForSecrets(text) {
   return findings.sort((left, right) => left.index - right.index)
 }
 
-// Why: a scrubbed fixture must verify clean, so this scanner has to recognise its own
-// placeholders — otherwise "prove it's gone" can never pass and the check gets ignored.
+// Recognize own placeholders so scrubbed fixtures can pass clean verification.
 const PLACEHOLDER_DOMAIN_RE = /@(?:example\.(?:com|org|net)|localhost)$/i
 
 function isAlreadyScrubbed(kind, match) {
@@ -122,9 +119,7 @@ export function formatFindings(label, findings) {
   return [`${label}: ${findings.length} finding(s) — scrub before committing.`, ...rows].join('\n')
 }
 
-// Why a codepoint test and not a character class: a control-byte range written as an escape is
-// folded back into raw 0x00-0x1f bytes by the formatter, which makes this file binary to the VCS
-// and leaves the one file gating real PTY data into history unreviewable in a diff.
+// Use codepoints: formatter turns escaped control-byte classes into raw bytes, making this transcript gate binary and unreviewable in VCS.
 function preview(value) {
   const head = value.length <= 24 ? value : `${value.slice(0, 21)}...`
   let printable = ''

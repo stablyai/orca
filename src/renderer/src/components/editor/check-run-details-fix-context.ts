@@ -14,6 +14,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function resolveCheckRunDetailsFixCheck(
   check: PRCheckDetail,
@@ -40,7 +41,7 @@ export function resolveHostedReviewForCheckRunDetailsFix(
   worktreeId: string
 ): HostedReviewInfo | null {
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return null
   }
@@ -121,7 +122,7 @@ export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): 
     )
   }
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return translate(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
@@ -149,7 +150,7 @@ export function resolveCheckRunDetailsFixRepo(worktreeId: string | null): Repo |
     return null
   }
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return null
   }

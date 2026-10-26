@@ -1,6 +1,5 @@
 import type { AppState } from '../types'
 import {
-  applyGeneratedTabTitleUpdates,
   getTabIdFromPaneKey,
   type GeneratedTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
@@ -10,6 +9,9 @@ import {
   sendRenamableTabChangeToLayoutOwner,
   type TabChange
 } from './tab-change-through-layout-owner'
+import { findRenamableUnifiedTab } from './renamable-unified-tab'
+import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -26,80 +28,66 @@ function terminalTab(state: AppState, tabId: string) {
   return owner ? state.tabsByWorktree[owner]?.find((tab) => tab.id === tabId) : undefined
 }
 
-/** Each tab's generated title the window would give it now, with the updates that give it. */
-function generatedTitleChanges(state: AppState, updates: readonly GeneratedTabTitleUpdate[]) {
-  const patched = applyGeneratedTabTitleUpdates(state, updates).patch?.tabsByWorktree ?? {}
-  return Object.values(patched)
-    .flat()
-    .flatMap((tab) => {
-      const title = tab.generatedTitle ?? null
-      return title === (terminalTab(state, tab.id)?.generatedTitle ?? null)
-        ? []
-        : [
-            {
-              tabId: tab.id,
-              title,
-              updates: updates.filter((u) => getTabIdFromPaneKey(u.paneKey) === tab.id)
-            }
-          ]
-    })
-}
-
-/**
- * A layout-owner build's terminal tab changes from any caller (CLI rename, templates, agent
- * titles, an ended launch agent): main changes its copy first, then the window's own action shows
- * the same change. Before this, only the tab bar's rename and color reached main; the rest reached
- * it only through the window's session save.
- */
+/** Route every tab change through main’s copy/frame; run window action only when main is unasked or paired server owns the tab. */
 export function routeTerminalTabChangesThroughLayoutOwner(
   actions: RoutedActions,
   get: TerminalStoreGet
 ): RoutedActions {
-  const route = (tabId: string, change: TabChange, local: () => void): void => {
-    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local)
+  const route = (tabId: string, change: TabChange, local: () => void, shown?: () => void): void => {
+    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local, { shown })
   }
-  /** Tabs whose generated title main has and the window does not yet: the window keeps a first title. */
-  const generatedTitleSent = new Map<string, object>()
+  // The tab bar's own rename and color count as a use of terminal tabs, as the window's action does.
+  const recordTabsInteraction = (): void => {
+    void get().recordFeatureInteraction?.('terminal-tabs')
+  }
+  // Main derives owned-tab titles from its agent status; window titles only absent/server-owned tab-bar entries.
   const routeGeneratedTitles = (updates: readonly GeneratedTabTitleUpdate[]): void => {
-    const unsent = updates.filter(
-      (update) =>
-        update.options?.replaceExistingGeneratedTitle === true ||
-        !generatedTitleSent.has(getTabIdFromPaneKey(update.paneKey) ?? '')
-    )
-    for (const { tabId, title, updates: ofTab } of generatedTitleChanges(get(), unsent)) {
-      const entry = {}
-      const settle = (): void => {
-        if (generatedTitleSent.get(tabId) === entry) {
-          generatedTitleSent.delete(tabId)
-        }
-      }
-      const sent = sendRenamableTabChangeToLayoutOwner(
-        get(),
-        tabId,
-        (id) => ({ type: 'renameTab', tabId: id, kind: 'generated', title }),
-        () => {
-          settle()
-          actions.setGeneratedTabTitlesFromAgentPrompts(ofTab)
-        },
-        settle
+    const state = get()
+    const local = updates.filter((update) => {
+      const tab = findRenamableUnifiedTab(
+        state.unifiedTabsByWorktree,
+        getTabIdFromPaneKey(update.paneKey) ?? ''
       )
-      if (sent) {
-        generatedTitleSent.set(tabId, entry)
+      if (!tab) {
+        return true
       }
+      // A twin (an owner the window cannot resolve) main refuses, so the window titles it as before.
+      const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: tab.worktreeId })
+      return owner.kind !== 'resolved' || owner.environmentId !== null
+    })
+    if (local.length > 0) {
+      actions.setGeneratedTabTitlesFromAgentPrompts(local)
     }
   }
   return {
-    setTabCustomTitle: (tabId, title, opts) =>
-      route(
-        tabId,
-        (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
-        () => actions.setTabCustomTitle(tabId, title, opts)
-      ),
-    setTabColor: (tabId, color) =>
+    setTabCustomTitle: (tabId, title, opts) => {
+      const renameOnTab = () =>
+        route(
+          tabId,
+          (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
+          () => actions.setTabCustomTitle(tabId, title, opts),
+          opts?.recordInteraction === false ? undefined : recordTabsInteraction
+        )
+      // A chat's name lives on its host, not in the layout; only a host too old to save it keeps
+      // the name on the tab.
+      const chat = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
+      if (chat?.contentType !== 'agent-session') {
+        renameOnTab()
+        return
+      }
+      const action = captureStructuredChatRename(get, chat)
+      void import('@/runtime/structured-chat-rename')
+        .then(({ renameStructuredChatTab }) =>
+          renameStructuredChatTab(get, chat, title, opts, renameOnTab, action)
+        )
+        .finally(action.finish)
+    },
+    setTabColor: (tabId, color, opts) =>
       route(
         tabId,
         (id) => ({ type: 'setTabProps', tabId: id, color }),
-        () => actions.setTabColor(tabId, color)
+        () => actions.setTabColor(tabId, color, opts),
+        opts?.recordInteraction === false ? undefined : recordTabsInteraction
       ),
     setAiVaultTabTitle: (tabId, title) => {
       const current = terminalTab(get(), tabId)?.aiVaultTitle ?? null

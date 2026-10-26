@@ -23,8 +23,7 @@ function getDerivedProjection(repos: AppState['repos']): ProjectHostSetupProject
   return projection
 }
 
-// Why: this is a zustand selector compared with Object.is, so the result must be
-// reference-stable per (repos, projects, setups) input or every render re-renders.
+// Object.is selector results must be stable per repos/projects/setups identities or every render retriggers.
 export function getProjectHostSetupProjectionFromState(
   state: Pick<AppState, 'repos'> & Partial<Pick<AppState, 'projects' | 'projectHostSetups'>>
 ): ProjectHostSetupProjection {

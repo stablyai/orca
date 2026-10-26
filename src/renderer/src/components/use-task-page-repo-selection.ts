@@ -5,8 +5,8 @@ import {
   normalizeTaskRepoSelection,
   getDefaultTaskRepoSelection,
   getTaskProjectPickerGroups
-} from '@/components/task-page-default-repo-selection'
-import { areStringSetsEqual } from '@/components/task-page-string-set-equality'
+} from '@/components/task-page/task-page-default-repo-selection'
+import { areStringSetsEqual } from '@/components/task-page/task-page-string-set-equality'
 import { buildSelectedReposKey } from '@/components/task-page-work-item-pagination'
 import {
   normalizeVisibleTaskProviders,
@@ -43,7 +43,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   } = model
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
-  // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
+  // Explicit repo preselection overrides saved defaults so repo-scoped entry points stay single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
     const preferred = pageData.preselectedRepoId
     if (preferred && eligibleRepos.some((repo) => repo.id === preferred)) {
@@ -65,7 +65,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     [taskPickerGroups]
   )
 
-  // Why: prune removed repos and preserve sticky-all (selection == all projects stays == all), without recreating the Set each time and churning the fetch effect.
+  // Prune removed repos while preserving sticky-all and unchanged Set identity to avoid fetch churn.
   const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
   useEffect(() => {
     const prevCount = prevTaskPickerCountRef.current
@@ -98,19 +98,12 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     [eligibleRepos, repoSelection]
   )
 
-  // Why: see buildSelectedReposKey — array-identity deps re-fire on every
-  // repos:changed even when the selection is unchanged. The context part is
-  // resolved as GitHub, but every provider-independent field (projectId,
-  // hostId, projectHostSetupId, repoId) is identical across providers, so the
-  // GitLab effect can key off this too — it passes no gitlabProjectRef, so its
-  // context carries no providerIdentity of its own. Thread a projectRef into
-  // that call and this key needs a GitLab-scoped part.
+  // Reuse this provider-independent key while GitLab supplies no projectRef; adding one requires GitLab provider identity in the key.
   const selectedReposKey = useMemo(
     () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
     [selectedRepos]
   )
 
-  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
   const linearWorkspaces = linearStatus.workspaces ?? []
   const selectedLinearWorkspaceId =
@@ -171,7 +164,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
       const visibleWithoutProvider = preferredVisibleTaskProviders.filter(
         (visibleProvider) => visibleProvider !== provider
       )
-      // Why: an empty provider list normalizes to "all providers", so keep one other source visible or hiding this one has no effect.
+      // Empty provider lists mean all, so hiding one source must leave another selected.
       const nextVisibleTaskProviders: TaskProvider[] =
         visibleWithoutProvider.length > 0 ? visibleWithoutProvider : ['github']
       const nextDefaultTaskSource = resolveVisibleTaskProvider(
@@ -192,7 +185,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     [defaultTaskSource, preferredVisibleTaskProviders, updateSettings]
   )
 
-  // Why: seed preset + query synchronously so the first fetch issues one request; a prior post-mount re-seed caused a throwaway empty-query fetch, doubling time-to-first-paint.
+  // Seed preset/query synchronously to avoid a throwaway initial empty-query request.
   const nextModel = model as typeof model & {
     eligibleRepos: typeof eligibleRepos
     resolvedInitialSelection: typeof resolvedInitialSelection

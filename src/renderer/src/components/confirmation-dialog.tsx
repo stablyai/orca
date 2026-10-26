@@ -53,10 +53,16 @@ export function ConfirmationDialogProvider({
   const compact = displayedRequest?.options.compact === true
   const buttonSize = compact ? 'sm' : 'default'
   const guarded = displayedRequest?.options.ignoresOpeningGesture === true
+  // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
+  const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
+    if (guarded && event.repeat) {
+      event.preventDefault()
+    }
+  }
+  const isFreshClick = (event: React.MouseEvent): boolean => !guarded || event.detail <= 1
 
   useEffect(() => {
-    // Why: this provider's dialog is not represented by activeModal. Block
-    // contextual tours so they cannot appear behind confirmation prompts.
+    // This dialog bypasses activeModal; block contextual tours explicitly while it is open.
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
@@ -216,7 +222,14 @@ export function ConfirmationDialogProvider({
               type="button"
               variant={displayedRequest?.options.cancelVariant ?? 'outline'}
               size={buttonSize}
-              onClick={() => settleActiveRequest(false)}
+              onKeyDown={ignoreRepeatedKey}
+              onClick={(event) => {
+                if (!isFreshClick(event)) {
+                  return
+                }
+                activeRequestRef.current?.options.onCancelClicked?.()
+                settleActiveRequest(false)
+              }}
             >
               {displayedRequest?.options.cancelLabel ??
                 translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
@@ -226,14 +239,9 @@ export function ConfirmationDialogProvider({
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
               size={buttonSize}
-              // Why: the gesture that opened the prompt may still be repeating or clicking.
-              onKeyDown={(event) => {
-                if (guarded && event.repeat) {
-                  event.preventDefault()
-                }
-              }}
+              onKeyDown={ignoreRepeatedKey}
               onClick={(event) => {
-                if (!guarded || event.detail <= 1) {
+                if (isFreshClick(event)) {
                   settleActiveRequest(true)
                 }
               }}

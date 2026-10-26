@@ -30,8 +30,6 @@ export function observeClaudeBackgroundTaskRoster(
     ) {
       continue
     }
-    // Presence must not revive a settled row; the task's own frames alone
-    // settle or restart it, while the roster enriches its identity fields.
     revise(id, {
       label: taskDescription(task.description) ?? taskName(task),
       kind:

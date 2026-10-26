@@ -1,5 +1,3 @@
-// Arranging the offer for display: which ids it covers, and how the rows nest.
-
 import { describe, expect, it } from 'vitest'
 import {
   allResumeSessionIds,
@@ -64,7 +62,6 @@ describe('arranging the offer the way the sidebar does', () => {
     expect(repoGroups[0]?.workspaces).toHaveLength(2)
   })
 
-  // Workspaces with no repo share one group rather than each inventing a header of its own.
   it('collects workspaces with no repo into a single group', () => {
     const workspaces = groupResumeCandidates([
       candidate({ sessionId: 'a', workspaceId: 'folder:aaa' }),
@@ -80,14 +77,12 @@ describe('arranging the offer the way the sidebar does', () => {
 })
 
 describe('choosing the workspace glyph', () => {
-  // The host read the kind off the durable record, so it wins over any shape-guessing.
   it('uses the kind the host recorded', () => {
     expect(resumeWorkspaceKind(candidate({ workspaceKind: 'folder' }))).toBe('folder')
     expect(resumeWorkspaceKind(candidate({ workspaceKind: 'git-worktree' }))).toBe('git-worktree')
   })
 
-  // An older host sends no kind; the id space still separates the two, and it is never guessed
-  // from a display name.
+  // Older hosts omit kind; use the id namespace rather than guessing from display names.
   it.each([
     ['folder:0f8f-aaa', 'folder'],
     ['repo-1::/w/one', 'git-worktree']
@@ -103,9 +98,7 @@ describe('naming the group header', () => {
   const REPOS = [{ id: 'repo-1', displayName: 'orca', repoIcon: REPO_ICON }]
   const GROUPS = [{ id: '4c3c3452-758b-418b-add1-0a280c8e03a0', name: 'Scratch' }]
 
-  // THE REGRESSION. A folder workspace's repoId is `folder-workspace:<projectGroupId>` and is never
-  // null, so the old "repoId !== null means it is a repo" test took the repo branch, found nothing
-  // in the repos list, and printed the raw synthetic id — a uuid — as the header.
+  // Folder workspaces carry non-null synthetic repoIds; resolve their project name instead of showing the raw uuid.
   it('titles a folder workspace with its project group name, not the raw id', () => {
     const header = resolveResumeGroupHeader(
       'folder-workspace:4c3c3452-758b-418b-add1-0a280c8e03a0',
@@ -126,8 +119,6 @@ describe('naming the group header', () => {
     })
   })
 
-  // An unknown project group still reads as a project, so it takes the group glyph rather than
-  // falling back into the repo branch.
   it('still reports a project for a group it cannot find', () => {
     const header = resolveResumeGroupHeader('folder-workspace:missing', REPOS, GROUPS)
 
@@ -141,7 +132,6 @@ describe('nesting child workspaces', () => {
     nodes.map((node) => [node.group.workspaceId, nestedWorkspaceIds(node.children)])
 
   it('puts a child under its nearest listed ancestor, skipping one with nothing to resume', () => {
-    // grandchild -> child (not listed) -> parent
     const ancestors: Record<string, string[]> = { grandchild: ['child', 'parent'], parent: [] }
     const nested = nestResumeWorkspaces(
       [group('grandchild'), group('other'), group('parent')],
@@ -163,7 +153,6 @@ describe('nesting child workspaces', () => {
     ])
   })
 
-  // Lineage from two hosts can disagree; a chat under no root would be resumed without being seen.
   it('places every workspace when ancestors loop', () => {
     const ancestors: Record<string, string[]> = { a: ['b'], b: ['a'], c: ['a'] }
     const nested = nestResumeWorkspaces(

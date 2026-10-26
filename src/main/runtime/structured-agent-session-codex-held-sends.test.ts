@@ -1,7 +1,4 @@
-// A Codex chat is Working while Codex still holds a send, never while Orca merely waits for a
-// delivery row: a turn that completes without taking a send (a hook blocked it) ends Working with
-// no row written, and a client already following the chat reads it from the frames it is sent.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// Exercise shipped host/journal/adapter with fake Codex: Working follows provider-held sends, including completion without delivery rows; subscribers read real frames.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +6,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
@@ -245,6 +242,24 @@ describe('a Codex send whose turn completes without taking it', () => {
     )
     const published = lastPublished(blocked)
     expect(published && hasUnansweredStructuredAgentSessionDispatch([published], fence)).toBe(false)
+
+    const later = await send('second succeeds')
+    await vi.waitFor(() => expect(answers).toBe(2))
+    turns.start()
+    turns.echo(later)
+    turns.end('completed')
+    await vi.waitFor(async () =>
+      expect((await rawSubmission(later)).dispatchState).toBe('accepted')
+    )
+    handlers?.onExit?.(new Error('codex exited'))
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    )
+    expect(
+      (await host.journalSnapshot(SESSION)).items.some(
+        (item) => item.body.kind === 'status' && item.body.failure
+      )
+    ).toBe(false)
   })
 
   it('keeps a send Working while Codex holds it, and its echo still settles it', async () => {

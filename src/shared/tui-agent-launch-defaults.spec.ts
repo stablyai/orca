@@ -8,8 +8,7 @@ import { applyAgentPermissionMode, YOLO_TUI_AGENT_ARGS } from './tui-agent-permi
 import { isTuiAgent } from './tui-agent-config'
 
 describe('tuiAgentArgsBypassPermissions', () => {
-  // The Agent Permissions toggle has no storage of its own: Yolo is the presence of the agent's
-  // bypass flag in the arguments string, wherever the user has written the rest of the field.
+  // Legacy Yolo intent lives in Arguments, not separate storage; recognize its token sequence anywhere before --.
   it.each([
     ['claude', '--dangerously-skip-permissions', true],
     ['claude', '--dangerously-skip-permissions --model Opus', true],
@@ -116,19 +115,18 @@ describe('resolvedTuiAgentArgsBypassPermissions', () => {
 })
 
 describe('resolveTuiAgentLaunchArgs', () => {
-  // A terminal launch still applies the whole configured string verbatim; only the structured
-  // route stopped reading it.
+  // Terminal launches retain every configured argument; structured chat uses separate permission settings.
   it('hands the configured arguments to a terminal launch unchanged', () => {
     expect(
       resolveTuiAgentLaunchArgs('claude', {
-        claude: '--dangerously-skip-permissions --model Opus'
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
       })
     ).toBe('--dangerously-skip-permissions --model Opus')
   })
 
   it('falls back to the agent default when nothing is configured', () => {
     expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
-    expect(resolveTuiAgentLaunchArgs('claude', { claude: '' })).toBe('')
+    expect(resolveTuiAgentLaunchArgs('claude', { agentDefaultArgs: { claude: '' } })).toBe('')
   })
 
   // Their chats run their own permission mode, so terminals get no permission argument for them.

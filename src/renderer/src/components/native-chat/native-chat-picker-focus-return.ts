@@ -1,10 +1,7 @@
 import { useRef } from 'react'
 
-/** Radix restores focus to the trigger on close, which is right for a visit that changed nothing
- *  and wrong after one that did: the message is what comes next. `notePick` marks the visit as
- *  used; a click that took focus somewhere else keeps it. */
+/** After a pick, focus the composer unless an outside click already moved focus elsewhere. */
 export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | undefined): {
-  /** Goes on the trigger, whose own press closes the surface. */
   triggerRef: React.RefObject<HTMLButtonElement | null>
   notePick: () => void
   onInteractOutside: (event: Event) => void
@@ -19,7 +16,7 @@ export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | und
       picked.current = true
     },
     onInteractOutside: (event: Event) => {
-      // Why: Radix reports a press on the trigger too, and that press only closes the surface.
+      // Radix also reports trigger presses, which only close the surface.
       if (!(event.target instanceof Node && triggerRef.current?.contains(event.target))) {
         interactedOutside.current = true
       }

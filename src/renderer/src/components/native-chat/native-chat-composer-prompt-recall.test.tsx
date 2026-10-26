@@ -8,6 +8,7 @@ import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-ag
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 vi.mock('./NativeChatComposerActions', () => ({
@@ -89,6 +90,7 @@ function renderComposer(prompts: string[]): HTMLElement {
       targetPtyId={null}
       agent="codex"
       structuredTransport={{
+        capturePresentation: () => () => true,
         send: vi.fn(() => true),
         dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
         optionsSurface: {

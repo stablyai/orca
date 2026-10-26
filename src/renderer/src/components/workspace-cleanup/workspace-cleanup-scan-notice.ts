@@ -45,7 +45,6 @@ export function formatWorkspaceCleanupScanNotice(
   )
 }
 
-/** Reports scan size without classifying the user's work. */
 export function formatWorkspaceCleanupReadyToast(workspaceCount: number): string {
   if (workspaceCount === 0) {
     return translate('components.workspace.cleanup.scan.noWorkspaces', 'No workspaces found.')

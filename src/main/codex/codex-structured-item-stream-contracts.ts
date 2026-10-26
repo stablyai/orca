@@ -6,7 +6,7 @@ import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
-  /** The turn a delta-only item belongs to, read the way its first delta names it. */
+  /** Resolve turn provenance from the first delta. */
   turnIdFor: (threadId: string, params: unknown) => string | null
   identityFor: (
     threadId: string,
@@ -23,7 +23,7 @@ export type CodexItemStreamDeps = {
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
-  /** Host clock when the item started, for a row its stream writes first. */
+  /** Host start time for rows first written by a stream. */
   startedAt?: number
 }
 

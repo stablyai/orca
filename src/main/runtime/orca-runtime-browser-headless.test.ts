@@ -127,16 +127,13 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-offscreen' })
     ).resolves.toEqual({ closed: true })
     expect(closeTab).toHaveBeenCalledWith('page-offscreen')
-    // Why: without retirement, paired clients keep a dead session tab after an RPC close.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-offscreen')
     expect(ipcMainOnMock).not.toHaveBeenCalledWith('browser:tabCloseReply', expect.anything())
     await expect(
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-other' })
     ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
     expect(closeTab).toHaveBeenCalledTimes(1)
-    // Why the unknown page still reaches retirement: it is the ghost probe — a session row whose
-    // page this runtime no longer has is the one thing left to close. This host reports no such
-    // row, so the close still fails closed rather than claiming it removed something.
+    // Unknown-page ghost probes still fail closed when no session row was retired.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledTimes(2)
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenLastCalledWith('wt-1', 'page-other')
   })

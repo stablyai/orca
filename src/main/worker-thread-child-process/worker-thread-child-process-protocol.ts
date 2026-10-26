@@ -1,5 +1,3 @@
-// Messages between the main-thread child stand-in and the worker that owns the real child.
-
 /** Structured-clone-safe subset of ProcessSpec; stdio is always three pipes. */
 export type WorkerThreadChildSpec = {
   program: string
@@ -12,6 +10,7 @@ export type WorkerThreadChildRequest =
   | { type: 'spawn'; id: number; spec: WorkerThreadChildSpec }
   | { type: 'stdin-write'; id: number; data: string }
   | { type: 'stdin-end'; id: number }
+  | { type: 'output-consumed'; id: number; bytes: number }
   | { type: 'kill'; id: number; signal?: NodeJS.Signals }
 
 export type WorkerThreadChildErrorPayload = { message: string; code?: string }

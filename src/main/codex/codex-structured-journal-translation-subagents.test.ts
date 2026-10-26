@@ -53,7 +53,6 @@ function subagentItem(kind: string, agentThreadId: string, agentPath: string): u
   }
 }
 
-/** Every activity item reaches the wire twice. */
 function deliverActivity(
   translator: ReturnType<typeof createCodexJournalTranslator>,
   params: unknown
@@ -86,8 +85,6 @@ describe('codex journal translation — subagents', () => {
     deliverActivity(translator, subagentItem('started', 'child-1', '/root/list_directory'))
     deliverActivity(translator, subagentItem('interacted', 'child-1', '/root/list_directory'))
 
-    // Four wire deliveries (two items, each sent twice), and none of the gray
-    // `codex · item:subAgentActivity` rows survive.
     const providerFrameKinds = rows.flatMap((row) =>
       row.body.kind === 'status' && row.body.providerFrame ? [row.body.providerFrame.kind] : []
     )
@@ -95,9 +92,6 @@ describe('codex journal translation — subagents', () => {
     expect(rows.filter((row) => row.key.includes('subagent'))).toEqual([])
   })
 
-  // The translator claims the item, but claiming it must not take the turn tail with
-  // it: the activity table is reached only through the publish arm, so a bare
-  // return leaves the tail stuck on whatever the previous frame said.
   it('still publishes the turn tail for an item it claims', () => {
     const { translator, activities } = harness()
 

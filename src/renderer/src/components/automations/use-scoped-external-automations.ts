@@ -12,15 +12,7 @@ import {
 import { externalAutomationScopeKey } from './external-automation-scope-keys'
 import { useExternalAutomationScopeRetention } from './use-external-automation-scope-retention'
 
-/**
- * External managers for the hosts currently in view, and the scope each one was
- * discovered under.
- *
- * A manager ID is unique only inside one host — `openclaw:local` names no
- * authority at all — so every call here takes the scope its row was discovered
- * under rather than a manager to look one up from. There is no lookup to miss
- * and no host to guess at.
- */
+/** Keep discovered scope with every in-view manager; host-local IDs such as openclaw:local cannot reconstruct its authority. */
 
 export type ScopedExternalAutomationsInput = {
   /** The hosts in view. Only these are probed, and only these are retained. */
@@ -60,8 +52,7 @@ export function useScopedExternalAutomations({
   scopesRef.current = scopes
   const signatureRef = useRef(signature)
   signatureRef.current = signature
-  // Seeded with the mount signature: the page's own mount refresh issues the
-  // first load, and this must not duplicate it.
+  // Let the page’s mount refresh issue the first load rather than duplicating it here.
   const loadedSignatureRef = useRef(signature)
   // A selection change can overtake the probe it replaced; only the newest wins.
   const loadTokenRef = useRef(0)
@@ -81,8 +72,7 @@ export function useScopedExternalAutomations({
     if (loadedSignatureRef.current === signature) {
       return
     }
-    // The old host's managers are not evidence about the new one, so they go now
-    // rather than when its probe answers.
+    // Clear previous-host managers immediately; they are not evidence about the new scope.
     setResult(EMPTY_VIEW)
     void reload().catch(() => undefined)
   }, [signature, reload])

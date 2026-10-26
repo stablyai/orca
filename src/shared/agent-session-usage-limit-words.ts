@@ -13,8 +13,7 @@ import {
 } from './agent-session-usage-limit'
 import { joinSentences } from './sentence-joining'
 
-/** A reset time in the reader's own clock. The host writes none: its time zone need not be the
- *  reader's, and a saved wait goes stale. */
+/** Render reset in the reader's clock; the host timezone may differ and persisted waits become stale. */
 export type AgentSessionUsageLimitResetWords = (resetsAt: number) => string | null
 
 const WINDOW_COPY = {
@@ -45,8 +44,7 @@ export function usageLimitWords(
   ])
 }
 
-/** A usage-limit line for a reader that has no agent name to reword it with (the phone): the host's
- *  sentence, then the reset in this reader's clock. Any other line keeps its text. */
+/** For nameless readers such as mobile, append localized reset time to the host usage-limit sentence; retain other lines unchanged. */
 export function usageLimitLineText(block: {
   text: string
   failure?: { kind: string; usageLimit?: AgentSessionUsageLimit }

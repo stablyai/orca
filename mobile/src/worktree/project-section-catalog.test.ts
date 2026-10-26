@@ -19,6 +19,8 @@ function repo(
     addedAt: undefined,
     connectionId: undefined,
     executionHostId,
+    projectGroupId: undefined,
+    projectGroupOrder: undefined,
     ...(repoIcon ? { repoIcon } : {})
   }
 }

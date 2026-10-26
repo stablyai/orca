@@ -165,8 +165,7 @@ export function useAddRepoServerPathFlow({
           return
         }
         if (repo && isGitRepoKind(repo)) {
-          // Why: once the repo exists, a transient non-authoritative refresh
-          // should fall through to project reveal instead of leaving the add flow open.
+          // A persisted repo should still reveal after a transient non-authoritative refresh.
           const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
           await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== serverAddGenRef.current) {
@@ -174,8 +173,7 @@ export function useAddRepoServerPathFlow({
           }
           await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
-          // Why: folder repos skip the Git default-checkout handoff; their synthetic
-          // root workspace is opened by the folder add flow.
+          // Folder projects open their synthetic root through the add flow instead of Git checkout completion.
           await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }

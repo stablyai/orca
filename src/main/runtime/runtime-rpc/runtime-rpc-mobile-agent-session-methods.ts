@@ -28,6 +28,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.subscribeStatus',
   // One visual from the chat's own scratch folder, for the transcript's `::orca-visual` lines.
   'agentSession.readVisual',
+  // One item whole, for "Show full output" and "Show full message".
+  'agentSession.item',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.
   'agentSessionAttachment.uploadStart',
   'agentSessionAttachment.uploadAppend',

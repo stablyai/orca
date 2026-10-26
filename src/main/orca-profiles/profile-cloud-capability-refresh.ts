@@ -43,7 +43,7 @@ export async function refreshCurrentOrcaProfileAuth(
       active,
       userDataPath,
       (session) => {
-        // Why: take the ticket at request time, after any refresh; that refresh may relink.
+        // Take the ticket after refresh because refreshing may relink the session.
         ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
         return refreshOrcaCloudCapabilities(configState.config, session)
       }

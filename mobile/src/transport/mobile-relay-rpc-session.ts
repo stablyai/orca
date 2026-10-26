@@ -25,16 +25,13 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
-// Why: a relay kept through the background grace may have died while the app was
-// suspended; one miss redials instead of two. Not shorter: the first packet after
-// resume can pay radio wake-up plus a TCP retransmit.
+// Use one decisive post-background probe, allowing radio wake/TCP retransmit latency before redial.
 const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
   RelayDialStageSource & {
-    // The cell's attach-reservation deadline (~10s). Diagnostics only — never
-    // schedule anything from it; rotation keys off getResumeExpiresAt().
+    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
     getAttachDeadlineAt(): number | null
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
@@ -228,7 +225,7 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.drop(id)
-        // Why: the frame was written long ago — the desktop may have processed it.
+        // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.track(id, { resolve, reject, timer, written: false })

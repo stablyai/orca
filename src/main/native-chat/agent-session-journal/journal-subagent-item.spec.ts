@@ -70,7 +70,6 @@ export function registerJournalSubagentItemTests(): void {
       expect(subagentJournalItemIdentity('child-1')).not.toEqual(
         subagentJournalItemIdentity('child-2')
       )
-      // Two long ids sharing a head stay two rows.
       const head = 'x'.repeat(600)
       expect(subagentJournalItemIdentity(`${head}a`)).not.toEqual(
         subagentJournalItemIdentity(`${head}b`)
@@ -94,7 +93,7 @@ export function registerJournalSubagentItemTests(): void {
       const block = body.blocks.find(isSubagentBlock)!
       expect(block.label.length).toBeLessThanOrEqual(512)
       expect(block.label.at(-1)).toBe('…')
-      // No lone surrogate before the ellipsis.
+      // The retained label ends in a complete surrogate pair.
       expect(block.label.at(-2)).toMatch(/[\uDC00-\uDFFF]/)
       expect(block.id.length).toBe(512)
     })
@@ -152,7 +151,7 @@ export function registerJournalSubagentItemTests(): void {
           { type: 'subagent', id: 'child-1', state: 'unverifiable', run: 'call-1' }
         ]
       })
-      // Contact was lost at an unknown moment, so no run length is invented.
+      // Unknown loss time must not invent a run duration.
       expect(row.body.kind === 'message' && row.body.blocks[1]).not.toHaveProperty('settledAt')
     })
   })

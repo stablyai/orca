@@ -37,11 +37,15 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   )
 }
 
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'omp'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
+  // OpenClaude writes Claude transcripts but retains distinct launch/UI identity.
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }

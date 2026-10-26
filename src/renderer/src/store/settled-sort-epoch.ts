@@ -1,12 +1,4 @@
-/**
- * Maintains `settledSortEpoch`: the sortEpoch the sidebar sort actually reads.
- *
- * Why in the store: the sidebar used to mirror sortEpoch into React state from an
- * effect, adding a nested update per bump; bursts of flushSync bumps stacked those
- * into "Maximum update depth exceeded" (React #185). A store listener sees every
- * write path — slice actions and runtime patches such as the web session sync — so
- * the settled value stays correct without any component mounted.
- */
+/** Keep settled sidebar sortEpoch in store: React effect mirroring nested burst flushSync updates into React #185. Store listener covers slice/runtime writes even without mounted components. */
 import type { StoreApi } from 'zustand'
 import {
   INITIAL_SORT_SETTLE_STATE,
@@ -15,6 +7,7 @@ import {
 } from '../../../shared/sidebar-list/sort-settle'
 import type { AppState } from './types'
 import { getIndexedAllWorktrees } from './worktree-repo-index'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): number {
   let count = 0
@@ -52,12 +45,12 @@ export function installSettledSortEpoch(
   api.subscribe((state, previous) => {
     const epochBumped = state.sortEpoch !== previous.sortEpoch
     // Why also on row writes: a bump-less add during a pending window must still settle now.
-    const rowsChanged = state.worktreesByRepo !== previous.worktreesByRepo
+    const rowsChanged = selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous)
     dispatch({
       kind: 'write',
       change:
         epochBumped || rowsChanged
-          ? { epochBumped, liveCount: countLiveWorktrees(state.worktreesByRepo) }
+          ? { epochBumped, liveCount: countLiveWorktrees(selectWorktreesByRepo(state)) }
           : null,
       settled: state.settledSortEpoch === state.sortEpoch,
       sortBy: state.sortBy,

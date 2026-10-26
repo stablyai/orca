@@ -1,4 +1,5 @@
 import { getTerminalInputByteLength } from './terminal-input'
+import { structuredAgentSessionBlocksByteLength } from './rpc-contract/structured-agent-session-message-params'
 import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
 import type {
   TerminalQuickCommand,
@@ -9,23 +10,15 @@ import {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from './terminal-quick-commands'
 
-// Why: a saved prompt must run on every path, and the tightest is a chat message, whose blocks may
-// be at most 256 KiB of JSON. Measured on the prompt's real escaped size, not a per-character worst
-// case; a paired create's 256 KiB of UTF-8 and one save's inbound frame are looser. Pinned against
-// the chat limit in tests. Part of `terminal.quick-commands.long-prompts.v1`.
+// Every prompt must fit the tightest path: a chat text block’s 256 KiB JSON budget, measured after escaping. Paired create/save limits are looser; tests pin this to chat.
 export const MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES = 256 * 1024
-// Why: builds before long-prompt support refuse longer prompts on save and reject a whole list
-// holding one; this is only for talking to those builds.
+// Older builds reject long saves and entire lists containing them; use only for legacy peers.
 export const LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH = 6000
 // Why: the whole list is one RPC reply, which a paired session closes over past 4 MiB of JSON;
 // this leaves room for the reply envelope and echoed request id.
 export const MAX_TERMINAL_QUICK_COMMANDS_SERIALIZED_BYTES = 4 * 1024 * 1024 - 128 * 1024
 
-/**
- * The character cap of an older host, or `null` for a host that takes long prompts. Unknown
- * capabilities count as current: an older host refuses a longer prompt itself, visibly, so
- * guessing must never block a save.
- */
+/** Unknown capabilities must not block saves: older hosts visibly reject oversized prompts themselves. Null means long prompts are supported. */
 export function terminalQuickCommandAgentPromptMaxLength(
   hostCapabilities: readonly string[] | null | undefined
 ): number | null {
@@ -35,7 +28,6 @@ export function terminalQuickCommandAgentPromptMaxLength(
     : null
 }
 
-/** A character cap, or `null` when only the message-size bound applies. */
 export function getTerminalQuickCommandBodyMaxLength(
   action: TerminalQuickCommandAction,
   agentPromptMaxLength: number | null
@@ -43,9 +35,8 @@ export function getTerminalQuickCommandBodyMaxLength(
   return action === 'agent-prompt' ? agentPromptMaxLength : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 }
 
-/** The prompt's size as a chat message's text block, the limit every saved prompt must fit. */
 export function getTerminalQuickCommandPromptMessageBytes(prompt: string): number {
-  return getTerminalInputByteLength(JSON.stringify([{ type: 'text', text: prompt }]))
+  return structuredAgentSessionBlocksByteLength([{ type: 'text', text: prompt }])
 }
 
 export type TerminalQuickCommandBodySize = {
@@ -56,7 +47,6 @@ export type TerminalQuickCommandBodySize = {
   olderHostCap: boolean
 }
 
-/** How much of its limit a quick command's body uses, in the unit that limit is measured in. */
 export function getTerminalQuickCommandBodySize(
   action: TerminalQuickCommandAction,
   body: string,
@@ -90,10 +80,7 @@ export function isTerminalQuickCommandPromptTooLong(
     : prompt.length > agentPromptMaxLength
 }
 
-/**
- * Refuses a list the host must not store: a prompt over the cap, or a list too large to send to a
- * paired client in one reply. Normalization never trims a prompt, so this is the bound.
- */
+/** Bound storage by prompt size and one paired-client reply; normalization deliberately never trims prompts. */
 export function assertTerminalQuickCommandsStorable(
   commands: readonly TerminalQuickCommand[]
 ): void {

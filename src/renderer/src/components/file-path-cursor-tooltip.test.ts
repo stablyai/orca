@@ -7,7 +7,6 @@ describe('cursorTooltipOffsets', () => {
   const row = { bottom: 120, left: 400 }
 
   it('places the tooltip under the cursor rather than the row', () => {
-    // Row-anchored placement would be align 0; the cursor is 64px into the row.
     expect(cursorTooltipOffsets({ x: 464, y: 108 }, row)).toEqual({ align: 64, side: 6 })
   })
 
@@ -20,8 +19,6 @@ describe('cursorTooltipOffsets', () => {
   })
 
   it('stays anchored to the cursor when the row moves under it', () => {
-    // The dropdown reflows while results stream in; re-measuring the row must
-    // keep the tooltip on the cursor, not drag it along with the row.
     const before = cursorTooltipOffsets({ x: 464, y: 108 }, row)
     const after = cursorTooltipOffsets({ x: 464, y: 108 }, { bottom: 148, left: 576 })
 

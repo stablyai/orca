@@ -14,9 +14,6 @@ import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
 
 export function registerGitLabWorkItemHandlers(store: Store): void {
-  // Why: combined MR + issue list — Tasks screen and any future picker
-  // that wants a unified view. Centralizes the merge / sort logic so
-  // callers don't have to re-implement it.
   ipcMain.handle(
     'gitlab:listWorkItems',
     async (
@@ -45,8 +42,6 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
     }
   )
 
-  // Why: aggregated dialog payload — body + discussions + pipeline jobs.
-  // Powers GitLabItemDialog's tabs.
   ipcMain.handle(
     'gitlab:workItemDetails',
     async (
@@ -71,10 +66,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
     }
   )
 
-  // Why: paste-URL flow in the picker. The user pastes a GitLab URL that
-  // may target a project different from the local checkout's remote, so
-  // the call carries the parsed project path explicitly rather than
-  // resolving from cwd.
+  // Pasted URLs can name another project; use the parsed path instead of cwd.
   ipcMain.handle(
     'gitlab:workItemByPath',
     async (
@@ -96,9 +88,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
         repoConnectionId(repo),
         ...localGitOptionArgs(store, repo)
       )
-      // Why: only persist a recent entry when the lookup actually
-      // produced an item. A 404 / auth failure shouldn't pollute the
-      // user's recents list with project paths they can't read.
+      // Failed lookups must not add unreadable projects to recents.
       if (result) {
         recordGitLabProjectRecent(store, args.host, args.path)
       }

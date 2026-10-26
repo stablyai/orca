@@ -43,28 +43,34 @@ export function openLinkedFileInEditor(
   isCurrentRequest: () => boolean
 ): EditorOpenResult | null {
   const language = detectLanguage(file.filePath)
-  const opened = useAppStore
-    .getState()
-    .openFileForLink({ ...file, language, mode: 'edit' }, { forceContentReload: true }, intent)
-  if (!opened || position.line === null) {
-    return opened
-  }
-  if (language === 'markdown') {
-    // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
-    useAppStore.getState().setMarkdownViewMode(opened.fileId, 'source')
-  }
-  // Why: another view of the same document keeps its cursor, and a newer click (even one
-  // without a line) supersedes this reveal until the editor consumes it.
-  scheduleEditorLineReveal(
-    useAppStore.getState,
-    file.filePath,
-    position.line,
-    position.column ?? 1,
-    opened.fileId,
-    {
-      viewStateId: opened.viewStateId,
-      canApply: () => isCurrentRequest() && isOpenedEditorViewCurrent(file.worktreeId, opened)
+  // Why on shown: a layout-owner build draws a new view only with main's frame.
+  const reveal = (shown: EditorOpenResult | null): void => {
+    if (!shown || position.line === null) {
+      return
     }
-  )
-  return opened
+    if (language === 'markdown') {
+      // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
+      useAppStore.getState().setMarkdownViewMode(shown.fileId, 'source')
+    }
+    // Reveal only in this view; other document views keep their cursors, and later clicks supersede this request.
+    scheduleEditorLineReveal(
+      useAppStore.getState,
+      file.filePath,
+      position.line,
+      position.column ?? 1,
+      shown.fileId,
+      {
+        viewStateId: shown.viewStateId,
+        canApply: () => isCurrentRequest() && isOpenedEditorViewCurrent(file.worktreeId, shown)
+      }
+    )
+  }
+  return useAppStore
+    .getState()
+    .openFileForLink(
+      { ...file, language, mode: 'edit' },
+      { forceContentReload: true },
+      intent,
+      reveal
+    )
 }

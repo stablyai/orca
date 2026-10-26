@@ -41,11 +41,11 @@ function queuedLaunch(tabId: string) {
   return store.getState().pendingStartupByTabId[tabId]?.agentLaunch
 }
 
-function launch() {
+function launch(groupId = store.getState().activeGroupIdByWorktree[WT]) {
   return launchAgentThroughHost({
     agent: 'claude',
     worktreeId: WT,
-    groupId: store.getState().activeGroupIdByWorktree[WT],
+    groupId,
     prompt: 'fix the failing checks',
     agentArgs: null,
     launchSource: 'source_control_recovery'
@@ -61,7 +61,14 @@ beforeEach(() => {
 
 describe('a desktop AI-button launch', () => {
   it('shows its tab at the click, in its split, with the launch queued for its pane to start', () => {
-    const { tabId } = launch()
+    const activeGroupId = store.getState().activeGroupIdByWorktree[WT]
+    const targetGroupId = store
+      .getState()
+      .createEmptySplitGroup(WT, activeGroupId, 'down', { activate: false })!
+    const { tabId } = launch(targetGroupId)
+    expect(
+      store.getState().groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
+    ).toContain(tabId)
 
     const tab = launchTab(tabId)!
     expect(tab).toMatchObject({ ptyId: null, launchAgent: 'claude' })

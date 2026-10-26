@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { SLEEPING_SWEEP_SETTLE_MS } from '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
-import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { SidebarClock } from '../../../../../../main/runtime/sidebar-inputs/sidebar-clock'
 import { SidebarRetentionOwner } from '../../../../../../main/runtime/sidebar-inputs/sidebar-retention-owner'
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
@@ -18,7 +21,9 @@ const repo = makeRepo()
 function mainOwner(): SidebarRetentionOwner {
   return new SidebarRetentionOwner(new SidebarClock(), {
     showSleepingWorkspaces: () => useAppStore.getState().showSleepingWorkspaces,
-    listRows: async () => useAppStore.getState().worktreesByRepo[repo.id] ?? [],
+    rowKeys: () =>
+      (useAppStore.getState().worktreesByRepo[repo.id] ?? []).map(getWorktreeHostIdentity),
+    watchRowKeys: () => () => {},
     retentionCandidates: () => {
       const state = useAppStore.getState()
       const live = (id: string): boolean =>

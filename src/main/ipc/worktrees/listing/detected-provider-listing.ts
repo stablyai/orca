@@ -3,10 +3,7 @@ import {
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
 } from '../../../worktree-removal-listing'
-import {
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost
-} from '../../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
@@ -49,8 +46,8 @@ export async function listDetectedWorktreesForCapturedRepo(
   isCurrent: () => boolean,
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
-  // An `ssh:` repo is not served here, so it lists from metadata, never from this machine's git.
-  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+  // Unserved SSH ownership permits metadata listing only, never local Git.
+  const connectionId = getRepoDialableSshTargetId(repo)
   const abortedResult = () =>
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
@@ -58,8 +55,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
 
   try {
-    // Why no re-scan for folder repos: their rows come from the store synchronously below, so no
-    // mutation can land under the read.
+    // Folder rows are read synchronously, leaving no mutation window that needs a re-scan.
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -115,11 +111,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       () => listDetectedGitWorktrees(store, repo),
       () => isCurrent() && !providerAbort?.signal.aborted
     )
-    // Why stale past the bound rather than a non-authoritative answer: non-authoritative rows still
-    // replace the client's rows for this host, so a worktree the last overtaking mutation created
-    // would vanish from the sidebar until the next listing. A stale rejection leaves client state
-    // untouched; the overtaking mutation's own change event, sent after its generation bump and
-    // therefore ahead of this reply, is what brings the listing that reflects it.
+    // Stale rejection preserves client rows; non-authoritative replacement could hide newly created worktrees.
     if (scan.superseded) {
       return abortedResult() ?? null
     }
@@ -161,14 +153,12 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-    // Why the scan's generation, not the current one: the rows describe the catalog as of when the
-    // scan began. A client orders this against the create and remove replies it has applied.
+    // Rows describe scan-start generation, which clients order against applied create/remove replies.
     return {
       repoId: repo.id,
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
-      // Why always marked: the desktop renderer ships with this main process.
       worktrees: projectPendingWorktreeRemovals(
         buildDetectedGitWorktrees(store, repo, localRows, allMeta),
         (worktree) => worktree.id,
@@ -190,7 +180,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
       err
     )
-    // Why: retention alone leaves inert rows with no explanation; the cause rides with the listing.
+    // Retained rows need their scan-failure cause to explain why they are unavailable.
     const unavailableReason = describeWorktreeScanFailure(err)
     const failureKind = classifyWorktreeScanFailure(unavailableReason)
     return {

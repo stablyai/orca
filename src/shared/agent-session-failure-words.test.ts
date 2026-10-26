@@ -31,8 +31,7 @@ const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
   'queueFull'
 ])
 
-/** Every fact shape a kind can carry: bare, with a person or a log detail, with a refusal, and
- *  for an attachment each reason with and without its limit. */
+/** Cover every fact shape, with person/log/refusal details and every attachment reason with/without a limit. */
 function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
   const facts: AgentSessionFailureFact[] = [
     { kind },
@@ -71,17 +70,23 @@ describe('the words written beside a failure fact', () => {
         ] as const) {
           const context = { agentName, command, provider: 'claude' } as const
           const sentence = agentSessionFailureSentence(fact, surface, context)
-          expect([fact, sentence]).toEqual([fact, expect.stringMatching(/[^.]\.$/)])
+          expect(sentence).toMatch(/[^.]\.$/)
           expect(sentence).not.toMatch(/\.\./)
           expect(sentence).not.toMatch(ORCA_INTERNAL)
           if (surface === 'row') {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              text: sentence,
+              failure: fact
+            })
           } else if (
             surface === 'rejection' &&
             isSubmissionRejectionFact(fact) &&
             !LEGACY_MARKER_KINDS.has(fact.kind)
           ) {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).reason).toBe(sentence)
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              reason: sentence,
+              rejection: fact
+            })
           }
         }
       }
@@ -163,6 +168,33 @@ describe('the words written beside a failure fact', () => {
         { agentName: 'Codex' }
       )
     ).toBe("Codex couldn't start. Start a new chat to continue.")
+  })
+
+  it("names a too-old agent's installed and minimum versions, and still reads Codex's legacy fact", () => {
+    const words = (details: Record<string, unknown>) =>
+      agentSessionFailureSentence(
+        readAgentSessionFailureFact({
+          kind: 'startFailed',
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            details: { reason: 'attachFailed', ...details }
+          }
+        })!,
+        'row',
+        {}
+      )
+    expect(
+      words({
+        agentInstallation: {
+          agent: 'opencode',
+          installedVersion: '1.0.0',
+          minimumVersion: '1.18.31'
+        }
+      })
+    ).toBe('OpenCode 1.0.0 is too old for chats. Update to 1.18.31 or newer.')
+    expect(
+      words({ codexInstallation: { installedVersion: '0.135.0', minimumVersion: '0.136.0' } })
+    ).toBe('Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.')
   })
 
   it('says a start refused beside a process Orca could not stop in its own words', () => {
@@ -342,4 +374,20 @@ describe('an attachment problem as a reader meets it', () => {
       })
     ).toEqual({ kind: 'attachmentInvalid' })
   })
+})
+
+it('keeps an unsettled ordinary send on the existing working and wait wording', () => {
+  expect(
+    agentSessionFailureSentence(
+      {
+        kind: 'restartFailed',
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'messagesUnsettled' }
+        }
+      },
+      'rejection',
+      { agentName: 'Claude' }
+    )
+  ).toBe('The agent is still working. Wait for the agent to finish responding, or stop it.')
 })

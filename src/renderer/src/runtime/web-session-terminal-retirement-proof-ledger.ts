@@ -12,13 +12,7 @@ type RetainedProofs = {
   proofs: NonNullable<RuntimeMobileSessionTabsResult['retiredTerminalSurfaces']>
 }
 
-/**
- * Client half of `session-tabs.retirement-proof-delta.v1`: a host that negotiated it sends each
- * retirement proof once per stream, so the client keeps the union itself. Bounded exactly like
- * the host's list, and a proof leaves the moment its surface is published live again, so nothing
- * here outlives the evidence the host still holds. A lost entry never proves anything; recovery
- * just falls back to the slower host-attested inventory path.
- */
+/** Retain negotiated session-tabs.retirement-proof-delta.v1 proofs as a host-bounded union; live surfaces remove them. Missing evidence proves nothing and falls back to slower host-attested inventory. */
 const retainedByKey = new Map<string, RetainedProofs>()
 
 const MAX_LEDGER_WORKTREES = 512
@@ -36,10 +30,7 @@ export function mergeRetainedTerminalRetirementProofs(
     retainedByKey.delete(key)
     return snapshot
   }
-  // Why: a host that holds no proofs omits the field; a delta host with nothing new sends `[]`.
-  // Absence therefore means "forget" — which is also what a recreated worktree's fresh host entry
-  // publishes, so a new occupant never inherits its predecessor's proofs even if the removed
-  // frame was missed.
+  // Omission means forget, unlike unchanged delta []; recreated worktrees cannot inherit predecessor proofs even after missed removal.
   if (snapshot.retiredTerminalSurfaces === undefined) {
     retainedByKey.delete(key)
     return snapshot

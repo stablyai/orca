@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { useRef } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HttpLinkDestinations from '@/lib/http-link-destinations'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
@@ -116,7 +116,6 @@ describe('native chat right-click targets', () => {
     expect(mocks.writeClipboardText).toHaveBeenCalledWith('https://example.com/docs')
 
     await rightClick('docs link')
-    // The same destinations, in the same order, as the click popover in use-native-chat-link-actions.
     expect(menuItemNames().slice(0, 3)).toEqual(['System Browser', 'Orca Browser', 'Copy link'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Orca Browser' }))
     expect(mocks.openRoutedHttpLink).toHaveBeenCalledWith('https://example.com/docs', {
@@ -216,3 +215,64 @@ describe('native chat right-click targets', () => {
     expect(onClearPaneTitle).toHaveBeenCalledOnce()
   })
 })
+
+it.each([
+  {
+    firstText: 'docs link',
+    firstCopy: 'Copy link',
+    firstDestination: 'https://example.com/docs',
+    nextText: 'app file',
+    nextCopy: 'Copy Path',
+    nextDestination: '/repo/src/app.ts',
+    nextFirstRow: 'Open file'
+  },
+  {
+    firstText: 'app file',
+    firstCopy: 'Copy Path',
+    firstDestination: '/repo/src/app.ts',
+    nextText: 'docs link',
+    nextCopy: 'Copy link',
+    nextDestination: 'https://example.com/docs',
+    nextFirstRow: 'System Browser'
+  }
+])(
+  'keeps $nextCopy on rapid reopening after an earlier selection closes',
+  async ({
+    firstText,
+    firstCopy,
+    firstDestination,
+    nextText,
+    nextCopy,
+    nextDestination,
+    nextFirstRow
+  }) => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    try {
+      render(<Chat onFind={vi.fn()} />)
+      await rightClick(firstText)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      // Cross the dismissal guard, then reopen before Radix's queued close cleanup.
+      clock.mockReturnValue(1_120)
+      fireEvent.click(screen.getByRole('menuitem', { name: firstCopy }))
+      expect(mocks.writeClipboardText).toHaveBeenCalledExactlyOnceWith(firstDestination)
+
+      fireEvent.contextMenu(screen.getByText(nextText))
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync()
+      })
+
+      expect(menuItemNames()[0]).toBe(nextFirstRow)
+      fireEvent.click(screen.getByRole('menuitem', { name: nextCopy }))
+      expect(mocks.writeClipboardText).toHaveBeenNthCalledWith(2, nextDestination)
+    } finally {
+      cleanup()
+      if (vi.isFakeTimers()) {
+        await act(async () => {
+          await vi.runOnlyPendingTimersAsync()
+        })
+      }
+      vi.useRealTimers()
+      clock.mockRestore()
+    }
+  }
+)

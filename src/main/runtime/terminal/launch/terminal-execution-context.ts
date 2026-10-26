@@ -20,7 +20,7 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
 
     if (options.resetIncarnation) {
       // Why: an explicit new lifecycle supersedes an unidentifiable exit from the reused PTY id.
-      this.earlyExitedPtyIncarnations.delete(ptyId)
+      this.pendingPtyRegistrationIncarnations.get(ptyId)?.exitedIncarnations.clear()
       this.disposeHeadlessTerminal(ptyId)
       this.osc7ScanTailByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)
@@ -46,9 +46,7 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
     return options.resetIncarnation === true || !hadExistingContext || previous !== wslDistro
   }
 
-  /** Record the spawn launch command so the per-PTY Command Code detector can
-   *  arm from it (renderer startupCommand parity). Best-effort: a chunk that
-   *  beats this call falls back to the detector's banner arming. */
+  /** Arm Command Code from the spawn command; chunks arriving earlier fall back to banner detection. */
   noteTerminalSpawnCommand(ptyId: string, command: string | null | undefined): void {
     const trimmed = typeof command === 'string' ? command.trim() : ''
     if (trimmed.length > 0) {

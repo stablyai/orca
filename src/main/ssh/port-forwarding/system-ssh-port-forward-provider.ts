@@ -11,7 +11,7 @@ import type {
   StartedPortForward
 } from './ssh-port-forward-provider'
 
-/** The build options a system-SSH forward spawns with; orphan recovery matches that argv. */
+/** Keep spawn options aligned with orphan-recovery argv matching. */
 export function systemSshForwardBuildArgsOptions(conn: SshConnection): SystemSshBuildArgsOptions {
   // The managed tunnel reads the channel answer from stderr (lastChannelOpenFailure).
   return { ...conn.getSystemSshBuildArgsOptions(), logChannelFailures: true }
@@ -33,10 +33,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
     )
 
     await forward.waitForStartup()
-    // Why: this stderr stays attached for the forward's whole lifetime but is
-    // only used to build the exit-error detail, so keep a bounded tail — a chatty
-    // remote sshd could otherwise grow it unbounded on a long-lived forward
-    // (mirrors MAX_RELAY_STARTUP_BUFFER_BYTES in ssh-relay-sentinel).
+    // Bound lifetime stderr while retaining its newest failure detail; chatty sshd must not grow memory indefinitely.
     const MAX_STDERR_TAIL_BYTES = 64 * 1024
     let stderr = ''
     const onStderr = (chunk: Buffer): void => {

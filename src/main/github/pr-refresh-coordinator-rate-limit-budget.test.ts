@@ -48,8 +48,7 @@ describe('pr-refresh-coordinator', () => {
 
   it('proceeds with background refreshes when the budget probe fails (fail open)', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
-    // Why: regression for #7553 — GHES with rate limiting disabled 404s every
-    // probe; an unreadable budget must not pause refreshes.
+    // GHES can disable rate limits and return 404; an unreadable budget must not pause refreshes.
     getRateLimitMock.mockResolvedValue({
       ok: false,
       error: 'HTTP 404: Rate limiting is not enabled.'
@@ -124,17 +123,14 @@ describe('pr-refresh-coordinator', () => {
       'graphql',
       executionOptions
     )
-    // Why (#11532): the lookup itself debits the snapshot now, so every caller
-    // is accounted for; the coordinator must not double-charge on top.
+    // Lookup owns budget debits; the coordinator must not charge twice.
     expect(noteRepositoryRateLimitSpendMock).not.toHaveBeenCalled()
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not consume active burst slots for rate-limit pauses', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
-    // Why: keyed on drained items (one getRateLimit call each) rather than
-    // guard-call counts, so the guard's per-bucket evaluation order stays free
-    // to change without breaking the slot-accounting assertion.
+    // Count drained requests so per-bucket guard order cannot affect slot accounting.
     let drainedItems = 0
     getRateLimitMock.mockImplementation(async () => {
       drainedItems += 1

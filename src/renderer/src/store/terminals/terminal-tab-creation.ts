@@ -33,6 +33,7 @@ import {
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
+import type { AppState } from '../types'
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
 function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
@@ -48,7 +49,8 @@ function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupComma
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  subscribe: (listener: (state: AppState) => void) => () => void
 ): Pick<TerminalSlice, 'createTab'> {
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
@@ -74,7 +76,7 @@ export function createTerminalTabCreationActions(
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
-        // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
+        // Trim ID hints: IPC can include empty IDs, which break pane-key routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
         const hintedId =
           trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
@@ -135,7 +137,7 @@ export function createTerminalTabCreationActions(
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
-          // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
+          // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
         // Switch point: a tab main already made is drawn with main's creation facts.
@@ -289,7 +291,10 @@ export function createTerminalTabCreationActions(
       })
       // Switch point: main writes the tab under these ids before any later command names it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab))
+        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
+          tab,
+          store: { getState: get, setState: (patch) => set(patch), subscribe }
+        })
       }
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.

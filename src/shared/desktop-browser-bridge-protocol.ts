@@ -1,18 +1,8 @@
-/**
- * The desktop browser bridge: a managed SSH host's orcad forwards browser commands from the host's
- * own `orca` CLI to a desktop that opted in with "Allow this host's orca CLI to control Orca".
- *
- * Both sides gate on DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY: orcad advertises it in status, and
- * the desktop declares it on the socket it attaches with. A peer without it never attaches, so the
- * CLI gets DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE instead of a silent hang.
- */
+/** An opted-in desktop serves a managed SSH host’s CLI browser requests. Both peers must advertise desktopBridge.v1; unsupported peers refuse with unavailable instead of hanging. */
 import { z } from 'zod'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
-/**
- * Declared by a desktop that understands a `cancel` event. orcad never sends one to a desktop
- * without it: an older desktop drops its whole attachment on an event type it cannot parse.
- */
+/** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
 export const DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY = 'browser.desktopBridge.cancel.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
@@ -22,15 +12,14 @@ export const DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE = 'desktop_browser_bridge_unro
 
 export const DESKTOP_BROWSER_BRIDGE_SETTING_LABEL = "Allow this host's orca CLI to control Orca"
 
-export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE = `No Orca desktop is sharing its browser with this host. On your desktop, open this host's SSH settings, turn on "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}", and keep the host connected. The desktop needs an Orca version that supports it.`
+/** The desktop also withholds the bridge while this host's pages browse from the desktop's own network. */
+export const DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL = 'Settings › Browser › SSH workspaces'
+export const DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL =
+  'Hosts browsing from this device instead'
 
-/**
- * The only commands a host may run on the desktop browser. Narrower than the relay bridge before
- * 1.4.225, which ran any CLI command on the desktop: nothing here reads or writes desktop files
- * (upload, download, pdf), reads the desktop clipboard, cookie jar or request headers (network),
- * runs raw agent-browser commands, changes browser profiles or identity, or bypasses certificate
- * errors.
- */
+export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE = `No Orca desktop is sharing its browser with this host. On your desktop, open this host's SSH settings and turn on "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}", make sure ${DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL} is "SSH host" and this host isn't listed under "${DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL}", and keep the host connected. The desktop needs an Orca version that supports it.`
+
+/** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. */
 export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.tabList',
   'browser.tabCurrent',

@@ -30,6 +30,7 @@ export type RuntimeServiceCommandSurface = {
   onNotificationDispatched: RuntimeMobileNotificationController['onDispatched']
   getMobileNotificationListenerCount: RuntimeMobileNotificationController['getListenerCount']
   dispatchMobileNotification: RuntimeMobileNotificationController['dispatch']
+  reportDesktopClientPresence: RuntimeMobileNotificationController['reportDesktopClientPresence']
   getMissedNotificationsSince: RuntimeMobileNotificationController['getMissedSince']
   configureNotificationDismissalStore: RuntimeMobileNotificationController['configureDismissalStore']
   closeNotificationDismissals: RuntimeMobileNotificationController['closeDismissals']
@@ -60,6 +61,7 @@ export type RuntimeServiceCommandSurface = {
   beginClaudeSignIn: RuntimeAccountController['beginClaudeSignIn']
   finishClaudeSignIn: RuntimeAccountController['finishClaudeSignIn']
   cancelClaudeSignIn: RuntimeAccountController['cancelClaudeSignIn']
+  runHostAccountSignIn: RuntimeAccountController['runHostSignIn']
   removeCodexAccount: RuntimeAccountController['removeCodex']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
   addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
@@ -72,6 +74,9 @@ export type RuntimeServiceCommandSurface = {
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
   deleteMobileSpeechModel: RuntimeMobileSpeechCatalog['delete']
   configureMobileDictation: RuntimeMobileSpeechCatalog['configure']
+  getOpenAiSpeechKeyStatus: RuntimeMobileSpeechCatalog['openAiKeyStatus']
+  setOpenAiSpeechKey: RuntimeMobileSpeechCatalog['setOpenAiKey']
+  clearOpenAiSpeechKey: RuntimeMobileSpeechCatalog['clearOpenAiKey']
   startMobileDictation: RuntimeMobileDictationController['start']
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
@@ -134,6 +139,7 @@ export function installRuntimeServiceCommandSurface(
     onNotificationDispatched: notifications.onDispatched.bind(notifications),
     getMobileNotificationListenerCount: notifications.getListenerCount.bind(notifications),
     dispatchMobileNotification: notifications.dispatch.bind(notifications),
+    reportDesktopClientPresence: notifications.reportDesktopClientPresence.bind(notifications),
     getMissedNotificationsSince: notifications.getMissedSince.bind(notifications),
     configureNotificationDismissalStore: notifications.configureDismissalStore.bind(notifications),
     closeNotificationDismissals: notifications.closeDismissals.bind(notifications),
@@ -167,6 +173,7 @@ export function installRuntimeServiceCommandSurface(
     beginClaudeSignIn: accounts.beginClaudeSignIn.bind(accounts),
     finishClaudeSignIn: accounts.finishClaudeSignIn.bind(accounts),
     cancelClaudeSignIn: accounts.cancelClaudeSignIn.bind(accounts),
+    runHostAccountSignIn: accounts.runHostSignIn.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
     addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
@@ -179,6 +186,9 @@ export function installRuntimeServiceCommandSurface(
     downloadMobileSpeechModel: speech.download.bind(speech),
     deleteMobileSpeechModel: speech.delete.bind(speech),
     configureMobileDictation: speech.configure.bind(speech),
+    getOpenAiSpeechKeyStatus: speech.openAiKeyStatus.bind(speech),
+    setOpenAiSpeechKey: speech.setOpenAiKey.bind(speech),
+    clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),

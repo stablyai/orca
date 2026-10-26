@@ -16,7 +16,7 @@ import { createCancelledConnectAttemptError } from '../../ssh/ssh-connect-attemp
 function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRuntimeEnvironment {
   const paired = createEnvironmentFromPairingOffer({
     id: 'environment-1',
-    name: 'Managed server',
+    name: 'Builder',
     now: 1,
     offer: {
       v: PAIRING_OFFER_VERSION,
@@ -47,7 +47,7 @@ function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRunt
 function setup(overrides: Partial<SshTarget> = {}, targeting?: OrcadManagedTunnelTargeting) {
   const target: SshTarget = {
     id: 'ssh-1',
-    label: 'Managed server',
+    label: 'Builder',
     host: 'example.com',
     port: 22,
     username: 'deploy',
@@ -244,7 +244,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         6_768,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
     })
 
@@ -276,7 +276,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       )
       await state.manager.ensure(environment())
       bound = after
-      // A plain ensure keeps the forward: nothing it compares names the bound port.
+      // Persisted deployment identity does not change when the server binds a fallback port.
       await state.manager.ensure(environment())
       expect(state.addForward).toHaveBeenCalledOnce()
 
@@ -289,7 +289,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         after,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
     })
 
@@ -586,7 +586,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         6_768,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
 
       await state.manager.ensure(environment())
@@ -717,7 +717,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
     expect(state.verifyIdentity).toHaveBeenCalledOnce()
   })
@@ -736,7 +736,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
     expect(state.ensureServing).toHaveBeenLastCalledWith(
       expect.objectContaining({ remotePort: 58_520 })
@@ -762,7 +762,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
   })
 
@@ -812,7 +812,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
     )
     expect(state.addForward.mock.calls[0]?.[4]).toBe(58_520)
     state.addForward.mockClear()
-    // The persisted link names the preferred port, so the next ensure reuses this forward.
     await state.manager.ensure({
       ...createEnvironment('orcadDeployment'),
       orcadDeployment: {

@@ -23,20 +23,15 @@ import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-teleme
 import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
-import {
-  WorkspaceCreationRegistry,
-  type WorkspaceCreationHandle
-} from '../sidebar-inputs/workspace-creation-registry'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
+import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution>
-
-  // Switch point: only a build where main produces the sidebar's inputs lists creations.
-  readonly workspaceCreations = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceCreationRegistry() : null
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -68,7 +63,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     // Listed from here: a create refused before its project resolved has nothing to show.
-    const creation = this.workspaceCreations?.open({ creationId: args.creationId, repoId: repo.id })
+    const creation = this.workspaceLifecycle?.openCreate({
+      creationId: args.creationId,
+      repoId: repo.id,
+      keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+    })
     try {
       return await this.createInResolvedProject(args, repo, creation, rearm, events)
     } finally {
@@ -193,15 +192,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
-    // Why: the filesystem-auth layer maintains a separate cache of registered
-    // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
-    // to authorize paths. Without invalidating it here, CLI-created worktrees
-    // are not recognized and all git operations fail with "Access denied:
-    // unknown repository or worktree path".
-    // Scoped to this repo: the global form dirties every owner, so the next
-    // authorization-requiring IPC relists EVERY registered repo — ~58 `git worktree
-    // list` spawns, ~10s of git wall-clock through an admission budget of 4, to
-    // rediscover roots only this repo changed.
+    // Invalidate this repo's authorized-root cache so CLI creates work; global invalidation needlessly rescans every repo.
     invalidateAuthorizedRootsCacheForRepo(store, repo)
 
     notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
@@ -268,8 +259,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
                 ? ('not_configured' as const)
                 : effectiveDecision === 'skip' || !shouldRunSetup
                   ? ('skipped' as const)
-                  : // Why: the in-process hook is already executing, so reporting
-                    // spawn_failed would strand callers that retry on it.
+                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
                     didSpawnSetup || didStartInProcessSetupHook
                     ? ('running' as const)
                     : ('spawn_failed' as const),

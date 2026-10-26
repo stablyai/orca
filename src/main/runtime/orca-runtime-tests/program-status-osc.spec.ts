@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
@@ -18,7 +19,7 @@ describe('OSC 7501 program status', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -58,7 +59,7 @@ describe('OSC 7501 program status', () => {
       onTerminalProgramStatusFacet: (event) => order.push(`facet:${event.facet?.state ?? 'none'}`)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -68,7 +69,7 @@ describe('OSC 7501 program status', () => {
     runtime.onPtyData('pty-order', '\x1b]7501;state=working:app=brew:progress=10\x1b\\', 1)
     runtime.onPtyData('pty-order', '\x1b]7501;state=done:app=brew\x1b\\', 2)
 
-    // Why it matters: a reader between the two (the 133;D drop) must never see done + a live facet.
+    // Readers between status updates must never see done with a live facet.
     expect(order).toEqual(['facet:working', 'status:working', 'facet:done', 'status:done'])
   })
 
@@ -83,7 +84,7 @@ describe('OSC 7501 program status', () => {
         facets.push([event.ptyId, event.facet?.state ?? null])
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -104,8 +105,7 @@ describe('OSC 7501 program status', () => {
   })
 
   it("drives agent edges and the PTY's status from Claude's OSC 7501, not its glyph-less titles", () => {
-    // Byte order captured from Claude Code 2.1.302 once the terminal answers the OSC 7501 probe:
-    // its titles lose the ⠂/✳ prefix, so only the program's report says working or idle.
+    // Claude Code 2.1.302 drops title spinners after OSC 7501; only its program report distinguishes working from idle.
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
     const osc7501 = (body: string) => `\x1b]7501;${body}\x1b\\`

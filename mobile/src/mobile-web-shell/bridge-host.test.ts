@@ -23,9 +23,6 @@ describe('requests', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     bridge.host.receive(
-      clientFrame({ type: 'request', id: OTHER, method: 'status.get', params: undefined })
-    )
-    bridge.host.receive(
       clientFrame({ type: 'request', id: bridgeId(3), method: 'status.get', params: { a: 1 } })
     )
     bridge.host.receive(
@@ -37,7 +34,6 @@ describe('requests', () => {
       })
     )
     expect(bridge.client.requests.map((request) => request.args)).toEqual([
-      ['status.get'],
       ['status.get'],
       ['status.get', { a: 1 }],
       ['status.get', undefined, { timeoutMs: 50 }]
@@ -116,11 +112,15 @@ describe('requests', () => {
   })
 
   it('refuses a subscription id as a request id, because one ledger answers for both', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
+    expect(bridge.client.streams).toHaveLength(1)
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(0)
-    expect(bridge.last().type).toBe('error')
+    expect(bridge.last()).toMatchObject({
+      type: 'error',
+      error: { message: expect.stringContaining('already in flight') }
+    })
   })
 
   it('admits exactly the in-flight cap and refuses the next', () => {
@@ -131,7 +131,6 @@ describe('requests', () => {
       )
     }
     expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
-    // The `init` this page's session opened with, and nothing else: none of these was refused.
     expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
     bridge.host.receive(
       clientFrame({ type: 'request', id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS), method: 'x.get' })
@@ -156,7 +155,7 @@ describe('requests', () => {
   })
 
   it('holds the cap against a page that closes between batches', async () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     const fill = (offset: number): void => {
       for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
         bridge.host.receive(
@@ -165,8 +164,9 @@ describe('requests', () => {
       }
     }
     fill(0)
-    // `close` empties the page's ledger, but the desktop is still running all 64 and `sendRequest`
-    // has no cancel: counting the ledger would hand the cap over again to the next document.
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
+    // Desktop calls survive page close because sendRequest has no cancel; keep their 64 slots occupied instead of resetting the cap.
     bridge.host.receive(clientFrame({ type: 'close' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
     fill(100)
@@ -269,10 +269,13 @@ describe('subscriptions', () => {
 
   it('answers a client whose subscribe throws and holds no slot', () => {
     const client = createFakeRpcClient()
+    let attempts = 0
     const bridge = harness({
+      ready: true,
       client: {
         ...client,
         subscribe: () => {
+          attempts += 1
           throw new Error('no socket')
         }
       }
@@ -280,7 +283,15 @@ describe('subscriptions', () => {
     bridge.host.receive(subscribeFrame(ID))
     expect(bridge.last().type).toBe('error')
     bridge.host.receive(subscribeFrame(ID))
-    expect(bridge.frames()).toHaveLength(2)
+    expect(attempts).toBe(2)
+    expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual(
+      [1, 2].map(() =>
+        expect.objectContaining({
+          type: 'error',
+          error: expect.objectContaining({ message: 'no socket' })
+        })
+      )
+    )
   })
 
   it('unsubscribes a stream that overflowed inside subscribe, exactly once', () => {
@@ -302,21 +313,13 @@ describe('subscriptions', () => {
     expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([
       { v: 1, type: 'end', id: ID, reason: 'overflow' }
     ])
-    // The stream was already retired when its unsubscribe arrived, so storing it on the record
-    // would leak the client's stream with nothing left to read it.
+    // Overflow retired this record before subscribe returned cleanup; storing unsubscribe now would leak the client stream.
     expect(unsubscribes).toBe(1)
   })
 })
 
 describe('backpressure', () => {
-  /**
-   * A stream on the byte window, which after C7.3 means any stream but a terminal's.
-   *
-   * Named rather than left to `subscribeFrame`'s default: that default is `terminal.subscribe`, and
-   * a terminal's output is held and coalesced rather than ending the stream. These cases are about
-   * the window itself, so they subscribe to something the window still governs; the terminal's
-   * exception has its own file, and neither should be read off the other.
-   */
+  // Use a nonterminal stream to test the byte window; terminal.subscribe now holds/coalesces output and tests that exception separately.
   const WINDOWED = 'session.tabs.subscribe'
 
   function fill(bridge: Harness, frames: number): void {
@@ -369,14 +372,18 @@ describe('backpressure', () => {
     for (let index = 0; index < BRIDGE_MAX_UNACKED_FRAMES && !ended(); index += 1) {
       bridge.client.streams[0]?.emit(chunk)
     }
-    const events = bridge.posted.length - 1
-    expect(events).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
-    const eventBytes = bridge.posted
-      .slice(0, events)
-      .reduce((total, json) => total + json.length, 0)
-    // Brackets the window: everything sent fits under it, and one more frame would not have.
+    const events = bridge.posted.filter((json) => JSON.parse(json).type === 'event')
+    expect(events.length).toBeGreaterThan(0)
+    expect(events.length).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
+    const eventBytes = events.reduce(
+      (total, json) => total + new TextEncoder().encode(json).byteLength,
+      0
+    )
     expect(eventBytes).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_BYTES)
-    expect(eventBytes + chunk.length).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
+    const nextBytes = new TextEncoder().encode(
+      JSON.stringify({ v: 1, type: 'event', id: ID, seq: events.length + 1, payload: chunk })
+    ).byteLength
+    expect(eventBytes + nextBytes).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
@@ -384,20 +391,26 @@ describe('backpressure', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID, WINDOWED))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
-    // What fits under the byte window, which leaves the next frame of this size to overflow it.
-    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / (chunk.length + 128))
+    bridge.client.streams[0]?.emit(chunk)
+    const first = bridge.posted.find((json) => JSON.parse(json).type === 'event')
+    expect(first).toBeDefined()
+    if (first === undefined) {
+      throw new Error('no event posted')
+    }
+    const frameBytes = new TextEncoder().encode(first).byteLength
+    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / frameBytes)
     const events = (): BridgeHostMessage[] => bridge.frames().filter((f) => f.type === 'event')
     const emit = (times: number): void => {
       for (let index = 0; index < times; index += 1) {
         bridge.client.streams[0]?.emit(chunk)
       }
     }
-    emit(fits)
+    emit(fits - 1)
     expect(events()).toHaveLength(fits)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: fits }))
     emit(fits)
-    // The frame window is nowhere near full, so releasing the acked bytes is the only thing that
-    // can let the second batch through.
+    expect(frameBytes * fits * 2).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
+    // Keep the frame-count window open so only released acknowledgement bytes can unblock the batch.
     expect(fits * 2).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
     expect(events()).toHaveLength(fits * 2)
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
@@ -445,18 +458,15 @@ describe('teardown', () => {
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
     bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     bridge.client.streams[0]?.emit({ chunk: 'a' })
-    // Nothing reaches the client either: a page that outlived its host is a page the fence is for.
     bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
     bridge.host.receive(subscribeFrame(bridgeId(10)))
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
     await flushBridge()
-    // The `init` this session opened with, plus the two the disposal settled, and nothing since.
     expect(bridge.frames()).toHaveLength(3)
     expect(bridge.client.requests).toHaveLength(1)
     expect(bridge.client.streams).toHaveLength(1)
     expect(bridge.client.foregroundCalls).toEqual([])
-    // A view still posting into a disposed host is a leak, and the diagnostic is how it is found.
     expect(bridge.diagnostics).toEqual(
       Array.from({ length: 4 }, () => ({ kind: 'frame-after-dispose' }))
     )
@@ -487,14 +497,12 @@ describe('teardown', () => {
   it('answers the document that loads in after a close, rather than latching shut', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'close' }))
-    // The next page shares this host, and a host that had shut itself would leave its `ready`
-    // retrying forever with nothing posted and nothing logged.
+    // Document close must leave the host reusable; the next ready on this same view must receive full service.
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.last().type).toBe('init')
     expect(bridge.client.stateListeners()).toBe(1)
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(1)
-    // Full service, not just an answered `ready`: the state fan-out reaches this document too.
     bridge.client.pushState('reconnecting')
     expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'reconnecting' } })
     expect(bridge.diagnostics).toEqual([])
@@ -503,8 +511,7 @@ describe('teardown', () => {
   it('forwards no straggler from the document that said goodbye', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'close' }))
-    // Frames the closed document posted before it went away. Forwarding one now would answer it
-    // into whichever document loads in next.
+    // Refuse stragglers from the closed document rather than answering into its replacement.
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     bridge.host.receive(subscribeFrame(OTHER))
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
@@ -520,8 +527,7 @@ describe('teardown', () => {
   it('posts nothing into a view that belongs to no document yet', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'close' }))
-    // The client keeps running between documents, and this listener is still attached: a `state`
-    // posted now arrives in the replacement document before its own `init`.
+    // Client state fan-out continues between documents; do not post it into the replacement before init.
     bridge.client.pushState('reconnecting')
     bridge.client.pushState('connected')
     expect(bridge.posted).toHaveLength(0)

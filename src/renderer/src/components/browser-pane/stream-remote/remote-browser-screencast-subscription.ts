@@ -43,8 +43,7 @@ function recordE2eScreencastSubscribe(): void {
   }
 }
 
-// Why: isCurrent gates the two channels the runtime can deliver a stale event on; frames and close
-// carry their own supersession checks downstream, so they are forwarded unguarded.
+// Guard ready/failure events here; frame and close handlers apply their own supersession checks.
 export type RemoteBrowserScreencastEvents = {
   isCurrent: () => boolean
   onReady: (event: BrowserScreencastReadyResult) => void
@@ -57,8 +56,6 @@ export type RemoteBrowserScreencastEvents = {
   onClosed: () => void
 }
 
-// Translates one runtime screencast subscription's raw RPC envelope traffic into the semantic
-// events a pane cares about.
 export async function openRemoteBrowserScreencastStream(
   subscribe: RemoteBrowserScreencastSubscribe,
   request: RemoteBrowserScreencastRequest,

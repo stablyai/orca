@@ -1,4 +1,4 @@
-import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -11,11 +11,11 @@ import {
 import {
   dedupeEditorTabsWithinGroups,
   getPersistedEditFileIdsByWorktree,
-  isTransientEditorContentType,
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { restoresSavedContentTab } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -24,9 +24,7 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
-/** Drops leaves whose group is gone, and repeat leaves for a group already
- *  placed earlier in the tree — one column per group is the render invariant,
- *  and a repeated leaf paints the same tab strip in every one of its columns. */
+/** Keep one leaf per surviving group; repeats draw duplicate tab strips in separate columns. */
 export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
@@ -67,7 +65,7 @@ function pruneLayoutNodeForGroups(
 export function buildHydratedTabState(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>,
-  /** A diff, conflict or check tab whose record the caller still holds, as a frame rebuild does. */
+  /** A diff, conflict or check tab a frame build keeps: its frame carries the tab's view. */
   keepsTransientTab: (worktreeId: string, entityId: string) => boolean = () => false
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}
@@ -127,22 +125,10 @@ export function buildHydratedTabState(
           // containing "::"; those are invalid pane-key tab ids.
           return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
         }
-        // Why dropped rather than converted: a preview used to be an editor tab whose id encoded
-        // the document, and its document was never persisted — so this chrome has always come back
-        // naming a file no restore produces, which is the empty pane the surface was reported for.
-        // A preview is a browser tab now, and the worktree id inside that encoded id can itself
-        // contain the separator, so re-deriving the document from it is guesswork. The reader
-        // reopens the preview; nothing is left pointing at a surface that cannot exist.
-        if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
-          return false
-        }
-        if (!isTransientEditorContentType(tab.contentType)) {
-          return true
-        }
-        // Why: restore skips backing editor state for transient diff/conflict
-        // items. Hydration must drop their tab chrome too or the split group
-        // comes back pointing at a document that no longer exists.
-        return persistedEditFileIds.has(tab.entityId) || keepsTransientTab(worktreeId, tab.entityId)
+        // The same rule main's layout load applies, so neither holds a tab the other drops.
+        return restoresSavedContentTab(tab, persistedEditFileIds, () =>
+          keepsTransientTab(worktreeId, tab.entityId)
+        )
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     // Why after the sort: the surviving record is the one the strip renders first.
@@ -166,9 +152,7 @@ export function buildHydratedTabState(
       const slots = structuredLaunchSlotIds(worktreeId, g.id)
       const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
       const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
-      // Why: persisted tabOrder can contain duplicates from older buggy
-      // writes. Deduping during hydration restores the store invariant before
-      // later group operations branch on tab counts or neighbors.
+      // Repair persisted duplicate tabOrder IDs before neighbor/count-dependent operations.
       const tabOrder = dedupeTabOrder(
         g.tabOrder
           .map(canonicalTabId)
@@ -179,10 +163,7 @@ export function buildHydratedTabState(
         canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === g.id
           ? canonicalActiveTabId
           : null
-      // Why: persisted MRU may reference tabs that no longer exist. Sanitize
-      // against the live tabOrder, then ensure the current active tab sits at
-      // the tail so the first close after restore jumps back to the previous
-      // tab rather than falling through to neighbor selection.
+      // Sanitize stale MRU IDs and put active tab last so first close restores prior selection rather than a neighbor.
       const sanitizedRecent = sanitizeRecentTabIds(
         g.recentTabIds?.map(canonicalTabId),
         tabOrder.filter((id) => tabOwners.get(id) === g.id)

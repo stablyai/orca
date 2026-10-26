@@ -1,6 +1,4 @@
-// Where each call site's tab lands, whether it takes the selection, and what telemetry the launch
-// is stamped with. Placement never rides a launch wire — it is applied locally — so it has to be
-// observed on the tab the funnel creates.
+// Placement stays local rather than riding the launch wire; verify the created tab’s position, selection and telemetry.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -31,7 +29,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -79,8 +77,7 @@ describe('agent launch caller placement and telemetry', () => {
   it.each(cases)('places the tab %s opens in the group it named', async (_id, profile) => {
     await launch(profile)
 
-    // Why: an omitted group is not "the active group" at this layer — it is handed on as
-    // `undefined` and the tab store decides, so the two shapes must stay distinguishable.
+    // Keep omitted group as undefined; the tab store decides its placement.
     expect(createdTabGroupId(store)).toBe(profile.args.groupId)
   })
 
@@ -90,8 +87,7 @@ describe('agent launch caller placement and telemetry', () => {
     expect(createdTabOptions(store)).toMatchObject({ launchAgent: profile.args.agent })
   })
 
-  // Why uniform: the store scopes activation to the launch's own workspace, so no caller — the
-  // floating panel included — needs to opt out of the selection to protect the main window's.
+  // The store scopes activation to the launch workspace, including floating-panel launches.
   it.each(cases)('selects the tab %s opens within its own workspace', async (_id, profile) => {
     await launch(profile)
 
@@ -105,8 +101,7 @@ describe('agent launch caller placement and telemetry', () => {
   it.each(cases)('persists the tab-bar order after %s launches', async (_id, profile) => {
     await launch(profile)
 
-    // Why: without this the stored order falls back to terminals-first and the new tab jumps to
-    // index 0. It runs for every call site.
+    // Without explicit ordering, terminals-first fallback moves the new tab to index 0.
     expect(store.setTabBarOrder).toHaveBeenCalledTimes(1)
     expect(store.setTabBarOrder.mock.calls[0]?.[0]).toBe(profile.args.worktreeId)
     expect(store.setTabBarOrder.mock.calls[0]?.[1]).toContain('tab-1')
@@ -175,8 +170,7 @@ describe('agent launch caller placement and telemetry', () => {
 
     launchAgentInNewTab({ requestId: 'request-2', agent: 'codex', worktreeId: 'wt-1' })
 
-    // Why: the terminal pane snapshots pending startup in useState on first render, so the tab
-    // must never exist without its startup command.
+    // TerminalPane snapshots startup on first render; create the tab with its command already attached.
     expect(store.createTab).toHaveBeenCalledTimes(1)
     expect(queuedStartupCommand(store)).toEqual(expect.any(String))
   })

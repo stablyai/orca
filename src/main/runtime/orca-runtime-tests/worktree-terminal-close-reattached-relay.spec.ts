@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -35,7 +36,11 @@ function makeReattachedRelayRuntime(): OrcaRuntimeService {
       'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: REATTACHED_PTY_ID })
     }
   })
-  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+  // The real Store keeps an SSH workspace's session in its host's partition.
+  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+    session,
+    toSshExecutionHostId(CONNECTION_ID)
+  )
   const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: CONNECTION_ID }
   runtimeStore.getRepos = () => [repo]
   runtimeStore.getRepo = (id: string) => (id === TEST_REPO_ID ? repo : undefined)

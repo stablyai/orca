@@ -50,7 +50,8 @@ describe('shared tab paths in a layout-owner build', () => {
     expect(store.getState().groupsByWorktree).toBe(before.groupsByWorktree)
   })
 
-  it('reconnect advertises restored terminals without rewriting their rows', async () => {
+  // A row's ptyId is the window's own field (the frame merge keeps it), so reconnect sets only that.
+  it('reconnect advertises restored terminals and changes only each row ptyId', async () => {
     const rows = { [WT]: [makeTab({ id: 'tab-1', worktreeId: WT, ptyId: null })] }
     store.setState({
       tabsByWorktree: rows,
@@ -63,7 +64,9 @@ describe('shared tab paths in a layout-owner build', () => {
     await store.getState().reconnectPersistedTerminals()
 
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
-    expect(store.getState().tabsByWorktree).toBe(rows)
+    expect(store.getState().tabsByWorktree).toEqual({
+      [WT]: [{ ...rows[WT][0], ptyId: 'pty-1' }]
+    })
     expect(store.getState().workspaceSessionReady).toBe(true)
   })
 })

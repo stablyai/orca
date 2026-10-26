@@ -85,8 +85,7 @@ export function setTrackedSessionOption(
   optionId: string,
   value: SessionOptionValue,
   source: TrackedNativeChatSessionOption['source'],
-  /** The model the picker drew this option under when none is tracked — without it a
-   *  value set against a CLI default would be dispatched and then silently forgotten. */
+  /** Picker model when none is tracked; retain options dispatched under the CLI default. */
   fallbackModelId: string | null = null
 ): string | null {
   if (optionId === 'model') {
@@ -123,8 +122,7 @@ export function flattenNativeChatSessionOptionRecord(
 export function applyNativeChatReportedSessionOptions(
   record: NativeChatSessionOptionRecord,
   values: Record<string, SessionOptionValue>,
-  /** Ids the provider reported back. Omitted means every value is a report, which
-   *  is what a surface that only ever learns values by reading them sends. */
+  /** Provider-confirmed ids; omitted means all values are read-back reports. */
   confirmed?: readonly string[]
 ): boolean {
   const sourceFor = (id: string): TrackedNativeChatSessionOption['source'] =>
@@ -151,19 +149,17 @@ export function applyNativeChatReportedSessionOptions(
   return changed
 }
 
-/** Resolves a hook-reported model string to a catalog id: exact id, then label,
- *  then the longest id the report contains. A catalog that seeds no models keeps
- *  the report itself. Null when nothing matches. */
+/** Match reported model by exact id, label, then longest contained id; retain raw reports for unseeded catalogs. Callers may keep unlisted selectors without fuzzy matching. */
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
-  reported: string
+  reported: string,
+  options?: { allowUnlisted?: boolean }
 ): string | null {
   const normalized = reported.trim().toLowerCase()
   if (!normalized) {
     return null
   }
-  // Why: a catalog with no seed (OMP) has nothing to match against, yet the hook's
-  // `provider/id` IS the selector the CLI accepts back — keep it as the tracked row.
+  // OMP seeds no models; its reported provider/id is already the exact reusable CLI selector.
   if (catalog.models.length === 0) {
     return reported.trim()
   }
@@ -174,6 +170,9 @@ export function matchNativeChatCatalogModelId(
   const byLabel = catalog.models.find((model) => model.label.toLowerCase() === normalized)
   if (byLabel) {
     return byLabel.id
+  }
+  if (options?.allowUnlisted && !/\s/.test(normalized)) {
+    return reported.trim()
   }
   let containingId: string | null = null
   for (const model of catalog.models) {

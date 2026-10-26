@@ -1,9 +1,11 @@
 import { stat } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { codexDatedRolloutRelativePath } from '../codex/codex-session-resume-home'
 import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { pendingAgentSessionRewindFork } from '../../shared/agent-session-rewind'
 import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,
@@ -70,7 +72,6 @@ export function isStructuredChatCliForkSourceCurrent(
   )
 }
 
-/** Prepares the record's current conversation on its execution host, without a History inventory. */
 export async function prepareStructuredChatCliFork(
   args: AiVaultPrepareChatForkArgs,
   prepare: AiVaultSessionResumePreparation
@@ -93,6 +94,13 @@ export async function prepareStructuredChatCliFork(
     !agentForksConversations(record.provider)
   ) {
     throw new Error('This chat has no saved conversation available on this host.')
+  }
+  // A terminal resume can't cut where the rewind did, so it would bring back the undone turns.
+  if (
+    pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)?.replacesSessionId ===
+    head.handle.nativeId
+  ) {
+    throw new Error('Send a message after rewinding this chat, then open it in a terminal.')
   }
   const agent = record.provider
   const cwd =
@@ -166,11 +174,12 @@ export async function prepareStructuredChatCliFork(
   })
   const preparedHome = result.useRealCodexHome ? null : (result.substituteCodexHome ?? codexHome)
   if (codexHome && (result.useRealCodexHome || result.substituteCodexHome)) {
-    filePath = join(
-      preparedHome ?? getSystemCodexHomePath(),
-      'sessions',
-      relative(join(codexHome, 'sessions'), filePath)
-    )
+    // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
+    const relativePath = codexDatedRolloutRelativePath(join(codexHome, 'sessions'), filePath)
+    if (!relativePath) {
+      throw new Error('The prepared conversation is unavailable in the selected account.')
+    }
+    filePath = join(preparedHome ?? getSystemCodexHomePath(), 'sessions', relativePath)
     const preparedFile = await stat(filePath)
     if (!preparedFile.isFile() || preparedFile.size === 0) {
       throw new Error('The prepared conversation is unavailable in the selected account.')

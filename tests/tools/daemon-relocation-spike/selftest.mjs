@@ -1,6 +1,4 @@
-// Offline validation of the spike's pure logic: argument parsing, tier
-// definitions, the tier -> copy-plan resolver, and the app-dir module filter.
-// No real build, copy, or launch. `runSelftest()` returns true on all-pass.
+// Validate args, tier/copy plans and module filters offline; return true on all-pass without a build/copy/launch.
 
 import { parseArgs, TIERS } from './cli.mjs'
 import { TIER_DEFINITIONS, selectTierDlls, resolveTierFileSet, GPU_DLLS } from './tier-file-set.mjs'
@@ -33,10 +31,7 @@ function makeSyntheticInventory() {
       size: 1,
       relFromUnpacked: 'out/main/daemon-entry.js'
     },
-    // node-pty is packaged at resources/node_modules/node-pty — a SIBLING of
-    // app.asar.unpacked, NOT under it (see packaged-runtime-node-modules.cjs).
-    // The synthetic inventory reflects that so the copy-plan test catches any
-    // regression that mislocates it.
+    // Model node-pty at resources/node_modules, sibling to app.asar.unpacked, so copy-plan regressions cannot hide in synthetic layout.
     nodePty: {
       exists: true,
       packageDir: 'C:\\App\\resources\\node_modules\\node-pty',
@@ -55,7 +50,6 @@ function run() {
     }
   }
 
-  // ── Argument parsing ────────────────────────────────────────────────
   check('help flag', parseArgs(['--help']).help === true)
   check('selftest flag', parseArgs(['--selftest']).selftest === true)
   check('missing app-dir errors', Boolean(parseArgs(['--work-dir', 'w']).error))
@@ -74,7 +68,6 @@ function run() {
     parseArgs(['--app-dir', 'a', '--work-dir', 'w']).launch?.tier === 'full'
   )
 
-  // ── Tier definitions ────────────────────────────────────────────────
   check(
     'all tiers defined',
     TIERS.every((t) => Boolean(TIER_DEFINITIONS[t]))
@@ -91,7 +84,6 @@ function run() {
   )
   check('no-gpu count is 1', noGpu.length === 1)
 
-  // ── Copy-plan resolution ────────────────────────────────────────────
   const inv = makeSyntheticInventory()
   for (const tier of TIERS) {
     const plan = resolveTierFileSet(inv, tier)
@@ -99,8 +91,7 @@ function run() {
     const dests = plan.ops.map((o) => o.destRel)
     check(`${tier}: has exe`, dests.includes('Orca.exe'))
     check(`${tier}: has icu`, dests.includes('icudtl.dat'))
-    // destRel mirrors the full win-unpacked layout so the require-closure and
-    // node-pty native resolution work verbatim from the copy.
+    // Mirror full win-unpacked paths for require/native resolution from the copy.
     check(
       `${tier}: has daemon entry`,
       dests.includes('resources/app.asar.unpacked/out/main/daemon-entry.js')
@@ -121,7 +112,6 @@ function run() {
   const brokenInv = { ...inv, nodePty: { exists: false, conptyNode: null } }
   check('missing node-pty warns', resolveTierFileSet(brokenInv, 'full').warnings.length > 0)
 
-  // ── Module-path filter ──────────────────────────────────────────────
   const appDir = 'C:\\Users\\me\\AppData\\Local\\Programs\\orca'
   const modules = [
     'C:\\Users\\me\\AppData\\Local\\Programs\\orca\\Orca.exe',

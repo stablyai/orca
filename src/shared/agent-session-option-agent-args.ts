@@ -3,7 +3,7 @@ import type { AgentType } from './agent-status-types'
 
 // Required values consume dash-leading text; boolean and optional-valued options are excluded.
 // Codex (clap) and OpenCode (yargs) never take a dash-leading value, so they have no entry.
-const VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
+const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
   claude: [
     '--add-dir',
     '--agent',
@@ -31,6 +31,7 @@ const VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
     '--output-format',
     '--permission-mode',
     '--permission-prompts',
+    '--permission-prompt-tool',
     '--plugin-dir',
     '--plugin-url',
     '--remote-control-session-name-prefix',
@@ -60,7 +61,10 @@ const VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
 }
 
 export function agentArgTerminatorIndex(agent: AgentType, tokens: readonly string[]): number {
-  return findOptionOccurrence(tokens, ['--'], false, VALUE_OPTIONS[agent])?.index ?? tokens.length
+  return (
+    findOptionOccurrence(tokens, ['--'], false, agentRequiredValueOptions(agent))?.index ??
+    tokens.length
+  )
 }
 
 export function agentArgOptionTokens(tokens: readonly string[]): readonly string[] {
@@ -76,13 +80,31 @@ export function removeAgentArgOption(
   matchesValue: (value: string | undefined) => boolean = () => true
 ): string[] {
   const kept: string[] = []
-  let rest = tokens
-  let found = findOptionOccurrence(rest, aliases, true, VALUE_OPTIONS[agent])
+  const required = agentRequiredValueOptions(agent)
+  let cursor = 0
+  let found = findOptionOccurrence(tokens, aliases, true, required, cursor)
   while (found) {
     const end = found.index + found.consumed
-    kept.push(...rest.slice(0, matchesValue(found.value) ? found.index : end))
-    rest = rest.slice(end)
-    found = findOptionOccurrence(rest, aliases, true, VALUE_OPTIONS[agent])
+    const keptEnd = matchesValue(found.value) ? found.index : end
+    for (let index = cursor; index < keptEnd; index += 1) {
+      kept.push(tokens[index])
+    }
+    cursor = end
+    found = findOptionOccurrence(tokens, aliases, true, required, cursor)
   }
-  return [...kept, ...rest]
+  for (let index = cursor; index < tokens.length; index += 1) {
+    kept.push(tokens[index])
+  }
+  return kept
+}
+
+/** Shared required-operand facts for terminal parsing, including CLI-sharing teams. */
+export function agentRequiredValueOptions(agent: string): readonly string[] {
+  const value: unknown = Object.getOwnPropertyDescriptor(
+    AGENT_REQUIRED_VALUE_OPTIONS,
+    agent === 'claude-agent-teams' ? 'claude' : agent
+  )?.value
+  return Array.isArray(value) && value.every((item): item is string => typeof item === 'string')
+    ? value
+    : []
 }

@@ -1,5 +1,4 @@
-// Session listings warm the account catalog; only startup/readback also resolves its default.
-// Catalog bookkeeping failures never reject the session action that supplied the listing.
+// Warm catalogs from listings; only startup/readback resolves defaults, and bookkeeping must not reject valid actions.
 
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type {
@@ -14,7 +13,6 @@ export type StructuredAgentSessionStartListingContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
 }
 
-/** Catalog persistence must not reject a valid start or options answer. */
 export function saveStructuredAgentSessionListing(
   context: Pick<StructuredAgentSessionStartListingContext, 'deps'>,
   sessionId: string,
@@ -31,8 +29,7 @@ export function saveStructuredAgentSessionListing(
   }
 }
 
-/** A start's late readback (Claude's settings) says once what the config resolved. Serialized
- *  behind the attach that published the child, which may still be indexing it. */
+/** Serialize delayed settings readback behind attach publication before resolving the configured default. */
 export function saveStructuredAgentSessionStartReadbackListing(
   context: StructuredAgentSessionStartListingContext,
   reporter: { sessionId: string; acquisitionGeneration: string; fence: number },

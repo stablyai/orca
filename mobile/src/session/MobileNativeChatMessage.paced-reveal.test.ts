@@ -11,6 +11,10 @@ import {
   MobileNativeChatReplyRevealsContext,
   type MobileNativeChatReplyReveals
 } from './mobile-native-chat-reply-reveals'
+import {
+  createMobileNativeChatGrowthHold,
+  MobileNativeChatGrowthHoldContext
+} from './mobile-native-chat-growth-hold'
 
 vi.mock('react-native', () => ({
   Image: 'Image',
@@ -39,6 +43,7 @@ const second = first + 'more '.repeat(40)
 describe('a growing reply on the phone', () => {
   let renderer: ReactTestRenderer | undefined
   let chat: MobileNativeChatReplyReveals
+  let growth = createMobileNativeChatGrowthHold()
 
   function render(text: string | string[], working = true, runningTool = false): void {
     const message: NativeChatMessage = {
@@ -59,7 +64,16 @@ describe('a growing reply on the phone', () => {
       mayStillGrow: working,
       activeTurnIsWorking: true
     })
-    const tree = createElement(MobileNativeChatReplyRevealsContext.Provider, { value: chat }, row)
+    const revealing = createElement(
+      MobileNativeChatReplyRevealsContext.Provider,
+      { value: chat },
+      row
+    )
+    const tree = createElement(
+      MobileNativeChatGrowthHoldContext.Provider,
+      { value: growth },
+      revealing
+    )
     act(() => {
       if (renderer) {
         renderer.update(tree)
@@ -92,7 +106,6 @@ describe('a growing reply on the phone', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
     vi.stubGlobal('requestAnimationFrame', (step: () => void) => setTimeout(step, 16))
     vi.stubGlobal('cancelAnimationFrame', (frame: number) => clearTimeout(frame))
-    // A reply that began while the chat was open.
     const tracker = createNativeChatReplyRevealTracker()
     trackNativeChatReplyRows(tracker, ['u1'], new Set(['u1']))
     const reveals = trackNativeChatReplyRows(tracker, ['u1', 'a1'], new Set(['u1', 'a1']))
@@ -101,6 +114,7 @@ describe('a growing reply on the phone', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = undefined
+    growth = createMobileNativeChatGrowthHold()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     vi.useRealTimers()
@@ -120,12 +134,22 @@ describe('a growing reply on the phone', () => {
     const before = drawn()
     expect(before).toBeGreaterThan(first.length)
     expect(before).toBeLessThan(second.length)
-    // The list recycles the row while it is still revealing.
     remount(second)
     expect(drawn()).toBeGreaterThanOrEqual(before)
     expect(drawn()).toBeLessThan(second.length)
     advance(DELAY)
     expect(drawn()).toBe(second.length)
+  })
+
+  it('waits while the page holds growth, then catches up in one step', () => {
+    growth.set(true)
+    render(first)
+    const shown = drawn()
+    advance(DELAY * 2)
+    expect(drawn()).toBe(shown)
+    act(() => growth.set(false))
+    advance(16)
+    expect(drawn()).toBe(first.length)
   })
 
   it.each([false, true])('paces a second prose block after the first caught up: %s', (caughtUp) => {
@@ -154,7 +178,6 @@ describe('a growing reply on the phone', () => {
     expect(chat.drawn.has('a1')).toBe(false)
     act(() => renderer?.unmount())
     renderer = undefined
-    // The question clears while the row remains outside the virtualized window.
     render(first)
     expect(drawn()).toBe(first.length)
     render(second)

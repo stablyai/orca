@@ -5,6 +5,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
+import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
@@ -68,6 +69,7 @@ export function AiVaultSessionVirtualList({
   onOpenCwd,
   onRequestDelete,
   searchHits,
+  searchHitHostLabels,
   keyboardRef,
   query = '',
   resumeHere
@@ -106,6 +108,8 @@ export function AiVaultSessionVirtualList({
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
+  /** Set only when search hits span several hosts. */
+  searchHitHostLabels?: ReadonlyMap<string, string> | null
   /** Present only where rows are keyboard-selectable. */
   keyboardRef?: Ref<AiVaultSessionListKeyboard>
   /** The search text; editing it moves the keyboard selection back to the top match. */
@@ -141,6 +145,7 @@ export function AiVaultSessionVirtualList({
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
+    measureElement: measureVirtualRowRetainingHiddenSize,
     estimateSize: (index) => {
       const row = vaultRows[index]
       if (row?.type === 'group') {
@@ -154,8 +159,7 @@ export function AiVaultSessionVirtualList({
     overscan: VAULT_ROW_OVERSCAN,
     // Why: the pinned group header covers the list's top, so a row scrolled into view stops below it.
     scrollPaddingStart: stickyHeaderIndexes.length > 0 ? VAULT_GROUP_HEADER_ROW_HEIGHT : 0,
-    // Why: keep the active group header mounted so CSS sticky can pin it while
-    // its sessions scroll underneath in the virtual list.
+    // Keep the active group header mounted so CSS sticky survives row virtualization.
     rangeExtractor: useCallback(
       (range) => {
         stickyRangeStartIndexRef.current = range.startIndex
@@ -184,8 +188,7 @@ export function AiVaultSessionVirtualList({
     })
   }, [])
 
-  // Why: the dialog stays up until the picked chat opens, and a second pick meanwhile would start
-  // a second resume; each pick settles, so this never stays set.
+  // Keep a synchronous single-flight latch while resume opens its destination so repeated picks cannot start duplicate resumes.
   const pickInFlight = useRef(false)
   const pickHere = (session: AiVaultSession): boolean => {
     if (!resumeHere) {
@@ -289,6 +292,7 @@ export function AiVaultSessionVirtualList({
                 expandedSessionIds={expandedSessionIds}
                 vaultScope={vaultScope}
                 searchHits={searchHits}
+                searchHitHostLabels={searchHitHostLabels}
                 buildResumeStartup={buildResumeStartup}
                 getOriginalPaneTarget={getOriginalPaneTarget}
                 isStructuredSessionOpen={isStructuredSessionOpen}

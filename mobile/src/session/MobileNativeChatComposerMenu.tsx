@@ -3,17 +3,14 @@ import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../src/shared/native-chat-picker-items'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-/** One row of the composer menu: a `/` command or skill, or a worktree file for `@`. */
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
 
-/** The text a row puts in place of the typed trigger. */
 export function composerMenuInsertText(row: ComposerMenuRow): string {
   return row.kind === 'file' ? `@${row.path}` : row.token
 }
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
 
-/** The floating card above the composer, grouped and labelled as desktop's `/` menu is. */
 export function MobileNativeChatComposerMenu({
   rows,
   onPick
@@ -49,7 +46,11 @@ function MenuRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={composerMenuInsertText(row)}
+      accessibilityLabel={
+        row.kind === 'skill' && row.location
+          ? `${row.token}, ${row.location}`
+          : composerMenuInsertText(row)
+      }
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => onPick(row)}
     >
@@ -69,6 +70,9 @@ function MenuRow({
           <Text style={styles.description} numberOfLines={2}>
             {description}
           </Text>
+        ) : null}
+        {row.kind === 'skill' && row.location ? (
+          <Text style={styles.description}>{row.location}</Text>
         ) : null}
       </View>
     </Pressable>

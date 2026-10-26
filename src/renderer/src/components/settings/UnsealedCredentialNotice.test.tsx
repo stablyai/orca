@@ -26,8 +26,7 @@ describe('UnsealedCredentialNotice', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  // Why null must stay silent: it means "nothing stored" or "envelope unreadable", and
-  // warning that an absent credential is exposed would be worse than saying nothing.
+  // Null means absent/unreadable storage, not evidence of plaintext exposure.
   it('renders nothing when protection is unknown', () => {
     render(<UnsealedCredentialNotice protection={null} credentialName="MiniMax API key" />)
     expect(screen.queryByRole('alert')).toBeNull()

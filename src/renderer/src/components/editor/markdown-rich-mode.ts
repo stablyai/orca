@@ -27,14 +27,7 @@ export type MarkdownRichModeEligibility = {
   unsupportedMessage: string | null
 }
 
-/**
- * The part of rich-mode eligibility that is a pure function of the document.
- *
- * Why this is split out: `unsupportedMessage` is deliberately late-bound — the
- * matcher messages are `get message()` accessors that call `translate()` at
- * access time, so they follow the active UI language. Anything that caches
- * eligibility must cache this decision and re-resolve the message per read.
- */
+/** Cache this pure document decision only; localized messages must be resolved per read. */
 export type MarkdownRichModeEligibilityDecision = {
   exceedsSizeLimit: boolean
   unsupportedReason: MarkdownRichModeUnsupportedReason | null
@@ -51,9 +44,7 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains HTML, JSX, or MDX.'
       )
     },
-    // Why: the rich editor preserves common embedded markup via placeholder
-    // tokens before parsing, but any HTML shape that still fails round-trip
-    // must fall back instead of risking silent source corruption.
+    // Fall back when placeholder-protected HTML still fails round-trip to avoid silently corrupting source.
     pattern: /<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*)?\/?>/
   },
   {
@@ -82,10 +73,7 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
   return resolveMarkdownRichModeUnsupportedMessage(getMarkdownRichModeUnsupportedReason(content))
 }
 
-/**
- * Reads the matcher's localized message through its getter, so the string
- * always reflects the language active at call time.
- */
+/** Resolve through the getter so messages follow the active UI language. */
 export function resolveMarkdownRichModeUnsupportedMessage(
   reason: MarkdownRichModeUnsupportedReason | null
 ): string | null {
@@ -98,9 +86,7 @@ export function resolveMarkdownRichModeUnsupportedMessage(
 export function getMarkdownRichModeUnsupportedReason(
   content: string
 ): MarkdownRichModeUnsupportedReason | null {
-  // Why: front-matter is handled externally — stripped before the rich editor
-  // sees the content and displayed as a read-only block. Only the body needs
-  // to pass the unsupported-content checks.
+  // Front matter is displayed separately as read-only; only its body enters rich editing.
   const fm = extractFrontMatter(content)
   const body = fm ? fm.body : content
 

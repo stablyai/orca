@@ -24,6 +24,7 @@ import {
   createEncryptedWsResponseReader
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -47,7 +48,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -160,7 +161,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'paired-laptop-pty' })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: (_ptyId, data) => {
         writes.push(data)
         return true
@@ -352,14 +353,11 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!offer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
-    // Full direct E2EE authentication drives MobileSocketWiring.onReady (the
-    // relay transport attaches through the same wiring), which must backfill
-    // candidates from the raw window without any direct activation call.
+    // Real E2EE onReady must backfill raw-window artifact candidates; relay shares this wiring and no direct activation is used.
     const phone = await authenticateMobileWsSession(offer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
     try {
-      // Post-connect pathless output scrolls the artifact out of the raw
-      // 64KiB window; only the connect-time backfilled candidate can answer.
+      // Scroll raw 64-KiB history past the path; only connect-time backfill can still answer.
       runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
       sendEncryptedWsRequest(phone, {
@@ -438,8 +436,7 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!offer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
-    // Real E2EE pairing + authentication drives MobileSocketWiring.onReady
-    // before e2ee_authenticated is sent; a throwing onReady never authenticates.
+    // Authenticate through real E2EE/onReady; a throwing onReady must never authenticate.
     const session = await authenticateMobileWsSession(offer.pairingUrl)
     const responses = createEncryptedWsResponseReader(session)
     try {

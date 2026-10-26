@@ -1,8 +1,5 @@
-/**
- * A Docker SSH host left exactly as a 1.4.224 desktop leaves it on quit: that release's relay
- * running detached with a live shell, under `~/.orca-remote/relay-<version>/`.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Leave the v1.4.224 relay detached with a live shell under its versioned remote directory, matching app quit.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
@@ -16,16 +13,11 @@ import {
 } from '../cross-version-wire/released-relay-transport'
 import { execDockerSshHostTargetCommand, type DockerSshHostTarget } from './docker-ssh-host-target'
 
-const NODE_PTY_SLOT = 'linux-x64-glibc'
-
 export type DockerReleasedRelay = { dir: string; version: string }
 
 export type DockerRelayInstance = { sockPath: string; relayPtyId: string }
 
-/**
- * Bundles the release's relay on the runner and lays it out on the host. Its `node-pty` is the
- * glibc-floor prebuild the orcad template carries: node-pty is N-API, so it loads on the host's Node.
- */
+// Bundle release sources using the orcad template’s glibc-floor N-API node-pty, which loads on the host Node.
 export async function installReleasedRelayOnDockerHost(
   target: DockerSshHostTarget,
   orcadTemplateDir: string
@@ -54,11 +46,17 @@ export async function installReleasedRelayOnDockerHost(
   const dir = `/root/.orca-remote/relay-${version}`
   const staging = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-relay-'))
   try {
+    // Why the host's arch: a Docker host on an arm64 machine runs arm64 containers.
+    const arch = execDockerSshHostTargetCommand(target, 'uname -m') === 'aarch64' ? 'arm64' : 'x64'
     const pty = path.join(staging, 'node_modules', 'node-pty')
     cpSync(path.join(orcadTemplateDir, 'node_modules', 'node-pty'), pty, { recursive: true })
-    cpSync(path.join(orcadTemplateDir, 'targets', NODE_PTY_SLOT, 'node_modules', 'node-pty'), pty, {
-      recursive: true
-    })
+    cpSync(
+      path.join(orcadTemplateDir, 'targets', `linux-${arch}-glibc`, 'node_modules', 'node-pty'),
+      pty,
+      {
+        recursive: true
+      }
+    )
     // Why dereference: the bundle is a real file here, never the checkout's symlink.
     cpSync(path.join(bundleDir, 'relay.js'), path.join(staging, 'relay.js'), { dereference: true })
     execDockerSshHostTargetCommand(target, `mkdir -p ${quotePosixShell(dir)}`)
@@ -96,10 +94,7 @@ export function openDockerRelayTransport(
   )
 }
 
-/**
- * Starts the detached daemon the way a 1.4.224 desktop launched it for `targetId`, with the
- * "keep terminals forever" grace, and leaves one echoing shell in it as that desktop's quit does.
- */
+// Use the old client’s keep-terminals-forever grace and leave an echoing shell behind.
 export async function startDockerRelayWithShell(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,
@@ -149,7 +144,6 @@ async function claimOwnerWaitingOutGrace(mux: SshChannelMultiplexer): Promise<vo
   }
 }
 
-/** Types a line into a relay shell over its own bridge and returns what it printed back. */
 export async function echoThroughDockerRelay(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,
@@ -179,7 +173,6 @@ export async function echoThroughDockerRelay(
   }
 }
 
-/** The PTY ids a relay still runs, asked through its own bridge. */
 export async function listDockerRelayPtys(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,

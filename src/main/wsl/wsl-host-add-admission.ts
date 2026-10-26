@@ -23,7 +23,7 @@ export function wslHostRunRefusal(gate: {
   if (!gate.isEnabled()) {
     return { ok: false, kind: 'disabled', message: WSL_HOSTS_DISABLED_MESSAGE }
   }
-  // Why before any deploy work: without the packaged template C4 fails deep inside with a raw error.
+  // Reject missing packaged templates before C4 deploy emits an opaque deep failure.
   return gate.hasServerFiles()
     ? null
     : { ok: false, kind: 'server-files-missing', message: WSL_HOST_SERVER_FILES_MISSING_MESSAGE }

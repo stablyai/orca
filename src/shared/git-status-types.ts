@@ -18,17 +18,8 @@ export type GitSubmoduleStatus = {
   untrackedChanges: boolean
 }
 
-// Compatibility note for non-upgraded consumers:
-// Any consumer that has not been upgraded to read `conflictStatus` may still
-// render `modified` styling via the `status` field (which is a compatibility
-// fallback, not a semantic claim). However, such consumers must NOT offer
-// file-existence-dependent affordances (diff loading, drag payloads, editable-
-// file opening) for entries where `conflictStatus === 'unresolved'` — the file
-// may not exist on disk (e.g. both_deleted). This affects file explorer
-// decorations, tab badges, and any surface outside Source Control.
-//
-// `conflictStatusSource` is never set by the main process. The renderer stamps
-// 'git' for live u-records and 'session' for Resolved locally state.
+// Legacy consumers may use modified styling, but unresolved conflicts must not offer file-dependent diff/drag/edit actions: both_deleted may have no file.
+// This applies outside Source Control too (explorer/tab badges). Renderer alone stamps conflictStatusSource: git for live u rows, session for resolved locally.
 export type GitUncommittedEntry = {
   path: string
   status: GitFileStatus
@@ -38,14 +29,9 @@ export type GitUncommittedEntry = {
   conflictStatus?: GitConflictResolutionStatus
   conflictStatusSource?: GitConflictStatusSource
   submodule?: GitSubmoduleStatus
-  // Set on entries that live INSIDE a submodule (lazily loaded when the user
-  // expands a dirty submodule row). Holds the submodule's path relative to the
-  // parent worktree. Drives diff routing into the submodule and read-only
-  // gating — submodule-internal changes are never stageable from the parent.
+  // Submodule-internal entries carry the parent-relative submodule root for diff routing and read-only gating; parent staging cannot modify them.
   submoduleRoot?: string
-  // Working-tree line counts for this entry's staging area (staged vs unstaged
-  // diffs are reported separately). Untracked files count their full contents
-  // as additions. Undefined for binary files and when the diff is unavailable.
+  // Counts describe this staging area; untracked contents are additions. Undefined means binary or unavailable.
   added?: number
   removed?: number
 }
@@ -70,16 +56,11 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
   head?: string
   branch?: string
-  // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
-  // Folding it in lets refresh polling avoid a second pair of git subprocesses.
+  // Reuse porcelain v2 upstream/ahead/behind metadata to avoid two extra refresh subprocesses.
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
-  // Why: a repo with an enormous un-ignored folder can emit a status listing big
-  // enough to crash the process when buffered. Status is capped at an entry
-  // limit; when the cap is hit, `entries` holds the first `limit` rows,
-  // `didHitLimit` is true, and `statusLength` is the total seen before git was
-  // stopped. Optional so un-upgraded consumers keep working. See the SCM
-  // "too many changes" state.
+  // Stop oversized Git output before buffering can crash. entries keeps the first limit rows; statusLength counts rows seen before stopping.
+  // Optional for older consumers; didHitLimit drives the SCM too-many-changes state.
   didHitLimit?: boolean
   statusLength?: number
   // Only computed when the request carried a merge-base OID (the renderer's
@@ -90,10 +71,7 @@ export type GitStatusResult = {
   branchLineTotalUnavailable?: string
 }
 
-// Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
-// "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
-// Kept as a named type because explicit upstream refreshes can still fail for
-// reasons unrelated to working-tree status (e.g., no upstream is expected).
+// Without hasUpstream, ahead/behind 0/0 are placeholders, not proof of sync. Explicit upstream refreshes can fail independently of worktree status.
 export type GitUpstreamStatus = {
   hasUpstream: boolean
   upstreamName?: string
@@ -102,9 +80,7 @@ export type GitUpstreamStatus = {
   /** True when push can target configured branch push metadata even though
    * upstream/ahead-behind cannot be resolved. */
   hasConfiguredPushTarget?: boolean
-  // Why: when a branch was rebased, the upstream-only commits can be older
-  // patch-equivalent copies. Pulling them reintroduces stale history; a
-  // lease-protected force push is the correct reconciliation.
+  // Rebases can leave older patch-equivalent upstream commits; pulling restores stale history, requiring lease-protected force push instead.
   behindCommitsArePatchEquivalent?: boolean
 }
 

@@ -1,11 +1,4 @@
-// Managed orcad on a real Win32-OpenSSH host, one cell per DefaultShell: resolve the context
-// (pinned node.exe, host script), deploy and activate, prove readiness and liveness, reach orcad
-// through the stdio bridge (this account's sshd refuses forwarding), decommission through the
-// instance-bound stop request, prove exit, and run a GC pass.
-// config/ci/windows-ssh-provider/invoke-windows-host-cells.ps1 provisions the account and runs this
-// file for `orcad-*` cells; ssh-windows-hosts.yml runs that.
-//
-// Run: ORCA_RUN_SSH_WINDOWS_HOST=1 ORCA_SSH_WINDOWS_HOST_CELL=<descriptor.json> pnpm test <this file>
+// Real Windows SSH host lane: invoke-windows-host-cells.ps1 supplies ORCA_RUN_SSH_WINDOWS_HOST=1 and ORCA_SSH_WINDOWS_HOST_CELL.
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
@@ -37,7 +30,7 @@ import {
 const RUN = process.env.ORCA_RUN_SSH_WINDOWS_HOST === '1'
 const CELL_TIMEOUT_MS = 20 * 60_000
 
-/** Orcad's own host ops and launches: these must never take a PowerShell hop. */
+/** Host operations must avoid PowerShell hops regardless of sshd DefaultShell. */
 function isOrcadHostCommand(command: string): boolean {
   return /orcad-host-script-[0-9a-f]{16}\.js|[\\/]orcad\.js /u.test(command)
 }
@@ -83,7 +76,8 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
           ...options,
           target: context.serverTarget,
           census: idle,
-          recountCensus: async () => idle
+          recountCensus: async () => idle,
+          releaseIncumbentAdmission: async () => {}
         })
         receipt.deploy = deployed
         expect(deployed.outcome).toBe('installed-and-activated')
@@ -93,7 +87,7 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
             await execOrcadRemote(options, orcadLivenessProbeCommand(options.host, slotDir))
           )
         expect(await liveness()).toBe('LIVE')
-        // Managed terminals' `orca`: the native launcher orcad installed in its profile.
+        // Probe the native orca launcher installed inside the managed profile.
         const cli = joinRemotePath(options.host, context.userDataDir, 'cli', 'bin', 'orca.exe')
         const status = JSON.parse(
           await execOrcadRemote(options, orcadWindowsNodeCommandLine(cli, ['status', '--json']))
@@ -101,26 +95,24 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
         receipt.cliStatus = status.result
         expect(status.result.runtime).toMatchObject({ reachable: true })
         expect(status.result.app.desktopWindowStatus).toBe('blocked')
-        // The managed tunnel picks the stdio bridge on this account and reaches orcad through it.
+        // This account blocks forwarding; verify the managed tunnel's stdio fallback.
         receipt.stdioBridge = await proveWindowsStdioBridge(conn, options.host, slotDir)
         expect(receipt.stdioBridge).toMatchObject({
           forwarding: 'refused',
           response: expect.stringMatching(/^HTTP\/1\.1 101/u)
         })
-        // Decommission stops it by the instance-bound request orcad itself completes and proves.
         const record = await readOrcadActivationRecord(options)
         receipt.decommission = await decommissionRemoteOrcad({
           ...options,
           record,
           census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
         })
-        // The message carries the refusal code and reason, which toMatchObject's diff omits.
+        // Include the refusal detail because matcher diffs omit the message.
         expect(receipt.decommission, JSON.stringify(receipt.decommission)).toMatchObject({
           outcome: 'decommissioned',
           version: deployed.fullVersion
         })
         expect(await liveness()).toBe('DEAD')
-        // A GC pass after decommission must leave the recorded previous slot in place.
         await gcOldOrcadVersions({
           conn,
           host: options.host,

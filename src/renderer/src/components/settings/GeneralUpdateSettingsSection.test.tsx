@@ -80,7 +80,7 @@ it('gives actionable server guidance while keeping the install retry', () => {
       version: '1.4.200',
       retryAction: 'install',
       message: 'Raw process listing',
-      installBlock: { reason: 'running-instances', instances: [{ pid: 42, kind: 'browser' }] }
+      installBlock: { reason: 'running-instances', instances: [{ pid: 42, kind: 'server' }] }
     }
   })
   render(<GeneralUpdateSettingsSection />)

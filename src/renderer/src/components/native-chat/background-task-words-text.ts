@@ -1,5 +1,4 @@
-// Desktop words for the background-tasks strip: each shared piece translated whole, with the
-// shared English as its fallback, so desktop and the phone never word one roster differently.
+// Translate whole shared pieces with shared English fallbacks so desktop and mobile roster wording agree.
 
 import { translate } from '@/i18n/i18n'
 import {

@@ -7,11 +7,11 @@ import {
   getLinearCommentByUuidForAgent,
   isLinearUuid,
   updateLinearIssueCommentForAgent,
-  LinearWriteFailure,
-  linearError
+  LinearWriteFailure
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
+import type { LinearAgentAccessError } from '../linear/issue-context/errors'
 import type {
-  LinearAgentAccessError,
   LinearCurrentIssueContextHints,
   LinearAttachResult,
   LinearCommentAddResult,
@@ -19,8 +19,8 @@ import type {
   LinearCommentEditResult
 } from './runtime-linear-command-dependencies'
 import { RuntimeLinearCreateCommands } from './runtime-linear-create-commands'
-import { getConnectedWorkspaces } from '../linear/issue-context-client'
-import { resolveWorkspaceSelector } from '../linear/issue-context-workspaces'
+import { getConnectedWorkspaces } from '../linear/issue-context/client'
+import { resolveWorkspaceSelector } from '../linear/issue-context/workspaces'
 import { runLinearCommentAction } from './runtime-linear-comment-action'
 
 export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {

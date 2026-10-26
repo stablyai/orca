@@ -48,10 +48,7 @@ async function sendOneShotRequestOnRuntime(
   }
 }
 
-/**
- * Sends a call shaped for one runtime only over a socket that runtime answered on. Why: the cached
- * identity a support route accepts can outlive a server restart behind the same endpoint.
- */
+/** Cached support identity can survive server restart; verify identity on the sending socket. */
 export async function sendSupportRoutedCallOnRuntime(
   route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
   call: PinnedCall,

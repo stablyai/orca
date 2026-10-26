@@ -28,7 +28,6 @@ describe('resolveGitHubPrStartPoint', () => {
     getPullRequestPushTargetMock.mockReset()
     getWorkItemMock.mockReset()
     fetchPullRequestHeadRefMock.mockReset()
-    // Why: success path rev-parses the path the fetch returns (writer-authoritative).
     fetchPullRequestHeadRefMock.mockImplementation(async (_remote: string, prNumber: number) =>
       durablePrLocalRef(prNumber)
     )
@@ -166,8 +165,7 @@ describe('resolveGitHubPrStartPoint', () => {
   })
 
   it('prefers the pull-head error when the branch miss triggered a failing fallback', async () => {
-    // Why: the branch fetch missed and we fell back to refs/pull/<N>/head; the
-    // fallback failure is the actionable one, not the original branch miss.
+    // Surface the failed pull-head fallback, rather than the earlier branch miss.
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error('fatal: could not find remote ref refs/heads/feature/fix')
     })
@@ -197,8 +195,7 @@ describe('resolveGitHubPrStartPoint', () => {
   it('captures the fork PR head from a dedicated ref, not the shared FETCH_HEAD', async () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     const fetchRemoteTrackingRef = vi.fn(async () => {})
-    // Why: simulate a concurrent `git fetch origin` clobbering FETCH_HEAD with the
-    // default-branch tip. The resolved start-point must come from the durable Orca ref.
+    // Concurrent fetches can clobber FETCH_HEAD; the durable Orca ref must remain authoritative.
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
         const ref = args.at(-1)
@@ -225,7 +222,6 @@ describe('resolveGitHubPrStartPoint', () => {
     })
 
     expect(fetchPullRequestHeadRefMock).toHaveBeenCalledWith('origin', 1849)
-    // Success path must not re-hash remote identity after the fetch returns a path.
     expect(gitExec).not.toHaveBeenCalledWith(['remote', 'get-url', 'origin'])
     expect(gitExec).not.toHaveBeenCalledWith(['rev-parse', '--verify', 'FETCH_HEAD'])
     expect(result).toEqual({
@@ -236,8 +232,7 @@ describe('resolveGitHubPrStartPoint', () => {
   })
 
   it('keeps the durable PR head when the head fetch fails but the local ref resolves', async () => {
-    // Why: mirror compare-base soft-keep — a transient fetch failure must not
-    // fail the resolve when a prior fetch already pinned refs/orca/pull/<N>.
+    // A prior durable fetch can survive transient transport failure.
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     fetchPullRequestHeadRefMock.mockRejectedValue(
       new Error('fatal: unable to access repo: Could not resolve host: github.com')
@@ -290,8 +285,7 @@ describe('resolveGitHubPrStartPoint', () => {
       'stale relay'
     ]
   ])('fails hard instead of soft-keeping the durable PR head on: %s', async (message) => {
-    // Why: soft-keep on a non-transient failure would check out a dead or
-    // unauthorized tip (or mask the reconnect prompt) with a success UX.
+    // Auth/deleted-ref/stale-relay failures must not return a dead or unauthorized cached tip.
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     fetchPullRequestHeadRefMock.mockRejectedValue(new Error(message))
     const fetchRemoteTrackingRef = vi.fn(async () => {})

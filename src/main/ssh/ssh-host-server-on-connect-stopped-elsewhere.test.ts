@@ -6,7 +6,7 @@ import {
   withDeactivatedVersionCommitted,
   type OrcadActivationRecord
 } from '../managed-server/activation/orcad-activation-record'
-import { planManagedOrcadAutoUpdate } from '../managed-server/lifecycle/orcad-managed-auto-update'
+import { planManagedOrcadAutoUpdate } from '../managed-server/lifecycle/orcad-managed-update-decision'
 import { compareAppVersions } from '../../shared/app-version'
 import {
   MANAGED_ORCAD_FENCED_DETAIL,

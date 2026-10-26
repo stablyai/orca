@@ -9,8 +9,7 @@ import nacl from 'tweetnacl'
 import { decodeCanonicalBase64 } from './canonical-base64.js'
 import { deriveHostFingerprint } from './host-fingerprint.js'
 
-// The desktop side of the push challenge, written the way the shipped host
-// will answer it, so the gateway is exercised against a real box-opening peer.
+// Model shipped desktop challenge answering so gateway tests use a real box-opening peer.
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
@@ -38,12 +37,6 @@ export function hostPublicKeyB64(keypair: PushHostKeypair): string {
 
 function equal(left: Uint8Array | undefined, right: Uint8Array): boolean {
   return Boolean(left && left.byteLength === right.byteLength && timingSafeEqual(left, right))
-}
-
-function uint64(value: number): Uint8Array {
-  const bytes = new Uint8Array(8)
-  new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
-  return bytes
 }
 
 function parseTranscript(transcript: Uint8Array): Map<string, Uint8Array> | null {
@@ -117,8 +110,7 @@ function validateTranscript(
     ['challengeNonce', equal(fields.get('challengeNonce'), nonce)],
     ['challengeId', equal(fields.get('challengeId'), textEncoder.encode(challenge.challengeId))],
     ['hostFingerprint', equal(fields.get('hostFingerprint'), textEncoder.encode(fingerprint))],
-    ['hostPublicKey', equal(fields.get('hostPublicKey'), context.keypair.publicKey)],
-    ['issuedAt-value', issuedAt === null || uint64(issuedAt).byteLength === 8]
+    ['hostPublicKey', equal(fields.get('hostPublicKey'), context.keypair.publicKey)]
   ]
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length === 0) return true

@@ -81,7 +81,6 @@ it.each([
       slash_commands: ['project:check'],
       skills: ['project:check']
     })
-    // The stream init classifies the name; the control seed's text survives it.
     expect(adapter.readCommands('session-1')).toEqual([
       { name: 'project:check', kind: 'skill', ...(described ? { description: described } : {}) }
     ])

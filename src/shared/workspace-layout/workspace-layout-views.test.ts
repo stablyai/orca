@@ -26,7 +26,6 @@ const tabFields = (id: string) => ({
   color: null
 })
 
-/** Group g1: terminal t1 (panes A, B), editor t2; group g2: browser t3. */
 function workspace(): WorkspaceLayout {
   return {
     worktreeId: WS,
@@ -60,7 +59,6 @@ function model(next: WorkspaceLayout = workspace()): WorkspaceLayoutModel {
   return { ...emptyModel(), workspaces: { [WS]: next } }
 }
 
-/** A record naming everything in the workspace, plus things a close later removes. */
 function fullRecord(): LayoutViewRecord {
   return {
     ...emptyLayoutViewRecord(),
@@ -80,7 +78,6 @@ function fullRecord(): LayoutViewRecord {
   }
 }
 
-/** The workspace after t2 and pane B are closed and the browser tab and file are gone. */
 function afterCloses(): WorkspaceLayout {
   const next = workspace()
   next.groups = [

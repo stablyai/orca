@@ -12,10 +12,7 @@ import {
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 export function registerJournalRowSchemaVersionTests(): void {
-  // Which rows an older host can still read: only rows that carry a turn item
-  // are stamped with the version it does not know, and the epoch row never is.
-  // Read raw: the reader upcasts every row to the current version, so only the
-  // stored row_json says what an older build would see.
+  // Inspect raw rows: upcasting hides the version older readers would see on disk.
   describe('journal row schema versions', () => {
     let root = ''
     const opener = createTrackedJournalOpener()

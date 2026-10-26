@@ -6,7 +6,7 @@ import type {
   UsageSession
 } from '../usage/usage-rollup-records'
 
-/** Muse logs carry no price, so the shared rollups get no extra metric. */
+// Muse supplies no prices for rollups.
 export type MuseUsageMetric = Record<never, never>
 
 export type MuseUsageLocationBreakdown = UsageLocationBreakdown<MuseUsageMetric>
@@ -24,13 +24,13 @@ export type MuseUsageProcessedFile = {
 export type MuseUsagePersistedFile = MuseUsageProcessedFile & {
   sessions: MuseUsageSession[]
   dailyAggregates: MuseUsageDailyAggregate[]
-  /** Event keys this file counted, so a record copied into another session log counts once. */
+  /** Prevent copied events from counting in multiple logs. */
   ownedEventKeys: string[]
-  /** True when this file skipped events another file owned; only these reparse when an owner vanishes. */
+  /** Reparse deferred files when their event owner disappears. */
   hasDeferredClaims: boolean
-  /** Workspace the log resolved to; subagent logs record none and inherit their parent's. */
+  /** Subagent logs inherit parent workspace attribution. */
   sessionCwd: string | null
-  /** Parent cwd a subagent log was parsed with; a change means its attribution is stale. */
+  /** Reparse when inherited parent cwd changes. */
   inheritedCwd: string | null
 }
 

@@ -11,14 +11,10 @@ type Attempt = { method: string; params: Record<string, unknown> }
 
 const IDEMPOTENT_CREATE_SUPPORT = { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS }
 
-// Lets a parked replay reach its state wait before the test resumes the transport.
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-// A transport scripted per call, recording what each attempt put on the wire. Narrower than the
-// one `worktree-create-retry.test.ts` drives: the launch route needs a receipt, a coded refusal
-// and one ambiguous drop, and nothing here reads the replay deadline.
 function scriptedLaunchClient(
   outcomes: Array<
     | { launched: string }
@@ -68,7 +64,6 @@ function scriptedLaunchClient(
       return {
         id: '1',
         ok: true,
-        // A launch answers with a bare `worktreeId`; `worktree.create` wraps one in `worktree`.
         result:
           'launched' in outcome
             ? {
@@ -88,7 +83,6 @@ function scriptedLaunchClient(
   } as unknown as RpcClient & { reconnect: () => void }
 }
 
-// operationId names the full launch; the host owns suffix selection and bypasses the legacy cache.
 describe('agent.launch operation id', () => {
   const launchOperationIds = (attempts: Attempt[]): unknown[] =>
     attempts.map((attempt) => attempt.params.operationId)
@@ -146,8 +140,6 @@ describe('agent.launch operation id', () => {
       'agent.launchReplay',
       'agent.launchReplay'
     ])
-    // The whole point: the replay is the SAME operation, so the host returns the recorded
-    // answer instead of launching a second agent in a second workspace.
     expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1'])
   })
 
@@ -212,7 +204,6 @@ describe('agent.launch operation id', () => {
     })
     expect(attempts[0]!.method).toBe('agent.launch')
     expect(attempts[0]!.params.operationId).toBeUndefined()
-    // Byte-identical to today: the rest of the payload is untouched.
     expect(attempts[0]!.params.target).toEqual({
       kind: 'create-worktree',
       create: { repo: 'id:r', name: 'otter', clientMutationId: 'key-launch' }
@@ -230,7 +221,7 @@ describe('agent.launch operation id', () => {
     expect(attempts[0]!.params.operationId).toBeUndefined()
   })
 
-  // These codes also describe a refused nested attach or an expired receipt after creation.
+  // These codes may describe nested attach refusal or expired receipts after creation.
   it.each([
     'agent_session_operation_capacity',
     'agent_session_operation_invalid',
@@ -243,7 +234,6 @@ describe('agent.launch operation id', () => {
     expect(launchOperationIds(attempts)).toEqual(['op-1'])
   })
 
-  // An unsettled claim is evidence that the launch may already have run.
   it('surfaces an unknown operation without re-sending and without re-minting', async () => {
     const attempts: Attempt[] = []
     const client = scriptedLaunchClient(
@@ -257,8 +247,7 @@ describe('agent.launch operation id', () => {
     expect(launchOperationIds(attempts)).toEqual(['op-1'])
   })
 
-  // A conflict can only come from a client that reused one id across two payloads. Re-sending it
-  // unnamed would hide that bug behind a create that quietly works.
+  // A reused id with conflicting payloads is a caller bug; unnamed retry would hide it by creating again.
   it('surfaces an operation conflict rather than re-sending unnamed', async () => {
     const attempts: Attempt[] = []
     const client = scriptedLaunchClient(
@@ -271,8 +260,6 @@ describe('agent.launch operation id', () => {
     expect(attempts).toHaveLength(1)
   })
 
-  // The pre-existing downgrade arm: a host that refuses the method drops to `worktree.create`,
-  // which has no operation ledger, so the id must not ride along.
   it('drops the launch name when the host refuses agent.launch itself', async () => {
     const attempts: Attempt[] = []
     const client = scriptedLaunchClient(
@@ -324,8 +311,7 @@ describe('agent.launch operation id', () => {
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
       agentLaunch: { agent: 'claude', supported: { replay: true } }
     })
-    // The host refuses anything else on the wire; parsing it back is what proves the default
-    // minter, not a test double, produces the shipped shape.
+    // Parse the production-minted id through host validation; a test double cannot prove the shipped shape.
     expect(
       parseAgentSessionOperationTimestamp(String(attempts[0]!.params.operationId))
     ).toBeCloseTo(Date.now(), -4)

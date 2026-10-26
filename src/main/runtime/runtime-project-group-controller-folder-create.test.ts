@@ -51,13 +51,13 @@ function createController() {
     notifyReposChanged,
     resolveFolderConnectionId: () => null,
     teardownFolderWorkspacePtys: async () => undefined,
-    cleanupRemovedFolderWorkspaceState: () => undefined
+    cleanupRemovedFolderWorkspaceState: () => undefined,
+    emitWorktreeLifecycle: () => undefined
   })
   return { controller, createFolderWorkspace, notifyReposChanged }
 }
 
-// A launch reads these as "nothing was created", so each must come before the store write and keep
-// the code `folderWorkspace.create` has always answered with.
+// Launch treats these refusals as no-effects; preserve folderWorkspace.create codes and run them before any store write.
 describe('RuntimeProjectGroupController.createFolderWorkspace refusals', () => {
   it.each([
     ['a group that is gone', 'group-2', 'folder_workspace_project_group_not_found'],

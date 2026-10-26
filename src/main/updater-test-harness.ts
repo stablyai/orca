@@ -3,7 +3,6 @@ import { afterAll, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { clearTrackedRealTimers, trackRealTimers } from './updater-test-timer-tracking'
 
-/** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
 type LinuxPackageType = 'deb' | 'rpm' | 'non-root' | 'unusable'
 
@@ -45,7 +44,6 @@ type UpdaterModuleFactories = {
   }
   electronUpdater: () => { autoUpdater: AutoUpdaterMock }
   electronUpdaterLoader: () => { loadElectronAutoUpdater: () => AutoUpdaterMock }
-  electronToolkitUtils: () => { is: { dev: boolean } }
   ptyKillAll: () => { killAllPty: UpdaterSpy }
   linuxUpdatePackageType: () => {
     getLinuxPackageType: Mock<() => LinuxPackageType>
@@ -72,7 +70,6 @@ export type UpdaterMocks = {
   browserWindowMock: { getAllWindows: Mock<() => unknown[]> }
   nativeUpdaterMock: { on: UpdaterSpy }
   autoUpdaterMock: AutoUpdaterMock
-  isMock: { dev: boolean }
   killAllPtyMock: UpdaterSpy
   powerMonitorOnMock: UpdaterSpy
   getLinuxPackageTypeMock: Mock<() => LinuxPackageType>
@@ -92,17 +89,13 @@ export type UpdaterMocks = {
   resetUpdaterMocks: () => void
 }
 
-// Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
+// Quitting re-stages Squirrel updates on macOS, so restart advice remains useful there.
 export const PRE_COMMIT_INSTALL_FAILURE =
   process.platform === 'darwin'
     ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
     : 'Could not start the update installer. Orca remains open.'
 
-/**
- * Builds the electron/electron-updater mock graph `updater.ts` runs against, plus the module
- * factories each test file feeds to its own hoisted `vi.mock` calls. Call it from an awaited
- * `vi.hoisted` block so the mocks exist before the mock factories run.
- */
+/** Call from an awaited vi.hoisted block so module factories see initialized mocks. */
 export function createUpdaterMocks(): UpdaterMocks {
   const appEvents = new EventEmitter()
   const updaterEvents = new EventEmitter()
@@ -125,17 +118,9 @@ export function createUpdaterMocks(): UpdaterMocks {
     updaterEvents.emit(event, ...args)
   }
 
-  // Why: `vi.resetModules()` abandons the previous test's `updater` module instance but cannot cancel
-  // the real timers it armed (1s silent-settle, 45s stall, 24h auto-check). Those fire during a later
-  // test — re-arming on that test's fake clock — and drove these shared spies, so a stale instance
-  // could land an extra `checkForUpdates()` inside the window under assertion.
+  // resetModules cannot cancel old timers; fence stale module instances from shared spies.
   let currentGeneration = 0
 
-  /**
-   * Hands each `updater` module instance an autoUpdater view stamped with the generation that loaded
-   * it. Once `resetUpdaterMocks` bumps the generation, the abandoned instance's calls and property
-   * writes are dropped instead of reaching the spies the running test asserts on.
-   */
   const loadGenerationScopedAutoUpdater = (): AutoUpdaterMock => {
     const loadedGeneration = currentGeneration
     return new Proxy(autoUpdaterMock, {
@@ -180,7 +165,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     allowPrerelease: false,
     allowDowngrade: false,
     disableDifferentialDownload: false,
-    // Why: setup installs the diagnostic logger adapter here; tests drive child stderr through it.
     logger: undefined as { error: (message: unknown) => void } | undefined,
     on,
     checkForUpdates: vi.fn(),
@@ -206,7 +190,6 @@ export function createUpdaterMocks(): UpdaterMocks {
   const nativeUpdaterMock = {
     on: vi.fn()
   }
-  const isMock = { dev: false }
   const killAllPtyMock = vi.fn()
   const powerMonitorOnMock = vi.fn()
   const getLinuxRootPackageTypeMock = vi.fn<() => 'deb' | 'rpm' | null>(() => null)
@@ -225,7 +208,6 @@ export function createUpdaterMocks(): UpdaterMocks {
   const startLocalBuildFeedMock = vi.fn()
   const closeLocalBuildFeedMock = vi.fn()
 
-  /** One factory per module `updater.ts` pulls in; test files pass these to their own `vi.mock`. */
   const moduleFactories: UpdaterModuleFactories = {
     electron: () => ({
       app: appMock,
@@ -237,9 +219,8 @@ export function createUpdaterMocks(): UpdaterMocks {
     }),
     electronUpdater: () => ({ autoUpdater: autoUpdaterMock }),
     electronUpdaterLoader: () => ({ loadElectronAutoUpdater: loadGenerationScopedAutoUpdater }),
-    electronToolkitUtils: () => ({ is: isMock }),
     ptyKillAll: () => ({ killAllPty: killAllPtyMock }),
-    // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
+    // Keep real artifact capture/redaction under test; fake only package-type detection.
     linuxUpdatePackageType: () => ({
       getLinuxPackageType: getLinuxPackageTypeMock,
       getLinuxRootPackageType: getLinuxRootPackageTypeMock,
@@ -266,12 +247,10 @@ export function createUpdaterMocks(): UpdaterMocks {
     localBuildFeedServer: () => ({ startLocalBuildFeed: startLocalBuildFeedMock })
   }
 
-  /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
   const resetUpdaterMocks = () => {
     vi.clearAllTimers()
     vi.useRealTimers()
-    // Why: the generation fence only ignores a stale instance's spy calls; this cancels the real
-    // timers it left armed so it never runs at all.
+    // The generation fence ignores stale calls but does not cancel their timers.
     clearTrackedRealTimers()
     vi.resetModules()
     autoUpdaterMock.reset()
@@ -282,7 +261,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
     killAllPtyMock.mockReset()
     armExitWatchdogMock.mockReset()
     disarmExitWatchdogMock.mockReset()
@@ -307,8 +285,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     trackRealTimers()
   }
 
-  // Why: keeps the timer patch scoped to files that use the harness. Fakes are dropped first
-  // because a file ending on a fake clock fails the wrapper's identity guard, stranding it.
+  // Drop fake timers before restoring real globals, or the wrapper's identity guard cannot restore them.
   afterAll(() => {
     vi.useRealTimers()
     clearTrackedRealTimers()
@@ -319,7 +296,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     browserWindowMock,
     nativeUpdaterMock,
     autoUpdaterMock,
-    isMock,
     killAllPtyMock,
     powerMonitorOnMock,
     getLinuxPackageTypeMock,

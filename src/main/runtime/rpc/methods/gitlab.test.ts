@@ -400,8 +400,7 @@ describe('gitlab RPC methods', () => {
     )
   })
 
-  // Regression for #7732: the WS/relay transports close the connection on frames
-  // over 1 MB, so the excerpt must be produced before the response is serialised.
+  // Bound excerpts before serialization: WS/relay frames over 1 MiB close the connection (#7732).
   it('bounds the job trace before it crosses the transport when logExcerpt is set', async () => {
     const noisyTrace = [
       'section_start:1699000000:build\r\u001b[0K$ pnpm build',

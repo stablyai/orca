@@ -183,8 +183,7 @@ describe('CLI arguments field applicability', () => {
     expect(markup).toContain('CLI arguments')
   })
 
-  // Why: absent, not disabled — a structured native chat session reads no CLI arguments,
-  // so the dialog must not show a control that launch would drop.
+  // Native chat launches ignore CLI arguments, so omit the field.
   it('leaves the field out entirely when they would not apply', () => {
     const markup = renderForm({ agentArgsApply: false })
 

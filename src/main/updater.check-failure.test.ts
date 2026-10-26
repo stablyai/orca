@@ -8,7 +8,7 @@ const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
   netRequestMock: vi.fn()
 }))
 
-const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, killAllPtyMock } =
+const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, killAllPtyMock } =
   vi.hoisted(() => {
     const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
     const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -79,7 +79,7 @@ const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, 
         on: vi.fn()
       },
       autoUpdaterMock,
-      isMock: { dev: false },
+
       killAllPtyMock: vi.fn()
     }
   })
@@ -98,10 +98,6 @@ vi.mock('electron-updater', () => ({
 
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
-}))
-
-vi.mock('@electron-toolkit/utils', () => ({
-  is: isMock
 }))
 
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
@@ -178,7 +174,7 @@ describe('updater check failure handling', () => {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
+
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()
@@ -365,23 +361,19 @@ describe('updater check failure handling', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    // First retry keeps the fast 1h cadence for transient release-readiness failures.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
 
-    // Second retry doubles to 2h: nothing at +1h, fires by +2h.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
 
-    // Third retry doubles to 4h.
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(4)
 
-    // A completed check resets the backoff to the fast retry.
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {

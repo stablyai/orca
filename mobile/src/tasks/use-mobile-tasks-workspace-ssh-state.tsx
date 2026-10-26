@@ -108,8 +108,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       return
     }
     if (workspaceCreateTargetRepo.connectionId && workspaceCreateSshStatus !== 'connected') {
-      // Why: remote agent detection runs on the SSH host through the relay; a
-      // disconnected repo would fail and cache an empty agent list.
+      // Do not cache empty remote-agent detection while SSH is disconnected; probes run on that host.
       setWorkspaceDetectedAgentIds(null)
       return
     }
@@ -123,7 +122,12 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
             connectionId: workspaceCreateTargetRepo.connectionId
           })
         }
-      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(repoClient) }
+      : {
+          operation: localAgentDetectionRead,
+          reply: localAgentDetectionRead.request(repoClient, {
+            repoId: workspaceCreateTargetRepo.id
+          })
+        }
     void detection.reply
       .then((reply) => {
         if (stale) {

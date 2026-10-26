@@ -58,12 +58,7 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
-  // Why: an AI Vault View Log tab must show the exact raw bytes read-only. A
-  // rich/preview/mermaid/csv/notebook renderer would depart from raw text (and
-  // can look editable), so neutralize specialized viewers + view-mode chrome
-  // for read-only tabs. `resolvedLanguage` still drives read-only Monaco
-  // tokenization (e.g. jsonl stays colorized); only viewer selection is forced
-  // to a plain source rendering here.
+  // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
   const worktreeEntries = gitStatusEntries ?? []
@@ -192,9 +187,7 @@ export function getEditorPanelRenderModel({
     isMermaid: viewerLanguage === 'mermaid',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
-    // Why: the preview renders the on-disk file, so diff surfaces only get it
-    // when the modified side still exists on disk (canOpen excludes deleted
-    // files and commit diffs whose content may not match the working tree).
+    // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.
     canOpenPreviewToSide:
       canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&

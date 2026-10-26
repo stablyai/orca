@@ -1,46 +1,87 @@
-/**
- * Which relay speaks for each relay id of one SSH target. The registry keeps one per target across
- * its bridges, so a reconnect remembers the owners.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- *
- * Relay ids repeat across relays (each numbers its own pty-1, pty-2…), so once a relay is known to
- * run a pane, no other relay's process under that id is ever served for it.
- */
+/** Remember owners across reconnects by endpoint plus incarnation: pty-N ids repeat across relays and restarts. Never serve a replacement process under a known id. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
+import type { LegacyRelayClient } from './legacy-relay-client'
+import { isEpochScopedRelayPtyId } from '../../../shared/ssh-pending-pty-kill'
+
+type Owner = {
+  endpoint: string
+  incarnationId: string | undefined
+  /** Its endpoint listed another process under the id, so that relay's silence proves nothing. */
+  replaced?: true
+  /** The last connection to list the owning process may report its exit. */
+  client?: LegacyRelayClient
+}
+
+type LegacyRelayOwnerRow = {
+  endpoint: string
+  incarnationId?: string | undefined
+  client?: LegacyRelayClient
+}
+
 export class LegacyRelayPaneOwners {
-  /** `null`: two relays claimed the id before either was known to own it, so neither ever does. */
-  private readonly owners = new Map<string, string | null>()
-  /** Exits reported for an id no relay owns yet, by relay; the listing that adopts one reads them. */
-  private readonly unownedExits = new Map<string, number>()
+  /** Null permanently rejects an id claimed by two relays before ownership was known. */
+  private readonly owners = new Map<string, Owner | null>()
+  /** Exit reports by relay endpoint, until the next listing reads or drops them. */
+  private readonly unclaimedExits = new Map<string, number>()
 
   owner(relayPtyId: string): string | null | undefined {
-    return this.owners.get(relayPtyId)
+    const owner = this.owners.get(relayPtyId)
+    return owner === undefined ? undefined : (owner?.endpoint ?? null)
   }
 
-  speaksFor(relayPtyId: string, endpoint: string): boolean {
-    return this.owners.get(relayPtyId) === endpoint
+  /** Whether `row` is the owner's own process; relays that report no incarnation can't be told apart. */
+  isOwnerProcess(relayPtyId: string, row: LegacyRelayOwnerRow): boolean {
+    const owner = this.owners.get(relayPtyId)
+    return owner?.endpoint === row.endpoint && owner.incarnationId === row.incarnationId
   }
 
-  claim(relayPtyId: string, endpoint: string | null): void {
-    this.owners.set(relayPtyId, endpoint)
+  /** Trust the connection that listed this process; reopened endpoints may reuse ids after restart. Epoch-scoped ids retain identity across connections. */
+  speaksFor(relayPtyId: string, endpoint: string, client: LegacyRelayClient): boolean {
+    const owner = this.owners.get(relayPtyId)
+    if (!owner || owner.replaced || owner.endpoint !== endpoint) {
+      return false
+    }
+    return isEpochScopedRelayPtyId(relayPtyId) || owner.client === client
+  }
+
+  bind(relayPtyId: string, row: LegacyRelayOwnerRow): void {
+    const owner = this.owners.get(relayPtyId) ?? {
+      endpoint: row.endpoint,
+      incarnationId: row.incarnationId
+    }
+    this.owners.set(relayPtyId, row.client ? { ...owner, client: row.client } : owner)
+  }
+
+  claimContested(relayPtyId: string): void {
+    this.owners.set(relayPtyId, null)
+  }
+
+  /** A replacement at the same endpoint cannot prove the original process exited. */
+  markReplaced(relayPtyId: string): void {
+    const owner = this.owners.get(relayPtyId)
+    if (owner) {
+      owner.replaced = true
+    }
+  }
+
+  isReplaced(relayPtyId: string): boolean {
+    return Boolean(this.owners.get(relayPtyId)?.replaced)
   }
 
   forget(relayPtyId: string): void {
     this.owners.delete(relayPtyId)
   }
 
-  /** An exit report from a relay that does not own the id; kept only while nobody does. */
+  /** Retain exits until listing binds ownership; key by endpoint so reopening does not lose earlier reports. */
   noteExit(relayPtyId: string, endpoint: string, code: number): void {
-    if (!this.owners.has(relayPtyId)) {
-      this.unownedExits.set(`${endpoint}\n${relayPtyId}`, code)
-    }
+    this.unclaimedExits.set(`${endpoint}\n${relayPtyId}`, code)
   }
 
-  exitBeforeAdoption(relayPtyId: string, endpoint: string): number | undefined {
-    return this.unownedExits.get(`${endpoint}\n${relayPtyId}`)
+  exitBeforeListing(relayPtyId: string, endpoint: string): number | undefined {
+    return this.unclaimedExits.get(`${endpoint}\n${relayPtyId}`)
   }
 
-  /** After each listing: an exit it did not use came from a relay it did not adopt. */
+  /** Discard reports the completed listing could not attribute. */
   clearExits(): void {
-    this.unownedExits.clear()
+    this.unclaimedExits.clear()
   }
 }

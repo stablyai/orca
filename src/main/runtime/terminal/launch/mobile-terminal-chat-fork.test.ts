@@ -5,6 +5,9 @@ import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import '../../orca-runtime-test-lifecycle.spec'
+import { committingSpawn } from '../../bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 vi.mock('../../../ai-vault/structured-chat-cli-fork', () => ({
   prepareStructuredChatCliFork: vi.fn(),
   isStructuredChatCliForkSourceCurrent: vi.fn(() => true)
@@ -80,7 +83,7 @@ it.each([true, false])(
       makeRuntimeStoreWithWorkspaceSession,
       makeWorkspaceSessionWithHeadlessTerminal
     } = await import('../../orca-runtime-test-fixtures.spec')
-    const { withChatTabChanges } = await import('../../agent-session-tab-layout')
+    const { withChatTabChanges } = await import('../../agent-session/agent-session-tab-layout')
     const source = 'source-chat',
       row = `agent-session:${source}`,
       canonical = 'custom-chat-tab'
@@ -97,12 +100,14 @@ it.each([true, false])(
     const fixture = makeRuntimeStoreWithWorkspaceSession(saved ? session : initial)
     const admit = vi.spyOn(fixture.runtimeStore, 'admitTerminalPane')
     const service = new OrcaRuntimeService(fixture.runtimeStore)
-    const spawn = vi.fn(async (_options: unknown) => ({
-      id: 'pty-fork',
-      incarnationId: '45454545-4545-4545-8545-454545454545'
-    }))
+    const spawn = vi.fn(
+      async (_options: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+        id: 'pty-fork',
+        incarnationId: '45454545-4545-4545-8545-454545454545'
+      })
+    )
     service.setPtyController({
-      spawn,
+      spawn: committingSpawn(service, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
@@ -200,6 +205,10 @@ it.each([true, false])(
       expect(fixture.getSession().unifiedTabs?.[wt]).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: canonical, entityId: source })])
       )
+    } else if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(admit.mock.calls[0]?.[0]).toMatchObject({
+        afterTabId: structuredAgentSessionTabId(source)
+      })
     } else {
       expect(admit.mock.calls[0]?.[0]).not.toHaveProperty('afterTabId')
       expect(reveal.mock.calls[0]?.[1]).not.toHaveProperty('afterTabId')
@@ -226,6 +235,12 @@ it('keeps preparation and runtime failures from starting a terminal', async () =
   })
   const ensure = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')
   for (const [failure, expected] of [
+    [
+      new Error(
+        'Could not confirm this conversation was saved. Try again after the agent responds.'
+      ),
+      { message: 'chat_fork_source_unavailable' }
+    ],
     [
       new Error('This chat has no saved conversation to copy.'),
       { message: 'chat_fork_source_unavailable' }

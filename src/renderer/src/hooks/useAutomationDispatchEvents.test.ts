@@ -255,8 +255,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(state.setActiveWorktree).toHaveBeenCalledWith('wt-active', 'ssh:box')
   })
 
-  // The scoped event main publishes with the write is the only one; a local emit
-  // here would name no host and re-invalidate every host in the catalog.
+  // The writer’s host-scoped event is sufficient; extra local emit would invalidate every catalog host.
   it('leaves the automationsChanged event to the host that owns the write', async () => {
     await registerAndDispatch()
 
@@ -271,6 +270,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
+  })
+
+  it('creates a new-per-run workspace on the captured run host, and names none without one', async () => {
+    await registerAndDispatch(makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'local' } }))
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
+      expect.objectContaining({ executionHostId: 'local' })
+    )
+
+    mockCreateWorktree.mockClear()
+    await registerAndDispatch()
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
+      expect.objectContaining({ executionHostId: undefined })
+    )
   })
 
   it('does not stamp the created workspace with an empty agent-launch fallback', async () => {
@@ -476,8 +488,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
           : createdWorktree
       })
       mockMarkDispatchResult.mockImplementation(async (result: { status: string }) => {
-        // The retirement clear reuses status 'completed' but nulls the terminal
-        // identity; label it distinctly so ordering stays legible.
+        // Retirement reuses completed state while clearing terminal identity; distinguish it for ordering assertions.
         order.push(
           result.status === 'completed' && Object.hasOwn(result, 'terminalPtyId')
             ? 'clear-terminal-identity'
@@ -546,8 +557,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
 
     await registerAndDispatch()
-    // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
-    // prompt submits — treating it as run completion would close the tab on an empty run.
+    // SessionStart boundary-done precedes prompt submission; treating it as completion closes an empty run.
     launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
     await Promise.resolve()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
@@ -632,9 +642,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  // Why: transport loss, PTY exit and cap eviction all drop and recreate the live
-  // entry with an empty stateHistory. The working edge is only in the observer's
-  // own bookkeeping by then, so it must survive a zero-overlap rescan.
+  // Recreated entries lose history; preserve the observer’s working edge through transport loss, PTY exit and cap eviction.
   it('completes a reuse-session run when the entry is recreated with no history', async () => {
     const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
     mockFindReusableAutomationSession.mockReturnValue({
@@ -663,7 +671,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     latestStoreSubscriber()
     await Promise.resolve()
 
-    // The entry is dropped and recreated: same pane, now done, history gone.
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,

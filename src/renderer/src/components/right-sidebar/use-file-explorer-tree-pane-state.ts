@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor'
@@ -60,14 +60,7 @@ type UseFileExplorerTreePaneStateResult = {
   fileDropOwnerRef: (root: HTMLElement | null) => void
 }
 
-/**
- * Owns every effect and command handler behind the explorer tree pane.
- *
- * Why: this must be called by FileExplorer above its `!worktreePath` early
- * return. The reset guard and SSH generation refs live here, and losing them
- * for a single null-worktree render would re-reset the tree — dropping the
- * whole directory cache — when the same workspace comes back.
- */
+/** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
 export function useFileExplorerTreePaneState({
   onRevealOutsideRoot,
   activeWorktreeId,
@@ -129,7 +122,7 @@ export function useFileExplorerTreePaneState({
       : false
   })
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)

@@ -1,8 +1,4 @@
-/**
- * `--model`/`--effort` used to downgrade a structured-preferring worker to a PTY terminal because
- * "launch preferences apply only to a terminal agent". They no longer do: the same two ids a saved
- * selection seeds a chat with are seeded into the worker's own session here.
- */
+/** Model/effort must seed structured workers like saved chat selections instead of forcing PTY mode. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session-wire'
@@ -49,9 +45,7 @@ describe('a structured worker seeds the dispatch launch preferences', () => {
     ['no preferences at all', undefined],
     ['an option set that narrows to nothing', { model: '  ' }]
   ])('omits options entirely for %s, never sending {}', async (_name, preferences) => {
-    // `{}` fails the durable record's bounded-string guard, and `agent_session_options_invalid` is
-    // not a wire refusal code — the throw strands the launch with no fallback. Omitted, the host
-    // seeds the user's own saved selection instead, which is what a chat would get.
+    // Omit empty options: {} fails the durable string guard without a fallback; absence seeds the saved selection.
     expect(await createWith(preferences)).not.toHaveProperty('options')
   })
 })
@@ -71,7 +65,8 @@ describe('the create the seed options land in', () => {
       runtime: {
         resolveStructuredAgentSessionCreateIntent: async () => settingsResolved
       } as never,
-      ensureHost: async () => ({}) as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this prepare path touches only host.deps.modelCatalog, absent here, so options pass through unchecked.
+      ensureHost: async () => ({ deps: {} }) as never,
       envelope: {
         sessionId: 'sess_1',
         clientOperationId: 'op_1',
@@ -124,7 +119,8 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
     expect(read).toHaveBeenCalledWith({
       agent: 'claude',
       workspacePath: '/repo/wt',
-      savedOnly: true
+      savedOnly: true,
+      verifiedOnly: true
     })
   })
 })

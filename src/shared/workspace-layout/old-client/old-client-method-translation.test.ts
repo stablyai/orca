@@ -57,7 +57,7 @@ function commandsOf(translation: MethodTranslation): LayoutCommand[] {
   return translation.commands
 }
 
-/** `terminal.create` as an old desktop's pane transport sends it, parsed as today. */
+/** Parse terminal.create as an older desktop pane transport sends it. */
 function createParams(fields: { tabId?: string; leafId?: string; title?: string }) {
   return TerminalCreateParams.parse({
     worktree: `id:${WS}`,
@@ -287,7 +287,7 @@ describe('session.tabs.move translation', () => {
     return model.workspaces[WS]!.groups.find((group) => group.id === groupId)!.tabOrder
   }
 
-  /** Translates against the snapshot the client was shown, as the handler does today. */
+  /** Translate against the snapshot the client saw, matching the handler. */
   function move(model: WorkspaceLayoutModel, params: Record<string, unknown>) {
     const workspace = model.workspaces[WS]!
     const shown = projectSessionTabs(WS, workspace, NO_VIEW, NO_FACTS, false)
@@ -306,6 +306,14 @@ describe('session.tabs.move translation', () => {
       })
     )
     expect(groupOrder(build(ctx, commands, model).model, group.id)).toEqual([browser, tabA, tabB])
+    // Each step names the tab before its slot in the wanted order, so main places it there.
+    expect(commands.map((command) => command.type === 'moveTab' && command.afterTabId)).toEqual(
+      commands.map((command) =>
+        command.type === 'moveTab' && command.index > 0
+          ? [browser, tabA, tabB][command.index - 1]
+          : null
+      )
+    )
   })
 
   it.each([
@@ -366,7 +374,16 @@ describe('session.tabs.move translation', () => {
     const base = { tabId: browser, targetGroupId: groupId }
     expect(move(model, { ...base, kind: 'move-to-group' })).toEqual({
       ok: true,
-      commands: [{ type: 'moveTab', workspace: WS, toGroupId: groupId, tabId: browser, index: 3 }]
+      commands: [
+        {
+          type: 'moveTab',
+          workspace: WS,
+          toGroupId: groupId,
+          tabId: browser,
+          index: 3,
+          afterTabId: workspace.groups[0]!.tabOrder[2]
+        }
+      ]
     })
     expect(move(model, { ...base, kind: 'move-to-group', index: 1 })).toEqual({
       ok: true,
@@ -376,7 +393,8 @@ describe('session.tabs.move translation', () => {
           workspace: WS,
           toGroupId: groupId,
           tabId: browser,
-          index: workspace.groups[0]!.tabOrder.indexOf(workspace.groups[0]!.tabOrder[1]!)
+          index: 1,
+          afterTabId: workspace.groups[0]!.tabOrder[0]
         }
       ]
     })

@@ -1,7 +1,7 @@
 import type { TaskPageResumeRestorationModel } from './use-task-page-resume-restoration'
 import { useState, useEffect } from 'react'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 import { jiraListProjects } from '@/runtime/runtime-jira-client'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationModel) {
@@ -18,7 +18,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     jiraTaskSourceContext,
     taskResumeApplied
   } = model
-  // Why: fetch the full Linear team list so the selector shows all teams, not just those with issues in the fetch window.
+  // Fetch all teams; the current issue window may contain only a subset.
   const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
   const [linearTeamRefreshNonce, setLinearTeamRefreshNonce] = useState(0)
   useEffect(() => {
@@ -33,7 +33,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId, {
       sourceContext: linearTaskSourceContext
     })
-    // Why: on a workspace switch, drop the prior workspace's teams during the pending fetch but seed from the workspace-scoped cache.
+    // On workspace switch, replace prior teams with that workspace’s cache while fetching.
     setAvailableTeams(cachedTeams ?? [])
     void listLinearTeams(selectedLinearWorkspaceId, {
       sourceContext: linearTaskSourceContext
@@ -51,7 +51,6 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
     linearConnected,

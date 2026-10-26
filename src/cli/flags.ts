@@ -32,11 +32,7 @@ export function getOptionalStringFlag(
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
-/**
- * A valued flag whose value the shell (or a missing variable) ate parses as `true`. Dropping it
- * silently mints a fresh mutation identity and can deliver a prompt twice (#15180), so every
- * valued-flag accessor refuses the damaged shape by name.
- */
+// A missing valued flag must fail: silently regenerating mutation IDs can submit prompts twice.
 export function rejectValuelessFlag(value: string | boolean | undefined, name: string): void {
   if (value === true) {
     throw new RuntimeClientError(
@@ -46,11 +42,7 @@ export function rejectValuelessFlag(value: string | boolean | undefined, name: s
   }
 }
 
-/**
- * A JSON-valued flag, rejected up front when a native argv boundary stripped its quotes so the
- * error names the shell instead of the user's value (#16706). The value itself is still parsed
- * downstream; this only catches the damaged shape.
- */
+/** Detect shell-stripped JSON quotes before downstream parsing so the error names the argv boundary. */
 export function getOptionalJsonFlag(
   flags: Map<string, string | boolean>,
   name: string

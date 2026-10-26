@@ -81,16 +81,24 @@ describe('Pi final tail before host eviction', () => {
     expect(append('lifecycle-refused', true)).toEqual({ accepted: false, reason: 'backpressure' })
     const before = journal.snapshot().items.length
     vi.useFakeTimers()
+    const reply = `Final reply${'r'.repeat(2 * 1024 * 1024)}`
+    const status = `Final status${'s'.repeat(17 * 1024 * 1024)}`
     lane.apply([
-      { type: 'text.delta', item: { id: 'reply' }, channel: 'assistant', text: 'Final reply' },
+      { type: 'text.delta', item: { id: 'reply' }, channel: 'assistant', text: reply },
       {
         type: 'item.update',
         item: 'tail',
-        body: { kind: 'status', tone: 'info', text: 'Final status' }
+        body: { kind: 'status', tone: 'info', text: status }
       }
     ])
-    lane.finalize()
-    lane.apply([{ type: 'session.ended', verdict: { state: 'interrupted', completedAt: 2 } }])
+    lane.finalize({ type: 'session.ended', verdict: { state: 'interrupted', completedAt: 2 } })
+    lane.apply([
+      {
+        type: 'item.close',
+        item: 'after-seal',
+        body: { kind: 'status', tone: 'info', text: 'must not land' }
+      }
+    ])
     let landed = false
     const barrier = deferred.drained().then((result) => {
       landed = true
@@ -112,14 +120,19 @@ describe('Pi final tail before host eviction', () => {
       discardSink: vi.fn()
     })
     expect(acknowledgeRelease).toHaveBeenCalledOnce()
+    expect(
+      journal
+        .snapshot()
+        .items.some((item) => item.body.kind === 'status' && item.body.text === 'must not land')
+    ).toBe(false)
     expect(journal.snapshot().items.map((item) => item.body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'message',
           role: 'assistant',
-          blocks: [{ type: 'text', text: 'Final reply' }]
+          blocks: [{ type: 'text', text: reply }]
         }),
-        expect.objectContaining({ kind: 'status', text: 'Final status' }),
+        expect.objectContaining({ kind: 'status', text: status }),
         expect.objectContaining({
           kind: 'approval',
           resolution: expect.objectContaining({ state: 'cancelled' })
@@ -129,28 +142,30 @@ describe('Pi final tail before host eviction', () => {
     )
   })
 
-  it('fails excessive final output explicitly instead of leaving a refused tail waiting for eviction', async () => {
+  it('keeps the final transfer operation-count limit', async () => {
     const failures: unknown[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(SESSION),
       onFailed: (error) => failures.push(error)
     })
     cleanups.push(() => deferred.close())
-    expect(
-      deferred.sink.tryAppendTransition?.({
-        finalTail: true,
-        lifecycle: true,
-        publish: false,
-        steps: [
-          {
-            kind: 'settlement',
-            settlementId: 'oversize',
-            reservedBytes: 16 * 1024 * 1024 + 1,
-            resolve: () => []
-          }
-        ]
-      })
-    ).toEqual({ accepted: false, reason: 'failed' })
+    for (let index = 0; index <= 512; index += 1) {
+      expect(
+        deferred.sink.tryAppendTransition?.({
+          finalTail: true,
+          lifecycle: true,
+          publish: false,
+          steps: [
+            {
+              kind: 'settlement',
+              settlementId: `tail:${index}`,
+              reservedBytes: 1,
+              resolve: () => []
+            }
+          ]
+        })
+      ).toEqual(index < 512 ? { accepted: true } : { accepted: false, reason: 'failed' })
+    }
     expect(failures).toEqual([
       expect.objectContaining({
         message: 'structured agent-session final tail exceeded its reserved capacity'

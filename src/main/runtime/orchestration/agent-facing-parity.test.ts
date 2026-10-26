@@ -1,9 +1,4 @@
-/**
- * A chat agent and a terminal agent run the same orchestration process: the same preamble, the
- * same pointer text and the same guide. They differ in how each is named (a terminal by its handle,
- * exactly as on main, a session by its Orca session ID) and in the preamble calling a chat a chat.
- * Orca absorbs everything else.
- */
+/** Chat and terminal agents must receive equivalent preambles, pointers and guides, apart from address and chat wording. */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
@@ -41,7 +36,7 @@ vi.mock('../rpc/methods/orchestration-structured-worker-session', () => ({
 const CHAT_SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 const CHAT_ADDRESS = `orca_session_id:${CHAT_SESSION}`
 const TERMINAL_HANDLE = 'term_worker'
-// A structured worker's mailbox key: the handle it was minted, which its preamble never shows.
+// The structured worker's hidden mailbox handle differs from its visible session address.
 const CHAT_WORKER_HANDLE = 'structworker_1'
 
 const db = new OrchestrationDb(':memory:')
@@ -116,7 +111,7 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
   return worker === 'chat' ? sent.preambles[0]! : prompts[0]!
 }
 
-/** The turn text the structured lane sends a chat for one message on `mailbox`. */
+/** Render the structured-lane pointer for one mailbox message. */
 async function renderChatPointer(mailbox: string): Promise<string> {
   const texts: string[] = []
   const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
@@ -124,12 +119,12 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     getDb: () => db,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
-    // The runtime's wiring of the structured lane.
     getCliCommand: localOrchestrationCliCommand,
     senderName: () => null,
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       hasActionablePromptNow: () => false,
+      isWorkingNow: () => false,
       currentFence: () => 1,
       currentContextClearOperationId: () => undefined,
       send: async (input) => {
@@ -142,7 +137,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   })
   delivery.deliverForHandle(mailbox)
   await vi.waitFor(() => expect(texts).toHaveLength(1))
-  // Read, as the agent's `check` reads it, so this mailbox's next mail is pointed too.
+  // Mark read as the agent's check does, allowing the next message pointer.
   db.markAsRead([message.id])
   return texts[0]!
 }
@@ -176,7 +171,6 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     'renders the pointer the PTY lane types into a local terminal, in %s',
     async (_label, packaged) => {
       installApp(packaged)
-      // What the PTY lane types for a local, non-WSL terminal (`getTerminalOrchestrationCliCommand`).
       const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
         connectionId: null,
         isWsl: false,

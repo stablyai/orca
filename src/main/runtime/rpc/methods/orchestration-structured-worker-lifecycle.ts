@@ -1,11 +1,4 @@
-/**
- * The lifecycle verbs for a worker that IS a structured agent session.
- *
- * Observation follows the SSH execution-boundary vocabulary — `live` / `unverifiable` / `exited` —
- * because losing contact with a host generation is not a death certificate. In particular a
- * runtime that has not installed the structured host cannot see a session's child at all, and that
- * is `unverifiable`, never `exited`.
- */
+/** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
@@ -46,7 +39,7 @@ import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -72,17 +65,8 @@ export type StructuredWorkerStopOutcome = {
   reason?: string
 }
 
-/**
- * Stopping a structured worker: closing the session running it now.
- *
- * `host.close` returns void and keeps a failed close indexed for retry, so the only settlement
- * evidence is the observation AFTER it: a session the host no longer holds and whose lease is no
- * longer live is proven gone. Anything else is retained rather than settled.
- *
- * Re-resolved after each close: a `/clear` the close queued behind can commit first and hand the
- * worker to a successor, which is then closed too. A running session that cannot be verified is
- * not closed, and the outcome says no close was attempted.
- */
+/** Prove stop by observing no host-held session and no live lease after close; void close alone proves nothing.
+ * Re-resolve /clear successors after each close. Unverifiable sessions remain untouched and retained. */
 export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
   dispatchId: string,
@@ -99,8 +83,7 @@ export async function stopStructuredWorker(
     try {
       sessionId = requireRunningStructuredWorker(identity).sessionId
     } catch (error) {
-      // Why returned, not thrown: worker-stop already marked the Dispatch stopping, and only an
-      // outcome lets it record the stop as unknown instead of stranding it there.
+      // Return uncertainty so worker-stop can settle its already-stopping dispatch instead of stranding it.
       const reason = error instanceof Error ? error.message : String(error)
       return { stopped: false, closeAttempted, reason }
     }
@@ -110,8 +93,7 @@ export async function stopStructuredWorker(
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
       ...(runtime ? { runtime } : {}),
-      // Between the close and the proof, never after: an unsettled close returns early, and a
-      // surviving redrive subscription keeps nudging a session no dispatch owns.
+      // Release redrive after close but before proof; an unsettled close returns early, leaving an unowned subscription otherwise.
       afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime, identity.sessionId)
     })
     closeAttempted ||= outcome.closeAttempted
@@ -142,8 +124,7 @@ export async function readStructuredWorkerOutput(args: {
   if (args.source === 'terminal') {
     throw new OrchestrationError(
       'archive_unavailable',
-      // Mode-neutral on purpose: a coordinator is never told which kind of worker it started, so
-      // a refusal must not be the thing that discloses it. `auto` and `transcript` both work here.
+      // Keep refusals mode-neutral; auto/transcript work for every worker.
       `Worker Dispatch ${args.dispatchId} has no terminal output; read it with --source auto or --source transcript.`
     )
   }
@@ -208,34 +189,15 @@ export async function readStructuredWorkerJournal(args: {
   })
 }
 
-/**
- * The cursor's `source_changed` anchor: the window's oldest item, plus every item whose projected
- * message sits BELOW `position`, by id AND revision.
- *
- * The journal is a reduced, MUTABLE timeline, so a message index over it is not self-validating and
- * the old oldest-item-only fingerprint could not see the normal case. A `running` tool item gains
- * its `[tool result]` at its original sequence once later items exist, the delta coalescer revises a
- * message in place, settlement can rewrite an item smaller, and a pending approval projects to null
- * until it resolves and then appears in the MIDDLE of the array. Under a stable oldest item that
- * fingerprint stayed valid through all of it: a caller could be handed `hel`, resume past it and
- * never receive the revision to `hello world` (omission), or have a resolved approval insert ahead
- * of its saved index and re-read what it already had (duplication) — both returning ok.
- *
- * Scoped to the prefix rather than the whole page ON PURPOSE. Fingerprinting every item would flip
- * the identity every 60ms with the coalescer window during an active turn, making the cursor
- * unusable exactly while the worker is working — a useless verb in place of a silent bug. Tail
- * growth the caller has not read yet cannot invalidate; a change to what it already holds does.
- * Position-dependence is safe because `p` rides in the same opaque payload as the identity.
- *
- * The oldest item stays in the anchor as the window-slide detector: a slide shifts every index.
- */
+/** Anchor cursors to the oldest item and the ids/revisions of messages below position.
+ * Journal messages mutate or appear in place, so oldest-item-only misses omissions/duplicates.
+ * Hash only the consumed prefix: unseen tail growth must not invalidate active readers; oldest-item changes still detect window slides. */
 function structuredJournalPrefixIdentity(args: {
   identity: StructuredJournalSource
   page: StructuredLineageJournalPage
   position: number
 }): string {
-  // Item ids are per session, and a `/clear` copies drafts into its successor: a later session's
-  // items are keyed by session too. The root's stay bare, so a cursor taken before any clear holds.
+  // Namespace successor items by session because /clear copies drafts; keep root ids bare for earlier cursors.
   const itemKey = (index: number): string => {
     const itemId = args.page.items[index]?.itemId ?? ''
     const sessionId = args.page.sessionIds[index]
@@ -243,9 +205,7 @@ function structuredJournalPrefixIdentity(args: {
       ? itemId
       : `${sessionId}/${itemId}`
   }
-  // Items that project to a message, in message order. `projectStructuredItemsToNativeChat` keeps
-  // order and drops the rest, and `boundWorkerTranscriptMessages` returns a PREFIX of that, so
-  // message index i is item i here for every index a cursor can name.
+  // Fingerprint message-producing items in projection order; bounded output is their prefix.
   const projected = args.page.items.flatMap((item, index) =>
     projectStructuredItemToNativeChat(item) === null ? [] : [{ index, revision: item.revision }]
   )
@@ -266,8 +226,7 @@ export async function captureStructuredWorkerArchive(
   agent: AgentType
 ): Promise<WorkerStructuredJournalArchive> {
   const running = requireRunningStructuredWorker(identity)
-  // Opens a conversation at rest or one the idle sweep closed, so a resting worker's journal is
-  // still preserved. The whole lineage: a `/clear` must not drop the worker's earlier output.
+  // Open resting journals too and preserve the whole /clear lineage.
   const page = await readStructuredLineageJournalPage(running.lineage)
   if (page) {
     return buildStructuredJournalArchive({
@@ -277,14 +236,8 @@ export async function captureStructuredWorkerArchive(
       hasOlder: page.hasOlder
     })
   }
-  // An unreadable journal is `archive_failed`, and release retains the worker so the evidence can
-  // still be preserved later — the same contract the PTY path keeps. It holds only while the
-  // evidence might still arrive. A session PROVEN gone detaches its journal for good, and closing
-  // the worker's chat tab is a routine user action that does exactly that, so throwing there wedges
-  // release on evidence that can never come and leaves `worker-abandon` as the only exit.
-  //
-  // Only a worker this runtime no longer owns qualifies — released with its chat tab gone. An owned
-  // one, running or at rest, keeps its journal, and so does one we could not look at.
+  // Unreadable owned/unverifiable journals must retain evidence for later archive.
+  // Only proven-retired lineages may skip missing journals: a user-closed chat can never supply more evidence.
   if (structuredWorkerOwned(running) !== false) {
     throw new OrchestrationError(
       'archive_failed',
@@ -330,16 +283,12 @@ export function readArchivedStructuredJournal(args: {
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.archive.agent,
-    // Constant on purpose: the archive is FROZEN before the close, so no item can be revised under
-    // a caller and there is no prefix to fingerprint.
+    // Frozen archives cannot revise under a cursor, so their identity is constant.
     identityAt: () => sourceIdentity,
     start: cursor?.position ?? 0,
     limit: args.limit,
     archived: true,
-    // The archive is frozen BEFORE the close, so it proves nothing about the child. Only a
-    // settled release row proves the close landed; `releasing` and `unknown` are the states
-    // that exist to say it did not, and answering `exited` from one of them is the death
-    // certificate `docs/reference/ssh-execution-boundary.md` forbids.
+    // Archives precede close and prove no exit; only settled release can certify death (docs/reference/ssh-execution-boundary.md).
     liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable'
   })
 }
@@ -360,8 +309,7 @@ function pageMessages(input: {
 }): OrchestrationWorkerReadTranscriptResult {
   const start = Math.min(input.start, input.messages.length)
   const end = Math.min(start + clampWorkerTranscriptLimit(input.limit), input.messages.length)
-  // Stamped with the identity of everything up to `end`, which is exactly what the next read
-  // recomputes and compares — so a later in-place revision below it is caught.
+  // Stamp the prefix through end so later revisions below it invalidate the next cursor.
   const sourceIdentity = input.identityAt(end)
   const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
   return {

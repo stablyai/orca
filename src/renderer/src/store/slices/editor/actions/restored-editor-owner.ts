@@ -3,8 +3,8 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { RestoredEditorOwnerResult } from '../types/restored-editor-owner'
 import { buildRestoredEditorOwnerTransition } from './restored-editor-owner-transition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { recordRestoredEditorMoveInLayoutOwner } from '../tabs/editor-tab-layout-owner'
-import { writeEditorBuffer } from '../buffers/editor-buffer-record'
+import { reparentRestoredEditorThroughLayoutOwner } from '../tabs/restored-editor-move-through-layout-owner'
+import { updateEditorBuffer } from '../buffers/editor-buffer-record'
 
 export function createRestoredEditorOwner(
   set: EditorSet,
@@ -14,19 +14,14 @@ export function createRestoredEditorOwner(
     setRestoredEditorOwnerMigrationPending: (fileId, pending) => {
       let changed = false
       set((s) => {
-        const file = s.openFiles.find((candidate) => candidate.id === fileId)
-        const next = pending || undefined
-        if (!file || file.pendingOwnerMigration === next) {
-          return s
-        }
-        changed = true
-        return writeEditorBuffer(s, fileId, { pendingOwnerMigration: next })
+        const next = updateEditorBuffer(s, fileId, { pendingOwnerMigration: pending || undefined })
+        changed = next !== s
+        return next
       })
       return changed
     },
 
     reparentRestoredEditorFileOwner: (args) => {
-      const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get() : null
       let result: RestoredEditorOwnerResult = { ok: false, reason: 'stale' }
       const projectReparent = buildRestoredEditorOwnerTransition(args, (next) => {
         result = next
@@ -37,16 +32,29 @@ export function createRestoredEditorOwner(
         get().activeWorktreeId === initialSource.worktreeId &&
         get().activeFileId === initialSource.id
       )
-      if (activatesTargetWorkspace) {
-        get().setActiveWorktree(args.targetWorktreeId, args.targetExecutionHostId, {
-          stateTransition: projectReparent
-        })
-      } else {
-        set((state) => projectReparent(state).patch)
+      const moveHere = (): void => {
+        if (activatesTargetWorkspace) {
+          get().setActiveWorktree(args.targetWorktreeId, args.targetExecutionHostId, {
+            stateTransition: projectReparent
+          })
+        } else {
+          set((state) => projectReparent(state).patch)
+        }
       }
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && before && initialSource) {
-        recordRestoredEditorMoveInLayoutOwner(before, get(), initialSource, result)
+      // Switch point: main moves the tabs and its frame rekeys the content.
+      const sent = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? reparentRestoredEditorThroughLayoutOwner(
+            set,
+            get,
+            args,
+            activatesTargetWorkspace,
+            moveHere
+          )
+        : null
+      if (sent) {
+        return sent
       }
+      moveHere()
       return result
     }
   }

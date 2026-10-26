@@ -25,7 +25,7 @@ describe('getDiscardAllPaths', () => {
       entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
     ]
     expect(getDiscardAllPaths(entries, 'staged')).toEqual(['a.ts'])
-    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts'])
+    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts', 'c.ts'])
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
   })
 
@@ -39,9 +39,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
-    // Why: `git restore --worktree --source=HEAD` on an unresolved conflict
-    // clears the `u` record silently before the user has reviewed it, which
-    // is why the per-row Stage/Discard buttons also suppress this case.
+    // Restoring unresolved conflicts silently clears the u record before review, matching the per-row discard guard.
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
@@ -55,9 +53,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
-    // Why: discarding a locally-resolved file loses the resolution. The user
-    // would have to re-resolve from scratch — treat it as too dangerous to
-    // include in a bulk action.
+    // Bulk discard must preserve local resolutions or users would have to resolve them again.
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
@@ -88,9 +84,7 @@ describe('getStageAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
-    // Why: `git add` on an unresolved conflict silently clears the `u`
-    // record before the user has reviewed it — same hazard the per-row
-    // Stage button guards against.
+    // git add silently clears unresolved u records before review, matching the per-row Stage guard.
     expect(getStageAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
@@ -104,9 +98,7 @@ describe('getStageAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
-    // Why: staging a locally-resolved file is the normal resolution
-    // workflow — it marks the conflict as finished. Unlike discard, this
-    // must NOT be filtered out.
+    // Staging a local resolution finishes the normal conflict workflow and must remain available.
     expect(getStageAllPaths(entries, 'unstaged')).toEqual(['clean.ts', 'resolved.ts'])
   })
 
@@ -162,8 +154,7 @@ describe('status entry stageability', () => {
       submoduleRoot: 'flutter_mine'
     })
 
-    // Why: changes inside a submodule are read-only from the parent — staging
-    // them via `git add` from the parent worktree is a no-op/footgun.
+    // Parent-worktree git add cannot stage inner submodule changes.
     expect(isStageableStatusEntry(innerEntry)).toBe(false)
     expect(getStageAllPaths([innerEntry], 'unstaged')).toEqual([])
   })
@@ -195,8 +186,7 @@ describe('getUnstageAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
-    // Why: `git reset HEAD` on a staged conflict row is safe and mirrors
-    // the per-row Unstage action — no conflict filter here.
+    // Unstaging conflicts safely mirrors the per-row action; no conflict filtering is needed.
     expect(getUnstageAllPaths(entries)).toEqual(['clean.ts', 'conflict.ts', 'resolved.ts'])
   })
 
@@ -288,9 +278,7 @@ describe('runDiscardAllForArea', () => {
     expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
     expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
-    // Why: bulk unstage MUST happen strictly before any discard, otherwise
-    // the index would still hold the staged delta when the worktree was
-    // reset and the files would reappear as inverse changes.
+    // Unstage before restoring worktree files or staged deltas survive as inverse changes.
     expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
       ctx.discardOne.mock.invocationCallOrder[0]
     )
@@ -311,8 +299,7 @@ describe('runDiscardAllForArea', () => {
     expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOne).not.toHaveBeenCalled()
-    // Why: staged discard is a two-step mutation. The index must be reset
-    // before the worktree restore/delete batch runs or staged deltas survive.
+    // Reset the index before restoring/deleting worktree files so staged deltas cannot survive.
     expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
       ctx.discardMany.mock.invocationCallOrder[0]
     )
@@ -332,9 +319,7 @@ describe('runDiscardAllForArea', () => {
     const ctx = makeDeps({ bulkUnstageError: error })
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
     expect(result).toEqual({ discarded: [], failed: [], aborted: true })
-    // Why: a failed unstage + successful discard would leave the index with
-    // the staged delta and the worktree at HEAD — a worse state than we
-    // started in. The discard loop must not run.
+    // Abort after failed unstage; restoring only the worktree would leave a mismatched staged delta.
     expect(ctx.discardOne).not.toHaveBeenCalled()
     expect(ctx.errors).toEqual([error])
   })
@@ -345,17 +330,13 @@ describe('runDiscardAllForArea', () => {
       discardOneError: (path) => (path === 'b.ts' ? error : undefined)
     })
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts', 'c.ts'], ctx.deps)
-    // Why: best-effort continuation — one stuck file shouldn't block the
-    // rest of a bulk action the user explicitly triggered.
     expect(result).toEqual({
       discarded: ['a.ts', 'c.ts'],
       failed: ['b.ts'],
       aborted: false
     })
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts', 'c.ts'])
-    // Why: `aborted` is reserved for the pre-step (bulk unstage) failing —
-    // per-file failures don't trip it, otherwise callers couldn't
-    // distinguish "nothing ran" from "some ran, some didn't".
+    // Reserve aborted for failed bulk unstage so callers can distinguish no work from partial success.
     expect(ctx.errors).toEqual([error])
   })
 

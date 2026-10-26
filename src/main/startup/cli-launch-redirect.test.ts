@@ -383,7 +383,6 @@ describe('CLI launch redirect: spawning', () => {
       })
     )
     const env = execve.mock.calls[0]?.[2]
-    // Why: the CLI must still start its Electron server with the caller's --no-sandbox.
     expect(env).toHaveProperty('ORCA_ELECTRON_NO_SANDBOX', '1')
     expect(env).not.toHaveProperty('ORCA_CLI_LAUNCH_REDIRECTED')
     expect(env).not.toHaveProperty('NODE_OPTIONS')

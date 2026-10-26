@@ -66,10 +66,8 @@ describe('gitlab client — MR operations', () => {
     getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
     glabExecFileAsyncMock.mockRejectedValue(new Error('glab: connection refused'))
 
-    // The swallowing variant collapses a real failure into a false "no MR".
     await expect(getMergeRequestForBranch('/repo', 'feature/x')).resolves.toBeNull()
-    // The throwing variant makes the failure visible so eligibility records
-    // `unavailable` rather than a false "No merge request found".
+    // Strict lookup preserves unavailable transport as distinct from a confirmed missing review.
     await expect(getMergeRequestForBranchOrThrow('/repo', 'feature/x')).rejects.toThrow(
       /connection refused/
     )
@@ -166,9 +164,7 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
-    // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
-    // recheck request the row can sit at `unchecked` forever and the sidebar merge button — which
-    // gates on MERGEABLE — never becomes available.
+    // List endpoints require explicit asynchronous recheck before merge status can converge.
     it('asks GitLab to recheck merge status on the branch lookup', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
@@ -379,7 +375,6 @@ describe('gitlab client — MR operations', () => {
 
       const mr = await getMergeRequestForBranch('/repo', 'main')
       expect(mr?.number).toBe(8)
-      // Open results never consult git for the default branch (lazy resolution).
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     })
 
@@ -443,8 +438,6 @@ describe('gitlab client — MR operations', () => {
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {
-      // Why: during a rebase the branch is empty — mirror github/getPRForBranch's
-      // early return without calling glab.
       await expect(getMergeRequestForBranch('/repo', '')).resolves.toBeNull()
       expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
     })

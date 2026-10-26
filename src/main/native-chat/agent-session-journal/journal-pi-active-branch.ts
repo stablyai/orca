@@ -13,7 +13,7 @@ function closePiImportDatabase(db: Database.Database | null): void {
   }
 }
 
-/** Keep the complete Pi tree on disk until its saved leaf identifies the active branch. */
+// Spool the full tree until the saved leaf identifies the active branch.
 export function createPiTranscriptCollector<T>(
   toItem: (message: NativeChatMessage, identity: AgentJournalItemIdentity) => T,
   identify: (line: string, lineIndex: number) => AgentJournalItemIdentity
@@ -76,7 +76,7 @@ export function createPiTranscriptCollector<T>(
       if (typeof id !== 'string' || !(parentId === null || typeof parentId === 'string')) {
         throw new Error('Pi session entry has no valid branch identity')
       }
-      // Pi v1 indexes include headers and parsed metadata, but not malformed lines.
+      // Pi v1 counts parsed headers/metadata but excludes malformed records from indexes.
       const keptByIndex =
         version < 2 && typeof record.firstKeptEntryIndex === 'number'
           ? byFileIndex.get(record.firstKeptEntryIndex)
@@ -164,17 +164,9 @@ export function createPiTranscriptCollector<T>(
           }
           processedRows += 1
           processedBytes += Buffer.byteLength(row.raw_line, 'utf8')
-          const record = parseJsonObject(row.raw_line)
-          if (record) {
-            const message =
-              record.type === 'compaction' || record.type === 'branch_summary'
-                ? piSummaryMessage(record, row.fallback_id)
-                : asRecord(record.message)?.role === 'system'
-                  ? null
-                  : decodeOmpTranscriptLine(row.raw_line, row.fallback_id)
-            if (message) {
-              keep(toItem(message, identify(row.raw_line, row.line_index)))
-            }
+          const message = decodePiSessionEntryLine(row.raw_line, row.fallback_id)
+          if (message) {
+            keep(toItem(message, identify(row.raw_line, row.line_index)))
           }
           if (
             processedBytes >= 1024 * 1024 ||
@@ -209,6 +201,23 @@ export function createPiTranscriptCollector<T>(
       closePiImportDatabase(db)
     }
   }
+}
+
+/** Preserve branch/compaction summaries; skip system prompts and reuse the OMP decoder otherwise. */
+export function decodePiSessionEntryLine(
+  line: string,
+  fallbackId: string
+): NativeChatMessage | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  if (record.type === 'compaction' || record.type === 'branch_summary') {
+    return piSummaryMessage(record, fallbackId)
+  }
+  return asRecord(record.message)?.role === 'system'
+    ? null
+    : decodeOmpTranscriptLine(line, fallbackId)
 }
 
 function piSummaryMessage(

@@ -14,31 +14,31 @@ type Props = Pick<
   | 'rows'
   | 'roots'
   | 'renderItem'
-  | 'rowState'
+  | 'runs'
   | 'layoutKey'
   | 'contentContainerStyle'
   | 'header'
   | 'footer'
   | 'emptyStateView'
   | 'onScroll'
+  | 'onNearTop'
 > & {
   tail: MobileNativeChatTailFollow
   rowKeys: MobileNativeChatRowKeys
-  /** The native list's header; with one, the row below it anchors the visible content. */
-  nativeHeader: ReactElement | null
+  /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
 }
 
-/** The chat's rows: the page draws its own keyed window, a native list recycles through FlatList. */
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
+  const { header, emptyStateView } = props
   if (Platform.OS === 'web') {
-    const { roots, rowState, header, emptyStateView, layoutKey } = props
+    const { roots, runs, layoutKey, onNearTop } = props
     return (
       <MobileNativeChatPageList
         {...tail.pageListProps}
-        {...{ rows, rowKeys, roots, renderItem, rowState, contentContainerStyle }}
-        {...{ footer, emptyStateView, onScroll, header, layoutKey }}
+        {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+        {...{ header, footer, emptyStateView, onScroll, onNearTop }}
       />
     )
   }
@@ -61,9 +61,9 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
       onContentSizeChange={tail.pinToTailAfterContentResize}
       onLayout={tail.pinToTail}
       maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
-      ListHeaderComponent={props.nativeHeader}
+      ListHeaderComponent={header}
       ListFooterComponent={footer}
-      ListEmptyComponent={props.emptyStateView}
+      ListEmptyComponent={emptyStateView}
     />
   )
 }

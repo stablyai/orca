@@ -1,11 +1,3 @@
-// Where a launch prompt sent the instant `attach` resolves reaches the adapter.
-//
-// Both shipped adapters look the session up in a live map and throw when it is absent
-// (`claude-structured-session-adapter.ts:331-337`, `codex-structured-session-state.ts`'s
-// `requireLiveCodexSession`), and both populate that map as the last step of `acquire`
-// (`claude-structured-session-acquisition.ts:278`, `codex-structured-session-acquire.ts:275`).
-// So the question is purely one of ordering, and that is what these model.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { commitStructuredAgentSessionLaunchPrompt } from '../../runtime/rpc/methods/agent-launch-structured-prompt'
@@ -19,7 +11,7 @@ import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
 
 let host: StructuredAgentSessionHost
 
-/** Mirrors both adapters: `acquire` publishes into the live map, `dispatch` throws without it. */
+/** Model adapter ordering: acquire publishes liveness; dispatch requires it. */
 function modelAdapterLiveness(registerOnAcquire: boolean): void {
   const { acquire, dispatch } = hostTestState()
   const live = new Set<string>()
@@ -39,7 +31,7 @@ function modelAdapterLiveness(registerOnAcquire: boolean): void {
   })
 }
 
-/** Exactly what `agentLaunchSurfaceFactory` does: create, then send on the create's own fence. */
+/** Match launch-surface ordering: create, then send at its returned fence. */
 async function launchAndDeliver(): Promise<{
   messageId: string | null
   dispatchState: string
@@ -60,7 +52,6 @@ async function launchAndDeliver(): Promise<{
   if (!sent.ok) {
     return { messageId, dispatchState: `refused:${sent.refusal.code}:${sent.refusal.message}` }
   }
-  // Accepted first; the delivery loop hands it over, and that outcome is what reached the agent.
   let dispatchState = sent.value.submission.dispatchState
   await vi.waitFor(async () => {
     dispatchState =
@@ -74,8 +65,7 @@ async function launchAndDeliver(): Promise<{
 
 beforeEach(() => {
   ;({ host } = hostTestState())
-  // The harness pins the host clock; operation ids are minted from `Date.now()` and carry a
-  // timestamp the host expires against, so the two must agree or every send reads as stale.
+  // Match operation-ID timestamps to the pinned host clock to avoid stale-send refusal.
   vi.spyOn(Date, 'now').mockReturnValue(NOW)
 })
 
@@ -90,8 +80,7 @@ describe('a launch prompt sent the instant the create resolves', () => {
     expect(hostTestState().dispatch).toHaveBeenCalledTimes(1)
   })
 
-  // Positive control: the assertion above is only evidence if this arm can fail, and it names
-  // the user-visible symptom precisely — a committed row that no agent will ever answer.
+  // Negative control: early acquire resolution would strand an accepted message.
   it('would commit a row and strand it if acquire ever resolved before publication', async () => {
     modelAdapterLiveness(false)
 

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 
@@ -22,7 +21,7 @@ function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable'
       optionMutationSequence: 0,
       reportedModelMutation: 0,
       confirmedOptions: new Set<string>(),
-      reusableOptions: new Map(),
+      appliedInputOptions: new Map(),
       connection: {
         supportedModels: async () => {
           calls.push('list_models')
@@ -41,65 +40,16 @@ function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable'
   }
 }
 
-describe('Claude model pre-flight against the catalog the CLI listed', () => {
-  it('refuses a model the provider does not list', async () => {
-    const { session, calls } = sessionWith([DEFAULT_ROW, SONNET, HAIKU])
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'not-a-real-model-xyz' }, undefined)
-    ).rejects.toBeInstanceOf(AgentSessionOptionRejectedError)
-    // Measured on Claude Code 2.1.260: set_model resolves for an unlisted id and
-    // every later turn returns is_error with zero tokens. Nothing undoes the
-    // write, so the refusal has to land before it.
-    expect(calls).toEqual(['list_models'])
-    expect(session.options.has('model')).toBe(false)
-  })
-
-  it('applies a model the provider lists', async () => {
-    const { session, calls } = sessionWith([DEFAULT_ROW, SONNET, HAIKU])
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'haiku' }, undefined)
-    ).resolves.toEqual({ model: 'haiku' })
-    expect(calls).toEqual(['list_models', 'set_model:haiku'])
-  })
-
-  it('applies a resolved model id the catalog carries only under its alias', async () => {
-    const { session, calls } = sessionWith([DEFAULT_ROW, SONNET])
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'claude-sonnet-5' }, undefined)
-    ).resolves.toEqual({ model: 'claude-sonnet-5' })
-    expect(calls).toEqual(['list_models', 'set_model:claude-sonnet-5'])
-  })
-
-  it('refuses nothing when list_models is unavailable', async () => {
-    // A CLI predating list_models would otherwise have every model refused.
-    const { session, calls } = sessionWith('unavailable')
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet' })
-    expect(calls).toEqual(['list_models', 'set_model:sonnet'])
-  })
-
-  it('refuses nothing when the listed catalog is empty', async () => {
-    // An empty answer identifies no model, so it is not evidence against one.
-    const { session, calls } = sessionWith([])
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet' })
-    expect(calls).toEqual(['list_models', 'set_model:sonnet'])
-  })
-
-  it('refuses nothing when the catalog carries only the synthetic default row', async () => {
-    // listedModels drops that row, leaving a list that identifies no model.
-    const { session, calls } = sessionWith([DEFAULT_ROW])
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet' })
-    expect(calls).toEqual(['list_models', 'set_model:sonnet'])
-  })
+describe('Claude literal model controls', () => {
+  it.each(['opus[1m]', 'claude-sonnet-5'])(
+    'passes %s through an incomplete catalog',
+    async (model) => {
+      const { session, calls } = sessionWith([DEFAULT_ROW, SONNET, HAIKU])
+      await expect(
+        setClaudeStructuredOption(session, { key: 'model', value: model }, undefined)
+      ).resolves.toEqual({ model })
+      expect(calls).toEqual([`set_model:${model}`])
+      expect(session.appliedInputOptions.get('model')).toBe(model)
+    }
+  )
 })

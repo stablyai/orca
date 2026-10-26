@@ -7,6 +7,7 @@ import type {
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,
@@ -94,9 +95,7 @@ export function createAutomation(
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
     ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
-    // Why own contexts win: a wire context speaks the client's perspective —
-    // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
-    // persisting it makes the projection orphan a record this authority owns.
+    // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
     sourceContext: contexts.sourceContext ?? input.sourceContext ?? null,
     projectId: input.projectId,
@@ -152,8 +151,7 @@ export function updateAutomation(
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
-  // Why: the renderer forwards a Partial verbatim, so `{ enabled: undefined }` survives structuredClone
-  // and would blank the stored value in the spread below. Explicit clears go through the `null` branches.
+  // Ignore undefined values preserved by structuredClone; explicit clears use null.
   const definedUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, value]) => value !== undefined)
   ) as AutomationUpdateInput
@@ -180,9 +178,7 @@ export function updateAutomation(
       ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
     projectId: repoId,
-    // Why the wire object is ignored: contexts are the storing authority's own
-    // registry speaking. A move restates them from that registry, anything else
-    // keeps the stored value; an explicit null still clears.
+    // Rebuild moved contexts from this authority's registry; otherwise preserve stored values or explicit null.
     runContext:
       definedUpdates.runContext === null
         ? null
@@ -254,12 +250,30 @@ export function updateAutomation(
     executionTarget,
     workspaceSshPinMoved ? undefined : workspaceSshPin
   )
-  // Replaced, not patched in place: the list projection caches on array identity.
+  // Replace the array to invalidate identity-keyed list projections.
   operations.state.automations = operations.state.automations.map((entry) =>
     entry.id === id ? updated : entry
   )
   operations.flush()
   return updated
+}
+
+/** Stamp legacy targets once without retargeting user- or migration-owned contexts. */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replace the array to invalidate identity-keyed list projections.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
 }
 
 export function deleteAutomation(
@@ -283,7 +297,7 @@ export function deleteAutomation(
     (entry) => entry.automationId !== id
   )
   operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
-  // Why: the automation and its unfinished runs were pinning their workspace; both are gone (#17775).
+  // Removing definitions and unfinished runs releases their workspace claims (#17775).
   invalidateLocalWorktreeMetadataPruneInputs()
   operations.flush()
 }

@@ -242,8 +242,7 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  // The notice tells users to "turn it off in Terminal settings", so the product names in
-  // the copy have to be the ones that find it.
+  // Product names in the clipboard notice must find its promised Terminal setting.
   it.each(['zellij', 'grok', 'tmux', 'osc 52'])(
     'finds the OSC 52 clipboard setting by searching %s',
     (query) => {

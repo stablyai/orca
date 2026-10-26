@@ -6,7 +6,7 @@ import { CODEX_DEFAULT_SERVICE_TIER } from './codex-structured-service-tier'
 import type { CodexSession } from './codex-structured-session-state'
 import { applyCodexStructuredSessionOption } from './codex-structured-session-options'
 
-/** Resolve one message's choices and baseline without changing the next pick. */
+/** Resolve per-message overrides without replacing the session's saved picks. */
 export async function resolvedCodexMessageOptions(
   session: CodexSession,
   choices: AgentSessionExecutionOptions | undefined
@@ -15,21 +15,18 @@ export async function resolvedCodexMessageOptions(
     return undefined
   }
   const listing = codexAcquireCatalogListing(session.catalogAccess)
-  const listedDefault = listing?.models.find((entry) => entry.isDefault)
   const priorModel = session.options.get('model')
   const priorEffort = session.options.get('effort')
+  // Keep the thread's effort unless switching models.
+  const thread = session.reportedOptions
   const model =
-    choices.model ??
-    listedDefault?.id ??
-    session.nativeDefaults?.model ??
-    (priorModel || priorEffort ? undefined : session.reportedOptions.model)
+    choices.model ?? thread.model ?? listing?.models.find((entry) => entry.isDefault)?.id
   if (!model && (choices.effort || priorModel || priorEffort)) {
     throw new AgentSessionOptionRejectedError(new Error('codex default model is unavailable'))
   }
   const listedModel = listing?.models.find((entry) => entry.id === model)
-  const defaultEffort =
-    listedModel?.defaultEffort ??
-    (model === session.nativeDefaults?.model ? session.nativeDefaults?.effort : undefined)
+  const threadEffort = model === thread.model ? thread.effort : undefined
+  const defaultEffort = threadEffort ?? listedModel?.defaultEffort
   if (choices.effort === undefined && priorEffort && !defaultEffort) {
     throw new AgentSessionOptionRejectedError(new Error('codex default effort is unavailable'))
   }
@@ -81,18 +78,27 @@ export async function resolvedCodexMessageOptions(
       choices.fastMode === 'true' ||
       (choices.serviceTier && choices.serviceTier !== CODEX_DEFAULT_SERVICE_TIER))
   ) {
-    await applyCodexStructuredSessionOption(selected, 'model', model)
+    // Preserve previously admitted choices across installation changes.
+    selected.options.set('model', model)
     if (!defaultEffort && choices.effort === undefined) {
       selected.options.delete('effort')
     }
-  }
-  if (choices.effort === undefined && defaultEffort && (priorEffort || choices.model)) {
-    await applyCodexStructuredSessionOption(selected, 'effort', defaultEffort)
+    if (
+      choices.effort === undefined &&
+      defaultEffort &&
+      (priorEffort || choices.model || selected.options.has('effort'))
+    ) {
+      selected.options.set('effort', defaultEffort)
+    }
   }
   for (const key of ['effort', 'personality', 'fastMode', 'serviceTier'] as const) {
     const value = choices[key]
     if (value !== undefined) {
-      await applyCodexStructuredSessionOption(selected, key, value)
+      if (key === 'fastMode') {
+        await applyCodexStructuredSessionOption(selected, key, value)
+      } else {
+        selected.options.set(key, value)
+      }
     }
   }
   return Object.fromEntries(selected.options)

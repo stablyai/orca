@@ -2,7 +2,9 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
+  isSameComposerWorkspace,
   nativeChatAttachmentOwnerUnchanged,
+  type ComposerWorkspace,
   type NativeChatAttachmentFocusOptions,
   type NativeChatResolvedPathOptions
 } from './native-chat-resolved-path-ownership'
@@ -25,17 +27,18 @@ import {
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
   structuredWorktreeId?: string
   /** The structured chat behind this composer; decides where its uploads are stored. */
   structuredSession?: NativeChatStructuredAttachmentSession
-  /** Live composer-disabled state; read at await-resume via a ref so a flip
-   *  mid-upload doesn't attach into a guarded composer. */
+  /** Recheck disabled state after awaits so late uploads cannot attach to a guarded composer. */
   disabled: boolean
   attachResolvedPaths: (
     paths: string[],
@@ -47,27 +50,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   setNotice: (notice: string | null) => void
 }
 
-type ComposerWorkspace = {
-  structuredWorktreeId?: string
-  terminalTabId: string
-  structuredSession?: NativeChatStructuredAttachmentSession
-}
-
-function isSameComposerWorkspace(captured: ComposerWorkspace, current: ComposerWorkspace): boolean {
-  return (
-    captured.structuredWorktreeId === current.structuredWorktreeId &&
-    captured.terminalTabId === current.terminalTabId &&
-    captured.structuredSession?.sessionId === current.structuredSession?.sessionId &&
-    captured.structuredSession?.runtimeEnvironmentId ===
-      current.structuredSession?.runtimeEnvironmentId
-  )
-}
-
-/**
- * Attach paths that arrived client-local (composer drop / file picker). SSH
- * worktrees upload into the worktree's `.orca/drops` first so the remote agent
- * can actually read what gets referenced (STA-1465).
- */
+/** Upload client-local files to the owning agent’s store or SSH .orca/drops before referencing them. */
 export function useNativeChatExternalAttachments({
   terminalTabId,
   structuredWorktreeId,
@@ -82,7 +65,7 @@ export function useNativeChatExternalAttachments({
   captureExternalDrop: (
     destinationIsCurrent?: () => boolean,
     options?: NativeChatAttachmentFocusOptions
-  ) => (paths: string[]) => Promise<void>
+  ) => CapturedNativeChatDrop
   captureReservedAttachments: (
     destinationIsCurrent?: () => boolean,
     options?: NativeChatAttachmentFocusOptions
@@ -94,23 +77,15 @@ export function useNativeChatExternalAttachments({
     disabledRef.current = disabled
   }, [disabled])
 
-  // The post-await gate asks which workspace this composer serves now, so it
-  // reads the pane through a ref. Resolving through the render closure would
-  // re-ask the workspace the upload started in — a comparison with itself.
-  const sessionId = structuredSession?.sessionId
-  const runtimeEnvironmentId = structuredSession?.runtimeEnvironmentId ?? null
+  // Read the current pane through a ref after awaits; closure-based lookup would compare the original workspace to itself.
   const workspaceRef = useRef<ComposerWorkspace>({
     structuredWorktreeId,
     terminalTabId,
     structuredSession
   })
   useLayoutEffect(() => {
-    workspaceRef.current = {
-      structuredWorktreeId,
-      terminalTabId,
-      structuredSession: sessionId ? { sessionId, runtimeEnvironmentId } : undefined
-    }
-  }, [runtimeEnvironmentId, sessionId, structuredWorktreeId, terminalTabId])
+    workspaceRef.current = { structuredWorktreeId, terminalTabId, structuredSession }
+  }, [structuredSession, structuredWorktreeId, terminalTabId])
   const pendingChipsRef = useRef(pendingChips)
   useLayoutEffect(() => {
     pendingChipsRef.current = pendingChips
@@ -119,6 +94,9 @@ export function useNativeChatExternalAttachments({
   const resolveAttachmentOwner = useCallback((): NativeChatAttachmentOwner => {
     const { structuredWorktreeId, structuredSession, terminalTabId } = workspaceRef.current
     if (structuredWorktreeId && structuredSession?.runtimeEnvironmentId) {
+      if (structuredSession.sessionPending) {
+        return { kind: 'not-ready', notice: structuredSession.sessionPendingNotice }
+      }
       return resolveNativeChatRuntimeSessionAttachmentOwner({
         sessionId: structuredSession.sessionId,
         runtimeEnvironmentId: structuredSession.runtimeEnvironmentId
@@ -159,7 +137,7 @@ export function useNativeChatExternalAttachments({
           return nativeChatAttachmentOwnerChangedNotice()
         }
         if (owner.kind === 'not-ready') {
-          return nativeChatWorktreeNotReadyNotice()
+          return owner.notice ?? nativeChatWorktreeNotReadyNotice()
         }
         if (owner.kind === 'remote') {
           return nativeChatLocalAttachmentUnsupportedNotice()
@@ -247,7 +225,15 @@ export function useNativeChatExternalAttachments({
           }
         }
       }
-      return { chips, refusal, run }
+      return {
+        chips,
+        refusal,
+        run,
+        preparationConsumer:
+          owner.kind === 'local' && owner.structuredSessionId
+            ? ('local-chat' as const)
+            : ('agent' as const)
+      }
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]
   )
@@ -258,7 +244,7 @@ export function useNativeChatExternalAttachments({
       options?: NativeChatAttachmentFocusOptions
     ) => {
       const intake = captureIntake(destinationIsCurrent, options)
-      return async (paths: string[]): Promise<void> => {
+      const attach = async (paths: string[]): Promise<void> => {
         if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
           return
         }
@@ -269,12 +255,16 @@ export function useNativeChatExternalAttachments({
         }
         await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
       }
+      // Every pick and drop ends here, so the web client's held files are released here.
+      const deliver: CapturedNativeChatDrop = (paths) =>
+        attach(paths).finally(() => releaseBrowserAttachmentFiles(paths))
+      deliver.preparationConsumer = intake.preparationConsumer
+      return deliver
     },
     [captureIntake, mountedRef, setNotice]
   )
 
-  // Chips a paste reserved before its clipboard said they are files: admitted work, so it may
-  // finish after an unmount; a refusal releases them.
+  // Paste-reserved chips are admitted work and may finish after unmount; refusals must release them.
   const captureReservedAttachments = useCallback(
     (
       destinationIsCurrent: () => boolean = () => true,
@@ -302,6 +292,8 @@ export function useNativeChatExternalAttachments({
     (paths: string[], options?: NativeChatAttachmentFocusOptions): void => {
       if (!disabledRef.current && mountedRef.current && paths.length > 0) {
         void captureExternalDrop(undefined, options)(paths)
+      } else {
+        releaseBrowserAttachmentFiles(paths)
       }
     },
     [captureExternalDrop, mountedRef]

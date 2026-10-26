@@ -19,14 +19,14 @@ describe('scrcpyVideoRegistry', () => {
 
     const events: ScrcpyVideoEvent['type'][] = []
     const unsubscribe = scrcpyVideoRegistry.subscribe('dev', (event) => events.push(event.type))
-    expect(events).toEqual(['meta', 'frame']) // replayed cached meta + config
+    expect(events).toEqual(['meta', 'frame'])
 
     scrcpyVideoRegistry.pushFrame('dev', frame(false))
     expect(events).toEqual(['meta', 'frame', 'frame'])
 
     unsubscribe()
     scrcpyVideoRegistry.pushFrame('dev', frame(false))
-    expect(events).toEqual(['meta', 'frame', 'frame']) // no delivery after unsubscribe
+    expect(events).toEqual(['meta', 'frame', 'frame'])
 
     scrcpyVideoRegistry.stop('dev')
     expect(close).toHaveBeenCalledTimes(1)
@@ -61,7 +61,6 @@ describe('scrcpyVideoRegistry', () => {
     scrcpyVideoRegistry.subscribe('gop', (event) => seen.push(tag(event)))()
     expect(seen).toEqual(['K1', 'D2'])
 
-    // A new keyframe drops the prior GOP so replay always starts decodeable.
     scrcpyVideoRegistry.pushFrame('gop', {
       config: false,
       keyFrame: true,

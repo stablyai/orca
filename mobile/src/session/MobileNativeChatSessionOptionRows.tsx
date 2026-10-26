@@ -1,8 +1,5 @@
-// The pill and choice-row primitives the session-option card is built from, kept
-// beside it so the card file stays about layout and apply wiring.
-
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
-import { Check, ChevronRight, ShieldAlert } from 'lucide-react-native'
+import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   sessionOptionValueMarker,
@@ -11,16 +8,15 @@ import {
   type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
-/** Muted one-liner above a group — dispatch state, or why a row is locked. */
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   return <Text style={styles.caption}>{children}</Text>
 }
 
-/** The composer's model pill: the model, then its options muted, with a shield for full access. */
 export function ModelPill({
   primary,
   secondary,
   warning,
+  icon: Icon,
   accessibleName,
   disabled,
   onPress
@@ -28,10 +24,12 @@ export function ModelPill({
   primary: string
   secondary: string | null
   warning: boolean
+  icon?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
+  const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
   return (
     <Pressable
       accessibilityLabel={accessibleName}
@@ -42,11 +40,19 @@ export function ModelPill({
       disabled={disabled}
       hitSlop={6}
     >
-      {warning ? <ShieldAlert size={15} color={colors.statusAmber} strokeWidth={2.2} /> : null}
-      <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
-        <Text style={[styles.pillPrimary, disabled && styles.pillTextDisabled]}>{primary}</Text>
-        {secondary ? <Text style={styles.pillSecondary}>{`  ${secondary}`}</Text> : null}
-      </Text>
+      {PillIcon ? (
+        <PillIcon
+          size={15}
+          color={warning ? colors.statusAmber : disabled ? colors.textMuted : colors.textSecondary}
+          strokeWidth={2.2}
+        />
+      ) : null}
+      {!Icon ? (
+        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.pillPrimary, disabled && styles.pillTextDisabled]}>{primary}</Text>
+          {secondary ? <Text style={styles.pillSecondary}>{`  ${secondary}`}</Text> : null}
+        </Text>
+      ) : null}
     </Pressable>
   )
 }
@@ -76,16 +82,23 @@ function ChoiceRow({
       accessibilityState={{ checked: selected, disabled }}
       style={[
         styles.row,
-        selected && styles.rowSelected,
         grouped && styles.rowGrouped,
-        divided && styles.rowDivided,
-        disabled && styles.rowDisabled
+        selected && styles.rowSelected,
+        divided && styles.rowDivided
       ]}
       onPress={onPress}
       disabled={disabled}
     >
       <View style={styles.rowBody}>
-        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+        <Text
+          style={[
+            styles.rowLabel,
+            disabled && !selected && styles.labelDisabled,
+            labelColor ? { color: labelColor } : null
+          ]}
+        >
+          {label}
+        </Text>
         {description ? (
           <Text style={styles.rowDescription} numberOfLines={2}>
             {description}
@@ -107,16 +120,15 @@ function ToggleRow({
 }: {
   label: string
   checked: boolean
-  /** Where the rendered value came from, or null once something picked it. */
   marker: SessionOptionValueMarker | null
   disabled: boolean
   grouped: boolean
   onToggle: (next: boolean) => void
 }): React.JSX.Element {
   return (
-    <View style={[styles.row, grouped && styles.rowGrouped, disabled && styles.rowDisabled]}>
+    <View style={[styles.row, grouped && styles.rowGrouped]}>
       <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
       {marker ? (
         <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
@@ -148,12 +160,12 @@ function ActionRow({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={[styles.row, grouped && styles.rowGrouped, disabled && styles.rowDisabled]}
+      style={[styles.row, grouped && styles.rowGrouped]}
       onPress={onPress}
       disabled={disabled}
     >
       <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
     </Pressable>
   )
@@ -172,7 +184,6 @@ export function SessionOptionSummaryRow({
   valueColor?: string
   disabled: boolean
   divided: boolean
-  /** Absent for a value with no choice to make: the row reads as text, with no page behind it. */
   onPress?: () => void
 }): React.JSX.Element {
   if (!onPress) {
@@ -197,13 +208,12 @@ export function SessionOptionSummaryRow({
       style={({ pressed }) => [
         styles.summaryRow,
         divided && styles.rowDivided,
-        pressed && !disabled && styles.pressed,
-        disabled && styles.rowDisabled
+        pressed && !disabled && styles.pressed
       ]}
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={[styles.summaryLabel, disabled && styles.labelDisabled]}>{label}</Text>
       <Text
         style={[styles.summaryValue, valueColor ? { color: valueColor } : null]}
         numberOfLines={1}
@@ -228,7 +238,6 @@ export function DescriptorRows({
   grouped?: boolean
   onSetOption: (value: SessionOptionValue) => void
   onInvokeAction: () => void
-  /** A choice whose name reads in a colour of its own, as Full access does. */
   choiceLabelColor?: (value: string) => string | undefined
 }): React.JSX.Element {
   const locked = disabled || !descriptor.settable
@@ -254,9 +263,7 @@ export function DescriptorRows({
       />
     )
   }
-  // One switch, not an On/Off pair: the option is binary. The value always
-  // renders; the marker is what keeps an unpicked one from reading as confirmed,
-  // since the switch itself cannot say "nobody said".
+  // An unknown baseline still renders a switch; the source marker prevents implying the value was confirmed.
   if (descriptor.kind.type === 'boolean') {
     return (
       <ToggleRow
@@ -340,7 +347,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs
   },
   rowSelected: {
-    borderColor: colors.textSecondary
+    borderColor: colors.textSecondary,
+    backgroundColor: colors.composerControl
   },
   rowGrouped: {
     marginBottom: 0,
@@ -352,8 +360,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.composerBorder
   },
-  rowDisabled: {
-    opacity: 0.5
+  labelDisabled: {
+    color: colors.textSecondary
   },
   rowBody: {
     flex: 1,

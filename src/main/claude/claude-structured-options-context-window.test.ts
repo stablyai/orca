@@ -22,7 +22,6 @@ function ringSession(catalog: unknown[] = []) {
   session.translator = translator
   const write = (key: string, value: string) =>
     setClaudeStructuredOption(session, { key, value }, undefined)
-  /** A turn's first response, after whatever the writes above left behind. */
   const respond = (turnId: string, at: number) => {
     translator.handle(userFrame(turnId, at))
     translator.handle(assistantFrame(`${turnId}-reply`, at + 1, 100_000))
@@ -35,6 +34,7 @@ describe('the context ring after a session option write', () => {
   it('sizes a new session from the model it was launched with', () => {
     const s = ringSession()
     adoptClaudeStructuredSpawnOptions(s.session, {
+      sdkOptions: { model: 'opus[1m]' },
       options: new Map([['model', 'opus[1m]']]),
       fastModeAtStart: false
     })
@@ -56,7 +56,6 @@ describe('the context ring after a session option write', () => {
     expect(refused.respond('turn-a', 1_000)).toBeNull()
   })
 
-  // The permission mode is a launch flag: a live write of it is refused like any unknown option.
   it('refuses a live permission-mode write', async () => {
     const s = ringSession()
     await expect(s.write('permissionMode', 'plan')).rejects.toThrow(/permissionMode/)

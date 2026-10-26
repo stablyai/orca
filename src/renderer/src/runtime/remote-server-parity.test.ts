@@ -1,17 +1,4 @@
-/**
- * Remote-server ↔ local parity tests.
- *
- * Maps to docs/remote-server-parity-test-plan.md. These assert the DETERMINISTIC
- * behaviors of the remote-runtime session reconcile (the code that governs how
- * remote workspaces order tabs, take focus, mark disconnect, and react to host
- * state) so a remote workspace behaves 1:1 with a local one.
- *
- * Scope: the remote tab/session model is server-authoritative — the client
- * reconciles host snapshots via applyWebSessionTabsSnapshot. This suite drives
- * that reconcile directly. UI-heavy / two-host flows (splitting geometry, right
- * sidebar rendering, live screencast, mobile) are covered by the live checklist,
- * not here.
- */
+// Exercise deterministic server-authoritative reconcile against local tab ordering/focus/disconnect semantics (remote-server-parity-test-plan.md). Live checklist covers geometry, sidebar, screencast, mobile and two-host UI flows.
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -54,6 +41,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -106,8 +94,7 @@ function makeSnapshot(
   }
 }
 
-// A local terminal tab + matching unified tab + group entry, as the store holds
-// them, so a snapshot reconcile has a realistic prior state to compare against.
+// Seed realistic prior terminal/unified-tab/group state for snapshot reconciliation.
 function localTerminal(parentTab: string, sortOrder: number, active: boolean) {
   const id = toWebTerminalSurfaceTabId(parentTab)
   const unified: Tab = {
@@ -180,9 +167,6 @@ beforeEach(() => {
   resetWebSessionFocusIntentForTests()
 })
 
-// ──────────────────────────────────────────────────────────────────────────
-// Plan §3 — Terminal tab creation ordering (new tab lands rightmost, like local)
-// ──────────────────────────────────────────────────────────────────────────
 describe('parity §3: remote terminal create appends rightmost (matches local)', () => {
   it('a newly created remote terminal is ordered last, after existing tabs', () => {
     const prior = stateWithLocalTerminals([
@@ -212,9 +196,6 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
   })
 })
 
-// ──────────────────────────────────────────────────────────────────────────
-// Plan §4 — Focus & activation (create focuses; status echo never steals focus)
-// ──────────────────────────────────────────────────────────────────────────
 describe('parity §4: remote create focuses new tab; echoes never steal focus', () => {
   it('a client-initiated create focuses the new terminal (intent honored)', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
@@ -234,8 +215,8 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
 
   it('an unsolicited status echo (no intent) does NOT steal focus from current', () => {
     const prior = stateWithLocalTerminals([
-      localTerminal('host-tab-1', 0, false), // agent tab
-      localTerminal('host-tab-2', 1, true) // user is here
+      localTerminal('host-tab-1', 0, false),
+      localTerminal('host-tab-2', 1, true)
     ])
     // No focus intent recorded — this is an agent "thinking" echo marking tab-1 active.
     const patch = applyWebSessionTabsSnapshot(
@@ -247,16 +228,12 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    // Focus stays on the user's current tab (tab-2), not the echoed tab-1. Under
-    // client-owned placement the strongest form holds: groups are not rewritten at all.
+    // Status echoes cannot steal focus; client-owned placement leaves groups unchanged.
     const effectiveGroups = patch.groupsByWorktree?.[WT] ?? prior.groupsByWorktree[WT]
     expect(effectiveGroups?.[0]?.activeTabId).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
   })
 })
 
-// ──────────────────────────────────────────────────────────────────────────
-// Plan §2 — Sidebar integrity: stale state ignored; newer snapshots applied
-// ──────────────────────────────────────────────────────────────────────────
 describe('parity §2: snapshot freshness (no split-brain from stale updates)', () => {
   it('ignores a stale lower-version snapshot after a newer version applied', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
@@ -270,15 +247,11 @@ describe('parity §2: snapshot freshness (no split-brain from stale updates)', (
     })
     const first = applyFreshWebSessionTabsSnapshot(prior, newer, ENV, NOW + 10)
     const afterNewer = { ...prior, ...(first as Partial<WebSessionTabsSyncState>) }
-    // Re-applying an older version of the same epoch must be a no-op (returns state).
     const second = applyFreshWebSessionTabsSnapshot(afterNewer, older, ENV, NOW + 20)
     expect(second).toBe(afterNewer)
   })
 })
 
-// ──────────────────────────────────────────────────────────────────────────
-// Plan §11 — Browser tab create focuses the new browser (intent), like local.
-// ──────────────────────────────────────────────────────────────────────────
 describe('parity §11: remote browser create focuses the new browser tab', () => {
   it('honors focus intent for a newly created browser session tab', () => {
     const pageId = 'browser-page-1'
@@ -321,7 +294,6 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    // Visible type flips to browser and the active browser workspace is the new page.
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('browser')
     expect(patch.activeBrowserTabIdByWorktree?.[WT]).toBe(pageId)
   })
@@ -392,9 +364,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    // No focus theft: the visible type must NOT flip to browser. The reconcile
-    // emits no change for an unchanged field, so it's either absent (unchanged)
-    // or still 'terminal' — never 'browser'.
+    // Unchanged reconcile fields may be absent; visible type must remain terminal, never browser.
     const nextType = patch.activeTabTypeByWorktree?.[WT] ?? 'terminal'
     expect(nextType).toBe('terminal')
   })

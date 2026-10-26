@@ -1,15 +1,9 @@
-/**
- * A desktop that refuses `speech.dictation.start`, reaching the composer the user actually tapped.
- *
- * The sibling suites mount their own copy of the composer's handler; this one mounts the real
- * `useMobileSessionNativeChatDictation` over the real `useMobileDictation`, because the defect was
- * in the wiring between them rather than in either half.
- */
+// Mount the real composing hooks: the refused-start defect was in their wiring, which independent handler copies would miss.
 import { createElement, useRef } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './use-mobile-native-chat-send-error'
+import type * as NativeChatSendError from './native-chat/use-mobile-native-chat-send-error'
 
 const seen = vi.hoisted(() => ({
   toasts: new Array<string>(),
@@ -38,9 +32,8 @@ vi.mock('../platform/haptics', () => ({
   }
 }))
 
-// The native-chat surface this hook composes with. None of it is on the mic's path, and reaching
-// the real modules would pull the Expo runtime in behind them.
-vi.mock('./use-mobile-native-chat-send-error', async (importOriginal) => ({
+// Stub off-path native chat dependencies to keep Expo out of this mic test.
+vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatSendError>()),
   useMobileNativeChatSendError: () => ({
     message: null,
@@ -53,7 +46,7 @@ vi.mock('./use-mobile-native-chat-send-error', async (importOriginal) => ({
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -110,6 +103,8 @@ function mount(client: FakeRpcClient): Mounted {
         }
       },
       setDictationMode: () => {},
+      dictationEnabled: true,
+      setDictationEnabled: () => {},
       deviceTokenRef,
       dictationRouteContextRef,
       activeHandleRef,
@@ -136,7 +131,6 @@ function mount(client: FakeRpcClient): Mounted {
   }
 }
 
-/** Answers every forwarded request, refusing `speech.dictation.start` with the desktop's own code. */
 async function tapAndRefuseStart(
   mounted: Mounted,
   rpc: FakeRpcClient,
@@ -164,15 +158,13 @@ beforeEach(() => {
 })
 
 describe('a mic tap the desktop refuses because dictation is not set up', () => {
-  // The two codes a desktop with no usable model answers with: `voice_dictation_disabled` from a
-  // profile that never enabled voice, `voice_model_not_ready:` from one whose model dir is empty.
+  // Exercise both disabled-profile and missing-model start refusals.
   for (const code of ['voice_dictation_disabled', 'voice_model_not_ready:not-downloaded']) {
     it(`opens the dictation setup sheet for ${code}`, async () => {
       const rpc = createFakeRpcClient()
       const mounted = mount(rpc)
       await tapAndRefuseStart(mounted, rpc, code)
       expect(mounted.setupSheetOpens).toHaveLength(1)
-      // And the desktop's internal code is never shown as product copy.
       expect(seen.toasts).toEqual([])
     })
   }

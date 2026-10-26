@@ -1,4 +1,5 @@
 import { workItemsCacheKey } from '@/store/github/cache-identity'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   CacheEntry,
   WorkItemsCacheError,
@@ -11,17 +12,12 @@ import {
   taskPageWorkItemKeyOrderSignature,
   taskPageWorkItemPaginationBoundary
 } from './task-page-work-item-signatures'
-export {
-  findTaskPageLinearDrawerIssue,
-  findTaskPageLinearIssue,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh,
-  shouldReplaceTaskPageLinearIssuesAfterRefresh
-} from './task-page-linear-cache-selectors'
 
 export type TaskPageRepoCacheInput = {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 }
 
@@ -29,11 +25,14 @@ export type TaskPageDialogWorkItemKey = {
   id: string
   repoId: string
   url: string
+  repoHostId?: GitHubWorkItem['repoHostId']
 } | null
 
 export type TaskPageRepoSourceState = {
   repoId: string
   repoPath: string
+  /** The row's host: a twin's two rows share repoId and can share repoPath. */
+  hostId: ExecutionHostId
   sourceKey: string
   sources: WorkItemsCacheSources | null
   error: WorkItemsCacheError | null
@@ -57,6 +56,11 @@ export function deriveTaskPageGitHubWorkItemsFetchOptions(
   }
 }
 
+// Why canonical: the fetch keys by the row's execution host, and an SSH row may carry only connectionId.
+function taskPageRepoCacheScope(repo: TaskPageRepoCacheInput): string {
+  return repo.sourceCacheScope ?? getRepoExecutionHostId(repo)
+}
+
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
   repos: readonly TaskPageRepoCacheInput[],
@@ -64,10 +68,7 @@ export function selectTaskPageWorkItemsCacheEntries(
   query: string
 ): (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
   return repos.map(
-    (repo) =>
-      workItemsCache[
-        workItemsCacheKey(repo.id, limit, query, repo.sourceCacheScope ?? repo.executionHostId)
-      ]
+    (repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))]
   )
 }
 
@@ -80,7 +81,8 @@ export function buildTaskPageRepoSourceState(
     return {
       repoId: repo.id,
       repoPath: repo.path,
-      sourceKey: `${repo.id}::${repo.sourceCacheScope ?? repo.executionHostId ?? 'local'}`,
+      hostId: getRepoExecutionHostId(repo),
+      sourceKey: `${repo.id}::${taskPageRepoCacheScope(repo)}`,
       sources: entry?.sources ?? null,
       error: entry?.error ?? null
     }
@@ -93,15 +95,7 @@ export type TaskPageUnresolvedSourceRepo = {
   label: string
 }
 
-/**
- * Select the fetched repos that resolved neither an issue nor a PR GitHub source.
- *
- * Why: since #9660 an unresolvable source returns an empty null-source envelope
- * instead of an unscoped search. That empty is otherwise indistinguishable from a
- * genuine zero-result query, so surface these repos to the user. The three states
- * are told apart purely by `sources`: present-but-both-null = unresolved (this
- * function), a non-null side = resolved (genuine zero), `null` = not yet fetched.
- */
+/** Surface fetched both-null sources as unresolved; null means unfetched, and a non-null source can have genuine zero results. */
 export function selectTaskPageUnresolvedSourceRepos(
   repos: readonly { id: string; displayName?: string; path: string }[],
   sourceState: readonly TaskPageRepoSourceState[]
@@ -121,10 +115,6 @@ export function selectTaskPageUnresolvedSourceRepos(
   return unresolved
 }
 
-function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
-  return `${item.repoId}\u0000${item.id}`
-}
-
 export function reconcileTaskPagePagesWithWorkItemsCache(
   pages: TaskPageWorkItemPages,
   entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
@@ -132,7 +122,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
-      cachedItems.set(taskPageWorkItemCacheKey(item), item)
+      cachedItems.set(taskPageWorkItemKey(item), item)
     }
   }
 
@@ -143,7 +133,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     }
     let pageChanged = false
     const nextPage = page.map((item) => {
-      const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
+      const cached = cachedItems.get(taskPageWorkItemKey(item))
       if (!cached || cached === item) {
         return item
       }
@@ -244,7 +234,9 @@ export function findTaskPageDialogWorkItem(
       (wi) =>
         wi.id === dialogWorkItemKey.id &&
         wi.repoId === dialogWorkItemKey.repoId &&
-        wi.url === dialogWorkItemKey.url
+        wi.url === dialogWorkItemKey.url &&
+        // Why: a twin's other host caches the same PR; its copy routes edits to that host.
+        (!dialogWorkItemKey.repoHostId || wi.repoHostId === dialogWorkItemKey.repoHostId)
     )
     if (found) {
       return found

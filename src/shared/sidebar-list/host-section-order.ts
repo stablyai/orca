@@ -19,9 +19,7 @@ export function orderHostSectionOptions(
     ordered.push(host)
     seen.add(host.id)
   }
-  // Why: persisted order is only a preference for hosts the user has seen;
-  // newly-discovered SSH/runtime hosts should still appear without needing a
-  // migration or explicit reset.
+  // Append newly discovered hosts even when persisted preferences predate them.
   for (const host of hostOptions) {
     if (seen.has(host.id)) {
       continue

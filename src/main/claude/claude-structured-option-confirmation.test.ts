@@ -11,8 +11,7 @@ import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'
 
-/** Verbatim rows from Claude Code 2.1.260's list_models response: `haiku` really
- *  does omit both effort keys, which is what makes an effort under it refusable. */
+/** Claude Code 2.1.260 list_models fixture; Haiku omits both effort keys. */
 const CATALOG = [
   {
     value: 'sonnet',
@@ -44,8 +43,6 @@ function modelPill(result: AgentSessionOptionsResult): SessionOptionDescriptor |
   return structuredAgentSessionOptionSnapshot(state).find((d) => d.category === 'model')
 }
 
-/** Provenance the record keeps. Nothing renders it — the pill shows the value
- *  either way, and a report that disagrees is what corrects it. */
 function modelSource(result: AgentSessionOptionsResult): string | undefined {
   return modelPill(result)?.valueSource
 }
@@ -90,8 +87,7 @@ describe('structured option confirmation reaches the pill', () => {
       routes: { list_models: () => CATALOG }
     })
     const adapter = await acquired(claude)
-    // `max` is session-scoped and absent from the persisted settings, so it records
-    // without a readback — recorded, never vouched for.
+    // Max is session-only and cannot be confirmed through persisted settings.
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'max', fence: 7 })
 
     const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
@@ -113,8 +109,7 @@ describe('structured option confirmation reaches the pill', () => {
   })
 
   it('treats a host that reports no confirmation as unconfirmed', () => {
-    // Wire compatibility: an older host omits `confirmed` entirely. Absence must
-    // read as unconfirmed provenance, and the pill still shows the host's value.
+    // Older hosts omit confirmed; preserve their value with unconfirmed provenance.
     const result = {
       models: [{ id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }],
       current: { model: 'haiku' }
@@ -139,7 +134,7 @@ describe('the provider report corrects the pill', () => {
     claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
 
     const corrected = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(corrected)).toBe('sonnet')
+    expect(modelValue(corrected)).toBe('claude-sonnet-5')
     expect(corrected.current.confirmed).toContain('model')
   })
 
@@ -168,7 +163,7 @@ describe('confirmation never outlives the write it belongs to', () => {
       reportedOptions: {},
       optionMutationSequence: 0,
       confirmedOptions: new Set<string>(),
-      reusableOptions: new Map(),
+      appliedInputOptions: new Map(),
       connection: {
         supportedModels: async () => CATALOG,
         applyFlagSettings: async (s: { effortLevel?: string }) => {
@@ -186,8 +181,6 @@ describe('confirmation never outlives the write it belongs to', () => {
     await setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)
     expect(session.confirmedOptions.has('effort')).toBe(true)
 
-    // The provider now reports a level it cannot represent; the stale confirmation
-    // must not survive into the new value.
     await setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
     expect(session.options.get('effort')).toBe('max')
     expect(session.confirmedOptions.has('effort')).toBe(false)

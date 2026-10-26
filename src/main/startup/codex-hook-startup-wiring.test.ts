@@ -13,12 +13,11 @@ const fixture = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: fixture.app, nativeTheme: {} }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../codex/codex-hook-reconcile', () => ({ startCodexHooks: fixture.startCodexHooks }))
 vi.mock('../agent-hooks/local-agent-cli-presence', () => ({
   hydrateAgentCliShellPath: () => fixture.pathReady
 }))
-// Why the real predicate: the start must read the same opt-out the rest of Orca does.
+// Use the real opt-out predicate to keep startup aligned with managed launches.
 vi.mock(
   '../agent-hooks/managed-agent-hook-controls',
   async () => await import('../../shared/agent-status-hooks-setting')
@@ -82,9 +81,7 @@ vi.mock('../orcad/orcad-artifact-cache-retention', () => ({
 
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
 
-// Why this file: without the start, no managed launch may ask Codex for its hook hash
-// and ~/.codex is never reconciled; without the PATH wait, a packaged app looks
-// for codex on launchd's PATH and finds none.
+// Start reconciles ~/.codex; awaiting shell PATH avoids launchd failing to find Codex.
 
 beforeEach(() => {
   fixture.startCodexHooks.mockClear()
@@ -123,8 +120,7 @@ describe('Codex hook startup', () => {
   })
 })
 
-// Why here: headless serve runs app readiness but never opens a window, so first-work rename
-// must be armed by readiness itself, not by the window's hook listener (STA-5871).
+// Headless serve never opens a window, so app readiness must arm rename (STA-5871).
 describe('First-work rename startup', () => {
   it('arms the hook subscription during app readiness, without a window', async () => {
     fixture.installFirstWorkRename.mockClear()

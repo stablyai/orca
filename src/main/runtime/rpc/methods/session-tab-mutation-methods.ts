@@ -42,7 +42,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
           })
         }
       )
-      return projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
+      const projected = projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
+      // One reply's answer, outside the projection: the fallback is never part of the tab snapshot.
+      return result.startupCwdFallback
+        ? { ...projected, startupCwdFallback: result.startupCwdFallback }
+        : projected
     }
   }),
   defineMethod({

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
 import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../worktree-terminals-sleeping-error'
 import type {
@@ -18,7 +18,11 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import { collectWorktreePtyIds } from './worktree-pty-collection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
+import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from '../../mobile-session-tab-close-refusal-message'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
@@ -31,33 +35,6 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     scope: WorktreeSleepScope,
     soleLivePtyId?: string
   ): Promise<RuntimeWorktreeTerminalSleepResult>
-
-  private collectWorktreePtyIds(
-    worktreeId: string,
-    hostFence: WorktreePtyHostFence,
-    includeDisconnected = false
-  ): Set<string> {
-    const ptyIds = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (
-        worktreeIdsEqual(leaf.worktreeId, worktreeId) &&
-        leaf.ptyId &&
-        worktreePtyBelongsToHost(leaf.ptyId, this.ptysById.get(leaf.ptyId)?.connectionId, hostFence)
-      ) {
-        ptyIds.add(leaf.ptyId)
-      }
-    }
-    for (const pty of this.ptysById.values()) {
-      if (
-        worktreeIdsEqual(pty.worktreeId, worktreeId) &&
-        (includeDisconnected || pty.connected) &&
-        worktreePtyBelongsToHost(pty.ptyId, pty.connectionId, hostFence)
-      ) {
-        ptyIds.add(pty.ptyId)
-      }
-    }
-    return ptyIds
-  }
 
   private getWorktreeHostFence(
     worktree: { id: string; repoId?: string } & Parameters<typeof getWorktreeExecutionHostId>[0]
@@ -78,11 +55,25 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     const hostFence = this.getWorktreeHostFence(worktree)
 
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
-      // Why: emptying a rotated runtime partition re-routes the session owner, so the
-      // records cleared below live in the partition that owned the tabs at the start.
+      // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
       const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`)
-      const targetPtyIds = this.collectWorktreePtyIds(worktree.id, hostFence, true)
+      const targetPtyIds = collectWorktreePtyIds(
+        // Switch point: main's bound terminals too, registered or not.
+        ORCA_LAYOUT_OWNER_IS_MAIN
+          ? withMainBoundLeaves(this, this.leaves.values())
+          : this.leaves.values(),
+        this.ptysById,
+        worktree.id,
+        hostFence,
+        true
+      )
+      // Main-bound terminals can survive inventory gaps; only certified exits count them stopped.
+      const mainBound = new Set(
+        [...targetPtyIds].filter(
+          (ptyId) => ORCA_LAYOUT_OWNER_IS_MAIN && mainHoldsTerminal(this, ptyId)
+        )
+      )
       const parentTabIds = [
         ...new Set(
           snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
@@ -110,6 +101,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         (ptyId) => this.getPtyLivenessVerdict(ptyId),
         (ptyId) =>
           this.ptysById.get(ptyId)?.connected === true ||
+          mainBound.has(ptyId) ||
           (this.isSshOwnedPtyId(ptyId) && this.ptysById.has(ptyId))
       )
       return {
@@ -197,7 +189,15 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       options.resolvedRuntimeEnvironmentId !== undefined
         ? options
         : this.getWorktreeHostFence(worktree)
-    const ptyIds = this.collectWorktreePtyIds(worktree.id, hostFence)
+    const ptyIds = collectWorktreePtyIds(
+      // Switch point: main's bound terminals too, registered or not.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? withMainBoundLeaves(this, this.leaves.values())
+        : this.leaves.values(),
+      this.ptysById,
+      worktree.id,
+      hostFence
+    )
 
     let stopped = 0
     for (const ptyId of ptyIds) {
@@ -317,8 +317,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeId: string,
     operation: () => Promise<T>
   ): Promise<T> {
-    // Why exclusive: adoption reconciles this worktree's terminal records, so
-    // it must not interleave with a spawn registering a pty or with a sleep.
+    // Adoption reconciles terminal records and must exclude concurrent spawns and sleeps.
     const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'exclusive')
     try {
       return await operation()

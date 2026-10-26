@@ -1,14 +1,7 @@
-/**
- * Pausing a moving project's terminals (mover design, section 3.3): the gate must pass, the fence
- * goes up, Sleep pauses every workspace in scope, and the daemon must prove each session exited
- * before the journal says `quiesced`. Nothing is ever ended to make progress.
- *
- * A refusal after the fence lifts it again. Workspaces Sleep already paused stay asleep: that is
- * their ordinary sleeping state, and waking them later restores them from it, so nothing is lost.
- */
+// Fence, Sleep, then prove exit; refusal lifts the fence but leaves already-slept workspaces restorable.
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import type { WslMoveExitProof } from './wsl-move-exit-proof'
-import type { WslMoveRestoreHintCapture } from './wsl-move-restore-hints'
+import type { WslMoveExitProof, WslMoveExitProofScope } from './wsl-move-exit-proof'
+import type { WslMoveRestoreHintCapture, WslMoveRestoreHintPane } from './wsl-move-restore-hints'
 import {
   assessWslMoveTerminals,
   type WslMoveGateBlocker,
@@ -16,28 +9,23 @@ import {
 } from './wsl-move-terminal-gate'
 
 export type WslMoveQuiesceScope = {
-  /** Every worktree and folder workspace of the moving projects; each one is slept. */
   workspaceIds: readonly string[]
-  /** Workspace keys as session ids mint them, for the exit proof. */
   workspaceKeys: ReadonlySet<string>
-  /** The panes the move carries, with the daemon session each one recorded. */
-  panes: readonly { paneKey: string; sessionId: string }[]
+  /** Capture daemon session and distro before Sleep. */
+  panes: readonly WslMoveRestoreHintPane[]
 }
 
 export type WslMoveQuiesceDeps = {
   gateInputs: () => Promise<WslMoveGateInputs>
-  /** Resolves with the workspaces whose Sleep failed; rejects when the renderer cannot answer. */
+  /** Return failed workspaces; reject if the renderer cannot answer. */
   sleepWorkspaces: (workspaceIds: readonly string[]) => Promise<{ failedWorktreeIds: string[] }>
-  /** PTYs this process still holds for the workspaces, daemon-backed or not. */
+  /** Include degraded-mode PTYs absent from daemon censuses. */
   livePtyIds: (workspaceIds: readonly string[]) => readonly string[]
   captureRestoreHints: (
     panes: WslMoveQuiesceScope['panes'],
     distro: string
   ) => Promise<WslMoveRestoreHintCapture>
-  proveExited: (scope: {
-    workspaceKeys: ReadonlySet<string>
-    sessionIds: ReadonlySet<string>
-  }) => Promise<WslMoveExitProof>
+  proveExited: (scope: WslMoveExitProofScope) => Promise<WslMoveExitProof>
   writeCutover: (cutover: WslMoveCutover) => void
   removeCutover: (migrationId: string) => void
   now: () => Date
@@ -45,7 +33,6 @@ export type WslMoveQuiesceDeps = {
 
 export type WslMoveQuiesceRefusalReason =
   | 'terminals-blocked'
-  /** Another quiesce for the same distro is still running in this process. */
   | 'quiesce-in-progress'
   | 'fence-failed'
   | 'renderer-unavailable'
@@ -54,14 +41,13 @@ export type WslMoveQuiesceRefusalReason =
   | 'terminals-live'
   | 'exit-unverifiable'
   | 'journal-failed'
-  /** Anything else that threw after the fence went up. */
   | 'quiesce-failed'
 
 export type WslMoveQuiesceResult =
   | {
       outcome: 'quiesced'
       cutover: WslMoveCutover
-      // Not in the journal: the schema has no field for them yet, so the caller carries them on.
+      // Hints stay with the caller because the journal schema cannot store them.
       restoreHints: WslMoveRestoreHintCapture
     }
   | {
@@ -71,13 +57,13 @@ export type WslMoveQuiesceResult =
       failedWorktreeIds?: string[]
       liveSessionIds?: string[]
       detail?: string
-      /** False only when the journal record could not be removed, so the fence still stands. */
+      /** False if journal removal failed and the fence remains. */
       fenceLifted: boolean
     }
 
 type Refusal = Extract<WslMoveQuiesceResult, { outcome: 'refused' }>
 
-// Journal keys with a quiesce running in this process; the journal alone cannot order two of them.
+// The durable journal cannot serialize concurrent quiesces within this process.
 const quiescingJournalKeys = new Set<string>()
 
 export async function quiesceWslMove(
@@ -139,7 +125,7 @@ async function quiesceUnderLock(
   }
 
   try {
-    // The fence blocks new terminals, not commands typed into open shells; a sub-second window remains.
+    // The fence prevents spawns, but existing shells can still start commands.
     const fencedGate = assessWslMoveTerminals(await deps.gateInputs())
     if (fencedGate.verdict === 'blocked') {
       return refuse({ reason: 'terminals-blocked', blockers: fencedGate.blockers })
@@ -177,7 +163,7 @@ async function proveAndRecord(
   deps: WslMoveQuiesceDeps,
   refuse: (refusal: Omit<Refusal, 'outcome' | 'fenceLifted'>) => Refusal
 ): Promise<WslMoveQuiesceResult> {
-  // Not the gate's pane probe: a slept pane has no process to ask, so it would read unverifiable.
+  // Sleeping removes pane processes, so use live-session evidence rather than the pane gate.
   const live = deps.livePtyIds(scope.workspaceIds)
   if (live.length > 0) {
     return refuse({ reason: 'terminals-live', liveSessionIds: [...live] })
@@ -185,8 +171,8 @@ async function proveAndRecord(
   const distro = fenced.manifest.source.distro
   const restoreHints = await deps.captureRestoreHints(scope.panes, distro)
   const sessionIds = new Set(scope.panes.map((pane) => pane.sessionId))
-  // Last, so a session that came back while the hints were read still refuses.
-  const proof = await deps.proveExited({ workspaceKeys: scope.workspaceKeys, sessionIds })
+  // Check exit last to catch sessions revived during hint capture.
+  const proof = await deps.proveExited({ distro, workspaceKeys: scope.workspaceKeys, sessionIds })
   if (proof.verdict === 'live') {
     return refuse({ reason: 'terminals-live', liveSessionIds: proof.sessionIds })
   }

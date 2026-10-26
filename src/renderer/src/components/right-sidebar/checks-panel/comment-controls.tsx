@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
 import { normalizePRCommentAuthorLogin } from '../../../../../shared/pr-bot-author-overrides'
@@ -35,8 +36,7 @@ export function CopyButton({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this row action unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start a reset timer then.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -145,7 +145,6 @@ export function ResolveButton({
   )
 }
 
-/** Format a line range string like "L12" or "L5-L12". */
 export function formatLineRange(comment: PRComment): string | null {
   if (!comment.line) {
     return null
@@ -156,7 +155,46 @@ export function formatLineRange(comment: PRComment): string | null {
   return `L${comment.line}`
 }
 
-/** True for top-level PR conversation comments the viewer can edit or delete. */
+export function CommentLocationLabel({
+  comment,
+  className,
+  onOpenLocation
+}: {
+  comment: PRComment
+  className: string
+  onOpenLocation?: (path: string, line: number) => void
+}): React.JSX.Element | null {
+  const { path, line } = comment
+  if (!path) {
+    return null
+  }
+  const lineRange = formatLineRange(comment)
+  const label = `${basename(path)}${lineRange ? `:${lineRange}` : ''}`
+  if (!onOpenLocation || !line) {
+    return (
+      <span className={className} title={path}>
+        {label}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={cn(
+        className,
+        'cursor-pointer rounded text-left hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
+      )}
+      title={path}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenLocation(path, comment.startLine ?? line)
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function isMutablePRConversationComment(comment: PRComment): boolean {
   if (comment.threadId || comment.path) {
     return false
@@ -182,8 +220,7 @@ export function CommentMoreMenu({
 }): React.JSX.Element | null {
   const authorLogin = normalizePRCommentAuthorLogin(comment.author)
   const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
-  // Why: the override is an escape hatch for bots the heuristics miss, so hide
-  // the action when the author is already detected as a bot without it.
+  // Offer the bot override only for authors heuristics miss or users already overrode.
   const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
@@ -271,7 +308,6 @@ export function CommentMoreMenu({
   )
 }
 
-/** Build copy text that includes file location context for review comments. */
 export function buildCopyText(comment: PRComment): string {
   if (!comment.path) {
     return comment.body
@@ -292,7 +328,6 @@ export function QueueForAgentButton({
     'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
     'Queue for agent'
   )
-  // Why: always-visible row action, but ghost styling keeps it from reading as a card-level CTA.
   return (
     <button
       type="button"

@@ -7,7 +7,6 @@ import {
 } from './ssh-transcript-path'
 
 const REMOTE_PATH = '/home/ada/.claude/projects/p/session-1.jsonl'
-// A colon, so the encoding is shown to keep the id separate from the path.
 const CONNECTION_ID = 'target:1'
 
 function row(connectionId: string | null, transcriptPath = REMOTE_PATH) {

@@ -54,9 +54,7 @@ describe('abortWhenRendererGone', () => {
   })
 
   it('ignores a main-frame navigation that starts but is blocked before it commits', () => {
-    // Why: Electron emits did-start-navigation before will-navigate gets to
-    // preventDefault() an external link or a stray file drop; the renderer
-    // document survives those, so the upload must too.
+    // did-start-navigation precedes blocked external navigation; the surviving document must keep its work.
     const sender = fakeSender()
     const { signal } = abortWhenRendererGone(sender)
 

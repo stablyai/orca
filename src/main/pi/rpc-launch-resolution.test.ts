@@ -12,7 +12,9 @@ import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record
 import { buildPiRpcLaunch } from './rpc-launch'
 import { piRpcProviderLink } from './rpc-launch-resolution'
 
-const probeVersion = vi.fn(async (..._input: unknown[]) => true)
+const probeVersion = vi.fn(async (..._input: unknown[]): Promise<{ version: string | null }> => ({
+  version: '0.84.0'
+}))
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'session-pi-resolve',
@@ -23,7 +25,7 @@ const identity: AgentSessionJournalIdentity = {
 }
 let root: string
 beforeEach(async () => {
-  probeVersion.mockReset().mockResolvedValue(true)
+  probeVersion.mockReset().mockResolvedValue({ version: '0.84.0' })
   root = await mkdtemp(join(tmpdir(), 'orca-pi-resolver-'))
 })
 afterEach(async () => {
@@ -89,18 +91,17 @@ async function setup() {
 }
 
 describe('Pi host launch resolution', () => {
-  it('refuses acquisition if the selected binary was replaced by an unsupported version', async () => {
+  it('refuses acquisition if the selected binary was replaced by a too-old version', async () => {
     const h = await setup()
-    probeVersion.mockResolvedValue(false)
-    await expect(h.resolver(identity)).rejects.toThrow('structured_agent_session_unsupported')
-    expect(probeVersion).toHaveBeenCalledWith(
-      {
-        program: '/host/bin/pi',
-        cwd: h.workspace,
-        env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' }
-      },
-      expect.any(Function)
-    )
+    probeVersion.mockResolvedValue({ version: '0.83.9' })
+    await expect(h.resolver(identity)).rejects.toMatchObject({
+      installation: { agent: 'pi', installedVersion: '0.83.9', minimumVersion: '0.84.0' }
+    })
+    expect(probeVersion).toHaveBeenCalledWith({
+      program: '/host/bin/pi',
+      cwd: h.workspace,
+      env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' }
+    })
   })
 
   it('uses the runtime workspace, binary and account home for a new folder session', async () => {
@@ -217,7 +218,6 @@ describe('Pi host launch resolution', () => {
       link: { ...h.prior(file), mintedAtFence: fence },
       now: 1_800_000_000_002
     })
-    // A restart: the store is closed and a fresh one reads the record back from disk.
     closeTestJournalHostDatabase(root)
     const reopened = await openTestAgentSessionRecordStore(root)
     const launch = await createPiRpcLaunchResolver({

@@ -1,4 +1,5 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
@@ -22,32 +23,33 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
         updateScrollIndicator(scope, false)
+        paintBottomRowBackdrop(scope)
       })
     )
   } catch {}
-  // Why: emit modes on every parsed write so RN's mirror stays current
-  // without round-trip; covers \x1b[?2004h/l and alt-screen toggles.
+  // Mirror modes after every parsed write so native paste/alternate-screen state needs no round trip.
   try {
     if (scope.term.onWriteParsed) {
       scope.termObserverDisposables.push(
         scope.term.onWriteParsed(function () {
           emitModesIfChanged(scope)
           emitKeyboardAvoidanceMetrics(scope)
+          paintBottomRowBackdrop(scope)
         })
       )
     }
   } catch {}
-  // Why: onDimensionsChange skips a renderer swap and a DPR change; every one of them re-renders.
+  // Dimensions changes miss renderer/DPR swaps; all three cause render events.
   try {
     if (scope.term.onRender) {
       scope.termObserverDisposables.push(
         scope.term.onRender(function () {
           reportLaidOutCellBox(scope)
+          paintBottomRowBackdrop(scope)
         })
       )
     }
   } catch {}
-  // Initial emit once buffer settles.
   afterWritesDrained(scope, function () {
     emitModesIfChanged(scope)
     emitKeyboardAvoidanceMetrics(scope)

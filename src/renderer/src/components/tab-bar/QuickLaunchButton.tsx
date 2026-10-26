@@ -5,7 +5,8 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
-import { Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
+import { AgentTerminalLaunchButton } from '@/components/agent/AgentTerminalLaunchButton'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -26,19 +27,13 @@ import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
   groupId: string
-  /** Called after the tab is created so keyboard focus lands in the new xterm.
-   *  Reuses the TabBar's existing double-rAF handoff — this component does
-   *  not duplicate the focus logic. */
+  /** Reuse the tab bar’s focus handoff after creating a terminal tab. */
   onFocusTerminal: (tabId: string) => void
-  /** Optional initial prompt forwarded to `launchAgentInNewTab`. When set,
-   *  the picked agent boots with this prompt — argv/flag agents auto-submit,
-   *  followup-path agents land it as a draft for the user to confirm. */
+  /** Forward the initial prompt; delivery policy determines submission versus a user-confirmed draft. */
   prompt?: string
   /** Use non-default modes for generated context that must not become shell syntax. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
-  /** Telemetry surface for `agent_started.launch_source`. Defaults to
-   *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
-   *  unchanged. */
+  /** Default launch telemetry to tab_bar_quick_launch. */
   launchSource?: LaunchSource
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
@@ -66,8 +61,13 @@ export function useTabAgentMenuLaunch({
   onPromptDelivered,
   onPromptHandedOff,
   disabled,
-  onFocusHostTerminal
-}: QuickLaunchAgentMenuItemsProps & { onFocusHostTerminal?: () => void }) {
+  onFocusHostTerminal,
+  onFocusChat
+}: QuickLaunchAgentMenuItemsProps & {
+  onFocusHostTerminal?: () => void
+  /** A New Chat opened at once: its composer takes the focus the menu gives back. */
+  onFocusChat?: (tabId: string) => void
+}) {
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow) => {
       if (disabled || row.kind === 'chat-unavailable') {
@@ -125,6 +125,10 @@ export function useTabAgentMenuLaunch({
           }
         })
       }
+      if (result.surface.kind === 'local-chat') {
+        onFocusChat?.(result.surface.tabId)
+        return
+      }
       if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
         return
@@ -141,7 +145,8 @@ export function useTabAgentMenuLaunch({
       onPromptDelivered,
       onPromptHandedOff,
       disabled,
-      onFocusHostTerminal
+      onFocusHostTerminal,
+      onFocusChat
     ]
   )
 
@@ -164,7 +169,7 @@ export function ProjectedAgentMenuItems({
   model: NewTabAgentMenuModel
   runLaunch: (row: NewTabAgentMenuRow) => void
 }): React.JSX.Element {
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const desktopDefaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -199,6 +204,7 @@ export function ProjectedAgentMenuItems({
     rows,
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
+  const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
@@ -208,13 +214,13 @@ export function ProjectedAgentMenuItems({
         >
           {needsServerUpdate
             ? translate(
-                'auto.components.tab.bar.QuickLaunchButton.needsServerUpdate',
-                'Update Orca on this server to list this workspace’s agents'
+                'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
+                'Update Orca on this server to list terminal agents'
               )
             : detectionFailed
               ? translate(
-                  'auto.components.tab.bar.QuickLaunchButton.hostUnreachable',
-                  'Can’t reach this workspace’s host to list its agents'
+                  'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
+                  'Couldn’t list terminal agents for this workspace'
                 )
               : detectedIds && detectedIds.length > 0
                 ? translate(
@@ -303,8 +309,7 @@ function ChatRow({
       disabled={disabled}
       title={chatTitle}
       aria-label={chatTitle}
-      // Why: the button's click (or a drag released on it) selects this item, so Radix closes the
-      // menu either way; the pointer or focus on the button is what asks for the CLI.
+      // Radix selects the row on nested clicks or drag release; pointer/focus on the trailing button chooses CLI launch.
       onSelect={() => {
         const button = cliButton.current
         const opensCli =
@@ -319,13 +324,10 @@ function ChatRow({
       }}
     >
       {children}
-      <button
+      <AgentTerminalLaunchButton
         ref={cliButton}
-        type="button"
-        tabIndex={-1}
         title={cliTitle}
-        aria-label={cliTitle}
-        className="-my-0.5 grid size-6 place-items-center rounded-md opacity-0 outline-none hover:bg-accent focus-visible:bg-accent focus-visible:opacity-100 [[data-highlighted]_&]:opacity-100"
+        className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start a chat instead.
           if (event.key === 'Enter' || event.key === ' ') {
@@ -343,9 +345,7 @@ function ChatRow({
             }
           }
         }}
-      >
-        <SquareTerminal />
-      </button>
+      />
     </DropdownMenuItem>
   )
 }

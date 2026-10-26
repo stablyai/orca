@@ -8,7 +8,6 @@ import {
   runAgentModelCatalogSession
 } from './agent-model-catalog-probe-runner'
 
-// Every child here is this test's own Node, never an agent CLI.
 const folders: string[] = []
 afterEach(() => {
   for (const folder of folders.splice(0)) {
@@ -58,7 +57,11 @@ describe('the shared catalog probe runner', () => {
         { ...node("process.stderr.write('not signed in');process.exit(3)"), env: NODE_ENV },
         { site: 'test-listing' }
       )
-    ).rejects.toMatchObject({ reason: 'exit', message: expect.stringContaining('not signed in') })
+    ).rejects.toMatchObject({
+      reason: 'exit',
+      message: expect.stringContaining('not signed in'),
+      failedExit: { exitCode: 3, stdout: '', stderr: 'not signed in' }
+    })
   })
 
   it('stops a listing that outlives its budget before rejecting', async () => {

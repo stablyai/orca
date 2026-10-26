@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 vi.mock('react-native', async () => {
@@ -134,6 +135,25 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 describe('terminal prompt presentation with the production view, card and composer', () => {
+  it('forwards terminal navigation without answering or cancelling the question', async () => {
+    const onAnswerInTerminal = vi.fn()
+    const onAnswerAsk = vi.fn(async () => true)
+    const onCancelAsk = vi.fn(async () => true)
+    await render({
+      ask: { questions: [{ question: 'Pick', options: [{ label: 'A' }], multiSelect: false }] },
+      askRequiresTerminal: true,
+      onAnswerInTerminal,
+      onAnswerAsk,
+      onCancelAsk
+    })
+    const button = tree!.root.findByProps({ accessibilityLabel: 'Answer in terminal' })
+    act(() => button.props.onPress())
+    expect(onAnswerInTerminal).toHaveBeenCalledOnce()
+    expect(onAnswerAsk).not.toHaveBeenCalled()
+    expect(onCancelAsk).not.toHaveBeenCalled()
+    expect(tree!.root.findAllByType(MobileNativeChatAsk)).toHaveLength(0)
+  })
+
   it('accepted Deny hides exactly that occurrence and restores Send across reconnect', async () => {
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 0))
     const onRespondPermission = vi.fn(async () => true)

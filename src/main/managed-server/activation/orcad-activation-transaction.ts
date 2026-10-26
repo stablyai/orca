@@ -1,11 +1,4 @@
-/**
- * The host-side journal that makes an orcad activation, rollback or decommission crash-safe.
- *
- * Written before the first mutation and kept until the host is proven to serve exactly one
- * slot again. The activation record stays the commit point: a journal whose `recordAfter`
- * matches the record committed; one whose `recordBefore` matches did not, and recovery puts
- * the pre-transaction slot and state back. Anything else keeps the fence for an operator.
- */
+// Journal before mutation and retain until the recorded slot is restored; recordAfter/core matching determines commit during recovery.
 import {
   parseOrcadActivationRecord,
   coreOrcadActivationRecord,
@@ -70,7 +63,7 @@ export type OrcadActivateTransaction = {
   startedAt: string
   updatedAt: string
   candidateVersion: string
-  /** The app that started this activation, which a resumed commit stamps as activeAppVersion. */
+  /** Retain the initiating app version when recovery finishes the activation commit. */
   candidateAppVersion?: string | null
   recordBefore: OrcadActivationRecord
   recordAfter: OrcadActivationRecord | null
@@ -101,19 +94,19 @@ export type OrcadActivationTransaction =
   | OrcadRollbackTransaction
   | OrcadDecommissionTransaction
 
-export type OrcadActivationTransactionReadResult =
+type OrcadActivationTransactionReadResult =
   | { state: 'absent' }
   | { state: 'ok'; transaction: OrcadActivationTransaction }
   | { state: 'unreadable'; reason: string }
 
-/** What recovery must do; `undo` lists the state to put back once the new slot is quiescent. */
-export type OrcadTransactionRecoveryPlan =
+/** Recovery must quiesce the launched slot before undoing state. */
+type OrcadTransactionRecoveryPlan =
   | { action: 'stabilize-committed'; activeVersion: string | null }
-  /** The new slot passed its gate and the journal holds the record; only the write was lost. */
+  /** Candidate passed readiness; only committing its journaled activation record remains. */
   | { action: 'finish-commit'; record: OrcadActivationRecord }
   | {
       action: 'undo'
-      /** The slot that may have run after the state changed hands. */
+      /** Slot that may have used state after the handoff. */
       launchedVersion: string | null
       activeVersion: string | null
       restoreState: OrcadSnapshotVerdict | null
@@ -209,7 +202,7 @@ export function parseOrcadActivationTransaction(
 export function serializeOrcadActivationTransaction(
   transaction: OrcadActivationTransaction & { fenceToken?: string }
 ): string {
-  // The decommission form keeps any fenceToken: it spreads the rest of the entry.
+  // Decommission serialization must preserve any existing fenceToken.
   const journal =
     transaction.operation === 'decommission' ? orcadDecommissionJournal(transaction) : transaction
   return `${JSON.stringify(journal, null, 2)}\n`
@@ -244,7 +237,7 @@ export function planOrcadTransactionRecovery(
     }
   }
   if (transaction.operation === 'activate') {
-    // The candidate launches only after the snapshot verdict is durable.
+    // Launch follows a durable snapshot verdict.
     const launched = transaction.phase === 'snapshot-captured'
     return {
       action: 'undo',
@@ -253,20 +246,19 @@ export function planOrcadTransactionRecovery(
       restoreState: launched ? transaction.snapshot : null
     }
   }
-  // The rescue is the incumbent's state; it only needs restoring once the target's replaced it.
+  // Rescue holds incumbent state; restore it once target-state replacement may have begun.
   const replaced = transaction.phase === 'rollback-state-restored'
   const rescued = replaced || transaction.phase === 'rescue-captured'
   return {
     action: 'undo',
     launchedVersion: replaced ? transaction.targetVersion : null,
     activeVersion: transaction.incumbentVersion,
-    // A crash mid-restore leaves the phase at rescue-captured with the root half replaced.
+    // A mid-restore crash retains rescue-captured even when live state is already partly replaced.
     restoreState: rescued ? transaction.rescue : null,
     launchedFromState: replaced ? rollbackStartingState(transaction) : null
   }
 }
 
-/** The pre-activation snapshot a rollback restored before launching its target. */
 export function rollbackStartingState(
   transaction: Pick<OrcadRollbackTransaction, 'recordBefore'>
 ): OrcadSnapshotVerdict | null {

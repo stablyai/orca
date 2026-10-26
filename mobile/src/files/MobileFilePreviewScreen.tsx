@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Alert, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -29,6 +29,7 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
 
 type Props = {
@@ -36,7 +37,7 @@ type Props = {
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
-  // Why: every workspace screen uses the handoff so it shares the route chunk; else the bundle overruns its asset budget.
+  // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
   const { client, state: connState } = useWorkspaceClient(previewParams?.hostId)
@@ -264,6 +265,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
       <MobileFilePreviewBody
         preview={preview}
         client={client}
+        worktreeId={previewSource?.source === 'worktree' ? previewSource.worktreeId : undefined}
         relativePath={displayPath}
         title={title || 'File'}
         editable={isEditableTerminalArtifact}
@@ -277,6 +279,14 @@ export function MobileFilePreviewScreen({ route }: Props) {
           setPreview({ status: 'error', message: 'Unable to load preview', reconnect: false })
         }
         onRetry={retry}
+        onOpenFile={(pathText) => {
+          const href = previewParams && mobileMarkdownFileLink(previewParams, pathText)
+          if (href) {
+            router.push(href)
+          } else {
+            Alert.alert('Unable to open file', 'Choose a file inside this workspace.')
+          }
+        }}
       />
       <ConfirmModal
         visible={confirmingDiscard}

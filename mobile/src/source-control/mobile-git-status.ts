@@ -10,22 +10,19 @@ export type MobileGitFileStatus = GitFileStatus
 export type MobileGitStagingArea = GitStagingArea
 export type { MobileGitStatusEntry, MobileGitUpstreamStatus }
 
-// The shape mobile reads off `git.status`, which is the reply schema's output, not the desktop
-// aggregate: every member mobile does not read is stripped rather than re-declared here.
 export type MobileGitStatusResult = MobileGitStatusHostPayload
 
 export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = MobileGitStatusEntry> =
   {
-    area: MobileGitStagingArea
+    area: Exclude<MobileGitStagingArea, 'untracked'>
     title: string
     data: TEntry[]
   }
 
-const AREA_ORDER: MobileGitStagingArea[] = ['unstaged', 'untracked', 'staged']
+const AREA_ORDER = ['unstaged', 'staged'] as const
 
-const AREA_TITLES: Record<MobileGitStagingArea, string> = {
+const AREA_TITLES: Record<MobileSourceControlSection['area'], string> = {
   unstaged: 'Changes',
-  untracked: 'Untracked Files',
   staged: 'Staged Changes'
 }
 
@@ -54,7 +51,9 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
   const sections = AREA_ORDER.map((area) => ({
     area,
     title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area)
+    data: entries.filter(
+      (entry) => entry.area === area || (area === 'unstaged' && entry.area === 'untracked')
+    )
   })).filter((section) => section.data.length > 0)
   if (sections.some((section) => section.data.length > 1)) {
     const collator = new Intl.Collator(undefined, { numeric: true })
@@ -95,20 +94,12 @@ export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolea
   return entry.conflictStatus !== 'unresolved' && entry.conflictStatus !== 'resolved_locally'
 }
 
-// Why: unresolved conflicts are not a stable file to open. Deletions are —
-// git.diff still returns the pre-delete side (text or image via modifiedDeleted).
+// Unresolved conflicts cannot open as stable files; deletions can still show their pre-delete diff.
 export function canOpenMobileGitStatusEntry(entry: MobileGitStatusEntry): boolean {
   return entry.conflictStatus !== 'unresolved'
 }
 
-/**
- * The refusal behind a reply, or null when the host accepted it.
- *
- * Four source-control loads route on the refusal itself rather than on acceptance: two degrade to
- * a capability-missing screen, one retries a not-yet-visible selector, and one falls back to a
- * different method. No acceptance policy carries `code` and `message` through, so those call sites
- * read the refusal here — in one place, before they hand the reply to the operation's policy.
- */
+// Preserve raw refusal code/message for capability fallback and retry routing before applying acceptance policy.
 export function readMobileGitRefusal(
   response: RpcResponse
 ): { code: string | undefined; message: string | undefined } | null {

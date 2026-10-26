@@ -84,7 +84,6 @@ function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
   return { database: () => db, recordedSessionIds: () => recorded, ...overrides }
 }
 
-/** A stored upload (or a bare part file) last touched `ageMs` ago. */
 async function seedUpload(
   uploadId: string,
   ageMs: number,
@@ -174,12 +173,10 @@ describe('sweepAgentSessionAttachments', () => {
     const path = await seedUpload(CARRIED, OLD)
     claim('session-1', path)
     claim('session-2', path, false)
-    // The source chat goes; the replacement still holds the upload.
     recorded = new Set(['session-2'])
     await sweepAgentSessionAttachments(store, facts(), NOW)
     expect(await remaining()).toEqual([CARRIED])
     expect(claimedSessions()).toEqual(['session-2'])
-    // Once no chat holds it, it is unclaimed and goes.
     recorded = new Set()
     await sweepAgentSessionAttachments(store, facts(), NOW)
     expect(claimedSessions()).toEqual([])
@@ -189,7 +186,6 @@ describe('sweepAgentSessionAttachments', () => {
 
   it('a send after the sweep marked an upload is refused, never sent without its file', async () => {
     const path = await seedUpload(UNSENT, OLD)
-    // The sweep wins the race: its mark lands before the claim.
     expect(markUnclaimedUploadForSweep(db, UNSENT, NOW)).toBe(true)
     let refused: unknown
     try {
@@ -203,7 +199,6 @@ describe('sweepAgentSessionAttachments', () => {
 
   it('finishes a delete a crashed sweep left marked, then forgets the mark', async () => {
     await seedUpload(UNSENT, HOUR)
-    // Marked, then the process died before the files went.
     expect(markUnclaimedUploadForSweep(db, UNSENT, NOW)).toBe(true)
     const onUploadRemoved = vi.fn()
     await sweepAgentSessionAttachments(store, facts({ onUploadRemoved }), NOW)

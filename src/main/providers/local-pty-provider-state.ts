@@ -41,11 +41,8 @@ export const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>(
 // Why the full path: the shell proof must tell Git Bash's `bin\bash.exe` launcher from `usr\bin\bash.exe`.
 export const ptyShellPath = new Map<string, string>()
 export const ptyAgentForegroundContextPaths = new Map<string, string[]>()
-// Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
-// `pid` anchors the identity to the row that proved it (null when ambiguous);
-// `at` is the last confirmation, so unanchored job evidence -- only a superset -- cannot hold it forever.
-// `steady` (POSIX) is the pane fingerprint the recognizing capture proved plus node-pty's name at
-// that moment; a cheap capture matching it re-proves the identity without the full table.
+// Preserve recognized identity across degraded scans; pid anchors it and at bounds unanchored job evidence.
+// POSIX steady stores the proven pane fingerprint and node-pty name for cheap revalidation.
 export const ptyLastRecognizedForeground = new Map<
   string,
   {
@@ -66,8 +63,7 @@ export const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 export const ptyCleanupCallbacks = new Map<string, () => void>()
 export const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
 export const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
-// Why: a wrapper spawn (macOS TCC login) reports its own status, never the
-// shell's, so its exit numbers must not be read as the agent's (STA-4536).
+// macOS TCC wrapper status is not the shell/agent exit status (STA-4536).
 export const ptyReportsChildExitStatus = new Map<string, boolean>()
 export const ptyForceKillTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -78,9 +74,6 @@ export const dataListeners = new Set<DataCallback>()
 export const exitListeners = new Set<ExitCallback>()
 export const startupIngressByPty = new Map<string, PtyStartupIngress>()
 
-/**
- * Disposes native node-pty listeners registered for a PTY id.
- */
 export function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -118,9 +111,6 @@ export function getPtyShellName(id: string): string | undefined {
   return shellPath === undefined ? undefined : getSpawnedShellName(shellPath)
 }
 
-/**
- * Removes all local tracking state for a PTY id after teardown.
- */
 export function clearPtyState(id: string): void {
   clearLocalPtyForceKillTimer(id)
   runPtyCleanup(id)
@@ -142,9 +132,6 @@ export function clearPtyState(id: string): void {
   ptyPhysicalExits.delete(id)
 }
 
-/**
- * Allocates either a stable caller-provided PTY id or a new numeric id.
- */
 export function allocatePtyId(sessionId: string | undefined): string {
   const requested = normalizeLocalCallerSessionId(sessionId)
   if (requested) {

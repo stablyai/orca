@@ -21,8 +21,12 @@ function packagedResources({ index, assets = [], cli = true }) {
   if (cli) {
     mkdirSync(join(outDir, 'cli'), { recursive: true })
   }
-  const webDir = join(outDir, 'web')
+  const webDir = join(outDir, 'renderer')
   mkdirSync(join(webDir, 'assets'), { recursive: true })
+  writeFileSync(
+    join(webDir, '.orca-web-client-files.json'),
+    JSON.stringify(['web-index.html', ...assets])
+  )
   if (index !== undefined) {
     writeFileSync(join(webDir, 'web-index.html'), index)
   }
@@ -66,6 +70,48 @@ describe('assertPackagedWebClient', () => {
     )
   })
 
+  it.each([
+    null,
+    {},
+    ['assets/web.js'],
+    ['web-index.html', 'index.html'],
+    ['web-index.html', 'assets/../private'],
+    ['web-index.html', 'assets//private'],
+    ['web-index.html', 'assets/./private'],
+    ['web-index.html', 'assets/a\\private'],
+    ['web-index.html', 'assets/private.js.map'],
+    ['web-index.html', '/assets/a'],
+    ['web-index.html', 'assets/a\0.js'],
+    ['web-index.html', 3]
+  ])('rejects malformed shared web manifests: %j', (files) => {
+    const resourcesDir = packagedResources({
+      index: INDEX,
+      assets: ['assets/web.js', 'assets/web.css']
+    })
+    writeFileSync(
+      join(resourcesDir, 'app.asar.unpacked/out/renderer/.orca-web-client-files.json'),
+      JSON.stringify(files)
+    )
+    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/invalid web file manifest/)
+  })
+
+  it('fails when a transitive worker is missing even though HTML assets exist', () => {
+    const resourcesDir = packagedResources({
+      index: INDEX,
+      assets: ['assets/web.js', 'assets/web.css']
+    })
+    writeFileSync(
+      join(resourcesDir, 'app.asar.unpacked/out/renderer/.orca-web-client-files.json'),
+      JSON.stringify([
+        'web-index.html',
+        'assets/web.js',
+        'assets/web.css',
+        'assets/editor.worker.js'
+      ])
+    )
+    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/editor.worker.js/)
+  })
+
   it('fails when the CLI the web root resolves from is not unpacked', () => {
     const resourcesDir = packagedResources({
       index: INDEX,
@@ -88,13 +134,10 @@ describe('assertPackagedServeSelectionEntry', () => {
     return resourcesDir
   }
 
-  it('looks where orca serve runs the entry from', () => {
-    expect(SERVE_SELECTION_ENTRY).toBe(`main/${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`)
-  })
-
   it('passes an unpacked entry whose relative requires are all unpacked', () => {
     const resourcesDir = packagedEntry({
-      [SERVE_SELECTION_ENTRY]: 'require("../chunks/a.js"); require("node:fs")',
+      [`main/${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`]:
+        'require("../chunks/a.js"); require("node:fs")',
       'main/chunks/a.js': 'require("./b"); require("../persistence")',
       'main/chunks/b.js': '',
       'main/persistence/index.js': ''

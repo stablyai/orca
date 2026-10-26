@@ -132,7 +132,7 @@ describe('a tab close of a terminal an older relay still runs', () => {
 })
 
 describe('a stop-and-wait of a terminal an older relay still runs', () => {
-  function install(recordStop = vi.fn()) {
+  function install(recordStop = vi.fn(), runtime: unknown = null) {
     installLegacyRelayBridge({
       leases: () => [lease],
       retireLease: vi.fn(),
@@ -146,7 +146,7 @@ describe('a stop-and-wait of a terminal an older relay still runs', () => {
       report: () => {}
     })
     const deps = {
-      runtime: null,
+      runtime,
       store: null,
       getLocalPtyProviderStartupPromise: () => null,
       shutdownProviderAndDetectExit: vi.fn(),
@@ -183,6 +183,89 @@ describe('a stop-and-wait of a terminal an older relay still runs', () => {
     ).resolves.toBe(false)
     expect(deps.finishPtyShutdown).not.toHaveBeenCalled()
     expect(recordStop).not.toHaveBeenCalled()
+    installLegacyRelayBridge(null)
+  })
+
+  it('keeps the stop request of a final stop the bridge still owes, so the pane reads closing', async () => {
+    const runtime = { markPtyStopRequested: vi.fn(), clearPtyStopRequest: vi.fn() }
+    const recordStop = vi.fn()
+    const deps = install(recordStop, runtime)
+    const ptyId = toAppSshPtyId(TARGET, lease.ptyId)
+    await expect(
+      stopAndWaitPtyFromRuntimeController(deps, ptyId, { deadlineMs: Date.now() + 1_000 })
+    ).resolves.toBe(false)
+    expect(recordStop).toHaveBeenCalled()
+    expect(runtime.clearPtyStopRequest).not.toHaveBeenCalled()
+    installLegacyRelayBridge(null)
+  })
+
+  it('takes back the stop request of a refused reversible stop, so the pane reads running', async () => {
+    const runtime = { markPtyStopRequested: vi.fn(), clearPtyStopRequest: vi.fn() }
+    const deps = install(vi.fn(), runtime)
+    const ptyId = toAppSshPtyId(TARGET, lease.ptyId)
+    await expect(
+      stopAndWaitPtyFromRuntimeController(deps, ptyId, { keepHistory: true })
+    ).resolves.toBe(false)
+    expect(runtime.markPtyStopRequested).toHaveBeenCalledWith(ptyId)
+    expect(runtime.clearPtyStopRequest).toHaveBeenCalledWith(ptyId)
+    installLegacyRelayBridge(null)
+  })
+})
+
+describe('a stop-and-wait whose provider startup fails', () => {
+  it('takes back its stop request, so the terminal still reads running', async () => {
+    const runtime = { markPtyStopRequested: vi.fn(), clearPtyStopRequest: vi.fn() }
+    const deps = {
+      runtime,
+      store: null,
+      getLocalPtyProviderStartupPromise: () => Promise.reject(new Error('daemon failed')),
+      shutdownProviderAndDetectExit: vi.fn(),
+      finishPtyShutdown: vi.fn()
+    }
+    await expect(
+      stopAndWaitPtyFromRuntimeController(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the startup await throws before any other dep is read.
+        deps as unknown as PtyRuntimeControllerDeps,
+        'local-pty-1'
+      )
+    ).rejects.toThrow('daemon failed')
+    expect(runtime.markPtyStopRequested).toHaveBeenCalledWith('local-pty-1')
+    expect(runtime.clearPtyStopRequest).toHaveBeenCalledWith('local-pty-1')
+  })
+})
+
+describe('a failed tab-close stop', () => {
+  it('takes back its stop request, so the terminal still reads running', async () => {
+    installLegacyRelayBridge({
+      leases: () => [lease],
+      retireLease: vi.fn(),
+      recordStop: vi.fn(),
+      connection: () => null,
+      onPanesChanged: () => {},
+      onData: () => {},
+      onReplay: () => {},
+      onExit: () => {},
+      report: () => {}
+    })
+    const runtime = {
+      markPtyStopRequested: vi.fn(),
+      clearPtyStopRequest: vi.fn(),
+      intentionalPtyStops: { mark: () => () => {} }
+    }
+    const deps = {
+      runtime,
+      store: { markSshRemotePtyLease: vi.fn() },
+      getLocalPtyProviderStartupPromise: () => undefined,
+      shutdownProviderAndDetectExit: vi.fn(),
+      rememberSyntheticKillExit: vi.fn(),
+      sendPtyExitToRenderer: vi.fn()
+    }
+    const ptyId = toAppSshPtyId(TARGET, lease.ptyId)
+    await expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridged branch reads only these deps.
+      stopRendererOwnedPty(deps as unknown as PtyKillIpcDeps, { id: ptyId, keepHistory: true })
+    ).rejects.toThrow('legacy_relay_bridged_pty_cannot_sleep')
+    expect(runtime.clearPtyStopRequest).toHaveBeenCalledWith(ptyId)
     installLegacyRelayBridge(null)
   })
 })

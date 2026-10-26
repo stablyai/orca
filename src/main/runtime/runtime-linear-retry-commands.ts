@@ -1,9 +1,11 @@
 import {
   type LinearAgentAccessError,
-  type LinearAgentWriteTarget,
-  type LinearCreateFieldIntent,
   linearError,
   sanitizeLinearErrorMessage
+} from '../linear/issue-context/errors'
+import type {
+  LinearAgentWriteTarget,
+  LinearCreateFieldIntent
 } from './runtime-linear-command-dependencies'
 import { RuntimeLinearCommandBase } from './runtime-linear-command-base'
 
@@ -24,7 +26,7 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     } = {}
   ): LinearAgentAccessError {
     const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
-    // Why: the retry preserves id and target so duplicate recovery can prove intent without matching mutable content.
+    // Preserve id/target for retry proof; mutable content cannot identify the original intent.
     const pinned =
       verb === 'create'
         ? [

@@ -4,8 +4,6 @@ import type {
   MobileGitBranchCompareSummary
 } from './git-compare-reply-schema'
 
-// The shapes mobile reads off the compare replies are the reply schemas' outputs, not the desktop
-// aggregates: a member with no reader in mobile/ is stripped rather than re-declared here.
 export type { MobileGitBranchChangeEntry, MobileGitBranchCompareSummary }
 export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 

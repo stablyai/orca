@@ -1,8 +1,6 @@
-/** The mounted module whose reply classification carries the salvage report. */
 const SALVAGE_REPORTING_MODULE = 'mobile/src/transport/rpc-operation-reply.ts'
 const CLASSIFY = 'classifyRpcReply'
 
-/** What one checked read dropped to stay compatible. */
 type SalvageReport = { droppedPaths: readonly string[]; droppedCount: number }
 type ClassifiedReply = { variant?: string; salvage?: SalvageReport }
 type Classify = (
@@ -12,26 +10,13 @@ type Classify = (
 
 let sink: ((name: string, value: unknown) => void) | null = null
 
-/**
- * Routes salvaged reads to the recording being driven. Module-level for the same reason the
- * declared device's sink is: the product module is loaded once per adapter module and the mount
- * that drives it is what knows where its observations go.
- */
+// Bind at mount because classifiers load per adapter module while the run owns the effect recorder.
 export function bindSalvageObserver(effect: (name: string, value: unknown) => void): void {
   sink = effect
 }
 
-/**
- * Records what a checked read threw away. `collectSalvageDrops` already builds the report on every
- * decoded reply — a salvaged array drops the elements that do not parse, a salvaged optional drops
- * a member that is present but malformed — and no product code reads it, so which rows a reply lost
- * was invisible to every projection downstream of it. Wrapping the classifier rather than a reader
- * is what makes it every checked read: one seam, carrying the operation the drop happened under.
- *
- * Only a non-empty report is recorded. `droppedCount: 0` on every decoded reply in the corpus is
- * bytes with no observation in them, and an empty report arriving where one used to be non-empty
- * still moves the golden by leaving.
- */
+// Wrap the classifier to observe every checked read’s discarded rows/members; downstream projections cannot see them.
+// Record only nonempty reports so unchanged decoded replies add no noise.
 export function observeSalvagedReads(file: string, module: Record<string, unknown>): void {
   if (!file.endsWith(SALVAGE_REPORTING_MODULE)) {
     return

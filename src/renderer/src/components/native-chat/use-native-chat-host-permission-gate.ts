@@ -7,15 +7,14 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 export type NativeChatHostPermissionGate = {
-  /** Present while Send is held: what the user can do about it. */
+  /** User action required to unblock Send. */
   sendBlockedReason: string | null
   notice: NativeChatComposerNotice | null
 }
 
 const OPEN: NativeChatHostPermissionGate = { sendBlockedReason: null, notice: null }
 
-/** Holds Send on a paired host that would run this chat with more access than this client asks
- *  for: an older host ignores per-chat modes and runs its own Agent Permissions. */
+/** Block sends to older paired hosts that ignore per-chat modes and would grant more access than requested. */
 export function useNativeChatHostPermissionGate(
   target: RuntimeClientTarget,
   agent: string,
@@ -38,6 +37,19 @@ export function useNativeChatHostPermissionGate(
   const text = hostPermissionRefusedText(agentLabel, verdict.kind, requested)
   return {
     sendBlockedReason: text,
-    notice: { key: `host-permission:${verdict.kind}`, kind: 'host', tone: 'warning', text }
+    notice: {
+      key: `host-permission:${verdict.kind}`,
+      kind: 'host',
+      tone: 'warning',
+      text,
+      ...(verdict.kind === 'unverified'
+        ? {
+            action: {
+              label: translate('components.native-chat.hostPermission.checkAgain', 'Check again'),
+              onClick: verdict.checkAgain
+            }
+          }
+        : {})
+    }
   }
 }

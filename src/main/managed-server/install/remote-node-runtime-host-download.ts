@@ -1,12 +1,7 @@
-/**
- * The host's own download of the pinned Node archive, tried only when this computer couldn't
- * produce it: many networks give the host a route, or a proxy in its environment, that the
- * desktop lacks. The archive hash is checked here and the promote re-checks the executable, so
- * where the bytes came from never decides what is accepted.
- */
+// Hosts may have routes/proxies the desktop lacks; archive and executable hashes still enforce the pin.
 import { copyFile, link, mkdtemp } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { nodeDistMirrorUrl } from '../../../shared/node-dist-mirror'
+import { nodeDistMirrorUrl, type NodeDistMirrorAttempt } from '../../../shared/node-dist-mirror'
 import {
   NODE_RUNTIME_PIN,
   nodeRuntimeReleaseUrl,
@@ -26,14 +21,13 @@ import { remoteSha256Command } from './remote-sha256-command'
 export const HOST_NODE_DOWNLOAD_OK = 'ORCA_NODE_HOST_DOWNLOAD_OK'
 export const HOST_NODE_DOWNLOAD_FAILED = 'ORCA_NODE_HOST_DOWNLOAD_FAILED'
 export const HOST_NODE_DOWNLOAD_NO_TOOL = 'ORCA_NODE_HOST_DOWNLOAD_NO_TOOL'
-/** One wall-clock budget for every source: ~70 KB/s still fetches the ~58 MB archive. */
+// One shared budget permits ~70 KB/s downloads without multiplying timeouts per source.
 const HOST_DOWNLOAD_BUDGET_SECONDS = 840
-/** Below this an attempt can't finish, so the source is reported as not tried. */
 const HOST_DOWNLOAD_MIN_ATTEMPT_SECONDS = 30
-/** The desktop downloader's 200 MiB limit, in the 512-byte blocks `ulimit -f` counts. */
+// ulimit -f counts 512-byte blocks; match the desktop's 200 MiB cap.
 const HOST_DOWNLOAD_MAX_BLOCKS = (200 * 1024 * 1024) / 512
-/** The budget plus the hash and the report, so the script always answers before the exec gives up. */
-export const HOST_NODE_DOWNLOAD_TIMEOUT_MS = (HOST_DOWNLOAD_BUDGET_SECONDS + 120) * 1000
+// Leave exec time for hashing and reporting after the download budget expires.
+const HOST_NODE_DOWNLOAD_TIMEOUT_MS = (HOST_DOWNLOAD_BUDGET_SECONDS + 120) * 1000
 
 const HOST_NODE_DOWNLOAD_NOT_PINNED =
   'the file is not the pinned release (a proxy or filter may have replaced it, or the host lacks sha256sum and shasum)'
@@ -43,18 +37,14 @@ export function hostNodeRuntimeUrl(target: NodeRuntimeTarget): string {
   return nodeRuntimeReleaseUrl(asset.source, asset.archive)
 }
 
-/**
- * Downloads into the installer's stage from this computer's mirror, then the release URL, with
- * curl or else wget. Only URLs Orca validated are used, so no host secret can reach the report.
- * Keeps the file only if it hashes to the pin, and always exits 0 with a marker.
- */
+/** Accept only a pinned archive; exit 0 with a status marker even when downloading fails. */
 export function hostDownloadNodeRuntimeCommand(
   host: RemoteHostPlatform,
   args: { stageDir: string; target: NodeRuntimeTarget; mirror?: string | null }
 ): string {
   const asset = pinnedNodeRuntimeAsset(args.target)
   const file = quotePosixShell(joinRemotePath(host, args.stageDir, asset.archive))
-  // Mirrors carry the official tree only; unofficial builds live at one address.
+  // Mirrors carry only the official tree; unofficial builds have one fixed source.
   const official = asset.source === 'official'
   const desktopMirror =
     official && args.mirror
@@ -67,13 +57,12 @@ export function hostDownloadNodeRuntimeCommand(
     `orca_dl_get ${quotePosixShell(new URL(hostNodeRuntimeUrl(args.target)).host)} ${quotePosixShell(hostNodeRuntimeUrl(args.target))}`
   ].filter((line): line is string => line !== null)
   const min = HOST_DOWNLOAD_MIN_ATTEMPT_SECONDS
-  // Why ulimit: a proxy or mirror serving endless bytes would otherwise fill the host's disk.
+  // Bound endless mirror/proxy responses so they cannot fill the host disk.
   const sizeCap = `ulimit -f ${HOST_DOWNLOAD_MAX_BLOCKS} 2>/dev/null`
-  // wget has no total-time limit, and `timeout` varies by host, so a backgrounded sleep bounds it.
-  // The watchdog's output goes to /dev/null so it never holds the capture or the SSH channel open.
+  // wget lacks a total timeout; a silent watchdog avoids host-specific timeout commands and open SSH captures.
   const wget =
     `wget -q -T 20 -t 1 -O ${file} "$2" & orca_dl_pid=$!; ` +
-    // The trap takes the sleep down with the watchdog, so nothing lingers once wget is done.
+    // Kill the watchdog's sleep too so it cannot linger after wget exits.
     `(trap 'kill "$orca_dl_z" 2>/dev/null; exit 0' TERM; sleep "$orca_dl_t" & orca_dl_z=$!; ` +
     'wait "$orca_dl_z" && kill "$orca_dl_pid") </dev/null >/dev/null 2>&1 & orca_dl_dog=$!; ' +
     'wait "$orca_dl_pid"; orca_dl_s=$?; kill "$orca_dl_dog" 2>/dev/null; exit "$orca_dl_s"'
@@ -84,8 +73,7 @@ export function hostDownloadNodeRuntimeCommand(
     `orca_dl_n=${sources.length}`,
     'orca_dl_end=$(date +%s 2>/dev/null)',
     `case "$orca_dl_end" in ''|*[!0-9]*) orca_dl_end= ;; *) orca_dl_end=$((orca_dl_end + ${HOST_DOWNLOAD_BUDGET_SECONDS})) ;; esac`,
-    // Each source gets an even share of what is left, so a stalled mirror can't starve the release
-    // URL, and the last source inherits whatever the others didn't use.
+    // Share remaining time evenly so stalled mirrors cannot starve later sources.
     'orca_dl_get() {',
     '  [ -z "$orca_dl_ok" ] || return 0',
     `  if [ -n "$orca_dl_end" ]; then orca_dl_t=$(((orca_dl_end - $(date +%s)) / orca_dl_n)); else orca_dl_t=${Math.floor(HOST_DOWNLOAD_BUDGET_SECONDS / sources.length)}; fi`,
@@ -105,9 +93,8 @@ export function hostDownloadNodeRuntimeCommand(
   ].join('\n')
 }
 
-export type HostNodeDownloadResult = { ok: true } | { ok: false; report: string }
+type HostNodeDownloadResult = { ok: true } | { ok: false; report: string }
 
-/** Whether the archive is now in the stage; otherwise the host's reason, in plain words. */
 export function readHostNodeDownload(output: string): HostNodeDownloadResult {
   const lines = output.trim().split(/\r?\n/)
   if (lines.at(-1)?.trim() === HOST_NODE_DOWNLOAD_OK) {
@@ -124,14 +111,14 @@ export function readHostNodeDownload(output: string): HostNodeDownloadResult {
   return { ok: false, report: `it gave an unexpected reply: ${output.trim().slice(0, 500)}` }
 }
 
-/** Neither this computer nor the host could get the pinned archive; says what is left to try. */
 export class NodeRuntimeUnreachableError extends Error {
   constructor(
     readonly url: string,
     readonly hostReport: string,
     readonly offlineArchivePath: string | undefined,
     cause: unknown,
-    mirrorable = true
+    /** Mirror-attempt metadata for setup failures; do not infer it from error text. */
+    readonly mirror: NodeDistMirrorAttempt = 'unset'
   ) {
     const desktop =
       cause instanceof DesktopDownloadUnreachableError
@@ -139,28 +126,26 @@ export class NodeRuntimeUnreachableError extends Error {
         : cause instanceof Error
           ? cause.message
           : String(cause)
-    const mirror = mirrorable
-      ? ', set a mirror of nodejs.org/dist in Settings > Advanced > Network > Node.js download mirror ' +
-        "(or NODEJS_ORG_MIRROR in this computer's environment)"
-      : ''
+    const mirrorAdvice =
+      mirror === 'unsupported'
+        ? ''
+        : `, ${mirror === 'tried' ? 'check the' : 'set a'} mirror of nodejs.org/dist in Settings > ` +
+          'Advanced > Network > Node.js download mirror ' +
+          "(or NODEJS_ORG_MIRROR in this computer's environment)"
     const offline = offlineArchivePath
       ? `, or download that file on another machine and copy it to ${offlineArchivePath} on this computer.`
       : '.'
     super(
       `Neither this computer nor the host could download Node from ${url}. ` +
         `This computer: ${desktop}. The host: ${hostReport}. ` +
-        `Check the network or proxy on either machine and connect again${mirror}${offline}`,
+        `Check the network or proxy on either machine and connect again${mirrorAdvice}${offline}`,
       { cause }
     )
     this.name = 'NodeRuntimeUnreachableError'
   }
 }
 
-/**
- * Runs the host download after this computer's attempt failed with `desktopError`, and returns the
- * archive's name in the stage; throws one error naming both attempts when the host fails too.
- */
-export async function downloadNodeRuntimeOnHost(args: {
+async function downloadNodeRuntimeOnHost(args: {
   exec: (command: string, options: { signal?: AbortSignal; timeoutMs?: number }) => Promise<string>
   host: RemoteHostPlatform
   stageDir: string
@@ -170,11 +155,12 @@ export async function downloadNodeRuntimeOnHost(args: {
   timeoutMs: number
   signal?: AbortSignal
 }): Promise<string> {
+  const mirror = configuredNodeDistMirror()
   const output = await args.exec(
     hostDownloadNodeRuntimeCommand(args.host, {
       stageDir: args.stageDir,
       target: args.target,
-      mirror: configuredNodeDistMirror()
+      mirror
     }),
     { signal: args.signal, timeoutMs: args.timeoutMs }
   )
@@ -185,7 +171,11 @@ export async function downloadNodeRuntimeOnHost(args: {
       result.report,
       args.offlineArchivePath,
       args.desktopError,
-      pinnedNodeRuntimeAsset(args.target).source === 'official'
+      pinnedNodeRuntimeAsset(args.target).source !== 'official'
+        ? 'unsupported'
+        : mirror
+          ? 'tried'
+          : 'unset'
     )
   }
   console.warn(
@@ -194,10 +184,6 @@ export async function downloadNodeRuntimeOnHost(args: {
   return pinnedNodeRuntimeAsset(args.target).archive
 }
 
-/**
- * Puts the pinned archive in the host stage: this computer's verified copy, uploaded, or else the
- * host's own download. Returns the archive's name there.
- */
 export async function stageNodeRuntimeArchive(args: {
   host: RemoteHostPlatform
   target: NodeRuntimeTarget
@@ -206,7 +192,7 @@ export async function stageNodeRuntimeArchive(args: {
   offlineArchivePath?: string
   exec: (command: string, options: { signal?: AbortSignal; timeoutMs?: number }) => Promise<string>
   upload: (localDir: string) => Promise<void>
-  /** Receives the local upload directory as soon as it exists, so the caller can remove it. */
+  /** Expose the local stage immediately for caller cleanup. */
   onLocalStage: (localDir: string) => void
   signal?: AbortSignal
 }): Promise<{ archive: string }> {
@@ -214,7 +200,7 @@ export async function stageNodeRuntimeArchive(args: {
   try {
     archivePath = await args.archivePath()
   } catch (desktopError) {
-    // Why any failure: a proxy's block page fails the hash just as a refused connect fails.
+    // Hash failures can be proxy block pages, so allow host download after any acquisition failure.
     if (isWindowsRemoteHost(args.host) || args.signal?.aborted) {
       throw desktopError
     }

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactNode } from 'react'
+import { act } from 'react'
+import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
+import { planEntry, planOf, planOp } from '../skills/bundled-skill-plan-fixtures.test-support'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,46 +13,38 @@ import { useAppStore } from '../../store'
 import { OrchestrationPane } from './OrchestrationPane'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { matchesSettingsSearch } from './settings-search'
-import { SKILLS_CLI_VERSION } from '../../../../shared/agent-feature-install-commands'
-
-const INSTALL_COMMAND = `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orchestration --global`
-const WINDOWS_INSTALL_COMMAND = `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1) else (npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orchestration --global)"`
 
 const mocks = vi.hoisted(() => ({
-  dialogProps: [] as Record<string, unknown>[],
   panelProps: [] as Record<string, unknown>[],
   skillInstalled: true,
   updateSettings: vi.fn()
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({
-  AgentSkillSetupPanel: (
-    props: Record<string, unknown> & { actionHint?: ReactNode; footer?: ReactNode }
-  ) => {
-    mocks.panelProps.push(props)
+  AgentSkillSetupPanel: (props: AgentSkillSetupPanelProps) => {
+    mocks.panelProps.push({ ...props })
     return (
       <section>
         <h3>{String(props.title)}</h3>
         <span>{props.installed ? 'Installed' : 'Not installed'}</span>
-        <code>{String(props.command)}</code>
-        <code>{String(props.installedCommand)}</code>
         <button type="button">{props.installed ? 'Update' : 'Install'}</button>
         <button type="button">Re-check</button>
         {props.actionHint}
-        {props.footer}
+        {typeof props.footer === 'function'
+          ? props.footer(
+              planOf([
+                planEntry('orchestration', [
+                  planOp('keep', '/home/u/.claude/skills/orchestration', {
+                    observed: { kind: 'link', target: '/home/u/.agents/skills/orchestration' }
+                  }),
+                  planOp('write', '/home/u/.agents/skills/orchestration', { agents: ['codex'] }),
+                  planOp('link', '/home/u/.gemini/skills/orchestration', { agents: ['gemini'] })
+                ])
+              ])
+            )
+          : props.footer}
       </section>
     )
-  }
-}))
-
-vi.mock('./OrchestrationSkillPromptDialog', () => ({
-  OrchestrationSkillPromptDialog: (props: Record<string, unknown>) => {
-    mocks.dialogProps.push(props)
-    return props.open ? (
-      <div data-testid="orchestration-skill-prompt-dialog">
-        <code>{String(props.command)}</code>
-      </div>
-    ) : null
   }
 }))
 
@@ -161,7 +155,6 @@ describe('OrchestrationPane', () => {
     root = null
     container?.remove()
     container = null
-    mocks.dialogProps.length = 0
     mocks.panelProps.length = 0
     mocks.skillInstalled = true
     mocks.updateSettings.mockReset()
@@ -205,6 +198,21 @@ describe('OrchestrationPane', () => {
     expect(matchesSettingsSearch('nested worker', getOrchestrationPaneSearchEntries())).toBe(true)
   })
 
+  it('shows the chat-error preference disabled and unchecked while Chat UI is off, preserving its saved choice', () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.experimentalNativeChat = false
+    settings.orchestrationChatErrorEscalationEnabled = true
+    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps(settings)} />)
+    expect(markup).toContain('Turn on Chat UI in Experimental settings to use it.')
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    const toggle = container.querySelector('[aria-label="Tell the coordinator about chat errors"]')
+    expect(toggle?.hasAttribute('disabled')).toBe(true)
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+    expect(settings.orchestrationChatErrorEscalationEnabled).toBe(true)
+    expect(matchesSettingsSearch('chat errors', getOrchestrationPaneSearchEntries())).toBe(true)
+  })
+
   it('keeps the nested depth row visible when settings search routes to Orchestration', () => {
     useAppStore.setState({ settingsSearchQuery: 'Nested worker' })
 
@@ -240,62 +248,35 @@ describe('OrchestrationPane', () => {
     expect(input.value).toBe('1')
   })
 
-  it('keeps host-only nested depth out of paired web clients', () => {
+  it('keeps host-only runtime settings out of paired web clients', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
 
     expect(markup).not.toContain('Nested worker depth')
+    expect(markup).not.toContain('Tell the coordinator about chat errors')
     expect(
       matchesSettingsSearch(
         'nested worker',
-        getOrchestrationPaneSearchEntries({ includeNestedWorkerDepth: false })
+        getOrchestrationPaneSearchEntries({ includeLocalRuntimeSettings: false })
+      )
+    ).toBe(false)
+    expect(
+      matchesSettingsSearch(
+        'chat errors',
+        getOrchestrationPaneSearchEntries({ includeLocalRuntimeSettings: false })
       )
     ).toBe(false)
   })
 
-  it('passes the install command, which also updates, without a manual-copy path', async () => {
-    const rendered = await renderPane()
-
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ command: WINDOWS_INSTALL_COMMAND })
-    )
-    expect(mocks.panelProps.at(-1)?.installedCommand).toBeUndefined()
-
-    expect(rendered.textContent).not.toContain('Prefer your own terminal?')
-    expect(rendered.textContent).not.toContain('Copy update command')
-    expect(rendered.textContent).not.toContain('Copy install command')
-    expect(mocks.dialogProps).not.toContainEqual(expect.objectContaining({ mode: 'update' }))
-    expect(mocks.dialogProps).not.toContainEqual(
-      expect.objectContaining({
-        command: INSTALL_COMMAND,
-        open: true
-      })
-    )
-  })
-
-  it('keeps first-time manual copy on the install command', async () => {
+  it('installs the orchestration skill, which also updates, with no manual-copy path', async () => {
     mocks.skillInstalled = false
     const rendered = await renderPane()
 
-    expect(rendered.textContent).toContain('Prefer your own terminal?')
-    expect(rendered.textContent).toContain('Copy install command')
-    expect(rendered.textContent).not.toContain('Copy update command')
-
-    const copyButton = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Copy install command'
+    expect(mocks.panelProps.at(-1)).toEqual(
+      expect.objectContaining({ skillNames: ['orchestration'] })
     )
-    expect(copyButton).toBeDefined()
-
-    await act(async () => {
-      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.dialogProps.at(-1)).toEqual(
-      expect.objectContaining({
-        command: WINDOWS_INSTALL_COMMAND,
-        open: true
-      })
-    )
-    expect(rendered.textContent).toContain(WINDOWS_INSTALL_COMMAND)
+    expect(mocks.panelProps.at(-1)?.installedSkillNames).toBeUndefined()
+    expect(rendered.textContent).not.toContain('Prefer your own terminal?')
+    expect(rendered.textContent).not.toContain('Copy install command')
   })
 })

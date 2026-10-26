@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { formatToolDuration } from '../../../../shared/native-chat-tool-identity'
+import { formatToolDuration } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import { IpynbCellOutputs } from './IpynbCellOutputs'
 import { IpynbRunPrompt } from './IpynbCellToolbar'
 import { useCellRun } from './ipynb-kernel-store'
@@ -7,7 +7,6 @@ import { parseIpynbOutput, type IpynbCell, type IpynbOutput } from './ipynb-pars
 
 type CellRunProps = { filePath: string; cellKey: string }
 
-/** The gutter for a code cell, reflecting its run in the notebook's kernel session. */
 export function IpynbCellRunPrompt({
   filePath,
   cellKey,

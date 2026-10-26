@@ -1,8 +1,4 @@
-/**
- * The port a managed orcad actually listens on. orcad asks for its preferred port but moves to a
- * free one when another runtime (a desktop Orca, `orca serve`) holds it, so a tunnel that assumed
- * the preferred port would reach that other runtime instead. The slot's readiness says which.
- */
+// Preferred ports may belong to other runtimes; tunnel to the active slot's published bound port.
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -19,7 +15,7 @@ import {
   execOrcadRemote,
   type OrcadRemoteExecTarget
 } from '../install/orcad-remote-runtime-control'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
 
 export type OrcadTunnelPortInput = {
   environment: KnownRuntimeEnvironment
@@ -39,9 +35,9 @@ export function orcadBoundPort(readiness: Pick<ServeReadiness, 'boundEndpoint'>)
   }
 }
 
-async function readSlotBoundPort(
+async function readManagedOrcadSlotReadiness(
   target: OrcadRemoteExecTarget & { remoteInstallDir: string }
-): Promise<number | null> {
+): Promise<ServeReadiness | null> {
   const parsed = parseOrcadReadinessWaitOutput(
     target.host,
     await execOrcadRemote(
@@ -49,28 +45,19 @@ async function readSlotBoundPort(
       readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
     )
   )
-  return parsed.state === 'ready' ? orcadBoundPort(parsed.readiness) : null
+  return parsed.state === 'ready' ? parsed.readiness : null
 }
 
-/** Falls back to the preferred port only when the slot published no endpoint (older builds). */
-export async function readManagedOrcadBoundPort(
-  target: OrcadRemoteExecTarget & { remoteInstallDir: string },
-  preferredPort: number
-): Promise<number> {
-  return (await readSlotBoundPort(target)) ?? preferredPort
-}
-
-/** The bound port the active slot's readiness names now; null when it names none. */
-async function readActiveSlotBoundPort(input: OrcadTunnelPortInput): Promise<number | null> {
-  if (!input.environment.orcadDeployment) {
-    return null
-  }
+export async function readActiveManagedOrcadReadiness(input: {
+  target: OrcadHostTarget
+  connection: OrcadHostTransport
+}): Promise<ServeReadiness | null> {
   const context = await resolveOrcadRemoteContext(input.target, input.connection)
   const active = context.activationRecord.active
   if (!active) {
     return null
   }
-  return readSlotBoundPort({
+  return readManagedOrcadSlotReadiness({
     conn: context.connection,
     host: context.host,
     remoteHome: context.remoteHome,
@@ -78,7 +65,14 @@ async function readActiveSlotBoundPort(input: OrcadTunnelPortInput): Promise<num
   })
 }
 
-/** Where a tunnel to this environment must point; independent SSH access keeps its own port. */
+async function readActiveSlotBoundPort(input: OrcadTunnelPortInput): Promise<number | null> {
+  if (!input.environment.orcadDeployment) {
+    return null
+  }
+  const readiness = await readActiveManagedOrcadReadiness(input)
+  return readiness ? orcadBoundPort(readiness) : null
+}
+
 export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput): Promise<number> {
   const access = getRuntimeSshAccess(input.environment)
   if (!access) {
@@ -87,7 +81,7 @@ export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput)
   try {
     return (await readActiveSlotBoundPort(input)) ?? access.remotePort
   } catch (error) {
-    // Why fall back: the identity check after the forward still catches a wrong server.
+    // Post-forward identity validation still detects a wrong server when falling back.
     console.warn(
       '[ssh] Could not read the managed Orca server port; trying the preferred one:',
       error
@@ -96,10 +90,7 @@ export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput)
   }
 }
 
-/**
- * The port the host says its server is bound to now, whichever desktop restarted it; null when
- * the host names none (older builds) or cannot be read, which is never a reason to move a tunnel.
- */
+/** Missing or unreadable published ports never justify moving an existing tunnel. */
 export async function readManagedOrcadPublishedPort(
   input: OrcadTunnelPortInput
 ): Promise<number | null> {

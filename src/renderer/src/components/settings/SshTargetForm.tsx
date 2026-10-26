@@ -52,15 +52,11 @@ export function SshTargetForm({
   onSave,
   onOpenChange
 }: SshTargetFormProps): React.JSX.Element {
-  // Why: reveal Advanced by default when the session starts with custom proxy/jump/
-  // reuse values; otherwise start collapsed. Reset per open/edit session so state
-  // does not leak across cancel → reopen (form component stays mounted).
+  // Reveal custom advanced values per open/edit session; the mounted form must not retain cancelled disclosure state.
   const hasAdvancedConnectionFields = hasAdvancedConnectionValues(form)
   const [advancedOpen, setAdvancedOpen] = useState(hasAdvancedConnectionFields)
   const baselineRef = useRef(form)
-  // Why: the session effect and the outside-dismiss handler need the latest draft
-  // without re-subscribing the effect to every keystroke. Sync in an effect so
-  // render stays pure (React may replay/discard render work).
+  // Mirror committed drafts for session/dismiss handlers without per-keystroke resubscription or impure render writes.
   const formRef = useRef(form)
   useEffect(() => {
     formRef.current = form
@@ -91,9 +87,7 @@ export function SshTargetForm({
     isEditing &&
     (editingLabel !== '' || (endpointSummary !== '' && endpointSummary !== editingLabel))
 
-  // Why: outside click is easy to hit by accident with a long multi-field form; keep Escape /
-  // Cancel / × as explicit discard paths. Read both refs at call time — the session effect can
-  // rewrite the baseline without a re-render.
+  // Guard accidental outside dismissal of dirty forms; read live draft/baseline refs because session effects may update without rerender.
   const isDraftDirty = (): boolean => isSshTargetFormDirty(formRef.current, baselineRef.current)
   const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
@@ -108,7 +102,7 @@ export function SshTargetForm({
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(e) => {
             e.preventDefault()
-            // Why: Enter still submits while the button is disabled, so gate here too.
+            // Gate Enter too because it submits past disabled buttons.
             if (saving) {
               return
             }
@@ -237,6 +231,7 @@ export function SshTargetForm({
                 </p>
               </div>
               <SshHostAdvancedFields
+                offerProxyConnectionReuse
                 open={advancedOpen}
                 onOpenChange={setAdvancedOpen}
                 form={form}
@@ -253,7 +248,7 @@ export function SshTargetForm({
             <Button type="submit" size="sm" disabled={saving}>
               {isEditing
                 ? translate('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
-                : translate('auto.components.settings.SshTargetForm.9518545cb6', 'Add Target')}
+                : translate('auto.components.settings.SshTargetForm.addHost', 'Add host')}
             </Button>
           </DialogFooter>
         </form>

@@ -13,7 +13,7 @@ import type {
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RepoKind } from '../../shared/repo-types'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/runtime-capability-constants'
+import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -34,18 +34,13 @@ import { findProjectSetups, resolveProjectIdSelector } from '../project-selector
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
-// Why: an Orca server that predates project host setup answers `method_not_found`, which reads
-// as an Orca bug rather than a version gap — and since --host runtime:<id> now routes these
-// commands to that server, a client can reach an older host without meaning to. The desktop
-// already names this case; match it instead of surfacing the raw dispatcher error.
 async function callProjectHostSetup<TResult>(
   client: HandlerContext['client'],
   method: string,
   params?: unknown
 ): Promise<RuntimeRpcSuccess<TResult>> {
   try {
-    // Why: forward the exact arity the caller used; passing an explicit undefined would change
-    // the request shape for the no-params methods.
+    // Preserve absent params; explicitly passing undefined changes the request shape.
     return params === undefined
       ? await client.call<TResult>(method)
       : await client.call<TResult>(method, params)
@@ -71,9 +66,7 @@ async function getResolvedHostId(
   return host.id
 }
 
-// Why: the setup paths keep the unresolved id on purpose. The runtime rejects every `ssh:` host
-// for those operations regardless of whether it exists, so resolving first would answer "no such
-// target" and imply the command would have worked with the right id.
+// The runtime rejects SSH setup operations regardless of target existence; preserve that refusal.
 async function getRequiredHostId(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client']
@@ -85,8 +78,7 @@ async function getRequiredHostId(
   if (host.kind !== 'alias') {
     return host.id
   }
-  // A bare alias has no unresolved spelling to forward — naming the machine is the lookup — so
-  // this one case resolves even on the paths that otherwise pass the id through untouched.
+  // Bare aliases must resolve to an id before they can be forwarded.
   const resolved = await resolveHostFlagTarget(flags, client)
   if (!resolved) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
@@ -94,8 +86,7 @@ async function getRequiredHostId(
   return resolved.id
 }
 
-// Why: a project on two hosts has two setups with the same id; `--host` picks one. An older
-// host strips the field and acts on the first twin, so refuse rather than let it guess.
+// Older hosts drop hostId and pick the first setup twin; refuse unsupported host targeting.
 async function getOptionalSetupHostId(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client']
@@ -149,8 +140,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')
     const hostId = await getRequiredHostId(flags, client)
-    // An SSH host's filesystem is not the CLI's, so resolving a relative path against the client
-    // cwd would register a path that names the wrong machine.
+    // SSH paths belong to the target filesystem, even when the runtime connection itself is local.
     const pathIsOffClient = client.isRemote || getSshTargetIdForExecutionHost(hostId) !== null
     const args: ProjectHostSetupExistingFolderArgs = {
       hostId,
@@ -191,11 +181,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   'project setup-create': async ({ flags, client, cwd, json }) => {
     const path = getOptionalStringFlag(flags, 'path')
     const args: ProjectHostSetupCreateArgs = {
-      // Why: unlike the setup paths below, the runtime does not reject `ssh:` here — this records
-      // independent metadata — so an unknown target would persist a row pointing at a machine
-      // that does not exist. Resolving catches that. `local` and `runtime:` pass through
-      // untouched, because this is also the provisioning path and a runtime host legitimately
-      // may not exist yet when its metadata is written.
+      // Resolve SSH targets to reject nonexistent hosts; runtime metadata may precede provisioning.
       hostId: await getResolvedHostId(flags, client),
       setupId: getOptionalStringFlag(flags, 'setup-id'),
       path:

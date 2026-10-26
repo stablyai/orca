@@ -2,31 +2,20 @@ import {
   MAX_SUBAGENT_FIELD_CHARS,
   normalizeSubagentState
 } from '../../../../shared/native-chat-subagent-summary'
+import { fitInteractivePrompt } from '../../../../shared/agent-status-field-normalization'
+import { parseAskFromToolInput } from '../../../../shared/native-chat-ask'
 import type { NativeChatBlock, NativeChatSubagentState } from '../../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
-// Why: the mobile-only payload diet. Inline image bytes are kept off every RPC
-// transport; everything below that only applies to `mobile` clients, whose
-// renderer previews block bodies rather than showing them whole.
-
-// Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
-// The mobile view only previews tool block bodies, so truncate them on the wire
-// to keep the payload small; the marker tells the user content was clipped.
+// Mobile previews tool bodies; cap large results on the wire and mark clipped content.
 const MOBILE_BLOCK_CHAR_CAP = 4000
-// Why: text blocks are the message body itself, rendered in full by the chat
-// view — a preview-sized cap cut long assistant replies mid-sentence with no way
-// to read on (STA-3230). Keep only a generous safety ceiling: a transcript
-// record can legally reach 2MB, and shipping that much markdown in one block
-// would freeze the phone.
+// Text is the full message, not a preview (STA-3230); use a higher ceiling so large records cannot freeze the phone.
 const MOBILE_TEXT_BLOCK_CHAR_CAP = 64_000
 const MOBILE_TOOL_INPUT_ITEMS_CAP = 20
 const MOBILE_TOOL_INPUT_NODE_CAP = 100
-// Why: a spawn group's roster is metadata, not a body — provider-supplied agent
-// paths and an open-string lifecycle whose schema declares no maximum, so a
-// journal from a newer build can carry more children and longer strings than
-// this build ever writes.
+// Newer/imported spawn rosters can exceed this build's child and field bounds.
 const MOBILE_SUBAGENT_CAP = 64
 const TRUNCATION_MARKER = '\n… (truncated)'
 
@@ -56,7 +45,7 @@ export function sanitizeNativeChatRpcBlock(
   }
   if (block.type === 'tool-call') {
     const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }
-    return { ...block, input: sanitizeToolInput(block.input, budget, 0) }
+    return { ...block, input: sanitizeToolInput(fitAskToolInput(block), budget, 0) }
   }
   if (block.type === 'subagent-group') {
     return {
@@ -64,8 +53,7 @@ export function sanitizeNativeChatRpcBlock(
       groupId: clip(block.groupId, MAX_SUBAGENT_FIELD_CHARS),
       agents: block.agents.slice(0, MOBILE_SUBAGENT_CAP).map((agent) => ({
         ...agent,
-        // The id is the roster KEY: a prefix clip would merge two children, so
-        // it takes the shared digest bound the other wires use.
+        // Ids are roster keys; digest-bound them because prefix clipping would merge children.
         id: boundSubagentEntryId(agent.id),
         label: clip(agent.label, MAX_SUBAGENT_FIELD_CHARS),
         state: clipSubagentState(agent.state)
@@ -86,10 +74,29 @@ export function sanitizeNativeChatRpcBlock(
   return block
 }
 
-/** A state too long to be one this build knows names no state at all, which is
- *  what `unverifiable` records — clipping it would ship a truncated word. */
+/** Oversize states are unknown; clipping would invent a lifecycle word. */
 function clipSubagentState(value: NativeChatSubagentState): NativeChatSubagentState {
   return value.length > MAX_SUBAGENT_FIELD_CHARS ? normalizeSubagentState(value) : value
+}
+
+// Preserve question labels by shortening presentation text before the generic budget drops options.
+function fitAskToolInput(block: Extract<NativeChatBlock, { type: 'tool-call' }>): unknown {
+  const { name, input } = block
+  if (typeof input === 'string' && input.length <= MOBILE_BLOCK_CHAR_CAP) {
+    return input
+  }
+  if (!parseAskFromToolInput(name, input)) {
+    return input
+  }
+  const encoded = typeof input === 'string' ? input : JSON.stringify(input)
+  if (encoded.length <= MOBILE_BLOCK_CHAR_CAP) {
+    return input
+  }
+  const fitted = fitInteractivePrompt(encoded, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
+  if (fitted === null) {
+    return input
+  }
+  return typeof input === 'string' ? fitted : JSON.parse(fitted)
 }
 
 function sanitizeToolInput(
@@ -129,8 +136,7 @@ function sanitizeToolInput(
       break
     }
     let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
-    // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
-    // to the same bounded key; suffix collisions so neither field is silently lost.
+    // Suffix colliding bounded keys so shared long prefixes cannot silently lose sibling fields.
     if (Object.hasOwn(result, boundedKey)) {
       boundedKey = `${boundedKey}~${count}`
     }

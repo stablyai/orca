@@ -9,8 +9,7 @@ import {
   getFolderWorkspacePathStatusTitle
 } from './folder-workspace-path-status'
 
-// Why: the status crosses the runtime RPC wire and is cast, not decoded (`result: z.unknown()`), so
-// the cast at the test boundary is the point — a newer host really can put these on the wire.
+// RPC returns z.unknown and casts it; tests must cover newer-host wire values outside this build’s union.
 function wireStatus(reason: unknown): FolderWorkspacePathStatus {
   return { path: '/srv/scans', exists: false, reason } as unknown as FolderWorkspacePathStatus
 }
@@ -35,8 +34,7 @@ describe('getFolderWorkspacePathStatusTitle', () => {
     expect(title).not.toBe('')
   })
 
-  // Why: Object.hasOwn coerces its key, so ['missing'] passes a hasOwn-only guard and then falls
-  // straight back out of the switch — the exact P1 found in review on #15002.
+  // hasOwn coerces [missing] into a valid key; reject arrays before the switch (#15002).
   it('does not admit a non-string reason through the membership guard', () => {
     const title = getFolderWorkspacePathStatusTitle(wireStatus(['missing']))
 

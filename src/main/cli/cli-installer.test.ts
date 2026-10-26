@@ -33,8 +33,7 @@ import { makeFixture } from './cli-installer-test-fixtures'
 import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
 import { buildLegacyAppImageCliWrapper } from './legacy-appimage-cli-wrapper'
 
-// Stands in for the AppImage runtime's `--appimage-extract`, which writes the
-// payload to ./squashfs-root relative to cwd.
+// Match --appimage-extract's output directory under cwd.
 async function fakeAppImageExtractRunner(_appImagePath: string, cwd: string): Promise<void> {
   const launcherDir = join(cwd, 'squashfs-root', 'resources', 'bin')
   await mkdir(launcherDir, { recursive: true })
@@ -54,7 +53,6 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: this test creates Unix symlinks and shell scripts that only apply on macOS.
   it.skipIf(process.platform === 'win32')(
     'creates a dev launcher and installs a macOS symlink in the requested path',
     async () => {
@@ -89,7 +87,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: this test creates Unix symlinks and shell scripts that only apply on Linux.
   it.skipIf(process.platform === 'win32')(
     'creates a linux symlink under the requested path and warns when PATH is missing',
     async () => {
@@ -120,8 +117,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: dev installs are useful for validation, but they must not replace the
-  // packaged `orca` / `orca-ide` commands developers rely on day to day.
   it.skipIf(process.platform === 'win32')(
     'uses a separate orca-dev command for default development installs',
     async () => {
@@ -150,10 +145,7 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: an AppImage's payload is only reachable through a FUSE mount that its
-  // own AppRun sets up, and AppRun prepends `--no-sandbox` into node mode on
-  // userns-restricted hosts (#11609). Extracting once gives the command the
-  // same plain launcher a deb install ships, so registration is a symlink.
+  // Extraction avoids the ephemeral FUSE mount and AppRun's --no-sandbox injection into node mode.
   it.skipIf(process.platform === 'win32')(
     'symlinks the linux command at the extracted AppImage launcher',
     async () => {
@@ -240,7 +232,6 @@ describe('CliInstaller', () => {
       const first = await makeInstaller().install()
       expect(first.state).toBe('installed')
 
-      // An update replaces the file in place, so size and mtime both change.
       await writeFile(appImagePath, '#!/usr/bin/env bash\n# next version\n', {
         encoding: 'utf8',
         mode: 0o755
@@ -252,7 +243,6 @@ describe('CliInstaller', () => {
       expect(second.state).toBe('installed')
       expect(second.launcherPath).toBe(first.launcherPath)
       await expect(readlink(installPath)).resolves.toBe(second.launcherPath)
-      // Only the live payload survives the upgrade, beside the record of which AppImage it is.
       const liveRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!.rootPath
       expect((await readdir(dirname(liveRoot))).sort()).toEqual(
         [basename(liveRoot), 'source-appimage'].sort()
@@ -303,8 +293,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: Linux renamed the public command to avoid shadowing GNOME Orca, so
-  // upgrading must clean up only the old symlink owned by prior Orca installs.
   it.skipIf(process.platform === 'win32')(
     'removes the old managed linux orca symlink when installing orca-ide',
     async () => {
@@ -422,8 +410,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: the privilegedRunner is injectable so the EACCES→osascript path can be
-  // exercised in integration without spawning osascript in unit tests.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'invokes the injected privilegedRunner when install falls back to elevated permissions',
     async () => {

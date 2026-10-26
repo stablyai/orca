@@ -14,6 +14,10 @@ export function isAntigravityFeedbackTool(toolName: string | undefined): boolean
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+function isAntigravitySubagentTool(toolName: string | undefined): boolean {
+  return toolName === 'invoke_subagent' || toolName === 'send_message'
+}
+
 export function normalizeAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -22,6 +26,23 @@ export function normalizeAntigravityEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
+  const subagentParent = state.antigravitySubagentParentByPaneKey.get(paneKey)
+  if (subagentParent && conversationId && conversationId !== subagentParent) {
+    // Subagents run inside the parent agy under their own conversationId and never carry user input.
+    if (!readFirstString(hookPayload, ['lastUserInput'])) {
+      return null
+    }
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+  }
+  const toolName = readAntigravityToolCall(hookPayload).toolName
+  if (
+    conversationId &&
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
+    isAntigravitySubagentTool(toolName)
+  ) {
+    state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
+  }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
@@ -29,11 +50,10 @@ export function normalizeAntigravityEvent(
     eventName !== 'Stop' &&
     state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
   ) {
-    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a finished row doesn't turn back into a yellow spinner.
+    // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
     return null
   }
 
-  const toolName = readAntigravityToolCall(hookPayload).toolName
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
@@ -54,7 +74,7 @@ export function normalizeAntigravityEvent(
   }
 
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
-  // Why: once the prompt is cached for this pane, avoid rescanning the (potentially large) Antigravity transcript per hook.
+  // Cache prompts per turn instead of rescanning large transcripts per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
   const effectivePrompt =
     promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
@@ -77,9 +97,12 @@ export function normalizeAntigravityEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
-  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
-  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
-    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+  // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
+  if (eventName === 'Stop' && !stopStillBusy) {
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+    if (transcriptPath) {
+      state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+    }
   }
   return payload
 }

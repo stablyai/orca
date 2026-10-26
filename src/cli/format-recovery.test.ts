@@ -120,7 +120,7 @@ describe('worktree selector recovery', () => {
         error: {
           code: 'selector_not_found',
           message: 'selector_not_found',
-          // The mutation-recovery layer already attached its request id.
+          // Preserve the request ID already attached by mutation recovery.
           data: { orchestrationRequestId: 'req_abc', nextSteps: ['Run request-show first.'] }
         },
         _meta: { runtimeId: 'runtime_local' }
@@ -217,17 +217,132 @@ describe('CLI error recovery', () => {
     expect(output).toContain('Fix the command flags or RPC params')
   })
 
+  it('tells an older server to reprovision when its computer sidecar is missing', () => {
+    // Older servers return generic steps without naming the server installation.
+    const error = new RuntimeRpcFailureError({
+      id: 'req_sidecar_exit',
+      ok: false,
+      error: {
+        code: 'accessibility_error',
+        message: 'computer sidecar exited with code 1',
+        data: {
+          nextSteps: [
+            'Run `orca computer capabilities --json` to confirm the provider is available before retrying.'
+          ]
+        }
+      },
+      _meta: { runtimeId: 'runtime_orcad' }
+    })
+
+    const output = formatCliError(error, { commandPath: ['computer', 'list-apps'] })
+    expect(output).toContain('update or reprovision the server')
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    reportCliError(error, true, { commandPath: ['computer', 'list-apps'] })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'accessibility_error',
+        data: {
+          nextSteps: expect.arrayContaining([
+            expect.stringContaining('update or reprovision the server')
+          ])
+        }
+      }
+    })
+    log.mockRestore()
+  })
+
+  it('preserves structured recovery for a local runtime-unavailable error', () => {
+    const error = new RuntimeClientError(
+      'runtime_unavailable',
+      'The local runtime has a recovery step.',
+      { nextSteps: ['Run `orca runtime status --json` and retry.'] }
+    )
+
+    expect(formatCliError(error)).toBe(
+      [
+        'The local runtime has a recovery step.',
+        'Next step: Run `orca runtime status --json` and retry.'
+      ].join('\n')
+    )
+  })
+
+  it('preserves structured recovery for an RPC runtime-unavailable error', () => {
+    const error = new RuntimeRpcFailureError({
+      id: 'req_runtime_recovery',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'The runtime returned a recovery step.',
+        data: { nextSteps: ['Reconnect the runtime, then retry.'] }
+      },
+      _meta: { runtimeId: 'runtime_local' }
+    })
+
+    expect(formatCliError(error)).toBe(
+      [
+        'The runtime returned a recovery step.',
+        'Next step: Reconnect the runtime, then retry.'
+      ].join('\n')
+    )
+  })
+
+  it('keeps startup guidance when a local runtime-unavailable error has no next steps', () => {
+    const message = 'Could not connect to the running Orca app.'
+
+    expect(formatCliError(new RuntimeClientError('runtime_unavailable', message))).toBe(
+      `${message}\nOrca is not running. Run 'orca open' first.`
+    )
+  })
+
+  it('keeps startup guidance when an RPC runtime-unavailable error has no next steps', () => {
+    const message = 'The RPC runtime is unavailable.'
+    const error = new RuntimeRpcFailureError({
+      id: 'req_rpc_startup_fallback',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message
+      },
+      _meta: { runtimeId: 'runtime_local' }
+    })
+
+    expect(formatCliError(error)).toBe(`${message}\nOrca is not running. Run 'orca open' first.`)
+  })
+
+  it('preserves the local request-id protection for an RPC runtime-unavailable error', () => {
+    const error = new RuntimeRpcFailureError({
+      id: 'req_rpc_runtime_mutation',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'Re-issue the same RPC command with --retry-request mutation_2.',
+        data: {
+          orchestrationRequestId: 'mutation_2',
+          nextSteps: ['Read the RPC mutation status before retrying.']
+        }
+      },
+      _meta: { runtimeId: 'runtime_local' }
+    })
+
+    expect(formatCliError(error)).toBe(
+      'Re-issue the same RPC command with --retry-request mutation_2.'
+    )
+  })
+
   it('does not replace mutation recovery with generic runtime startup advice', () => {
     const error = new RuntimeClientError(
       'runtime_unavailable',
       'Re-issue the same command with --retry-request mutation_1.',
-      { orchestrationRequestId: 'mutation_1' }
+      {
+        orchestrationRequestId: 'mutation_1',
+        nextSteps: ['Read the mutation request status before retrying.']
+      }
     )
 
     const output = formatCliError(error)
 
-    expect(output).toContain('--retry-request mutation_1')
-    expect(output).not.toContain('orca open')
+    expect(output).toBe('Re-issue the same command with --retry-request mutation_1.')
   })
 })
 

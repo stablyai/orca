@@ -82,11 +82,7 @@ export async function listAssignableUsers(
   }
   await acquire()
   try {
-    // Why: paginate through all assignable users — GraphQL's assignableUsers
-    // maxes out at 100 per page and large orgs/repos silently lose assignees
-    // beyond the first page. REST /assignees with --paginate walks every page;
-    // --jq collapses per-page arrays into NDJSON so we don't have to stitch
-    // JSON arrays that gh concatenates back-to-back.
+    // REST pagination covers all assignees; jq emits NDJSON instead of concatenated page arrays.
     const { stdout } = await ghExecFileAsync(
       [
         'api',

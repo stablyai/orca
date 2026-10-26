@@ -21,6 +21,7 @@ import {
 } from '@/lib/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-preflight-failures'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function assertWorkspaceCleanupAgentStopApproved(
   state: AppState,
@@ -110,8 +111,12 @@ export function getWorkspaceCleanupAgentEvidence(
           evidence.set(identity, 'unknown')
         } else {
           const owner =
-            findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, candidateHost) ??
-            findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId).find(
+            findIndexedWorktreeOwnerForHost(
+              selectWorktreesByRepo(state),
+              worktreeId,
+              candidateHost
+            ) ??
+            findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).find(
               (worktree) => isExecutionHostAliasForWorktree(candidateHost, worktree)
             )
           if (isExecutionHostAliasForWorktree(hostId, owner ?? { hostId: candidateHost })) {

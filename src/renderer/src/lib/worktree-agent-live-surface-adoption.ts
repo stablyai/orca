@@ -3,8 +3,11 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { adoptLiveTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
-import { layoutFramesHoldTerminalPane } from '@/runtime/layout-frame-terminal-panes'
+import {
+  layoutFramesHoldTerminalPane,
+  layoutFrameTerminalTab
+} from '@/runtime/layout-frame-terminal-panes'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { resolveTerminalTabPtyOwnership } from './terminal-tab-for-pty-id'
 import type {
   LiveTerminalSurfaceOwner,
@@ -80,11 +83,7 @@ function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {
   return Object.values(store.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
 }
 
-/**
- * Rebind a PTY the host found unowned to the pane its record names, but only while this renderer
- * still holds that pane free: the host's graph omits unmounted panes, so its verdict cannot tell a
- * closed pane from one that merely lost its binding, and minting forks the PTY onto a second tab.
- */
+/** Rebind host-unowned PTYs to recorded panes still held free here. Host graph omits unmounted panes, so its verdict alone cannot distinguish close from lost binding; minting would duplicate surfaces. */
 function bindToRecordedSurface(
   store: LiveSurfaceAdoptionStore,
   worktreeId: string,
@@ -110,14 +109,10 @@ function adoptHostOwnedSurface(
 ): boolean {
   const store = getState()
   const known = tabExists(store, owner.tabId)
-  // Switch point: main's frames draw a pane main holds for this terminal; the window makes no tab
-  // or pane of its own. Declined when main lacks it (main-first follow-up) or before the snapshot.
+  // Switch point, a paired server's workspace (the gate blocks those before any sweep today; a
+  // local one returns before this): frames draw the server's pane; the window makes none.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && !known) {
-    const pane = parsePaneKey(owner.paneKey)
-    return (
-      pane?.tabId === owner.tabId &&
-      layoutFramesHoldTerminalPane(worktreeId, { ...owner, leafId: pane.leafId })
-    )
+    return framesShowRecordedPane(worktreeId, owner)
   }
   if (bindLivePtyToExactSurface(store, worktreeId, owner)) {
     if (!known) {
@@ -150,23 +145,34 @@ function adoptHostOwnedSurface(
   return true
 }
 
-/**
- * Give every live workspace PTY the surface that already owns it, minting one
- * only for a PTY proven to have none.
- *
- * `surfaced` is whether any live PTY ends the sweep holding a surface. False means the
- * workspace has live agents but nothing the user can look at — the caller owes them a
- * seeded pane, because failing closed must not also fail silent. `declinedPtyIds` names
- * the live PTYs the sweep left without one, so a decline is diagnosable and not mute.
- */
+/** Whether main's frames show the terminal in the pane main recorded for it. */
+function framesShowRecordedPane(worktreeId: string, recorded: LiveTerminalSurfaceOwner): boolean {
+  const pane = parsePaneKey(recorded.paneKey)
+  return (
+    pane?.tabId === recorded.tabId &&
+    layoutFramesHoldTerminalPane(worktreeId, { ...recorded, leafId: pane.leafId })
+  )
+}
+
+/** Whether main holds the terminal bound in the pane it recorded, drawn by this window yet or not. */
+function mainHoldsRecordedPane(worktreeId: string, recorded: LiveTerminalSurfaceOwner): boolean {
+  const pane = parsePaneKey(recorded.paneKey)
+  return Boolean(
+    pane?.tabId === recorded.tabId &&
+    layoutFrameTerminalTab(worktreeId, recorded.tabId)?.terminal?.panes.some(
+      (held) => held.leafId === pane.leafId && held.ptyId === recorded.ptyId
+    )
+  )
+}
+
+/** Reuse proven PTY surfaces, minting only after host proves no owner. surfaced=false returns seeding responsibility when live agents remain invisible; declinedPtyIds makes refusal diagnosable. */
 export async function adoptLiveWorkspacePtySurfaces(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   livePtyIds: readonly string[],
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
 ): Promise<{ surfaced: boolean; declinedPtyIds: string[] }> {
-  // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
-  // solely in tab.ptyId or the persisted layout used to read as unbound.
+  // Include persisted layout/tab.ptyId bindings; mounted-only ptyIdsByTabId misses dormant surfaces.
   const unbound = livePtyIds.filter(
     (ptyId) => resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind === 'none'
   )
@@ -183,17 +189,22 @@ export async function adoptLiveWorkspacePtySurfaces(
   }
   const materializedTabIds = new Set<string>()
   for (const ptyId of unbound) {
-    // Why: a pane can mount while the census is in flight, so the pre-RPC
-    // verdict is stale by the time it would authorize a mint.
+    // Recheck after RPC: panes can mount and bind while census is in flight.
     if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
       surfaced = true
       continue
     }
     const owner = surfaceOwners?.get(ptyId)
-    // Why: only the execution host can prove a live PTY is unowned, and minting
-    // on anything weaker forks a running agent onto a second empty surface.
+    // Only execution-host proof permits minting; weaker ownership evidence forks live agents onto empty surfaces.
     if (!owner) {
       declinedPtyIds.push(ptyId)
+      continue
+    }
+    const mainPlaces =
+      ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
+    // Main places unshown terminals before answering, so its named pane/frame owns presentation. Window writes nothing; paired servers retain their existing path.
+    if (mainPlaces && !('unowned' in owner)) {
+      surfaced = true
       continue
     }
     if (!('unowned' in owner)) {
@@ -204,24 +215,15 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
-    // Switch point: main shows it unless this window holds its recorded pane; a refusal leaves
-    // it without one, so it is declined rather than counted as shown.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const outcome =
-        owner.recorded && bindToRecordedSurface(getState(), worktreeId, owner.recorded)
-          ? 'shown'
-          : await adoptLiveTerminalThroughLayoutOwner(getState, worktreeId, {
-              ptyId,
-              ...(owner.recorded ? { recordedPaneKey: owner.recorded.paneKey } : {})
-            })
-      if (outcome === 'shown') {
+    // Switch point: one main could not place stays unshown, unless main's frames already show it
+    // in the pane main recorded (main's graph not yet reinstalled when it answered).
+    if (mainPlaces) {
+      if (owner.recorded && mainHoldsRecordedPane(worktreeId, owner.recorded)) {
         surfaced = true
-        continue
-      }
-      if (outcome === 'refused') {
+      } else {
         declinedPtyIds.push(ptyId)
-        continue
       }
+      continue
     }
     surfaced = true
     if (owner.recorded && bindToRecordedSurface(getState(), worktreeId, owner.recorded)) {

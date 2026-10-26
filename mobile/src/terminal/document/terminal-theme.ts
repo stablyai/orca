@@ -1,20 +1,14 @@
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { colors } from '../../theme/mobile-theme'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
-/** The page background before a theme arrives, and the fallback when a theme omits one. */
 const TERMINAL_BACKGROUND_FALLBACK = colors.terminalBg
 
-/** A terminal colour with no alpha: what the contrast maths works on. */
 export type TerminalDocumentRgb = { r: number; g: number; b: number }
 
-/** A parsed CSS colour, alpha included, before it is composited onto the app surface. */
 export type TerminalDocumentRgba = TerminalDocumentRgb & { a: number }
 
-/**
- * The theme payload the host publishes; an older host omits the contrast floor. The floor arrives
- * unvalidated from a host of unknown version, so it is typed as the router types its other wire
- * fields and `normalizeTerminalContrastOverride` is what decides it is a usable number.
- */
+// Older hosts omit contrast floors; validate unknown wire values before applying an override.
 export type TerminalDocumentThemeMessage =
   | { theme?: Record<string, string>; minimumContrastRatio?: unknown }
   | null
@@ -22,7 +16,6 @@ export type TerminalDocumentThemeMessage =
 
 const DARK_BG_MIN_CONTRAST = 3
 const LIGHT_BG_MIN_CONTRAST = 4.5
-// Dark app surface a transparent terminal background composites over (matches desktop APP_SURFACE_COLORS.dark).
 const CONTRAST_APP_SURFACE = { r: 10, g: 10, b: 10 }
 
 export function parseTerminalBackgroundRgba(value: unknown): TerminalDocumentRgba | null {
@@ -111,7 +104,6 @@ export function terminalContrastRatio(a: TerminalDocumentRgb, b: TerminalDocumen
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
-// Clamp an explicit desktop override to xterm's 1-21 range; null means "no usable override".
 export function normalizeTerminalContrastOverride(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null
@@ -119,8 +111,6 @@ export function normalizeTerminalContrastOverride(value: unknown) {
   return Math.min(21, Math.max(1, value))
 }
 
-// Pick the xterm minimumContrastRatio floor from the composed terminal background.
-// Unparseable input defaults to the dark floor so agent output never stays invisible.
 export function resolveTerminalContrastFloor(background: unknown) {
   const color = parseTerminalBackgroundRgba(background)
   if (!color) {
@@ -162,31 +152,37 @@ export function normalizeTerminalTheme(
   return Object.assign({}, scope.defaultTheme, next)
 }
 
-/**
- * What `applyTerminalTheme` writes through. Both slots are written, so a target may arrive without
- * a theme; nothing else on the terminal is touched.
- */
 export type TerminalDocumentThemeTarget = {
   options: { theme?: TerminalDocumentTheme; minimumContrastRatio: number }
 }
 
 export function applyTerminalTheme(
   scope: TerminalDocumentScope,
-  input: TerminalDocumentThemeMessage
+  input: TerminalDocumentThemeMessage,
+  force = false
 ) {
   scope.terminalThemeInput = input
-  scope.terminalTheme = normalizeTerminalTheme(scope, input)
+  const nextTheme = normalizeTerminalTheme(scope, input)
+  const themeChanged = Object.keys(scope.defaultTheme).some(
+    (key) => scope.terminalTheme[key] !== nextTheme[key]
+  )
+  scope.terminalTheme = nextTheme
   const background = scope.terminalTheme.background || TERMINAL_BACKGROUND_FALLBACK
   scope.paintDocumentBackground(background)
-  // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
-  // an older host omits the field and the luminance gate stays authoritative.
+  // Prefer the desktop’s published user override; only older hosts use the luminance-derived floor.
   const publishedFloor = normalizeTerminalContrastOverride(
     input && typeof input === 'object' ? input.minimumContrastRatio : undefined
   )
   scope.terminalMinimumContrastRatio =
     publishedFloor === null ? resolveTerminalContrastFloor(background) : publishedFloor
   if (scope.term) {
-    scope.term.options.theme = scope.terminalTheme
-    scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    // Theme assignment resets OSC palette changes; visibility recovery should repaint without reassignment.
+    if (force || themeChanged) {
+      scope.term.options.theme = scope.terminalTheme
+    }
+    if (scope.term.options.minimumContrastRatio !== scope.terminalMinimumContrastRatio) {
+      scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    }
   }
+  paintBottomRowBackdrop(scope)
 }

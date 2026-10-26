@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
@@ -64,7 +65,6 @@ function setPaneState(state: AgentStatusEntry['state']): void {
   useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
 }
 
-/** Lets a queued sweep run to completion. */
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -77,6 +77,26 @@ describe('detached Claude account-move restart', () => {
   beforeEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
     useAppStore.setState(useAppStore.getInitialState(), true)
+    // Why: switch on, a restart binds only into a pane main's layout holds.
+    provideLayoutFrameTerminalPanes({
+      holdsTerminalPane: () => false,
+      terminalTab: (worktreeId, tabId) =>
+        worktreeId === 'wt1' && tabId === 'tab-1'
+          ? {
+              id: 'tab-1',
+              kind: 'terminal',
+              entityId: 'tab-1',
+              executionHostId: 'local',
+              createdAt: 1,
+              customTitle: null,
+              color: null,
+              terminal: {
+                root: { type: 'leaf', leafId: LEAF_ID },
+                panes: [{ leafId: LEAF_ID, ptyId: OLD_PTY }]
+              }
+            }
+          : undefined
+    })
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {

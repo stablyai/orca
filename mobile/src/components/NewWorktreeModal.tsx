@@ -8,6 +8,7 @@ import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-mo
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
 import { useHostDescriptor } from '../transport/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
@@ -42,11 +43,7 @@ function serverOf(repo: MobileWorkspaceRepo): `runtime:${string}` | undefined {
 }
 
 export function NewWorktreeModal(props: NewWorktreeModalProps) {
-  // Why: each drawer opening is a fresh form session; remounting resets local
-  // form state before paint instead of clearing it in a visible-prop Effect.
-  // State, not a ref: react-native-screens freezes a blurred screen by suspending
-  // this subtree, and a counter bumped during a render React then throws away
-  // would restart the session for an opening that never committed.
+  // Remount fresh form before paint per committed opening. Use state, not render-mutated ref counter: react-freeze may discard opening renders.
   const [session, setSession] = useState({ openEpoch: 0, visible: props.visible })
   if (session.visible !== props.visible) {
     setSession({
@@ -55,11 +52,7 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
     })
   }
 
-  // Why: key the session on the HOST, never on the RpcClient object. A reconnect,
-  // forceReconnect, or foreground revival swaps that object for the same host
-  // (see useHostClient), and keying on it silently remounted this form mid-edit
-  // and threw away the picked source. Every client-scoped hook below already
-  // drops responses from a superseded client, so no remount is needed for that.
+  // Key by host, not client: reconnect swaps RpcClient without ending form session and must not erase picked source. Client-scoped hooks discard superseded responses.
   return <NewWorktreeModalContent key={`${session.openEpoch}:${props.hostId}`} {...props} />
 }
 
@@ -82,8 +75,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     hostId,
     visible
   })
-  // Why: everything about the picked repo runs where it does; the routing table keeps the
-  // desktop's own concerns (settings, accounts) on the desktop.
+  // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
@@ -99,6 +91,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const executionTarget = useNewWorkspaceExecutionTarget({
     client,
     connectionId: selectedRepoConnectionId,
+    repoId: selectedRepo?.id,
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
@@ -111,6 +104,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     selectedRepoId: selectedRepo?.id ?? null,
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
+  })
+  const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
+  useWorktreeCreateBasePrefetch({
+    client: visible ? client : null,
+    repoId: selectedRepo?.id ?? null,
+    repoIsGit: selectedRepoIsGit,
+    selection: composer.createSelection
   })
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
@@ -155,7 +155,6 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onClose
   })
 
-  const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
   const sourceAvailability: SmartModeAvailabilityInput = {
     textOnly: selectedRepo != null && !selectedRepoIsGit,
     tasksSupported,

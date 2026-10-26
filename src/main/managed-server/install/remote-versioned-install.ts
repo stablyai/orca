@@ -1,13 +1,11 @@
-// Versioned-install plumbing for orcad on a remote host: each content-hashed bundle installs
-// into its own immutable dir, so an in-memory daemon never serves new clients off overwritten
-// on-disk code.
+// Immutable version directories keep running daemons from serving clients with overwritten code.
 
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
-import { RELAY_INSTALL_LOCK_NAME } from './remote-install-lock'
+import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { remoteInstallDirName, type RemoteInstallModel } from './remote-install-model'
 import {
@@ -32,30 +30,25 @@ type RemoteInstallProbeOptions = {
   signal?: AbortSignal
 }
 
-/**
- * Read the local relay's content-hashed version (e.g. "0.1.0+0a5fe134d020") from
- * `${localRelayDir}/.version`. Throws on missing/empty so the caller can't
- * silently fall back to a path where a stale-generation daemon may be running.
- */
-export function readLocalFullVersion(localRelayDir: string): string {
-  const versionFile = join(localRelayDir, '.version')
+/** Reject missing versions instead of falling back to a path a stale-generation daemon may own. */
+export function readLocalFullVersion(localDir: string): string {
+  const versionFile = join(localDir, '.version')
   if (!existsSync(versionFile)) {
     throw new Error(
-      `Orca's local relay build is missing its version marker at ${versionFile}. ` +
+      `Orca's local server build is missing its version marker at ${versionFile}. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }
   const v = readFileSync(versionFile, 'utf-8').trim()
   if (!v) {
     throw new Error(
-      `Orca's local relay version marker at ${versionFile} is empty. ` +
+      `Orca's local server version marker at ${versionFile} is empty. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }
   return v
 }
 
-/** `${remoteHome}/.orca-remote/<prefix>-<fullVersion>` for one install model. */
 export function computeRemoteInstallDir(
   model: RemoteInstallModel,
   remoteHome: string,
@@ -73,7 +66,6 @@ export function computeRemoteInstallDir(
   )
 }
 
-/** Every artifact the model ships plus its completion sentinel; anything missing forces a re-deploy. */
 export async function isRemoteInstallComplete(
   conn: RemoteInstallTransport,
   model: RemoteInstallModel,
@@ -104,11 +96,7 @@ export async function isRemoteInstallComplete(
   }
 }
 
-/**
- * Mark the install complete, then normally release the lock. Deploy keeps the
- * lock through first launch so cross-version GC can't move the dir before daemon
- * liveness is observable.
- */
+/** Deploy retains the lock through first launch so GC cannot move slots before liveness is visible. */
 export async function finalizeInstall(
   conn: RemoteInstallTransport,
   remoteRelayDir: string,
@@ -132,10 +120,7 @@ export async function finalizeInstall(
   options?.signal?.throwIfAborted()
 }
 
-/**
- * Release the install lock without writing the completion sentinel, leaving the
- * dir as a recoverable partial the next deploy re-installs.
- */
+/** Leave incomplete installs recoverable by the next deploy. */
 export async function abandonInstall(
   conn: RemoteInstallTransport,
   remoteRelayDir: string,
@@ -148,13 +133,12 @@ export async function abandonInstall(
       if (isUnconfirmedSshCommandTermination(error)) {
         throw error
       }
-      // Not confirmed removed: the lock may remain.
       return false
     }
   )
 }
 
-/** Shell and SFTP-relative builders both go through here so their namespaces cannot drift. */
+// Shell and SFTP builders must share directory segments to prevent namespace drift.
 function remoteInstallDirSegments(
   model: RemoteInstallModel,
   fullVersion: string,
@@ -163,7 +147,7 @@ function remoteInstallDirSegments(
   const segments = [RELAY_REMOTE_DIR, remoteInstallDirName(model, fullVersion)]
   for (const segment of segments) {
     assertSafeRemotePathSegment(segment, pathFlavor)
-    // Why: the version reaches logs and diagnostics, where an embedded CR/LF can forge lines.
+    // Versions reach logs; reject CR/LF to prevent forged diagnostic lines.
     if (segment.includes('\r') || segment.includes('\n')) {
       throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
     }

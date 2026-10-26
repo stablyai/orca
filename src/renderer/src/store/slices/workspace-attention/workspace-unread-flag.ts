@@ -12,12 +12,7 @@ import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktre
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarker } from './workspace-live-markers'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
-import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
-import {
-  readCachedRuntimeEnvironmentCapability,
-  runtimeEnvironmentSupportsCapability
-} from '@/runtime/runtime-rpc-client'
-import { tryRuntimeTargetForWorktreeOwner } from '../worktrees/listing/worktree-owner-target'
+import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
 
 // The persisted workspace flag `isUnread`. Only the workspace-attention module writes it.
 
@@ -30,48 +25,44 @@ export function markWorkspaceUnreadFlag(
     raiseWorkspaceUnreadFlag(set, get, worktreeId)
     return
   }
-  // Switch point: the owning host raises the flag from the same news, unless it is older.
-  void ownerRaisesUnreadFlag(get(), worktreeId).then((ownerRaises) => {
-    if (!ownerRaises) {
-      raiseWorkspaceUnreadFlag(set, get, worktreeId)
-    }
-  })
-}
-
-/**
- * Whether the owning host raises the flag itself. A local owner runs this build (main, its SSH
- * hosts, or the host that served the browser client). A paired server answers by capability; an
- * unreadable status raises here, so no flag is lost.
- */
-async function ownerRaisesUnreadFlag(state: AppState, worktreeId: string): Promise<boolean> {
+  // Capture the row’s host before async owner check: same-ID folder focus may move meanwhile. Current owners raise flags; legacy owners need renderer fallback.
+  const state = get()
   const workspaceScope = parseWorkspaceKey(worktreeId)
   const folderRow =
     workspaceScope?.type === 'folder'
       ? folderRowToMark(state, worktreeId, workspaceScope.folderWorkspaceId)
       : undefined
-  const target = tryRuntimeTargetForWorktreeOwner(
-    state,
-    worktreeId,
-    folderRow ? getFolderWorkspaceHostId(folderRow, state.projectGroups) : undefined
-  )
-  if (!target) {
-    return false
+  const folderHostId = folderRow
+    ? getFolderWorkspaceHostId(folderRow, state.projectGroups)
+    : undefined
+  const pending = pendingRaises.get(worktreeId) ?? { raises: 0, reads: 0 }
+  pendingRaises.set(worktreeId, pending)
+  pending.raises += 1
+  const readsBefore = pending.reads
+  void ownerHostOwnsSidebarInputs(state, worktreeId, folderHostId)
+    .then((ownerRaises) => {
+      // A read while the owner was being asked already covers this news.
+      if (!ownerRaises && pending.reads === readsBefore) {
+        raiseWorkspaceUnreadFlag(set, get, worktreeId, folderHostId)
+      }
+    })
+    .finally(() => {
+      pending.raises -= 1
+      if (pending.raises === 0) {
+        pendingRaises.delete(worktreeId)
+      }
+    })
+}
+
+/** Track pending raises/reads by workspace: group-hosted folder reads can name local while owner lookup names another host, so per-host counters would miss reads. */
+const pendingRaises = new Map<string, { raises: number; reads: number }>()
+
+/** A read of the workspace by any path; a raise still waiting on its owner check drops. */
+export function noteWorkspaceRead(worktreeId: string): void {
+  const pending = pendingRaises.get(worktreeId)
+  if (pending) {
+    pending.reads += 1
   }
-  if (target.kind === 'local') {
-    return true
-  }
-  // Why the cached answer first: a per-raise probe would delay the flag past a screen arrival.
-  const cached = readCachedRuntimeEnvironmentCapability(
-    target.environmentId,
-    WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY
-  )
-  if (cached !== null) {
-    return cached
-  }
-  return runtimeEnvironmentSupportsCapability(
-    target.environmentId,
-    WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY
-  ).catch(() => false)
 }
 
 /** Same-id folder rows: the on-screen host's, else the first. */
@@ -80,7 +71,15 @@ function folderRowToMark(
   worktreeId: string,
   folderWorkspaceId: string
 ): FolderWorkspace | undefined {
-  const host = onScreenHostId(state, worktreeId)
+  return folderRowOnHost(state, folderWorkspaceId, onScreenHostId(state, worktreeId))
+}
+
+/** The folder row on `host`, or the first same-id row when no host is named. */
+function folderRowOnHost(
+  state: AppState,
+  folderWorkspaceId: string,
+  host: ExecutionHostId | null
+): FolderWorkspace | undefined {
   return state.folderWorkspaces.find(
     (workspace) =>
       workspace.id === folderWorkspaceId &&
@@ -91,14 +90,18 @@ function folderRowToMark(
 function raiseWorkspaceUnreadFlag(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,
-  worktreeId: string
+  worktreeId: string,
+  /** The folder row's host when the news arrived; unset picks the on-screen row now. */
+  folderHostId?: ExecutionHostId
 ): void {
   const stamp = { lastActivityAt: Date.now() }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     const folderWorkspaceId = workspaceScope.folderWorkspaceId
     const state = get()
-    const marked = folderRowToMark(state, worktreeId, folderWorkspaceId)
+    const marked = folderHostId
+      ? folderRowOnHost(state, folderWorkspaceId, folderHostId)
+      : folderRowToMark(state, worktreeId, folderWorkspaceId)
     if (!marked || marked.isUnread) {
       return
     }
@@ -112,7 +115,9 @@ function raiseWorkspaceUnreadFlag(
     void get().updateFolderWorkspace(
       folderWorkspaceId,
       { isUnread: true, ...stamp },
-      { executionHostId: getFolderWorkspaceHostId(marked, state.projectGroups) }
+      {
+        executionHostId: getFolderWorkspaceHostId(marked, state.projectGroups)
+      }
     )
     return
   }
@@ -164,6 +169,7 @@ export function clearWorkspaceUnreadFlag(
   /** Folder rows share an id across hosts: the on-screen host's row, or null for every row. */
   executionHostId?: ExecutionHostId | null
 ): void {
+  noteWorkspaceRead(worktreeId)
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     const folderWorkspaceId = workspaceScope.folderWorkspaceId
@@ -232,12 +238,7 @@ export function clearWorkspaceUnreadFlag(
   )
 }
 
-/**
- * The flag follows its markers — a read or removal clears it once no live marker remains.
- * Why every same-id folder row without a host: tabs are keyed by workspace id, not host, so a
- * marker can't be attributed to one host's row; a row is lowered only when the shared id has no
- * live marker at all, so purging host A's tabs lowers host B only if B holds none either.
- */
+/** Lower flags only after the last live marker disappears. Unscoped same-ID folders share workspace-keyed markers, so lower every row only when none remain. */
 export function settleWorkspaceUnreadFlag(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,

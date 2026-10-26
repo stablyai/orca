@@ -7,7 +7,7 @@ import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
-export type RemoteDirEntry = {
+type RemoteDirEntry = {
   name: string
   isDirectory: boolean
 }
@@ -20,10 +20,10 @@ export type RemoteBrowseResult = {
 
 const SSH_BROWSE_TIMEOUT_MS = 15_000
 
-// Why: 127 = POSIX "command not found" (locale-independent) — the Windows fallback never ran, so the original POSIX error is the real one.
+// Exit 127 means PowerShell never ran; keep the original POSIX failure.
 const POSIX_COMMAND_NOT_FOUND_EXIT = 127
 
-// Carries the raw exit code so the fallback can distinguish 127 (no powershell.exe → not Windows) from a genuine PowerShell error.
+// Preserve exit status so fallback distinguishes missing PowerShell from its own actual failure.
 class RemoteBrowseError extends Error {
   constructor(
     message: string,
@@ -34,7 +34,7 @@ class RemoteBrowseError extends Error {
   }
 }
 
-// Why: relay fs.readDir needs workspace-root ACLs that don't exist until a repo is added, so browse over raw SSH exec.
+// Browse via raw exec before repo-add because relay fs.readDir needs workspace-root ACLs.
 export async function browseSshDirectory(
   manager: SshConnectionManager | null,
   targetId: string,
@@ -51,14 +51,14 @@ export async function browseSshDirectory(
   try {
     return await browseWithPosixShell(conn, dirPath)
   } catch (posixError) {
-    // Why: only a RemoteBrowseError (ran, non-zero exit) signals a Windows shell; don't retry transport errors/timeouts as Windows.
+    // Only a host-answered nonzero exit permits Windows fallback; never reinterpret lost contact as host dialect.
     if (!(posixError instanceof RemoteBrowseError)) {
       throw posixError
     }
     try {
       return await browseWithWindowsPowerShell(conn, dirPath)
     } catch (fallbackError) {
-      // Why: exit 127 (no powershell.exe) → host isn't Windows, surface the original POSIX failure; otherwise PowerShell's own error is the real cause.
+      // Missing PowerShell preserves POSIX failure; otherwise surface the actual PowerShell error.
       throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
     }
   }
@@ -74,8 +74,7 @@ function browseWithPosixShell(
   conn: SshBrowseConnection,
   dirPath: string
 ): Promise<RemoteBrowseResult> {
-  // Why: `command ls` skips aliases; capturing it keeps a failing ls exiting non-zero (not looking empty).
-  // The trailing / comes from `[ -d ]`, which follows symlinks (ls -p doesn't); broken links and loops test false.
+  // Bypass ls aliases and propagate listing failure; test -d follows valid directory symlinks unlike ls -p.
   return runBrowseCommand(
     conn,
     `cd ${shellEscape(dirPath)} && pwd && ${POSIX_LIST_WITH_DIR_MARKERS}`,
@@ -99,12 +98,12 @@ function browseWithWindowsPowerShell(
 
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    // Why: PowerShell 5.1 emits redirected stdout in the OEM code page; pin UTF-8 so non-ASCII names aren't mojibake.
+    // Pin redirected UTF-8; PowerShell 5.1 defaults to OEM encoding.
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     `$dir = ${powerShellPathExpression(dirPath)}`,
     'Set-Location -LiteralPath $dir',
     '$resolved = (Get-Location).ProviderPath',
-    // Why: the renderer's parentPath/joinPath split only on `/`, so emit a forward-slash resolvedPath while keeping native $resolved for Get-ChildItem.
+    // Emit renderer-friendly forward slashes but retain native resolved path for Get-ChildItem.
     "Write-Output ($resolved -replace '\\\\', '/')",
     'Get-ChildItem -LiteralPath $resolved -Force | ForEach-Object {',
     "  if ($_.PSIsContainer) { Write-Output ($_.Name + '/') } else { Write-Output $_.Name }",
@@ -120,7 +119,7 @@ async function runBrowseCommand(
   pathFlavor: FilesystemPathFlavor,
   options?: SshExecOptions
 ): Promise<RemoteBrowseResult> {
-  // Why: login-shell rc output would otherwise be read as the resolved path.
+  // Fence startup stdout so login banners cannot become resolved paths.
   const fence = options?.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
   const remoteCommand = fence?.command ?? command
   const channel = options ? await conn.exec(remoteCommand, options) : await conn.exec(remoteCommand)
@@ -161,12 +160,10 @@ async function runBrowseCommand(
         } else if (typeof closable.destroy === 'function') {
           closable.destroy()
         }
-      } catch {
-        /* best effort */
-      }
+      } catch {}
     }
     const onTimeout = (): void => {
-      // Why: no relay deadline exists during add-project browsing, so bound this raw exec channel or Add Remote Project hangs forever.
+      // No relay deadline exists before project-add; bound raw exec so browsing cannot hang forever.
       rejectOnce(new Error('Remote directory listing timed out'))
       closeChannel()
     }
@@ -185,7 +182,7 @@ async function runBrowseCommand(
     const onStderrData = (data: Buffer): void => {
       stderr += data.toString()
     }
-    // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
+    // Capture exit before close to distinguish failed ls plus successful pwd from empty directory.
     const onExit = (code: number | null): void => {
       exitObserved = true
       exitCode = code
@@ -194,12 +191,12 @@ async function runBrowseCommand(
       rejectOnce(error)
     }
     const onClose = (code?: number | null): void => {
-      // Why: ssh2 can emit `exit` before `exec` resolves; `close` repeats the status.
+      // ssh2 may emit exit before exec resolves; close repeats status.
       if (!exitObserved && typeof code === 'number') {
         exitCode = code
       }
       stdout = fence?.readStdout(stdout) ?? stdout
-      // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
+      // Missing exit status is unknown, never successful empty directory.
       if (exitCode !== 0) {
         const msg =
           stderr.trim() ||
@@ -214,7 +211,7 @@ async function runBrowseCommand(
         return
       }
 
-      // Why: Windows OpenSSH exec emits CRLF; split on \r?\n so a trailing \r doesn't defeat the endsWith('/') dir check or leave a stray CR in names.
+      // Split Windows CRLF so carriage returns cannot corrupt names or directory suffix checks.
       const lines = stdout.trim().split(/\r?\n/)
       if (lines.length === 0) {
         rejectOnce(new Error('Empty response from remote'))
@@ -236,7 +233,6 @@ async function runBrowseCommand(
         }
       }
 
-      // Sort: directories first, then natural name order (matches the Explorer)
       sortDirEntries(entries)
 
       resolveOnce({ entries, resolvedPath, pathFlavor })
@@ -246,7 +242,7 @@ async function runBrowseCommand(
     channel.stderr.on('data', onStderrData)
     channel.on('exit', onExit)
     channel.on('close', onClose)
-    // Why: SSH exec streams emit `error` on transport loss; without a scoped listener a disappearing remote can become process-fatal.
+    // Own channel/stderr errors so disappearing hosts cannot crash main.
     channel.on('error', onError)
     channel.stderr.on('error', onError)
     timeout = setTimeout(onTimeout, SSH_BROWSE_TIMEOUT_MS)
@@ -256,12 +252,12 @@ async function runBrowseCommand(
   })
 }
 
-// Why: exit 127 means powershell.exe wasn't found — the host isn't Windows, so surface the original POSIX failure instead.
+// PowerShell-not-found means the Windows fallback never ran.
 function isPosixCommandNotFound(error: unknown): boolean {
   return error instanceof RemoteBrowseError && error.exitCode === POSIX_COMMAND_NOT_FOUND_EXIT
 }
 
-// Why: single-quote to block shell injection; ~ needs $HOME since single quotes suppress tilde expansion.
+// Quote against injection, substituting HOME explicitly because single quotes suppress tilde expansion.
 function shellEscape(s: string): string {
   if (s === '~') {
     return '"$HOME"'
@@ -282,7 +278,7 @@ function powerShellPathExpression(s: string): string {
   return powerShellLiteral(normalizeWindowsDrivePath(s))
 }
 
-// Why: renderer's POSIX path rebuild yields '/C:/…' or bare 'C:' (drive-relative), both mis-resolved by Set-Location; re-root to a proper drive path.
+// Normalize renderer /C:/ and drive-relative C: to rooted Windows paths before Set-Location.
 function normalizeWindowsDrivePath(s: string): string {
   const stripped = s.replace(/^\/(?=[A-Za-z]:(?:[/\\]|$))/, '')
   return /^[A-Za-z]:$/.test(stripped) ? `${stripped}/` : stripped

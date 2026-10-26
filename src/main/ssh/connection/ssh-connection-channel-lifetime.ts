@@ -16,7 +16,7 @@ function isTrackableChannel(value: unknown): value is TrackableChannel {
   )
 }
 
-export type SshChannelErrorReporter = (error: Error) => void
+type SshChannelErrorReporter = (error: Error) => void
 
 const reportOrphanChannelError: SshChannelErrorReporter = (error) => {
   console.warn(`[ssh] Unhandled SSH channel error: ${error.message}`)

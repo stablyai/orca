@@ -4,7 +4,7 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime-pty-id'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { PtyTransport } from './pty-transport-types'
 
@@ -122,6 +122,6 @@ export function resolveTerminalPasteRuntimeEnvironmentId(
   const ptyId = transport?.getPtyId() ?? null
   return (
     (ptyId ? parseRemoteRuntimePtyId(ptyId)?.environmentId : null) ??
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
 }

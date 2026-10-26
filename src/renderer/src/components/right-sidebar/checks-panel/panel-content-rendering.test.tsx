@@ -115,6 +115,7 @@ describe('checks panel concrete content', () => {
       activeWorktreeId: 'worktree-1',
       agentComposerState: null,
       aiActionDisabledReason: undefined,
+      fixChecksDisabledReason: undefined,
       canTargetPRComments: false,
       checks: [],
       checksError: null,

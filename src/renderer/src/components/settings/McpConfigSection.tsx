@@ -39,6 +39,7 @@ import {
 } from '../../../../shared/file-write-disk-precondition'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -58,9 +59,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const repos = useAppStore((state) => state.repos)
   const allWorktreesForRepo = useAppStore(
-    (state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES
+    (state) => selectWorktreesByRepo(state)[repo.id] ?? EMPTY_WORKTREES
   )
-  // Why: a path only means something on the host that owns this repo row, not the focused one.
+  // Paths belong to the repo row’s host, independent of focused host.
   const repoHostId = getRepoExecutionHostId(repo)
   const repoHost = parseExecutionHostId(repoHostId)
   const runtimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
@@ -90,7 +91,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       if (active) {
         return active
       }
-      // Why: an active row owned by another host must not lend this repo its worktree id.
+      // Another host’s active row cannot lend this repo its worktree ID.
       if (!allWorktreesForRepo.some((worktree) => worktree.id === activeWorktreeId)) {
         return { id: activeWorktreeId, path: repo.path }
       }
@@ -253,9 +254,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             runtimeEnvironmentId
           )
         : {}
-      // Why: v1 only creates the root workspace config so we do not need to
-      // guess per-agent directory layouts or mutate agent-specific files.
-      // Why: the listing can be stale; never replace a config something else just created.
+      // Create only root workspace config; avoid agent-specific layouts and refuse to overwrite files created since the listing.
       assertFileWriteApplied(
         await writeRuntimeFile(
           { ...fileContext, ...sshExpectation },

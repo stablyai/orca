@@ -21,6 +21,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type SuccessorState = Pick<
   AppState,
@@ -47,15 +48,14 @@ function findListedRow(
   hostId: ExecutionHostId | null
 ) {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows = state.worktreesByRepo[repoId] ?? []
+  const rows = selectWorktreesByRepo(state)[repoId] ?? []
   if (!hostId) {
     return rows.find((row) => row.id === worktreeId)
   }
-  return findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, hostId)
+  return findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, hostId)
 }
 
-// Why: a per-workspace-env's runtime-owned SSH target is torn down with its workspace, so a sibling
-// hosted on that target would land on a dead runtime and auto-create a terminal that never spawns.
+// Per-workspace runtimes die with their workspace; choosing a sibling on that host would spawn a terminal on a dead runtime.
 function isHostedOnRuntimeOwnedSshTarget(
   worktree: Pick<Worktree, 'hostId' | 'repoId'>,
   repoById: Map<string, Repo>
@@ -84,7 +84,7 @@ export function pickActiveWorktreeSuccessor(
   removed: RemovedActiveRow
 ): Worktree | null {
   const repoById = getRepoMapFromState(state)
-  const siblings = (state.worktreesByRepo[removed.repoId] ?? []).filter(
+  const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
@@ -122,14 +122,7 @@ function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
   )
 }
 
-/**
- * When the workspace the user is on leaves the list — any delete, a partly failed one, the CLI,
- * `git worktree remove`, another client — focus its successor instead of the empty landing screen.
- *
- * Removal paths clear the selection and drop the row in either order (a process exit can empty the
- * workspace first; startup drops rows before its purge), so this remembers the last listed active
- * row and hands off once the selection is empty and that row is gone.
- */
+/** Focus a successor once the active row is gone and selection is empty. Remember the last listed active row because removal and selection clearing can arrive in either order. */
 export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () => void {
   let witness: RemovedActiveRow | null = null
   let generation = 0
@@ -168,7 +161,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     if (
       next.activeWorktreeId === prev.activeWorktreeId &&
       next.activeWorkspaceExecutionHostId === prev.activeWorkspaceExecutionHostId &&
-      next.worktreesByRepo === prev.worktreesByRepo &&
+      selectWorktreesByRepo(next) === selectWorktreesByRepo(prev) &&
       next.activeView === prev.activeView &&
       next.activePendingCreationId === prev.activePendingCreationId
     ) {
@@ -213,7 +206,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     }
     const removed = witness
     const scheduled = ++generation
-    // Why a microtask: let the removal's own synchronous follow-up writes land first, then re-check.
+    // Let removal’s synchronous follow-up writes finish before rechecking.
     queueMicrotask(() => {
       const state = store.getState()
       if (

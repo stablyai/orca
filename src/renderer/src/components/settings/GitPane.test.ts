@@ -152,7 +152,7 @@ describe('GitPane', () => {
     expect(markup).toContain(
       translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
     )
-    expect(markup).toContain(
+    expect(markup).not.toContain(
       translate('auto.components.settings.GitPane.untrackedFirst', 'Untracked first')
     )
   })

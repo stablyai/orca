@@ -101,9 +101,10 @@ it('attaches Pi at spawn and holds the opening send until the provider answers i
   script.releaseHandshake()
   await vi.waitFor(() => expect(script.prompts()).toEqual(['hello while Pi is starting']))
   await vi.waitFor(() =>
-    expect(
-      peekOpenedAgentSessionRecordStore()?.getRecord(HOST_TEST_SESSION)?.options
-    ).toBeUndefined()
+    expect(peekOpenedAgentSessionRecordStore()?.getRecord(HOST_TEST_SESSION)?.options).toEqual({
+      model: 'scripted/model-1',
+      effort: 'medium'
+    })
   )
   await stopStructuredAgentSessionRuntime()
   expect(script.closes()).toBe(1)

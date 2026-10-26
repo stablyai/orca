@@ -17,13 +17,10 @@ import {
 import { agentStatusSubjectsEqual } from './agent-status-subject'
 import { groupedBy } from './grouped-by'
 
-/** What a surface reads about one child: a read-only projection of the host's record.
- *  Host bookkeeping (residency, invocation history, provenance, aliases) never travels. A view
- *  from another build is decoded permissively or behind a capability, never by the record codec. */
+/** Publish read-only child views without host bookkeeping. Decode foreign versions permissively or gate by capability, never with the strict record codec. */
 export type AgentChildWorkView = {
   id: AgentChildWorkId
-  /** The id today's wire names this child by (`tasks[].id`, `subagents[].id`). Absent when the
-   *  host holds no provider handle for the current invocation; legacy shapes then omit the row. */
+  /** Provider ID for tasks/subagents; absent without a current-invocation handle, so legacy projections omit the row. */
   providerId?: string
   kind: AgentChildWorkKind
   name?: string
@@ -50,8 +47,7 @@ export type AgentChildWorkViewAlias = Pick<
   'childWorkId' | 'aliasKind' | 'alias' | 'fence'
 >
 
-// Stable handles before per-call ones: a spawn's tool id changes on every resume. Keyed by kind so
-// a new alias kind cannot compile without a rank (an unranked kind would lose its row's providerId).
+// Rank stable handles before per-call IDs changed by resume; require a rank for every alias kind to preserve providerId.
 const PROVIDER_ID_ALIAS_RANK: Record<AgentChildWorkAliasKind, number> = {
   task_id: 0,
   thread_id: 1,

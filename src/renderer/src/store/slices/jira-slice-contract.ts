@@ -9,7 +9,7 @@ import type {
   JiraIssueListFilters,
   JiraSiteSelection,
   JiraViewer
-} from '../../../../shared/jira-types'
+} from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export type JiraReadOptions = {

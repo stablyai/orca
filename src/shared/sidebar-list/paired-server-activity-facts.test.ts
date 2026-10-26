@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { buildPairedServerActivityFacts } from './paired-server-activity-facts'
 import { normalizePairedServerRow, type PairedServerWorkspaceRow } from './paired-server-rows'
+import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 
 const HOST = 'runtime:env-1'
 
@@ -50,10 +51,25 @@ describe('paired server activity facts', () => {
       serverRow('idle', { status: 'done' })
     ])
     expect(facts).toEqual({
-      live: { terminal: 'live', browser: false, structuredChat: false, agent: null },
-      lost: { terminal: 'unverifiable', browser: false, structuredChat: false, agent: null },
-      agent: { terminal: null, browser: false, structuredChat: false, agent: 'monitoring' },
-      asks: { terminal: 'live', browser: false, structuredChat: false, agent: 'permission' }
+      [`${HOST}|live`]: { terminal: 'live', browser: false, structuredChat: false, agent: null },
+      [`${HOST}|lost`]: {
+        terminal: 'unverifiable',
+        browser: false,
+        structuredChat: false,
+        agent: null
+      },
+      [`${HOST}|agent`]: {
+        terminal: null,
+        browser: false,
+        structuredChat: false,
+        agent: 'monitoring'
+      },
+      [`${HOST}|asks`]: {
+        terminal: 'live',
+        browser: false,
+        structuredChat: false,
+        agent: 'permission'
+      }
     })
   })
 
@@ -61,7 +77,7 @@ describe('paired server activity facts', () => {
     const { facts } = build([serverRow('live', { liveTerminalCount: 1, status: 'active' })], {
       freshness: 'unverifiable'
     })
-    expect(facts.live?.terminal).toBe('unverifiable')
+    expect(facts[composeWorktreeHostIdentity(HOST, 'live')]?.terminal).toBe('unverifiable')
   })
 
   it("adds the browser tabs this desktop's session holds in a server workspace", () => {
@@ -87,12 +103,29 @@ describe('paired server activity facts', () => {
       }
     })
     expect(asked).toEqual([HOST])
-    expect(facts.browsing).toEqual({
+    expect(facts[composeWorktreeHostIdentity(HOST, 'browsing')]).toEqual({
       terminal: null,
       browser: true,
       structuredChat: false,
       agent: null
     })
+  })
+
+  it('keeps each server’s copy of a same-id workspace under its own key', () => {
+    const other = normalizePairedServerRow('runtime:env-2', {
+      worktreeId: 'same',
+      repoId: 'repo',
+      liveTerminalCount: 0,
+      status: 'inactive'
+    })
+    const facts = buildPairedServerActivityFacts(
+      [
+        { hostId: HOST, freshness: 'live', rows: [serverRow('same', { liveTerminalCount: 1 })] },
+        { hostId: 'runtime:env-2', freshness: 'live', rows: other ? [other] : [] }
+      ],
+      () => null
+    )
+    expect(Object.keys(facts)).toEqual([`${HOST}|same`])
   })
 
   it('an older server that sends no counts reports nothing', () => {

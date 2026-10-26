@@ -108,7 +108,7 @@ export function useWorktreeCardLifecycleEffects({
     hostedReviewExactKey
   ])
 
-  // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
+  // Poll issues only while visible; hidden metadata does not justify GitHub calls.
   useEffect(() => {
     // Why: per-card decoration lookups from the browser flood the RPC path at paired-web startup; the host is authoritative.
     if (

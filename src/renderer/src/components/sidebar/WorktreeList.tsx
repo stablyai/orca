@@ -35,6 +35,10 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspace-record-selectors'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -46,7 +50,7 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCancel?: () => void
 }
 
-// Switch point: this host's window lists main's inputs; a paired web client builds its own view.
+// Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
 const useSidebarListModel =
   ORCA_SIDEBAR_INPUTS_IS_MAIN && !isPairedWebClientWindow()
     ? useMainSidebarListModel
@@ -61,14 +65,13 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
 }: WorktreeListProps) {
-  // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
-  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
@@ -92,7 +95,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(
@@ -138,6 +141,10 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
+  const visibleProjectRepoIdsBySection = useMemo(
+    () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
+    [rowModel.occurrencePlan]
+  )
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
@@ -151,7 +158,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
-    // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
+    // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
   }, [])
 
@@ -218,7 +225,7 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
-  // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
+  // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
   }
@@ -244,11 +251,13 @@ const WorktreeList = React.memo(function WorktreeList({
         onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       />
       <VirtualizedWorktreeViewport
-        // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
+        // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
+        hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
-        // Why: full-page nav views aren't scoped to a worktree, so no sidebar card should look selected.
+        visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
+        // Full-page Tasks/Activity views have no selected worktree card.
         activeWorktreeId={
           activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
         }

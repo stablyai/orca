@@ -1,10 +1,4 @@
-// A layout-owner build's drift check: every tab change reaches main as a command and main keeps
-// its own layout over a window save, so a save whose layout differs from main's model shows a
-// change main never got as a command. Report-only, and only when its log is set (evidence runs);
-// it never alters, fails or delays the write. Records main keeps through its own writes (pane
-// bindings, resume records, default-tab marks, closed-tab records, terminal row owners,
-// client-hosted browser pages, the topology revision) are not compared: a save that has not
-// caught up with them asks main for nothing. Deleted with the old path (phase F).
+// Optional report-only drift logging excludes runtime-owned fields that legitimately outrun renderer snapshots.
 
 import { appendFileSync } from 'node:fs'
 import {
@@ -26,19 +20,14 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { droppedTabBarEntries, terminalTabBarEntries } from './window-save-raw-session-divergence'
 import { compactFieldChanges, type FieldChange } from './window-save-divergence-values'
 
-/** Set by evidence runs: each divergence is appended there as one JSON line. */
 const LOG_PATH_ENV = 'ORCA_LAYOUT_SAVE_DIVERGENCE_LOG'
 const MAX_PATHS = 12
-/** A pane's terminal binding and resume record: main writes them on every spawn and capture. */
-const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping'])
+const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping', 'resume'])
 
-/** `values`: main's and the save's values of each changed field, content left out. */
 export type WindowSaveDivergence = { workspace: string; paths: string[]; values?: FieldChange[] }
 
-/** One report path, with the field values behind a `changed` one. */
 type Difference = { path: string; changes?: (FieldChange & { kind: string })[] }
 
-/** Main's layout model of one partition, as the session holds it. */
 export function layoutModelOf(
   session: WorkspaceSessionState | null | undefined,
   hostId: ExecutionHostId
@@ -48,7 +37,6 @@ export function layoutModelOf(
     : null
 }
 
-/** The fields two copies of one record differ in. */
 function changedFields(before: unknown, after: unknown): string[] {
   if (typeof before !== 'object' || typeof after !== 'object' || !before || !after) {
     return stableJson(before ?? null) === stableJson(after ?? null) ? [] : ['value']
@@ -66,7 +54,6 @@ function fieldOf(item: unknown, field: string): unknown {
     : Object.entries(item).find(([key]) => key === field)?.[1]
 }
 
-/** Values logged beside a changed record's own fields, by its id and changed fields. */
 type Alongside = (id: string, fields: string[]) => Omit<FieldChange, 'record'>[]
 
 function diffKeyed(
@@ -110,7 +97,6 @@ function listById<T>(items: readonly T[] | undefined, id: (item: T) => string) {
   return new Map<string, unknown>((items ?? []).map((item) => [id(item), item]))
 }
 
-/** A terminal tab's panes in tree order with the terminal each is bound to, null while unbound. */
 function paneBindings(workspace: WorkspaceLayout, tabId: string) {
   const tab = workspace.tabs.find((candidate) => candidate.id === tabId)
   const leafIds: string[] = []
@@ -138,7 +124,7 @@ function bindingOnly(leaf: unknown): boolean {
   )
 }
 
-/** Each copy's panes without those whose only change is their binding, first or last included. */
+/** Exclude binding-only changes from both pane sets. */
 function unboundLeaves(
   before: Readonly<Record<string, unknown>> | undefined,
   after: Readonly<Record<string, unknown>> | undefined
@@ -161,10 +147,7 @@ function unboundLeaves(
   return { was, now }
 }
 
-/**
- * Whether a workspace holds anything. The Loader makes one for every key a save names and places a
- * stored closed-tab record by worktree id into it, so neither makes one by itself.
- */
+/** Loader-created placeholders and closed-tab evidence alone do not establish workspace content. */
 function hasContent(workspace: WorkspaceLayout | undefined): workspace is WorkspaceLayout {
   return Boolean(
     workspace &&
@@ -177,7 +160,7 @@ function hasContent(workspace: WorkspaceLayout | undefined): workspace is Worksp
   )
 }
 
-/** A lone group with no stored tree is that group's leaf, as main's own save writes it. */
+/** Reconstruct a missing lone-group tree like persistence does. */
 function groupTreeOf(workspace: WorkspaceLayout): TabGroupLayoutNode | null {
   const [only, ...rest] = workspace.groups
   return (
@@ -185,7 +168,6 @@ function groupTreeOf(workspace: WorkspaceLayout): TabGroupLayoutNode | null {
   )
 }
 
-/** Where one workspace of two copies of main's model differs; empty when nothing. */
 function diffWorkspaceLayouts(
   before: WorkspaceLayout | undefined,
   after: WorkspaceLayout | undefined
@@ -206,7 +188,7 @@ function diffWorkspaceLayouts(
       'tab',
       listById(before.tabs, (t) => t.id),
       listById(after.tabs, (t) => t.id),
-      // Bindings are main's to write, so they never make a path; they show who holds a changed pane.
+      // Bindings identify changed panes but must not create drift paths themselves.
       (id, fields) =>
         fields.includes('panes')
           ? [{ field: 'ptys', before: paneBindings(before, id), after: paneBindings(after, id) }]
@@ -244,10 +226,7 @@ function diffWorkspaceLayouts(
   return paths
 }
 
-/**
- * Each workspace whose part of main's model differs between two copies of one partition, plus
- * `rawPaths`: what only the stored session itself shows, by workspace.
- */
+/** Include raw-session differences hidden by layout normalization. */
 export function windowSaveDivergences(
   was: WorkspaceLayoutModel | null,
   now: WorkspaceLayoutModel | null,
@@ -258,8 +237,6 @@ export function windowSaveDivergences(
     ...rawPaths.keys()
   ])
   const result: WindowSaveDivergence[] = []
-  // Ignored, as main's own writes: pane bindings, resume records, default-tab marks, closed-tab records, row owners,
-  // clientHostedBrowserPagesByWorkspace and the topology revision.
   for (const workspace of workspaces) {
     const differences: Difference[] = [
       ...diffWorkspaceLayouts(was?.workspaces[workspace], now?.workspaces[workspace]),
@@ -293,11 +270,7 @@ function report(source: string, partition: ExecutionHostId, divergence: WindowSa
   }
 }
 
-/**
- * Reports where the window's `save` (a whole session, or a patch laid over `stored`) differs from
- * main's layout model of `stored`. A paired server's partition is skipped: its layout is the
- * server's, mirrored by the window. Nothing here can fail the save: errors are only logged.
- */
+/** Compare without affecting saves; paired-server partitions retain server-owned layout authority. */
 export function reportWindowSaveDrift(
   stored: WorkspaceSessionState,
   save: WorkspaceSessionState,

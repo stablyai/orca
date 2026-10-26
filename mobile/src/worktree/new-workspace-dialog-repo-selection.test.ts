@@ -37,6 +37,14 @@ describe('mobile new workspace dialog repo selection', () => {
         activeRepoId: 'active'
       })
     ).toBe('draft')
+    expect(
+      resolveMobileNewWorkspaceDialogRepoId({
+        eligibleRepos,
+        draftRepoId: 'missing',
+        initialRepoId: 'initial',
+        activeRepoId: 'active'
+      })
+    ).toBe('initial')
   })
 
   it('uses the last visited repo as the active repo before falling back', () => {

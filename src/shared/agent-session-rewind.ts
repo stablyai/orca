@@ -4,7 +4,12 @@ import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
 } from './agent-session-journal-schemas'
-import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from './agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 
 export const AGENT_SESSION_REWIND_REASONS = [
@@ -47,6 +52,19 @@ export const AgentSessionRewindRecordSchema = z.object({
   sequence: z.number().int().nonnegative().optional(),
   /** Written by older builds only, as is `retained`: rewind now derives both from the journal. */
   hydrationVerified: z.boolean().optional(),
+  // A provider that rewinds by forking: the session the chat continues in, copied from `sourceSessionId`
+  // through `throughEntryId` (absent: nothing kept). Older records defer the copy to launch.
+  providerFork: z
+    .object({
+      sessionId: Key,
+      sourceSessionId: Key,
+      throughEntryId: Key.optional(),
+      materialized: z.boolean().optional(),
+      resumeCursor: Key.optional(),
+      // The chat's session when it was rewound; a later head means the fork no longer applies.
+      replacesSessionId: Key
+    })
+    .optional(),
   reason: z.string().min(1).max(512).optional(),
   retained: z
     .array(
@@ -69,6 +87,58 @@ export const AgentSessionRewindRecordSchema = z.object({
     .optional()
 })
 export type AgentSessionRewindRecord = z.infer<typeof AgentSessionRewindRecordSchema>
+export type AgentSessionRewindFork = NonNullable<AgentSessionRewindRecord['providerFork']>
+
+// Accepted messages keep Orca's key until a rewind rebuilds the epoch with provider keys.
+export function savedRewindKeys(submissions: readonly AgentJournalSubmission[]) {
+  const providerKeys = new Map<string, string>()
+  const omitted = new Set<string>()
+  for (const submission of submissions) {
+    const key = agentJournalSubmissionKey(submission.clientMessageId)
+    providerKeys.set(key, key)
+    if (isQueuedAgentJournalSubmission(submission) || submission.dispatchState === 'rejected') {
+      omitted.add(key)
+    } else if (submission.dispatchState === 'accepted' && submission.providerItemId) {
+      providerKeys.set(key, submission.providerItemId)
+    }
+  }
+  const providerKey = (itemId: string) => providerKeys.get(itemId) ?? itemId
+  return {
+    providerKey,
+    omitted,
+    hasSubmission: (itemId: string) => providerKeys.has(itemId),
+    nativeIdentity: (itemId: string) => {
+      const key = parseAgentJournalItemKey(providerKey(itemId))
+      return key?.provider === 'claude' || key?.provider === 'codex' ? key : null
+    }
+  }
+}
+
+/** Rewind whole turns only: mid-turn sends have different provider/journal order. Read turnOpener from the turn record, matching restored-history scope. */
+export function isAgentSessionRewindTarget(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
+  turnOpener: (turnItemId: string) => string | undefined
+): boolean {
+  if (item.body.kind !== 'message' || item.body.role !== 'user') {
+    return false
+  }
+  return (
+    item.turnScope?.kind !== 'unknown' &&
+    (item.turnScope?.kind !== 'turn' || turnOpener(item.turnScope.turnItemId) === item.itemId)
+  )
+}
+
+/** Apply the owed fork while the head is the rewound session or its unwritten fork. Include prepared recovery so early launch cannot resume the old conversation. */
+export function pendingAgentSessionRewindFork(
+  rewind: AgentSessionRewindRecord | undefined,
+  headNativeId: string | undefined
+): AgentSessionRewindFork | null {
+  const fork = rewind?.providerFork
+  if (!fork || rewind.phase === 'refused') {
+    return null
+  }
+  return headNativeId === fork.replacesSessionId || headNativeId === fork.sessionId ? fork : null
+}
 export const isAgentSessionRewindRecord = (value: unknown): value is AgentSessionRewindRecord =>
   AgentSessionRewindRecordSchema.safeParse(value).success
 

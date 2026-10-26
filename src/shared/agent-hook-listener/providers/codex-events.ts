@@ -11,6 +11,7 @@ import {
 } from '../../agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
+  enrichCodexSubagentIdentity,
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
@@ -107,23 +108,29 @@ export function normalizeCodexSubagentLifecycleEvent(
       },
       Date.now()
     )
+    enrichCodexSubagentIdentity(
+      roster,
+      agentId,
+      readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+    )
+    const parentPath =
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath ??
+      state.lastStatusByPaneKey.get(paneKey)?.providerSession?.transcriptPath
+    if (parentPath) {
+      reconcileCodexSubagentTranscript(
+        getOrCreateCodexSubagentTranscriptState(state, paneKey),
+        roster,
+        parentPath
+      )
+    }
   } else {
     finishCodexSubagent(roster, agentId)
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.delete(agentId)
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
 
-/**
- * Drops a `PermissionRequest` wait that Codex's own review agent owns.
- *
- * Codex runs this hook as decider #1, ahead of both its review agent and the user, so the event
- * alone is "a decision is being made", not "a human is blocked". Under `approvals_reviewer =
- * auto_review` ("Approve for me") the review agent resolves it seconds later and the pane flapped
- * between Needs You and Working for every gated tool call (STA-7698).
- *
- * `request_user_input` is untouched: it arrives as `PreToolUse`, and no reviewer can answer a
- * question addressed to the user (#9861).
- */
+/** Codex PermissionRequest precedes reviewer/user decisions; suppress reviewer-owned waiting (STA-7698). request_user_input still blocks a human on PreToolUse (#9861). */
 function resolveCodexApprovalOwnedState(
   state: HookListenerState,
   eventName: unknown,
@@ -153,21 +160,7 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  const sessionId = readString(hookPayload, 'session_id')
-  const currentSessionId = state.lastStatusByPaneKey.get(paneKey)?.providerSession?.id
-  // Ephemeral side chats share the pane but must not replace its recorded main turn.
-  if (
-    hookPayload.transcript_path === null &&
-    !readString(hookPayload, 'agent_id') &&
-    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath &&
-    sessionId &&
-    currentSessionId &&
-    sessionId !== currentSessionId
-  ) {
-    return null
-  }
-
-  // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
+  // Auto-allowed request_user_input still blocks on PreToolUse (Codex0.145+).
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
@@ -189,7 +182,7 @@ export function normalizeCodexEvent(
   const agentId = readString(hookPayload, 'agent_id')
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (eventName === 'SessionStart' && !agentId) {
-    // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
+    // New processes must not retain children whose Stop hooks were lost.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   }
@@ -237,16 +230,19 @@ export function normalizeCodexEvent(
       },
       Date.now()
     )
+    enrichCodexSubagentIdentity(
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      agentId,
+      transcriptPath
+    )
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
   if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
-    // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
-    // Cleared, not deleted, so a reconcile cannot re-seed retired children from the previous row.
+    // Clear the existing roster so missing child Stops cannot reseed stale children from the previous row (CLI0.144).
     getOrCreateCodexSubagentRoster(state, paneKey).clear()
   }
-  // Why: resolved after the transcript reconcile above, so this turn's reviewer is read from the
-  // rollout during the very PermissionRequest being classified, not from a prior event.
+  // Classify with reviewer evidence just read from this turn's rollout, never a prior event.
   const ownedState = resolveCodexApprovalOwnedState(
     state,
     eventName,
@@ -288,9 +284,7 @@ export function normalizeCodexEvent(
   })
 }
 
-/** A root hook for a turn whose rollout already recorded its end restates that end as Stop,
- *  since Codex skips Stop for internal subagents such as /review. A delayed hook for an ended
- *  turn the lead has moved past is dropped, so it can neither end nor rearm the current turn. */
+/** Replay rollout-confirmed root ends as missing Stops, including /review; drop delayed hooks once the lead moved to another turn. */
 export function codexHookEventForEndedTurn(
   state: HookListenerState,
   paneKey: string,

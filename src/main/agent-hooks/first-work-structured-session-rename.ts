@@ -14,7 +14,7 @@ export function maybeAutoRenameWorkspaceOnFirstStructuredTurn(
   }
   return maybeAutoRenameBranchOnFirstWork(
     {
-      // No pane: a structured session is resolved by its workspace id, not by a terminal tab.
+      // Structured sessions use workspace identity rather than a terminal pane.
       paneKey: '',
       tabId: undefined,
       worktreeId: summary.workspaceId,

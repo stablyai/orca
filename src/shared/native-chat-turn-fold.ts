@@ -1,13 +1,9 @@
-// Which rows a settled turn folds behind its "Worked for N" status row.
-//
-// A turn's answer is its last assistant row that renders prose, or its last
-// failure report; everything before it is the work that produced it. The journal
-// carries no "this one is the answer" marker on a message, so the answer is
-// derived rather than read — last candidate wins. So a failed turn ends on its
-// error, and an error the agent recovered from folds behind the answer after it.
+// Derive settled-turn answers from the last assistant prose or system failure; the journal has no answer marker.
+// Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from './agent-session-compaction'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from './agent-session-orca-stop'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from './native-chat-trailing-run'
@@ -18,28 +14,20 @@ import {
   type NativeChatRole
 } from './native-chat-types'
 
-/** What the fold needs to know about one transcript row. Deliberately not a
- *  `NativeChatMessage`: each surface derives "renders prose" through its own
- *  row-content pass, and the fold must read the same answer that pass draws. */
+/** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
 export type NativeChatTurnFoldRow = {
   /** The turn this row belongs to; undefined before the first user message. */
   turnKey: string | undefined
   role: NativeChatRole
   /** Whether the row draws prose — the only thing that can be an answer. */
   rendersProse: boolean
-  /** Whether the row draws anything when unfolded. One that draws nothing hides nothing, so it
-   *  never makes its turn offer the disclosure. */
+  /** Invisible rows cannot justify a disclosure: they hide nothing. */
   draws: boolean
-  /** Whether the row carries work that outlives the turn that started it: a
-   *  spawn roster or a background task. That row is the durable report of how
-   *  the work ended — often the only one — so it never folds. */
+  /** Spawn/task rows outlive their turn and may be the only outcome report; never fold them. */
   outlivesTurn: boolean
-  /** Whether a system row reports a failure. It competes with prose to be the
-   *  turn's answer, so a turn that failed shows the error as its end. */
+  /** System failures compete as final answers so failed turns end on visible errors. */
   reportsFailure: boolean
-  /** Whether the row explains what became of the turn: a compaction's result, or
-   *  that the response was interrupted. It never folds: hiding it would leave the
-   *  turn's status as the only trace of it. */
+  /** Compaction/interruption/turn notices remain visible; hiding them leaves only generic turn status. */
   explainsTurn: boolean
 }
 
@@ -54,8 +42,7 @@ export function nativeChatTurnFoldRow(
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
     draws: hasReceipt || nativeChatRowRendersContent(message.blocks),
-    // The raw blocks, not the renderable ones: a childless roster draws no row
-    // and its plain-text twin is then the only record the spawn happened.
+    // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
     outlivesTurn: message.blocks.some(
       (block) =>
         isSubagentGroupBlock(block) ||
@@ -74,7 +61,8 @@ export function nativeChatTurnFoldRow(
         block.type === 'text' &&
         (block.presentation === 'compaction' ||
           block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
-          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
+          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
+          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION)
     )
   }
 }
@@ -82,8 +70,7 @@ export function nativeChatTurnFoldRow(
 export type NativeChatTurnFold = {
   /** Rows a folded turn must not draw, by index. */
   foldedRows: ReadonlySet<number>
-  /** Turns that actually hide something, so a surface offers the disclosure only
-   *  where there is something behind it. */
+  /** Offer disclosure only for turns that actually hide rows. */
   foldableTurnKeys: ReadonlySet<string>
 }
 
@@ -92,9 +79,7 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** The index of each turn's answer: its last assistant row that renders prose,
- *  or its last system row reporting a failure. A turn with neither has no answer,
- *  and folds whole. */
+/** Last assistant prose/system failure per turn; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlyMap<string, number> {
@@ -110,15 +95,7 @@ export function nativeChatTurnAnswerRows(
   return answers
 }
 
-/**
- * Fold every settled, unexpanded turn to its answer.
- *
- * `settledTurnKeys` is the gate, not a working flag: a turn folds once it has a
- * duration to show, which is exactly when its status row appears. A running turn
- * is therefore never folded, and nothing has to close the disclosure when the
- * turn ends — the fold arrives already closed, because the turn joined the set
- * of turns that have a duration.
- */
+/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open; newly settled turns start collapsed without separate disclosure cleanup. */
 export function nativeChatTurnFold({
   rows,
   settledTurnKeys,
@@ -133,9 +110,7 @@ export function nativeChatTurnFold({
   const foldableTurnKeys = new Set<string>()
   for (const [index, row] of rows.entries()) {
     const { turnKey } = row
-    // Outside the fold by construction: the reader's own message anchors the
-    // turn, a roster or background-task row outlives it, and a compaction report or interruption
-    // notice explains it.
+    // User anchors, durable task/roster reports and turn explanations remain outside the fold.
     if (
       turnKey === undefined ||
       row.role === 'user' ||
@@ -146,9 +121,7 @@ export function nativeChatTurnFold({
     ) {
       continue
     }
-    // A turn that produced no prose folds whole: its status row is the anchor,
-    // so there is still something on screen to open. Keeping such a turn
-    // unfolded instead would put every command it ran back in the transcript.
+    // No-prose turns fold wholly behind the status anchor instead of leaving every command expanded.
     if (index === answers.get(turnKey)) {
       continue
     }

@@ -1,0 +1,140 @@
+import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+/** Pin connect-bound timing and recoverability together: subscribe rejection crosses IPC with only its message.
+ * Separate assertions could miss a rewording that stops pane recovery. */
+import { createServer, type Server, type Socket } from 'node:net'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { generateKeyPair, publicKeyToBase64 } from '../../e2ee-crypto'
+import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../remote-runtime-client-error-classification'
+import { subscribeRemoteRuntimeTransport } from './remote-runtime-subscription-transport'
+import { withRemoteRuntimeTailscaleHint } from '../remote-runtime-tailscale-hint'
+
+const servers = new Set<Server>()
+const sockets = new Set<Socket>()
+
+afterEach(async () => {
+  for (const socket of sockets) {
+    socket.destroy()
+  }
+  sockets.clear()
+  await Promise.all(
+    [...servers].map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve())
+        })
+    )
+  )
+  servers.clear()
+})
+
+/** Accepts TCP but never answers the upgrade — the same silence a black-holed host produces. */
+async function listenSilentUpgradeServer(): Promise<string> {
+  const server = createServer((socket) => {
+    sockets.add(socket)
+    socket.once('close', () => sockets.delete(socket))
+  })
+  servers.add(server)
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (address === null || typeof address === 'string') {
+    throw new Error('expected a TCP address')
+  }
+  return `ws://127.0.0.1:${address.port}`
+}
+
+describe('remote runtime subscription connect bound', () => {
+  it('closes an unanswered real upgrade immediately when setup is cancelled', async () => {
+    const endpoint = await listenSilentUpgradeServer()
+    const keyPair = generateKeyPair()
+    const controller = new AbortController()
+    const pending = subscribeRemoteRuntimeTransport(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint,
+        deviceToken: 'device-token',
+        publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+      }),
+      'files.search',
+      { worktree: 'id:fixture', query: 'needle' },
+      15_000,
+      { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() },
+      { signal: controller.signal }
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(sockets.size).toBe(1))
+    for (const socket of sockets) {
+      socket.resume()
+    }
+    controller.abort()
+    await rejection
+    await vi.waitFor(() => expect(sockets.size).toBe(0))
+  })
+
+  it('creates no socket for a pre-aborted request', async () => {
+    const endpoint = await listenSilentUpgradeServer()
+    const keyPair = generateKeyPair()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      subscribeRemoteRuntimeTransport(
+        pairedRuntimeConnectionFromOffer({
+          v: 2,
+          endpoint,
+          deviceToken: 'device-token',
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+        }),
+        'files.search',
+        {},
+        15_000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(sockets.size).toBe(0)
+  })
+
+  it('fails an unanswered subscribe on the connect bound, with a message that survives the code strip', async () => {
+    const endpoint = await listenSilentUpgradeServer()
+    const keyPair = generateKeyPair()
+
+    const rejection = await subscribeRemoteRuntimeTransport(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint,
+        deviceToken: 'device-token',
+        publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+      }),
+      'terminal.multiplex',
+      {},
+      // Keep the start timeout longer than connect (production 15s vs 12s), so a lost bound changes these assertions.
+      2_000,
+      { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() },
+      { connectTimeoutMs: 150 }
+    ).then(
+      () => null,
+      (reason: unknown) => reason
+    )
+
+    expect(rejection).toBeInstanceOf(RemoteRuntimeClientError)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: re-proved by the assertion above.
+    const error = rejection as RemoteRuntimeClientError
+    // The connect bound, not the subscription-start timer.
+    expect(error.code).toBe('remote_runtime_unavailable')
+    expect(error.code).not.toBe('runtime_timeout')
+    expect(error.message).toContain(endpoint)
+
+    // Loss of contact is never evidence the host's work stopped.
+    expect(error.message).toContain('unverifiable')
+    expect(error.message).not.toMatch(/\b(exited|gone|stopped|empty|no terminals)\b/i)
+
+    // What the renderer actually sees: ipcMain.handle forwards the message only.
+    const stripped = toRemoteRuntimeClientErrorLike(new Error(error.message))
+    expect(stripped.code).toBeUndefined()
+    expect(isRecoverableRemoteRuntimeConnectionError(stripped)).toBe(true)
+    expect(withRemoteRuntimeTailscaleHint(error.message, endpoint)).not.toBe(error.message)
+  })
+})

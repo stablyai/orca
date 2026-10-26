@@ -10,7 +10,7 @@ export const commandReceiptScopeSchema = z.discriminatedUnion('kind', [
 
 export type CommandReceiptScope = z.infer<typeof commandReceiptScopeSchema>
 
-/** Sends look across callers; other methods look up only the authenticated caller's row. */
+/** Sends deduplicate across callers; other receipts remain authenticated-caller scoped. */
 export function commandReceiptScope(
   callerKey: string,
   operationIdScope?: 'global'
@@ -18,7 +18,7 @@ export function commandReceiptScope(
   return operationIdScope === 'global' ? { kind: 'global' } : { kind: 'caller', callerKey }
 }
 
-/** What a replay answers from: a pointer (if its row is gone the command stays spent: read what remains, else unknown, never rerun), or the outcome itself. */
+// Missing referenced rows never authorize rerunning spent commands; replay remaining facts or answer unknown.
 export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('journal-row'),
@@ -29,8 +29,7 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
     kind: z.literal('queued-draft'),
     messageId: z.string().min(1)
   }),
-  /** An accepted prompt answer, kept whole: no rewind or later revision changes its replay. Its
-   *  values are the resolution the prompt's row holds, bounded as that row is. */
+  // Persist accepted prompt answers so rewinds/revisions cannot change their replay.
   z.strictObject({
     kind: z.literal('prompt-answer'),
     itemId: z.string().min(1),
@@ -51,8 +50,6 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
       resolvedAt: z.number().nullable()
     })
   }),
-  /** A Stop accepted with no row of its own: a background-task stop, a prompt card's own interrupt,
-   *  or a Stop joining a close or repeating the one in force. Its replay reads nothing more. */
   z.strictObject({ kind: z.literal('stop') }),
   z.strictObject({
     kind: z.literal('no-op'),
@@ -109,7 +106,7 @@ export const commandReceiptSchema = z.discriminatedUnion('status', [
 
 export type CommandReceipt = z.infer<typeof commandReceiptSchema>
 
-/** Additive, so no version bump: one would stop older builds writing this database. */
+// Additive tables preserve older clients' database write compatibility.
 export function ensureCommandReceiptsTable(db: Database.Database): void {
   db.exec(`
 CREATE TABLE IF NOT EXISTS agent_session_command_receipts (

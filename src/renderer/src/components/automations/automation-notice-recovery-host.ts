@@ -1,12 +1,4 @@
-/**
- * The host a refused action's recovery verb has to act on.
- *
- * A notice is raised where the user was working, which is not where the host
- * filter points: a row action addresses that row's captured owner, and a create
- * addresses the destination the dialog captured. Without this, Reconnect dials
- * and Update server opens settings for whichever host the list happens to be
- * scoped to — or, under All hosts, for nothing at all.
- */
+/** Recover against the refused row’s captured owner or create destination; the list filter may point elsewhere or to All hosts. */
 
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'

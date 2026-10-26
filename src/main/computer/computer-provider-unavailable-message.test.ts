@@ -11,6 +11,13 @@ describe('computerProviderUnavailableMessage', () => {
     )
   })
 
+  it('names the runtime file a Linux or Windows install is missing', () => {
+    expect(computerProviderUnavailableMessage('linux')).toContain('computer-use-linux/runtime.py')
+    expect(computerProviderUnavailableMessage('win32')).toContain(
+      'computer-use-windows/runtime.ps1'
+    )
+  })
+
   it('keeps unsupported platforms explicit', () => {
     expect(computerProviderUnavailableMessage('freebsd')).toBe(
       'computer-use has no native provider for freebsd'

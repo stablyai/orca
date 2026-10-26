@@ -79,7 +79,6 @@ describe('the line under each of the chat own messages', () => {
     expect(texts(notices({ pending: [pending('a', 'sending')] }))).toEqual({
       [agentJournalSubmissionKey('a')]: SENDING
     })
-    // The host's row draws a recorded one.
     expect(texts(notices({ pending: [pending('c', 'recorded')] }))).toEqual({})
   })
 
@@ -139,7 +138,14 @@ describe('the line under each of the chat own messages', () => {
       const facts = structuredAgentSessionStartFailureFacts([statusRow(startRowKey, startFailed)])
       const recorded = (id: string) =>
         row(id, 'rejected', { reason: 'Written by the host.', rejection: startFailed })
-      expect(texts(notices({ submissions: [recorded('first')], startFailures: facts }))).toEqual({
+      expect(
+        texts(
+          notices({
+            submissions: [recorded('first'), row('later', 'pending')],
+            startFailures: facts
+          })
+        )
+      ).toEqual({
         [agentJournalSubmissionKey('first')]: 'Your message was not sent.'
       })
       expect(texts(notices({ submissions: [recorded('first')] }))).toEqual({

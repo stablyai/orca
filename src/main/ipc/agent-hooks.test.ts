@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentHookServerModule from '../agent-hooks/server'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
-// Why: cover the agentStatus:drop IPC handler — it must propagate the
-// renderer dismissal to dropStatusEntry so the on-disk last-status file
-// evicts the entry.
+// Renderer dismissals must evict persisted status as well as the live row.
 
 const dropStatusEntry = vi.fn()
 const dropPersistedStatusEntry = vi.fn()
@@ -39,8 +37,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../agent-hooks/server', async () => {
-  // Why: import the real isValidPaneKey so this test stays in sync with any
-  // tightening of the validator (length cap, character allow-list, etc).
+  // Use the real pane-key validator so invalid-input coverage tracks its constraints.
   const actual = await vi.importActual<typeof AgentHookServerModule>('../agent-hooks/server')
   return {
     ...actual,
@@ -152,8 +149,7 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
-  // The half-migration seam: until PR 2 retires the renderer's own feed bridge, main must not
-  // publish structured rows to the renderer at all — one pane key, one writer.
+  // Keep one writer per pane while the renderer feed bridge owns structured rows.
   it('omits structured rows the renderer feed bridge still owns', async () => {
     getStatusSnapshot.mockReturnValue([
       {

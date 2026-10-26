@@ -1,15 +1,16 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../git/runner'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { getProjectRefForRemote, getWorkItemByProjectRef } from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
@@ -45,9 +46,8 @@ export async function resolveRuntimeGitLabWorktreeBase(
   if (isFolderRepo(repo)) {
     return { error: 'Folder mode does not support creating worktrees.' }
   }
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId)
-  }
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
+  requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(deps.store, repo)
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
@@ -108,7 +108,10 @@ export async function resolveRuntimeGitLabWorktreeBase(
   }
   const compareBaseRef = targetBranch ? `refs/remotes/${remote}/${targetBranch}` : undefined
   const fetchRemoteTrackingRef = async (branch: string, ref: string): Promise<void> => {
-    await gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`])
+    await gitExecFileAsync(['fetch', remote, `+refs/heads/${branch}:${ref}`], {
+      ...localGitExecOptions,
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    })
   }
   const fetchCompareBaseRef = (): Promise<boolean> =>
     fetchCompareBaseRefWithLocalFallback({

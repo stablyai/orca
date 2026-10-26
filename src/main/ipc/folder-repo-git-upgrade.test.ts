@@ -8,14 +8,12 @@ import type * as FsPromises from 'node:fs/promises'
 import type * as GitRepo from '../git/repo'
 import type { Repo } from '../../shared/repo-types'
 
-// Why: the watch must stay one stat per folder project per tick — counting the real
-// calls is what keeps a directory-listing fan-out from creeping back in.
+// Count real stats to prevent directory-listing fan-out in polling.
 const { statCalls, readdirSpy, gitProbes, pendingGitChecks } = vi.hoisted(() => ({
   statCalls: [] as string[],
   readdirSpy: vi.fn(),
   pendingGitChecks: new Set<Promise<unknown>>(),
-  // Why: the rejected-marker cache exists to stop git respawning every tick; counting the
-  // real probes is the only way that guarantee stays true.
+  // Count Git probes to ensure rejected markers cannot respawn every tick.
   gitProbes: [] as string[]
 }))
 
@@ -149,8 +147,7 @@ function gitInit(repoPath: string): void {
 }
 
 describe('folder repo git upgrade watch', () => {
-  // Why: `realpathSync` because macOS TMPDIR is itself a symlink; `symlinkedRoot` is an
-  // explicit link so the spelling-mismatch test runs the same way on Linux and Windows CI.
+  // Canonicalize macOS temp aliases and add an explicit link for portable spelling-mismatch coverage.
   let root: string
   let symlinkedRoot: string
 
@@ -170,13 +167,13 @@ describe('folder repo git upgrade watch', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  // Real timers: the tick awaits real filesystem stats, which fake timers cannot flush.
+  // Real filesystem stats do not advance with fake timers.
   async function tick(times = 1): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * times + POLL_MS))
     await drainGitChecks()
   }
 
-  /** Why: a tick that spawns git can outrun a fixed wait on a loaded machine. */
+  /** Poll observable stats because Git-spawning ticks can outrun fixed waits under load. */
   async function waitForStats(count: number): Promise<void> {
     const deadline = Date.now() + 5_000
     while (statCalls.length < count && Date.now() < deadline) {
@@ -207,14 +204,13 @@ describe('folder repo git upgrade watch', () => {
     })
     expect(prepareLocalWorktreeRootForRepo).toHaveBeenCalledTimes(1)
     expect(invalidateAuthorizedRootsCache).toHaveBeenCalledTimes(1)
-    // Why: the shared notifier is what also reaches paired clients (#11994).
+    // Shared repo notifications must reach paired clients too (#11994).
     expect(notifyReposChanged).toHaveBeenCalledWith(window)
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(window, 'folder-repo')
   })
 
   it("keeps external worktrees visible when the stored path is not git's own root", async () => {
-    // Why: a symlinked parent makes git report a different toplevel; hiding external
-    // worktrees there would hide the project's only workspace (found in Electron QA).
+    // Git reports the real root; hiding external worktrees could hide this symlinked project's only workspace.
     const repoPath = join(symlinkedRoot, 'symlinked-project')
     await mkdir(repoPath)
     gitInit(repoPath)
@@ -264,8 +260,7 @@ describe('folder repo git upgrade watch', () => {
   })
 
   it('refuses a folder that is inside another repo rather than its own root', async () => {
-    // Why: git accepts any path inside a work tree, so a stray marker in a subdirectory
-    // would otherwise flip a project whose path is not a repository root.
+    // Git accepts subdirectories; a stray marker must not upgrade a non-root folder project.
     const outer = join(root, 'outer')
     await mkdir(outer)
     gitInit(outer)
@@ -410,8 +405,7 @@ describe('folder repo git upgrade watch', () => {
     })
     await tick(5)
 
-    // Why: at the fast interval this window would tick ~6 times; on the idle interval it
-    // ticks once. Anything above 2 means the backoff was skipped.
+    // Fast cadence would tick about six times; the idle cadence should stay at one or two.
     expect(listCalls).toBeGreaterThanOrEqual(1)
     expect(listCalls).toBeLessThanOrEqual(2)
     expect(store.getRepo).not.toHaveBeenCalled()
@@ -494,7 +488,6 @@ describe('folder repo git upgrade watch', () => {
     const paths = ['a', 'b', 'c'].map((name) => join(root, name))
     for (const repoPath of paths) {
       await mkdir(repoPath)
-      // Sibling dirs a parent-directory scan would have to stat on every tick.
       await mkdir(join(repoPath, 'nested'))
     }
     const store = makeStore(
@@ -508,9 +501,7 @@ describe('folder repo git upgrade watch', () => {
     statCalls.length = 0
     await tick(4)
 
-    // Why: assert the shape, not the tick count — wall-clock slack decides how many ticks
-    // land, but every project must be stat'd the same number of times (a per-tick
-    // multiplication breaks that) and a directory listing must never appear.
+    // Count per-project work and forbid listings independently of wall-clock tick totals.
     const perPath = paths.map(
       (repoPath) => statCalls.filter((call) => call === join(repoPath, '.git')).length
     )

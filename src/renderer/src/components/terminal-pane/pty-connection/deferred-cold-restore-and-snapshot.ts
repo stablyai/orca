@@ -21,29 +21,42 @@ import { bindStartFreshSpawn } from './fresh-spawn-start'
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
 import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
+import { attachToMainResumedSleepPane, mainResumedSleepPane } from './main-resumed-sleep-pane'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
     startup: ColdRestoreAgentResumeStartup | null
   ): boolean => {
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return false
     }
     const state = useAppStore.getState()
+    if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
+      session.pendingStartupCommand = {
+        command: startup.command,
+        resumeSource: startup.resumeSource
+      }
+    }
     state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
       agentType: startup.agent,
       launchToken: startup.launchToken,
       tabId: session.deps.tabId,
       leafId: session.pane.leafId
     })
+    if (startup.resumeSource) {
+      session.savedStartupLaunchRegistration = {
+        source: startup.resumeSource,
+        entry: useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+      }
+    }
     return true
   }
   session.clearSleepingRecordAfterColdRestoreSpawn = (
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      // Switch point: main records the wake of this pane alone, the one this window resumed.
-      // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
+      // Record main’s wake before dropping the record; record-only consumption would leave nothing for main to resume.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         recordPaneWakeThroughLayoutOwner(
           useAppStore.getState(),
@@ -74,13 +87,27 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
-    session.applyColdRestoreAgentResumeStartup(startup)
-    const spawned = session.startFreshSpawn(startup, options)
-    // Switch point: main's layout shows this pane unbound while the start runs.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+    if (startup?.resumeSource?.cancelled) {
+      return Promise.resolve(null)
     }
-    return spawned
+    const mainPane = mainResumedSleepPane(session, startup)
+    if (mainPane && startup?.sleepingRecordEntry) {
+      return attachToMainResumedSleepPane(
+        session,
+        mainPane,
+        startup.sleepingRecordEntry.paneKey,
+        options
+      )
+    }
+    return startPaneThroughMainThenAttach(session, () => {
+      session.applyColdRestoreAgentResumeStartup(startup)
+      const spawned = session.startFreshSpawn(startup, options)
+      // Switch point: main's layout shows this pane unbound while the start runs.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+      }
+      return spawned
+    })
   }
   session.startFreshColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
@@ -89,14 +116,16 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     deferHiddenAgentResume(session, startup)
       ? Promise.resolve(null)
       : session.spawnColdRestoreAgentResume(startup, options)
-  // Why: the hibernation wake fires from noteVisibilityResume in the outer
-  // connection scope, long after this deferred-connect closure has run.
+  // Visibility wake runs from the outer binding after this deferred-connect closure returns.
   session.wakeHibernatedAgentPane = () => session.spawnColdRestoreAgentResume()
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     session.transport.getPtyId() === ptyId
-  const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
+  const runTerminalPasteStartupCommand = async (
+    command: string,
+    current: () => boolean
+  ): Promise<boolean> => {
     const ptyId = session.transport.getPtyId()
     const result = await executeTerminalStartupCommandPaste({
       command,
@@ -109,43 +138,52 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         isWindowsConpty: session.isNativeWindowsConpty
       }),
       transport: session.transport,
-      isTargetCurrent: isStartupPasteTargetCurrent
+      isTargetCurrent: (target) => current() && isStartupPasteTargetCurrent(target)
     })
-    if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
+    if (result.status !== 'pasted' || !current() || !isStartupPasteTargetCurrent(ptyId)) {
       return false
     }
     return session.transport.sendInput('\r', 'launch')
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return
     }
     if (session.startupInjectTimer !== null) {
       clearTimeout(session.startupInjectTimer)
     }
+    const generation = session.transportStreamGeneration
+    const isCurrent = (): boolean =>
+      !session.disposed &&
+      session.pendingStartupCommand === startup &&
+      !startup.resumeSource?.cancelled &&
+      generation === session.transportStreamGeneration &&
+      (startup.isCurrent?.() ?? true)
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
       void (async () => {
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         if (session.shouldDeliverStartupViaTerminalPaste) {
           await waitForTerminalOutputParsed(session.pane.terminal)
         }
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         const command = startup.command
         const submitted = session.shouldDeliverStartupViaTerminalPaste
-          ? await runTerminalPasteStartupCommand(command)
+          ? await runTerminalPasteStartupCommand(command, isCurrent)
           : session.transport.sendInput(`${command}\r`, 'launch')
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()
         }
-        session.pendingStartupCommand = null
+        if (session.pendingStartupCommand === startup) {
+          session.pendingStartupCommand = null
+        }
       })()
     }, 50)
   }
@@ -199,8 +237,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       session.clearRestoredSnapshotBaseline()
       return
     }
-    // Why: arming drops the redelivery permanently, so the snapshot's painted
-    // content must be able to back the seq it claims; a blank image cannot (STA-5179).
+    // Only painted cell content can back a seq baseline that permanently suppresses redelivery; blank images cannot (STA-5179).
     if (snapshot.seq > 0 && !paintsContent) {
       session.clearRestoredSnapshotBaseline()
       return
@@ -210,12 +247,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         ? Math.min(snapshot.pendingDeliveryStartSeq, snapshot.seq)
         : null
     if (windowStartSeq !== null && windowStartSeq >= snapshot.seq) {
-      // Why: main reported an empty undelivered backlog — no chunk at or
-      // below the snapshot seq can ever arrive again (delivery is once and
-      // in order) and a future pending-cap trim re-arms the out-of-band
-      // marker. Arming a baseline anyway would misread live chunks from a
-      // foreign seq domain (restarted counter / synthetic injection) as
-      // duplicates or trim gaps and silently drop genuinely-new output.
+      // An empty pending backlog cannot redeliver earlier seqs; arming a baseline would drop new output from restarted/foreign counters.
       session.clearRestoredSnapshotBaseline()
       return
     }

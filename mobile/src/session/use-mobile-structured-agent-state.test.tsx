@@ -7,6 +7,7 @@ import type {
   AgentJournalResetReason
 } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
+import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 
@@ -14,13 +15,17 @@ function cursorAt(sequence: number): AgentJournalCursor {
   return { epoch: 'epoch-1', sequence }
 }
 
-function said(sequence: number, agentId?: string): AgentJournalRenderItem {
+function said(
+  sequence: number,
+  agentId?: string,
+  role: 'assistant' | 'user' = 'assistant'
+): AgentJournalRenderItem {
   return {
     itemId: `item-${sequence}`,
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `${sequence}` }] },
+    body: { kind: 'message', role, blocks: [{ type: 'text', text: `${sequence}` }] },
     ...(agentId === undefined ? {} : { agentId })
   }
 }
@@ -59,9 +64,7 @@ describe('useMobileStructuredAgentState older history', () => {
     renderer = null
   })
 
-  /** Mounts the hook on a session whose newest rows are `newest` (by default one of the
-   *  session's own, at 1000), with the host serving `older` by the cursor each read asks before:
-   *  a page, a reset, or a thrown error. */
+  // Serve cursor-addressed older pages, resets and throws behind the hook’s newest rows.
   async function mountWithOlderPages(
     older: Record<number, AgentSessionHistoryPage | AgentJournalResetReason | Error | undefined>,
     newest: AgentJournalRenderItem[] = [said(1_000)]
@@ -115,7 +118,7 @@ describe('useMobileStructuredAgentState older history', () => {
         type: 'snapshot',
         sessionId: 'session-1',
         fence: 1,
-        page: page(newest, true)
+        page: { ...page(newest, true), direction: 'tail' }
       })
     })
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
@@ -192,5 +195,84 @@ describe('useMobileStructuredAgentState older history', () => {
     expect(hook.current!.state.status).toBe('ready')
     act(() => hook.current!.loadEarlier())
     expect(hook.current!.olderPages).toBe('unavailable')
+  })
+})
+
+describe('useMobileStructuredAgentState live feed', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('reopens a feed that ended under a live connection from its last row', async () => {
+    vi.useFakeTimers()
+    const streams: { params: unknown; frame: (value: unknown) => void }[] = []
+    const subscribe = vi.fn((_method: string, params: unknown, frame: (value: unknown) => void) => {
+      streams.push({ params, frame })
+      return () => {}
+    })
+    const sendRequest = vi.fn(async () => ({ ok: true, result: {} }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an RPC client stub with the two members the hook calls.
+    const client = { sendRequest, subscribe } as unknown as RpcClient
+    const hook: { current: ReturnType<typeof useMobileStructuredAgentState> | null } = {
+      current: null
+    }
+    function Harness(): null {
+      hook.current = useMobileStructuredAgentState({
+        client,
+        sessionId: 'session-1',
+        sessionKey: 'session-1',
+        enabled: true,
+        connected: true
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(streams).toHaveLength(1))
+    act(() =>
+      streams[0].frame({
+        type: 'snapshot',
+        sessionId: 'session-1',
+        fence: 1,
+        page: { ...page([said(58), said(59)], false), direction: 'tail', liveCursor: cursorAt(59) }
+      })
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    act(() => streams[0].frame({ type: 'error', message: 'Stream ended' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    await vi.waitFor(() => expect(streams).toHaveLength(2))
+    expect(streams[1].params).toEqual({ sessionId: 'session-1', cursor: cursorAt(59) })
+    act(() =>
+      streams[1].frame({
+        type: 'batch',
+        sessionId: 'session-1',
+        batch: {
+          cursor: cursorAt(61),
+          items: [said(59), said(60, undefined, 'user'), said(61)],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(hook.current!.state.items.map((item) => item.sequence)).toEqual([58, 59, 60, 61])
+    expect(hook.current!.state.error).toBeUndefined()
+
+    act(() => streams[1].frame({ type: 'end' }))
+    act(() => publishConnectionRevival('app-resume'))
+    await vi.waitFor(() => expect(streams).toHaveLength(3), { interval: 1, timeout: 50 })
+    expect(streams[2].params).toEqual({ sessionId: 'session-1', cursor: cursorAt(61) })
   })
 })

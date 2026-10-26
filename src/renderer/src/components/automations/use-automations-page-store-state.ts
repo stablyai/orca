@@ -11,6 +11,7 @@ import {
   automationWorktreeForRow,
   type AutomationListRow
 } from './automation-list-row-identity'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
 
@@ -18,8 +19,8 @@ const AGENTS = getAgentCatalog().map((agent) => agent.id)
 export function useAutomationsPageStoreState() {
   const repos = useAppStore((s) => s.repos)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)

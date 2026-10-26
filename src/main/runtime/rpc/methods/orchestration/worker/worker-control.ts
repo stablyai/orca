@@ -146,15 +146,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
-      // Read via the handle inspectWorkerTerminal proved live: the durable one, or a handle
-      // re-minted from the recorded incarnation after the durable handle went stale.
+      // Read through the handle inspectWorkerTerminal proved live, including incarnation-fenced remints.
       const liveHandle = observation.terminalHandle ?? terminalHandle
       const structured = await readStructuredWorkerOutput({
         db,
         dispatchId: params.dispatch,
         workerState: worker?.state ?? 'unsupervised',
-        // Reused, never re-derived: being able to read the journal proves the host is installed,
-        // not that the provider child is alive.
+        // Reuse observation: reading a journal proves host installation, never provider-child liveness.
         liveness:
           observation.status === 'live' || observation.status === 'exited'
             ? observation.status
@@ -213,8 +211,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       )
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon settles the Dispatch, so it owes the same binding release stop and release do:
-          // a surviving redrive subscription keeps nudging a worker nobody is waiting on.
+          // Abandon must release redrive like stop/release, or an unowned session keeps receiving nudges.
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }

@@ -25,13 +25,10 @@ function item(repoId: string, id: string, updatedAt: string): GitHubWorkItem {
   }
 }
 
-// Build a run of issues numbered `from`..`to` (inclusive) with strictly
-// decreasing updatedAt, on repo `r`, so `at(-1)` is the oldest.
+// Use distinct descending timestamps so the last fixture row is the oldest.
 function run(r: string, from: number, to: number): GitHubWorkItem[] {
   const out: GitHubWorkItem[] = []
   for (let n = from; n <= to; n += 1) {
-    // Larger number => newer; encode as a descending timestamp so sort order is
-    // unambiguous and distinct.
     const ts = `2026-01-01T00:00:${String(1000 - n).padStart(4, '0')}Z`
     out.push(item(r, `issue:${n}`, ts))
   }
@@ -54,7 +51,6 @@ describe('resolveEmptyPageOutcome', () => {
     expect(
       resolveEmptyPageOutcome({ ...base, target: 33, errorTypes: ['validation_error'] })
     ).toEqual({ reason: 'window-unreachable', clampTotalPagesTo: 33 })
-    // A real count is still clamped — the count over-advertising is the bug.
     expect(
       resolveEmptyPageOutcome({
         ...base,
@@ -66,9 +62,7 @@ describe('resolveEmptyPageOutcome', () => {
   })
 
   it('resolves as load-failed when a window 422 coincides with a sibling failure', () => {
-    // Repos advance independently; another repo's failure — thrown or on the
-    // envelope channel — says nothing about the healthy repos' remaining
-    // pages, and the transient failure is the actionable signal.
+    // A sibling failure says nothing about healthy repos’ remaining pages and must outrank a window clamp.
     expect(
       resolveEmptyPageOutcome({
         ...base,
@@ -104,18 +98,15 @@ describe('resolveEmptyPageOutcome', () => {
       reason: 'end-of-data',
       clampTotalPagesTo: 2
     })
-    // 0 means the count itself failed — treat like unknown.
     expect(resolveEmptyPageOutcome({ ...base, target: 2, countedTotalPages: 0 })).toEqual({
       reason: 'end-of-data',
       clampTotalPagesTo: 2
     })
-    // A real count must not shrink: the PR list path swallows its own failures
-    // into clean-empty results, and clamping would hide healthy pages silently.
+    // PR failures can become clean-empty results; shrinking a real count would silently hide healthy pages.
     expect(resolveEmptyPageOutcome({ ...base, target: 2, countedTotalPages: 34 })).toEqual({
       reason: 'end-of-data',
       clampTotalPagesTo: null
     })
-    // Never clamps below one advertised page.
     expect(resolveEmptyPageOutcome({ ...base, target: 0 })).toEqual({
       reason: 'end-of-data',
       clampTotalPagesTo: 1
@@ -127,8 +118,7 @@ describe('applyEmptyPageClamp', () => {
   const clean = { failedCount: 0, errorTypes: [] as const }
 
   it('keeps a real count that resolved between click and response', () => {
-    // The count promise routinely lands mid-flight; the committed value, not
-    // the click-time closure, must decide whether end-of-data may clamp.
+    // The count can resolve during fetch; clamp against committed state rather than the click-time closure.
     expect(applyEmptyPageClamp(33, { ...clean, target: 2 })).toBe(33)
   })
 
@@ -138,8 +128,6 @@ describe('applyEmptyPageClamp', () => {
   })
 
   it('never touches the count for window or failure outcomes', () => {
-    // Window 422 limits live in provenPageLimit (applyWindowPageLimit), not
-    // the count slot.
     expect(
       applyEmptyPageClamp(39, { target: 33, failedCount: 0, errorTypes: ['validation_error'] })
     ).toBe(39)
@@ -159,8 +147,7 @@ describe('applyWindowPageLimit', () => {
 
 describe('deriveAdvertisedTotalPages', () => {
   it('is order-independent: a count landing after a speculative withdrawal wins', () => {
-    // Probe first: end-of-data wrote countedTotalPages=1 (speculative). Count
-    // then overwrites with 39 — the bar must show 39, not stay collapsed.
+    // A late real count must overwrite speculative end-of-data withdrawal.
     expect(
       deriveAdvertisedTotalPages({
         loadedPages: 1,
@@ -239,8 +226,7 @@ describe('accumulateWorkItemPages', () => {
   it('drops the re-fetched boundary row that shares the previous page cursor', async () => {
     const boundary = item('r', 'issue:2', '2026-07-02')
     const existing = [[item('r', 'issue:1', '2026-07-03'), boundary]]
-    // Inclusive cursor re-returns issue:2 (boundary) then genuinely older rows,
-    // enough to fill a full page of size 2 after dedup.
+    // Inclusive boundary overlap must be deduped and backfilled to a full display page.
     const fetchPage = vi.fn().mockResolvedValue({
       items: [boundary, item('r', 'issue:3', '2026-07-01'), item('r', 'issue:4', '2026-07-00')]
     })
@@ -266,9 +252,7 @@ describe('accumulateWorkItemPages', () => {
   })
 
   it('backfills across fetches so a deduped page stays full and the tail stays reachable', async () => {
-    // Regression: pageSize 3. Page 0 = issues 1..3. Inclusive cursor re-fetches
-    // the boundary (issue:3), so a naive "one fetch = one page" scheme would emit
-    // a 2-item page and the count-derived totalPages would strand the tail.
+    // Boundary dedup leaves two fresh rows; backfill the third so count-derived pages cannot strand tail items.
     const existing = [run('r', 1, 3)]
     const cursor0 = run('r', 1, 3).at(-1)!.updatedAt
     const fetchPage = vi
@@ -291,7 +275,6 @@ describe('accumulateWorkItemPages', () => {
     if (result.cancelled) {
       return
     }
-    // One uniform full page of the 3 genuinely-new items 4,5,6 — nothing stranded.
     expect(result.newPages).toEqual([run('r', 4, 6)])
     expect(result.loadedPages).toBe(2)
     expect(fetchPage).toHaveBeenCalledTimes(2)
@@ -345,7 +328,6 @@ describe('accumulateWorkItemPages', () => {
     if (result.cancelled) {
       return
     }
-    // Short final page rather than dropping issues 4,5.
     expect(result.newPages).toEqual([run('r', 4, 5)])
     expect(result.loadedPages).toBe(2)
   })
@@ -353,8 +335,7 @@ describe('accumulateWorkItemPages', () => {
   it('stops (flushing progress) when a full page yields nothing new', async () => {
     const existing = [run('r', 1, 3)]
     const cursor0 = run('r', 1, 3).at(-1)!.updatedAt
-    // First fetch adds issues 4,5 (2 fresh); second fetch re-returns only
-    // already-seen rows (a >pageSize same-timestamp run) — no forward progress.
+    // Repeated same-timestamp rows stall the cursor; flush the buffered fresh rows.
     const fetchPage = vi
       .fn()
       .mockResolvedValueOnce({ items: run('r', 3, 5) })
@@ -373,7 +354,6 @@ describe('accumulateWorkItemPages', () => {
     if (result.cancelled) {
       return
     }
-    // The 2 buffered fresh rows are flushed rather than lost.
     expect(result.newPages).toEqual([run('r', 4, 5)])
     expect(fetchPage).toHaveBeenCalledTimes(2)
   })
@@ -421,9 +401,7 @@ describe('accumulateWorkItemPages', () => {
 
   it('recovers leftover rows discarded at the target boundary on the next call', async () => {
     const pageSize = 3
-    // Call 1: page0 = 1..3, target page 1. The fetch returns more than one
-    // page of fresh rows; issue 7 is past the emitted page and gets discarded
-    // (it belongs to page 2, which the user hasn't requested yet).
+    // Rows past the requested display page are discarded until the next advance.
     const existing1 = [run('r', 1, 3)]
     const fetch1 = vi.fn().mockResolvedValueOnce({ items: run('r', 3, 7) }) // boundary 3 + 4,5,6,7
     const call1 = await accumulateWorkItemPages({
@@ -440,9 +418,7 @@ describe('accumulateWorkItemPages', () => {
     }
     expect(call1.newPages).toEqual([run('r', 4, 6)]) // 7 discarded
 
-    // Call 2: page1 is now on screen. The inclusive cursor re-fetches the
-    // boundary (6, deduped) plus the discarded 7 and beyond — 7 must reappear
-    // exactly once, in order, with no duplicate of 4..6.
+    // Re-fetch the discarded tail from the inclusive boundary without duplicating the displayed page.
     const call2 = await accumulateWorkItemPages({
       existingPages: [...existing1, ...call1.newPages],
       initialCursor: call1.newPages.at(-1)!.at(-1)!.updatedAt, // ts(6)

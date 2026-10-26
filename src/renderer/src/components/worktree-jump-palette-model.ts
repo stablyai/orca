@@ -98,11 +98,8 @@ export type OpenTabRecentRow = {
 
 export const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
 
-// Keep the status selectors alive through the command dialog's close animation so
-// rows do not disappear halfway through the fade.
+// Retain status selectors through close animation so rows do not disappear mid-fade.
 export const PALETTE_CLOSE_LINGER_MS = 300
-/** Backwards-compatible name for selectors that share the close-animation window. */
-export const PALETTE_STATUS_INPUTS_LINGER_MS = PALETTE_CLOSE_LINGER_MS
 export const DIGIT_INDEX_ACTION_ID = 'workspace.selectByIndex' as const
 // Why: the chord only binds keys 1–9, so expanded rows past the ninth are unaddressable.
 export const DIGIT_INDEX_ADDRESSABLE_ROWS = 9

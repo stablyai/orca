@@ -46,6 +46,8 @@ export const gitApi = {
   ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
   conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:conflictOperation', args),
+  mutationInFlight: (args: { worktreePath: string; connectionId?: string }) =>
+    ipcRenderer.invoke('git:mutationInFlight', args),
   abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:abortMerge', args),
   abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>

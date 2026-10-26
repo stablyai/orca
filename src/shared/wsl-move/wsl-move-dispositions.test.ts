@@ -99,7 +99,7 @@ describe('WSL mover disposition consistency', () => {
       })
       .map(([item]) => item)
     expect(conflicting).toEqual([])
-    // Decision C: the native chat journal and its tables stay local.
+    // Native chat journals/tables stay local (decision C).
     expect(byItem.get(52)).toEqual(new Set(['not-applicable']))
   })
 })

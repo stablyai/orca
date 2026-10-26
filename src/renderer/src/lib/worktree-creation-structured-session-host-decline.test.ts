@@ -6,7 +6,10 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
-const mocks = vi.hoisted(() => ({ createSupport: vi.fn() }))
+const mocks = vi.hoisted(() => {
+  const mainStarts: unknown[] = []
+  return { createSupport: vi.fn(), mainStarts }
+})
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -16,7 +19,37 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useAppStore } from '@/store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them, and the first
+// terminals it starts for the window's new tabs.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const client = (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) => {
+      if (args[1] !== 'terminal.create') {
+        return client.callRuntimeRpc(...args)
+      }
+      mocks.mainStarts.push(args[2])
+      return new Promise(() => undefined)
+    }
+  }
+})
+
+/** The startup the tab's terminal runs: main's start in a layout-owner build, else the window's. */
+function startupOf(tabId: string): unknown {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return useAppStore.getState().pendingStartupByTabId[tabId]
+  }
+  return mocks.mainStarts.find(
+    (params) =>
+      typeof params === 'object' && params !== null && 'tabId' in params && params.tabId === tabId
+  )
+}
 
 const initial = useAppStore.getState()
 
@@ -93,6 +126,7 @@ const REQUEST = {
 } as unknown as WorktreeCreationRequest
 
 afterEach(() => {
+  mocks.mainStarts.length = 0
   vi.unstubAllGlobals()
   useAppStore.setState(initial, true)
 })
@@ -172,7 +206,7 @@ describe('a background worktree create whose own machine declines the chat', () 
     )
     const state = useAppStore.getState()
     const tab = state.tabsByWorktree[LOCAL_CREATED.id]![0]!
-    expect(state.pendingStartupByTabId[tab.id]).toMatchObject({
+    expect(startupOf(tab.id)).toMatchObject({
       command: "claude --model opus 'fix the flaky test'"
     })
     expect(

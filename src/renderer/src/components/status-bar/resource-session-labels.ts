@@ -54,7 +54,7 @@ export function resolveDaemonSessionLabel(
   session: DaemonSession,
   resolvedWorktreeId: string | null,
   tabId: string | null,
-  ctx: MergeContext,
+  ctx: Pick<MergeContext, 'runtimePaneTitlesByTabId'>,
   index: ResourceSessionBindingIndex
 ): string {
   if (tabId && resolvedWorktreeId) {

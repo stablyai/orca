@@ -21,14 +21,16 @@ describe('Node dist mirror URL', () => {
   })
 
   it.each([
-    ['ftp://mirror.example.com/node', 'http or https'],
-    ['https://user:secret@mirror.example.com/node', 'user name or password'],
-    ['https://mirror.example.com/node?token=1', 'query'],
-    ['not a url', 'valid mirror URL']
-  ])('refuses %s', (value, message) => {
+    ['ftp://mirror.example.com/node', 'http or https', 'protocol'],
+    ['https://user:secret@mirror.example.com/node', 'user name or password', 'credentials'],
+    ['https://mirror.example.com/node?token=1', 'query', 'query'],
+    ['not a url', 'valid mirror URL', 'invalid'],
+    [`https://m.example/${'a'.repeat(2048)}`, 'too long', 'too-long']
+  ])('refuses %s', (value, message, reason) => {
     expect(normalizeNodeDistMirrorUrl(value)).toMatchObject({
       ok: false,
-      message: expect.stringContaining(message)
+      message: expect.stringContaining(message),
+      reason
     })
   })
 

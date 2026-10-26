@@ -21,7 +21,8 @@ import {
   readCombinedDiffViewMemory,
   releaseCombinedDiffView,
   rememberCombinedDiffView,
-  type CombinedDiffViewLease
+  type CombinedDiffViewLease,
+  type CombinedDiffViewSuccession
 } from './combined-diff-view-cache'
 
 export type CombinedDiffViewRestore = {
@@ -40,6 +41,7 @@ export function useCombinedDiffViewRestore({
   setSectionHeights,
   setSections,
   setSideBySide,
+  succession,
   viewStateKey,
   worktreeId
 }: {
@@ -50,6 +52,8 @@ export function useCombinedDiffViewRestore({
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
+  /** Set for tab-scoped keys so a reopened tab restores the view its closed predecessor left. */
+  succession?: CombinedDiffViewSuccession
   viewStateKey: string
   worktreeId: string
 }): CombinedDiffViewRestore {
@@ -71,26 +75,41 @@ export function useCombinedDiffViewRestore({
     supersededLoadIndicesRef
   } = registry
 
-  // Why useState and not `useRef(expr)`: the latter re-reads the cache on every render and
-  // throws the result away, and an anchor seeds legitimately to null so a nullish guard would keep
-  // re-reading. useState's initializer runs once without writing a ref during render.
+  // Lazy state reads once even when the valid seed is null; useRef(expr) or nullish guards would reread on renders.
   const [restoreSeed] = useState<{ offset: number; anchor: VirtualizedScrollAnchor }>(() => {
-    const memory = readCombinedDiffViewMemory(viewStateKey)
+    // Preview inheritance before render; the later claim moves it only after virtualizer seeding.
+    const memory = readCombinedDiffViewMemory(
+      viewStateKey,
+      succession ? { worktreeId, succession } : undefined
+    )
     return { offset: memory?.scrollTop ?? 0, anchor: memory?.scrollAnchor ?? null }
   })
   const scrollOffsetRef = useRef(restoreSeed.offset)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
   const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
 
-  // Why: keep above CombinedDiffViewer's persist/scroll hooks so the lease exists before their effects write.
+  // Create the lease before viewer persist/scroll effects can write.
   const memoryLeaseRef = useRef<CombinedDiffViewLease | null>(null)
+  const successionContentKey = succession?.contentKey
+  const successionScopeId = succession?.scopeId
+  const isSuccessionScopeOpen = succession?.isScopeOpen
   useLayoutEffect(() => {
-    const lease = claimCombinedDiffView(viewStateKey, worktreeId)
+    const lease = claimCombinedDiffView(
+      viewStateKey,
+      worktreeId,
+      successionContentKey !== undefined && successionScopeId !== undefined && isSuccessionScopeOpen
+        ? {
+            contentKey: successionContentKey,
+            scopeId: successionScopeId,
+            isScopeOpen: isSuccessionScopeOpen
+          }
+        : undefined
+    )
     memoryLeaseRef.current = lease
     return () => releaseCombinedDiffView(lease)
-  }, [viewStateKey, worktreeId])
+  }, [isSuccessionScopeOpen, successionContentKey, successionScopeId, viewStateKey, worktreeId])
 
-  // Why: tab/worktree switches unmount this viewer; cache by pane key so remount restores sections+scroll before repaint.
+  // Cache sections and scroll by pane so remount restores them before repaint.
   const initializedEntryStateRef = useRef<{
     viewStateKey: string
     entrySignature: string
@@ -156,10 +175,7 @@ export function useCombinedDiffViewRestore({
     scrollOffsetRef.current = memory?.scrollTop ?? 0
     scrollAnchorRef.current = memory?.scrollAnchor ?? null
     latestDomScrollAnchorRef.current = scrollAnchorRef.current
-    // Why: separates "this row is uncounted" from "this pass skipped counting",
-    // which decides whether an uncounted row is cheap. Per pass, not per view:
-    // `all` mode merges passes that fail independently, so a counted branch row
-    // must not vouch for an uncommitted pass that counted nothing.
+    // Count evidence belongs to each independent pass; all mode must not treat compare success as proof uncommitted rows were counted.
     const countedPasses = collectCountedCombinedDiffPasses(entries)
     setSections(
       entries.map((entry) => {

@@ -42,7 +42,6 @@ export type CodexEventLabel =
 export type CodexTrustEntry = {
   /** Path on disk to the hooks.json that declares the hook (the "key_source"). */
   sourcePath: string
-  /** Codex event label (snake_case). */
   eventLabel: CodexEventLabel
   /** 0-based index of the matcher group within the event array. */
   groupIndex: number
@@ -50,13 +49,12 @@ export type CodexTrustEntry = {
   handlerIndex: number
   /** The exact `command` string written to hooks.json. */
   command: string
-  /** Effective timeout in seconds; defaults to 600 when undefined, explicit values clamped to a minimum of 1. */
+  /** Seconds: Interrupt defaults to 1 and clamps to 1–3; other events default to 600, minimum 1. */
   timeoutSec?: number
   /** Whether the handler is async. Defaults to false. */
   async?: boolean
   /** Optional matcher pattern (only meaningful for events that support it). */
   matcher?: string
-  /** Optional statusMessage field. */
   statusMessage?: string
   /** Verbatim hash to write instead of computing one. Never fed into hashing. */
   trustedHash?: string
@@ -108,11 +106,7 @@ export function parseTrustKey(key: string): {
   return parseCodexTrustKey(key)
 }
 
-/**
- * Upserts hook approvals, preserving unrelated bytes instead of reserializing
- * the user's config. Throws CodexConfigTomlRefusedError, writing nothing, when
- * Codex could not load the result; see writeLoadableHookTrustConfig.
- */
+/** Preserve unrelated config bytes and refuse edits that would break previously loadable TOML. */
 export function upsertHookTrustEntries(
   configPath: string,
   entries: readonly CodexTrustEntry[]
@@ -124,7 +118,6 @@ export function upsertHookTrustEntries(
   }
 }
 
-/** Thrown instead of writing a config.toml that Codex could no longer load. */
 export class CodexConfigTomlRefusedError extends Error {
   constructor(message: string) {
     super(message)
@@ -138,13 +131,7 @@ export function isCodexConfigTomlRefusedError(
   return error instanceof Error && error.name === 'CodexConfigTomlRefusedError'
 }
 
-/**
- * Every hooks.state write goes through here. A user's inline
- * `hooks.state = {...}` or dotted `hooks.state."k".trusted_hash` key cannot take
- * an appended `[hooks.state."k"]` table, and Codex refuses to start with a
- * config.toml it cannot load, so a write that would break a loadable file is
- * refused instead. One that is already broken may still be repaired.
- */
+/** Inline or dotted approvals can conflict with appended tables; reject newly invalid TOML. */
 export function writeLoadableHookTrustConfig(
   configPath: string,
   previous: string,
@@ -154,7 +141,6 @@ export function writeLoadableHookTrustConfig(
   writeConfigAtomically(configPath, contents)
 }
 
-/** Throws CodexConfigTomlRefusedError when `contents` would break a `previous` Codex could load. */
 export function assertLoadableHookTrustConfig(
   configPath: string,
   previous: string,
@@ -167,7 +153,6 @@ export function assertLoadableHookTrustConfig(
   }
 }
 
-/** Each key's trust tables as written, to restore verbatim later; see restoreHookTrustBlocks. */
 export function readHookTrustBlocks(
   configPath: string,
   keys: readonly string[]
@@ -176,7 +161,6 @@ export function readHookTrustBlocks(
   return new Map(keys.map((key) => [key, readHookTrustBlockTexts(content, key)]))
 }
 
-/** Puts each key's trust tables back as read by readHookTrustBlocks; no tables removes the key. */
 export function restoreHookTrustBlocks(
   configPath: string,
   restores: readonly { key: string; blocks: readonly string[] }[]
@@ -200,7 +184,6 @@ function isLoadableToml(content: string): boolean {
   }
 }
 
-/** Moves hook trust blocks to new keys verbatim; see moveHookTrustContent. */
 export function moveHookTrustEntries(
   configPath: string,
   moves: readonly { oldKey: string; newKey: string }[]
@@ -283,11 +266,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
     : new CodexHookTrustEntryMap()
 }
 
-/**
- * Whether config.toml holds an approval key under every spelling Orca writes,
- * as written: Codex on Windows reads only the backslash one, so a lookup that
- * folds separators would count a forward-slash table alone as approved.
- */
+/** Check exact spellings: separator-folded lookups could hide a missing Windows approval table. */
 export function readHookTrustKeySpellings(configPath: string): (key: string) => boolean {
   const written = new Set(
     existsSync(configPath)
@@ -302,7 +281,7 @@ export function readHookTrustEntriesFromContent(content: string): Map<string, Co
 }
 
 function readTomlForMutation(configPath: string): string {
-  // Why: only definitive absence may seed empty; an indeterminate read must preserve the existing file.
+  // Only confirmed absence permits seeding an empty config.
   const observation = observe(() => readTomlFile(configPath))
   if (observation.kind === 'indeterminate') {
     throw observation.error

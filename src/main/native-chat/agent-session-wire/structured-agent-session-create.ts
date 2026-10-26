@@ -35,11 +35,11 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 export type StructuredAgentSessionCreateOptions = {
   firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
   hostLaunchDirectory?: string
-  /** Called after the durable create, before delivery can start the agent. */
+  catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
+  /** Publish after durable creation, before agent delivery starts. */
   publishTab?: () => Promise<void>
 }
 
-/** Founds a chat and its opening message; only the delivery loop acquires the agent. */
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
@@ -107,6 +107,7 @@ async function foundConversation(
   const request = reserveRequestFor({
     sessionId,
     params,
+    models: prior ? undefined : options.catalogModels,
     callerKey,
     fingerprint: params.envelope.payloadFingerprint,
     now: context.now(),
@@ -278,7 +279,6 @@ async function foundConversation(
   }
 }
 
-/** Host entry points that open a chat: attach an existing one or create a new one. */
 export function structuredAgentSessionEntryDelegates(
   context: () => StructuredAgentSessionAttachContext
 ) {
@@ -296,8 +296,7 @@ export function structuredAgentSessionEntryDelegates(
   }
 }
 
-/** The model and effort the chat was created with, which its opening message runs on as a send's
- *  carried ones do. */
+/** Opening messages retain creation-time model/effort choices like later sends. */
 function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
   options?: AgentSessionExecutionOptions
 } {

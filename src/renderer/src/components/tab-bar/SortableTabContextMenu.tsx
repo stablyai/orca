@@ -1,13 +1,4 @@
-import {
-  PanelLeftClose,
-  PanelRightClose,
-  Pin,
-  PinOff,
-  Pencil,
-  SquareTerminal,
-  X,
-  ListX
-} from 'lucide-react'
+import { Pin, PinOff, Pencil, SquareTerminal, X, ListX } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,17 +104,12 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  /** True when this tab is an agent terminal that can switch between the terminal
-   *  and native chat views; gates the "Switch view" menu item. Structured
-   *  sessions never qualify — they have no terminal underneath. */
+  /** Only terminal-backed agent tabs can switch view; structured chats have no terminal beneath them. */
   canToggleViewMode?: boolean
-  /** True when the tab is currently showing the native chat view (drives the
-   *  item's label/icon between "chat" and "terminal"). */
+  /** Select the destination label/icon from the tab’s current chat/terminal view. */
   isChatView?: boolean
-  /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
-  /** Set only for a native chat tab. */
   nativeChat?: NativeChatTabSession
 }
 
@@ -135,8 +121,6 @@ export function SortableTabContextMenu({
   open,
   point,
   tabCount,
-  hasTabsToRight,
-  hasTabsToLeft,
   isPinned,
   onOpenChange,
   onSessionSwitchComplete,
@@ -144,8 +128,6 @@ export function SortableTabContextMenu({
   onActivate,
   onClose,
   onCloseOthers,
-  onCloseToRight,
-  onCloseToLeft,
   onCloseSplitPane,
   onRenameOpen,
   onSetTabColor,
@@ -162,8 +144,7 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
-  // Why: switching a tab into chat view is hidden while that toggle is removed; a tab already in
-  // chat view keeps its way back.
+  // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
   return (
@@ -194,7 +175,7 @@ export function SortableTabContextMenu({
               <SquareTerminal className="size-3.5 shrink-0" />
               {translate(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Switch to Terminal'
+                'Continue with Terminal Agent'
               )}
             </DropdownMenuItem>
           </>
@@ -227,20 +208,6 @@ export function SortableTabContextMenu({
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           <ListX className="size-3.5" />
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-          <PanelRightClose className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
-            'Close All Tabs To The Right'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
-          <PanelLeftClose className="size-3.5" />
-          {translate(
-            'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
-            'Close All Tabs To The Left'
-          )}
         </DropdownMenuItem>
         <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
         <DropdownMenuSeparator />

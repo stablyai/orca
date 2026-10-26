@@ -18,7 +18,7 @@ export function resolveSourceControlBaseRef(input: {
   return worktreeBaseRef || input.repoBaseRef?.trim() || input.defaultBaseRef?.trim() || null
 }
 
-// Why: the compare base is distinct from the PR/rebase target; when enabled it defaults to the branch upstream (else effectiveBaseRef) to surface local changes.
+// Upstream comparison can differ from the PR/rebase target; fall back to effectiveBaseRef when unavailable.
 export function resolveSourceControlCompareBaseRef(input: {
   enabled: boolean
   worktreeBaseRef?: string | null
@@ -36,7 +36,7 @@ export function resolveSourceControlCompareBaseRef(input: {
   return input.upstreamName?.trim() || input.fallbackBaseRef?.trim() || null
 }
 
-// Why: only clear the branch-compare summary once we truly have no base; compareBaseRef is momentarily null while upstream loads, which would flicker.
+// Wait for upstream resolution before clearing a missing base to avoid flicker.
 export function shouldClearBranchCompareForMissingBase(input: {
   isFolder: boolean
   compareBaseRef: string | null

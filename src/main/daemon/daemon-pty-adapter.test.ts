@@ -1,5 +1,4 @@
 import './mock-descendant-sweep'
-/* Core IPtyProvider surface of DaemonPtyAdapter: spawn, io, sizing, teardown. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonClient } from './client'
@@ -406,7 +405,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter.pauseProducer(id)
       await waitFor(() => lastSubprocess.pause.mock.calls.length > 0)
 
-      // Drop the daemon out from under the adapter: the in-flight pause now has no matching resume.
       await server.shutdown()
       await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
 
@@ -423,7 +421,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       try {
-        // Any reconnecting operation must flush the owed resume first.
         await adapter.listProcesses()
         expect(notifySpy).toHaveBeenCalledWith('resumePty', { sessionId: id })
       } finally {
@@ -445,18 +442,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(await adapter.getAppliedSize(id)).toEqual({ cols: 120, rows: 40 })
     })
 
-    // Why: a resize after exit is a dropped fire-and-forget notify; getAppliedSize must report the PTY's last real size, not the drop.
     it('does not advance when a resize is dropped after the session exited', async () => {
       const { id } = await adapter.spawn({ cols: 200, rows: 50 })
 
-      // Child exits, then a late narrow resize races in; daemon Session.resize early-returns for an exited session so 80×24 never lands.
       lastSubprocess._simulateExit(0)
       await new Promise((r) => setTimeout(r, 50))
 
       adapter.resize(id, 80, 24)
       await new Promise((r) => setTimeout(r, 50))
 
-      // The drop must stay visible: never resized to 80 cols, and getAppliedSize never reports 80 (stays wide, or null once reaped).
       expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
       const applied = await adapter.getAppliedSize(id)
       expect(applied?.cols).not.toBe(80)
@@ -510,9 +504,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    // A proven `0` and an absent field are different facts. Dropping
-    // the zero left consumers unable to tell "the app negotiated nothing" from
-    // "this source could not say", which is what makes Preview guess wrong.
+    // Known zero proves no kitty flags were negotiated; absence leaves the state unknown.
     it('publishes proven kitty flags including a known zero', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('plain output\r\n')
@@ -527,8 +519,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    // The other half of that contract: a daemon that cannot say must leave the
-    // key absent, so consumers keep the state unknown instead of reading a `0`.
     it('omits kitty flags when the daemon snapshot has none', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('plain output\r\n')
@@ -579,7 +569,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
     })
 
-    // Why: shutdown can be the first lazy-client op after restart; connect before killing or a healthy session is orphaned (#7742).
     it('kills a live session from a fresh adapter that has not connected yet', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
 
@@ -616,11 +605,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
-    // Why: cold-restore flags a session for a full checkpoint; exiting before it lands leaked a permanent Set entry for the daemon's life.
     it('clears the pending full-checkpoint flag when a session exits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
-      // Simulate the cold-restore reanchor path having flagged this session.
       internals.sessionsNeedingFullCheckpoint.add(id)
       expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(true)
 
@@ -713,8 +700,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('does not let an untagged stale-write exit clear a known replacement', async () => {
-      // The daemon-request-router emits this compatibility exit without an incarnation
-      // when a fire-and-forget write targets a session it no longer owns.
+      // Stale fire-and-forget writes receive compatibility exits without incarnation IDs.
       await adapter.spawn({ cols: 80, rows: 24 })
       const sessionId = 'replacement-known-before-untagged-exit'
       const internals = adapter as unknown as {
@@ -833,7 +819,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       adapter.dispose()
 
-      // Session survives — verify by connecting new adapter
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
       const procs = await adapter2.listProcesses()
       expect(procs).toHaveLength(1)

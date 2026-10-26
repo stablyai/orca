@@ -1,13 +1,4 @@
-/**
- * Boundary validation for an `automation.list` response.
- *
- * A client validates rather than casts: a host that answers a scoped request
- * with the legacy `{ automations }` shape is reporting the whole authority, and
- * committing that as one host's rows would attribute other hosts' automations to
- * the selected one. Individual malformed rows are dropped and counted so one bad
- * row neither hides a host nor produces an unqualified row, and a returned
- * selector that does not match the request is never reclassified into Self.
- */
+/** Validate scoped ownership instead of casting legacy authority-wide rows into one host. Drop/count malformed rows individually; duplicate IDs and mismatched selectors cannot establish ownership or become Self. */
 
 import type { Automation } from './automations-types'
 import type { AutomationUsageSummary } from './automation-usage-summary'
@@ -169,8 +160,7 @@ export function validateAutomationListResponse(
   }
   return {
     ok: true,
-    // Omitted rather than defaulted: a host is allowed not to report, and "not
-    // reported" must not read downstream as "authoritatively none".
+    // Omit unreported counts; zero would claim authoritative absence.
     result: { automations, items, ...(orphanCount === undefined ? {} : { orphanCount }) },
     invalidRows
   }

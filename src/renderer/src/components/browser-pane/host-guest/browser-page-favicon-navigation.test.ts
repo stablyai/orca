@@ -30,8 +30,7 @@ function createHarness(startUrl: string) {
     invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     recoveryNavigationValidationRef: ref(null),
     activeLoadFailureRef: ref(null),
-    // Why the destination, not the current document: Orca-driven navigations set this ref before
-    // assigning src, which is exactly the case the origin check must not read it for.
+    // Point the ref at the destination as Orca navigation does; it must not be mistaken for the departing origin.
     lastKnownWebviewUrlRef: ref<string | null>(startUrl),
     addressBarInputRef: ref(null),
     onSetUrlRef: ref(vi.fn()),
@@ -51,7 +50,6 @@ function createHarness(startUrl: string) {
     addressBarInputRef: ref(null),
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref<string | null>(startUrl),
-    trackNextLoadingEventRef: ref(true),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
     invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
@@ -72,7 +70,7 @@ function createHarness(startUrl: string) {
     committedUrl.current = url
   }
 
-  return { faviconUrlRef, updates, navigation, navigateTo, committedUrl }
+  return { faviconUrlRef, updates, navigation, loading, navigateTo, committedUrl }
 }
 
 describe('favicon retention across navigations', () => {
@@ -126,7 +124,7 @@ describe('favicon retention across navigations', () => {
     expect(harness.faviconUrlRef.current).toBe(GITHUB_ICON)
   })
 
-  it('reports loading without touching the icon on did-start-loading', () => {
+  it('reports loading without touching the icon when a page navigation starts', () => {
     const harness = createHarness('https://github.com/nodejs/node')
     harness.navigation.handleFaviconUpdate({ favicons: [GITHUB_ICON] })
     harness.updates.length = 0
@@ -134,6 +132,28 @@ describe('favicon retention across navigations', () => {
     harness.navigateTo('https://github.com/nodejs/undici')
 
     expect(harness.updates).toEqual([{ loading: true }])
+  })
+
+  it('does not report loading for iframe loads or same-document navigations', () => {
+    const harness = createHarness('https://github.com/nodejs/node')
+
+    const startNavigation = (url: string, isMainFrame: boolean, isInPlace: boolean) =>
+      Object.assign(new Event('did-start-navigation'), {
+        url,
+        isMainFrame,
+        isInPlace,
+        frameProcessId: 1,
+        frameRoutingId: 1
+      })
+    harness.loading.handleDidStartLoading()
+    harness.navigation.handleDidStartNavigation(
+      startNavigation('https://ads.example.com/frame', false, false)
+    )
+    harness.navigation.handleDidStartNavigation(
+      startNavigation('https://github.com/nodejs/node#readme', true, true)
+    )
+
+    expect(harness.updates.some((update) => update.loading)).toBe(false)
   })
 
   it('takes the first renderable icon rather than the first declared one', () => {

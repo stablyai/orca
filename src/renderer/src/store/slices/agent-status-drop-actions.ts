@@ -3,11 +3,11 @@ import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions
-} from './agent-status-contract'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+} from './agent-status/agent-status-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
-import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status/agent-status-drop-reducer'
+import { pruneMigrationUnsupportedEntries } from './agent-status/agent-status-migration-unsupported-entries'
 import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
@@ -46,8 +46,7 @@ export function createAgentStatusDropActions(
           (entry) => entry.paneKey === paneKey
         )
         const nextAck = removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
-        // Row dismissal keeps cutoff/manual-unread: the pane may still be live, and its next
-        // hook event would replay every cleared stateHistory event as unread without them.
+        // Dismissal preserves cutoff/manual-unread because live panes can republish cleared history.
         const nextClearedAt = opts?.paneRemoved
           ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
           : s.activityClearedAtByPaneKey

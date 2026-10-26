@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
-// Exercises the in-WebView touch dispatcher end-to-end: a surface tap on a
-// printed http(s) URL must post an `open-url` message (which RN routes to the
-// in-app/phone browser). Regression guard for taps that jitter a few pixels —
-// those were being swallowed because the tap shared the long-press slop gate.
-import { beforeEach, describe, expect, it } from 'vitest'
+// URL taps with slight jitter once hit the long-press slop gate and never reached the native browser bridge.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
@@ -11,8 +8,11 @@ function bodyMarkup(): string {
   return TERMINAL_DOCUMENT_MARKUP
 }
 
-// Minimal xterm stub: one scrollback line containing a URL, fixed 8x15 cells.
-function makeTerminal(lineRef: { current: string }, mouseTrackingMode = 'none') {
+function makeTerminal(
+  lineRef: { current: string },
+  mouseTrackingMode = 'none',
+  scrollbackRows = 0
+) {
   return {
     cols: 80,
     rows: 24,
@@ -23,7 +23,7 @@ function makeTerminal(lineRef: { current: string }, mouseTrackingMode = 'none') 
     buffer: {
       active: {
         viewportY: 0,
-        baseY: 0,
+        baseY: scrollbackRows,
         length: 1,
         cursorY: 0,
         type: 'normal' as const,
@@ -33,8 +33,7 @@ function makeTerminal(lineRef: { current: string }, mouseTrackingMode = 'none') 
             return null
           }
           return {
-            // Honor (trimRight, startCol, endCol) like real xterm so the
-            // cell→string-index conversion (cellColToStringIndex) resolves correctly.
+            // Honor xterm’s translateToString slice arguments so wide-cell offset conversion is realistic.
             translateToString: (_trim?: boolean, start?: number, end?: number) =>
               text.slice(start ?? 0, end ?? text.length),
             getCell: () => ({ extended: undefined })
@@ -70,13 +69,14 @@ type OscLinkRange = { row: number; startCol: number; endCol: number; uri: string
 function boot(
   line: string,
   oscLinks?: OscLinkRange[],
-  mouseTrackingMode = 'none'
+  mouseTrackingMode = 'none',
+  scrollbackRows = 0
 ): { posted: Posted; setLine: (line: string) => void } {
   const posted: Posted = []
   const lineRef = { current: line }
   const w = window as unknown as { Terminal: unknown; ReactNativeWebView: unknown }
   w.Terminal = function () {
-    return makeTerminal(lineRef, mouseTrackingMode)
+    return makeTerminal(lineRef, mouseTrackingMode, scrollbackRows)
   }
   w.ReactNativeWebView = {
     postMessage(s: string) {
@@ -84,7 +84,6 @@ function boot(
     }
   }
   document.body.innerHTML = bodyMarkup()
-  // eslint-disable-next-line no-new-func
   // The bundle the WebView loads, run as the WebView runs it.
   new Function(TERMINAL_DOCUMENT_SCRIPT)()
   window.dispatchEvent(
@@ -106,24 +105,32 @@ function fireTouch(type: string, touches: Array<{ x: number; y: number }>): void
   Object.defineProperty(ev, 'touches', {
     value: touches.map((p, i) => ({ identifier: i, clientX: p.x, clientY: p.y, target: surface }))
   })
-  Object.defineProperty(ev, 'target', { value: surface })
-  document.dispatchEvent(ev)
+  surface.dispatchEvent(ev)
 }
 
-// Wait one macrotask so init()'s rAF chain (term.open -> ready) settles.
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 50))
 
 describe('terminal WebView tap routing', () => {
-  // Fit scale here is min(1, innerWidth / (cellW*cols)) = 200 / 640 = 0.3125.
-  // A URL at column 12 sits at screen x = 12 * 8 * 0.3125 = 30px, y within row 0.
   const URL_LINE = 'visit https://example.com/foo now'
   const tapX = 12 * 8 * 0.3125
   const tapY = 2
   const screenXForCol = (col: number): number => col * 8 * 0.3125
 
   beforeEach(() => {
+    vi.spyOn(window, 'addEventListener')
+    vi.spyOn(document, 'addEventListener')
     Object.defineProperty(window, 'innerWidth', { value: 200, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 400, configurable: true })
+  })
+
+  afterEach(() => {
+    for (const [type, listener, options] of vi.mocked(window.addEventListener).mock.calls) {
+      window.removeEventListener(type, listener, options)
+    }
+    for (const [type, listener, options] of vi.mocked(document.addEventListener).mock.calls) {
+      document.removeEventListener(type, listener, options)
+    }
+    vi.restoreAllMocks()
   })
 
   it('posts open-url when a clean tap lands on a URL', async () => {
@@ -135,8 +142,7 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('still posts open-url when the tap jitters a few pixels', async () => {
-    // Why: a finger rarely lands perfectly still. Movement under TAP_SLOP must
-    // not reclassify the tap as a scroll and drop the link open.
+    // Small finger jitter must stay a tap and open the touched URL.
     const { posted } = boot(URL_LINE)
     await settle()
     fireTouch('touchstart', [{ x: tapX, y: tapY }])
@@ -164,6 +170,24 @@ describe('terminal WebView tap routing', () => {
     ).toEqual(['terminal-input', 'terminal-tap'])
   })
 
+  it('marks the mouse report a touch tap sends as a click', async () => {
+    // A click can move the TUI cursor; order it behind live-field text rather than the wheel queue.
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    const inputs = posted.filter((message) => message.type === 'terminal-input')
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]?.click).toBe(true)
+  })
+
   it('focuses native input without mouse bytes while the tracking encoding is unproven', async () => {
     const { posted } = boot('interactive prompt', undefined, 'drag')
     await settle()
@@ -187,8 +211,7 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('opens the URL even right after a width-change reflow', async () => {
-    // Why: scrollback reflow rewraps the local buffer; the tap path must keep
-    // working afterward (the reflow message must not disturb tap routing).
+    // Reflow must preserve URL tap routing after scrollback rewrap.
     const { posted } = boot(URL_LINE)
     await settle()
     window.dispatchEvent(
@@ -303,5 +326,76 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchmove', [{ x: tapX, y: tapY + 120 }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+  })
+
+  // Scaled rows are smaller than tap slop; a short drag can still count as a real row scroll.
+  it('does not tap after a short drag that scrolled scrollback', async () => {
+    const { posted } = boot('plain output', undefined, 'none', 50)
+    await settle()
+    fireTouch('touchstart', [{ x: 20, y: 100 }])
+    fireTouch('touchmove', [{ x: 20, y: 88 }])
+    fireTouch('touchend', [])
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
+  })
+
+  it('does not tap or click after a short drag that scrolled a mouse-tracking TUI', async () => {
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
+
+    fireTouch('touchstart', [{ x: 20, y: 100 }])
+    fireTouch('touchmove', [{ x: 20, y: 88 }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
+    const input = posted
+      .filter((m) => m.type === 'terminal-input')
+      .map((m) => String(m.bytes))
+      .join('')
+    const reports = input.split('\u001b[M').slice(1)
+    expect(reports.length).toBeGreaterThan(0)
+    expect(reports.every((report) => report[0] === '`' || report[0] === 'a')).toBe(true)
+  })
+
+  it('still taps when the touch moves less than a row', async () => {
+    const { posted } = boot('plain output', undefined, 'none', 50)
+    await settle()
+    fireTouch('touchstart', [{ x: 20, y: 100 }])
+    fireTouch('touchmove', [{ x: 20, y: 97 }])
+    fireTouch('touchend', [])
+    expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(1)
+  })
+
+  it('still taps when the touch moves a row and back before anything scrolls', async () => {
+    const { posted } = boot('plain output', undefined, 'none', 50)
+    await settle()
+    fireTouch('touchstart', [{ x: 20, y: 100 }])
+    fireTouch('touchmove', [{ x: 20, y: 94 }])
+    fireTouch('touchmove', [{ x: 20, y: 100 }])
+    fireTouch('touchend', [])
+    expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(1)
+  })
+
+  it('does not tap when the touch stops a coast', async () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { posted } = boot('plain output', undefined, 'none', 50)
+    await settle()
+    fireTouch('touchstart', [{ x: 20, y: 300 }])
+    now += 16
+    fireTouch('touchmove', [{ x: 20, y: 240 }])
+    now += 16
+    fireTouch('touchmove', [{ x: 20, y: 180 }])
+    fireTouch('touchend', [])
+    const beforeStoppingTouch = posted.length
+
+    fireTouch('touchstart', [{ x: 20, y: 180 }])
+    fireTouch('touchend', [])
+
+    expect(posted.slice(beforeStoppingTouch).find((m) => m.type === 'terminal-tap')).toBeUndefined()
   })
 })

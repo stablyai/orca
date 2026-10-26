@@ -245,7 +245,7 @@ describe('assertAttachableParentWorkspace', () => {
     assertAttachableParentWorkspace(store as never, parentWorkspace, childKey)
   }
 
-  // Why: the pick can go stale between the composer and the create; nesting is decoration, not the job.
+  // Composer parent selection can go stale; nesting must not block creation.
   it.each([
     ['worktree', () => worktreeWorkspaceKey(PARENT_ID)],
     ['folder', () => folderWorkspaceKey('folder-gone')]

@@ -24,8 +24,7 @@ const ROW_TOP_PX = 1_000
 
 let restoreLayout: (() => void)[] = []
 
-/** A chat pane whose marker sits `intoRowPx` down its row. The view's bottom edge rests
- *  `aboveMarkerPx` short of the marker: 0 for a reader who was at the end of what there was. */
+/** Place the view bottom aboveMarkerPx short of a marker positioned intoRowPx within its row. */
 function pane(
   value: Marker,
   { intoRowPx = 0, aboveMarkerPx = 0 }: { intoRowPx?: number; aboveMarkerPx?: number } = {}
@@ -75,13 +74,11 @@ describe('NativeChatNewRowsMarker', () => {
     expect(value.onArrived).toHaveBeenCalled()
   })
 
-  // Under a prompt the reader expanded, the row's top would leave the marker below the view.
   it('brings itself to the top when it sits too far down its row to show with it', () => {
     const { onReveal } = pane(marker({ place: 'above-turn-bar' }), { intoRowPx: 500 })
     expect(onReveal).toHaveBeenCalledWith(screen.getByRole('separator'))
   })
 
-  // They scrolled up to read something else before they left: that place is theirs to keep.
   it('leaves a reader who had parked the view above the new rows where they were', () => {
     const value = marker()
     const { onReveal } = pane(value, { aboveMarkerPx: 400 })

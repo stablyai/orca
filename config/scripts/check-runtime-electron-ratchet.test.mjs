@@ -29,7 +29,6 @@ describe('structured chat coverage', () => {
     return root
   }
 
-  // Every lane that must exist.
   const requiredLanes = {
     'src/main/native-chat/reader.ts': 'export {}',
     'src/main/claude/claude-session.ts': 'export {}',
@@ -197,14 +196,15 @@ describe('structured chat coverage', () => {
 describe('the default entry points', () => {
   const lanes = ['native-chat', 'claude', 'codex', 'runtime'].map((lane) => `src/main/${lane}/`)
 
-  it('are the runtime entries plus a file from every lane that exists', () => {
+  it('are the runtime and CLI entries plus a file from every lane that exists', () => {
     const entries = defaultEntryPoints().map((file) =>
       path.relative(process.cwd(), file).split(path.sep).join('/')
     )
-    expect(entries.slice(0, 3)).toEqual([
+    expect(entries.slice(0, 4)).toEqual([
       'src/main/runtime/orca-runtime.ts',
       'src/main/runtime/runtime-rpc.ts',
-      'src/main/orcad/main.ts'
+      'src/main/orcad/main.ts',
+      'src/cli/index.ts'
     ])
     for (const lane of [...lanes, 'src/shared/', 'src/packages/process-host/src/']) {
       expect(entries.some((file) => file.startsWith(lane))).toBe(true)

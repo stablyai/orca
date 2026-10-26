@@ -10,7 +10,6 @@ import { killPtyFromRuntimeController, stopAndWaitPtyFromRuntimeController } fro
 
 const PTY_ID = 'respawned-pty'
 
-// The shutdown acknowledges only after `duringShutdown` ran; `listed` is the host's inventory then.
 function providerWhose(duringShutdown: () => void, listed: { id: string }[]): IPtyProvider {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stops call only shutdown and listProcesses.
   return {
@@ -100,7 +99,7 @@ describe('a stop whose shutdown lands after a same-id respawn', () => {
 })
 
 describe('a stop of a PTY whose incarnation was stamped mid-stop', () => {
-  // Owner reconciliation records the same process's incarnation while its shutdown is in flight.
+  // Owner reconciliation can discover this same process's incarnation while shutdown is pending.
   function start(): ReturnType<typeof harness> {
     setLocalPtyProvider(providerWhose(() => ptyIncarnationById.set(PTY_ID, 'inc-same'), []))
     ptyOwnership.set(PTY_ID, LOCAL_EXECUTION_HOST_ID)

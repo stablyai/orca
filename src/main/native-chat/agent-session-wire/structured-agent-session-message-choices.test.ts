@@ -49,6 +49,51 @@ it('keeps the first accepted choice through opening and saves a later pick for t
   expect(rig.store.getRecord(SESSION)?.options?.model).toBe('model-b')
 })
 
+it('keeps the model and effort a chat with none saved first ran, after its config moves', async () => {
+  await rig.dispose()
+  const agent = { restartable: true as const, reportsModel: 'gpt-ran', reportsEffort: 'xhigh' }
+  rig = await createQueuedMessageTestRig(agent)
+  const first = rig.send('first')
+  expect(await first.result).toMatchObject({ ok: true })
+  await eventually(() =>
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-ran', effort: 'xhigh' })
+  )
+  await rig.settleAccepted(first.id, 'a')
+  Object.assign(agent, { reportsModel: 'gpt-new', reportsEffort: 'low' })
+  await rig.restartHostProcess()
+  const second = rig.send('second')
+  expect(await second.result).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual({
+    model: 'gpt-ran',
+    effort: 'xhigh'
+  })
+})
+
+it('records what a later readback reports when the start named only a filled-in default', async () => {
+  // Model Claude’s delayed settings readback after startup without a model.
+  const first = rig.send('first')
+  expect(await first.result).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+  expect(rig.store.getRecord(SESSION)?.options).toBeUndefined()
+  await rig.settleAccepted(first.id, 'a')
+  const preparation = Promise.withResolvers<never>()
+  rig.dispatch.mockImplementationOnce(() => preparation.promise)
+  await rig.send('rejected before preparation').result
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+  await rig.host.handleAdapterEvent({
+    type: 'options-reported',
+    sessionId: SESSION,
+    fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+    acquisitionGeneration: 'generation-1',
+    reportedOptions: { model: 'opus[1m]', effort: 'high' }
+  })
+  preparation.reject(new Error('content preparation failed'))
+  await eventually(() =>
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]', effort: 'high' })
+  )
+})
+
 it('rejects a refused choice before prompt input and leaves the next pick saved', async () => {
   await pickModel('model-b')
   rig.dispatch.mockRejectedValueOnce(
@@ -112,7 +157,7 @@ it('keeps a draft’s accepted choices through a host restart and Send now', asy
   expect((await rig.handoff(draftId))?.options).toEqual(choices)
 })
 
-it('steers a matching choice but holds an empty default choice for a new turn', async () => {
+it('steers a matching choice but holds a different one for a new turn', async () => {
   const choices = { model: 'model-a', effort: 'high' }
   const first = rig.send('first', undefined, { carried: choices })
   await first.result
@@ -138,8 +183,8 @@ it('steers a matching choice but holds an empty default choice for a new turn', 
     clientMessageId: matching.id,
     providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-a', ordinal: 1 }
   })
-  const defaults = rig.send('default choices', undefined, { carried: {} })
-  await defaults.result
+  const other = rig.send('other choices', undefined, { carried: { effort: 'low' } })
+  await other.result
   expect(rig.dispatch).toHaveBeenCalledTimes(2)
 
   rig
@@ -151,5 +196,45 @@ it('steers a matching choice but holds an empty default choice for a new turn', 
     )
   await rig.host.flushStreamedEvents(SESSION)
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(3))
-  expect(rig.dispatch.mock.calls[2]?.[0].executionOptions).toEqual({})
+  expect(rig.dispatch.mock.calls[2]?.[0].executionOptions).toEqual({
+    model: 'model-a',
+    effort: 'low'
+  })
 })
+
+it.each(['before', 'during', 'after'])(
+  'uses only a model observed after input, including reports %s finalization',
+  async (when) => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ reportsModel: 'old-model', reportsEffort: 'high' })
+    const report = (model: string) =>
+      rig.host.handleAdapterEvent({
+        type: 'options-reported',
+        sessionId: SESSION,
+        fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+        acquisitionGeneration: 'generation-1',
+        reportedOptions: { model, effort: 'low', fastMode: true, fastModeState: 'on' }
+      })
+    rig.dispatch.mockImplementationOnce(async (input) => {
+      if (when === 'before') {
+        await report('previous-model')
+      }
+      input.onInputPreparation?.()
+      input.onExecutionSnapshot?.()
+      if (when === 'during') {
+        await report('actual-model')
+      }
+      return { state: 'admitted', ranOptions: {} }
+    })
+    const first = rig.send('first')
+    expect(await first.result).toMatchObject({ ok: true })
+    await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
+    if (when !== 'during') {
+      expect(rig.store.getRecord(SESSION)?.options).toBeUndefined()
+      await report('actual-model')
+    }
+    await eventually(() =>
+      expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'actual-model' })
+    )
+  }
+)

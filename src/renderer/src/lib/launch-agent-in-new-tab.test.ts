@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import type { Project } from '../../../shared/project-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
-/** Startup commands published with the created tabs, in creation order. */
 function queuedStartups() {
   return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
 }
@@ -21,6 +21,10 @@ const mockToastMessage = vi.fn()
 const mockWaitForAgentReady = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
+const initialProjects: Pick<Project, 'id' | 'localWindowsRuntimePreference'>[] = [
+  { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
+]
 
 const store = {
   activeRepoId: 'repo-1',
@@ -42,18 +46,7 @@ const store = {
       { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
     >
   },
-  projects: [
-    {
-      id: 'repo-1',
-      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
-    }
-  ] as {
-    id: string
-    localWindowsRuntimePreference:
-      | { kind: 'inherit-global' }
-      | { kind: 'windows-host' }
-      | { kind: 'wsl'; distro: string | null }
-  }[],
+  projects: initialProjects,
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
   sshConnectionStates: new Map([
     ['ssh-a', { status: 'connected', remotePlatform: 'linux' }],
@@ -122,8 +115,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-// Why: this file pins main's window launch and its paste, which chat-default and paired launches
-// still take; an AI button's host launch reuses that paste and is pinned in its own tests.
+// Cover window-planned launches/paste here; AI-button host launches share delivery but have separate ownership tests.
 vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
   newTabPromptLaunchesThroughHost: () => false,
   launchNewTabPromptThroughHost: vi.fn()
@@ -142,6 +134,11 @@ const mockCreateWebRuntimeSessionTerminal = vi.fn()
 const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
+vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+  createWebRuntimeSessionTerminalResult: async (args: unknown) => ({
+    outcome: await mockCreateWebRuntimeSessionTerminal(args)
+  })
+}))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
   createWebRuntimeAgentSessionTerminalWithLaunchDraft:
@@ -154,7 +151,6 @@ vi.mock('../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
-/** One click that launches Command Code in wt-1, a terminal-route agent. */
 const COMMAND_CODE_CLICK = {
   requestId: 'command-code-click',
   agent: 'command-code',
@@ -164,7 +160,6 @@ const COMMAND_CODE_CLICK = {
 describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // The local runtime has answered (without structured support), so no launch waits on it.
     setLocalRuntimeCapabilitiesForTests([])
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
@@ -361,7 +356,6 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'draft'
     })
 
-    // Claude's --prefill launch seeds the draft without a paste callback.
     expect(result?.pasteDraftAfterLaunch).toBe(false)
     expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -540,6 +534,8 @@ describe('launchAgentInNewTab', () => {
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true
     }
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-12', agent: 'codex', worktreeId: 'wt-1' })
@@ -548,7 +544,7 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       agentSessionKind: 'fresh',
-      agent: 'codex',
+      launchAgent: 'codex',
       viewMode: 'terminal'
     })
   })
@@ -562,6 +558,8 @@ describe('launchAgentInNewTab', () => {
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true
     }
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-13', agent: 'codex', worktreeId: 'wt-1' })
@@ -570,7 +568,7 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       agentSessionKind: 'fresh',
-      agent: 'codex',
+      launchAgent: 'codex',
       viewMode: 'terminal'
     })
   })
@@ -589,9 +587,8 @@ describe('launchAgentInNewTab', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
-
-    await Promise.resolve()
+    await launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
+      ?.terminalCompletion
     expect(mockToastError).toHaveBeenCalledWith(
       'Upgrade the remote Orca host before starting or resuming agent sessions.'
     )
@@ -762,8 +759,7 @@ describe('launchAgentInNewTab', () => {
     }
     store.ptyIdsByTabId = { 'tab-1': [ptyId] }
 
-    // Why: explicit disconnect sends the transient clear before its state
-    // event, while the old connection can still appear connected and bound.
+    // Disconnect clears status before the state event, while the old binding can still appear connected.
     store.transientClearedAgentStatusConnectionIds = { 'ssh-a': true }
     finishDelivery?.(true)
     await expect(result?.promptDeliveryResult).resolves.toEqual({
@@ -820,7 +816,6 @@ describe('launchAgentInNewTab', () => {
       onTimeout?.()
       return Promise.resolve(false)
     })
-    // User closed the tab before the agent became ready — it is gone from the list.
     store.tabsByWorktree = { 'wt-1': [] }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -862,7 +857,6 @@ describe('launchAgentInNewTab', () => {
       onTimeout?.()
       return Promise.resolve(false)
     })
-    // PTY never spawned: a real failure, not a user cancellation.
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: null } as never] }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -893,7 +887,8 @@ describe('launchAgentInNewTab', () => {
 
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
+        // Codex's update prompt would take the Enter that submits the pasted prompt (#18153).
+        command: "codex '-c' 'check_for_update_on_startup=false' '--model' 'gpt-5.5'"
       })
     )
   })

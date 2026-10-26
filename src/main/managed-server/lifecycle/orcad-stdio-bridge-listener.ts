@@ -1,8 +1,3 @@
-/**
- * The local half of the stdio bridge: a loopback listener whose every accepted socket rides its
- * own bridge channel from a channel factory. Owns admission, queueing and teardown; knows nothing
- * of the host transport the channels run over.
- */
 import { createServer, type Socket } from 'node:net'
 import type { OrcadStdioBridgeMode } from './orcad-stdio-bridge-script'
 import {
@@ -17,16 +12,11 @@ import type {
 } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { listenForPortForward } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
 
-/**
- * Each bridge is one sshd session, and OpenSSH's MaxSessions defaults to 10 per connection. The
- * client holds one shared control socket and one per stream (terminals, each browser), so 8
- * covers it and leaves room for the exec work sharing the connection. Past it, sockets queue.
- */
+// OpenSSH defaults to 10 sessions; cap bridges at 8 to leave capacity for exec work.
 export const ORCAD_STDIO_BRIDGE_MAX_CHANNELS = 8
-export const ORCAD_STDIO_BRIDGE_QUEUE_TIMEOUT_MS = 30_000
+const ORCAD_STDIO_BRIDGE_QUEUE_TIMEOUT_MS = 30_000
 
-/** Opens one bridge channel for one accepted socket; a rejection just drops that socket. */
-export type OrcadStdioBridgeChannelFactory = () => Promise<{
+type OrcadStdioBridgeChannelFactory = () => Promise<{
   channel: RemoteCommandChannel
   mode: OrcadStdioBridgeMode
 }>
@@ -136,7 +126,7 @@ function pipeSocketThroughBridge(
   mode: OrcadStdioBridgeMode
 ): void {
   const decoder = new OrcadStdioBridgeDecoder(mode)
-  // A refused dial is what the forward's failed channel open is: the socket just closes.
+  // Refused dials close only their socket, matching forwarding-channel refusal.
   decoder.once('signal', (signal: OrcadStdioBridgeSignal) => {
     if (signal !== 'ready') {
       socket.destroy()
@@ -167,6 +157,6 @@ function closeChannel(channel: RemoteCommandChannel): void {
   try {
     channel.close()
   } catch {
-    // Late callbacks after the transport dropped.
+    // Ignore teardown callbacks after the host transport drops.
   }
 }

@@ -1,5 +1,5 @@
 import './xterm-env-polyfill'
-import { Terminal } from '@xterm/headless'
+import { Terminal, type ITerminalOptions } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
@@ -8,6 +8,7 @@ import {
   serializeWithAbsoluteCursor
 } from '../../shared/terminal-serialize-absolute-cursor'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
@@ -30,11 +31,12 @@ import {
   type HeadlessTerminalRow
 } from './headless-terminal-rows'
 
-export type HeadlessEmulatorOptions = {
+/** windowsPty: ConPTY repaints its own grid after a resize, so growing rows must not pull scrollback. */
+export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
   cols: number
   rows: number
   scrollback?: number
-  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon Session must never pass this. */
+  /** Only opted-in live writes may reply; daemon Session must never supply this sink. */
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
@@ -42,22 +44,20 @@ export type HeadlessEmulatorOptions = {
 }
 
 export type HeadlessEmulatorWriteOptions = {
-  /** Reply ownership for this exact chunk; default false so seed/hydration/snapshot writes never forward (main-side replay guard; twin of renderer replay-guard.ts). */
+  /** Opt in only for live chunks; seed, hydration and snapshot writes must never reply. */
   forwardQueryReplies?: boolean
 }
 
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
     writeSync?: (data: string) => void
-    // Why: kitty keyboard flags aren't on the public IModes; read the core service the CSI u handlers mutate.
     coreService?: {
       kittyKeyboard?: { flags?: number }
     }
   }
 }
 
-const DEFAULT_SCROLLBACK = 5000
-// Keep in sync with the renderer twin terminal-capability-replies.ts (main must not import renderer modules).
+// Match renderer terminal-capability-replies.ts without importing renderer code.
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
@@ -71,9 +71,9 @@ export class HeadlessEmulator {
   private onQueryReply: ((reply: string) => void) | null
   private conptyDa1OverrideInstalled = false
   private viewAttributeResponder: TerminalViewAttributeResponder | null = null
-  // Why: replies must be scoped to the exact write that carried the query, so seeds/snapshots and unsolicited emissions never leak to the PTY.
+  // Scope replies to their live chunk so replayed queries cannot reach the PTY.
   private queryReplyForwardingDepth = 0
-  // Why: a mid-escape chunk tail lives in xterm's parser, not the buffer, so serialize() drops it and it renders literal after restore (Bug E).
+  // serialize() omits parser state, so preserve an incomplete escape for the next live chunk.
   private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
@@ -87,31 +87,31 @@ export class HeadlessEmulator {
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: opts.scrollback ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
       allowProposedApi: true,
       logLevel: 'off',
-      // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).
-      vtExtensions: { kittyKeyboard: true }
+      // Match renderer kitty flag parsing and query responses.
+      vtExtensions: { kittyKeyboard: true },
+      windowsPty: opts.windowsPty ?? {}
     })
 
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
     trackModifyOtherKeys(this.terminal)
 
-    // Why Unicode 11: must match the renderer's char-width measurement, else emoji rows mismeasure and the mirror accumulates cell-shifted tears.
+    // Match renderer cell widths to prevent shifted snapshot rows.
     this.terminal.loadAddon(new Unicode11Addon())
     activateOrcaTerminalUnicodeProvider(this.terminal)
 
-    // Why gated: an emulator query reply would beat the renderer's to the shell's stdin (OSC 11 default-black was the casualty).
+    // Unsolicited emulator replies could race the renderer into shell input.
     this.onQueryReply = opts.onQueryReply ?? null
     if (this.onQueryReply) {
       this.terminal.onData((reply) => this.emitQueryReply(reply))
     }
   }
 
-  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply. See startup-device-attributes-responder. */
+  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply. */
   installConptyPrimaryDeviceAttributesOverride(): void {
-    // Why idempotent: installed at creation and again at spawn-mark time (which can land later), so it's never stacked.
     if (this.conptyDa1OverrideInstalled) {
       return
     }
@@ -123,13 +123,12 @@ export class HeadlessEmulator {
     })
   }
 
-  /** Why exposed: responder modules install handlers here (see the view-attribute and
-   *  device-attributes responders); the caller owns disposal. */
+  /** Responder installers own disposal of handlers registered here. */
   get responderParser(): Terminal['parser'] {
     return this.terminal.parser
   }
 
-  /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes; daemon Session must never call this. */
+  /** Headless xterm has no theme; use renderer attributes for replies, never in daemon Session. */
   installViewAttributeResponder(getBaseAttributes: () => TerminalViewAttributes | null): void {
     if (this.viewAttributeResponder) {
       return
@@ -137,12 +136,11 @@ export class HeadlessEmulator {
     this.viewAttributeResponder = installTerminalViewAttributeResponder({
       parser: this.terminal.parser,
       getBaseAttributes,
-      // emitQueryReply keeps replies in the per-chunk forwarding window, so seeded/replayed queries answer no one.
       emitReply: (reply) => this.emitQueryReply(reply)
     })
   }
 
-  /** Sets cursor options so xterm answers DECSCUSR / DECRQM 12 renderer-true; per-PTY color overrides are dropped (a theme apply overwrites them anyway). */
+  /** Match renderer cursor replies; pushed attributes supersede per-PTY color overrides. */
   applyPushedViewAttributes(attributes: TerminalViewAttributes): void {
     if (this.disposed) {
       return
@@ -152,7 +150,7 @@ export class HeadlessEmulator {
     this.viewAttributeResponder?.clearColorOverrides()
   }
 
-  /** Re-seeds snapshot kitty flags via the live-push parse, routed unflagged so it can never answer a query (terminal-query-authority.md). */
+  /** Restore kitty flags without allowing query replies. */
   applyKittyKeyboardFlags(flags: number): Promise<void> {
     if (!Number.isInteger(flags) || flags <= 0) {
       return Promise.resolve()
@@ -166,7 +164,7 @@ export class HeadlessEmulator {
     }
   }
 
-  /** Severs the reply sink so a post-dispose reply can't reach a successor PTY (respawns reuse session ids). */
+  /** Prevent late replies from reaching a respawned PTY that reuses the session ID. */
   disableQueryReplyForwarding(): void {
     this.onQueryReply = null
   }
@@ -181,7 +179,7 @@ export class HeadlessEmulator {
       return Promise.resolve()
     }
     this.oscText.scan(data)
-    // Why the sentinel: xterm parses writes async, so its zero-byte callback fires in FIFO order to open the window at exactly this chunk.
+    // The empty-write callback opens forwarding at this chunk’s position in xterm’s async FIFO.
     if (forwardQueryReplies) {
       this.terminal.write('', () => {
         this.queryReplyForwardingDepth += 1
@@ -198,7 +196,7 @@ export class HeadlessEmulator {
     })
   }
 
-  /** Synchronous write for cold-restore replay (async would snapshot a half-applied stream); false when writeSync is unavailable. */
+  /** Apply cold-restore bytes before snapshotting; return false if the private sync API is unavailable. */
   writeSync(data: string): boolean {
     if (this.disposed) {
       return false
@@ -216,7 +214,7 @@ export class HeadlessEmulator {
     if (forwardQueryReplies) {
       this.queryReplyForwardingDepth += 1
     }
-    // Why: restore snapshots are requested right after PTY bursts; queued writes could snapshot half-cleared TUI rows.
+    // Queued PTY writes could leave a snapshot with half-cleared TUI rows.
     try {
       writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
     } finally {
@@ -232,12 +230,7 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return
     }
-    // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
-    // invalidates them — but a resize to the size already applied is not a
-    // reflow. Cold restore seeds the ranges and then replays records that
-    // resize, and same-size records reach the durable log because every
-    // attach re-asserts the pane's dimensions, so clearing unconditionally
-    // dropped the links a restore had just recovered.
+    // Preserve row-indexed restored links on same-size resizes; only real resizes invalidate them.
     if (this.terminal.cols === cols && this.terminal.rows === rows) {
       return
     }
@@ -245,14 +238,14 @@ export class HeadlessEmulator {
     this.terminal.resize(cols, rows)
   }
 
-  // Why: these dims proxy the child's real size, so they stay stale on a dropped resize the renderer must detect.
+  // Report applied dimensions so the renderer can detect a dropped resize.
   getAppliedSize(): { cols: number; rows: number } {
     return { cols: this.terminal.cols, rows: this.terminal.rows }
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     const modes = this.getModes()
-    // Why absolute: relative cursor restore is off by a column after a wrap-pending final row; saved-cursor rides along for DECRC.
+    // Absolute cursor restore avoids wrap-pending drift; carry the saved register for DECRC.
     const serializedAnsi = serializeWithAbsoluteCursor(
       this.serializer,
       this.terminal,
@@ -276,7 +269,7 @@ export class HeadlessEmulator {
       rows: this.terminal.rows,
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
       lastTitle: this.oscText.lastTitle ?? undefined,
-      // Why written LAST by the restorer: the next live chunk must complete this dangling sequence, not render it literally (Bug E / #7329).
+      // Restore this last so the next live chunk completes the incomplete escape.
       ...(this.partialEscapeTail.length > 0
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
@@ -288,12 +281,12 @@ export class HeadlessEmulator {
     return this.terminal.buffer.active.type === 'alternate'
   }
 
-  /** Dangling incomplete escape at the stream position; handoffs seed the other side so a split sequence isn't lost. */
+  /** Carry parser state across handoff so split escape sequences survive. */
   get partialEscapeTailAnsi(): string {
     return this.partialEscapeTail
   }
 
-  /** PSReadLine's Ctrl+L repaint is only safe at an empty prompt; '>>' is PowerShell's continuation prompt, not empty. */
+  /** Ctrl+L is safe at an empty PSReadLine prompt; PowerShell’s continuation prompt (>>) is excluded. */
   isCursorOnEmptyPromptLine(): boolean {
     const buffer = this.terminal.buffer.active
     const line = buffer.getLine(buffer.baseY + buffer.cursorY)

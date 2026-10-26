@@ -3,7 +3,6 @@ export type ImageFileSignature = {
   extension: 'png' | 'jpg' | 'gif' | 'webp'
 }
 
-/** Leading bytes needed to recognize every signature below. */
 export const IMAGE_SIGNATURE_BYTES = 12
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -24,7 +23,7 @@ function startsWithAscii(buffer: Uint8Array, text: string, offset = 0): boolean 
   )
 }
 
-// Why: magic bytes, not a decoder — enough to name a file or reject a non-image.
+// Signature checks identify file types without proving the image decodes.
 export function detectImageFileSignature(buffer: Uint8Array): ImageFileSignature | null {
   if (startsWith(buffer, PNG_SIGNATURE)) {
     return { mimeType: 'image/png', extension: 'png' }

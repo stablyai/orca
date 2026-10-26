@@ -29,7 +29,7 @@ function looksLikeFilePath(link: ParsedTerminalFileLink, isProse: boolean): bool
   return hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)
 }
 
-// Why: prose still needs a path separator; inline code admits exact bare tokens separately.
+// Require separators in prose; exact bare inline-code tokens are checked separately.
 function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   return (
     /[\\/]/.test(link.pathText) &&
@@ -38,8 +38,7 @@ function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): bool
   )
 }
 
-// Why: path-shaped candidates are underlined only once the host confirms them; overlapping
-// candidates (a rooted spaced span vs. its tokens) resolve to the longest that exists.
+// Underline only host-confirmed paths; choose the longest existing candidate when spaced spans overlap tokens.
 function selectExistingLinks(
   candidates: ParsedTerminalFileLink[],
   exists: FileLinkExists
@@ -99,7 +98,7 @@ function hasPartialPathBoundary(value: string, link: ParsedTerminalFileLink): bo
   )
 }
 
-// Why: wrap the parsed location, not the display text; a `file://` URI must not reach the literal href.
+// Wrap parsed locations rather than raw file-URI display text so navigation receives the literal path.
 function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): MarkdownNode {
   return {
     type: 'link',
@@ -134,11 +133,7 @@ function linkableTokens(
   return tokenLinks
 }
 
-// Why: the terminal extractor spans "src/a.ts and src/b.ts" as one spaced path.
-// An unrooted span holding a bare word or several linkable tokens is prose
-// joining paths, so link the tokens on their own; a spaced folder name keeps
-// every token path-shaped and stays one link. A rooted span also offers its
-// tokens: a real spaced path still wins as the longest that exists.
+// Prose can join paths into one extracted span; split path-like tokens while letting longer real spaced paths win existence checks.
 function splitProseJoinedLinks(link: ParsedTerminalFileLink): ParsedTerminalFileLink[] {
   if (!/\s/.test(link.displayText)) {
     return [link]
@@ -146,7 +141,7 @@ function splitProseJoinedLinks(link: ParsedTerminalFileLink): ParsedTerminalFile
   if (ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)) {
     return [link, ...linkableTokens(link, true)]
   }
-  // Why: main never split sentence punctuation off an unrooted span's tokens; doing so would add links.
+  // Preserve unrooted token punctuation to avoid linking cases the extractor intentionally leaves plain.
   const tokenLinks = linkableTokens(link, false)
   const hasBareWord = Array.from(link.displayText.matchAll(/\S+/g)).some(
     (match) => !/[\\/.]/.test(match[0])
@@ -259,7 +254,7 @@ function inlineCodeFileLink(node: MarkdownNode, exists: FileLinkExists): Markdow
   if (!value) {
     return null
   }
-  // Why: dotted bare names take the slash-path rule, so `v1.2.3` or `glm-5.3` stay plain.
+  // Dotted bare words still need separators, keeping versions/model names plain.
   const bare = extractTerminalFileLinks(value).find(
     (candidate) =>
       candidate.startIndex === 0 &&
@@ -275,7 +270,7 @@ function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
   if (node.type === 'link') {
     const route = routeNativeChatHref(node.url)
     if (route.kind === 'file') {
-      // Why: the wrapped href carries literal location text, so URL syntax is resolved here, once.
+      // Resolve URL syntax once before wrapping literal location text.
       node.url = createNativeChatFileHref(formatFileLinkLocation(route))
     }
     return

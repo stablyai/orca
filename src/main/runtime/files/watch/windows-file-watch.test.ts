@@ -12,10 +12,7 @@ vi.mock('node:fs', () => ({
   }
 }))
 
-import {
-  WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS,
-  watchWindowsRuntimeFileExplorer
-} from './windows-file-watch'
+import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
 
 describe('watchWindowsRuntimeFileExplorer', () => {
   beforeEach(() => {
@@ -28,13 +25,28 @@ describe('watchWindowsRuntimeFileExplorer', () => {
   it('keeps emitting overflow refreshes while raw events never stop', () => {
     const callback = vi.fn()
     watchWindowsRuntimeFileExplorer('C:\\repo', callback, vi.fn())
-    // Raw events every 50 ms: a resetting debounce would never fire.
+    // Sustained 50ms events would starve a resetting debounce.
     for (let elapsed = 0; elapsed < 2_000; elapsed += 50) {
       fsWatch.listener?.()
       vi.advanceTimersByTime(50)
     }
-    // One whole-tree refresh per window, not one per raw event.
-    expect(callback).toHaveBeenCalledTimes(2_000 / WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS)
+    expect(callback).toHaveBeenCalledTimes(4)
     expect(callback).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
+  })
+
+  it('refreshes a one-off save after a quiet period on the short leading delay', () => {
+    const callback = vi.fn()
+    watchWindowsRuntimeFileExplorer('C:\\repo', callback, vi.fn())
+    fsWatch.listener?.()
+    vi.advanceTimersByTime(149)
+    expect(callback).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    fsWatch.listener?.()
+    vi.advanceTimersByTime(499)
+    expect(callback).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(callback).toHaveBeenCalledTimes(2)
   })
 })

@@ -57,14 +57,14 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         validatedUpdates.displayName !== undefined
           ? {
               ...validatedUpdates,
-              // The host persists provenance; do not rely on renderer-authored metadata.
+              // Persist label provenance on the host rather than trusting renderer metadata.
               displayNameIsPinned: displayNameUpdatePinsLabel(validatedUpdates.displayName),
               pendingFirstAgentMessageRename: false,
               firstAgentMessageRenameError: null
             }
           : validatedUpdates
       const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
-      // Why: a late write from a terminal still bound to a removed folder workspace (#22712).
+      // Late terminal activity must not resurrect a removed folder instance (#22712).
       if (isRemovedFolderWorkspaceInstance(store, args.worktreeId, executionHostId)) {
         return null
       }
@@ -75,9 +75,9 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         return null
       }
       const meta = store.setWorktreeMeta(target, sanitizedUpdates)
-      // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
+      // Local optimistic state is current; notifying it would re-sort the sidebar (#209).
       if (args.updates.displayName !== undefined) {
-        // Why: remote clients have no optimistic rename and stopped polling titles, so push a remote-only invalidation; gate on displayName so per-click isUnread updates stay event-free.
+        // Remote clients need rename pushes; per-click unread changes must remain event-free.
         runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
       }
       return meta

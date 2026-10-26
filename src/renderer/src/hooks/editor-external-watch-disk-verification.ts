@@ -6,7 +6,7 @@ import {
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   clearSelfWrite,
   getRecentSelfWrite,
@@ -27,8 +27,7 @@ export type EditorExternalWatchNotification = {
   }
 }
 
-// Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per owner+path.
-// Never push an armed dispatch back: same-path events under sustained writes would starve it.
+// Coalesce atomic-write reload bursts per owner/path to prevent EditorPanel fan-out (#826); never postpone an armed dispatch under sustained writes.
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
 const pendingExternalReloads = new Map<string, EditorExternalWatchNotification>()
 
@@ -78,9 +77,7 @@ function beginEchoVerificationRead(
   return current
 }
 
-// Why: one save echo can arrive as a burst of payloads; share the in-flight full-file read so concurrent payloads for the same file don't stack duplicate reads.
-// A payload from a later task may describe a write the in-flight read already missed, so it never
-// joins that read; it shares exactly one fresh read issued once the current one settles.
+// Share burst echo reads, but queue one fresh read for later-task events that the in-flight disk snapshot may have missed.
 function readFileForEchoVerification(args: {
   runtimeEnvironmentId: string | null | undefined
   filePath: string
@@ -122,7 +119,7 @@ function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefin
   const state = useAppStore.getState()
   for (const fileId of fileIds) {
     const file = state.openFiles.find((candidate) => candidate.id === fileId)
-    // Why: echo verification resolves async — the tab may have been closed since, so only mark files still open.
+    // Async echo verification may outlive tab close; mark only still-open files.
     if (file) {
       markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
     }
@@ -139,7 +136,7 @@ export function scheduleEditorChangedOnDiskMark(
   }
   const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
   const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
-  // Why: the fs event may be the echo of Orca's own save — verify disk really differs from our last write before showing a "changed on disk" banner.
+  // Verify disk differs from the last save before labeling its watcher echo an external change.
   if (!recentSelfWrite || recentSelfWrite.content === null) {
     markTabsChangedOnDisk(fileIds, target.connectionId)
     return
@@ -157,12 +154,12 @@ export function scheduleEditorChangedOnDiskMark(
       }
     })
     .catch(() => {
-      // Why: unreadable disk state can't disprove an external change — keep the conflict visible rather than risk a silent overwrite.
+      // Unreadable disk cannot disprove conflict; keep it visible instead of risking silent overwrite.
       markTabsChangedOnDisk(fileIds, target.connectionId)
     })
 }
 
-// Per-file generation so a newer echo-verify read supersedes an older one — overlapping reads can't clear each other's autosave gate or apply a stale verdict.
+// Per-file generation so a newer echo-verify read supersedes an older one — an overlapping read can't apply a stale verdict.
 const liveMoveVerifyGeneration = new Map<string, number>()
 let liveMoveVerifyCounter = 0
 
@@ -174,10 +171,10 @@ type LiveMoveVerifyCandidate = {
   operationId?: string
 }
 
-// Fails closed: anything but a proven baseline match surfaces the conflict, so a real external write is never swallowed.
+// Fails closed: `false` (anything but a proven match) surfaces the conflict; `null` (unread, on a resync) proves nothing.
 function resolveLiveMoveVerification(
   candidate: LiveMoveVerifyCandidate,
-  diskSignature: string | null,
+  matchesDisk: boolean | null,
   connectionId: string | undefined,
   consumeProvenance: boolean
 ): void {
@@ -187,7 +184,6 @@ function resolveLiveMoveVerification(
   }
   liveMoveVerifyGeneration.delete(fileId)
   const state = useAppStore.getState()
-  state.setPendingLiveDiskVerification(fileId, false)
   const file = state.openFiles.find((candidateFile) => candidateFile.id === fileId)
   if (
     !file ||
@@ -202,8 +198,7 @@ function resolveLiveMoveVerification(
   if (consumeProvenance) {
     state.clearSelfMoveEcho(fileId)
   }
-  const isMoveEcho = baseline !== undefined && diskSignature === baseline
-  if (!isMoveEcho) {
+  if (matchesDisk === false) {
     markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
   }
 }
@@ -228,11 +223,12 @@ export function verifyLatchedEditorMoveDestinations(
   )
 }
 
-// Autosave is suspended synchronously first so a write landing mid-read can't be overwritten before verification settles.
+/** `resync`: a watch reconnect check, where a failed read leaves the tab to its guarded save. */
 export function scheduleEditorSelfMoveEchoVerification(
   target: EditorExternalWatchTarget,
   fileIds: string[],
-  consumeProvenance: boolean
+  consumeProvenance: boolean,
+  resync = false
 ): void {
   if (fileIds.length === 0) {
     return
@@ -245,14 +241,13 @@ export function scheduleEditorSelfMoveEchoVerification(
     }
     const generation = ++liveMoveVerifyCounter
     liveMoveVerifyGeneration.set(fileId, generation)
-    state.setPendingLiveDiskVerification(fileId, true)
     const candidate: LiveMoveVerifyCandidate = {
       fileId,
       baseline: file.lastKnownDiskSignature,
       generation,
       operationId: file.pendingSelfMoveEcho?.operationId
     }
-    // Why: cross-worktree tabs must read their own absolute path; joining their relative path to the initiating worktree can address the wrong host path.
+    // Cross-worktree tabs must read their own absolute paths, not paths joined under the initiating workspace.
     void readFileForEchoVerification({
       runtimeEnvironmentId: file.runtimeEnvironmentId?.trim() || target.runtimeEnvironmentId,
       filePath: file.filePath,
@@ -262,16 +257,22 @@ export function scheduleEditorSelfMoveEchoVerification(
       expectedExternalSshTargetId: file.externalSshTargetId
     })
       .then((result) => {
-        const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
+        const matchesDisk =
+          !result.isBinary &&
+          ((candidate.baseline !== undefined &&
+            getDiskBaselineSignature(result.content) === candidate.baseline) ||
+            // Why: the tab's own save can land before it rebaselines; that is not an external change.
+            getRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)?.content ===
+              result.content)
+        resolveLiveMoveVerification(candidate, matchesDisk, target.connectionId, consumeProvenance)
+      })
+      .catch(() =>
         resolveLiveMoveVerification(
           candidate,
-          diskSignature,
+          resync ? null : false,
           target.connectionId,
           consumeProvenance
         )
-      })
-      .catch(() =>
-        resolveLiveMoveVerification(candidate, null, target.connectionId, consumeProvenance)
       )
   }
 }
@@ -287,7 +288,7 @@ export function scheduleSelfWriteAwareEditorExternalReload(
     return
   }
   const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
-  // Why: a self-write stamp only proves recent change; compare disk content so it suppresses only Orca's echo, not a newer agent write in the same TTL.
+  // Self-write TTL proves recency only; compare content so newer agent writes within it still surface.
   void readFileForEchoVerification({
     runtimeEnvironmentId,
     filePath: file.filePath,

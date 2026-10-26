@@ -1,0 +1,83 @@
+# Renderer reads of `worktreesByRepo` / `folderWorkspaces` / `detectedWorktreesByRepo`
+# outside src/renderer/src/store/workspace-record-selectors.ts, as `<count> <file> # <why>`.
+# This is a RATCHET: counts may only go DOWN. Read through the selectors instead.
+# `P5b-2 must clear` rows read store state through a loosely typed or optional field: once the
+# fields leave the store they read undefined and silently fall back, so P5b-2 must move them.
+# Prune after a fix: pnpm check:workspace-record-read-ratchet --prune
+3 src/renderer/src/attention/notification-subject-owner.ts # P5b-2 must clear: loosely typed state param
+4 src/renderer/src/components/dashboard/build-dashboard-bucket-counts.ts # P5b-2 must clear: optional state fields; memo compare goes stale when absent
+3 src/renderer/src/components/dashboard/dashboard-card-terminal-input.ts # P5b-2 must clear: optional state fields default to empty
+1 src/renderer/src/components/dashboard/dashboard-snapshot-workspaces.ts # P5b-2 must clear: optional state field defaults to empty
+1 src/renderer/src/components/dashboard/dashboard-worktree-launch-options.ts # P5b-2 must clear: optional state field defaults to empty
+4 src/renderer/src/components/dashboard/useDashboardPopoutBridge.ts # P5b-2 must clear: change detection on optional fields never fires when absent
+2 src/renderer/src/components/dashboard/useRetainedAgents.ts # reads a passed-in copy
+6 src/renderer/src/components/editor/closed-editor-tab-controller.ts # P5b-2 must clear: identity compare of store slices passes when absent
+1 src/renderer/src/components/editor/markdown-document-worktree-path-selector.ts # P5b-2 must clear: optional state field
+1 src/renderer/src/components/feature-wall/feature-wall-setup-progress.ts # reads a passed-in copy
+3 src/renderer/src/components/quick-open-file-list.ts # P5b-2 must clear: store read; file at the max-lines limit
+2 src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts # P5b-2 must clear: optional state fields default to empty
+1 src/renderer/src/components/sidebar/add-repo-skip-finalization.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/components/sidebar/imported-worktrees-card-candidates.ts # reads a passed-in copy
+1 src/renderer/src/components/sidebar/new-external-worktrees-inbox-candidates.ts # reads a passed-in copy
+3 src/renderer/src/components/sidebar/worktree-list/listing/use-main-list-model.ts # reads a passed-in copy
+2 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts # reads a passed-in copy
+1 src/renderer/src/components/sidebar/worktree-list/navigation/pending-reveal-inputs.ts # reads a passed-in copy
+2 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
+2 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx # reads a passed-in copy
+1 src/renderer/src/components/sidebar/worktree-manual-order-catalog.ts # reads a passed-in copy
+2 src/renderer/src/components/skills/skill-install-workspace-choices.ts # reads a passed-in copy
+1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts # P5b-2 must clear: session store snapshot
+1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/components/workspace-space/space-window-state.ts # reads a passed-in copy
+1 src/renderer/src/hooks/composer-state/composer-source-state.ts # P5b-2 must clear: composer store snapshot
+2 src/renderer/src/hooks/composer-state/composer-target-state.ts # P5b-2 must clear: composer store snapshot
+5 src/renderer/src/lib/agent-background-session-test-state.ts # test state builder
+1 src/renderer/src/lib/connection-owner-resolution.ts # P5b-2 must clear: optional-chain compare of a previous slice
+2 src/renderer/src/lib/direct-ssh-target-scope.ts # P5b-2 must clear: optional input fields default to empty
+3 src/renderer/src/lib/duplicate-paired-servers.ts # P5b-2 must clear: optional state fields default to empty
+1 src/renderer/src/lib/folder-workspace-runtime-owner.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/lib/http-link-localhost-route.ts # P5b-2 must clear: optional state field defaults to empty; extracted from http-link-routing.ts
+2 src/renderer/src/lib/local-project-runtime-workspace.ts # P5b-2 must clear: optional state field defaults to empty
+3 src/renderer/src/lib/resolve-owner.ts # P5b-2 must clear: optional state fields; a missing copy reads as no match
+3 src/renderer/src/lib/resolved-worktree-execution-host.ts # P5b-2 must clear: loosely typed state param
+2 src/renderer/src/lib/runtime-session-mirror-owners.ts # P5b-2 must clear: optional state fields default to empty
+3 src/renderer/src/lib/sleeping-record-execution-host-scope.ts # P5b-2 must clear: loosely typed state param
+2 src/renderer/src/lib/terminal-worktree-route.ts # P5b-2 must clear: the unattributed-twin check reads both catalogs directly
+3 src/renderer/src/lib/typing-latency/diagnostic-summary.ts # P5b-2 must clear: optional state field
+2 src/renderer/src/lib/unread-badge-count.ts # reads a passed-in copy
+1 src/renderer/src/lib/workspace-directory.ts # P5b-2 must clear: optional state field defaults to empty
+3 src/renderer/src/lib/workspace-session-host-persistence.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/lib/workspace-session.ts # P5b-2 must clear: store snapshot read; file at the max-lines limit
+2 src/renderer/src/lib/workspace-terminal-host-authority.ts # P5b-2 must clear: optional state fields
+1 src/renderer/src/lib/worktree-activation-pty-inventory.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/lib/worktree-initial-terminal-seeding.ts # P5b-2 must clear: treats an undefined field as a narrow adapter
+2 src/renderer/src/lib/worktree-operation-catalog-route.ts # P5b-2 must clear: loosely typed state param
+6 src/renderer/src/lib/worktree-operation-route.ts # P5b-2 must clear: optional state fields default to empty
+2 src/renderer/src/lib/worktree-runtime-owner.ts # P5b-2 must clear: loosely typed state param
+3 src/renderer/src/runtime/local-structured-session-tab-retirement.ts # P5b-2 must clear: optional state fields default to empty
+2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts # reads a passed-in copy
+3 src/renderer/src/store/folder-workspaces/folder-workspace-catalog-actions.ts # store writer
+7 src/renderer/src/store/folder-workspaces/folder-workspace-catalog.ts # store writer
+5 src/renderer/src/store/folder-workspaces/folder-workspace-mutations.ts # store writer
+1 src/renderer/src/store/project-groups/project-group-removal-state.ts # store writer
+4 src/renderer/src/store/repos/converted-ssh-host-rows.ts # store writer
+5 src/renderer/src/store/repos/repo-catalog-merge.ts # store writer
+5 src/renderer/src/store/repos/repo-removal.ts # store writer
+6 src/renderer/src/store/slices/diff-comment-persistence.ts # store writer
+12 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
+2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer
+1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-meta.ts # P5b-2 must clear: feeds an existing row-type cast
+3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer
+13 src/renderer/src/store/slices/worktrees/listing/fetched-worktree-merge.ts # store writer
+6 src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts # store writer
+3 src/renderer/src/store/slices/worktrees/listing/worktree-sort-order-patch.ts # store writer
+4 src/renderer/src/store/slices/worktrees/metadata/hosted-review-link-mutation.ts # store writer
+6 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts # store writer
+8 src/renderer/src/store/slices/worktrees/metadata/update-worktrees-meta.ts # store writer
+2 src/renderer/src/store/slices/worktrees/metadata/worktree-git-identity-update.ts # store writer
+1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-refresh.ts # store writer
+6 src/renderer/src/store/slices/worktrees/session/worktree-activity-bump.ts # store writer
+6 src/renderer/src/store/slices/worktrees/teardown/host-qualified-worktree-row-removal.ts # store writer
+8 src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts # store writer
+1 src/renderer/src/store/slices/worktrees/teardown/remove-worktree-store-cleanup.ts # store writer
+8 src/renderer/src/store/terminals/workspace-terminal-hydration.ts # store writer

@@ -4,19 +4,13 @@ import {
   isSettledBackgroundTaskState
 } from '../../shared/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpBackgroundTaskUpdate } from './acp-dialects/acp-dialect'
 
-/** Partial provider snapshots; the assembler owns settlement and durable placement. A running
- *  task's snapshot lives until it settles. Settled ones are history, bounded, so a later ending
- *  (after a Stop found it gone) keeps its label; one evicted keeps only its row's turn. */
+/** Retain running snapshots and bounded settled labels; the assembler owns durable placement. */
 export class AcpBackgroundTaskTimeline {
   private readonly running = new Map<string, NativeChatBackgroundTaskBlock>()
   private readonly settled = new BoundedMap<string, NativeChatBackgroundTaskBlock>({
@@ -41,12 +35,6 @@ export class AcpBackgroundTaskTimeline {
         kind: update.kind ?? previous?.kind ?? fallbackKind ?? 'unknown',
         label: update.label ?? previous?.label ?? fallbackLabel ?? update.taskId,
         state: update.state
-      }
-      for (const key of ['label', 'summary', 'error', 'outputFile'] as const) {
-        const text = block[key]
-        if (text !== undefined) {
-          block[key] = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-        }
       }
       if (isSettledBackgroundTaskState(block.state)) {
         this.running.delete(block.taskId)

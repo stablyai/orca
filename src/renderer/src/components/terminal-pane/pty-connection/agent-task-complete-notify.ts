@@ -20,6 +20,21 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 import { installAgentIdleWorkingHandlers } from './agent-idle-working-handlers'
 
+/** Hook-owned idle absorbs the burst’s current or late BEL through the completion max wait, like claimed title completion. */
+export function absorbBurstBellForHookOwnedIdle(session: ConnectPanePtySession): void {
+  if (session.hasPendingAgentTaskCompleteNotification()) {
+    return
+  }
+  session.pendingTerminalBellNotification = false
+  session.clearTerminalBellNotificationTimer()
+  session.hookOwnedIdleAbsorbsBell = true
+  // Why: main's claimed completion stayed pending on a `done` row for its whole max wait.
+  session.agentTaskCompleteNotificationMaxTimer = setTimeout(() => {
+    session.agentTaskCompleteNotificationMaxTimer = null
+    session.hookOwnedIdleAbsorbsBell = false
+  }, AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+}
+
 export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): void {
   session.scheduleAgentTaskCompleteNotification = (
     title: string,
@@ -75,9 +90,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       if (session.disposed) {
         return
       }
-      // Why: terminal attention is a visual pane affordance, not an OS
-      // notification. Route through dispatch so stale pane completions are
-      // rejected before unread attention is marked.
+      // Use shared dispatch so stale completions are rejected before marking pane attention.
       session.pendingTerminalBellNotification = false
       session.clearTerminalBellNotificationTimer()
       session.deps.dispatchNotification({
@@ -95,8 +108,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
 
     const dispatchIfDetailed = (): void => {
       if (hasNewerActiveHookStatus()) {
-        // Why: the confirmed exit belongs to the row captured above; a replaced
-        // active row means a newer turn started during the notification delay.
+        // A replaced active row belongs to a newer turn than the confirmed exit captured before the delay.
         session.clearPendingAgentTaskCompleteNotification()
         return
       }
@@ -115,8 +127,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       graceElapsed = true
       dispatchIfDetailed()
     }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
-    // Why: some agents never surface assistant text through hooks. Keep a hard
-    // cap so task-complete notifications still fire instead of waiting forever.
+    // Bound notification wait because some agents never publish assistant text through hooks.
     session.agentTaskCompleteNotificationMaxTimer = setTimeout(
       dispatch,
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
@@ -128,24 +139,9 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     }
   })
 
-  // ─── Agent task-complete: notification-backed attention ───────────────
-  //
-  // The working→idle title transition drives two independent concerns:
-  //   1. The Claude prompt-cache countdown in the sidebar.
-  //   2. The "Agent Task Complete" OS notification users toggle in Settings.
-  //
-  // This path raises the same terminal attention marker as BEL through the
-  // shared notification dispatcher. Not every agent CLI reliably emits BEL on
-  // completion (Gemini, some Codex flows), and the highlight needs to remain
-  // findable after the OS banner is gone. Double-firing with a concurrent BEL
-  // is handled by delaying the BEL OS notification below; main still keeps a
-  // 5 s per-worktree dedupe as the final guard.
+  // Completion must mark durable pane attention even without BEL; delayed BEL dispatch and main dedup prevent duplicate OS notices.
   session.onAgentBecameIdle = (title: string, meta?: AgentIdleEdgeMeta): void => {
-    // Why: a stale-derived idle comes from main's UNTHROTTLED 3s timer, not
-    // observed bytes — a merely-paused agent (>3s silent mid-task, window
-    // minimized) would otherwise mint a false task-complete OS notification
-    // that renderer timer throttling previously damped. Clear session-tied
-    // state only; never schedule completion attention from it.
+    // Stale-title expiry is not observed completion; clear session state without announcing a merely paused agent.
     if (meta?.staleWorkingTitleClear) {
       session.deps.setCacheTimerStartedAt(session.cacheKey, null)
       return
@@ -153,23 +149,13 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     const currentState = useAppStore.getState()
     const activeHookStatus = currentState.agentStatusByPaneKey[session.cacheKey]
     if (session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
-      // Why: agent CLIs can briefly publish an idle title while hook status
-      // still says the same agent turn is active (e.g. during tool output).
+      // Idle titles can appear mid-tool while hooks still own an active turn.
       if (activeHookStatus) {
         session.preserveSuppressedTitleSideEffects(title, activeHookStatus)
       }
       return
     }
-    // Why: only start the prompt-cache countdown for Claude agents — other
-    // agents have different (or no) prompt-caching semantics and showing a
-    // timer for them would be misleading.
-    //
-    // Why we check `settings !== null` separately: during startup, settings
-    // hydrate asynchronously after terminals reconnect. If we treat null
-    // as disabled, the first working→idle transition on a restored Claude
-    // tab silently drops the timer. Writing a timestamp is cheap and the
-    // CacheTimer component gates rendering on the enabled flag, so a
-    // spurious write when the feature turns out to be disabled is harmless.
+    // Only Claude uses this cache timer; allow pre-hydration timestamps so restored idle transitions are not lost before settings arrive.
     const settings = currentState.settings
     if (
       isClaudeIdleEdge(title, activeHookStatus) &&
@@ -183,8 +169,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     if (session.syncAgentTaskCompleteTrackingEnabled()) {
       session.agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
-    // Why: some agent TUIs leave xterm renderer modes active after a turn.
-    // Reset cursor everywhere, and Kitty keyboard state on native Windows.
+    // Reset cursor style after idle; negotiated keyboard modes remain owned by the live application.
     session.queueAgentIdleTerminalModeReset()
   }
   installAgentIdleWorkingHandlers(session)

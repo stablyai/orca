@@ -30,8 +30,6 @@ describe('rankPaletteFilterOptions', () => {
   ]
 
   it('moves a toggled option to the front, so a cursor must track ids not positions', () => {
-    // Why pinned here: PaletteFilterFieldOptions derives its highlight from the option id
-    // precisely because this re-rank invalidates any stored index the moment a user toggles.
     const before = rankPaletteFilterOptions({
       options,
       query: '',
@@ -40,8 +38,7 @@ describe('rankPaletteFilterOptions', () => {
     })
     expect(before.ordered.map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd'])
 
-    // Toggling the option the user had arrowed onto pins it to the front; an index of 1
-    // would now point at a different option than it did a render earlier.
+    // A toggle pins the row first, invalidating the previous highlight index.
     const after = rankPaletteFilterOptions({
       options,
       query: '',

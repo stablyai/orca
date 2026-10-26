@@ -78,8 +78,6 @@ describe('prepareLocalSshBrowserPartition probe caching', () => {
     expect(skipped.partition).toMatch(/^persist:orca-browser-v1-/)
     expect(mocks.probe).not.toHaveBeenCalled()
 
-    // The user pressed "Check again": the next prepare must actually probe and
-    // resurface the classified failure instead of returning the cached success.
     await expect(
       prepareLocalSshBrowserPartition({ targetId: 'target-undo', browserProfileId: 'default' })
     ).rejects.toThrow('browser_local_route_forwarding_blocked')

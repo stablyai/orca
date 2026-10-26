@@ -1,6 +1,4 @@
-// What each call site's arguments resolve to on the launch command line, and whether the
-// permission-bypass flag survives. The bypass bit has no storage of its own — it lives inside the
-// arguments string — so losing it here is silent and security-relevant.
+// Permission bypass lives only in the arguments string; verify each caller’s final argv so it cannot be silently lost.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -30,7 +28,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -62,11 +60,7 @@ function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
   })
 }
 
-/**
- * A call site whose prompt the host delivers states its arguments in the request, and the host
- * builds the command from them by the same rule (its startup plan inputs); absent means the
- * setting, shipped bypass default included.
- */
+// Host-delivered prompts use request arguments; absence inherits settings, including shipped bypass defaults.
 function expectHostRequestArguments(profile: AgentLaunchCallerProfile): void {
   const request = hostLaunchRequest(store)
   expect(queuedStartupCommand(store)).toBeUndefined()
@@ -111,11 +105,9 @@ describe('agent launch caller arguments and permission bypass', () => {
 
     const command = queuedStartupCommand(store)
     expect(command).toBeDefined()
-    // A call site that names arguments replaces the shipped default outright; one that names none
-    // inherits it. Both shapes must stay visible on the queued command.
+    // Explicit arguments replace shipped defaults; absent arguments inherit them on the queued command.
     const args = profile.args.agentArgs === undefined ? `'${CODEX_BYPASS}'` : "'--model' 'gpt-5.5'"
-    // Why: quick-command is the ONE call site that carries a prompt and names no delivery mode, so
-    // it takes the default auto-submit path and folds the prompt into argv for an argv agent.
+    // Quick-command alone supplies a prompt without a delivery mode, invoking auto-submit and argv injection.
     const argvPrompt = profile.id === 'quick-command' ? ` '${profile.args.prompt}'` : ''
     expect(command).toBe(`codex ${args}${argvPrompt}`)
   })
@@ -128,8 +120,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     }
 
     const command = queuedStartupCommand(store) ?? ''
-    // Why: the three recipe-driven call sites hand in saved arguments, which REPLACE the shipped
-    // default rather than merging with it — a saved recipe without the flag launches without bypass.
+    // Saved recipe arguments replace defaults; a recipe without a bypass flag must launch without it.
     const namesOwnArguments = profile.args.agentArgs !== undefined
     expect(command.includes(CODEX_BYPASS)).toBe(!namesOwnArguments)
   })
@@ -145,8 +136,7 @@ describe('agent launch caller arguments and permission bypass', () => {
 
       const payload = queuedStartupPayload(store)
       if (profile.args.agentArgs === undefined) {
-        // Why: the funnel forwards `agentArgsOverride` only when the caller named arguments, so the
-        // tab can tell "inherit the setting" apart from "this launch chose these".
+        // Forward overrides only when named so the tab can distinguish inheritance from explicit arguments.
         expect(payload).not.toHaveProperty('agentArgsOverride')
       } else {
         expect(payload?.agentArgsOverride).toBe(profile.args.agentArgs)
@@ -183,8 +173,7 @@ describe('agent launch caller arguments and permission bypass', () => {
 
     launchAgentInNewTab({ requestId: 'request-4', agent: 'goose', worktreeId: 'wt-1' })
 
-    // Goose has no bypass flag; its default posture is an env var, and a migration that carried
-    // only argv would silently downgrade it.
+    // Goose bypass defaults use an env var; argv-only migration would silently change permissions.
     expect(queuedStartupPayload(store)?.env).toEqual({ GOOSE_MODE: 'auto' })
   })
 
@@ -198,9 +187,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: undefined
     })
 
-    // Characterized, not endorsed: an explicit `undefined` is indistinguishable from an omitted
-    // key here, so a caller that resolved "apply no saved arguments" to `undefined` gets the
-    // shipped bypass default back instead of launching without it.
+    // Characterize current behavior: explicit undefined inherits shipped bypass defaults like an omitted key, rather than clearing arguments.
     expect(queuedStartupCommand(store)).toBe(`codex '${CODEX_BYPASS}'`)
     expect(queuedStartupPayload(store)).not.toHaveProperty('agentArgsOverride')
   })
@@ -247,8 +234,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     })
   })
 
-  // Why: chat composer picks seed only structured creates (launch-structured-agent-session.test.ts,
-  // orca-runtime-structured-agent-session-create-intent.test.ts); a terminal fallback never gets them.
+  // Composer picks seed structured creates only; terminal fallbacks must not receive them (launch-structured-agent-session tests).
   it.each([
     [true, undefined, CODEX_BYPASS],
     [false, undefined, CODEX_BYPASS],
@@ -276,7 +262,6 @@ describe('agent launch caller arguments and permission bypass', () => {
         worktreeId: 'wt-1'
       })
 
-      // No local structured capability, so even with Chat UI on this is the terminal fallback.
       expect(result?.startupPlan?.sessionOptions).toBeUndefined()
       const command = queuedStartupCommand(store)
       expect(command).not.toContain("'-m'")

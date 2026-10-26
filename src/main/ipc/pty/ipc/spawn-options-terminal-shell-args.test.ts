@@ -4,8 +4,7 @@ import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { createPtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 
-/** Why: the renderer's `pty:spawn` handler builds options here, not through the
- *  runtime controller — the configured profile has to reach both. */
+/** Check renderer option assembly independently of runtime-controller shell-profile coverage. */
 async function resolveSpawnShellArgs(
   args: PtySpawnIpcArgs,
   settings: { terminalDefaultShell?: string; terminalDefaultShellArgs?: string[] }

@@ -119,6 +119,7 @@ describe('migrateLegacyOpenCodeGoApiKey', () => {
     expect(migrateLegacyOpenCodeGoApiKey(secrets, store)).toBe(true)
     expect(store.save).not.toHaveBeenCalled()
     expect(store.value()).toBe('fake-current-key')
+    expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBeNull()
     expect(secretStore.decryptString).not.toHaveBeenCalled()
     expect(console.warn).toHaveBeenCalledWith(
       '[opencode-go] Kept the existing saved API key and dropped the one from settings.'

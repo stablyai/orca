@@ -16,33 +16,20 @@ import {
 import { SystemSshCommandExitError, throwIfAborted } from './system-ssh-operation-lifecycle'
 import { runProcess } from '@orca/process-host'
 
-/** The host answered, but not with an sftp subsystem. The caller must fall back, not fail. */
-export class SftpSubsystemUnavailableError extends Error {
+/** Subsystem refusal permits transport fallback. */
+class SftpSubsystemUnavailableError extends Error {
   constructor(detail: string) {
     super(`Remote host has no usable sftp subsystem: ${detail}`)
     this.name = 'SftpSubsystemUnavailableError'
   }
 }
 
-/**
- * True for the errors that mean "this host cannot serve sftp at all".
- *
- * Host-scoped, and therefore the only errors safe to remember: a capability cache keyed by host
- * turns anything it accepts into a verdict about every later write to that host. Deliberately
- * narrow — a permission denial or a missing directory is a real failure that must surface, not a
- * reason to retry the whole upload down a slower path.
- */
+/** Cache only host-wide SFTP unavailability; permission/path failures must surface without retrying the payload. */
 export function isSftpUnavailableError(error: unknown): boolean {
   return error instanceof SftpSubsystemUnavailableError || error instanceof SftpArgTranslationError
 }
 
-/**
- * True when *this path* cannot be spelled for sftp, which says nothing about the host.
- *
- * Kept apart from the host verdict on purpose. A UNC destination, or a local file whose name
- * contains a newline, is a property of one operation; caching it would degrade every subsequent
- * write to that host for the cache's whole retry window on the strength of one odd filename.
- */
+/** Path refusal applies only to this operation; caching it would degrade every later host write. */
 export function isSftpPathUnsupportedError(error: unknown): boolean {
   return error instanceof UnsupportedSftpPathError
 }
@@ -56,8 +43,7 @@ function systemSftpCandidates(sshPath: string | null, platform: NodeJS.Platform)
   const pathApi = platform === 'win32' ? win32 : posix
   const executable = platform === 'win32' ? 'sftp.exe' : 'sftp'
   const candidates: string[] = []
-  // Why the ssh binary's own directory first: a host with two OpenSSH installs must pair the sftp
-  // client with the ssh that `buildSshArgs` was built for, not whichever one PATH happens to reach.
+  // Prefer the selected SSH install's sibling SFTP client so dual installs cannot mix clients/options.
   if (sshPath) {
     candidates.push(pathApi.join(pathApi.dirname(sshPath), executable))
   }
@@ -72,8 +58,7 @@ function systemSftpCandidates(sshPath: string | null, platform: NodeJS.Platform)
   return candidates
 }
 
-/** Locate the sftp client paired with the system ssh binary. Returns null when there is none. */
-export function findSystemSftp(): string | null {
+function findSystemSftp(): string | null {
   if (process.env.ORCA_SYSTEM_SFTP_PATH) {
     return process.env.ORCA_SYSTEM_SFTP_PATH
   }
@@ -114,20 +99,11 @@ function findSftpOnPath(): string | null {
   return null
 }
 
-/**
- * OpenSSH prints this when the server refuses the subsystem — a host with `Subsystem sftp`
- * commented out, or an internal-sftp block that does not apply to this user.
- */
 const SUBSYSTEM_REFUSED_PATTERN = /subsystem request failed|no such file or directory.*sftp-server/i
 
-export type SftpBatchOptions = SystemSshBuildArgsOptions & { signal?: AbortSignal }
+type SftpBatchOptions = SystemSshBuildArgsOptions & { signal?: AbortSignal }
 
-/**
- * Runs one sftp batch script.
- *
- * The script goes to the *local* sftp client's stdin, which is the point: no remote process ever
- * reads a redirected stdin, so none of this rides the Windows PowerShell stdin defect.
- */
+/** Feed the local SFTP client, avoiding remote PowerShell redirected-stdin reads. */
 export async function runSftpBatch(
   target: SshTarget,
   commands: readonly string[],
@@ -144,17 +120,13 @@ export async function runSftpBatch(
     result = await runProcess({
       program: sftpPath,
       args: ['-b', '-', ...args],
-      // `-b -` takes the script on stdin, and that stdin is the *local* client's — no remote
-      // process reads a pipe anywhere in this transfer, which is the whole point of preferring it.
       input: `${commands.join('\n')}\n`,
-      // Why no timeout: a large upload is legitimately slow, and a wall-clock cap would fail a
-      // healthy transfer on a slow link. A dead peer is caught by the ServerAlive options instead.
+      // Large healthy uploads may be slow; ServerAlive detects dead peers without a wall-clock cap.
       timeoutMs: null,
       signal: options?.signal
     })
   } catch (error) {
-    // A client that will not start is "this host cannot do sftp" from the caller's side, not a
-    // transfer failure: the payload never left. Falling back is the only useful answer.
+    // A client that cannot start moved no payload; permit fallback.
     throw new SftpSubsystemUnavailableError(
       `sftp client at ${sftpPath} could not be started: ${error instanceof Error ? error.message : String(error)}`
     )
@@ -167,7 +139,7 @@ export async function runSftpBatch(
   if (SUBSYSTEM_REFUSED_PATTERN.test(detail)) {
     throw new SftpSubsystemUnavailableError(detail)
   }
-  // Why typed only off-transport: the host answered this script; a dropped link said nothing.
+  // Transport loss proves no host capability; do not cache it as SFTP refusal.
   if (CONTACT_LOST_PATTERN.test(detail)) {
     throw new Error(`sftp batch failed (exit ${result.code}): ${detail}`)
   }
@@ -177,12 +149,7 @@ export async function runSftpBatch(
 const CONTACT_LOST_PATTERN =
   /connection (?:closed|reset|lost|timed out|refused)|broken pipe|timeout, server .* not responding/i
 
-/**
- * Creates remote directories, parents first.
- *
- * `-mkdir` keeps sftp going when a directory is already there; batch mode otherwise aborts the
- * whole script on the first non-zero status, which for an idempotent tree walk is not a failure.
- */
+/** Prefix mkdir with - so an already-existing directory does not abort the idempotent batch. */
 export function makeDirectoriesViaSftp(
   target: SshTarget,
   remoteDirectories: readonly string[],

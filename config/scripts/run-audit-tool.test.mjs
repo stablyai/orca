@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
+import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
+import { describe, expect, it, vi } from 'vitest'
 import { parseAllDocuments } from 'yaml'
 import { auditToolEntry, runAuditTool } from './run-audit-tool.mjs'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
@@ -33,9 +35,44 @@ describe('locked audit tool execution', () => {
       args: [auditToolEntry('react-doctor', root), ...args],
       cwd: root,
       stdio: 'inherit',
+      maxOutputBytes: 64 * 1024 * 1024,
       timeoutMs: null
     })
     expect(result).toBe(failed)
+  })
+
+  it('captures structured tool output without hiding the installation log', () => {
+    const calls = []
+    const output = { ...success, stdout: '{"ok":true}' }
+    expect(
+      runAuditTool('react-doctor', ['.', '--json'], {
+        stdio: 'pipe',
+        run: (spec) => {
+          calls.push(spec)
+          return calls.length === 1 ? success : output
+        }
+      })
+    ).toBe(output)
+    expect(calls[0].stdio).toBe('inherit')
+    expect(calls[1].stdio).toBe('pipe')
+  })
+
+  it('captures reports larger than the default subprocess output limit', () => {
+    const reportSize = DEFAULT_MAX_OUTPUT_BYTES + 1024
+    const result = runAuditTool('react-doctor', ['.', '--json'], {
+      stdio: 'pipe',
+      run: (spec) =>
+        spec.stdio === 'inherit'
+          ? success
+          : runProcessSync({
+              ...spec,
+              args: ['-e', `process.stdout.write('x'.repeat(${reportSize}))`]
+            })
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.outputTruncated).toBe(false)
+    expect(result.stdout).toHaveLength(reportSize)
   })
 
   it.each([
@@ -56,7 +93,9 @@ describe('locked audit tool execution', () => {
   })
 
   it('rejects an unknown executable before installing anything', () => {
-    expect(() => auditToolEntry('../arbitrary-package')).toThrow('Unknown audit tool')
+    const run = vi.fn()
+    expect(() => runAuditTool('../arbitrary-package', [], { run })).toThrow('Unknown audit tool')
+    expect(run).not.toHaveBeenCalled()
   })
 
   it.each(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])(
@@ -73,7 +112,7 @@ describe('locked audit tool execution', () => {
     const [policy] = parseAllDocuments(
       readFileSync(join(root, 'config/audit-tools/pnpm-workspace.yaml'), 'utf8')
     ).map((document) => document.toJS())
-    expect(policy).toEqual({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
+    expect(policy).toMatchObject({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
     const documents = parseAllDocuments(
       readFileSync(join(root, 'config/audit-tools/pnpm-lock.yaml'), 'utf8')
     ).map((document) => document.toJS())

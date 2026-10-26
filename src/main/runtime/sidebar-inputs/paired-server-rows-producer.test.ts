@@ -52,9 +52,21 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
   const retiredListeners = new Set<(environmentId: string) => void>()
   const watches = new Map<
     string,
-    { onChange: () => void; onClose: () => void; closed: boolean; ended: boolean }
+    {
+      /** A catalog change unless told otherwise, as ready and reposChanged are. */
+      onChange: (change?: { catalog: boolean }) => void
+      onClose: () => void
+      closed: boolean
+      ended: boolean
+    }
   >()
+  // worktree.ps; the catalog reads go to `catalogCall`, unanswered unless a test sets them.
   const call = vi.fn<MobileDesktopRelayHosts['call']>()
+  const catalogCall = vi.fn<MobileDesktopRelayHosts['call']>(async (_host, method) => ({
+    id: method,
+    ok: false,
+    error: { code: 'method_not_found', message: method }
+  }))
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: state.servers.map(({ id }) => ({
@@ -73,7 +85,8 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
       sshConnectionStates: new Map<string, SshConnectionState>()
     }),
     resolve: async () => null,
-    call,
+    call: (host, method, params, options) =>
+      (method === 'worktree.ps' ? call : catalogCall)(host, method, params, options),
     hostsBrowserPage: () => false,
     onEnvironmentRetired: (listener) => {
       retiredListeners.add(listener)
@@ -84,7 +97,12 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
       return () => statusListeners.delete(listener)
     },
     watchChanges: (host, _expected, callbacks) => {
-      const watch = { ...callbacks, closed: false, ended: false }
+      const watch = {
+        onChange: (change = { catalog: true }) => callbacks.onChange(change),
+        onClose: callbacks.onClose,
+        closed: false,
+        ended: false
+      }
       watches.set(host.environmentId, watch)
       return {
         close: () => {
@@ -97,12 +115,28 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
   return {
     hosts,
     call,
+    catalogCall,
     state,
     watches,
     publishStatus: () => statusListeners.forEach((listener) => listener()),
     retire: (environmentId: string) =>
       retiredListeners.forEach((listener) => listener(environmentId))
   }
+}
+
+// callRuntimeEnvironment's bound for a call that names none.
+const DEFAULT_TRANSPORT_TIMEOUT_MS = 15_000
+
+const GROUP = {
+  name: 'school',
+  parentPath: null,
+  parentGroupId: null,
+  createdFrom: 'manual',
+  tabOrder: 0,
+  isCollapsed: false,
+  color: null,
+  createdAt: 1,
+  updatedAt: 1
 }
 
 function rowsOf(producer: PairedServerRowsProducer, hostId: string) {
@@ -141,7 +175,7 @@ describe('PairedServerRowsProducer', () => {
       { environmentId: 'box' },
       'worktree.ps',
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
+      { expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
     expect(rowsOf(producer, 'runtime:box')).toEqual({
       hostId: 'runtime:box',
@@ -206,6 +240,90 @@ describe('PairedServerRowsProducer', () => {
 
     expect(call).toHaveBeenCalledTimes(2)
     expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual(['new'])
+  })
+
+  // A server answering after `delayMs`, or failing as the transport would once its bound passes.
+  function slowServer(call: ReturnType<typeof fakeHosts>['call'], delayMs: number, rows: string[]) {
+    call.mockImplementationOnce(
+      (_host, _method, _params, options) =>
+        new Promise((resolve, reject) => {
+          const boundMs = options?.timeoutMs ?? DEFAULT_TRANSPORT_TIMEOUT_MS
+          if (delayMs > boundMs) {
+            setTimeout(() => reject(new Error('timed out')), boundMs)
+          } else {
+            setTimeout(() => resolve(psReply(rows.map((id) => row(id)))), delayMs)
+          }
+        })
+    )
+  }
+
+  it('lists a server that takes 8 s to answer', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    slowServer(call, 8_000, ['a'])
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(7_999)
+    expect(rowsOf(producer, 'runtime:box')?.rows).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'live',
+      rows: [{ worktreeId: 'a' }]
+    })
+  })
+
+  it('holds one fetch per server, and notices during it coalesce into one follow-up', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    slowServer(call, 8_000, ['old'])
+    slowServer(call, 8_000, ['new'])
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Change notices and a reader's refresh arrive while it runs.
+    watches.get('box')?.onChange()
+    watches.get('box')?.onChange()
+    void producer.refresh('box')
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(call).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(call).toHaveBeenCalledTimes(2)
+    // The fallback poll answers too, so the rows stay live.
+    call.mockResolvedValueOnce(psReply([row('new')]))
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(call).toHaveBeenCalledTimes(3)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({ freshness: 'live' })
+    expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual(['new'])
+  })
+
+  it('keeps the last rows when a fetch times out', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValueOnce(psReply([row('a')]))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+
+    slowServer(call, 60_000, ['never'])
+    watches.get('box')?.onChange()
+    // The transport's normal bound, not the phone's 5 s, ends the wait.
+    await vi.advanceTimersByTimeAsync(DEFAULT_TRANSPORT_TIMEOUT_MS - 1)
+    expect(rowsOf(producer, 'runtime:box')?.freshness).toBe('live')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'unverifiable',
+      rows: [{ worktreeId: 'a' }]
+    })
   })
 
   it('keeps the last rows as unverifiable when the server loses contact or stops answering', async () => {
@@ -458,6 +576,40 @@ describe('PairedServerRowsProducer', () => {
     expect(rowsOf(producer, 'runtime:box')?.freshness).toBe('live')
   })
 
+  it('never certifies rows live from a fetch that started before a contact gap', async () => {
+    const { hosts, call, watches, state, publishStatus } = fakeHosts([{ id: 'box', live: true }])
+    let answerBefore: (response: RuntimeRpcResponse<unknown>) => void = () => {}
+    let answerAfter: (response: RuntimeRpcResponse<unknown>) => void = () => {}
+    call.mockReturnValueOnce(new Promise((resolve) => (answerBefore = resolve)))
+    call.mockReturnValueOnce(new Promise((resolve) => (answerAfter = resolve)))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+
+    state.servers = [{ id: 'box', live: false }]
+    publishStatus()
+    state.servers = [{ id: 'box', live: true }]
+    publishStatus()
+    watches.get('box')?.onChange()
+    answerBefore(psReply([row('deleted-during-gap')]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'unverifiable',
+      rows: [{ worktreeId: 'deleted-during-gap' }]
+    })
+
+    answerAfter(psReply([row('current')]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'live',
+      rows: [{ worktreeId: 'current' }]
+    })
+  })
+
   it('opens a new watch once the old one ends with its transport, even without a close notice', () => {
     const { hosts, watches, publishStatus } = fakeHosts([{ id: 'box', live: true }])
     const producer = new PairedServerRowsProducer({
@@ -475,5 +627,105 @@ describe('PairedServerRowsProducer', () => {
     publishStatus()
     expect(watches.get('box')).not.toBe(first)
     expect(first?.closed).toBe(true)
+  })
+
+  it("reads a server's catalog on contact and on its change events, never on the fallback poll", async () => {
+    const { hosts, call, catalogCall, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValue(psReply([]))
+    let groupId = 'g1'
+    catalogCall.mockImplementation(async (_host, method) => {
+      const result =
+        method === 'repo.list'
+          ? { repos: [{ id: 'r', path: '/srv/r', displayName: 'r', projectGroupId: groupId }] }
+          : method === 'projectGroup.list'
+            ? { groups: [{ ...GROUP, id: groupId }] }
+            : null
+      return result
+        ? { id: method, ok: true as const, result, _meta: { runtimeId: 'runtime-a' } }
+        : { id: method, ok: false as const, error: { code: 'method_not_found', message: method } }
+    })
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    const repoListCalls = () =>
+      catalogCall.mock.calls.filter(([, method]) => method === 'repo.list')
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Stamped as the server's own, and without project.list an older server's projection.
+    expect(producer.catalogs()).toEqual([
+      {
+        hostId: 'runtime:box',
+        repos: [expect.objectContaining({ id: 'r', executionHostId: 'runtime:box' })],
+        projectGroups: [expect.objectContaining({ id: 'g1', executionHostId: 'runtime:box' })],
+        projection: {
+          projects: [expect.objectContaining({ sourceRepoIds: ['r'] })],
+          setups: [expect.objectContaining({ repoId: 'r', hostId: 'runtime:box' })]
+        }
+      }
+    ])
+    await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    expect(call.mock.calls.length).toBeGreaterThan(1)
+    expect(repoListCalls()).toHaveLength(1)
+
+    groupId = 'g2'
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(repoListCalls()).toHaveLength(2)
+    expect(producer.catalogs()[0]?.repos[0]?.projectGroupId).toBe('g2')
+  })
+
+  it('keeps the last catalog through a failed read and reads it again on the next fetch', async () => {
+    const { hosts, call, catalogCall, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValue(psReply([]))
+    catalogCall.mockResolvedValueOnce({
+      id: 'repo.list',
+      ok: true,
+      result: { repos: [{ id: 'r', path: '/srv/r', displayName: 'r' }] },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(producer.catalogs()[0]?.repos.map((repo) => repo.id)).toEqual(['r'])
+
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(producer.catalogs()[0]?.repos.map((repo) => repo.id)).toEqual(['r'])
+    const reads = catalogCall.mock.calls.length
+    // The failed read left it stale, so the poll reads it again.
+    await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    expect(catalogCall.mock.calls.length).toBeGreaterThan(reads)
+  })
+
+  it('reads no catalog for worktreesChanged, which no catalog write sends alone', async () => {
+    const { hosts, call, catalogCall, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValue(psReply([]))
+    catalogCall.mockResolvedValue({
+      id: 'repo.list',
+      ok: true,
+      result: { repos: [] },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    const reads = catalogCall.mock.calls.length
+    const rowReads = call.mock.calls.length
+
+    watches.get('box')?.onChange({ catalog: false })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(call.mock.calls.length).toBe(rowReads + 1)
+    expect(catalogCall.mock.calls.length).toBe(reads)
   })
 })

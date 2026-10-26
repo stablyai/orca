@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   createExecProbedStageCommand,
   ensureRemoteOrcadNodeRuntime
@@ -25,19 +24,21 @@ import {
 } from '../../ssh/orcad-remote-node-runtime-report'
 import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRelayDirectory } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./remote-install-transfers', () => ({ uploadRelayDirectory: vi.fn(async () => {}) }))
+vi.mock('./remote-install-transfers', () => ({
+  uploadRemoteInstallDirectory: vi.fn(async () => {})
+}))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
-// What dash printed for the probe on a Docker host whose /root is a `noexec` tmpfs.
+// Captured dash output for executing from a noexec home filesystem.
 const NOEXEC_PROBE_REPLY = [
   REMOTE_NODE_RUNTIME_NOEXEC,
   'ORCA_RUNTIME_EXIT=126',
@@ -50,7 +51,7 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true })
   }
   vi.mocked(execCommand).mockReset()
-  vi.mocked(uploadRelayDirectory).mockClear()
+  vi.mocked(uploadRemoteInstallDirectory).mockClear()
 })
 
 describe('pinned-Node runtime store on a host that refuses to run programs', () => {
@@ -112,7 +113,7 @@ describe('pinned-Node runtime store on a host that refuses to run programs', () 
     expect(classifyOrcadHostUnavailable(failure)).toBe('runtime_noexec')
     expect(String(failure)).toContain('/root/.orca-remote/runtimes')
     expect(archivePath).not.toHaveBeenCalled()
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
     expect(commands.at(-1)).toMatch(/^rm -rf '\/root\/\.orca-remote\/runtimes\/\.stage-/)
   })
@@ -144,7 +145,7 @@ describe('pinned-Node runtime store on a host that refuses to run programs', () 
       target: 'linux-x64-glibc',
       archivePath: async () => archive()
     })
-    expect(uploadRelayDirectory).toHaveBeenCalledTimes(1)
+    expect(uploadRemoteInstallDirectory).toHaveBeenCalledTimes(1)
   })
 })
 

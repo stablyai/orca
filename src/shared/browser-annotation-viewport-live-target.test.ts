@@ -248,7 +248,7 @@ describe('annotation viewport bridge live target', () => {
     guest.install(true)
     guest.flushFrames()
 
-    expect(guest.lastReport()?.target).toBeUndefined()
+    expect(guest.lastReport()).toEqual({ scrollX: 0, scrollY: 0, viewportWidth: 1000 })
   })
 
   it('re-reports on resize and when the element changes size', async () => {
@@ -279,7 +279,7 @@ describe('annotation viewport bridge live target', () => {
     guest.target.removeAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)
     guest.window.dispatchEvent(new guest.window.Event('scroll'))
     guest.flushFrames()
-    expect(guest.lastReport()?.target).toBeUndefined()
+    expect(guest.lastReport()).toEqual({ scrollX: 0, scrollY: 0, viewportWidth: 1000 })
   })
 })
 

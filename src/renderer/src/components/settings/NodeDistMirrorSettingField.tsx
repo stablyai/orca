@@ -4,6 +4,7 @@ import { normalizeNodeDistMirrorUrl } from '../../../../shared/node-dist-mirror'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
+import { nodeDistMirrorRefusalText } from '@/ssh/ssh-host-node-download-copy'
 
 type MirrorDraft = { source: string; text: string; error: string | null }
 
@@ -19,7 +20,7 @@ export function NodeDistMirrorSettingField({
 }: NodeDistMirrorSettingFieldProps): React.JSX.Element {
   const source = value ?? ''
   const [draft, setDraft] = useState<MirrorDraft>({ source, text: source, error: null })
-  // Why stored, not derived: a draft left keyed to an old value would match again if it returned.
+  // Store reconciliation so returning source values cannot revive an obsolete draft.
   const current: MirrorDraft =
     draft.source === source ? draft : { source, text: source, error: null }
   if (current !== draft) {
@@ -29,7 +30,7 @@ export function NodeDistMirrorSettingField({
   const commit = (): void => {
     const normalized = normalizeNodeDistMirrorUrl(current.text)
     if (!normalized.ok) {
-      setDraft({ ...current, error: normalized.message })
+      setDraft({ ...current, error: nodeDistMirrorRefusalText(normalized.reason) })
       return
     }
     setDraft({ source, text: normalized.value, error: null })

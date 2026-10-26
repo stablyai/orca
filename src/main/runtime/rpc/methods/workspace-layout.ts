@@ -1,18 +1,20 @@
-// The read-only layout stream (design 2.4) and the server snapshot read (design 6.3). Not
-// advertised as a capability and not on the mobile allowlist: no client calls them until the
-// switch, so they are inert.
+// Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
   LayoutApplyParams,
+  LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
 } from '../../../../shared/rpc-contract/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../shared/rpc-contract/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { listEnvironments } from '../../../../shared/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
 
-// Why: keyed by the caller's connection, as session.tabs is, so only the subscriber's connection can end it.
+// Connection-owned keys prevent one subscriber from ending another's stream.
 const layoutCleanupKey = (connectionId: string | undefined, subscriptionId: string): string =>
   `layout:${connectionId ?? 'local'}:${subscriptionId}`
 
@@ -22,7 +24,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
     permission: 'workspace',
     params: LayoutSubscribeParams,
     handler: async (params, { runtime, connectionId, signal }, emitFrame) => {
-      // Typed so the frames stay the contract the client reads.
+      // Keep emitted frames checked against the client contract.
       const emit = (frame: WorkspaceLayoutStreamFrame): void => emitFrame(frame)
       const keys = params?.workspaces
       const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
@@ -30,8 +32,11 @@ export const WORKSPACE_LAYOUT_METHODS = [
         const subscriptionId = `layout-${connectionId ?? 'inproc'}-${++layoutSubscriptionSeq}`
         const cleanupKey = layoutCleanupKey(connectionId, subscriptionId)
         const release = (): void => runtime.cleanupSubscription(cleanupKey)
-        const { snapshot, seq, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
-          if (wanted(event.key)) {
+        const { snapshot, seq, epoch, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
+          if (event.type === 'records') {
+            // Emit even unrelated events so subscriber positions stay gapless.
+            emit({ ...event, workspaces: event.workspaces.filter((change) => wanted(change.key)) })
+          } else if (wanted(event.key)) {
             emit(event)
           }
         })
@@ -50,7 +55,8 @@ export const WORKSPACE_LAYOUT_METHODS = [
           type: 'snapshot',
           subscriptionId,
           workspaces: snapshot.filter((entry) => wanted(entry.key)),
-          seq
+          seq,
+          ...(epoch ? { epoch } : {})
         })
         if (signal?.aborted) {
           release()
@@ -71,19 +77,50 @@ export const WORKSPACE_LAYOUT_METHODS = [
     name: 'layout.getRemoteSnapshots',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => ({ snapshots: runtime.getRemoteLayoutSnapshots() })
+    handler: async (_params, { runtime }) => {
+      // Removed servers' saved snapshots must not seed views again.
+      const known = new Set(
+        listEnvironments(getAppEnvironment().getPath('userData')).map(({ id }) => id)
+      )
+      return {
+        snapshots: Object.fromEntries(
+          Object.entries(runtime.getRemoteLayoutSnapshots()).filter(([id]) => known.has(id))
+        )
+      }
+    }
   })
 ]
 
-/**
- * The window's layout commands (C1). Registered only in a layout-owner build; see methods/index.ts.
- * Main mints new ids except those the window already drew under (its tabs, startup-split panes).
- */
+/** Layout-owner builds only: main mints ids except those already drawn by the window (tabs and startup-split panes). */
 export const LAYOUT_APPLY_METHODS = [
   defineMethod({
     name: 'layout.apply',
     permission: 'workspace',
     params: LayoutApplyParams,
     handler: async (params, { runtime }) => runtime.applyLayoutCommand(params.command)
+  }),
+  // Reopen held panes; main's frames, not the reply, show their start.
+  defineMethod({
+    name: 'layout.reopenHeldPanes',
+    permission: 'workspace',
+    params: LayoutReopenHeldPanesParams,
+    handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
+  })
+]
+
+/** Layout-intents servers accept paired-desktop view reports to route CLI/phone file opens into the displayed group. */
+export const LAYOUT_VIEW_REPORT_METHODS = [
+  defineMethod({
+    name: 'layout.reportView',
+    permission: 'workspace',
+    params: LayoutReportViewParams,
+    handler: async (params, { runtime, connectionId, signal }) => {
+      // Reports outlive calls and require connection-close cleanup, as sidebarInputs.reportView does.
+      if (connectionId === undefined || signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      runtime.reportClientView(connectionId, params.activeGroupByWorkspace, params.refresh === true)
+      return { ok: true }
+    }
   })
 ]

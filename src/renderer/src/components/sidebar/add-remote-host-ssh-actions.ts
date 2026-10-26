@@ -74,6 +74,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -85,7 +86,8 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    // Why explicit both ways: absent means on here, and off on a server from before the default flip.
+    ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
+    // Send true/false explicitly because older servers interpret absence as disabled.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
 
@@ -155,7 +157,6 @@ export async function prefillFormFromSshConfigHost(
   }
 }
 
-/** Bulk-load ~/.ssh/config hosts into Orca’s host list (sidebar targets). */
 export async function addAllSshConfigHostsToOrca({
   ssh,
   recordSshRepoReadoptions,
@@ -168,9 +169,7 @@ export async function addAllSshConfigHostsToOrca({
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<{ kind: 'added'; count: number } | { kind: 'already-synced' } | { kind: 'failed' }> {
   try {
-    // Why: no reAdopt — the button counts and promises only the *new* hosts the picker
-    // showed. Re-adopting would resurrect hosts the user deleted, which the count omits.
-    // Settings → Import stays the explicit re-adopt path.
+    // Import only newly counted hosts; re-adopting deleted aliases remains an explicit Settings action.
     const result = await ssh.importConfig()
     recordSshRepoReadoptions(result.repoReadoptions)
     setSshTargetsMetadata(await ssh.listTargets())

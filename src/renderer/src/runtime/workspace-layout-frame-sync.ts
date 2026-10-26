@@ -1,38 +1,36 @@
-// The window's layout slices drawn from main's layout stream (design phase E2b), in a layout-owner
-// build only. Main publishes every workspace it holds; this window shows a frame's workspace when
-// it writes that workspace to a partition this machine owns (a paired server's stay the mirror's)
-// and holds it (startup restore keeps only workspaces the catalog knows; a first visit adds one).
-//
-// A tab the window drew, closed or moved before main answered stays as drawn until the answer is
-// in (layout-owner-drawn-tab-holds); everything else shows as each frame arrives.
+// Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
+import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
-import { buildLayoutFrameSlices, shownLiveTitle } from '@/store/workspace-layout-frame-slices'
+import { terminalLayoutsPatch } from '@/store/workspace-layout-frame-store-patch'
 import {
-  buildLayoutFrameStorePatch,
-  terminalLayoutsPatch
-} from '@/store/workspace-layout-frame-store-patch'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import {
-  framesDrawWorkspace,
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
 } from './workspace-layout-frame-drawn-workspaces'
-import { splitWorkspaceSessionByHost } from '@/lib/workspace-session-host-split'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
-import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
-import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
-import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
+import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { liveTitleUpdates } from './workspace-layout-frame-changes'
+import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
+import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
 import {
-  beginLayoutFramePositions,
-  endLayoutFramePositions,
-  noteLayoutFramePosition
-} from './layout-frame-position'
+  layoutFrameFlushPatch,
+  type LayoutFrameBuildHolds,
+  type LayoutFrameBuildPatch
+} from './workspace-layout-frame-builds'
+import { eitherHeld } from '@/store/workspace-layout-frame-held-tabs'
+import { heldTabGroupFocus } from './held-tab-group-follow'
+import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
+import { provideLayoutFrameWorkspaces } from './layout-frame-workspaces'
+import {
+  notePendingRecordsFrame,
+  pendingWorkspaceChanges,
+  type PendingWorkspaceChanges
+} from './workspace-layout-frame-pending'
+import { layoutFrameApplyObserver } from './workspace-layout-frame-apply-observer'
 import {
   provideLayoutFrameTerminalPanes,
   type LayoutFrameTerminalQueries
@@ -40,14 +38,19 @@ import {
 import {
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
-  takeTabRowFields
+  takeTabRowFields,
+  type MovedTabSelection
 } from './layout-owner-pane-intents'
 import {
   isDrawnGroupLayoutHeld,
   isDrawnTabHeld,
   onDrawnTabsRedraw
 } from './layout-owner-drawn-tab-holds'
-import { subscribeRuntimeLayout } from './runtime-layout-client'
+import {
+  LOCAL_LAYOUT_FRAMES,
+  openLayoutFrameStream,
+  type LayoutFrameSource
+} from './layout-frame-stream'
 
 type FrameSyncStore = {
   getState: () => AppState
@@ -59,181 +62,169 @@ export type WorkspaceLayoutFrameSync = LayoutFrameTerminalQueries & {
   /** Shows every workspace the frames own once the snapshot is in, then keeps them current. */
   start: () => void
   close: () => void
+  /** A frame this window made from what it already holds (a paired server's new handles). */
+  receive: (frame: WorkspaceLayoutChangeFrame) => void
+  /** These workspaces have just started drawing from frames: each takes the full build. */
+  redraw: (keys: Iterable<string>) => void
 }
 
-/** A bucket, not a host: the view read-back routes the workspaces a rebuild skips here. */
-const OTHER_WORKSPACES: ExecutionHostId = 'runtime:frame-sync-other-workspaces'
-
-const structureJsonByLayout = new WeakMap<PublishedWorkspaceLayout, string>()
-
-/** A frame's JSON without live titles, kept per frame: title frames arrive at spinner rate. */
-function structureJson(layout: PublishedWorkspaceLayout): string {
-  let json = structureJsonByLayout.get(layout)
-  if (json === undefined) {
-    json = withoutLiveTitles(layout)
-    structureJsonByLayout.set(layout, json)
-  }
-  return json
-}
-
-function withoutLiveTitles(layout: PublishedWorkspaceLayout): string {
-  return stableJson({
-    ...layout,
-    tabs: layout.tabs.map((tab) =>
-      tab.terminal
-        ? {
-            ...tab,
-            terminal: {
-              ...tab.terminal,
-              panes: tab.terminal.panes.map(({ liveTitle: _liveTitle, ...pane }) => pane)
-            }
-          }
-        : tab
-    )
-  })
-}
-
-/** Title changes between two frames of one workspace, for the pane each tab shows. */
-function liveTitleUpdates(
-  shown: PublishedWorkspaceLayout,
-  next: PublishedWorkspaceLayout,
-  focusedLeafId: (tabId: string) => string | null | undefined
-): TerminalTabTitleUpdate[] {
-  const shownById = new Map(shown.tabs.map((tab) => [tab.id, tab]))
-  const updates: TerminalTabTitleUpdate[] = []
-  for (const tab of next.tabs) {
-    const shownTab = shownById.get(tab.id)
-    if (!tab.terminal || !shownTab) {
-      continue
-    }
-    const focused = focusedLeafId(tab.entityId)
-    const title = shownLiveTitle(tab, focused)
-    if (title !== undefined && title !== shownLiveTitle(shownTab, focused)) {
-      updates.push({ tabId: tab.entityId, title })
-    }
-  }
-  return updates
-}
-
-export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLayoutFrameSync {
+export function openWorkspaceLayoutFrameSync(
+  store: FrameSyncStore,
+  source: LayoutFrameSource = LOCAL_LAYOUT_FRAMES
+): WorkspaceLayoutFrameSync {
   let cache: WorkspaceLayoutCache = EMPTY_WORKSPACE_LAYOUT_CACHE
-  /** Workspace key → the frame the store shows. */
-  let shown: Record<string, PublishedWorkspaceLayout> = {}
+  /** Workspaces the store shows from frames; any other the frames draw takes a full build. */
+  const shown = new Set<string>()
+  /** Workspace key → what its records frames changed since the last flush. */
+  const pending = new Map<string, PendingWorkspaceChanges>()
   let started = false
   let live = false
   let snapshotReceived = false
   let flushQueued = false
   let streamOpen = true
-  /** Workspaces whose pane trees the store may still lack: a structure frame came in, or a tab
-   *  the window's own command held skipped one. */
+  // Workspaces needing pane trees after a build or skipped held-tab update.
   let paneTreeKeys = new Set<string>()
+  const paneStartsShown = framePaneFactsShown()
 
-  const rebuild = (state: AppState, keys: string[]): void => {
-    // The view and content facts are this window's: read them back out of what it saves.
-    const rebuilt = new Set(keys)
-    const own = splitWorkspaceSessionByHost(buildWorkspaceSessionPayload(state), (key) =>
-      rebuilt.has(key) ? LOCAL_EXECUTION_HOST_ID : OTHER_WORKSPACES
-    )[LOCAL_EXECUTION_HOST_ID]!
-    const { facts, desktopView } = loadWorkspaceLayoutWithoutReport(
-      LOCAL_EXECUTION_HOST_ID,
-      own,
-      nameBasedLoadContext()
-    )
-    const heldFiles = new Set(state.openFiles.map((file) => `${file.worktreeId}\0${file.id}`))
-    const built = buildLayoutFrameSlices({
-      layouts: Object.fromEntries(keys.map((key) => [key, cache[key]!])),
-      facts,
-      view: desktopView,
-      holdsEditorFile: (worktreeId, fileId) => heldFiles.has(`${worktreeId}\0${fileId}`)
-    })
-    const patch = buildLayoutFrameStorePatch(
-      state,
-      built,
-      keys,
-      isTabPaneTreeHeld,
-      takeTabRowFields,
-      HELD_DRAWN_TABS
-    )
-    if (Object.keys(patch).length > 0) {
-      store.setState(patch)
+  /** The moved tabs' selections this flush's writes took. */
+  let selectionsTaken: MovedTabSelection[] = []
+  const show = (patch: LayoutFrameBuildPatch): void => {
+    selectionsTaken.push(...showFramePatch(store, patch))
+  }
+
+  // Each change against the cache's copy it applies to, before the frame replaces it.
+  const noteFrame = (before: WorkspaceLayoutCache, frame: WorkspaceLayoutChangeFrame): void => {
+    switch (frame.type) {
+      case 'snapshot':
+        // A reopened stream's snapshot redraws every workspace: the window drew alone meanwhile.
+        if (snapshotReceived) {
+          shown.clear()
+        }
+        return
+      case 'workspace':
+      case 'removed':
+        // An older host's whole workspace: only a full build shows it.
+        shown.delete(frame.key)
+        return
+      case 'records':
+        notePendingRecordsFrame(pending, shown, before, cache, frame)
     }
   }
 
   // Pane trees show at once; only a tab the window's own pane command holds waits.
-  const showPaneTrees = (state: AppState, drawn: (key: string) => boolean): void => {
-    let layouts = state.terminalLayoutsByTabId
-    const waiting = new Set<string>()
-    for (const key of paneTreeKeys) {
-      const layout = cache[key]
-      if (!layout || !drawn(key)) {
-        continue
-      }
-      for (const tab of layout.tabs) {
-        const root = tab.terminal?.root
-        const current = root ? layouts[tab.entityId] : undefined
-        if (!root || !current) {
-          continue
-        }
-        if (isTabPaneTreeHeld(tab.entityId)) {
-          waiting.add(key)
-        } else if (stableJson(current.root) !== stableJson(root)) {
-          layouts = { ...layouts, [tab.entityId]: { ...current, root } }
-        }
-      }
-    }
-    paneTreeKeys = waiting
-    const patch = terminalLayoutsPatch(state, layouts)
-    if (Object.keys(patch).length > 0) {
-      store.setState(patch)
-    }
+  const showPaneTrees = (state: AppState): void => {
+    const shownTrees = terminalLayoutsWithFramePaneTrees(
+      state.terminalLayoutsByTabId,
+      cache,
+      paneTreeKeys,
+      source.draws(state)
+    )
+    paneTreeKeys = shownTrees.waiting
+    show(terminalLayoutsPatch(state, shownTrees.layouts))
   }
 
   const flush = (): void => {
     flushQueued = false
+    selectionsTaken = []
     if (!live) {
+      pending.clear()
       return
     }
     const state = store.getState()
-    const drawn = framesDrawWorkspace(state)
-    const nextShown: Record<string, PublishedWorkspaceLayout> = {}
-    const structural: string[] = []
+    const drawn = source.draws(state)
+    const rowFieldsTaken = new Map<string, Partial<TerminalTab>>()
+    const holds: LayoutFrameBuildHolds = {
+      ...FRAME_BUILD_HOLDS,
+      held: eitherHeld(FRAME_BUILD_HOLDS.held, source.heldTabs),
+      newRowFields: (tabId) => {
+        const fields = takeTabRowFields(tabId)
+        if (fields) {
+          rowFieldsTaken.set(tabId, fields)
+        }
+        return fields
+      }
+    }
+    const changed: string[] = []
+    const fullBuilt: string[] = []
+    const workspaceBuilt: string[] = []
+    const rebound = new Map<string, ReadonlySet<string>>()
     const titleUpdates: TerminalTabTitleUpdate[] = []
     for (const [key, layout] of Object.entries(cache)) {
-      const previous = shown[key]
-      if (layout === previous || !drawn(key)) {
-        if (previous) {
-          nextShown[key] = previous
+      const changes = pending.get(key)
+      if (!drawn(key)) {
+        // Frames the window did not draw: its next draw takes the full build.
+        if (changes) {
+          shown.delete(key)
         }
         continue
       }
-      // Against the store, not `shown`: a held frame leaves `shown` behind the pane trees drawn since.
-      paneTreeKeys.add(key)
-      if (previous && structureJson(previous) === structureJson(layout)) {
+      if (shown.has(key) && !changes) {
+        continue
+      }
+      changed.push(key)
+      if (!shown.has(key)) {
+        fullBuilt.push(key)
+      } else if (changes?.rebuild) {
+        workspaceBuilt.push(key)
+      } else if (changes) {
         titleUpdates.push(
           ...liveTitleUpdates(
-            previous,
+            changes.titled,
             layout,
             (tabId) => state.terminalLayoutsByTabId[tabId]?.activeLeafId
           )
         )
-        nextShown[key] = layout
-      } else {
-        structural.push(key)
-        nextShown[key] = layout
+        if (changes.rebound.size > 0) {
+          rebound.set(key, changes.rebound)
+        }
       }
     }
+    pending.clear()
     // A workspace main stopped publishing keeps what the window shows; main has nothing to say.
-    shown = nextShown
-    if (structural.length > 0) {
-      rebuild(state, structural)
+    for (const key of shown) {
+      if (!(key in cache)) {
+        shown.delete(key)
+      }
     }
+    // One update: a move's or rename's content rekeys with the frame that shows it.
+    const rekeyed = shownContentRekeyPatch(state, cache)
+    const base: AppState = { ...state, ...rekeyed }
+    show({
+      ...rekeyed,
+      ...layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
+    })
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }
-    // A closed stream's cache is frozen: the window draws its own answers then.
-    if (streamOpen && paneTreeKeys.size > 0) {
-      showPaneTrees(store.getState(), framesDrawWorkspace(store.getState()))
+    showFramePaneStarts(store, changed, cache, paneStartsShown)
+    // Run after the apply check: the focus is the user's selection, not the frame's.
+    const builtKeys = [...fullBuilt, ...workspaceBuilt]
+    const followHeldTabs = heldTabGroupFocus(base, store, builtKeys, holds.held)
+    for (const key of builtKeys) {
+      shown.add(key)
+      // Against the store, not the frame: a held tab's tree may lag the pane trees drawn since.
+      paneTreeKeys.add(key)
     }
+    // Closed-stream cache is frozen: draw local command answers now; other changes wait for reopened snapshot.
+    if (!streamOpen) {
+      followHeldTabs()
+      return
+    }
+    if (paneTreeKeys.size > 0) {
+      showPaneTrees(store.getState())
+    }
+    layoutFrameApplyObserver()?.({
+      before: base,
+      after: store.getState(),
+      cache,
+      changed,
+      fullBuilt,
+      workspaceBuilt,
+      rowFieldsTaken,
+      held: holds.held,
+      selectTakenMovedTabs: (state) => withMovedTabsSelected(state, selectionsTaken)
+    })
+    followHeldTabs()
   }
 
   const scheduleFlush = (): void => {
@@ -244,82 +235,82 @@ export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLa
     }
   }
 
-  beginLayoutFramePositions()
-  const stream = subscribeRuntimeLayout(
-    { kind: 'local' },
-    {},
-    (frame) => {
-      cache = applyLayoutFrame(cache, frame)
-      if (frame.type === 'snapshot') {
-        // A reopened stream's snapshot redraws every workspace: the window drew alone meanwhile.
-        if (snapshotReceived) {
-          shown = {}
-        }
-        snapshotReceived = true
-        live = started
+  // A released tab shows main's copy: its workspace builds from the cache again.
+  const rebuildWorkspaces = (keys: Iterable<string>): void => {
+    for (const key of keys) {
+      if (shown.has(key)) {
+        pendingWorkspaceChanges(pending, key).rebuild = true
       }
-      scheduleFlush()
-    },
-    (status) => {
-      if (status.state === 'lost' || status.state === 'refused') {
-        console.warn('[layout-owner] layout stream stopped:', status)
-      }
-      if (status.state === 'connecting' && !streamOpen) {
-        // The local stream reopens after a loss; replies wait for its frames again.
-        streamOpen = true
-        beginLayoutFramePositions()
-      } else if (status.state !== 'connecting' && status.state !== 'live') {
-        streamOpen = false
-        endLayoutFramePositions()
-      }
-    },
-    // After the frame's flush. A held tab may still show as the window drew it, so a waiting reply
-    // checks the store rather than assume the frame shows.
-    (seq) => queueMicrotask(() => streamOpen && noteLayoutFramePosition(seq))
-  )
-  // A released tab shows main's copy: its workspaces draw from the cache again.
-  const stopHeldTabsListener = onDrawnTabsRedraw((workspaces) => {
-    if (!streamOpen) {
-      return
-    }
-    for (const key of workspaces) {
-      delete shown[key]
     }
     scheduleFlush()
+  }
+
+  const receive = (frame: WorkspaceLayoutChangeFrame): void => {
+    const before = cache
+    cache = applyLayoutFrame(cache, frame)
+    noteFrame(before, frame)
+    if (frame.type === 'snapshot') {
+      snapshotReceived = true
+      live = started
+    }
+    scheduleFlush()
+  }
+
+  const stream = openLayoutFrameStream(source, receive, (open) => {
+    streamOpen = open
+  })
+  const stopHeldTabsListener = onDrawnTabsRedraw((workspaces) => {
+    if (streamOpen) {
+      rebuildWorkspaces(workspaces)
+    }
   })
   // Against the store: the window may have drawn over main's tree for this tab since.
   const stopReleaseListener = onTabPaneTreeRedraw((tabId) => {
-    // A closed stream's cache is frozen: the window draws its own answers then.
+    // Closed-stream cache is frozen: draw local command answers now; other changes wait for reopened snapshot.
     if (!streamOpen) {
       return
     }
-    for (const [key, layout] of Object.entries(cache)) {
-      if (layout.tabs.some((tab) => tab.entityId === tabId)) {
-        paneTreeKeys.add(key)
-      }
-    }
-    scheduleFlush()
+    rebuildWorkspaces(
+      Object.entries(cache).flatMap(([key, layout]) =>
+        layout.tabs.some((tab) => tab.entityId === tabId) ? [key] : []
+      )
+    )
   })
 
-  // A workspace only main held (a CLI-started tab) shows on the window's first visit, so the
-  // activation finds main's tab rather than seeding a second one.
+  // Draw main-only workspace on first visit or activation seeds a duplicate instead of finding CLI-started tabs.
   const stopHeldWorkspacesListener = onWorkspaceStartsDrawing(
     store,
-    () => Object.keys(cache).filter((key) => !(key in shown)),
+    source.draws,
+    () => Object.keys(cache).filter((key) => !shown.has(key)),
     () => streamOpen && scheduleFlush()
   )
 
+  let stopWorkspaceReader = (): void => {}
   return {
     start: () => {
       started = true
+      // A closed stream's cache is frozen: main may have changed the workspace since.
+      stopWorkspaceReader = provideLayoutFrameWorkspaces((worktreeId) =>
+        streamOpen ? cache[worktreeId] : undefined
+      )
       // Before its snapshot, the snapshot starts it; a stream that ends first leaves restore's.
       live = snapshotReceived
       // A re-run restore rebuilt the slices, so every workspace is shown again.
-      shown = {}
+      shown.clear()
       flush()
+    },
+    receive,
+    redraw: (keys) => {
+      for (const key of keys) {
+        shown.delete(key)
+      }
+      if (streamOpen) {
+        scheduleFlush()
+      }
     },
     close: () => {
       live = false
+      stopWorkspaceReader()
       stopHeldWorkspacesListener()
       stopHeldTabsListener()
       stopReleaseListener()
@@ -327,8 +318,7 @@ export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLa
     },
     // Only a pane flush draws: the same workspaces it shows.
     holdsTerminalPane: (worktreeId, pane) =>
-      framesDrawWorkspace(store.getState())(worktreeId) &&
-      layoutHoldsBoundPane(cache[worktreeId], pane),
+      source.draws(store.getState())(worktreeId) && layoutHoldsBoundPane(cache[worktreeId], pane),
     // A closed stream's cache is frozen: main may have closed the tab since.
     terminalTab: (worktreeId, tabId) =>
       streamOpen
@@ -337,7 +327,10 @@ export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLa
   }
 }
 
-const HELD_DRAWN_TABS = { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
+const FRAME_BUILD_HOLDS: Omit<LayoutFrameBuildHolds, 'newRowFields'> = {
+  keepsTerminalLayout: isTabPaneTreeHeld,
+  held: { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
+}
 
 let startupFrames: WorkspaceLayoutFrameSync | null = null
 

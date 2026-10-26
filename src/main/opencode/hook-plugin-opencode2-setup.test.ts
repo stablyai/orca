@@ -16,7 +16,6 @@ vi.mock('electron', () => ({
 
 import { _internals } from './hook-service'
 
-// Execute the generated module against legacy and current plugin contracts.
 describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (agent) => {
   type PostBody = { payload?: unknown }
 
@@ -43,9 +42,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
-  // Why: the plugin resolves hook coords from the endpoint file first and only then from
-  // env. Pin every input here so the run does not depend on the developer's Orca session
-  // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
+  // Isolate endpoint-file and environment inputs so tests cannot post to a live Orca session.
   const ENV_KEYS = [
     'ORCA_PANE_KEY',
     'ORCA_OPENCODE_AGENT',
@@ -88,7 +85,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
   async function loadPluginModule(
     source = _internals.getOpenCodePluginSource()
   ): Promise<PluginModule> {
-    // Why: a unique basename per load defeats the ESM module cache between cases.
+    // Bypass ESM caching between cases.
     const pluginPath = join(
       tempDir,
       `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
@@ -119,9 +116,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
         ? _internals.getOpenCode2PluginSource()
         : _internals.getOpenCodePluginSource()
     )
-    // Why: OpenCode probes setup() during startup, and the setup API shape can
-    // drift between releases. A throw surfaces as a plugin failed error in the
-    // TUI, so every shape must resolve to a callable cleanup instead.
+    // OpenCode probes varying setup shapes; each must return cleanup without throwing in the TUI.
     const contexts: unknown[] = [
       undefined,
       {},
@@ -161,8 +156,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
         ? _internals.getOpenCode2PluginSource()
         : _internals.getOpenCodePluginSource()
     )
-    // Why: both plugin files share one config dir, so distinct ids keep the
-    // loader from reporting a duplicate-id collision as a plugin failure.
+    // Both plugins share one directory; duplicate IDs disable the second plugin.
     expect(module.default?.id).toBe(
       agent === 'opencode2' ? 'orca-opencode2-status' : 'orca-opencode-status'
     )
@@ -225,7 +219,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     expect(subscriptionSignal?.aborted).toBe(true)
   })
 
-  // Why: the host's OpenCode 1 session binder must stay off OpenCode 2 posts only.
   it('declares no OpenCode major on posts from the OpenCode 1 server() entry', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const bodies: Record<string, unknown>[] = []
@@ -341,9 +334,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
   })
 
-  // Why: OpenCode 2 raises one form primitive for several producers, and its owner
-  // id — not its metadata — decides whether Orca can ever retire the blocker
-  // (v2.0.12 capture in docs/bug-reproductions/opencode2-form-created-kinds).
+  // OpenCode 2 form ownership decides blocker retirement; metadata alone cannot identify it.
   async function runSetupBridge(
     events: { type: string; data: Record<string, unknown> }[]
   ): Promise<{ names: string[]; cleanup?: () => Promise<void> }> {
@@ -409,8 +400,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
   })
 
-  // Why: metadata is optional in OpenCode's schema and its kind is a convention,
-  // so any session-owned form must block rather than silently disappear.
+  // Optional metadata kinds cannot decide whether session-owned forms block.
   it.each([
     ['no metadata at all', undefined],
     ['metadata without a kind', { server: 'server' }],
@@ -541,7 +531,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       if (transition === 'disposed') {
         await hooks?.dispose?.()
       } else {
-        // Seed ancestry while the earlier prompt lookup remains suspended.
         await hooks?.event({
           event: { type: 'session.created', properties: { info: { id: 'ses_root' } } }
         })

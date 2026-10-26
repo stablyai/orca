@@ -10,14 +10,9 @@ import {
 } from '../../../../src/shared/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
 
-// Pure presentation logic for the PR sidebar's checks + state badge. No React /
-// native imports so it is unit-testable under the node Vitest config (KTD5).
-// Ports the LOGIC of the desktop presenters (github-pr-merge-state.ts,
-// github-pr-reviewer-display.ts), not their components.
+// Pure RN-free checks/badge logic follows desktop merge-state and reviewer presenters.
 
-// The mobile-theme color tokens this logic maps to. Section components resolve
-// the token name to an actual color from `mobile-theme`, keeping this module
-// free of style imports.
+// Return theme token names; components resolve colors so pure logic stays style-free.
 export type MobileStatusToken =
   | 'statusGreen'
   | 'statusAmber'
@@ -34,15 +29,12 @@ const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
   neutral: 'neutral'
 }
 
-// Why: delegate to the one shared classifier — a second copy here is what made mobile call a
-// `skipped` check unresolved and an `action_required` gate pending while desktop called them
-// green and red for the same PR.
+// Share desktop classifier: duplicate logic misclassified skipped as unresolved and action_required as pending.
 export function checkOutcome(check: PRCheckDetail): CheckOutcome {
   return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
 }
 
-// Sort order: failures first (most actionable), then pending, then success /
-// neutral. Stable within a bucket so the upstream ordering is preserved.
+// Stable failure→pending→success/neutral buckets retain upstream order within each.
 const OUTCOME_RANK: Record<CheckOutcome, number> = {
   failure: 0,
   pending: 1,
@@ -62,7 +54,6 @@ export type PRChecksSummary = {
   passed: number
   pending: number
   failed: number
-  // Worst-case outcome across all checks, for the summary badge color.
   outcome: CheckOutcome | 'none'
   label: string
 }
@@ -110,8 +101,6 @@ export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: stri
   return checksError === null ? summary.label : 'Checks unavailable'
 }
 
-// Per-row status word shown beside each check (desktop ChecksList parity), so the
-// outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
 export function checkStatusLabel(check: PRCheckDetail): string {
   if (check.status !== 'completed') {
     return check.status === 'in_progress' ? 'In progress' : 'Pending'
@@ -149,9 +138,7 @@ export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusT
   }
 }
 
-// Stable identity for a check so its lazily-fetched detail can be cached and
-// re-expanded without a second fetch (U5). Prefer the numeric run ids; fall
-// back to the name (GitHub keeps check names unique per head commit).
+// Cache detail by numeric run id, falling back to name (unique per head), so re-expansion avoids refetch.
 export function prCheckKey(check: PRCheckDetail): string {
   if (typeof check.checkRunId === 'number') {
     return `run:${check.checkRunId}`
@@ -162,9 +149,7 @@ export function prCheckKey(check: PRCheckDetail): string {
   return `name:${check.name}`
 }
 
-// Key of the first failing check in a list, or null when none fail. Mirrors the
-// desktop ChecksList behavior of auto-expanding the first failed check on load.
-// Pass the sorted list so "first" matches the rendered order (failures lead).
+// Use sorted list for first-failure auto-expand so chosen row matches rendered actionable order.
 export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string | null {
   for (const check of checks) {
     if (checkOutcome(check) === 'failure') {
@@ -186,9 +171,7 @@ const PR_STATE_LABELS: Record<PRState, string> = {
   closed: 'Closed'
 }
 
-// State-badge color comes from the shared prStateToken so the sidebar badge and
-// the workspace-list linked-PR badge resolve the SAME color per state (merged =
-// purple, open = green, closed = red, draft/unknown = muted).
+// Use shared prStateToken so sidebar and workspace badge agree on merged/open/closed/draft colors.
 export function prStateBadge(state: PRState): PRStateBadge {
   return { label: PR_STATE_LABELS[state] ?? state, token: prStateToken(state) }
 }
@@ -229,8 +212,7 @@ type ReviewDisplayItem = {
   latestReviews?: { login: string; state?: string | null; avatarUrl?: string | null }[]
 }
 
-// Port of getGitHubPRReviewerRows: requested reviewers (status "Requested")
-// followed by any latest-review authors not already requested, deduped by login.
+// Match desktop reviewer rows: requested first, then latest review authors, deduplicated by login.
 export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
   const byLogin = new Map<string, ReviewerRow>()
   for (const user of item.reviewRequests ?? []) {

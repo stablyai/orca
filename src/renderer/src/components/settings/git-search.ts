@@ -67,7 +67,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.git.search.sourceControlGroupOrderDescription',
-      'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+      'Choose whether Staged Changes or Changes appear first in Source Control.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.git.search.groupOrder', 'group order'),

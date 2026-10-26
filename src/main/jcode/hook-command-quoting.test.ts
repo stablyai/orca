@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getJcodeManagedCommand, isJcodeManagedCommand } from './hook-settings'
 
-/**
- * jcode tokenizes a configured hook command shell-style before executing it directly
- * (`parse_hook_command`, crates/jcode-terminal-launch/src/lib.rs). These cases mirror
- * that tokenizer: unquoted whitespace splits, unquoted `\` is an escape, single quotes
- * are verbatim, and inside double quotes only `\` and `"` are escapes.
- */
+/** Mirror parse_hook_command in crates/jcode-terminal-launch/src/lib.rs: shell-style tokenization before direct execution. */
 function tokenizeLikeJcode(raw: string): string[] {
   const parts: string[] = []
   let current = ''
@@ -65,8 +60,7 @@ describe('jcode managed hook command quoting', () => {
   })
 
   it('is what a bare path fails to do, which is why the quoting exists', () => {
-    // Regression anchor: the unquoted Windows path loses every separator, so jcode
-    // execs `C:Usersme.orcaagent-hooksjcode-hook.cmd` and no hook ever fires.
+    // Unquoted Windows separators are consumed as escapes before direct execution.
     expect(tokenizeLikeJcode('C:\\Users\\me\\.orca\\agent-hooks\\jcode-hook.cmd')).toEqual([
       'C:Usersme.orcaagent-hooksjcode-hook.cmd'
     ])

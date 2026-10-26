@@ -136,7 +136,7 @@ describe('NewerDaemonHoldBanner', () => {
     expect(newerDaemonHoldStore.getState().panes[PANE_KEY]?.phase).toBe('held')
     expect(newerDaemonHoldStore.getState().panes[OTHER_PANE_KEY]?.dismissed).toBe(false)
     expect(release).not.toHaveBeenCalled()
-    await act(async () => reopenHeldTerminals())
+    await act(async () => reopenHeldTerminals(PANE_KEY))
     expect(release).toHaveBeenCalledTimes(1)
     expect(otherRelease).toHaveBeenCalledTimes(1)
   })

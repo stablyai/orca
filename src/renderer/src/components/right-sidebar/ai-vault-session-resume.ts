@@ -20,6 +20,7 @@ import {
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
@@ -171,13 +172,13 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
   if (workspaceKey?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
     )
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {
@@ -234,9 +235,7 @@ function resolveAiVaultResumeTargetState(args: {
   }
 }
 
-// Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Copy stays available for blocked CLI sessions, while a
-// structured owner reopens natively and must never expose a legacy command.
+// Require real turns; blocked CLI sessions may still copy commands, but native-owned sessions must reopen natively.
 export function aiVaultSessionRowResumeGating(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null

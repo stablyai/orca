@@ -94,30 +94,41 @@ describe('structured chat naming runtime', () => {
     const state = rig()
     const record = agentSessionRecordFixture()
     record.location.workspaceKind = 'folder'
-    expect(await state.deps.generate(record, 'Repair login')).toBe('Login repair')
+    expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Login repair' })
     expect(state.runtime.resolveWorkspace).toHaveBeenCalledWith(record.location.workspaceId)
     expect(mocks.target).toHaveBeenCalledWith('/workspace/folder', 'codex', state.runtime)
   })
 
-  it('refuses an SSH workspace instead of spawning on the client', async () => {
-    const state = rig()
-    const remote = structuredChatNamingDeps(
-      () => ({ getSettings: () => state.settings }),
-      {
-        ...state.runtime,
-        resolveWorkspace: async () => ({
-          path: '/remote/workspace',
-          executionHostId: toSshExecutionHostId('target')
-        })
-      },
-      state.logger
-    )
-    await expect(remote.generate(agentSessionRecordFixture(), 'Repair login')).rejects.toThrow(
-      'not this native execution host'
-    )
-    expect(mocks.target).not.toHaveBeenCalled()
-    expect(mocks.generate).not.toHaveBeenCalled()
-  })
+  it.each(['ssh', 'wsl'])(
+    'skips unsupported %s even with invalid native settings',
+    async (kind) => {
+      const state = rig()
+      state.settings.sourceControlAi = {
+        ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
+        actions: { conversationName: { agentId: 'custom' } },
+        customAgentCommand: ''
+      }
+      const record = agentSessionRecordFixture()
+      if (kind === 'wsl') {
+        record.location.wslDistro = 'Ubuntu'
+      }
+      const remote = structuredChatNamingDeps(
+        () => ({ getSettings: () => state.settings }),
+        {
+          ...state.runtime,
+          resolveWorkspace: async () => ({
+            path: '/remote/workspace',
+            executionHostId: kind === 'ssh' ? toSshExecutionHostId('target') : 'local'
+          })
+        },
+        state.logger
+      )
+      expect(await remote.generate(record, 'Repair login')).toBeNull()
+      expect(state.logger.warn).not.toHaveBeenCalled()
+      expect(mocks.target).not.toHaveBeenCalled()
+      expect(mocks.generate).not.toHaveBeenCalled()
+    }
+  )
 
   it('publishes a new name to the host feed and retitles the open tab', () => {
     const state = rig()
@@ -139,14 +150,16 @@ describe('structured chat naming runtime', () => {
     )
   })
 
-  it('declines invalid agent configuration without launching anything', async () => {
+  it('reports invalid agent configuration without launching anything', async () => {
     const state = rig()
     state.settings.sourceControlAi = {
       ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
       actions: { conversationName: { agentId: 'custom' } },
       customAgentCommand: ''
     }
-    expect(await state.deps.generate(agentSessionRecordFixture(), 'Repair login')).toBeNull()
+    expect(await state.deps.generate(agentSessionRecordFixture(), 'Repair login')).toEqual({
+      error: expect.any(String)
+    })
     expect(state.logger.warn).toHaveBeenCalled()
     expect(mocks.generate).not.toHaveBeenCalled()
   })

@@ -150,8 +150,7 @@ export function DiffCommentDraftCard({
       )
       return
     }
-    // Chromium drops focus to <body> when the pressed button turns disabled, and the zone only
-    // hands focus back to Monaco while the card still holds it. Park it on the textarea first.
+    // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
     textareaRef.current?.focus()
     setSubmitting(true)
     try {

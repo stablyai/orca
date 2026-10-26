@@ -18,8 +18,12 @@ vi.mock('@orca/process-host', async (importOriginal) => {
   return { ...actual, spawnProcess: spawnProcessMock }
 })
 
-function fakeChild(): EventEmitter & { stdin: { on: () => void; end: () => void } } {
-  return Object.assign(new EventEmitter(), { stdin: { on: vi.fn(), end: vi.fn() } })
+function fakeChild(): EventEmitter & {
+  stdin: { on: () => void; end: () => void }
+} {
+  return Object.assign(new EventEmitter(), {
+    stdin: { on: vi.fn(), end: vi.fn() }
+  })
 }
 
 function lastSpawnSpec(): ProcessSpec {
@@ -61,10 +65,13 @@ describe('spawnSourceControlAgent', () => {
       args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', '/opt/agent/claude', '-p', '--verbose'],
       cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc']
     })
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', AGENT_TOKEN: 'kept' })
-    expect(decodedSupervisorSpec(spec)).toMatchObject({ cwd, lifetime: 'one-shot' })
+    expect(decodedSupervisorSpec(spec)).toMatchObject({
+      cwd,
+      lifetime: 'one-shot'
+    })
   })
 
   it('spawns a Windows agent directly, without a supervisor', () => {
@@ -80,13 +87,15 @@ describe('spawnSourceControlAgent', () => {
     )
 
     expect(child.supervised).toBeUndefined()
-    expect(lastSpawnSpec()).toMatchObject({ program: 'C:/tools/agent.exe', args: ['--print'] })
+    expect(lastSpawnSpec()).toMatchObject({
+      program: 'C:/tools/agent.exe',
+      args: ['--print']
+    })
     expect(lastSpawnSpec().env).not.toHaveProperty('ORCA_PROVIDER_SUPERVISOR_SPEC')
   })
 
   it('hands an npm .cmd shim to process-host unwrapped, multi-line prompt included', () => {
-    // Why: wrapping the shim in cmd.exe here refused every argv prompt, which always has
-    // line breaks, before process-host could run the shim as node + script (#28768).
+    // #28768: cmd.exe wrapping rejects multiline prompts before process-host can resolve npm shims to node + script.
     const shim = join(folder, 'copilot.cmd')
     writeFileSync(shim, '')
     spawnProcessMock.mockReturnValueOnce(fakeChild())
@@ -113,7 +122,11 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${missing}"` },
         { kind: 'local', cwd: folder }
       )
@@ -129,7 +142,11 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${agent}"` },
         { kind: 'local', cwd: folder }
       )
@@ -140,7 +157,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
   })
 
   it.each([
-    // Only macOS throws ENOEXEC; glibc's execvp hands such a file to /bin/sh, direct or supervised.
+    // Only macOS returns ENOEXEC here; glibc execvp hands executable text to /bin/sh.
     ...(process.platform === 'darwin'
       ? [['an executable that is not a program', 'garbage', (path: string) => path] as const]
       : []),
@@ -152,8 +169,16 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-        { agentId: 'custom', model: '', customAgentCommand: `"${command}"` },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: `"${command}"`
+        },
         { kind: 'local', cwd: folder }
       )
     ).resolves.toEqual({
@@ -162,13 +187,17 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
     })
   })
 
-  // Electron prints startup warnings (a bad NODE_EXTRA_CA_CERTS); Node's debug log stands in here.
+  // Model Electron startup warnings before supervised missing-binary diagnostics.
   it('reads a missing binary as not found past the runtime own stderr output', async () => {
     const missing = join(folder, 'missing-behind-warning')
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${missing}"` },
         {
           kind: 'local',
@@ -194,12 +223,22 @@ process.stdin.on('end', () => setTimeout(() => console.log(prompt.includes('READ
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-        { agentId: 'custom', model: '', customAgentCommand: `"${process.execPath}" "${agent}"` },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: `"${process.execPath}" "${agent}"`
+        },
         { kind: 'local', cwd: folder }
       )
     ).resolves.toMatchObject({ success: true, message: 'Update README' })
     expect(lastSpawnSpec().program).toBe(process.execPath)
-    expect(decodedSupervisorSpec(lastSpawnSpec())).toMatchObject({ lifetime: 'one-shot' })
+    expect(decodedSupervisorSpec(lastSpawnSpec())).toMatchObject({
+      lifetime: 'one-shot'
+    })
   })
 })

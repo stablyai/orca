@@ -1,6 +1,4 @@
-// Host-held drafts as this pane acts on them: the card list, Send-now (Steer),
-// Delete, in-place Edit, the Cmd/Ctrl+Enter steer chord, and a held queue's Resume and Clear all.
-// Everything durable lives on the host; an open editor holds only its own typing.
+// Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -28,18 +26,19 @@ import {
   sendingQueuedMessageCards,
   type QueuedMessageCard
 } from './structured-agent-session-queued-cards'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import type {
+  AdmitStructuredAgentSessionAction,
+  CaptureStructuredAgentSessionPresentation,
+  StructuredAgentSessionMutate
+} from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionQueuedMessagesController = {
   cards: QueuedMessageCard[]
-  /** The host queues sends. Without it a card can still show — a message the host kept unsent —
-   *  but queueing settings and the steer chord would do nothing. */
+  /** Cards can show unsent messages without host queue support; queue settings/steer then have no effect. */
   queueCapable: boolean
-  /** No card is still sending or has its own action in flight: Clear all waits those out
-   *  rather than clear fewer cards than it shows. */
+  /** Clear all waits for sends/actions so it cannot silently clear fewer cards than shown. */
   clearCapable: boolean
-  /** Why the queue holds cards Resume would send: the header row above them. A string reason: a
-   *  newer host may name one this build does not know. */
+  /** Host pause reason for sendable cards; accept future reason strings from newer hosts. */
   pause: { reason: string } | null
   /** Whether the host lifted the pause; a failure is a toast, and Resume is the retry. */
   resume: () => Promise<boolean>
@@ -47,23 +46,19 @@ export type StructuredAgentSessionQueuedMessagesController = {
   clear: () => Promise<boolean>
   /** Resume or Clear all on its way: both header actions grey, and the pressed one spins. */
   queuePending: QueuedMessagesPendingAction | null
-  /** The card's own action, or the Clear deleting it, in flight: the card greys, and the
-   *  pressed button spins. */
+  /** Card action or enclosing Clear in flight; disable the card and spin the pressed control. */
   pending: (messageId: string) => QueuedMessagesPendingAction | null
   /** Send-now into the running turn; the transcript shows it at delivery position. */
   steer: (messageId: string) => Promise<void>
   remove: (messageId: string) => Promise<void>
   /** The host edits cards in place; without it a card offers no Edit. */
   editCapable: boolean
-  /** The card being edited in this pane, at most one. */
   editor: QueuedMessageInlineEditor | undefined
-  /** Opens the card's inline editor. */
   edit: (messageId: string) => Promise<void>
   /** Cmd/Ctrl+Enter: Send-now the newest card. False when there is none to steer. */
   steerNewest: () => boolean
 }
 
-/** Which control is on its way, so the button that was pressed is the one that spins. */
 export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
 
 const NO_SENDS: readonly StructuredAgentSessionPendingSend[] = []
@@ -90,10 +85,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
   mutate: StructuredAgentSessionMutate
+  admit: AdmitStructuredAgentSessionAction
+  capturePresentation: CaptureStructuredAgentSessionPresentation
   editTransport: QueuedEditTransport
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
-  const { isWorking, queuePause } = args
+  const { admit, capturePresentation, isWorking, queuePause } = args
   const sending = args.sending ?? NO_SENDS
 
   const cards = useMemo(
@@ -119,8 +116,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     cardsRef.current = cards
   }, [cards])
 
-  // One action per control at a time, drawn as busy until it settles. The ref closes the
-  // same-frame double click or chord repeat the disabled state cannot.
+  // Refs close same-frame double-click/chord races before disabled state renders.
   const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
   const [inFlight, setInFlight] = useState<ReadonlyMap<string, QueuedMessagesPendingAction>>(
     () => new Map()
@@ -162,18 +158,19 @@ export function useStructuredAgentSessionQueuedMessages(args: {
 
   const remove = useCallback(
     async (messageId: string): Promise<void> => {
+      const isCurrent = capturePresentation()
       await run([messageId], 'delete', async () => {
         const result = await mutate<AgentSessionQueuedMessageDeleteResult>(
           'agentSession.queuedMessageDelete',
           'agentSession.queuedMessageDelete',
           { messageId }
         )
-        if (result && !result.deleted && result.disposition === 'dispatched') {
+        if (isCurrent() && result && !result.deleted && result.disposition === 'dispatched') {
           alreadySentNotice()
         }
       })
     },
-    [mutate, run]
+    [capturePresentation, mutate, run]
   )
 
   const editing = useStructuredAgentSessionQueuedEdit({
@@ -222,13 +219,18 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     if (!clearCapable || messageIds.length === 0) {
       return false
     }
+    const isCurrent = capturePresentation()
     // Refused while any of these cards is in flight; each shows busy until the whole Clear settles.
     return run([QUEUE_KEY, ...messageIds], 'clear', async () => {
+      const action = admit()
+      if (!action) {
+        return false
+      }
       const results = await mapSettledWithConcurrency(
         messageIds,
         CLEAR_DELETE_CONCURRENCY,
         (messageId) =>
-          args.editTransport.write<AgentSessionQueuedMessageDeleteResult>(
+          action.write<AgentSessionQueuedMessageDeleteResult>(
             'agentSession.queuedMessageDelete',
             'agentSession.queuedMessageDelete',
             { messageId }
@@ -244,10 +246,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       const failure = results.find(
         (result) => result.status === 'fulfilled' && result.value.kind === 'not-done'
       )
-      if (failure?.status === 'fulfilled' && failure.value.kind === 'not-done') {
+      if (isCurrent() && failure?.status === 'fulfilled' && failure.value.kind === 'not-done') {
         toast.error(failure.value.notice)
       }
-      if (dispatched) {
+      if (isCurrent() && dispatched) {
         alreadySentNotice()
       }
       return (
@@ -255,7 +257,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         results.every((result) => result.status === 'fulfilled' && result.value.kind === 'done')
       )
     })
-  }, [args.editTransport, clearCapable, run])
+  }, [admit, capturePresentation, clearCapable, run])
 
   return {
     cards,

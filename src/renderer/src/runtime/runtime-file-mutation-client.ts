@@ -60,11 +60,14 @@ export async function writeRuntimeFile(
   filePath: string,
   content: string,
   access?: LocalFileAccess,
-  diskPrecondition?: FileWriteDiskPrecondition
+  diskPrecondition?: FileWriteDiskPrecondition,
+  /** Runs at the last moment before the bytes are sent; throwing aborts the write. */
+  beforeSend?: () => void
 ): Promise<FileWriteResult> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+    beforeSend?.()
     return parseFileWriteResult(
       await window.api.fs.writeFile(
         withSshMutationExpectation(context, {
@@ -84,7 +87,14 @@ export async function writeRuntimeFile(
     content
   })
   if (!diskPrecondition) {
-    await callRuntimeFileMutation(remoteArgs.target, 'files.write', params, 15_000)
+    await callRuntimeFileMutation(
+      remoteArgs.target,
+      'files.write',
+      params,
+      15_000,
+      undefined,
+      beforeSend
+    )
     return FILE_WRITE_OK
   }
   return writeRemoteFileIfUnchanged(
@@ -92,7 +102,8 @@ export async function writeRuntimeFile(
     filePath,
     content,
     params,
-    diskPrecondition
+    diskPrecondition,
+    beforeSend
   )
 }
 

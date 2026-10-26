@@ -11,7 +11,10 @@ import { createMemoryNativeChatComposerDraftStorage } from './native-chat-compos
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
@@ -56,7 +59,6 @@ type ComposerApi = {
 
 type Dispatched = { handled: boolean; accepted: boolean; error: string | null }
 
-/** A transport whose next send settles only when the test says so. */
 function heldTransport(hostCommand = false): {
   transport: NativeChatStructuredComposerTransport
   settle: () => Promise<void>
@@ -67,6 +69,7 @@ function heldTransport(hostCommand = false): {
   })
   return {
     transport: {
+      capturePresentation: () => () => true,
       send: vi.fn(() => true),
       dispatchCommand: vi.fn(() => dispatched),
       optionsSurface: {
@@ -167,7 +170,6 @@ function composer(
       setDraft,
       setCaret
     })
-    // The composer fires a send and moves on; each test settles it through the transport.
     onRender({ draft, setDraft, attachments, send: (text) => void send(text) })
     return null
   }
@@ -307,7 +309,6 @@ describe('native-chat composer draft lifecycle', () => {
       seen.api?.attachments.resolvePendingImageAttachment(pending.id ?? '', '/repo/shot.png')
     )
 
-    // The chip went in after `/compact`, which the accepted command then took out.
     expect(seen.api?.draft?.trim()).toBe(imageReferenceToken(pending.id ?? ''))
     expect(seen.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
       '/repo/shot.png'
@@ -450,14 +451,12 @@ describe('native-chat composer draft lifecycle', () => {
         { scopeKey: 'tab-1:pane' }
       )
     )
-    // The paste still on its way comes back pending, so Send waits for it.
     expect(
       second.api?.attachments.imageAttachments.map(({ path, pending }) => ({ path, pending }))
     ).toEqual([
       { path: '/repo/x.png', pending: undefined },
       { path: '', pending: true }
     ])
-    // Sent: the prompt is emptied, then its images.
     await act(async () => {
       second.api?.setDraft('')
       second.api?.attachments.clearImageAttachments()

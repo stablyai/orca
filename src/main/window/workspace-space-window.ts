@@ -1,6 +1,5 @@
-import { BrowserWindow, nativeTheme, type WebContents } from 'electron'
+import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
 import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
@@ -85,7 +84,7 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
     }
   })
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/space.html`)
   } else {
     void window.loadFile(join(__dirname, '../renderer/space.html'))

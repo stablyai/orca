@@ -24,8 +24,7 @@ function connectedRuntimeId(snapshot: RuntimeHostStatusSnapshot): string | null 
   return live ? (snapshot.status?.runtimeId ?? null) : null
 }
 
-// Why: a host that predates the method, or a scope that refuses it, will not start accepting it
-// on this connection; stop asking until the host reconnects.
+// Unsupported/refused colour pushes cannot succeed on this connection; retry only after reconnect.
 function isPermanentRefusal(error: unknown): boolean {
   return (
     error instanceof RuntimeRpcCallError &&
@@ -87,8 +86,7 @@ export function createRemoteRuntimeTerminalColorPush(
   }
 }
 
-// Why one instance: status snapshots arrive through the app-lifetime IPC bridge, while the
-// colours and window focus come from the app shell.
+// One lifetime instance joins IPC status with shell-owned colours/focus events.
 export const remoteRuntimeTerminalColorPush = createRemoteRuntimeTerminalColorPush(
   (environmentId, colors) =>
     callRuntimeRpc({ kind: 'environment', environmentId }, 'terminal.setViewerColors', { colors })

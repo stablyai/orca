@@ -1,8 +1,14 @@
+import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
+import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
   readNativeChatDraftDocument,
   writeNativeChatDraftDocument
 } from './native-chat-draft-cache'
-import { hasUnsavedNativeChatComposerDraftChange } from './native-chat-composer-draft-store'
+import {
+  subscribeToNativeChatComposerDraft,
+  hasUnsavedNativeChatComposerDraftChange
+} from './native-chat-composer-draft-store'
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {
@@ -56,6 +62,7 @@ export function NativeChatPromptEditor({
   className,
   ...events
 }: Props): React.JSX.Element {
+  const historyPaths = useMemo(() => createNativeChatPastedTextHistory(scopeKey ?? ''), [scopeKey])
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
   const editor = useEditor(
@@ -117,19 +124,29 @@ export function NativeChatPromptEditor({
           return true
         },
         clipboardTextSerializer: (slice) =>
-          slice.content.textBetween(0, slice.content.size, '\n', promptLeafText)
+          resolveNativeChatPastedText(
+            scopeKey ?? '',
+            slice.content.textBetween(0, slice.content.size, '\n', promptLeafText),
+            true
+          )
       },
       onTransaction: ({ editor: current, transaction }) => {
-        // Why: a value set from the store with no change of this window behind it (another
-        // window's draft, a late load) is already saved; saving it back would make it one. A
-        // value this window just set keeps its document, skill chips included.
+        const pastedTextFiles = transaction.docChanged
+          ? historyPaths(current.state.doc, transaction.docs)
+          : undefined
+        // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
         if (
           scopeKey &&
           transaction.docChanged &&
           (!transaction.getMeta('preventUpdate') ||
             hasUnsavedNativeChatComposerDraftChange(scopeKey))
         ) {
-          writeNativeChatDraftDocument(scopeKey, promptText(current.state.doc), current.getJSON())
+          writeNativeChatDraftDocument(
+            scopeKey,
+            promptText(current.state.doc),
+            current.getJSON(),
+            pastedTextFiles
+          )
         }
       },
       onUpdate: () => {
@@ -145,6 +162,15 @@ export function NativeChatPromptEditor({
     },
     []
   )
+
+  useLayoutEffect(() => {
+    if (!editor || !scopeKey) {
+      return
+    }
+    const capture = () => historyPaths(editor.state.doc)
+    capture()
+    return subscribeToNativeChatComposerDraft(scopeKey, capture)
+  }, [editor, scopeKey, historyPaths])
 
   useLayoutEffect(() => {
     editor?.setEditable(!disabled, false)
@@ -218,8 +244,7 @@ export function NativeChatPromptEditor({
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
             focus: () => {
-              // Why: a blurred editor never writes its caret to the page, so focusing the element
-              // alone would bring back the stale one and undo a caret moved by an insertion.
+              // Focus the editor view so an inserted caret replaces the stale DOM selection.
               editor.view.focus()
               if (!editor.isEditable) {
                 editor.view.dom.focus()
@@ -254,14 +279,14 @@ export function NativeChatPromptEditor({
                 to: promptTextPosition(doc, to ?? 0)
               })
             },
-            insertSkill: (from, to, token) => {
+            insertSkill: (from, to, token, path) => {
               const { doc } = editor.state
               const range = { from: promptTextPosition(doc, from), to: promptTextPosition(doc, to) }
               editor.view.dispatch(closeHistory(editor.state.tr))
               editor
                 .chain()
                 .insertContentAt(range, [
-                  { type: 'nativeChatSkill', attrs: { token } },
+                  { type: 'nativeChatSkill', attrs: { token, path: path ?? '' } },
                   { type: 'text', text: ' ' }
                 ])
                 .run()
@@ -285,6 +310,14 @@ export function NativeChatPromptEditor({
                 editor.view.dispatch(tr.setMeta('addToHistory', false))
               }
             },
+            stagePastedText: (token) => {
+              const pill = { type: NativeChatFileReference.name, attrs: { token } }
+              editor.view.dispatch(closeHistory(editor.state.tr))
+              editor.view.dispatch(
+                editor.state.tr.replaceSelectionWith(editor.schema.nodeFromJSON(pill), false)
+              )
+              editor.view.dispatch(closeHistory(editor.state.tr))
+            },
             insertFileReferences: (paths) => {
               editor.commands.insertContentAt(
                 editor.state.selection.from,
@@ -298,13 +331,15 @@ export function NativeChatPromptEditor({
   useImperativeHandle(inputRef, () => input!, [input])
 
   return (
-    <NativeChatImageRowProvider value={imageRow}>
-      <EditorContent
-        editor={editor}
-        {...events}
-        data-disabled={disabled || undefined}
-        className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-      />
-    </NativeChatImageRowProvider>
+    <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
+      <NativeChatImageRowProvider value={imageRow}>
+        <EditorContent
+          editor={editor}
+          {...events}
+          data-disabled={disabled || undefined}
+          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+        />
+      </NativeChatImageRowProvider>
+    </NativeChatPastedTextScopeProvider>
   )
 }

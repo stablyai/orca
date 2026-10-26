@@ -1,13 +1,12 @@
-/**
- * The record a desktop install and `orca serve --supervise` share to park a supervised server
- * while macOS replaces the app bundle both run from. Lives outside the bundle, keyed by its path.
- */
+/** Keep bundle-keyed coordination outside the macOS app being replaced so desktop installs can park supervised serve processes. */
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 /** launchd label prefix `orca serve service install` writes; only those supervisors register. */
 export const SERVE_LAUNCHD_LABEL_PREFIX = 'com.stablyai.orca.serve'
 export const SERVE_COORDINATION_PROTOCOL = 1
+/** orcad restarts its own browser helper; under the serve prefix so older installers park it too. */
+export const ORCAD_BROWSER_PARK_LABEL = `${SERVE_LAUNCHD_LABEL_PREFIX}.orcad-browser`
 /** A registration this stale belongs to a supervisor that is gone or wedged. */
 export const SERVE_SUPERVISOR_HEARTBEAT_STALE_MS = 15_000
 export const SERVE_SUPERVISOR_HEARTBEAT_MS = 3_000
@@ -140,10 +139,7 @@ export function isLiveRegistration(
   return now - registration.heartbeatAt < SERVE_SUPERVISOR_HEARTBEAT_STALE_MS
 }
 
-/**
- * Whether a supervisor must keep its server stopped. Every way out is evidence or a deadline, so
- * a crashed installer or supervisor never leaves the service parked for good.
- */
+/** Release only on evidence or deadline so crashed installers/supervisors cannot park services forever. */
 export function decideServeParkHold(
   record: ServeParkRecord | null,
   facts: { now: number; installerAlive: boolean; bundleNow: string }
@@ -155,7 +151,8 @@ export function decideServeParkHold(
     return facts.installerAlive && facts.now < record.parkDeadlineAt ? 'hold' : 'release'
   }
   // Committed: the installer quits into ShipIt by design, so its death proves nothing.
-  if (facts.bundleNow !== record.bundleBefore) {
+  // A missing bundle is mid-swap, not installed: restarting from it now would fail.
+  if (facts.bundleNow !== record.bundleBefore && facts.bundleNow !== formatBundleIdentity(null)) {
     return 'release'
   }
   return record.commitDeadlineAt !== null && facts.now < record.commitDeadlineAt

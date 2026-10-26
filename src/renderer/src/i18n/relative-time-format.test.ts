@@ -31,8 +31,7 @@ describe('getUiRelativeTimeFormatter', () => {
     expect(korean.format(-1, 'day')).toBe('어제')
   })
 
-  // getIntlLocale() already maps the synthetic plugin<hex> resource language to a real BCP-47 tag,
-  // so the constructor never sees a value Intl would reject.
+  // Synthetic plugin resource names must resolve to a real tag before reaching Intl.
   it('formats in the tag a plugin language pack resolves to', () => {
     mockIntlLocale.value = 'ja'
     expect(getUiRelativeTimeFormatter().format(-1, 'day')).toBe('昨日')

@@ -1,10 +1,5 @@
-// Why hoisted: localeCompare with an options object resolves a fresh ICU collator
-// on every comparison (~14x this form). Numeric collation itself costs ~5x over
-// bare localeCompare — accepted for the feature; don't "optimize" the hoist away.
-// numeric: true orders "99 - a" before "100 - b", matching Finder/Explorer.
-// Locale pinned to 'en' so local main, renderer, relay, and remote runtime hosts
-// all produce one order regardless of each process's LANG (precedent:
-// skill-freshness pins 'en' for canonical ordering).
+// Hoisting avoids per-comparison ICU construction (~14x cost); numeric collation costs ~5x bare localeCompare.
+// Numeric order matches Finder/Explorer (99 before 100); pin en so local/remote processes agree regardless of LANG.
 export const fileNameCollator = new Intl.Collator('en', { numeric: true })
 
 export function compareFileNames(a: string, b: string): number {
@@ -12,8 +7,7 @@ export function compareFileNames(a: string, b: string): number {
   if (primary !== 0) {
     return primary
   }
-  // Why: numeric collation ties distinct names ("2" vs "02"); fall back to code
-  // units so sibling order stays a total order instead of readdir order.
+  // Numeric ties (2 vs 02) need code-unit ordering to avoid readdir-dependent results.
   return a < b ? -1 : a > b ? 1 : 0
 }
 

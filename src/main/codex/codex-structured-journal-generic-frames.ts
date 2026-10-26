@@ -21,17 +21,15 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-t
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
-} from '../../shared/native-chat-provider-frame-summary'
+} from '../../shared/native-chat/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { CodexUsageLimits } from './codex-usage-limits'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
-/** A turn's rows by whether a client draws them; each kind has its own cap. */
 type TurnRows = { drawn: number; wordless: number }
-/** `producer` is absent only on the overflow bucket, which pools every thread's
- *  evicted turns and so has no single author: it reads as the session's own. */
+/** Overflow summaries pool threads, so they have no single producer. */
 type SuppressedSummary = {
   count: number
   publishedCount: number
@@ -95,8 +93,7 @@ export class CodexJournalGenericFrames {
       return CODEX_JOURNAL_ADMITTED
     }
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
-    // A frame the classifier declines is deliberately not journaled, which is success.
-    // Failing admission here force-closes the provider through the retry queue.
+    // Declined frames count as success; rejection would force-close the provider.
     const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
     const usageLimit = ended ? this.usageLimits.failure(payload) : null
     const failure =
@@ -119,26 +116,24 @@ export class CodexJournalGenericFrames {
       : CODEX_JOURNAL_ADMITTED
   }
 
-  /** One frame's own row, under the identity every frame row gets, however it is worded. */
   appendFrameRow(
     threadId: string,
     payload: unknown,
     translated: {
       body: AgentJournalStatusItem
       classification: UnhandledProviderFrameJournalItem['classification']
+      turnScope?: UnhandledProviderFrameJournalItem['turnScope']
     }
   ): CodexJournalTranslationAdmission {
     const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
     const turnId = frameTurnId ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
     const rows = this.genericRowsByTurn.get(bucket) ?? { drawn: 0, wordless: 0 }
-    // The cap bounds noise, never evidence: an error frame is always journaled, and capped
-    // frames a client draws stay countable through one summary row per turn.
+    // Errors bypass the noise cap; suppressed visible frames are counted in a summary.
     const isError = translated.classification === 'error-surface'
     // The task list reads every plan update; capping one would freeze it mid-turn.
     const isPlan = translated.body.providerFrame?.kind === CODEX_PLAN_UPDATED_FRAME_KIND
-    // A row no client draws is bounded silently: past its own cap it is dropped and counted
-    // nowhere, since a summary of rows nobody sees would be the only line drawn.
+    // Do not create visible summaries for rows no client draws.
     const wordless = !isPlan && isWordlessProviderFrame(translated.body)
     if (!isError && wordless && rows.wordless >= MAX_CODEX_WORDLESS_ROWS_PER_TURN) {
       return CODEX_JOURNAL_ADMITTED
@@ -164,6 +159,7 @@ export class CodexJournalGenericFrames {
           : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
     const attribution = this.deps.attributionFor(threadId, frameTurnId)
+    attribution.turnScope = translated.turnScope ?? attribution.turnScope
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
       : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
@@ -207,7 +203,6 @@ export class CodexJournalGenericFrames {
         provider: 'orca' as const,
         clientMessageId: `provider-frame-suppressed:codex:${bucket}`
       }
-      // A summary across evicted turns names no producer and belongs to no turn.
       const options = {
         ...(summary.producer
           ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)

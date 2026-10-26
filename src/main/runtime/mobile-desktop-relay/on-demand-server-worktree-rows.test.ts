@@ -1,5 +1,4 @@
-// The phone's server catalog with the sidebar-inputs switch off: the suite as it stood before main
-// kept live server rows, run unchanged over the fetch-per-request source.
+// Run the catalog contract against per-request fetching instead of main-owned live rows.
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
@@ -148,11 +147,10 @@ describe('mobile relay host catalog, fetching on demand', () => {
       { hostId: 'runtime:ready', label: 'Build box', health: 'available', relay: 'ready' },
       { hostId: 'runtime:old', label: 'ThinkPad', health: 'available', relay: 'update-needed' },
       { hostId: 'runtime:down', label: 'VM', health: 'connecting', relay: 'unavailable' },
-      // A build's capabilities outlive contact, so an old server stays update-needed offline.
+      // Build capabilities remain known while offline.
       { hostId: 'runtime:old-down', label: 'Pi', health: 'connecting', relay: 'update-needed' },
       { hostId: 'runtime:new', label: 'Fresh', health: 'connecting', relay: 'unavailable' }
     ])
-    // Listing reads what the desktop already knows; it never contacts a server.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(call).not.toHaveBeenCalled()
   })
@@ -192,7 +190,7 @@ describe('mobile relay host catalog, fetching on demand', () => {
       reconnectAttempt: 0,
       managedServer: { kind: 'relay', reason: 'relay_terminals_live' }
     })
-    // Its workspaces are the SSH host's, which the desktop already lists to the phone itself.
+    // The phone already lists these workspaces under the SSH host.
     expect(
       catalog(hosts)
         .catalog.list()
@@ -230,7 +228,7 @@ describe('mobile relay host catalog, fetching on demand', () => {
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({ environmentId: 'env' }),
       'worktree.ps',
-      // The phone's full-catalog limit: the server's default page would silently truncate.
+      // Default server pagination would silently truncate the full catalog.
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
       { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
@@ -246,13 +244,11 @@ describe('mobile relay host catalog, fetching on demand', () => {
 
     state.environments = [{ id: 'env', name: 'Box', snapshot: snapshot('env', 'unreachable') }]
     const offline = await hostCatalog.worktrees('runtime:env')
-    // Never re-fetched while the desktop itself cannot reach it, and never rewritten as idle.
     expect(call).toHaveBeenCalledTimes(1)
     expect(offline).toEqual({
       worktrees: [{ worktreeId: 'w', hostId: 'runtime:env', status: 'working' }]
     })
 
-    // A failed fetch on a server that looks reachable also serves the last rows.
     state.environments = [{ id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }]
     call.mockRejectedValueOnce(new Error('socket closed'))
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual(offline)
@@ -319,7 +315,6 @@ describe('mobile relay host catalog, fetching on demand', () => {
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
     state.pairingRevision = 2
     call.mockResolvedValueOnce(psReply([{ worktreeId: 'new-server-row', hostId: 'local' }]))
-    // Never joins the old server's fetch, still pending here.
     const next = hostCatalog.worktrees('runtime:env')
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call).toHaveBeenLastCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
@@ -346,7 +341,6 @@ describe('mobile relay host catalog, fetching on demand', () => {
     answerFetch(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     await expect(rows).resolves.toEqual({ worktrees: null })
     expect(hostCatalog.list().hosts).toEqual([])
-    // Added back under the same id and identity: the late rows were pruned, not kept.
     state.environments = [{ ...removed[0]!, snapshot: snapshot('env', 'unreachable') }]
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })
@@ -358,7 +352,6 @@ describe('mobile relay host catalog, fetching on demand', () => {
     call.mockResolvedValue(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     const { catalog: hostCatalog } = catalog(hosts)
     await hostCatalog.worktrees('runtime:env')
-    // A manual disconnect retires the desktop's transport and its status owner.
     state.environments = [
       {
         id: 'env',
@@ -428,7 +421,7 @@ describe('mobile relay host catalog, fetching on demand', () => {
 })
 
 describe("mobile relay host catalog, fetching on demand: the desktop sidebar's own view of server rows", () => {
-  // What resolveRpcWorkspaceCreatorProvenance records: a relayed phone records the desktop relaying it.
+  // Relayed phone creates record the relaying desktop as provenance.
   const creators = [
     { worktreeId: 'mine', creatorProvenance: { kind: 'paired-device', deviceId: 'desktop' } },
     { worktreeId: 'other', creatorProvenance: { kind: 'paired-device', deviceId: 'laptop' } },
@@ -451,7 +444,6 @@ describe("mobile relay host catalog, fetching on demand: the desktop sidebar's o
   it('marks rows someone else created, whatever the desktop filter says', async () => {
     const rows = await serverRows({})
     expect(marked(rows, 'desktopOtherClient')).toEqual(['other', 'server'])
-    // Marked, never dropped: deep links and lineage still resolve every row.
     expect(rows.worktrees).toHaveLength(creators.length)
   })
 
@@ -509,7 +501,6 @@ describe("mobile relay host catalog, fetching on demand: the desktop sidebar's o
             unknown: [tab('unknown', 'terminal')]
           }
         },
-        // Another host's session says nothing about this server's rows.
         local: { browserTabsByWorktree: { other: [browserTab('other')] } }
       }
     })

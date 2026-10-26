@@ -16,11 +16,12 @@ import {
   type GuestCdpSender
 } from './guest-direct-key-input'
 import { withAgentInputInjection } from './agent-input-injection'
+import type { AgentPointerInput } from './browser-agent-activity'
 
-/**
- * CDP `Input.*` for a page: keys and text reach an embedded guest without moving the user's
- * focus, and presses hand it back (docs/reference/agent-browser-focus-isolation.md).
- */
+/** Shows the agent's pointer at an input's point and resolves once it has landed. */
+export type ShowAgentPointer = (input: AgentPointerInput) => Promise<void>
+
+/** Protect user focus while routing CDP input (docs/reference/agent-browser-focus-isolation.md). */
 export class CdpPageInputCommands {
   private inputQueue: Promise<void> = Promise.resolve()
 
@@ -29,10 +30,36 @@ export class CdpPageInputCommands {
     private readonly responder: CdpClientResponseWriter,
     private readonly debuggerChannel: CdpDebuggerChannel,
     private readonly domFocusReplay: CdpDomFocusReplay,
-    private readonly guardFocus: AgentInputFocusGuard
+    private readonly guardFocus: AgentInputFocusGuard,
+    private readonly showAgentPointer: ShowAgentPointer
   ) {}
 
-  /** Handles an `Input.*` command; false when the page is gone and the caller should forward. */
+  /** Points the agent cursor at a DOM node the agent is about to act on without pointer input. */
+  async pointAtNode(backendNodeId: unknown): Promise<void> {
+    if (typeof backendNodeId !== 'number') {
+      return
+    }
+    try {
+      const box = await this.debuggerChannel.sendDebuggerCommand('DOM.getBoxModel', {
+        backendNodeId
+      })
+      const model = box !== null && typeof box === 'object' && 'model' in box ? box.model : null
+      const quad =
+        model !== null && typeof model === 'object' && 'content' in model ? model.content : null
+      if (!Array.isArray(quad) || quad.length !== 8 || !quad.every(Number.isFinite)) {
+        return
+      }
+      await this.showAgentPointer({
+        type: 'mouseMoved',
+        x: (quad[0] + quad[2] + quad[4] + quad[6]) / 4,
+        y: (quad[1] + quad[3] + quad[5] + quad[7]) / 4
+      })
+    } catch {
+      // A node without a box (hidden, detached) just gets no cursor.
+    }
+  }
+
+  /** False tells the caller to forward commands for a destroyed page. */
   handle(
     client: WebSocket,
     clientId: number,
@@ -62,7 +89,7 @@ export class CdpPageInputCommands {
       )
       return true
     }
-    // Why: a replaced client's queued input must not still land in the page.
+    // Replaced clients must not deliver queued input to the page.
     this.reply(
       client,
       clientId,
@@ -78,6 +105,10 @@ export class CdpPageInputCommands {
     params: Record<string, unknown>,
     sessionId: string | undefined
   ): Promise<unknown> {
+    // Frame sessions use frame-local points, so only root-session pointers are shown.
+    if (method === 'Input.dispatchMouseEvent' && !sessionId) {
+      await this.showAgentPointer(params)
+    }
     if (method === 'Input.dispatchKeyEvent' && !sessionId) {
       return await dispatchPageKeyEvent(this.webContents, params, this.sendRoot, this.guardFocus)
     }
@@ -92,7 +123,7 @@ export class CdpPageInputCommands {
     if (!routedByFocus && !isFocusTakingCdpInput(method, params)) {
       return await send()
     }
-    // Why: presses and focus-routed input keep the page's focus emulated and hand the user's back.
+    // Emulate page focus while the pane guards and restores user focus.
     await enablePageFocusEmulation(this.sendRoot)
     const release = await this.guardFocus()
     try {
@@ -116,8 +147,7 @@ export class CdpPageInputCommands {
   private readonly sendRoot: GuestCdpSender = (method, params, sessionId) =>
     this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
 
-  // Why: delivery awaits focus probes and focus guards; one queue keeps a pipelined
-  // keyDown/char/keyUp/insertText or press/move/release sequence in order.
+  // Focus awaits must not reorder pipelined key, text, or pointer events.
   private queueInput<T>(run: () => Promise<T>): Promise<T> {
     const result = this.inputQueue.then(run)
     this.inputQueue = result.then(

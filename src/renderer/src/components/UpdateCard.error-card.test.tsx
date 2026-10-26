@@ -107,7 +107,7 @@ describe('UpdateCard staged install recovery', () => {
     expect(screen.getByText('Your update is ready')).toBeTruthy()
     expect(screen.getByText('Background browser')).toBeTruthy()
     expect(screen.getByText('PID 12345')).toBeTruthy()
-    expect(screen.getByText(/Connected devices will disconnect/)).toBeTruthy()
+    expect(screen.getByText(/its server keeps running without a browser/)).toBeTruthy()
     expect(screen.queryByText('Diagnostic process IDs: 12345')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
@@ -214,7 +214,7 @@ describe('UpdateCard Windows signature failures', () => {
   })
 
   // An install failure now carries the updater's own text, so it can reach these branches too.
-  it('routes a signature verdict raised during install to the security-stop card', () => {
+  it('omits generic restart advice for a signature verdict', () => {
     const message =
       'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
     renderAfterAvailableStatus()
@@ -284,8 +284,6 @@ describe('UpdateCard local builds', () => {
   })
 })
 
-// ── Linux package-install recovery routing ───────────────────────────
-
 async function flushActions(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) {
@@ -353,7 +351,7 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(screen.getByRole('button', { name: 'Show Package' })).toBeTruthy()
   })
 
-  it('drives the copy action through the real preload surface', async () => {
+  it('copies the install command returned by the updater API', async () => {
     renderAfterAvailableStatus()
     showPackageRecovery()
 
@@ -467,8 +465,7 @@ describe('UpdateCard Linux package-install recovery', () => {
         .setUpdateStatus({ state: 'error', message: 'net::ERR_HTTP2_PROTOCOL_ERROR' })
     )
 
-    // Why: the shared card marks the pending action aria-disabled, so the second click still
-    // reaches the handler and only its own guard can stop a double relaunch.
+    // aria-disabled still dispatches clicks; the handler guard must prevent duplicate relaunch.
     const enable = screen.getByRole('button', { name: 'Enable & Restart' })
     fireEvent.click(enable)
 

@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: slug dialog details are loaded through GitHub IPC and must clear stale request state before each lookup. */
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleDot, ExternalLink, GitPullRequest, LoaderCircle, X } from 'lucide-react'
@@ -28,9 +27,7 @@ export function SlugDialogBody({
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
 
-  // Why: the Project row is the source of truth for the list-side columns;
-  // reading it reactively here keeps the dialog in sync with optimistic
-  // patches applied by the table (e.g. inline assignee edits).
+  // Read Project rows reactively so optimistic table edits also update the open dialog.
   const row = useMemo(() => {
     const table = projectViewCache[cacheKey]?.data
     if (!table) {
@@ -106,9 +103,7 @@ export function SlugDialogBody({
     if (!next || next === title) {
       return
     }
-    // Why: without a row id we can't address the project item — the helper
-    // would just return "Row not found" and toast-spam the user. The title
-    // button is also disabled in this case (see render below).
+    // Missing rows cannot be addressed; avoid mutation helpers that would only toast Row not found.
     if (!row) {
       return
     }
@@ -126,8 +121,6 @@ export function SlugDialogBody({
     if (bodyDraft === body) {
       return
     }
-    // Why: same reason as commitTitle — bail rather than ask the helper to
-    // patch a missing row. The body button is also disabled when row is null.
     if (!row) {
       return
     }
@@ -226,8 +219,6 @@ export function SlugDialogBody({
             disabled={!row}
             sourceTarget={sourceTarget}
             onChange={async (add, remove) => {
-              // Why: bail rather than call the helper with an empty id —
-              // see commitTitle above. Trigger is also disabled when !row.
               if (!row) {
                 return
               }

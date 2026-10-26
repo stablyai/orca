@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import { makeWorktreeMeta, expectDetectedWorktreeListResult } from './worktrees-test-fixtures'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
@@ -26,9 +26,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -90,7 +87,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
-    // Why: a worktree on disk with no persisted WorktreeMeta would otherwise fall back to lastActivityAt: 0 and rank dead last in Recent.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -109,10 +105,11 @@ describe('registerWorktreeHandlers', () => {
     }
     store.setWorktreeMeta.mockReturnValue(stampedMeta)
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/discovered-wt', hostId: 'local' }),
@@ -130,7 +127,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('backfills project-host ownership without re-stamping lastActivityAt for existing meta', async () => {
-    // Why: only first discovery stamps (re-stamping would reshuffle the sidebar); host ownership is still backfilled since it derives from repo setup.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -160,13 +156,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -185,7 +179,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('repairs legacy project ids when discovery now resolves the same host setup to a logical project', async () => {
-    // Why: provider identity can arrive after metadata was written; existing workspaces must move to the logical project ID without losing activity ordering.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -232,13 +225,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -286,8 +277,8 @@ describe('registerWorktreeHandlers', () => {
       linkedPR: null,
       instanceId: 'existing-instance',
       projectId: 'github:other/project',
-      hostId: 'ssh:ssh-target-1',
-      projectHostSetupId: 'repo-other-host',
+      hostId: 'local',
+      projectHostSetupId: 'repo-other-setup',
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -295,8 +286,15 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    )
 
+    expect(result.authoritative).toBe(true)
+    expect(result.worktrees[0]).toMatchObject({
+      id: 'repo-1::/workspace/existing-wt',
+      projectId: 'github:other/project'
+    })
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
@@ -309,6 +307,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'ssh-target-1'
     }
+    store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-ssh::/remote/orca': makeWorktreeMeta({
@@ -343,13 +342,11 @@ describe('registerWorktreeHandlers', () => {
       })
     )
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-ssh' })) as {
-      id: string
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-      lastActivityAt: number
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-ssh'
+      })
+    )
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -395,8 +392,14 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    )
 
+    expect(result.authoritative).toBe(true)
+    expect(result.worktrees.map((worktree) => worktree.id)).toContain(
+      'repo-1::/workspace/existing-wt'
+    )
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
@@ -429,10 +432,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      instanceId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -452,7 +456,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
-    // Why: folder repos produce a synthetic worktree; without the stamp a just-added folder sorts to the bottom of Recent.
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -479,7 +482,7 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 1_700_000_000_000
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/folder', hostId: 'local' }),
@@ -492,37 +495,8 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
-    // Why: stamping logic is duplicated in worktrees:list and worktrees:listAll; a listAll regression would silently bury newly-discovered worktrees.
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/discovered-wt',
-        head: 'abc123',
-        branch: 'refs/heads/feature',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    store.getWorktreeMeta.mockReturnValue(undefined)
-    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
-
-    const listed = (await handlers['worktrees:listAll'](null, undefined)) as {
-      id: string
-      lastActivityAt: number
-    }[]
-
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/discovered-wt', hostId: 'local' }),
-      expect.objectContaining({ lastActivityAt: expect.any(Number) })
-    )
-    expect(listed[0]).toMatchObject({
-      id: 'repo-1::/workspace/discovered-wt',
-      lastActivityAt: 1_700_000_000_000
-    })
-  })
-
-  it('omits prunable worktrees from worktrees:listAll', async () => {
-    // Why: a prunable registration has no working directory (issue #8389), so surfacing it yields repeated pty/fs failures and a blank pane.
+  it('omits prunable worktrees from worktrees:listDetected', async () => {
+    // Prunable registrations have no working directory; listing them causes PTY/filesystem failures.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -551,87 +525,14 @@ describe('registerWorktreeHandlers', () => {
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
 
-    const listed = (await handlers['worktrees:listAll'](null, undefined)) as { id: string }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
     const listedIds = listed.map((worktree) => worktree.id)
 
     expect(listedIds).toContain('repo-1::/workspace/live-wt')
     expect(listedIds).not.toContain('repo-1::/workspace/stale-wt')
-  })
-
-  it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {
-    const repos = Array.from({ length: 10 }, (_, index) => ({
-      id: `repo-${index}`,
-      path: `/workspace/repo-${index}`,
-      displayName: `repo-${index}`,
-      badgeColor: '#000',
-      addedAt: 0
-    }))
-    store.getRepos.mockReturnValue(repos)
-    let activeScans = 0
-    let maxActiveScans = 0
-    let notifyScanStarted: (() => void) | undefined
-    const waitForScanCount = async (count: number): Promise<void> => {
-      while (listWorktreesMock.mock.calls.length < count) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(
-            () => reject(new Error(`Timed out waiting for ${count} scans`)),
-            1000
-          )
-          notifyScanStarted = () => {
-            clearTimeout(timeout)
-            resolve()
-          }
-        })
-      }
-    }
-    const pendingScans: (() => void)[] = []
-    listWorktreesMock.mockImplementation(
-      async (
-        repoPath: string
-      ): Promise<
-        { path: string; head: string; branch: string; isBare: false; isMainWorktree: true }[]
-      > => {
-        activeScans += 1
-        maxActiveScans = Math.max(maxActiveScans, activeScans)
-        await new Promise<void>((resolve) => {
-          pendingScans.push(resolve)
-          notifyScanStarted?.()
-          notifyScanStarted = undefined
-        })
-        activeScans -= 1
-        return [
-          {
-            path: repoPath,
-            head: 'abc123',
-            branch: 'refs/heads/main',
-            isBare: false,
-            isMainWorktree: true
-          }
-        ]
-      }
-    )
-
-    const listPromise = handlers['worktrees:listAll'](null, undefined) as Promise<
-      { path: string }[]
-    >
-    await Promise.resolve()
-
-    expect(listWorktreesMock).toHaveBeenCalledTimes(8)
-    expect(maxActiveScans).toBe(8)
-
-    for (const resolve of pendingScans.splice(0)) {
-      resolve()
-    }
-    await waitForScanCount(10)
-
-    expect(listWorktreesMock).toHaveBeenCalledTimes(10)
-
-    for (const resolve of pendingScans.splice(0)) {
-      resolve()
-    }
-    const listed = await listPromise
-
-    expect(maxActiveScans).toBe(8)
-    expect(listed.map((worktree) => worktree.path)).toEqual(repos.map((repo) => repo.path))
   })
 })

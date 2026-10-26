@@ -5,15 +5,24 @@ import { editorModelRegistry } from '@/lib/editor-model-registry'
 import {
   disposeClosedEditorModels,
   disposeClosedCheckDetailsReadingCache,
+  keptClosedEditorTabs,
   type ClosedEditorTab
 } from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
+import type { EditorBufferKeptRecords } from '@/store/slices/editor/buffers/editor-buffer-kept'
 
 type EditorStore = Pick<
-  StoreApi<WorktreeOperationRouteState & { openFiles: OpenFile[] }>,
+  StoreApi<
+    WorktreeOperationRouteState &
+      Partial<EditorBufferViewIndex> & {
+        openFiles: OpenFile[]
+        editorBufferKept?: EditorBufferKeptRecords
+      }
+  >,
   'getState' | 'subscribe'
 >
 type RetainedModel = {
@@ -80,7 +89,7 @@ export function attachClosedEditorTabCleanup(
     if (!registry) {
       return
     }
-    // Not `toEditorModelUri`: this re-resolves a live model's own URI (diff models are not `file:`).
+    // Re-resolve the model’s actual URI; diff models are not file: URIs.
     const model = registry.editor.getModel(registry.Uri.parse(candidate.uri.toString()))
     if (!model || model !== candidate) {
       return
@@ -166,10 +175,20 @@ export function attachClosedEditorTabCleanup(
       )
     }
 
-    const files = [...pendingFiles.values()].filter((file) => !stillOwned(file))
+    const kept = keptClosedEditorTabs(pendingFiles, store.getState().editorBufferKept, (uri) =>
+      currentRegistry.editor.getModel(currentRegistry.Uri.parse(uri))
+    )
+    const files = [...pendingFiles.values()].filter((file) => !stillOwned(file) && !kept.has(file))
     const models = new Set(candidateModels)
     pendingFiles.clear()
     candidateModels.clear()
+    // Kept dirty records retain their models until record release.
+    for (const [file, model] of kept) {
+      pendingFiles.set(ownerKey(file), file)
+      if (model) {
+        candidateModels.add(model)
+      }
+    }
     disposeCaptured(files, models)
     if (active && generation !== flushGeneration) {
       for (const file of files) {
@@ -211,6 +230,9 @@ export function attachClosedEditorTabCleanup(
     previousState = currentState
     if (
       openFiles === previous &&
+      // Detach/rejoin can change model ownership without replacing openFiles.
+      currentState.editorBufferIdOf === closedState.editorBufferIdOf &&
+      currentState.editorBufferKept === closedState.editorBufferKept &&
       currentState.repos === closedState.repos &&
       currentState.worktreesByRepo === closedState.worktreesByRepo &&
       currentState.detectedWorktreesByRepo === closedState.detectedWorktreesByRepo &&
@@ -263,7 +285,8 @@ export function attachClosedEditorTabCleanup(
         candidateModels.add(model)
       }
     }
-    if (removed || retainedModels.size > 0) {
+    const keptChanged = currentState.editorBufferKept !== closedState.editorBufferKept
+    if (removed || retainedModels.size > 0 || (keptChanged && pendingFiles.size > 0)) {
       schedule()
     }
   })

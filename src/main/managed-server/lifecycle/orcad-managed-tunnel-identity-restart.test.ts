@@ -32,7 +32,6 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()))
 })
 
-/** An orcad process on `userDataPath`, the host profile that holds its E2EE key and devices. */
 async function startOrcad(userDataPath: string): Promise<OrcaRuntimeRpcServer> {
   const server = new OrcaRuntimeRpcServer({
     runtime: new OrcaRuntimeService(),
@@ -82,7 +81,6 @@ function managedEnvironment(pairing: PairingOffer, runtimeId: string): KnownRunt
   }
 }
 
-/** The restarted process listens on a new port; the tunnel's local endpoint reaches it. */
 function reachedThrough(pairing: PairingOffer, server: OrcaRuntimeRpcServer): PairingOffer {
   const port = new URL(pairingOffer(server).endpoint).port
   const endpoint = new URL(pairing.endpoint)
@@ -158,7 +156,7 @@ describe('reopening a managed tunnel after orcad restarted elsewhere', () => {
     expect(restarted.caller).toBe(first.caller)
     const paired = parsePairingCode(first.connection.pairingOffer)!
     server.getDeviceRegistry()!.removeDevice(paired.pairedDeviceId!)
-    await expect(connect()).rejects.toThrow('orcad_identity_mismatch')
+    await expect(connect()).rejects.toThrow('orcad_pairing_rejected')
     refreshWslHostPairing(desktopProfile, 'wsl:ubuntu', {
       pairingCode: encodePairingOffer(pairingOffer(server)),
       localPort: restarted.connection.localPort,
@@ -180,14 +178,13 @@ describe('reopening a managed tunnel after orcad restarted elsewhere', () => {
     ).verifiedRuntimeId
     await first.stop()
 
-    // Another desktop updated or woke the host while this one was away.
     const restarted = await startOrcad(hostProfile)
     const pairing = reachedThrough(paired, restarted)
 
     await expect(
       verifyManagedOrcadTunnelIdentity(managedEnvironment(pairing, recorded))
     ).resolves.toEqual({ verdict: 'verified' })
-    // The first authenticated status reply over the reopened tunnel records the new id.
+    // Authenticated status records the restarted process's new runtime ID.
     const status = await verifyRuntimePairingIdentity(pairedRuntimeConnectionFromOffer(pairing), {
       runtimeId: null
     })

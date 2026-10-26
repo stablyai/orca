@@ -15,10 +15,7 @@ import { wrapPosixHookCommand, wrapWindowsHookCommand } from '../agent-hooks/ins
 import { getManagedCommand, KimiHookService } from './hook-service'
 import { buildManagedKimiHooksBlock, KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
 
-// Why: getSharedManagedScriptPath() writes the managed script under
-// homedir()/.orca, and getKimiHome() honors KIMI_CODE_HOME. Point both at a
-// temp dir so the local install/remove cycle never touches the real ~/.orca or
-// ~/.kimi-code. os.homedir() resolves HOME on POSIX and USERPROFILE on Windows.
+// Isolate homedir (HOME/USERPROFILE) and KIMI_CODE_HOME so installs cannot touch real configs.
 let home: string
 let originalHome: string | undefined
 let originalKimiHome: string | undefined
@@ -63,8 +60,7 @@ describe('KimiHookService', () => {
     expect(new KimiHookService().getStatus().state).toBe('not_installed')
   })
 
-  // Why: Kimi runs hooks through cmd.exe on Windows, where a POSIX `if [ -f ... ]` command
-  // fails before it ever reaches the script, so no status event was ever posted.
+  // Kimi uses cmd.exe on Windows; POSIX conditionals prevent all hook delivery there.
   describe('on Windows', () => {
     beforeEach(() => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
@@ -129,15 +125,12 @@ describe('KimiHookService', () => {
       for (const event of KIMI_HOOK_EVENTS) {
         expect(config).toContain(`event = "${event}"`)
       }
-      // The managed script must exist and POST to the Kimi hook endpoint.
       const script = readFileSync(scriptPath(), 'utf-8')
       expect(script).toContain('/hook/kimi')
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      // Keep large payloads off curl's command line to avoid EDR false positives.
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-      // The command Kimi runs points at the managed script via sh.
       expect(config).toContain('agent-hooks/kimi-hook.sh')
     }
   )
@@ -145,7 +138,6 @@ describe('KimiHookService', () => {
   it('keeps user config when installing, then restores it on remove', () => {
     const dir = join(home, '.kimi-code')
     mkdirSync(dir, { recursive: true })
-    // Pre-existing user config with their own provider.
     const userConfig =
       'default_model = "kimi-k2.6"\n\n[providers."mine"]\ntype = "openai"\napi_key = "sk-secret"\n'
     writeFileSync(configPath(), userConfig)
@@ -157,7 +149,6 @@ describe('KimiHookService', () => {
     expect(installed).toContain('api_key = "sk-secret"')
     expect(installed).toContain('default_model = "kimi-k2.6"')
 
-    // Reinstall must not duplicate the managed block.
     service.install()
     const reinstalled = readFileSync(configPath(), 'utf-8')
     expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)

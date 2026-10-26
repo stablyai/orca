@@ -2,10 +2,7 @@ import { win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
 import { canonicalWorktreePath, looksLikePosixAbsolutePath } from './git/worktree-path-comparison'
 
-/**
- * Bytes frozen: retirement namespace keys persist this, so a changed fold would orphan saved
- * retired names. That is why a WSL UNC tail still folds here; equality uses `areWorktreePathsEqual`.
- */
+/** Persisted namespace bytes are frozen, including WSL case folding; use areWorktreePathsEqual for equality. */
 export function worktreePathComparisonKey(pathValue: string, platform = process.platform): string {
   if (
     !looksLikePosixAbsolutePath(pathValue) &&

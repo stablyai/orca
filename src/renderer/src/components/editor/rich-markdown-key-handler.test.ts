@@ -6,8 +6,7 @@ import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-mar
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
-// Why: keybinding matching resolves the platform from navigator.userAgent,
-// which is environment-dependent under vitest; pin it for determinism.
+// Pin the shortcut platform because navigator.userAgent varies across test environments.
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => 'darwin' as NodeJS.Platform
 }))
@@ -219,8 +218,7 @@ describe('rich markdown key handler', () => {
       const ctx = createContext(editor, false)
       const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA', repeat: true })
 
-      // Why: leave the repeat unconsumed here; open drafts are consumed by the
-      // mounted composer guard (product B) instead of this editor key path.
+      // The mounted composer guard owns repeats; the editor path must leave them unconsumed.
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
       expect(ctx.openAnnotationPopoverRef.current).not.toHaveBeenCalled()
@@ -234,9 +232,7 @@ describe('rich markdown key handler', () => {
 
     try {
       const ctx = createContext(editor, false)
-      // Why: the ProseMirror-selection flush moved into openAnnotationPopover
-      // (which reads the selection), so the handler now only delegates the open
-      // with requireLiveSelection and consumes the chord when it succeeds.
+      // openAnnotationPopover owns selection flushing; this handler delegates with requireLiveSelection.
       ctx.openAnnotationPopoverRef.current = vi.fn(() => true)
       const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
 

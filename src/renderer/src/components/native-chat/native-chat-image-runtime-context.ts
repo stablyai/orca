@@ -14,6 +14,11 @@ import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-wor
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 /** The transcript must not read until ownership and its path are both known. */
 export type NativeChatImageRuntimeContext = RuntimeFileOperationArgs | null
@@ -40,15 +45,14 @@ type OwnerState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-// Keep the subscription limited to fields that can change image ownership. The
-// derived context is computed during render, after Zustand has filtered updates.
+// Subscribe only to ownership inputs; derive context after Zustand filters unrelated updates.
 export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
   return {
     settings: state.settings,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+    folderWorkspaces: selectFolderWorkspaces(state),
     floatingWorkspacePath: state.floatingWorkspacePath,
     structuredSessionLaunchDirectoryByTabId: state.structuredSessionLaunchDirectoryByTabId,
     projectGroups: state.projectGroups,
@@ -71,8 +75,7 @@ const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
   route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
-// Why stable: consumers compare by identity, so an unrelated store update must not read as a
-// new image owner.
+// Keep target identity stable so unrelated store changes cannot look like an image-owner change.
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 const environmentTargets = new Map<string, RuntimeClientTarget>()
 

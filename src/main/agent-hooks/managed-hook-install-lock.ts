@@ -75,12 +75,11 @@ async function acquireInstallLock(
 
     const state = await inspectManagedHookLock(lockPath)
     if (state.kind === 'unknown') {
-      // Why: unverifiable legacy locks cannot be stolen safely; hooks are best-effort,
-      // so fail fast instead of adding a recurring connection timeout.
+      // Never steal unverifiable legacy locks; fail fast rather than delay best-effort installation.
       throw new Error('Managed-hook install lock has an unverifiable owner')
     }
     if (state.kind === 'owned' && state.owner.hostIdentity !== hostIdentity) {
-      // Why: homes can be shared across SSH hosts, whose PID namespaces are unrelated.
+      // Shared homes can span unrelated host PID namespaces.
       throw new Error('Managed-hook install lock belongs to another host')
     }
 

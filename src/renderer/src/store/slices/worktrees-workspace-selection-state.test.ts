@@ -423,6 +423,29 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).not.toHaveBeenCalled()
   })
 
+  it("never scrolls to the focused card for its same-id twin's pin, and reveals the focused copy by host", () => {
+    const store = createTestStore()
+    const local = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', hostId: 'local' })
+    const ssh = makeWorktree({ ...local, hostId: 'ssh:box' })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [local, ssh] },
+      activeWorktreeId: local.id,
+      activeWorkspaceExecutionHostId: 'local',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([ssh], true)
+    expect(reveal).not.toHaveBeenCalled()
+
+    store.getState().setWorktreesPinnedAndReveal([local], true)
+    expect(reveal).toHaveBeenCalledWith(local.id, {
+      behavior: 'smooth',
+      highlight: true,
+      executionHostId: 'local'
+    })
+  })
+
   it.each([
     { previousPinned: false, nextPinned: true },
     { previousPinned: true, nextPinned: false }
@@ -456,6 +479,63 @@ describe('setWorktreesPinnedAndReveal', () => {
       expect(reveal).toHaveBeenCalledWith(child.id, { behavior: 'smooth', highlight: true })
     }
   )
+
+  it("follows a server-proxied focused row selected by its server's runtime alias", () => {
+    const store = createTestStore()
+    const proxied = makeWorktree({
+      id: 'repo1::/a',
+      repoId: 'repo1',
+      path: '/a',
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'hub'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [proxied] },
+      activeWorktreeId: proxied.id,
+      activeWorkspaceExecutionHostId: 'runtime:hub',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([proxied], true)
+
+    expect(reveal).toHaveBeenCalledWith(proxied.id, {
+      behavior: 'smooth',
+      highlight: true,
+      executionHostId: 'ssh:box'
+    })
+  })
+
+  it("does not reveal the focused descendant for its ancestor's twin on another host", () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repo1::/parent',
+      instanceId: 'parent-instance',
+      repoId: 'repo1',
+      hostId: 'local'
+    })
+    const parentTwin = makeWorktree({ ...parent, hostId: 'ssh:box' })
+    const child = makeWorktree({
+      id: 'repo1::/child',
+      instanceId: 'child-instance',
+      repoId: 'repo1',
+      hostId: 'local'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [parent, parentTwin, child] },
+      worktreeLineageById: {
+        [child.id]: makeLineage({ worktreeId: child.id, parentWorktreeId: parent.id })
+      },
+      activeWorktreeId: child.id,
+      activeWorkspaceExecutionHostId: 'local',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([parentTwin], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
 
   it('reveals the focused descendant from embedded legacy lineage', () => {
     const store = createTestStore()

@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import {
+  listEphemeralVmRuntimes,
+  upsertEphemeralVmRuntime
+} from '../../shared/ephemeral-vm-runtime-store'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
 const {
@@ -35,7 +38,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
@@ -46,6 +49,7 @@ vi.mock('./runtime-environments/runtime-environments', () => ({
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 
 const tempDirs: string[] = []
 
@@ -663,7 +667,8 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
 
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
     const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox'
@@ -679,10 +684,11 @@ describe('registerEphemeralVmHandlers', () => {
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
 
-    const suspended = await handlers.get('ephemeralVm:suspendWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
-    expect(suspended).toEqual(expect.objectContaining({ status: 'suspended' }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suspend reads only getRepo and getRepos, which makeStore provides.
+    await suspendEphemeralVmWorkspace(store as never, 'workspace-1')
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([
+      expect.objectContaining({ status: 'suspended' })
+    ])
     expect(readFileSync(join(repoPath, 'suspend-mode.txt'), 'utf8')).toBe('suspend')
 
     invalidateRuntimeEnvironmentTransportMock.mockImplementationOnce((environmentId: string) => {

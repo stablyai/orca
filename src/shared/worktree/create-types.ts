@@ -47,9 +47,7 @@ export type WorktreeCreateTimingPhase = {
   durationMs: number
 }
 
-/** Whether a create reused a prewarmed checkout, and when it did not, which part of
- *  the claim key disagreed. A hit says what reset it needed, who armed it, how long it took
- *  to build and how long it then sat ready before this create claimed it. */
+/** Prepared-checkout claim/reset evidence; hits also retain origin, build duration and idle age. */
 export type PreparedCheckoutOutcome =
   | {
       status: 'hit'
@@ -71,15 +69,11 @@ export type WorktreeCreateTiming = {
 
 export type CreateSparseCheckoutRequest = {
   directories: string[]
-  /** Set when the directories came from a saved preset and the user did not
-   *  modify them — recorded on WorktreeMeta so the worktree can show "from
-   *  preset X" later. Cleared if the user edited the textarea. */
+  /** Retain preset identity only for an unedited saved directory list; persisted to WorktreeMeta for display. */
   presetId?: string
 }
 
-/** A reusable per-repo sparse directory list. Saved by the user from the
- *  composer; surfaced again the next time they create a worktree in the same
- *  repo. The MVP scope (no preset) is `presetId === undefined`. */
+/** A user-saved per-repo sparse directory list reused by the create composer. */
 export type SparsePreset = {
   id: string
   repoId: string
@@ -92,23 +86,16 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
-  /** True only when `name` came from Orca's creature-name generator rather than the user. Gates
-   *  name retirement: a generated name is never reissued, but `Orca`, `Runner` and `Molly` are all
-   *  in that pool, so a name the user typed must stay reusable. Defaults to false, which keeps
-   *  CLI and automation callers on the pre-retirement behavior. */
+  /** Retire only generator-chosen names. User-typed pool names remain reusable; omitted callers retain legacy behavior. */
   nameWasGenerated?: boolean
-  /** Optional user-facing label to persist separately from the git-safe
-   *  branch/path seed. Used when a workspace is created from a GitHub or
-   *  Linear artifact whose title should remain readable in the sidebar. */
+  /** Readable label stored separately from the git-safe branch/path seed, e.g. a linked artifact’s title. */
   displayName?: string
   /** Distinguishes user labels from generated artifact titles at creation time. */
   displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   /** Source Control compare target when it differs from the checkout start point. */
   compareBaseRef?: string
-  /** Optional git branch to create, separate from the filesystem-safe worktree
-   *  name. Used when creating from an existing branch whose local branch name
-   *  legitimately contains `/` while the worktree directory must not. */
+  /** Existing local branches may contain slashes that the filesystem-safe worktree name cannot. */
   branchNameOverride?: string
   setupDecision?: SetupDecision
   /** Per-create choice; omitted callers use the execution host's saved default. */
@@ -134,42 +121,31 @@ export type CreateWorktreeArgs = {
   parentWorkspace?: WorkspaceKey
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
-  /** Set when the renderer knows this auto-generated branch should be renamed
-   *  from the first agent message. */
+  /** Await a first-agent-message branch/title rename for this generated branch. */
   pendingFirstAgentMessageRename?: boolean
-  /** Telemetry-only: which UI surface initiated this create. Threaded from
-   *  the renderer entry point so main can emit `workspace_created` with the
-   *  correct `source`. `unknown` is a valid wire value — an unrecognized
-   *  surface emits `source: 'unknown'` rather than dropping the event, so
-   *  dashboards surface enum-coverage gaps as a slice rather than as
-   *  missing data. Optional on the type so older renderer code paths that
-   *  pre-date this prop default to `unknown` at the IPC boundary instead
-   *  of failing typecheck. */
+  /** Creation-surface telemetry. Unknown surfaces emit "unknown" to expose coverage gaps; older callers may omit it and default at IPC. */
   telemetrySource?: WorkspaceSource
-  /** Optional startup command for callers that want the backend to spawn the
-   *  first terminal as soon as the worktree is registered. */
+  /** Optionally spawn the first terminal as soon as registration finishes. */
   startup?: WorktreeStartupLaunch
-  /** Correlates `createWorktree:progress` events back to a specific pending
-   *  creation in the renderer, so concurrent background creates each drive
-   *  their own status surface. Omitted by synchronous callers. */
+  /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
-/** Git's checkout meter during a local create: files written out of the total. */
 export type WorktreeCheckoutProgress = {
   percent: number
   completed: number
   total: number
 }
 
-/** `createWorktree:progress` payload. `checkout` rides the 'creating' phase;
- *  null means git finished writing files. */
+/** Progress payload: checkout accompanies creating; null means Git finished writing files. */
 export type CreateWorktreeProgressEvent = {
   creationId?: string
   phase: 'fetching' | 'creating'
   checkout?: WorktreeCheckoutProgress | null
+  /** Local creates name the checkout before Git publishes it. */
+  worktreeId?: string
 }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
@@ -232,10 +208,9 @@ export type RemoveWorktreeResult = {
   catalogVersion?: WorktreeCatalogVersion
   preservedBranch?: PreservedWorktreeBranch
   nestedPreservedBranches?: (PreservedWorktreeBranch & { worktreeId: string })[]
-  /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
+  /** Present only when an explicit waiver allowed removal despite an archive-hook failure (#19334). */
   archiveHookOverride?: ArchiveHookOverride
-  /** The host accepted the removal and is still deleting the checkout. Sent only to clients that
-   *  cannot show a removal in progress; the others get the reply when the delete has finished. */
+  /** Legacy clients receive acceptance before deletion finishes; capable clients wait for completion. */
   removing?: true
 }
 

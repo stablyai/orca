@@ -5,6 +5,7 @@ import {
   beginLayoutFramePositions,
   endLayoutFramePositions,
   layoutFramesFlowing,
+  noteLayoutFrameEpoch,
   noteLayoutFramePosition
 } from './layout-frame-position'
 
@@ -82,5 +83,40 @@ describe('afterLayoutFrame', () => {
     // Nothing is open now, so a later reply does not wait.
     afterLayoutFrame(20, run)
     expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps one position per stream: a server’s frames never release this window’s waits', () => {
+    const local = vi.fn()
+    const server = vi.fn()
+    beginLayoutFramePositions()
+    beginLayoutFramePositions('env-1')
+    afterLayoutFrame(3, local)
+    afterLayoutFrame(3, server, 'env-1')
+
+    noteLayoutFramePosition(9, 'env-1')
+    expect([local, server].map((run) => run.mock.calls.length)).toEqual([0, 1])
+    expect(layoutFramesFlowing('env-1')).toBe(true)
+    endLayoutFramePositions('env-1')
+    expect(layoutFramesFlowing('env-1')).toBe(false)
+    expect(layoutFramesFlowing()).toBe(true)
+    endLayoutFramePositions('env-1')
+  })
+
+  it('starts a stream’s positions over when its main restarts, showing replies left waiting', () => {
+    const stale = vi.fn()
+    const fresh = vi.fn()
+    beginLayoutFramePositions('env-1')
+    noteLayoutFrameEpoch('epoch-1', 'env-1')
+    noteLayoutFramePosition(40, 'env-1')
+    afterLayoutFrame(41, stale, 'env-1')
+
+    noteLayoutFrameEpoch('epoch-2', 'env-1')
+    expect(stale).toHaveBeenCalledTimes(1)
+    // The restarted main counts from its own start: seq 2 is ahead of nothing yet.
+    afterLayoutFrame(2, fresh, 'env-1')
+    expect(fresh).not.toHaveBeenCalled()
+    noteLayoutFramePosition(2, 'env-1')
+    expect(fresh).toHaveBeenCalledTimes(1)
+    endLayoutFramePositions('env-1')
   })
 })

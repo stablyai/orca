@@ -12,32 +12,14 @@ import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-er
 import { bytesToBase64 } from '../hooks/mobile-dictation-session-state'
 import type { MicrophoneScreenLock } from './microphone-screen-lock'
 
-/**
- * The device side of `native.audio.start`, `read` and `stop`.
- *
- * The microphone opens here, inside the shell, which is the whole reason these are verbs: a page
- * served from a custom scheme has no `getUserMedia` worth having, and the OS permission prompt is
- * the shell's to run. What crosses back is PCM, because the page is what speaks
- * `speech.dictation.*` to the desktop — transcription runs there, and putting that protocol in the
- * binary would freeze it until a store release.
- *
- * Every engine call is injectable for the reason the media verbs' are: the arms worth pinning — a
- * denied microphone, an engine that will not open, a ring that filled, an interruption — are the
- * ones a simulator makes expensive, and none of them is a fact about Swift.
- */
+// Keep transcription protocol in the page so it can update without a binary release; the shell owns only microphone permission and PCM capture.
 
-/** The audio engine as this handler needs it: a permission, an open, a run, and two event lanes. */
 export type NativeAudioEngine = {
-  /** Runs the OS prompt if the OS runs one, and answers what it decided. */
   readonly requestPermission: () => Promise<BridgeAudioPermission>
-  /** Brings the engine up and answers the rate it actually opened at. */
   readonly open: (sampleRate: number) => Promise<{ opened: boolean; sampleRate: number }>
-  /** Starts producing microphone events. False is a device that would not. */
   readonly begin: () => boolean
-  /** Stops producing them and releases the session. Called on every exit, including a throw. */
   readonly end: () => void
-  /** The screen, which an open microphone holds: a lock mid-capture suspends the app and takes the
-   *  audio with it. Injectable for the engine's own reason — `expo-keep-awake` is a device call. */
+  // Hold the screen with an open mic because locking suspends capture; inject the device wake API for tests.
   readonly screenLock: MicrophoneScreenLock
   readonly onMicrophoneData: (handler: (bytes: Uint8Array) => void) => { remove: () => void }
   readonly onInterruption: (handler: (kind: BridgeAudioInterruption) => void) => {
@@ -45,14 +27,7 @@ export type NativeAudioEngine = {
   }
 }
 
-/**
- * What the microphone produced and the page has not taken yet, bounded by the page's own budget.
- *
- * The newcomer is dropped rather than the oldest, which is the same decision
- * `MobileDictationPendingAudioBudget.tryReserve` makes on the page: what a page does about a drop
- * is fail the dictation, so recency buys nothing, and dropping from the front would hand the page
- * a splice of two moments that reads as speech nobody said.
- */
+// Drop new audio on overflow, matching the page budget: dropping old bytes would splice unrelated speech before dictation fails.
 class NativeAudioRing {
   private readonly chunks: Uint8Array[] = []
   private pendingBytes = 0
@@ -70,8 +45,6 @@ class NativeAudioRing {
     this.pendingBytes += bytes.byteLength
   }
 
-  /** Up to `maxBytes` from the front, splitting the chunk the bound falls inside, plus everything
-   *  the ring refused since the previous drain. Cleared by the drain that reports it. */
   drain(maxBytes: number): { bytes: Uint8Array; droppedBytes: number } {
     const taking = Math.min(maxBytes, this.pendingBytes)
     const out = new Uint8Array(taking)
@@ -103,14 +76,12 @@ type Capture = {
   readonly ring: NativeAudioRing
   readonly stopListening: () => void
   recording: boolean
-  /** The interruption not yet carried to the page. One slot, because what a page does about any of
-   *  them is the same and a queue would report a stale one after the live one. */
+  // Keep only the latest pending interruption so reads cannot replay stale OS state.
   interruption: BridgeAudioInterruption | null
 }
 
 export type NativeAudioCapture = {
   readonly serve: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
-  /** Ends whatever is running. The page session's end and the screen's unmount both call it. */
   readonly dispose: () => void
 }
 
@@ -118,23 +89,11 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
   const screen = engine.screenLock
   let capture: Capture | null = null
   let disposed = false
-  /**
-   * Starts and stops run one at a time, in the order the page asked for them.
-   *
-   * Both of them await the device, and both decide what `capture` is when they come back. Two
-   * starts overlapping — a page reloaded while the OS prompt is up, which is the very case the
-   * replacement rule below exists for — each reached `listen()` and the second overwrote the
-   * first's handlers without removing them, leaving the engine calling into a capture nobody could
-   * read for the life of the app. A stop overlapping a start found nothing to end and the start
-   * opened a microphone after it.
-   *
-   * Reads stay off this queue: they must not wait behind an opening capture, and a read with no
-   * capture is already a refusal rather than a guess.
-   */
+  // Serialize starts/stops so overlapping opens cannot orphan listeners and a stop cannot run before its start finishes. Reads remain immediate and refuse without capture.
   let queue: Promise<unknown> = Promise.resolve()
 
   function enqueue<Value>(action: () => Promise<Value>): Promise<Value> {
-    // On both settle paths: a start that failed must not wedge every stop behind it.
+    // A failed start must not block later stops.
     const run = queue.then(action, action)
     queue = run.then(
       () => undefined,
@@ -164,8 +123,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
         return
       }
       capture.interruption = kind
-      // A capture the page has given up on must not go on filling the ring behind it. The rule is
-      // the seam's own, so the shell, the device and the page all end on the same two kinds.
+      // Match native/page interruption rules so abandoned dictation cannot continue recording.
       if (bridgeAudioInterruptionEndsCapture(kind)) {
         capture.recording = false
       }
@@ -183,9 +141,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
 
   async function start(params: unknown): Promise<unknown> {
     const { sampleRate } = audioStartParamsSchema.parse(params)
-    // A page is a document that can navigate, fault or be swiped away mid-capture, and the shell is
-    // the only side that notices. So a second start replaces the first rather than refusing it,
-    // which would leave the microphone held by a document that is gone.
+    // Replace prior capture because its page may have navigated or disappeared without stopping it.
     end()
     const permission = await engine.requestPermission()
     if (permission !== 'granted') {
@@ -195,18 +151,13 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
     if (!opened.opened) {
       return { started: false, sampleRate: opened.sampleRate, permission }
     }
-    // The session can end while the device is still opening. Nothing subscribes after that: the
-    // dispose has already run, and a capture opened behind it would have no owner to stop it.
-    // The open succeeded though — on a phone that is `initialize()` bringing the audio session up —
-    // so it is torn down here. `end()` below is a no-op with no capture, and nobody else will call
-    // one, so simply returning would leave the device's session up for the life of the app.
+    // Dispose may finish during open; close the successful device session directly because no capture exists for end() to close.
     if (disposed) {
       engine.end()
       return { started: false, sampleRate: opened.sampleRate, permission }
     }
     capture = listen()
-    // The mic is open from here, so the screen is held from here — and given back by `end()`,
-    // which every exit below reaches, including the one an engine that throws takes.
+    // Hold only after opening; every subsequent failure must release through end().
     screen.hold()
     try {
       if (!engine.begin()) {
@@ -249,11 +200,9 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
         return read(params)
       }
       audioStopParamsSchema.parse(params)
-      // Queued so a stop that followed a start ends the capture that start opened, rather than
-      // finding nothing and leaving a live microphone behind it.
+      // Queue stop behind start so it cannot miss an opening capture.
       return enqueue(async () => {
-        // Drained before the capture goes, because ending it takes the ring with it. This is the
-        // audio produced since the page's last read, which is the tail of the utterance.
+        // Drain before end destroys the ring, preserving audio since the last page read.
         const drained = capture?.ring.drain(BRIDGE_AUDIO_RING_MAX_BYTES)
         return {
           stopped: end(),

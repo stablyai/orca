@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { REVIEW_REFRESH_COOLDOWN_MS, reviewRefreshIntervalMs } from './review-refresh-policy'
+import { reviewRefreshIntervalMs } from './review-refresh-policy'
 
 describe('review refresh intervals', () => {
   it.each([
@@ -21,9 +21,5 @@ describe('review refresh intervals', () => {
     [{ state: 'open', checksStatus: 'failure', selected: true }, 60_000]
   ] as const)('uses %j → %s', (input, expected) => {
     expect(reviewRefreshIntervalMs(input)).toBe(expected)
-  })
-
-  it('keeps exposure cooldown separate from periodic refresh cadence', () => {
-    expect(REVIEW_REFRESH_COOLDOWN_MS).toBe(10_000)
   })
 })

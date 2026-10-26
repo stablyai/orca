@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
@@ -28,6 +28,8 @@ import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-proper
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
+import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
@@ -57,10 +59,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
   const { pending } = settings.pendingViewChanges
-  // A collapse the desktop has not answered spins on its header.
-  const pendingCollapseKeys = useMemo(
-    () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
-    [pending]
+  // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
+  const pendingCollapseKeys = useSlowPendingKeys(
+    useMemo(
+      () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
+      [pending]
+    )
   )
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
@@ -71,7 +75,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 
   return (
     <>
-      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
       {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId && forceReconnectHost !== null}
@@ -92,7 +95,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       ) : null}
 
-      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
       {routeNotice && (
         <HostRouteNoticeBanner
           message={routeNotice}
@@ -106,8 +108,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       ) : null}
 
-      {/* An action that did not happen. Above the list and dismissible, because the list, the
-          header and the confirm it re-opens all have to stay on screen. */}
+      {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
       {state.actionError !== '' && (
         <HostRouteNoticeBanner
           message={state.actionError}
@@ -116,7 +117,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {/* Search bar */}
       {state.showSearch && (
         <View style={styles.searchBar}>
           <MobileSearchField
@@ -124,16 +124,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             onChangeText={state.setSearch}
             placeholder="Search workspaces…"
             autoFocus
-            // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
+            // Remount the focus effect per open so rapid search toggles reopen the keyboard.
             focusKey={state.showSearch}
             accessibilityLabel="Search workspaces"
           />
         </View>
       )}
 
-      {/* A feed this page cannot read: the host is older or newer than the page. */}
       {controller.feed?.kind === 'reopen' ? (
-        <HostWorkspaceListReopen />
+        <HostWorkspaceListReopen aboveRows={sections.length > 0} />
       ) : (
         <HostWorkspaceListStates
           connState={connState}
@@ -150,7 +149,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {sections.length > 0 && controller.feed?.kind !== 'reopen' && (
+      {sections.length > 0 && (
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
@@ -158,10 +157,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
-          // Why: react-native-web dismisses on-drag on any scroll, and a narrowing search fires one.
+          // React Native Web dismisses on-drag for any scroll, including one caused by narrowing search.
           keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
-          // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
+          // Keep the final row above the system navigation bar in edge-to-edge layouts.
           contentContainerStyle={[
             styles.list,
             // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
@@ -179,7 +178,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             const isCollapsed = controller.collapsedGroups.has(section.key)
             const count =
               section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
-            // Why: the desktop's header draws its anchor repo's colour and icon.
             const repoSectionLook =
               state.view.groupBy === 'repo' && section.repo
                 ? repoLookById.get(section.repo.id)
@@ -189,7 +187,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             return (
               <>
                 <Pressable
-                  style={styles.sectionHeader}
+                  style={[
+                    styles.sectionHeader,
+                    section.projectGroupDepth
+                      ? {
+                          paddingLeft:
+                            spacing.lg + projectGroupHeaderIndent(section.projectGroupDepth)
+                        }
+                      : null
+                  ]}
                   onPress={() => settings.toggleCollapsed(section.key)}
                 >
                   {isCollapsed ? (
@@ -200,7 +206,9 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                   {section.icon === 'pin' && (
                     <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                   )}
-                  {state.view.groupBy === 'repo' ? (
+                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
+                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+                  ) : state.view.groupBy === 'repo' ? (
                     <View style={styles.sectionRepoIcon}>
                       <MobileRepoIcon
                         repoIcon={repoSectionIcon}
@@ -215,7 +223,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                     <ActivityIndicator
                       size="small"
                       color={colors.textMuted}
-                      style={styles.sectionIcon}
+                      style={styles.sectionPendingSpinner}
                     />
                   )}
                 </Pressable>
@@ -256,7 +264,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
       {!embedded && (
         <NewWorkspaceFab
           onPress={actions.openNewWorktreeModal}

@@ -35,7 +35,12 @@ afterEach(() => {
   cleanup()
 })
 
-function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiVaultSearchHit) {
+function renderSession(
+  session: AiVaultSession,
+  blocked = false,
+  searchHit?: AiVaultSearchHit,
+  searchHitHostLabels?: ReadonlyMap<string, string>
+) {
   const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
   const onCopyResume = vi.fn()
   const onResume = vi.fn()
@@ -52,6 +57,7 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
         expandedSessionIds={new Set()}
         vaultScope="all"
         searchHits={searchHit ? new Map([[session.id, searchHit]]) : undefined}
+        searchHitHostLabels={searchHitHostLabels}
         buildResumeStartup={buildResumeStartup}
         getOriginalPaneTarget={() => null}
         isStructuredSessionOpen={() => false}
@@ -87,6 +93,20 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
   )
   return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
 }
+
+describe('AiVaultVirtualRow search hit source host', () => {
+  it('names the host a hit came from when hits span several hosts', () => {
+    renderSession(cliSession, false, undefined, new Map([['local', 'Local Mac']]))
+
+    expect(screen.getByTitle('Found on Local Mac').textContent).toBe('Local Mac')
+  })
+
+  it('shows no host badge when every hit came from one host', () => {
+    renderSession(cliSession)
+
+    expect(screen.queryByTitle(/^Found on /)).toBeNull()
+  })
+})
 
 describe('AiVaultVirtualRow resume command actions', () => {
   it('renders blocked IDE references without preparing an unsafe startup command', () => {

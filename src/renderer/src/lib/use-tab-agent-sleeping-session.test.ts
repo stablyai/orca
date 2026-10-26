@@ -58,9 +58,7 @@ function sleepingRecord(paneKey: string, agent: ResumableTuiAgent): SleepingAgen
 
 describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
   it("prefers a hibernated pane's session identity over a stale reused launchAgent", () => {
-    // Why: a codex launch later reused for claude leaves a claude sleeping record
-    // for the pane. Its generic spinner title names no agent, so only the session
-    // record proves the launch identity went stale.
+    // A Codex pane reused for Claude can retain a generic spinner; only sleeping-session ownership proves the launch identity stale.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -200,9 +198,7 @@ describe('useTabAgent sleeping-session', () => {
 
   it('paints a hibernated pane with its sleeping-session agent over a stale launchAgent', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    // Why: the pane was launched as codex, then reused for claude and hibernated.
-    // No live hook/process remains and the frozen title names no agent, so the
-    // persisted session record is the only proof the launch identity went stale.
+    // After reused Claude hibernates, persisted session identity alone can override stale Codex launch when hooks/process/title reveal none.
     useAppStore.setState({
       terminalLayoutsByTabId: {
         'tab-1': {

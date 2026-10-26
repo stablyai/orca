@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type * as RepoIconModule from '../../shared/repo-icon'
 
-// Counts real sanitizer entries so the icon cache is proven by decode count
-// rather than by wall clock, which is unfalsifiable on a loaded CI box.
+// Count real decodes to verify caching without timing-sensitive assertions.
 const sanitizeRepoIconCalls = vi.hoisted(() => vi.fn())
 vi.mock('../../shared/repo-icon', async (importOriginal) => {
   const actual = await importOriginal<typeof RepoIconModule>()
@@ -19,7 +18,6 @@ vi.mock('../../shared/repo-icon', async (importOriginal) => {
 import {
   admitDashboardSnapshot,
   isDashboardRevealAgentArgs,
-  isDashboardSpawnAgentArgs,
   isDashboardSnapshot
 } from './dashboard-payload-validation'
 
@@ -277,7 +275,7 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
-  it('validates bounded launch choices and spawn requests', () => {
+  it('validates bounded launch choices', () => {
     expect(
       isDashboardSnapshot({
         ...SNAPSHOT,
@@ -291,10 +289,6 @@ describe('dashboard payload validation', () => {
       })
     ).toBe(false)
     expect(isDashboardSnapshot({ ...SNAPSHOT, launchableAgentsByWorktreeId: [] })).toBe(false)
-
-    expect(isDashboardSpawnAgentArgs({ worktreeId: 'worktree-1', agent: 'codex' })).toBe(true)
-    expect(isDashboardSpawnAgentArgs({ worktreeId: '', agent: 'codex' })).toBe(false)
-    expect(isDashboardSpawnAgentArgs({ worktreeId: 'worktree-1', agent: 'unknown' })).toBe(false)
   })
 
   it('bounds the conversation name', () => {
@@ -347,8 +341,7 @@ describe('dashboard payload validation', () => {
     }
   })
 
-  // Why: the pop-out replays the last accepted snapshot, so rejecting the whole
-  // board over one card froze every other agent's status until it was renamed.
+  // One malformed card must not freeze every other agent on the last accepted board.
   describe('admitDashboardSnapshot', () => {
     it('drops only the offending card and keeps the rest of the board', () => {
       const good = SNAPSHOT.cards[0]
@@ -412,8 +405,7 @@ describe('dashboard payload validation', () => {
       expect(admitDashboardSnapshot({ ...SNAPSHOT, generatedAt: Number.NaN })).toBeNull()
       expect(admitDashboardSnapshot({ ...SNAPSHOT, cards: 'nope' })).toBeNull()
       expect(admitDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: [] })).toBeNull()
-      // Why: showIdle and filterOptions describe the frame, not one card, so a
-      // bad value there has no card to drop and must fail the whole snapshot.
+      // Invalid frame fields cannot be salvaged by dropping one card.
       expect(admitDashboardSnapshot({ ...SNAPSHOT, showIdle: 'yes' })).toBeNull()
       expect(
         admitDashboardSnapshot({
@@ -424,8 +416,7 @@ describe('dashboard payload validation', () => {
     })
   })
 
-  // Why: sanitizing an image icon decodes the whole payload to read a 24-byte
-  // header, and the renderer republishes the same icons every 250 ms.
+  // Renderer publishes every 250ms; repeated icons must not re-decode their full payload.
   it('validates a repeated image icon without re-decoding it every publish', () => {
     const src = imageIconSrc(256 * 1024)
     const snapshot = {
@@ -443,15 +434,13 @@ describe('dashboard payload validation', () => {
       expect(isDashboardSnapshot(snapshot)).toBe(true)
     }
 
-    // 10 repos x 20 publishes = 200 icon checks against ONE decode.
     expect(sanitizeRepoIconCalls).toHaveBeenCalledTimes(1)
   })
 
   it('re-decodes when the icon payload or its source actually changes', () => {
     const first = { type: 'image', src: imageIconSrc(1_024), source: 'upload' }
     const second = { type: 'image', src: imageIconSrc(2_048), source: 'upload' }
-    // Same bytes, different source: `source` picks which src pattern is legal,
-    // so it must not collide with the first entry's cached verdict.
+    // Source changes legal patterns, so equal bytes cannot share verdicts across sources.
     const rebranded = { ...first, source: 'file' }
     sanitizeRepoIconCalls.mockClear()
 
@@ -480,8 +469,7 @@ describe('dashboard payload validation', () => {
   })
 
   it('does not let a split of one icon key inherit another icon verdict', () => {
-    // A valid base64 src may contain whitespace, so `source` and `src` must not
-    // be joined ambiguously: this pair concatenates identically.
+    // Whitespace in valid src values makes plain separator keys ambiguous.
     const accepted = { type: 'image', src: imageIconSrc(1_024, true), source: 'upload' }
     const joined = `upload ${accepted.src}`
     const splitAt = joined.indexOf(' ', 'upload '.length)
@@ -495,8 +483,6 @@ describe('dashboard payload validation', () => {
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: { 'repo-1': accepted } })).toBe(
       true
     )
-    // `forged.source` is not a legal RepoIconImageSource, so it must be rejected
-    // no matter what the accepted icon left in the cache.
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: { 'repo-1': forged } })).toBe(
       false
     )
@@ -513,7 +499,6 @@ describe('dashboard payload validation', () => {
       )
     }
 
-    // Cheap branches bypass the cache entirely rather than sharing its keyspace.
     expect(sanitizeRepoIconCalls).toHaveBeenCalledTimes(3)
   })
 

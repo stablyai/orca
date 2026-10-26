@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.rpc
 }))
 vi.mock(
@@ -82,7 +83,7 @@ const LISTING = `${JSON.stringify({
       ]
     }
   }
-})}\n`
+})}\n${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'orca-model-settings', response: { applied: { model: 'claude-opus-5-5[1m]' } } } })}\n`
 
 let dir: string
 let release: () => void
@@ -105,6 +106,7 @@ async function hostCatalog(listingLands: Promise<void>) {
   const record = agentSessionRecordFixture({
     sessionId: SESSION,
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(dir, 'claude-home') },
+    providerHandleChain: [],
     options: { permissionMode: 'ask' }
   })
   const modelCatalog = createAgentModelCatalogService({
@@ -133,7 +135,13 @@ async function hostCatalog(listingLands: Promise<void>) {
   const resting = {
     child: null,
     params: { provider: 'claude' },
-    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
+    journal: {
+      threadGoal: () => null,
+      visitItems: () => {},
+      submissions: () => [],
+      contextUsage: () => null,
+      context: { floor: () => null }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {
@@ -191,17 +199,30 @@ const optionReads = () =>
   mocks.rpc.mock.calls.filter(([, method]) => method === 'agentSession.options').length
 
 describe('Approve for me on a new Claude chat', () => {
-  it('is offered once the background listing lands after the chat opened', async () => {
+  it('is offered before and after the background listing lands', async () => {
     const lands = new Promise<void>((resolve) => (release = resolve))
     await hostCatalog(lands)
     const { result, unmount } = openNewChat()
     // The chat opened before its account was ever listed: the first answers come without a list.
     await waitFor(() => expect(optionReads()).toBe(1))
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('ask'))
-    expect(offered(result.current.optionSnapshot)).not.toContain('auto')
+    expect(offered(result.current.optionSnapshot)).toEqual([
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
 
     release()
-    await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
+    await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
+    await waitFor(() =>
+      expect(offered(result.current.optionSnapshot)).toEqual([
+        'ask',
+        'accept-edits',
+        'auto',
+        'full-access'
+      ])
+    )
     unmount()
   })
 
@@ -209,8 +230,8 @@ describe('Approve for me on a new Claude chat', () => {
     const first = await hostCatalog(Promise.resolve())
     await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
     await first.persistence.flush()
-    // A restarted host loads the saved file: the chat opens warm.
-    await hostCatalog(new Promise(() => {}))
+    // A restarted host retains the rows and revalidates its configured default before naming it.
+    await hostCatalog(Promise.resolve())
     const { result, unmount } = openNewChat()
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
     unmount()

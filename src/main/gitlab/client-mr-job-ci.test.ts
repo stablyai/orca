@@ -76,13 +76,11 @@ describe('gitlab client — MR operations', () => {
 
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', '--hostname', 'git.internal', 'projects/g%2Fp/jobs/99/trace'],
-        // Why: a trace outlives the runner's 30s default, so the fetch raises it.
         { timeout: 60_000 }
       )
     })
 
-    // #7732: a job canceled before it started 404s; the Checks panel must show its
-    // benign empty state, not the issue-edit copy classifyGlabError would produce.
+    // Canceled-before-start jobs have no trace; show an empty log rather than issue-edit error copy.
     it('reports a 404 trace as an empty log rather than an error', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404 Not Found'))
 

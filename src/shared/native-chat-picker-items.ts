@@ -1,4 +1,5 @@
 import type { DiscoveredSkill, SkillSourceKind } from './skills'
+import { locatedPickerSkill } from './native-chat-reported-skill'
 import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
 import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from './skill-display-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
@@ -23,6 +24,10 @@ export type NativeChatPickerItem =
       token: string
       description: string | null
       sources: { sourceKind: SkillSourceKind; skillFilePath: string }[]
+      /** The file the agent selects this skill by, when the agent reported it; a pick sends it. */
+      path?: string
+      /** Distinguishes same-named reported files independently of description or scanner scope. */
+      location?: string
     }
 
 export type NativeChatSkillDiscoverySnapshot = {
@@ -31,12 +36,8 @@ export type NativeChatSkillDiscoverySnapshot = {
   errorKind?: 'unavailable' | 'timeout' | 'host' | 'unknown'
 }
 
-/**
- * Which commands a scanned skill of the same name may stand in for, by marking them unclassified.
- * Never one the chat's own send handles (`/compact`), which runs that whatever the row says. Where
- * the agent's report lists skills among its commands (OpenCode 1.x), only a name reported under
- * that skill's own description; any other is the agent's command, which OpenCode runs first.
- */
+/** Only unclassify namesake commands a scanned skill can replace. Never override host-owned dispatch (/compact).
+ * OpenCode 1.x mixes skills into commands: require matching skill descriptions; otherwise its real command takes precedence. */
 export function classifyPickerCommands(
   commands: readonly SlashCommandSuggestion[],
   skills: readonly DiscoveredSkill[],
@@ -82,8 +83,7 @@ export function buildNativeChatPickerItems(
   /** `$` matches skill names only, so a shell word like `$CODEX_HOME` never hits a description. */
   trigger: '/' | '$' = '/'
 ): NativeChatPickerItem[] {
-  // A name can only collide when both kinds invoke through the same sigil;
-  // where skills carry their own, `/review` and `$review` are distinct entries.
+  // Only shared sigils collide: /review and $review remain separate.
   const sharedSigil = skillSigil === '/'
   const unclassifiedNames = new Set(
     commands.filter((command) => command.kindUnspecified).map((command) => command.name)
@@ -107,8 +107,7 @@ export function buildNativeChatPickerItems(
     resolvedCommands.map((command, index) => ({
       item: {
         kind: 'command' as const,
-        // Why: the name is the dispatch token and the catalog is curated, so
-        // it is inserted verbatim; only untrusted skill text gets sanitized.
+        // Curated command names are dispatch tokens; sanitize untrusted skill text only.
         id: `command:${command.name}`,
         name: command.name,
         token: `/${command.name}`,
@@ -151,7 +150,9 @@ function mergeNativeChatSkills(
     if (!safeName) {
       continue
     }
-    byName.set(safeName, [...(byName.get(safeName) ?? []), { ...skill, name: safeName }])
+    const namedSkills = byName.get(safeName) ?? []
+    namedSkills.push({ ...skill, name: safeName })
+    byName.set(safeName, namedSkills)
   }
   const discovered = new Map(
     [...byName.entries()].map(([name, namedSkills]) => [
@@ -159,27 +160,49 @@ function mergeNativeChatSkills(
       pickerSkill(name, namedSkills, skillSigil)
     ])
   )
-  // Why: when the running session reports its own skills, that report is the
-  // authority on which ones exist — a disk scan cannot see what the session
-  // actually loaded (plugin roots, setting-source filters), and a scanned root
-  // the session ignored must not be offered. The scan stays the source of
-  // description and scope for the names both know about.
+  // Session reports determine loaded skills (including plugin roots/setting-source filters); disk scans enrich matching descriptions/scope only.
+  // Each reported file gets its own row so same-named skills remain explicitly selectable.
+  const nameCounts = new Map<string, number>()
+  const firstReportedByName = new Map<string, NativeChatSessionSkill>()
+  for (const skill of sessionSkills ?? []) {
+    nameCounts.set(skill.name, (nameCounts.get(skill.name) ?? 0) + 1)
+    if (!firstReportedByName.has(skill.name)) {
+      firstReportedByName.set(skill.name, skill)
+    }
+  }
+  const located = (sessionSkills ?? []).flatMap((skill) =>
+    skill.path && isTokenSafe(skill.name)
+      ? [
+          locatedPickerSkill(
+            skill,
+            skill.path,
+            exactPaths.get(skill.path),
+            skillSigil,
+            (nameCounts.get(skill.name) ?? 0) > 1
+          )
+        ]
+      : []
+  )
   const names =
     sessionSkills !== undefined
       ? [
-          ...sessionSkills.map((skill) => skill.name).filter(isTokenSafe),
+          ...sessionSkills
+            .filter((skill) => !skill.path)
+            .map((skill) => skill.name)
+            .filter(isTokenSafe),
           ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
         ]
       : [...discovered.keys()]
-  return [...new Set(names)]
-    .map((name) => {
+  return [
+    ...located,
+    ...[...new Set(names)].map((name) => {
       const skill = discovered.get(name) ?? pickerSkill(name, [], skillSigil)
-      const reported = sessionSkills?.find((entry) => entry.name === name)?.description
+      const reported = firstReportedByName.get(name)?.description
       return skill.description === null && reported
         ? { ...skill, description: sanitizePickerText(reported, 240) }
         : skill
     })
-    .sort(comparePickerSkills)
+  ].sort(comparePickerSkills)
 }
 
 function pickerSkill(
@@ -254,8 +277,7 @@ function isSubsequence(query: string, value: string): boolean {
   return false
 }
 
-// Why: the row's visual truncation is CSS; the name IS the inserted PTY token,
-// so it must never be sliced. Token safety instead rejects absurd lengths.
+// Names are inserted PTY tokens, never visual prefixes. CSS truncates display; reject unsafe lengths without slicing tokens.
 const MAX_TOKEN_SAFE_NAME_LENGTH = 200
 
 function getSafeSkillName(skill: DiscoveredSkill): string | null {
@@ -287,8 +309,7 @@ function compareDiscoveredSkills(a: DiscoveredSkill, b: DiscoveredSkill): number
   )
 }
 
-// A session-reported skill this host could not locate on disk sorts last: it is
-// real and invocable, but carries no scope or description to rank on.
+// Unlocated reported skills remain invocable but lack description/scope for ranking; sort last.
 const UNLOCATED_SCOPE_PRIORITY = Object.keys(SCOPE_PRIORITY).length
 
 function skillScopePriority(item: Extract<NativeChatPickerItem, { kind: 'skill' }>): number {
@@ -306,48 +327,9 @@ function comparePickerSkills(
   )
 }
 
-// `/` is the composer's trigger for every agent. A draft-leading slash is the one
-// that can dispatch; elsewhere the token starts after whitespace and its query
-// stops at the next `/` so file paths stay prose.
-export const LEADING_SLASH_TRIGGER = /^\/(\S*)$/
-export const MID_PROMPT_SLASH_TRIGGER = /\s\/([^\s/]*)$/
-// An agent whose skills carry their own sigil (Codex `$`) also opens its skills alone on it.
-const SKILL_SIGIL_TRIGGER = /(?:^|\s)\$(\S*)$/
-const COMMON_ENV_VARS = new Set(
-  'PATH HOME USER SHELL PWD TMPDIR TEMP TMP LANG TERM XDG_CONFIG_HOME'.split(' ')
-)
-
-/** The query after a `$` skill sigil at the caret, or null when it reads as shell
- *  syntax (`$HOME`, `$5`, `$(pwd)`, `$?`), by the same rule as Codex's own composer. */
-export function matchSkillSigil(before: string): string | null {
-  const query = before.match(SKILL_SIGIL_TRIGGER)?.[1] ?? null
-  // A bare `$` still opens the full list.
-  if (!query) {
-    return query
-  }
-  const name = query.match(/^[\w:-]*/)?.[0] ?? ''
-  if (name === '' || name === '_' || /^[-\d]/.test(name)) {
-    return null
-  }
-  // Why: a lowercase spelling stays a skill, so a skill named `home` still completes.
-  return !/[a-z]/.test(name) && COMMON_ENV_VARS.has(name.toUpperCase()) ? null : query
-}
-
-/** Replaces the typed trigger token with the item's own token, which for a skill
- *  is the agent-native form whichever trigger opened the menu. */
-export function applyPickerSuggestion(
-  draft: string,
-  caret: number,
-  item: NativeChatPickerItem
-): { draft: string; caret: number; insertedToken: string } {
-  const before = draft.slice(0, caret)
-  const after = draft.slice(caret)
-  const slashMatch = before.match(LEADING_SLASH_TRIGGER) ?? before.match(MID_PROMPT_SLASH_TRIGGER)
-  const query = slashMatch?.[1] ?? (item.kind === 'skill' ? matchSkillSigil(before) : null)
-  if (query === null) {
-    return { draft, caret, insertedToken: '' }
-  }
-  const tokenStart = before.length - query.length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}${item.token} `
-  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken: item.token }
-}
+export {
+  LEADING_SLASH_TRIGGER,
+  MID_PROMPT_SLASH_TRIGGER,
+  applyPickerSuggestion,
+  matchSkillSigil
+} from './native-chat-picker-triggers'

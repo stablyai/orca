@@ -1,7 +1,4 @@
-/**
- * The runtime environment behind a WSL host (C7): a plain paired environment whose pairing points
- * at the desktop end of the `wsl.exe` stdio bridge, plus its record in the WSL deployment store.
- */
+/** WSL host pairing points at the desktop’s wsl.exe stdio bridge; deployment state lives in the WSL store. */
 import { parsePairingCode, type PairingOffer } from './pairing'
 import {
   createEnvironmentFromPairingOffer,
@@ -105,10 +102,7 @@ export function addWslHostEnvironment(
   return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), args.id)
 }
 
-/**
- * Saves an explicit re-pair or moved bridge. Server restarts retain the paired client grant.
- * Returns whether the pairing changed, so callers retire stale transports.
- */
+/** Re-pair/move the bridge; return pairing changes so callers retire stale transports. Restarts keep the client grant. */
 export function refreshWslHostPairing(
   userDataPath: string,
   environmentId: string,

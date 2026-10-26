@@ -4,8 +4,7 @@ import type * as WorktreeIdModule from '../../shared/worktree/id'
 
 const counter = vi.hoisted(() => ({ splitCalls: 0 }))
 
-// Why: `splitWorktreeId` (and the `Object.keys` snapshot around it) is the per-row work the repo
-// loop used to repeat once per repo. Counting it makes the O(repos x rows) regression observable.
+// Count per-row parsing to expose O(repos × rows) rescans.
 vi.mock('../../shared/worktree/id', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeIdModule>()
   return {
@@ -46,7 +45,7 @@ beforeEach(() => {
 
 describe('getLocalRepoForRegisteredWorktree', () => {
   it('walks the worktree meta table once, not once per repo', () => {
-    // Worst case: the owning repo is last, so every earlier repo used to force a full rescan.
+    // Put the owner last to expose scans repeated for earlier repos.
     const repoCount = 10
     const rowCount = 200
     const repos = Array.from({ length: repoCount }, (_, i) => ({

@@ -1,6 +1,7 @@
 /** The managed-server status a retained SSH state carries, admitted field by field. */
 import type {
   SshManagedServerLinkedProject,
+  SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus,
   SshManagedServerUpdateNote
 } from './ssh-types'
@@ -16,8 +17,9 @@ import {
   SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
 } from './ssh-retained-payload-limits'
 import { clampUtf8TextPrefix } from './utf8-byte-limits'
+import { isNodeDistMirrorAttempt } from './node-dist-mirror'
 
-// Why field-by-field like plainSsh: an unknown kind from a newer host drops alone.
+// Drop an unknown kind alone so newer-host fields do not discard the whole retained state.
 export function admitSshManagedServerStatus(value: unknown): {
   managedServer?: SshManagedServerStatus
 } {
@@ -84,9 +86,24 @@ export function admitSshManagedServerStatus(value: unknown): {
         : {}),
       ...('held' in value && value.held === true ? { held: true } : {}),
       ...('contactLost' in value && value.contactLost === true ? { contactLost: true } : {}),
+      ...admitNodeDownloadBlocked(
+        'nodeDownloadBlocked' in value ? value.nodeDownloadBlocked : null
+      ),
       ...('bridged' in value && value.bridged === true ? { bridged: true } : {})
     }
   }
+}
+
+// Unknown mirror state degrades only its note to the plain retry line.
+function admitNodeDownloadBlocked(value: unknown): {
+  nodeDownloadBlocked?: SshManagedServerNodeDownloadBlocked
+} {
+  if (!value || typeof value !== 'object' || !('mirror' in value)) {
+    return {}
+  }
+  return isNodeDistMirrorAttempt(value.mirror)
+    ? { nodeDownloadBlocked: { mirror: value.mirror } }
+    : {}
 }
 
 const SSH_MANAGED_SERVER_LINKED_MAX_ENTRIES = 64
@@ -118,7 +135,7 @@ function admitSshManagedServerLinkedProjects(value: unknown): {
   return linked.length > 0 ? { linked } : {}
 }
 
-// Why alone: an unknown note from a newer host drops without hiding that the host is managed.
+// Unknown update notes must not hide managed-host identity.
 function admitSshManagedServerUpdateNote(value: unknown): { update?: SshManagedServerUpdateNote } {
   if (!value || typeof value !== 'object' || !('state' in value)) {
     return {}

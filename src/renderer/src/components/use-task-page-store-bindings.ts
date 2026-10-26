@@ -8,6 +8,8 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+
 export function useTaskPageStoreBindings() {
   useTranslation()
   const settings = useAppStore((s) => s.settings)
@@ -31,7 +33,7 @@ export function useTaskPageStoreBindings() {
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
-  // Why: bumped after cache eviction to re-run the fetch effect — eviction alone won't, since its deps don't include workItemsCache.
+  // Eviction alone cannot restart fetch because its dependencies exclude workItemsCache.
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
@@ -43,7 +45,7 @@ export function useTaskPageStoreBindings() {
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
   const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)

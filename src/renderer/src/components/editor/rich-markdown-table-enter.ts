@@ -17,11 +17,7 @@ function moveToVerticalNeighbor(editor: Editor, direction: 1 | -1): boolean {
   return true
 }
 
-/**
- * Table Enter: move to the cell below instead of inserting an in-cell
- * paragraph (GFM cannot keep multi-line table cells). On the last row,
- * insert a row and move into it. Returns true when consumed inside a table.
- */
+/** Move down or append a row on Enter; GFM cannot preserve additional in-cell paragraphs. */
 export function handleRichMarkdownTableEnter(editor: Editor): boolean {
   if (!isInTable(editor.state)) {
     return false
@@ -31,14 +27,11 @@ export function handleRichMarkdownTableEnter(editor: Editor): boolean {
     return true
   }
 
-  // Why: last-row Enter grows the table rather than inserting an in-cell hard
-  // break that GFM serialization cannot keep.
   if (!editor.can().addRowAfter()) {
     return true
   }
 
   editor.commands.addRowAfter()
-  // Selection stays in the original row; step down into the new one.
   moveToVerticalNeighbor(editor, 1)
   return true
 }

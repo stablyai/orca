@@ -208,7 +208,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             ) {
               return current
             }
-            // Keep identity stable so hydrating details does not fetch them again.
+            // Keep identity stable so detail hydration cannot fetch itself again.
             const alreadyHydrated =
               current.title === issue.title &&
               current.status === issue.status.name &&
@@ -221,9 +221,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
         return
       }
 
-      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
-      // one leg's transport does, and interpreting only after both settled is what makes the issue
-      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
       const [issueReply, commentsReply] = await Promise.all([
         linearIssueRead.request(
           client,

@@ -35,7 +35,6 @@ export type BrowserClientRetainedPage = {
   releaseAvailabilityWatch?: () => void
 }
 
-/** The live page a guest WebContents belongs to; retiring/reconciling pages are not addressable. */
 export function findBrowserClientPageByWebContentsId(
   pages: Iterable<BrowserClientRetainedPage>,
   webContentsId: number
@@ -48,7 +47,6 @@ export function findBrowserClientPageByWebContentsId(
   return undefined
 }
 
-/** Drops `page` unless a newer page already took its id. */
 export function forgetBrowserClientRetainedPage(
   pages: Map<string, BrowserClientRetainedPage>,
   browserPageId: string,

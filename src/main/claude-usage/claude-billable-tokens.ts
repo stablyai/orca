@@ -1,8 +1,7 @@
 import type { ClaudeUsageTokenTotals } from './types'
 
-/** Token totals plus the subset from requests over the model's long-context threshold. */
 export type ClaudeBillableTokens = ClaudeUsageTokenTotals & {
-  /** Absent when no request crossed the threshold. */
+  /** Subset from requests over the long-context threshold. */
   longContext?: ClaudeUsageTokenTotals
 }
 
@@ -33,7 +32,6 @@ export function minTokenTotals(
   }
 }
 
-/** Sums two token sets, keeping each long-context subset aligned with its totals. */
 export function addBillableTokens(
   left: ClaudeBillableTokens,
   right: ClaudeBillableTokens
@@ -54,7 +52,6 @@ export const NO_TOKENS: Readonly<ClaudeUsageTokenTotals> = {
   cacheWrite1hTokens: 0
 }
 
-/** Adds (or with `sign` -1 removes) a long-context share, dropping the field once it nets to zero. */
 export function addLongContext(
   target: ClaudeBillableTokens,
   share: ClaudeUsageTokenTotals | undefined,

@@ -22,14 +22,11 @@ function referenceCompare(a: GitStatusEntry, b: GitStatusEntry): number {
     }
     return 2
   }
-  // 'en' pinned to match the shared collator — an undefined locale would make
-  // this oracle environment-dependent (sv/cs/da collate differently).
+  // Pin en to match the shared comparator; runner locales would make the oracle vary.
   return rank(a) - rank(b) || a.path.localeCompare(b.path, 'en', { numeric: true })
 }
 
 describe('compareGitStatusEntries', () => {
-  // Why pin the order: the shared collator replaced a per-call localeCompare, so
-  // the only thing that could regress is the ordering it produces.
   it('orders identically to a per-call localeCompare', () => {
     const paths = [
       'src/a.ts',

@@ -1,7 +1,7 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
-// Every way Orca reads or kills processes, never settling: a Stop that reaches for one hangs.
+// Termination probes never settle, exposing any unexpected process cleanup during Stop.
 const processWork = vi.hoisted(() => {
   const never = (): Promise<never> => new Promise(() => {})
   return {
@@ -37,12 +37,14 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection,
-  type CodexAppServerConnectionHandlers,
-  type CodexAppServerLaunch,
-  type openCodexAppServerConnection
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
+  CodexAppServerLaunch,
+  openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import {
@@ -199,7 +201,6 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     let nextTurn = 0
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => {
-      // Codex opens each turn it answers; a send's dispatch waits for that.
       const turnId = `turn-${++nextTurn}`
       codex.connections[0].handlers.onNotification?.('turn/started', {
         threadId: THREAD_ID,
@@ -228,7 +229,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       state: 'admitted'
     })
   })
@@ -249,8 +250,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
   })
 })
 
-// Codex keeps a turn's background terminals alive across an interrupt and kills its one-shot
-// commands itself, so a Stop is the interrupt alone.
+// Codex interrupts one-shot commands but retains background terminals.
 describe('a Codex Stop is the interrupt alone', () => {
   async function stopAfterASend() {
     const events: CodexStructuredSessionEvent[] = []
@@ -273,7 +273,7 @@ describe('a Codex Stop is the interrupt alone', () => {
     })
     const stopped = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
     await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
-    // Codex answers the interrupt, then sends the turn's end; one read can carry both.
+    // One read can carry both the interrupt reply and turn completion.
     const answerThenEnd = (): void => {
       answer.resolve({})
       completeTurn(codex)

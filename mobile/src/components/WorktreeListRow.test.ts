@@ -18,6 +18,7 @@ import {
   getWorktreeCardDetails,
   type WorktreeCardDetails
 } from '../../../src/shared/worktree/card-properties'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const { agentSpinnerRender, agentStateDotRender, metaGlyphsRender } = vi.hoisted(() => ({
   agentSpinnerRender: vi.fn(),
@@ -94,8 +95,7 @@ function ListRowHarness({
   const onLongPress = useCallback(() => undefined, [])
   const onToggleLineage = useCallback(() => undefined, [])
 
-  // Sibling state changes re-render the harness without changing the row's props,
-  // exercising the row's React.memo bailout.
+  // Rerender harness with unchanged row props to exercise React.memo bailout.
   return createElement(
     Fragment,
     null,
@@ -319,8 +319,7 @@ describe('memoized worktree rows', () => {
 
   it('names the host with a glyph that matches the host kind', async () => {
     const textNodes = (): string[] =>
-      renderer!.root
-        .findAllByType('Text' as never)
+      findAllByHostType(renderer!.root, 'Text')
         .flatMap((node) => node.props.children)
         .filter((child): child is string => typeof child === 'string')
 
@@ -334,7 +333,7 @@ describe('memoized worktree rows', () => {
     })
     expect(textNodes()).toContain('openclaw')
     expect(textNodes().some((text) => text.includes('Disconnected'))).toBe(false)
-    expect(renderer!.root.findAllByType('Server' as never)).toHaveLength(1)
+    expect(findAllByHostType(renderer!.root, 'Server')).toHaveLength(1)
 
     await act(async () =>
       renderer!.update(
@@ -351,15 +350,35 @@ describe('memoized worktree rows', () => {
     )
     // Separate nodes: the name truncates while the health word stays whole.
     expect(textNodes()).toEqual(expect.arrayContaining(['openclaw', '· Disconnected']))
-    const healthText = renderer!.root
-      .findAllByType('Text' as never)
-      .find((node) => node.props.children === '· Disconnected')
+    const healthText = findAllByHostType(renderer!.root, 'Text').find(
+      (node) => node.props.children === '· Disconnected'
+    )
     expect([healthText?.props.style].flat()).toContainEqual({ flexShrink: 0 })
     const announcedBadges = renderer!.root.findAll(
       (node) => node.props.accessibilityLabel === 'openclaw, Disconnected'
     )
     expect(announcedBadges).toHaveLength(1)
-    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(0)
+    expect(findAllByHostType(renderer!.root, 'Monitor')).toHaveLength(0)
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
+          item: {
+            ...baseItem,
+            hostId: 'ssh:ssh-1',
+            hostContextHealthLabel: 'Disconnected'
+          },
+          now: 2_000
+        })
+      )
+    )
+    expect(textNodes()).toContain('Disconnected')
+    expect(textNodes()).not.toContain('openclaw')
+    expect(textNodes()).not.toContain('· Disconnected')
+    expect(renderer!.root.findAll((node) => String(node.type) === 'Server')).toHaveLength(1)
+    expect(
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Disconnected')
+    ).toHaveLength(1)
 
     await act(async () =>
       renderer!.update(
@@ -370,13 +389,13 @@ describe('memoized worktree rows', () => {
       )
     )
     expect(textNodes()).toContain('Local Mac')
-    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(1)
+    expect(findAllByHostType(renderer!.root, 'Monitor')).toHaveLength(1)
 
     await act(async () =>
       renderer!.update(createElement(ListRowHarness, { item: baseItem, now: 2_000 }))
     )
     expect(textNodes()).not.toContain('Local Mac')
-    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(0)
+    expect(findAllByHostType(renderer!.root, 'Monitor')).toHaveLength(0)
   })
 
   it("leaves out the PR, host and agents the desktop's card properties turn off", async () => {
@@ -412,8 +431,7 @@ describe('memoized worktree rows', () => {
 
   describe('Compact', () => {
     const texts = (): string[] =>
-      renderer!.root
-        .findAllByType('Text' as never)
+      findAllByHostType(renderer!.root, 'Text')
         .flatMap((node) => node.props.children)
         .filter((child): child is string => typeof child === 'string')
     const repoChips = () =>
@@ -512,9 +530,9 @@ describe('memoized worktree rows', () => {
       expect(renderer!.root.findAll((node) => String(node.type) === 'GitPullRequest')).toHaveLength(
         1
       )
-      const badgeTexts = renderer!.root
-        .findAllByType('Text' as never)
-        .map((node) => [node.props.children].flat().join(''))
+      const badgeTexts = findAllByHostType(renderer!.root, 'Text').map((node) =>
+        [node.props.children].flat().join('')
+      )
       expect(badgeTexts).toContain('#7')
     })
 

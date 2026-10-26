@@ -36,7 +36,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
     getRemoteRuntimeSharedControlDiagnostics: vi.fn(() => null),
     reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
     retryRemoteRuntimeSharedControlConnectionsNow: vi.fn(),
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: vi.fn()
@@ -179,11 +178,11 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
   it('declines a server another Orca service pairs', async () => {
     environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'vm',
-      pairingCode: pairingCode(ENDPOINT, { deviceToken: 'vm-token' }),
+      pairingCode: pairingCode(ENDPOINT, { deviceToken: 'vm-token', keyByte: 2 }),
       source: 'ephemeral-vm'
     })
     await expect(
-      repair(null, { selector: 'vm', pairingCode: pairingCode(ENDPOINT) })
+      repair(null, { selector: 'vm', pairingCode: pairingCode(ENDPOINT, { keyByte: 2 }) })
     ).resolves.toMatchObject({ ok: false, kind: 'environment-save-failed' })
     expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })

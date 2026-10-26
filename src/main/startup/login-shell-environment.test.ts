@@ -14,12 +14,7 @@ const SHELL_ONLY_VARIABLE = 'ORCA_TEST_LOGIN_SHELL_ONLY'
 const originalShellOnlyValue = process.env[SHELL_ONLY_VARIABLE]
 let testHome: string | null = null
 
-// Why: this case spawns a REAL login shell, so it can only run against one the
-// machine actually has. Hardcoding /bin/zsh made it fail on Linux CI, where zsh
-// is not installed — the resolver simply returned the parent env and the
-// assertion read `undefined`. Each entry pairs a shell with the profile file an
-// interactive login shell of that family sources (bash reads .bash_profile when
-// it is a login shell, never .bashrc).
+// Choose an installed real shell with its login profile: Linux CI may lack zsh, and login bash reads .bash_profile rather than .bashrc.
 const REAL_SHELL_CANDIDATES = [
   { path: '/bin/zsh', profileFile: '.zshenv' },
   { path: '/bin/bash', profileFile: '.bash_profile' }

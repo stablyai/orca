@@ -6,7 +6,6 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')

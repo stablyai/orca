@@ -90,7 +90,7 @@ describe('daemon preflight client replacement', () => {
         rows: 24
       })
       .catch(() => {
-        /* replacement disconnects the original request */
+        /* Replacement disconnects this pending request. */
       })
     await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
 

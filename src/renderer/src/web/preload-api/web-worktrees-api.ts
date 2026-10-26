@@ -27,27 +27,18 @@ import {
   requireActiveEnvironment,
   assertActiveEnvironment
 } from './web-runtime-session'
-import {
-  WEB_RUNTIME_WORKTREE_LIST_LIMIT,
-  callRuntimeDetectedWorktrees,
-  listAllRuntimeWorktrees
-} from './web-runtime-worktree-catalog'
+import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
+import type { WorkspaceSleepOutcome } from '../../../../shared/workspace-sleep'
+
+// Past the host's two-minute chat stop, so a slow stop answers rather than timing out.
+const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    list: async ({ repoId }) => {
-      const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
-        repo: repoId,
-        limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-      })
-      return owned.result.worktrees.map((worktree) =>
-        withRuntimeWorktreeOwner(worktree, owned.hostId)
-      )
-    },
-    // Why the catch: a host predating this method answers `method_not_found`, and an empty list
-    // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
+    // Older hosts return method_not_found; empty retired names preserve suggestions without blocking create.
     listRetiredNames: async ({ repoId }) => {
       try {
         return readRetiredNameRegistryForRepo(
@@ -59,7 +50,6 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }
     },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
-    listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       if (args.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(args)
@@ -147,6 +137,46 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         targetBranch,
         isCrossRepository
       }),
+    // Each workspace sleeps on the paired host, which runs its terminals, chats and VM.
+    sleep: async ({ targets, markChatsAsleep }) =>
+      Promise.all(
+        targets.map(async ({ worktreeId }) => {
+          emitWebWorkspaceSleep({ worktreeId, phase: 'started' })
+          const ended = (slept: boolean): void =>
+            emitWebWorkspaceSleep({
+              worktreeId,
+              phase: 'ended',
+              slept,
+              stoppedPtyIds: null,
+              records: null
+            })
+          try {
+            const reply = await callRuntimeResult<Partial<WorkspaceSleepOutcome>>(
+              'worktree.sleep',
+              {
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                markChatsAsleep: markChatsAsleep === true
+              },
+              // Why: the host stops the workspace's chats too, which can take up to two minutes.
+              WEB_WORKSPACE_SLEEP_TIMEOUT_MS
+            )
+            ended(true)
+            return {
+              worktreeId,
+              chatFailed: reply?.chatFailed === true,
+              receipts: Array.isArray(reply?.receipts) ? reply.receipts : []
+            }
+          } catch (error) {
+            ended(false)
+            const failure = error instanceof Error ? error.message : String(error)
+            return { worktreeId, failure, chatFailed: false, receipts: [] }
+          }
+        })
+      ),
+    // A web client runs no VM, so a reopen during a sleep changes nothing.
+    sleepReopened: async () => {},
+    resumeSleptPane: async () => false,
+    retireStrandedSleepRecord: async () => {},
     remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>(
@@ -155,8 +185,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           worktree: toRuntimeWorktreeSelector(worktreeId),
           ...(hostId ? { hostId } : {}),
           force,
-          // Why (#11960): the web client renders the same Force Delete affordances, so
-          // dropping this field here would leave paired clients permanently wedged.
+          // Forward Force Delete waiver or paired clients stay wedged (#11960).
           allowUnverifiedPtyStop,
           runHooks: skipArchive !== true
         },

@@ -1,4 +1,5 @@
 import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
@@ -9,15 +10,11 @@ import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
-  TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
   TerminalReveal,
-  TerminalSleep,
   TerminalSplit,
-  TerminalStop,
-  TerminalStopExact,
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
@@ -41,15 +38,45 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
-      // A focused terminal create predates paired-client navigation. Keep the
-      // authority boundary here so a remote caller cannot activate the host
-      // renderer. This legacy RPC remains a background create for paired viewers;
-      // caller-local selection belongs to the session-tab RPC flow.
+      // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
       const activate = pairedViewer ? false : params.activate === true
       const presentation =
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+      // Switch point: the window's own new tab, which main starts; refused as a pane-named split is.
+      if (params.windowTab) {
+        // Only transport-proven local IPC owns these host tabs; paired viewers create tabs on their own hosts.
+        if (
+          context.caller?.kind !== 'desktop' ||
+          !params.worktree?.startsWith('id:') ||
+          !params.tabId ||
+          !params.leafId
+        ) {
+          throw new Error('host_not_owned')
+        }
+        return {
+          terminal: await runtime.startWindowTabTerminal(
+            params.worktree.slice('id:'.length),
+            { tabId: params.tabId, leafId: params.leafId },
+            {
+              command: params.command,
+              ...(params.cwd ? { cwd: params.cwd } : {}),
+              ...(params.shell ? { shellOverride: params.shell } : {}),
+              startupCommandDelivery: params.startupCommandDelivery,
+              env: params.env,
+              envToDelete: params.envToDelete,
+              ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+              ...(params.resumeProviderSession
+                ? { resumeProviderSession: params.resumeProviderSession }
+                : {}),
+              ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+              ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              terminalImageViewerSupported: terminalImageViewerSupported(context)
+            }
+          )
+        }
+      }
       const terminal = await runtime.dedupeTerminalCreate(
         pairedDeviceId ?? clientId ?? 'local',
         params.worktree,
@@ -67,6 +94,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeProviderSession
               ? { resumeProviderSession: params.resumeProviderSession }
               : {}),
+            ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
@@ -96,7 +124,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           terminal.executionHostId
         )
       }
-      return { terminal }
+      const publicTerminal = { ...terminal }
+      delete publicTerminal.savedStartupCwd
+      return { terminal: publicTerminal }
     }
   }),
   defineMethod({
@@ -104,48 +134,35 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     permission: 'workspace',
     params: TerminalSplit,
     handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
-        direction: params.direction,
-        command: params.command,
-        env: params.env,
-        telemetrySource: params.telemetrySource
-      })
+      split:
+        params.pane && !params.terminal
+          ? await runtime.splitTerminalPane(params.pane, {
+              direction: params.direction ?? 'horizontal',
+              newLeafId: params.newLeafId,
+              cwd: params.cwd,
+              initialSize: params.initialSize,
+              command: params.command,
+              env: params.env,
+              // The window's split shows why its start failed, as its own spawn did.
+              keepPaneOnStartFailure: true
+            })
+          : // The schema requires a handle when no pane is named.
+            await runtime.splitTerminal(params.terminal ?? '', {
+              direction: params.direction,
+              command: params.command,
+              env: params.env,
+              telemetrySource: params.telemetrySource,
+              retrySplit: params.retrySplit
+            })
     })
   }),
-  defineMethod({
-    name: 'terminal.stop',
-    permission: 'workspace',
-    params: TerminalStop,
-    handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.closeAll',
-    permission: 'workspace',
-    params: TerminalCloseAll,
-    handler: async (params, { runtime }) => runtime.closeTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.sleep',
-    permission: 'workspace',
-    params: TerminalSleep,
-    handler: async (params, { runtime }) => runtime.sleepTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.stopExact',
-    permission: 'workspace',
-    params: TerminalStopExact,
-    handler: async (params, { runtime }) =>
-      runtime.stopExactTerminalsForWorktree(params.worktree, params.expectedPtyIds, {
-        keepHistory: params.keepHistory,
-        targetOnly: params.targetOnly
-      })
-  }),
+  ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({
     name: 'terminal.resizeForClient',
     permission: 'workspace',
     params: TerminalResizeForClient,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
+      // Reject stale handles before resize can reach the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
@@ -178,14 +195,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   }),
   defineMethod({
-    // Why a method of its own: terminal.focus resolves a handle on the host that runs the PTY, and a
-    // paired server has no window, so only the desktop showing its pane can reveal it (#24688).
+    // Keep reveal separate from host-side focus: only the desktop showing a remote pane can reveal it (#24688).
     name: 'terminal.reveal',
     permission: 'workspace',
     params: TerminalReveal,
     handler: async (params, { runtime, clientKind }) => {
-      // Why local callers only: it moves this host's window, which terminal.focus lets a paired
-      // client do only by asking for host navigation, and a CLI or companion app here needs no more.
+      // Local callers may move this window; paired callers need explicit host-navigation intent through focus.
       if (clientKind !== undefined) {
         throw Object.assign(
           new Error('terminal.reveal is available only to callers on this machine.'),

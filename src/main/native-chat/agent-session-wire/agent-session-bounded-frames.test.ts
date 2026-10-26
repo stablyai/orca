@@ -1,6 +1,4 @@
-// The bounded-frame invariant: no frame the host emits to a `boundedFrames` subscriber is larger
-// than a phone's bridge frame, whatever the chat holds. Each case below is a worst case for one
-// thing a frame can carry; the last puts them all in one chat.
+// Exercise worst-case serialized frames against the phone bridge limit.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -36,10 +34,9 @@ import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 
-// Longest id a client may name a session by, so the ids every frame repeats are at their widest.
+// Widest allowed session ID enlarges every frame envelope.
 const SESSION = `s${'x'.repeat(511)}`
-// Escaped (6 bytes), multi-byte (3 bytes) and astral (4 bytes) text, so a budget counted in
-// characters rather than serialized bytes would overflow.
+// Escaped/multibyte/astral text exposes character-count byte budgets.
 const WIDE_TEXT = '\u0001한😀'
 
 let root: string
@@ -88,7 +85,6 @@ const output = (head: string) => ({
   truncated: true
 })
 
-/** The frame a phone's bridge carries for `payload`: its envelope around the event. */
 function bridgeFrameBytes(payload: AgentSessionSubscribeEvent): number {
   return jsonBytes({ v: 1, type: 'event', id: crypto.randomUUID(), seq: 2 ** 31, payload })
 }
@@ -110,7 +106,7 @@ describe('a bounded row', () => {
           output: output(WIDE_TEXT.repeat(4_000))
         }
       }),
-      // Too many short strings to shorten: the row becomes the too-large marker.
+      // Many short strings force a marker instead of string shortening.
       rendered({
         body: {
           kind: 'question',
@@ -124,7 +120,7 @@ describe('a bounded row', () => {
           }
         }
       }),
-      // Identifiers are never shortened, so they are what the marker must bound itself.
+      // The oversized marker must bound identifiers ordinary shortening preserves.
       rendered({
         itemId: 'i'.repeat(5 * 1024 * 1024),
         agentId: 'a'.repeat(5 * 1024 * 1024),
@@ -135,13 +131,15 @@ describe('a bounded row', () => {
       })
     ]
     for (const row of rows) {
-      expect(jsonBytes(boundedFrameItem(row))).toBeLessThanOrEqual(BOUNDED_FRAME_ROW_BYTES)
+      const formed = boundedFrameItem({ item: row, bytes: jsonBytes(row) })
+      expect(formed.bytes).toBe(jsonBytes(formed.item))
+      expect(formed.bytes).toBeLessThanOrEqual(BOUNDED_FRAME_ROW_BYTES)
     }
   })
 
   it('is the stored row when it already fits', () => {
     const row = rendered({ body: message('hello') })
-    expect(boundedFrameItem(row)).toBe(row)
+    expect(boundedFrameItem({ item: row, bytes: jsonBytes(row) }).item).toBe(row)
   })
 })
 
@@ -247,7 +245,7 @@ describe('frames to a bounded-frame subscriber', () => {
   })
 
   function largeQueue(): QueuePublication {
-    // What an older build admitted under its 1 MiB bound.
+    // Simulate cards admitted under the older 1 MiB queue bound.
     const queuedMessages: AgentSessionQueuedMessage[] = Array.from({ length: 40 }, (_, index) => ({
       messageId: `draft-${index}`,
       position: index,
@@ -327,11 +325,9 @@ describe('frames to a bounded-frame subscriber', () => {
       expect(bridgeFrameBytes(frame)).toBeLessThanOrEqual(MOBILE_BRIDGE_MAX_FRAME_BYTES)
       expect(frame).not.toHaveProperty('commands')
     }
-    // The side lists still arrive, each in a frame of its own.
     const cards = frames.flatMap((frame) =>
       frame.type === 'batch' && frame.queuedMessages ? [frame.queuedMessages] : []
     )
-    // Whole cards from the front: an older build's 1 MiB queue lists what fits.
     const listed = cards.at(-1) ?? []
     expect(listed.length).toBeGreaterThan(0)
     expect(listed).toEqual(queue.queuedMessages.slice(0, listed.length))
@@ -353,29 +349,26 @@ describe('frames to a bounded-frame subscriber', () => {
       emit: (event) => frames.push(event),
       boundedFrames: true
     })
-    // About 10 MB of rows land before one publish, as a drain of buffered events can.
+    // Simulate a buffered drain before one publish.
     for (let index = 0; index < 40; index += 1) {
       await append(message('x'.repeat(256 * 1024)))
     }
     frames.length = 0
     subscribers.publish(SESSION, journal)
 
-    // The phone's shell ends a stream past 4 MiB unacked.
+    // The phone shell caps unacknowledged stream bytes at 4 MiB.
     const bytes = frames.reduce((sum, frame) => sum + bridgeFrameBytes(frame), 0)
     expect(bytes).toBeLessThan(4 * 1024 * 1024)
-    // One page of rows; the rest are the side lists a hydrating frame owes.
     const [tail, ...side] = frames
     expect(tail?.type === 'snapshot' && tail.page).toMatchObject({ hasOlder: true })
     expect(side.every((frame) => frame.type === 'batch' && frame.batch.items.length === 0)).toBe(
       true
     )
-    // Live rows after it arrive as batches again.
     await append(message('next'))
     const live = frames.length
     subscribers.publish(SESSION, journal)
     expect(frames.slice(live).map((frame) => frame.type)).toEqual(['batch'])
 
-    // A phone that applied all of it pages back to the first row with no gap.
     let state = frames.reduce(
       (current, event) => reduceStructuredAgentSession(current, { type: 'event', event }),
       EMPTY_STRUCTURED_AGENT_SESSION
@@ -445,7 +438,6 @@ describe('frames to a bounded-frame subscriber', () => {
       queuedMessages: queue.queuedMessages,
       backgroundTasks: largeRoster
     })
-    // Rows as stored, whole.
     for (const frame of frames) {
       const items =
         frame.type === 'snapshot'

@@ -127,6 +127,21 @@ describe('paired session-tab agent completion notifications', () => {
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
   })
 
+  // STA-12043: a cold-restored host republishes the old turn as unverifiable under a new date.
+  it('announces no completion for an unverifiable done', () => {
+    applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW), true)
+    const announced = mocks.observeAgentHookCompletionForNotification.mock.calls.length
+    const restored = makeAgentSnapshot(2, NOW + 60_000, undefined, 'done', NOW + 60_000)
+    const [tab] = restored.tabs
+    if (tab?.type === 'terminal' && tab.agentStatus) {
+      tab.agentStatus.restoredUnconfirmed = true
+    }
+
+    applySnapshot(restored, true)
+
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(announced)
+  })
+
   it('announces one live stamped completion after a late-pair working seed', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

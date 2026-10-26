@@ -28,7 +28,7 @@ export function assertAdoptedSourceIdentity(
   }
 }
 
-/** Metadata is observed from the same lines that become the imported journal. */
+// Observe metadata from the same lines imported into the journal.
 export function adoptedTranscriptSourceObserver(input: {
   agent: AgentType
   filePath: string

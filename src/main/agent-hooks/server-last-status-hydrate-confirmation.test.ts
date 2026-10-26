@@ -265,7 +265,7 @@ describe('Last-status persistence', () => {
         baselineAgentType: 'codex',
         intent: 'plain-escape'
       })
-      // Why: synthesizing `done` onto a never-confirmed `working` would fabricate a transition from stale disk state.
+      // Never infer a live transition from unconfirmed disk state.
       expect(applied).toBe(false)
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
       expect(server.getStatusSnapshot()[0]?.interrupted).toBeUndefined()
@@ -383,7 +383,6 @@ describe('Last-status persistence', () => {
           subagents: undefined
         })
       ])
-      // Why: migration must be one-time, else every launch re-prunes the same persisted idle rows.
       const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
     } finally {

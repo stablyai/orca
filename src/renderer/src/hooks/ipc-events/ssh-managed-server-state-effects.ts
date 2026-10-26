@@ -1,4 +1,3 @@
-/** What a change in an SSH host's server means for the rest of the app. */
 import { toast } from 'sonner'
 import type {
   SshConnectionState,
@@ -19,6 +18,10 @@ import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
 import { rekeyWorktreeVisitHost } from '@/lib/worktree-visit-recency'
 import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 
@@ -51,11 +54,10 @@ export function applySshManagedServerTransition(
       previous.detail === next.detail
     )
   ) {
-    // `detail` is main's English refusal; the SSH Hosts status line shows it under "Details".
     toast.error(
       translate(
         'auto.hooks.ipcEvents.sshManagedServer.refusedBlocked',
-        'This SSH host could not move to a managed Orca server. SSH Hosts in Settings shows why.'
+        'Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why.'
       )
     )
   }
@@ -74,8 +76,7 @@ function remountBridgedTabsOnce(targetId: string, next: ManagedServerStatus): vo
     return
   }
   bridgedTargetsRemounted.add(targetId)
-  // Why lazy: the panes module subscribes to the bridge when loaded; importing it here would do so
-  // for every importer of this file.
+  // Load panes lazily because module import itself subscribes to the bridge.
   void import('../../components/terminal-pane/legacy-relay-bridge-panes').then(
     ({ legacyRelayBridgedTabIds }) => {
       const store = useAppStore.getState()
@@ -121,7 +122,6 @@ function startManagedServerCatalogLoad(
   )
 }
 
-/** Loads a newly managed host's server and the local catalogs, then drops its relay-era rows. */
 async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): Promise<void> {
   const { environmentId } = load
   const isCurrent = (): boolean => catalogLoadByTarget.get(targetId) === load
@@ -133,14 +133,14 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
       : { browserPagesByWorkspace }
   })
   const store = useAppStore.getState()
-  // Why: host badges read server names from this catalog, which a conversion does not refresh.
+  // Conversion must refresh the server catalog too because host badges read its names.
   const environments = await window.api.runtimeEnvironments.list()
   if (!isCurrent()) {
     return
   }
   store.setRuntimeEnvironments(environments)
   void store.refreshRuntimeEnvironmentStatus(environmentId)
-  // Why local too: the host's relay-era rows come from the local catalog, which main now hides.
+  // Refresh local catalogs to remove relay-era rows main now hides.
   for (const runtimeEnvironmentId of [null, environmentId]) {
     const options = { runtimeEnvironmentId, throwOnError: true }
     await store.fetchRepos(options)
@@ -172,7 +172,7 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
     load.linked
   )
   useAppStore.setState((state) => {
-    // Why: the host's workspaces are the server's now; unmoved, the next prune drops their recency.
+    // Move recency with server-owned workspaces or mount pruning drops it.
     const lastVisitedAtByWorktreeId = rekeyWorktreeVisitHost(
       state.lastVisitedAtByWorktreeId,
       toSshExecutionHostId(targetId),
@@ -195,10 +195,7 @@ async function fetchServerWorktrees(environmentId: string): Promise<void> {
   await Promise.all(repos.map((repo) => state.fetchWorktrees(repo.id, { executionHostId })))
 }
 
-/**
- * Why keep watching: the server's worktree rows arrive with startup's scan on cold start, and a
- * failed scan leaves them missing until a later one, so a missing row never reads as no copy.
- */
+// Watch later scans: startup may precede server rows or fail, so missing rows cannot prove absence.
 function rehomeActiveWorkspaceWhenKnown(
   targetId: string,
   environmentId: string,
@@ -217,8 +214,8 @@ function rehomeActiveWorkspaceWhenKnown(
       state.startupWorktreeRefreshCompleted && !previous.startupWorktreeRefreshCompleted
     if (
       !startupScanFinished &&
-      state.worktreesByRepo === previous.worktreesByRepo &&
-      state.detectedWorktreesByRepo === previous.detectedWorktreesByRepo &&
+      selectWorktreesByRepo(state) === selectWorktreesByRepo(previous) &&
+      selectDetectedWorktreesByRepo(state) === selectDetectedWorktreesByRepo(previous) &&
       state.activeWorktreeId === previous.activeWorktreeId &&
       state.activeWorkspaceExecutionHostId === previous.activeWorkspaceExecutionHostId
     ) {
@@ -235,7 +232,6 @@ function rehomeActiveWorkspaceWhenKnown(
   })
 }
 
-/** This desktop's project id → the server's, for each project the move linked at the same path. */
 function linkedServerRepoIds(
   repos: readonly Repo[],
   targetId: string,
@@ -263,10 +259,7 @@ function linkedServerRepoIds(
 
 type ServerCopy = { kind: 'found'; worktreeId: string } | { kind: 'absent' } | { kind: 'pending' }
 
-/**
- * The server's copy of a workspace: the same id, or the same checkout in the project it linked to.
- * Only a project the server's catalog lacks is absent; that catalog loaded or this never runs.
- */
+/** Match server workspace by ID or linked checkout path; only a project absent from the loaded server catalog proves absence. */
 function serverCopyOfWorkspace(
   worktreeId: string,
   runtimeHostId: ExecutionHostId,
@@ -292,8 +285,8 @@ function serverCopyOfWorkspace(
   const path = normalizeRuntimePathForComparison(source.worktreePath)
   // Why detected too: a checkout the server's visibility settings hide still exists there.
   const row = [
-    ...(state.worktreesByRepo[serverRepoId] ?? []),
-    ...(state.detectedWorktreesByRepo[serverRepoId]?.worktrees ?? [])
+    ...(selectWorktreesByRepo(state)[serverRepoId] ?? []),
+    ...(selectDetectedWorktreesByRepo(state)[serverRepoId]?.worktrees ?? [])
   ].find(
     (worktree) =>
       worktree.hostId === runtimeHostId && normalizeRuntimePathForComparison(worktree.path) === path
@@ -301,7 +294,7 @@ function serverCopyOfWorkspace(
   return row ? { kind: 'found', worktreeId: row.id } : { kind: 'pending' }
 }
 
-/** Why: an active workspace left on the SSH host keeps showing panes that dial the stopped relay. */
+// Move active ownership off SSH or mounted panes keep dialing the stopped relay.
 function rehomeActiveWorkspace(
   targetId: string,
   environmentId: string,
@@ -326,7 +319,6 @@ function rehomeActiveWorkspace(
     })
     return 'settled'
   }
-  // The server holds no project for it, so the SSH owner it names is retired.
   state.setActiveWorktree(null, undefined, {
     stateTransition: (current) => ({
       patch: current.repos.some((repo) => repo.id === current.activeRepoId)

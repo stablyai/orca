@@ -7,17 +7,16 @@ import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
-/** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
   providerSessionId: string
   leafUuid: string | null
-  /** The launch's stored leaf: a frame seen before publication is not a completed turn. */
+  /** A frame seen before publication does not prove a completed turn. */
   turnEndLeafUuid: string | null
   fence: number
   acquisitionGeneration: string
-  /** The record's chain already heads this provider session: the link resumes, never creates. */
   continuesChain: boolean
+  forkedFromKey?: string
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
@@ -32,6 +31,7 @@ export function createClaudeSessionPublication(input: {
     sessionId: input.providerSessionId,
     leafUuid: input.leafUuid,
     resumed: input.continuesChain,
+    ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {}),
     fence: input.fence,
     ...(input.linkId ? { linkId: input.linkId } : {}),
     observedAt: input.observedAt
@@ -54,7 +54,7 @@ export function createClaudeSessionPublication(input: {
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
       childWork: new ClaudeChildWorkDecoder(),
-      // Undefined until init: an unread catalog is unavailable, not empty.
+      // An unread catalog is unavailable, not empty.
       commands: new ClaudeSlashCommandCatalog(),
       dispatchSequence: 0,
       optionMutationSequence: 0,
@@ -63,8 +63,8 @@ export function createClaudeSessionPublication(input: {
       reportedOptions: {},
       reportedModelMutation: 0,
       confirmedOptions: new Set(),
-      // Only choices carried in this child's launch can skip their first write.
-      reusableOptions: new Map(
+      // Only options included at launch can skip their first control write.
+      appliedInputOptions: new Map(
         [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
       ),
       launchedModel: null,

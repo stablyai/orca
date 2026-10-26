@@ -1,8 +1,5 @@
-// The one row that says a turn was cut short when the agent stopped without anyone asking (a crash,
-// a quit, an eviction, a teardown). Derived on read from the journal, never stored: the turn record
-// is the durable fact, so a journal written before this rule, a quit that died mid-settle and any
-// future stop cause all read the same. A row the host already wrote about the stop stays the
-// explanation, so nothing is said twice. Shared by desktop and mobile, whose transcripts must agree.
+// Derive cut-turn notices from durable journal turns for desktop/mobile, including old journals and mid-settle quits.
+// Do not duplicate host-written stop explanations; derived rows are never stored.
 
 import { agentSessionFailureFact, readAgentSessionFailureFact } from './agent-session-failure'
 import {
@@ -40,12 +37,9 @@ function isCutRootTurn(item: AgentJournalRenderItem): boolean {
   return rootTurnVerdict(item) === 'interruption'
 }
 
-/** What a row says about a stop, matched by what it states or who wrote it, never its tone alone:
- *  an agent's own error row in the turn (a denied permission, a refusal) says nothing about the stop.
- *  `exit`: the agent stopped. `owner-death`: a reopen proved the old agent dead, which is about the
- *  cut whatever was sent since. `not-continued`: a resume after a restart did not carry the chat on,
- *  which the restart note marks with a tone ('error' refused or not connected, 'warning' unconfirmed);
- *  a continuation that went on writes its note with none. A failed start's row is about a start. */
+/** Match stop facts/writer identity, never tone alone (in-turn agent errors may be refusals).
+ * exit explains a stop; owner-death explains the cut even after new sends; toned restart notes explain refused/disconnected/unconfirmed continuation.
+ * Successful continuation notes have no tone; failed-start rows concern starts. */
 function stopExplanation(
   item: AgentJournalRenderItem
 ): 'exit' | 'owner-death' | 'not-continued' | null {
@@ -74,13 +68,8 @@ function stopExplanation(
     : null
 }
 
-/**
- * The cut turns some row already explains: one scoped to the turn, or one about the conversation
- * (or from a host that states no scope) that follows the cut turn closely enough to be about it.
- * An exit row is about the cut only with no message sent since, which a later start would be
- * answering. An owner's proven death, and a restart note that follows the continuation's own
- * message, are about the cut until another turn begins.
- */
+/** Match scoped explanations or nearby conversation/legacy-unscoped rows. Exit requires no intervening send;
+ * proven owner death and restart notes after their continuation message explain the cut until another turn begins. */
 function explainedCutTurns(items: readonly AgentJournalRenderItem[]): Set<string> {
   const explained = new Set<string>()
   let cutNoSendSince: string | null = null
@@ -110,8 +99,7 @@ function explainedCutTurns(items: readonly AgentJournalRenderItem[]): Set<string
   return explained
 }
 
-/** The turn's last row, which the notice follows: one scoped to it, or by journal order on a host
- *  that states no scope. A new root turn ends the order-read run. */
+/** Last scoped row, or journal-order row for legacy hosts; a new root turn ends the run. */
 function lastRowOfTurn(
   items: readonly AgentJournalRenderItem[],
   turnIndex: number,
@@ -186,11 +174,7 @@ function cutTurnNotice(
   return notice
 }
 
-/**
- * The journal as the transcript reads it: each root turn cut short with nobody asking, and no row
- * saying so, gets one notice in the words of the provider-exit row, right after the turn's last row.
- * Returns `items` itself when no turn needs one.
- */
+/** Add one provider-exit-worded notice after each unexplained cut root turn’s last row. Return the same items reference when unchanged. */
 export function withNativeChatCutTurnNotices(
   items: readonly AgentJournalRenderItem[],
   context: CutTurnNoticeContext = {}

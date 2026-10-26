@@ -18,7 +18,7 @@ import {
   persist,
   settingsModel,
   type SettingsPersistenceModel
-} from './settings-persistence-test-fixture'
+} from './__fixtures__/settings-persistence-test-fixture'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { TooltipProvider } from '../ui/tooltip'
 
@@ -31,7 +31,7 @@ function ChatPersistenceHarness({ model }: { model: SettingsPersistenceModel }) 
     throw new Error('Settings fixture is missing')
   }
   const context = {
-    model: { ...model, settings },
+    model: { ...model, settings, fontSuggestions: [] },
     interactions: controller,
     navigation: { getSectionSearchEntries: () => [getChatNamingSearchEntry()] },
     view: { isSectionMounted: () => true }

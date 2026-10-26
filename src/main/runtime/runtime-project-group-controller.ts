@@ -14,6 +14,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../project-groups/folder-workspace-create-refusal'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
@@ -34,6 +35,7 @@ type RuntimeProjectGroupDependencies = {
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
   cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
 }
 
 type FolderWorkspaceUpdates = Partial<
@@ -258,8 +260,7 @@ export class RuntimeProjectGroupController {
     }
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
+      // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
         connectionId = this.deps.resolveFolderConnectionId(workspace)
@@ -274,6 +275,14 @@ export class RuntimeProjectGroupController {
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
       this.deps.notifyReposChanged()
+      // The same removal a worktree announces, so its consumers end work held there too.
+      if (workspace) {
+        this.deps.emitWorktreeLifecycle({
+          kind: 'removed',
+          worktreeId: folderWorkspaceKey(folderWorkspaceId),
+          path: workspace.folderPath
+        })
+      }
     }
     return { deleted }
   }

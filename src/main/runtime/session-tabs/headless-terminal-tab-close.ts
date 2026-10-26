@@ -1,7 +1,8 @@
 import type { RuntimeHeadlessTabProperties as HeadlessTabPropertiesMethods } from './headless-tab-properties'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import type { OrcaRuntimeWithPersistHeadlessTerminalTitle as PersistHeadlessTerminalTitleMethods } from '../workspaces/workspace-file-session-targets'
-import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './structured-session-tab-close'
+import { OrcaRuntimeWithMainLayoutTabMoves } from './main-layout-session-tab-move'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
@@ -17,11 +18,7 @@ import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
-export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
-  protected abstract applyHeadlessSessionTabPropsToSnapshot(
-    ...args: Parameters<HeadlessTabPropertiesMethods['applyHeadlessSessionTabPropsToSnapshot']>
-  ): ReturnType<HeadlessTabPropertiesMethods['applyHeadlessSessionTabPropsToSnapshot']>
-
+export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(
     ...args: Parameters<HeadlessTabPropertiesMethods['applyHeadlessTerminalPaneLayoutToSnapshot']>
   ): ReturnType<HeadlessTabPropertiesMethods['applyHeadlessTerminalPaneLayoutToSnapshot']>
@@ -34,10 +31,6 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     ...args: Parameters<PersistHeadlessTerminalTitleMethods['normalizeMobileSessionTabOrder']>
   ): ReturnType<PersistHeadlessTerminalTitleMethods['normalizeMobileSessionTabOrder']>
 
-  protected abstract persistHeadlessSessionTabProps(
-    ...args: Parameters<HeadlessTabPropertiesMethods['persistHeadlessSessionTabProps']>
-  ): ReturnType<HeadlessTabPropertiesMethods['persistHeadlessSessionTabProps']>
-
   protected abstract persistHeadlessTerminalPaneLayout(
     ...args: Parameters<HeadlessTabPropertiesMethods['persistHeadlessTerminalPaneLayout']>
   ): ReturnType<HeadlessTabPropertiesMethods['persistHeadlessTerminalPaneLayout']>
@@ -45,14 +38,6 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   protected abstract getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[]
 
   abstract renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename>
-
-  protected abstract persistHeadlessTerminalTitle(
-    ...args: Parameters<PersistHeadlessTerminalTitleMethods['persistHeadlessTerminalTitle']>
-  ): ReturnType<PersistHeadlessTerminalTitleMethods['persistHeadlessTerminalTitle']>
-
-  protected abstract resolveMobileSessionHostTabId(
-    ...args: Parameters<PersistHeadlessTerminalTitleMethods['resolveMobileSessionHostTabId']>
-  ): ReturnType<PersistHeadlessTerminalTitleMethods['resolveMobileSessionHostTabId']>
 
   protected async closeHeadlessMobileTerminalTab(
     worktreeId: string,
@@ -79,6 +64,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return proof ? [proof] : []
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
+    const liveTerminalOf = this.liveTerminalsOfClosedTab(worktreeId, snapshot, closedParentTabId)
     const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
@@ -98,9 +84,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       options.authorizedPty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
     }
-    // Why: local provider ids can be reused after restart, so a dormant
-    // persisted id is not kill authority. SSH relay ids remain durable exact
-    // identities even before pane metadata reconnects.
+    // Persisted local provider ids may be reused after restart; only dormant SSH relay ids remain exact stop authority.
     const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
@@ -111,7 +95,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
           ? options.authorizedPty
           : null
-      const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate) ?? authorizedPty
+      const livePty = liveTerminalOf(candidate) ?? authorizedPty
       const ptyId = livePty?.ptyId ?? candidate.ptyId
       const hasOtherOwner = snapshot.tabs.some(
         (other) =>
@@ -120,9 +104,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
           other.ptyId === ptyId
       )
       if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
-        // Why: a live serve leaf can exist before its debounced binding reaches
-        // persistence. Include it from the authoritative snapshot so split
-        // close cannot leave a provider process behind.
+        // Include live serve bindings from the authoritative snapshot before their debounced durable write, or split close leaks processes.
         ptyIdsToKill.add(ptyId)
       }
     }
@@ -138,10 +120,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return false
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    // A close is not a handover: the generation publishing this worktree still is. Minting an epoch
-    // here published a stranger for a worktree the renderer owns, and a client that retires what it
-    // displaces then rejected that renderer's own next frame. The sibling headless writers carry the
-    // stored epoch forward for the same reason; `...snapshot` is what does it here.
+    // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1,
@@ -179,6 +158,10 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     if (!snapshot) {
       throw new Error('tab_not_found')
     }
+    const movedInMain = await this.moveTabInMainLayout(worktreeId, snapshot, move)
+    if (movedInMain) {
+      return movedInMain
+    }
     if (!this.notifier?.moveSessionTab) {
       return this.moveHeadlessMobileSessionTab(worktreeId, snapshot, move)
     }
@@ -192,8 +175,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       throw new Error('target_group_not_found')
     }
 
-    // Why: web clients address terminal surfaces as tab::leaf, while desktop
-    // tab grouping is owned by the outer terminal tab id.
+    // Clients address panes as tab::leaf; desktop groups use the outer tab id.
     if (move.kind === 'reorder') {
       const tabOrder = this.normalizeMobileSessionTabOrder(snapshot, targetGroup, move.tabOrder)
       if (!tabOrder.includes(hostTabId)) {
@@ -213,11 +195,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     return { moved: true }
   }
 
-  // Why: pane geometry inside a tab (split ratios, expanded pane, pane titles)
-  // is host-authoritative for remote-server tabs but had no push path, so a
-  // client divider-drag / expand / pane-rename reverted on the next snapshot.
-  // Persist the structural fields onto the tab's layout, keeping host-owned
-  // pty bindings and active leaf.
+  // Persist client geometry/expand/titles to prevent snapshot reverts; preserve host-owned PTY bindings and active leaf.
   async updateMobileSessionPaneLayout(
     worktreeSelector: string,
     args: {
@@ -232,16 +210,16 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: resolve to the host tab id (older/raw-id clients) so the persisted
-    // layout entry matches, matching setMobileSessionTabProps.
+    // Resolve legacy raw ids to the host tab id, matching tab-prop persistence.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    // Why: when a renderer is authoritative (desktop host reached via shared
-    // control), it owns pane geometry and republishes it — a headless write here
-    // would be overwritten and could fight the renderer. Only pane names, which
-    // the window takes one pane at a time, are passed on to it.
+    // Main owns pane renames; pass only geometry onward.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      args = await this.nameMainPanes(worktreeId, hostTabId, args)
+    }
+    // Attached renderers own geometry; forward only explicitly renamed panes so stale resent maps cannot overwrite host names.
     if (this.getAvailableAuthoritativeWindow()) {
       // Why: only panes the client says it renamed; a resent map may predate the host's names.
       const renamed = new Set(args.renamedLeafIds)
@@ -271,75 +249,6 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
-    return { updated: true }
-  }
-
-  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
-  // push path, so pinning or coloring a tab reverted on the next snapshot and
-  // was never persisted. Persist to the workspace session + live snapshot.
-  /** What `title` reads once a manual name is cleared; readers that predate `customTitle` show it. */
-  protected headlessTerminalFallbackTitle(worktreeId: string, tabId: string): string {
-    const tab = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[worktreeId]?.find(
-      (candidate) => candidate.id === tabId
-    )
-    return (
-      tab?.generatedTitle?.trim() || tab?.title?.trim() || tab?.defaultTitle?.trim() || 'Terminal'
-    )
-  }
-
-  async setMobileSessionTabProps(
-    worktreeSelector: string,
-    args: {
-      tabId: string
-      color?: string | null
-      isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
-      customTitle?: string | null
-    }
-  ): Promise<{ updated: true }> {
-    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: a renderer-authoritative host owns + republishes tab props, so a
-    // headless write would be overwritten. Persist only when headless.
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const hostTabId = snapshot
-      ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
-      : args.tabId
-    // Why by tab: a sleeping or starting pane has no handle for terminal.rename to name (#29975).
-    const customTitle =
-      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
-    if (this.getAvailableAuthoritativeWindow()) {
-      if (customTitle !== undefined) {
-        this.notifier?.renameTerminal(hostTabId, customTitle)
-      }
-      return { updated: true }
-    }
-    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    // Why: a live pane's own title outranks the snapshot's, so name it the way terminal.rename does.
-    const liveHandles =
-      customTitle === undefined
-        ? []
-        : this.getPtyIdsForExplicitTabClose(worktreeId, hostTabId).flatMap((ptyId) => {
-            const handle = this.handleByPtyId.get(ptyId)
-            return handle ? [handle] : []
-          })
-    for (const handle of liveHandles) {
-      await this.renameTerminal(handle, customTitle ?? null)
-    }
-    if (customTitle !== undefined && liveHandles.length === 0) {
-      this.persistHeadlessTerminalTitle(worktreeId, hostTabId, customTitle)
-    }
-    // A live pane's rename above already set its title; only a paneless tab needs `title` here.
-    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, {
-      ...args,
-      ...(customTitle !== undefined && liveHandles.length === 0
-        ? {
-            customTitle,
-            title: customTitle ?? this.headlessTerminalFallbackTitle(worktreeId, hostTabId)
-          }
-        : {})
-    })
     return { updated: true }
   }
 }

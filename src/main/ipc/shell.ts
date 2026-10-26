@@ -45,8 +45,6 @@ async function openInFileManager(
     return target
   }
   try {
-    // Why: the file-manager action uses reveal semantics, matching the
-    // previous sidebar behavior while still validating the path per click.
     shell.showItemInFolder(target.path)
     return { ok: true }
   } catch {
@@ -101,7 +99,7 @@ async function openInExternalEditor(
     return target
   }
   try {
-    // Why the UNC path for a WSL owner: VS Code and Cursor turn it into `--remote wsl+<distro>`.
+    // VS Code and Cursor derive --remote wsl+<distro> from UNC paths.
     await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
     return { ok: true }
   } catch {
@@ -132,8 +130,7 @@ export function registerShellHandlers(
   ipcMain.handle(
     'shell:openPath',
     async (_event, path: string, ownerHostId: unknown): Promise<void> => {
-      // Why: keep the legacy fire-and-forget renderer contract while reusing the
-      // same absolute/existing path validation as the explicit file-manager API.
+      // Preserve the legacy fire-and-forget contract while applying the common path validation.
       void (await openInFileManager(path, ownerHostId))
     }
   )
@@ -186,7 +183,6 @@ export function registerShellHandlers(
       return
     }
 
-    // Only local files are supported. Remote hosts are intentionally rejected.
     if (parsed.hostname && parsed.hostname !== 'localhost') {
       return
     }
@@ -220,8 +216,7 @@ export function registerShellHandlers(
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        // Why: callers only need an existing folder grant; enabling native
-        // creation can leave typed prefix directories behind on macOS.
+        // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
         properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
@@ -231,8 +226,7 @@ export function registerShellHandlers(
     }
   )
 
-  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
-  // so we use the native OS dialog to let the user pick any attachment file.
+  // Native dialogs avoid Electron prompt/file-input reliability issues.
   ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile']
@@ -243,8 +237,7 @@ export function registerShellHandlers(
     return result.filePaths[0]
   })
 
-  // Why: a separate plural handler, like repos:pickFolder/pickFolders — callers that
-  // must take exactly one file (the notebook interpreter picker) keep pickAttachment.
+  // Keep single-file callers, including interpreter selection, on pickAttachment.
   ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections']
@@ -252,8 +245,6 @@ export function registerShellHandlers(
     return result.canceled ? [] : result.filePaths
   })
 
-  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
-  // so we use the native OS dialog to let the user pick an image file.
   ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
@@ -309,9 +300,7 @@ export function registerShellHandlers(
     return result.filePaths[0]
   })
 
-  // Why: copying a picked image next to the markdown file lets us insert a
-  // relative path (e.g. `![](image.png)`) instead of embedding base64,
-  // keeping markdown files small and portable.
+  // Relative image links keep Markdown small and portable.
   ipcMain.handle(
     'shell:copyFile',
     async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
@@ -320,10 +309,7 @@ export function registerShellHandlers(
       if (!isAbsolute(src) || !isAbsolute(dest)) {
         throw new Error('Both source and destination must be absolute paths')
       }
-      // Why: COPYFILE_EXCL prevents silently overwriting an existing file.
-      // The renderer-side deconfliction loop already picks a unique name, so
-      // the dest should never exist — if it does, something is wrong and we
-      // should fail loudly rather than clobber data.
+      // Reject name collisions even if renderer deconfliction missed one; never overwrite existing data.
       await copyFile(src, dest, constants.COPYFILE_EXCL)
     }
   )

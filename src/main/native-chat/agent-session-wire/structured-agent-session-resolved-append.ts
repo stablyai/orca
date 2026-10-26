@@ -13,8 +13,7 @@ import type { StructuredAgentSessionSinkQueue } from './structured-agent-session
 
 type ResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
 
-/** Resolve an item against the journal it lands in, at its own place in that journal's write
- *  queue, so what the resolver reads is every write issued before it and none after. */
+/** Resolve at execution in the journal queue, seeing prior writes and no later ones. */
 export function createStructuredAgentSessionResolvedAppend(
   queue: StructuredAgentSessionSinkQueue
 ): Required<

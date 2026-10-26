@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { createHash, createHmac } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
@@ -7,17 +8,12 @@ import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { exportJWK, generateKeyPair, jwtVerify, SignJWT } from 'jose'
-import {
-  buildHostProofMacInput,
-  HOST_CHALLENGE_PLAINTEXT_DOMAIN,
-  RELAY_HOST_CAPABILITIES_HEADER,
-  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
-} from '@orca-cloud/relay-contract'
+import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract'
 import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
-import { assignmentLeaseKeyId } from './assignment-lease.js'
+import { assignmentLeaseKeyId } from './assignment/assignment-lease.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
   encodeMembership,
@@ -53,21 +49,89 @@ async function unusedPort(): Promise<number> {
   return address.port
 }
 
+async function stopRelay(
+  child: ChildProcess | undefined,
+  signal: NodeJS.Signals = 'SIGKILL'
+): Promise<void> {
+  if (!child || child.exitCode !== null || child.signalCode !== null) {
+    return
+  }
+  const closed = new Promise<void>((resolveClose) => child.once('close', () => resolveClose()))
+  child.kill(signal)
+  await closed
+}
+
 async function waitForRelay(child: ChildProcess): Promise<void> {
   await new Promise<void>((resolveReady, reject) => {
     let stderr = ''
-    const timeout = setTimeout(() => reject(new Error('relay did not start')), 10_000)
-    child.stdout?.on('data', (chunk: Buffer) => {
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      child.stdout?.off('data', onOutput)
+      child.stderr?.off('data', onErrorOutput)
+      child.off('exit', onExit)
+    }
+    const onOutput = (chunk: Buffer): void => {
       if (chunk.toString().includes('[orca-relay] listening')) {
-        clearTimeout(timeout)
+        cleanup()
         resolveReady()
       }
-    })
-    child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
-    child.once('exit', (code) =>
+    }
+    const onErrorOutput = (chunk: Buffer): void => {
+      stderr += chunk.toString()
+    }
+    const onExit = (code: number | null): void => {
+      cleanup()
       reject(new Error(`relay exited before ready: ${code}\n${stderr}`))
-    )
+    }
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('relay did not start'))
+    }, 10_000)
+    child.stdout?.on('data', onOutput)
+    child.stderr?.on('data', onErrorOutput)
+    child.once('exit', onExit)
   })
+}
+
+async function withClockRelay(
+  operation: (clockFile: string, dataDirectory: string) => Promise<void>
+): Promise<void> {
+  const originalUrl = relayUrl
+  const clockPort = await unusedPort()
+  const clockUrl = `http://127.0.0.1:${clockPort}`
+  const clockData = mkdtempSync(resolve(tmpdir(), 'orca-relay-clock-'))
+  const clockFile = resolve(clockData, 'offset-ms')
+  writeFileSync(clockFile, '0')
+  const clockProcess = spawnProcess({
+    program: process.execPath,
+    args: ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
+    cwd: appDirectory,
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      PORT: String(clockPort),
+      ORCA_RELAY_PUBLIC_URL: clockUrl,
+      ORCA_RELAY_CELL_URL: clockUrl,
+      ORCA_RELAY_AUTH_ISSUER: issuer,
+      ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
+      ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
+      ORCA_RELAY_DATA_DIR: clockData,
+      ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
+      ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
+      ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
+      ORCA_RELAY_TEST_CLOCK_FILE: clockFile
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  relayUrl = clockUrl
+  try {
+    await waitForRelay(clockProcess)
+    await operation(clockFile, clockData)
+  } finally {
+    await stopRelay(clockProcess)
+    relayUrl = originalUrl
+    rmSync(clockData, { recursive: true, force: true })
+  }
 }
 
 async function relayToken(audience: string, relayHostId = 'abcdefghijklmnop'): Promise<string> {
@@ -132,7 +196,9 @@ function spawnTopologyRelay(input: {
   cellId: string
   cells?: Array<{ id: string; url: string; capacityRequests: number }>
 }): ChildProcess {
-  return spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+  return spawnProcess({
+    program: process.execPath,
+    args: ['--import', 'tsx', 'src/index.ts'],
     cwd: appDirectory,
     env: {
       ...process.env,
@@ -292,9 +358,7 @@ async function openHostControl(input?: {
   const socket = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/host/control`, {
     headers: {
       authorization: `Bearer ${await relayToken('orca-relay', hostId)}`,
-      ...(input?.capabilities
-        ? { [RELAY_HOST_CAPABILITIES_HEADER]: input.capabilities }
-        : {})
+      ...(input?.capabilities ? { ['x-orca-host-capabilities']: input.capabilities } : {})
     },
     perMessageDeflate: false
   })
@@ -310,9 +374,7 @@ async function openHostControl(input?: {
       assignmentEpoch: input?.assignmentEpoch ?? 1,
       hostPublicKeyB64: Buffer.from(keyPair.publicKey).toString('base64'),
       appVersion: 'test',
-      ...(input?.controlResumeSecret
-        ? { controlResumeSecret: input.controlResumeSecret }
-        : {}),
+      ...(input?.controlResumeSecret ? { controlResumeSecret: input.controlResumeSecret } : {}),
       ...(input?.previousGeneration === undefined
         ? {}
         : { previousGeneration: input.previousGeneration })
@@ -376,7 +438,9 @@ beforeAll(async () => {
   relayUrl = `http://127.0.0.1:${relayPort}`
   adminAudience = `${relayUrl}/v1/admin/drain`
   relayDataDirectory = mkdtempSync(resolve(tmpdir(), 'orca-relay-blackbox-'))
-  relayProcess = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+  relayProcess = spawnProcess({
+    program: process.execPath,
+    args: ['--import', 'tsx', 'src/index.ts'],
     cwd: appDirectory,
     env: {
       ...process.env,
@@ -400,7 +464,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  relayProcess?.kill('SIGTERM')
+  await stopRelay(relayProcess, 'SIGTERM')
   await new Promise<void>((resolveClose) => jwksServer?.close(() => resolveClose()))
   rmSync(relayDataDirectory, { recursive: true, force: true })
 })
@@ -410,6 +474,7 @@ describe('served relay URL', () => {
     expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
       ok: true,
       connectionCapacityProtocol: 2,
+      capacityReportedCapMin: true,
       drainPaceWindowMaxMs: 1_200_000
     })
     expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
@@ -420,7 +485,9 @@ describe('served relay URL', () => {
     const port = await unusedPort()
     const url = `http://127.0.0.1:${port}`
     const dataDirectory = mkdtempSync(resolve(tmpdir(), 'orca-relay-unready-'))
-    const processUnderTest = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    const processUnderTest = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/index.ts'],
       cwd: appDirectory,
       env: {
         ...process.env,
@@ -443,8 +510,7 @@ describe('served relay URL', () => {
       expect((await fetch(`${url}/health`)).status).toBe(200)
       expect((await fetch(`${url}/ready`)).status).toBe(503)
     } finally {
-      processUnderTest.kill('SIGTERM')
-      await new Promise<void>((resolveExit) => processUnderTest.once('exit', () => resolveExit()))
+      await stopRelay(processUnderTest, 'SIGTERM')
       rmSync(dataDirectory, { recursive: true, force: true })
     }
   })
@@ -667,9 +733,7 @@ describe('served relay URL', () => {
   })
 
   it('restates a pending connection to the rebound control, detailed only when advertised', async () => {
-    // The one link the unit tests cannot reach: an upgrade that really carries
-    // x-orca-host-capabilities must reach acceptControl and change the ack. A
-    // typo in the header name here passes every other test in the suite.
+    // Real upgrade must carry x-orca-host-capabilities into acceptControl; unit tests cannot catch a misspelled header here.
     const host = await openHostControl()
     const hostId = createHash('sha256')
       .update(host.keyPair.publicKey)
@@ -703,7 +767,7 @@ describe('served relay URL', () => {
       keyPair: host.keyPair,
       controlResumeSecret: String(host.ack.controlResumeSecret),
       previousGeneration: 1,
-      capabilities: RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
+      capabilities: 'pending-conn-details'
     })
     expect(capable.ack.pendingConns).toEqual([
       {
@@ -719,8 +783,7 @@ describe('served relay URL', () => {
       controlResumeSecret: String(capable.ack.controlResumeSecret),
       previousGeneration: 1
     })
-    // A shipped host parses these entries strictly, so an unannounced key would
-    // fail the whole ack and kill a control that was working.
+    // Legacy hosts strictly decode entries; unadvertised fields would kill an otherwise healthy control.
     expect(legacy.ack.pendingConns).toEqual([
       { connId: connection.connId, connTicket: connection.connTicket }
     ])
@@ -904,11 +967,22 @@ describe('served relay URL', () => {
       })
     ).toMatchObject({ type: 'device-credential-installed', currentVersion: 1 })
 
-    const first = await attachPhone({ host: host.socket, hostAck: host.ack, hostId, credential: resumeToken })
+    const first = await attachPhone({
+      host: host.socket,
+      hostAck: host.ack,
+      hostId,
+      credential: resumeToken
+    })
     const originalExpiry = first.hello.resumeExpiresAt
+    const firstPhoneClosed = new Promise<void>((resolveClose) =>
+      first.phone.once('close', () => resolveClose())
+    )
+    const firstDataClosed = new Promise<void>((resolveClose) =>
+      first.data.once('close', () => resolveClose())
+    )
     first.phone.close()
     first.data.close()
-    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
+    await Promise.all([firstPhoneClosed, firstDataClosed])
     const closedBasis = nextMessage(host.socket)
     host.socket.send(
       JSON.stringify({
@@ -923,7 +997,12 @@ describe('served relay URL', () => {
       reqId: 'closed-basis-confirm',
       code: 'confirmation_not_active'
     })
-    const second = await attachPhone({ host: host.socket, hostAck: host.ack, hostId, credential: resumeToken })
+    const second = await attachPhone({
+      host: host.socket,
+      hostAck: host.ack,
+      hostId,
+      credential: resumeToken
+    })
     expect(second.hello.resumeExpiresAt).toBe(originalExpiry)
     const injectedResult = nextMessage(host.socket)
     host.socket.send(
@@ -959,38 +1038,7 @@ describe('served relay URL', () => {
   })
 
   it('rejects the first post-E2EE confirmation after its server-owned deadline', async () => {
-    const originalUrl = relayUrl
-    const clockPort = await unusedPort()
-    const clockUrl = `http://127.0.0.1:${clockPort}`
-    const clockData = mkdtempSync(resolve(tmpdir(), 'orca-relay-clock-'))
-    const clockFile = resolve(clockData, 'offset-ms')
-    writeFileSync(clockFile, '0')
-    const clockProcess = spawn(
-      process.execPath,
-      ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
-      {
-        cwd: appDirectory,
-        env: {
-          ...process.env,
-          NODE_ENV: 'test',
-          PORT: String(clockPort),
-          ORCA_RELAY_PUBLIC_URL: clockUrl,
-          ORCA_RELAY_CELL_URL: clockUrl,
-          ORCA_RELAY_AUTH_ISSUER: issuer,
-          ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
-          ORCA_RELAY_DATA_DIR: clockData,
-          ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
-          ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
-          ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_TEST_CLOCK_FILE: clockFile
-        },
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    )
-    relayUrl = clockUrl
-    try {
-      await waitForRelay(clockProcess)
+    await withClockRelay(async (clockFile) => {
       const host = await openHostControl()
       const hostId = createHash('sha256')
         .update(host.keyPair.publicKey)
@@ -1027,12 +1075,7 @@ describe('served relay URL', () => {
       splice.phone.close()
       splice.data.close()
       host.socket.close()
-    } finally {
-      clockProcess.kill('SIGKILL')
-      await new Promise<void>((resolveExit) => clockProcess.once('exit', () => resolveExit()))
-      relayUrl = originalUrl
-      rmSync(clockData, { recursive: true, force: true })
-    }
+    })
   })
 
   it('fences a competing generation and rejects its old immutable basis', async () => {
@@ -1135,6 +1178,7 @@ describe('served relay URL', () => {
     )
     const invite = await inviteResponse
     const resumeToken = Buffer.alloc(32, 26).toString('base64url')
+    const committed = nextMessage(firstHost.socket)
     firstHost.socket.send(
       JSON.stringify({
         type: 'device-credential-install',
@@ -1145,9 +1189,11 @@ describe('served relay URL', () => {
         authorization: { mode: 'authenticated-direct', directAuthId: 'lost-response-direct' }
       })
     )
-    // The coordinator deliberately ignores the acknowledgement and recovers
-    // only from the durable status after its control transport disappears.
-    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
+    // Observe the commit boundary; recovery below uses only the durable status.
+    expect(await committed).toMatchObject({
+      type: 'device-credential-installed',
+      currentVersion: 1
+    })
     firstHost.socket.terminate()
     const rebound = await openHostControl({
       keyPair: firstHost.keyPair,
@@ -1436,50 +1482,86 @@ describe('served relay URL', () => {
   })
 
   it('rolls an aborted invite reservation into bounded cooldown before retry', async () => {
-    const host = await openHostControl()
-    const hostId = createHash('sha256')
-      .update(host.keyPair.publicKey)
-      .digest('base64url')
-      .slice(0, 16)
-    const inviteResponse = nextMessage(host.socket)
-    host.socket.send(
-      JSON.stringify({ type: 'invite-create', reqId: 'cooldown-invite', relayDeviceId: 'cooldown-device' })
-    )
-    const invite = await inviteResponse
-    const first = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
-      headers: forwardedHeaders()
-    })
-    await new Promise<void>((resolveOpen) => first.once('open', resolveOpen))
-    const firstOpen = nextMessage(host.socket)
-    first.send(
-      JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: invite.inviteToken })
-    )
-    await firstOpen
-    first.close()
-    await new Promise((resolveWait) => setTimeout(resolveWait, 50))
+    await withClockRelay(async (clockFile, dataDirectory) => {
+      const host = await openHostControl()
+      const hostId = createHash('sha256')
+        .update(host.keyPair.publicKey)
+        .digest('base64url')
+        .slice(0, 16)
+      const inviteResponse = nextMessage(host.socket)
+      host.socket.send(
+        JSON.stringify({
+          type: 'invite-create',
+          reqId: 'cooldown-invite',
+          relayDeviceId: 'cooldown-device'
+        })
+      )
+      const invite = await inviteResponse
+      const first = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
+        headers: forwardedHeaders()
+      })
+      await new Promise<void>((resolveOpen) => first.once('open', resolveOpen))
+      const firstOpen = nextMessage(host.socket)
+      first.send(
+        JSON.stringify({
+          type: 'relay-auth',
+          v: 1,
+          mode: 'connect',
+          credential: invite.inviteToken
+        })
+      )
+      await firstOpen
+      const database = await openRelayDatabase({ dataDir: dataDirectory })
+      try {
+        first.close()
+        await expect
+          .poll(
+            async () =>
+              (
+                await database.query(`SELECT state FROM relay_invites WHERE relay_device_id = ?`, [
+                  'cooldown-device'
+                ])
+              )[0]?.state
+          )
+          .toBe('cooldown')
 
-    const cooldown = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
-      headers: forwardedHeaders()
-    })
-    await new Promise<void>((resolveOpen) => cooldown.once('open', resolveOpen))
-    const cooldownHello = nextMessage(cooldown)
-    cooldown.send(
-      JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: invite.inviteToken })
-    )
-    expect(await cooldownHello).toEqual({ type: 'relay-hello', ok: false, code: 4401 })
+        const cooldown = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
+          headers: forwardedHeaders()
+        })
+        await new Promise<void>((resolveOpen) => cooldown.once('open', resolveOpen))
+        const cooldownHello = nextMessage(cooldown)
+        cooldown.send(
+          JSON.stringify({
+            type: 'relay-auth',
+            v: 1,
+            mode: 'connect',
+            credential: invite.inviteToken
+          })
+        )
+        expect(await cooldownHello).toEqual({ type: 'relay-hello', ok: false, code: 4401 })
 
-    await new Promise((resolveWait) => setTimeout(resolveWait, 2_050))
-    const retry = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
-      headers: forwardedHeaders()
+        writeFileSync(clockFile, '2050')
+        const retry = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
+          headers: forwardedHeaders()
+        })
+        await new Promise<void>((resolveOpen) => retry.once('open', resolveOpen))
+        const retriedOpen = nextMessage(host.socket)
+        retry.send(
+          JSON.stringify({
+            type: 'relay-auth',
+            v: 1,
+            mode: 'connect',
+            credential: invite.inviteToken
+          })
+        )
+        expect(await retriedOpen).toMatchObject({ type: 'conn-open', kind: 'invite' })
+        retry.close()
+        host.socket.close()
+      } finally {
+        await database.close()
+        host.socket.close()
+      }
     })
-    await new Promise<void>((resolveOpen) => retry.once('open', resolveOpen))
-    const retriedOpen = nextMessage(host.socket)
-    retry.send(
-      JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: invite.inviteToken })
-    )
-    expect(await retriedOpen).toMatchObject({ type: 'conn-open', kind: 'invite' })
-    retry.close()
-    host.socket.close()
   })
 
   it('keeps install status and every effect not-found after injected SQL failure', async () => {
@@ -1487,29 +1569,27 @@ describe('served relay URL', () => {
     const faultPort = await unusedPort()
     const faultUrl = `http://127.0.0.1:${faultPort}`
     const faultData = mkdtempSync(resolve(tmpdir(), 'orca-relay-fault-'))
-    const faultProcess = spawn(
-      process.execPath,
-      ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
-      {
-        cwd: appDirectory,
-        env: {
-          ...process.env,
-          NODE_ENV: 'test',
-          PORT: String(faultPort),
-          ORCA_RELAY_PUBLIC_URL: faultUrl,
-          ORCA_RELAY_CELL_URL: faultUrl,
-          ORCA_RELAY_AUTH_ISSUER: issuer,
-          ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
-          ORCA_RELAY_DATA_DIR: faultData,
-          ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
-          ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
-          ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_TEST_FAULT_SQL: 'INSERT INTO relay_install_results'
-        },
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    )
+    const faultProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
+      cwd: appDirectory,
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        PORT: String(faultPort),
+        ORCA_RELAY_PUBLIC_URL: faultUrl,
+        ORCA_RELAY_CELL_URL: faultUrl,
+        ORCA_RELAY_AUTH_ISSUER: issuer,
+        ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
+        ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
+        ORCA_RELAY_DATA_DIR: faultData,
+        ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
+        ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
+        ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
+        ORCA_RELAY_TEST_FAULT_SQL: 'INSERT INTO relay_install_results'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     relayUrl = faultUrl
     try {
       await waitForRelay(faultProcess)
@@ -1520,7 +1600,11 @@ describe('served relay URL', () => {
         .slice(0, 16)
       const inviteResponse = nextMessage(host.socket)
       host.socket.send(
-        JSON.stringify({ type: 'invite-create', reqId: 'fault-invite', relayDeviceId: 'fault-device' })
+        JSON.stringify({
+          type: 'invite-create',
+          reqId: 'fault-invite',
+          relayDeviceId: 'fault-device'
+        })
       )
       const invite = await inviteResponse
       const splice = await attachPhone({
@@ -1567,8 +1651,7 @@ describe('served relay URL', () => {
       splice.data.close()
       host.socket.close()
     } finally {
-      faultProcess.kill('SIGKILL')
-      await new Promise<void>((resolveExit) => faultProcess.once('exit', () => resolveExit()))
+      await stopRelay(faultProcess, 'SIGKILL')
       relayUrl = originalUrl
       rmSync(faultData, { recursive: true, force: true })
     }
@@ -1579,29 +1662,27 @@ describe('served relay URL', () => {
     const faultPort = await unusedPort()
     const faultUrl = `http://127.0.0.1:${faultPort}`
     const faultData = mkdtempSync(resolve(tmpdir(), 'orca-relay-direct-fault-'))
-    const faultProcess = spawn(
-      process.execPath,
-      ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
-      {
-        cwd: appDirectory,
-        env: {
-          ...process.env,
-          NODE_ENV: 'test',
-          PORT: String(faultPort),
-          ORCA_RELAY_PUBLIC_URL: faultUrl,
-          ORCA_RELAY_CELL_URL: faultUrl,
-          ORCA_RELAY_AUTH_ISSUER: issuer,
-          ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
-          ORCA_RELAY_DATA_DIR: faultData,
-          ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
-          ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
-          ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
-          ORCA_RELAY_TEST_FAULT_SQL: 'INSERT INTO relay_direct_authorizations'
-        },
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    )
+    const faultProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/fault-injection-test-entry.ts'],
+      cwd: appDirectory,
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        PORT: String(faultPort),
+        ORCA_RELAY_PUBLIC_URL: faultUrl,
+        ORCA_RELAY_CELL_URL: faultUrl,
+        ORCA_RELAY_AUTH_ISSUER: issuer,
+        ORCA_RELAY_JWKS_URL: `${issuer}/jwks`,
+        ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: assignmentKey,
+        ORCA_RELAY_DATA_DIR: faultData,
+        ORCA_RELAY_ADMIN_AUDIENCE: adminAudience,
+        ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.com',
+        ORCA_RELAY_ADMIN_JWKS_URL: `${issuer}/jwks`,
+        ORCA_RELAY_TEST_FAULT_SQL: 'INSERT INTO relay_direct_authorizations'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     relayUrl = faultUrl
     try {
       await waitForRelay(faultProcess)
@@ -1673,8 +1754,7 @@ describe('served relay URL', () => {
       splice.data.close()
       host.socket.close()
     } finally {
-      faultProcess.kill('SIGKILL')
-      await new Promise<void>((resolveExit) => faultProcess.once('exit', () => resolveExit()))
+      await stopRelay(faultProcess, 'SIGKILL')
       relayUrl = originalUrl
       rmSync(faultData, { recursive: true, force: true })
     }
@@ -1686,16 +1766,15 @@ describe('served relay URL', () => {
     const cellUrl = `http://127.0.0.1:${cellPort}`
     const cellData = mkdtempSync(resolve(tmpdir(), 'orca-relay-cell-'))
     const keyPair = nacl.box.keyPair()
-    const hostId = createHash('sha256')
-      .update(keyPair.publicKey)
-      .digest('base64url')
-      .slice(0, 16)
+    const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
     const database = await openRelayDatabase({ dataDir: cellData })
     const assignments = new RelayAssignmentStore(database, () => 100)
     await assignments.reconcileCells([{ id: 'cell-a', url: cellUrl, capacityRequests: 10 }])
     await assignments.assign({ userId: 'user-1', relayHostId: hostId })
     await database.close()
-    const cellProcess = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    const cellProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/index.ts'],
       cwd: appDirectory,
       env: {
         ...process.env,
@@ -1755,7 +1834,11 @@ describe('served relay URL', () => {
       expect(assigned.ack).toMatchObject({ type: 'host-hello-ack', generation: 1 })
       const invitePromise = nextMessage(assigned.socket)
       assigned.socket.send(
-        JSON.stringify({ type: 'invite-create', reqId: 'cell-invite', relayDeviceId: 'cell-device' })
+        JSON.stringify({
+          type: 'invite-create',
+          reqId: 'cell-invite',
+          relayDeviceId: 'cell-device'
+        })
       )
       const invite = await invitePromise
       const splice = await attachPhone({
@@ -1780,8 +1863,7 @@ describe('served relay URL', () => {
       splice.data.close()
       assigned.socket.close()
     } finally {
-      cellProcess.kill('SIGTERM')
-      await new Promise<void>((resolveExit) => cellProcess.once('exit', () => resolveExit()))
+      await stopRelay(cellProcess, 'SIGTERM')
       relayUrl = originalUrl
       rmSync(cellData, { recursive: true, force: true })
     }
@@ -1798,10 +1880,7 @@ describe('served relay URL', () => {
       { id: 'cell-b', url: cellBUrl, capacityRequests: 10 }
     ]
     const keyPair = nacl.box.keyPair()
-    const hostId = createHash('sha256')
-      .update(keyPair.publicKey)
-      .digest('base64url')
-      .slice(0, 16)
+    const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
     const seedDatabase = await openRelayDatabase({ dataDir: dataDirectory })
     const seedAssignments = new RelayAssignmentStore(seedDatabase)
     await seedAssignments.reconcileCells(cells)
@@ -1883,8 +1962,7 @@ describe('served relay URL', () => {
             cellIncarnation: '11111111-1111-4111-8111-111111111111',
             migName: 'orca-relay-c1',
             instanceGroup: 'https://compute.example/instanceGroups/orca-relay-c1',
-            generationIdentity:
-              'https://compute.example/instanceTemplates/orca-relay-c1-abc',
+            generationIdentity: 'https://compute.example/instanceTemplates/orca-relay-c1-abc',
             fenceCommit: 'a'.repeat(40),
             planSha256: 'b'.repeat(64),
             planObjectName:
@@ -1894,8 +1972,7 @@ describe('served relay URL', () => {
             terraformStateSerial: 7,
             terraformStateObjectGeneration: '987654321',
             terraformStateObjectSha256: 'd'.repeat(64),
-            requestReason:
-              'orca-relay-fence/44444444-4444-4444-8444-444444444444'
+            requestReason: 'orca-relay-fence/44444444-4444-4444-8444-444444444444'
           },
           confirmation: 'PREPARE_TERRAFORM_CELL_FENCE',
           expected: { status: 409, body: { error: 'cell_fence_admission_enabled' } }
@@ -1910,8 +1987,7 @@ describe('served relay URL', () => {
             cellIncarnation: '11111111-1111-4111-8111-111111111111',
             migName: 'orca-relay-c1',
             instanceGroup: 'https://compute.example/instanceGroups/orca-relay-c1',
-            generationIdentity:
-              'https://compute.example/instanceTemplates/orca-relay-c1-abc',
+            generationIdentity: 'https://compute.example/instanceTemplates/orca-relay-c1-abc',
             fenceCommit: 'a'.repeat(40),
             planSha256: 'b'.repeat(64),
             planObjectName:
@@ -1921,8 +1997,7 @@ describe('served relay URL', () => {
             terraformStateSerial: 7,
             terraformStateObjectGeneration: '987654321',
             terraformStateObjectSha256: 'd'.repeat(64),
-            requestReason:
-              'orca-relay-fence/44444444-4444-4444-8444-444444444444'
+            requestReason: 'orca-relay-fence/44444444-4444-4444-8444-444444444444'
           },
           confirmation: 'ABORT_UNSTARTED_TERRAFORM_CELL_FENCE',
           expected: { status: 409, body: { error: 'cell_fence_attempt_not_found' } }
@@ -2113,8 +2188,7 @@ describe('served relay URL', () => {
         blockedExpiredUnregistered: 0,
         blockedExpiredOnNewerTargetAssignment: 0
       })
-      // Completion must prove the source has stopped admitting new work, even in
-      // the served admin workflow that performs its own topology preflight.
+      // Admin completion must prove source admission stopped despite its separate topology preflight.
       expect((await cellState('cell-a', false)).status).toBe(200)
 
       cellB = spawnTopologyRelay({
@@ -2251,34 +2325,28 @@ describe('served relay URL', () => {
         }
       )
       expect(unsafeSelectorResponse.status).toBe(400)
-      const selectorResponse = await fetch(
-        `${directorUrl}/v1/admin/admission-selector/apply`,
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${token}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify(selectorInput)
-        }
-      )
+      const selectorResponse = await fetch(`${directorUrl}/v1/admin/admission-selector/apply`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(selectorInput)
+      })
       expect(selectorResponse.status).toBe(200)
       expect(await selectorResponse.json()).toMatchObject({
         v: 1,
         changed: true,
         selector: { generation: 1, membership: selectorInput.membership }
       })
-      const selectorStatus = await fetch(
-        `${directorUrl}/v1/admin/admission-selector/status`,
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${token}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({ v: 1, attemptId: selectorInput.attemptId })
-        }
-      )
+      const selectorStatus = await fetch(`${directorUrl}/v1/admin/admission-selector/status`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ v: 1, attemptId: selectorInput.attemptId })
+      })
       expect(selectorStatus.status).toBe(200)
       expect(await selectorStatus.json()).toMatchObject({
         v: 1,
@@ -2327,7 +2395,7 @@ describe('served relay URL', () => {
       targetHost.socket.close()
     } finally {
       for (const child of [cellA, cellB, director]) {
-        if (child && child.exitCode === null) child.kill('SIGKILL')
+        await stopRelay(child)
       }
       relayUrl = originalUrl
       rmSync(dataDirectory, { recursive: true, force: true })
@@ -2348,11 +2416,12 @@ describe('served relay URL', () => {
     const invite = await invitePromise
     host.socket.close()
 
-    relayProcess.kill('SIGKILL')
-    await new Promise<void>((resolveExit) => relayProcess.once('exit', () => resolveExit()))
+    await stopRelay(relayProcess, 'SIGKILL')
     const directorPort = await unusedPort()
     relayUrl = `http://127.0.0.1:${directorPort}`
-    relayProcess = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    relayProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/index.ts'],
       cwd: appDirectory,
       env: {
         ...process.env,
@@ -2409,10 +2478,11 @@ describe('served relay URL', () => {
     })
     expect(await closed).toBe(4503)
 
-    relayProcess.kill('SIGTERM')
-    await new Promise<void>((resolveExit) => relayProcess.once('exit', () => resolveExit()))
+    await stopRelay(relayProcess, 'SIGTERM')
     relayUrl = combinedUrl
-    relayProcess = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    relayProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/index.ts'],
       cwd: appDirectory,
       env: {
         ...process.env,
@@ -2441,7 +2511,9 @@ describe('served relay URL', () => {
     const signalPort = await unusedPort()
     const signalUrl = `http://127.0.0.1:${signalPort}`
     const signalData = mkdtempSync(resolve(tmpdir(), 'orca-relay-sigterm-'))
-    const signalProcess = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    const signalProcess = spawnProcess({
+      program: process.execPath,
+      args: ['--import', 'tsx', 'src/index.ts'],
       cwd: appDirectory,
       env: {
         ...process.env,
@@ -2478,7 +2550,7 @@ describe('served relay URL', () => {
       expect(await closed).toBe(4503)
       await exited
     } finally {
-      if (signalProcess.exitCode === null) signalProcess.kill('SIGKILL')
+      await stopRelay(signalProcess)
       relayUrl = originalUrl
       rmSync(signalData, { recursive: true, force: true })
     }
@@ -2498,6 +2570,20 @@ describe('served relay URL', () => {
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(adminPrivateKey)
+    for (const invalid of [
+      await googleServiceToken(`${adminAudience}/other`),
+      await googleServiceToken(adminAudience, 'other@example.com')
+    ]) {
+      expect(
+        (
+          await fetch(`${relayUrl}/v1/admin/drain`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${invalid}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ v: 1, graceMs: 0 })
+          })
+        ).status
+      ).toBe(401)
+    }
     const response = await fetch(`${relayUrl}/v1/admin/drain`, {
       method: 'POST',
       headers: {
@@ -2532,41 +2618,51 @@ describe('served relay URL', () => {
 
     expect((await post('/v1/admin/runtime-status', capacity, { v: 1 })).status).toBe(200)
     expect(
-      (await post('/v1/admin/evacuation-status', capacity, {
-        v: 1,
-        sourceCellId: 'source',
-        targetCellId: 'target',
-        completeReady: false
-      })).status
+      (
+        await post('/v1/admin/evacuation-status', capacity, {
+          v: 1,
+          sourceCellId: 'source',
+          targetCellId: 'target',
+          completeReady: false
+        })
+      ).status
     ).toBe(401)
     expect(
-      (await post('/v1/admin/cell-fence-attempt-status', capacity, {
-        v: 1,
-        cellId: 'production-gce-c1'
-      })).status
+      (
+        await post('/v1/admin/cell-fence-attempt-status', capacity, {
+          v: 1,
+          cellId: 'production-gce-c1'
+        })
+      ).status
     ).toBe(401)
 
     expect((await post('/v1/admin/runtime-status', monitor, { v: 1 })).status).toBe(200)
     expect((await post('/v1/admin/drain', monitor, { v: 1, graceMs: 0 })).status).toBe(401)
     expect(
-      (await post('/v1/admin/cell-fence-attempt-status', monitor, {
-        v: 1,
-        cellId: 'production-gce-c1'
-      })).status
+      (
+        await post('/v1/admin/cell-fence-attempt-status', monitor, {
+          v: 1,
+          cellId: 'production-gce-c1'
+        })
+      ).status
     ).toBe(401)
 
     expect((await post('/v1/admin/runtime-status', fence, { v: 1 })).status).toBe(200)
     expect((await post('/v1/admin/drain', fence, { v: 1, graceMs: 0 })).status).toBe(401)
     expect(
-      (await post('/v1/admin/cell-fence-attempt-status', fence, {
-        v: 1,
-        cellId: 'production-gce-c1'
-      })).status
+      (
+        await post('/v1/admin/cell-fence-attempt-status', fence, {
+          v: 1,
+          cellId: 'production-gce-c1'
+        })
+      ).status
     ).toBe(404)
     expect(
-      (await post('/v1/admin/cell-fence-attest', fence, {
-        v: 1
-      })).status
+      (
+        await post('/v1/admin/cell-fence-attest', fence, {
+          v: 1
+        })
+      ).status
     ).toBe(401)
 
     const directorPort = await unusedPort()
@@ -2596,12 +2692,8 @@ describe('served relay URL', () => {
           },
           body: JSON.stringify(adoption)
         })
-      expect(
-        (await postDirector(fence)).status
-      ).toBe(401)
-      expect(
-        (await postDirector(broker)).status
-      ).toBe(409)
+      expect((await postDirector(fence)).status).toBe(401)
+      expect((await postDirector(broker)).status).toBe(409)
       const commitAdoption = {
         v: 1,
         cellId: 'cell-a',
@@ -2648,7 +2740,7 @@ describe('served relay URL', () => {
       })
       expect(fenceResponse.status).toBe(403)
     } finally {
-      if (director.exitCode === null) director.kill('SIGKILL')
+      await stopRelay(director)
       rmSync(directorData, { recursive: true, force: true })
     }
   })

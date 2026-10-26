@@ -17,6 +17,13 @@ import {
   getFolderWorkspaceCandidateRepos,
   getFolderWorkspaceConnectionId
 } from './folder-workspace-connection'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 type ConnectionOwnerState = Pick<
   AppState,
@@ -35,18 +42,18 @@ export function createConnectionIdForFileSelector(
       return undefined
     }
     if (
-      previousSlices?.folderWorkspaces === state.folderWorkspaces &&
+      previousSlices?.folderWorkspaces === selectFolderWorkspaces(state) &&
       previousSlices.projectGroups === state.projectGroups &&
       previousSlices.repos === state.repos &&
-      previousSlices.worktreesByRepo === state.worktreesByRepo
+      selectWorktreesByRepo(previousSlices) === selectWorktreesByRepo(state)
     ) {
       return previousResult
     }
     previousSlices = {
-      folderWorkspaces: state.folderWorkspaces,
+      folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo
+      worktreesByRepo: selectWorktreesByRepo(state)
     }
     previousResult = getConnectionIdForFileFromState(state, worktreeId, filePath)
     return previousResult
@@ -64,19 +71,15 @@ export function getConnectionIdFromState(
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
   }
-  // Why: owner resolution runs from retained Zustand selectors, so unrelated
-  // store writes must not flatten every worktree or scan every repository.
-  const worktreeResolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  // Retained selectors need indexed ownership; unrelated writes must not rescan every repo/worktree.
+  const worktreeResolution = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
   if (worktreeResolution.kind === 'ambiguous') {
-    // Why (#17799): rows that disagree about the owner cannot name a connection.
-    // `undefined` is this module's documented "cannot determine the host" answer;
-    // collapsing it to `null` would authorize a local read of a remote path.
+    // Conflicting owners yield undefined, never null: null would authorize local reads of a remote path (#17799).
     return undefined
   }
   const worktree = worktreeResolution.kind === 'resolved' ? worktreeResolution.owner : undefined
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  // Why (#17799, #11163): one rule, shared with main's launch scope. The renderer's contribution is
-  // only the memoized index — unrelated store writes must not rescan every repository.
+  // Share main’s scope rule; the renderer adds memoized indexing to avoid unrelated-write scans (#17799, #11163).
   const resolution = resolveWorktreeExecutionHost(
     {
       byId: (id) => resolveIndexedRepoOwner(state.repos, id),
@@ -87,12 +90,7 @@ export function getConnectionIdFromState(
   return resolution.kind === 'resolved' ? resolution.connectionId : undefined
 }
 
-/**
- * The SSH connectionId of a repo named directly, for callers that hold a repoId rather than a
- * worktree id — the workspace may not have landed in the store yet, or its rows may disagree about
- * the owner, and neither is evidence about the repo itself. `undefined` keeps this module's
- * "cannot determine the host" answer for a repo the store does not carry.
- */
+/** Resolve a directly named repo independently of pending/disagreeing workspace rows; undefined means the repo itself is absent. */
 export function getRepoConnectionIdFromState(
   state: ConnectionOwnerState,
   repoId: string | null | undefined
@@ -135,4 +133,33 @@ export function getConnectionIdForFileFromState(
       .map(({ repo }) => repo.connectionId ?? null)
   )
   return connectionIds.size === 1 ? ([...connectionIds][0] ?? null) : undefined
+}
+
+/**
+ * The SSH connectionId of one host's copy of `worktreeId`. Ids repeat across hosts, so the bare-id
+ * lookup above answers `undefined` for a same-path twin; naming the copy's host resolves it.
+ */
+export function getConnectionIdForWorktreeCopy(
+  state: ConnectionOwnerState,
+  worktreeId: string,
+  hostId: ExecutionHostId
+): string | null | undefined {
+  const row = selectWorkspaceByHostTarget(
+    {
+      worktreesByRepo: selectWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state)
+    },
+    hostWorktreeTarget({ id: worktreeId, hostId })
+  )
+  if (!row) {
+    return undefined
+  }
+  const resolution = resolveWorktreeExecutionHost(
+    {
+      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
+      byHost: (id, repoHostId) => findIndexedRepoOwnerForHost(state.repos, id, repoHostId)
+    },
+    { repoId: row.repoId, hostId: row.hostId ?? hostId }
+  )
+  return resolution.kind === 'resolved' ? resolution.connectionId : undefined
 }

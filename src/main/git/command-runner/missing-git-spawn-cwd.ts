@@ -4,18 +4,18 @@ import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { isMissingCommandBinaryError } from '../exec-error'
 
 const MAX_KNOWN_MISSING_CWDS = 256
-// Why: in memory only; a deleted project folder otherwise spawns a failing Git on every sweep.
+// Remember missing folders in memory to avoid a failing Git spawn on every sweep.
 const knownMissingCwds = new Set<string>()
 
 type GitCwdOptions = { cwd?: string; wslDistro?: string; signal?: AbortSignal }
 
-// Why: only native routes; WSL and UNC absence is not a cheap local answer, and loss of contact is not proof.
+// Cache native absence only; unreachable WSL/UNC paths do not prove deletion.
 function recordableCwd({ cwd, wslDistro }: GitCwdOptions): string | null {
   const routesThroughWsl = process.platform === 'win32' && Boolean(wslDistro)
   return cwd && !routesThroughWsl && !/^[\\/]{2}/.test(cwd) ? cwd : null
 }
 
-// Why stat: spawn's chdir follows symlinks, so a symlinked root whose target is gone is absent too.
+// Match spawn chdir semantics: stat follows symlinked roots.
 function isCwdAbsent(cwd: string): Promise<boolean> {
   return stat(cwd).then(() => false, isDefinitiveAbsence)
 }
@@ -24,7 +24,7 @@ async function noteMissingCwd(error: unknown, cwd: string, signal?: AbortSignal)
   if (!isMissingCommandBinaryError(error) || signal?.aborted || knownMissingCwds.has(cwd)) {
     return
   }
-  // Why re-check: concurrent first failures for one folder must record and warn once.
+  // Recheck after stat so concurrent failures record and warn once.
   if (!(await isCwdAbsent(cwd)) || knownMissingCwds.has(cwd)) {
     return
   }
@@ -57,7 +57,7 @@ export function runUnlessGitCwdKnownMissing<T>(
       knownMissingCwds.delete(cwd)
       return runAndNote()
     }
-    // Why: same shape as the real spawn failure, so every caller keeps its existing result.
+    // Preserve the spawn failure shape expected by existing callers.
     throw Object.assign(new Error('spawn git ENOENT'), {
       code: 'ENOENT',
       syscall: 'spawn git',

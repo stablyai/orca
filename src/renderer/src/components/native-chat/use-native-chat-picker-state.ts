@@ -1,4 +1,7 @@
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  writeNativeChatComposerText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import {
   useCallback,
   useEffect,
@@ -61,8 +64,11 @@ export function useNativeChatPickerState(args: {
   /** A message recalled from history is resent or walked past, not completed, until it is edited. */
   recalledFromHistory: boolean
   disabled: boolean
+  isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   sessionSkills?: readonly NativeChatSessionSkill[]
+  /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
+  onPickerOpened?: () => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -77,7 +83,9 @@ export function useNativeChatPickerState(args: {
     agentCommands,
     recalledFromHistory,
     disabled,
+    isComposing,
     sessionSkills,
+    onPickerOpened,
     textareaRef,
     setDraft,
     setCaret,
@@ -133,9 +141,7 @@ export function useNativeChatPickerState(args: {
   )
 
   useEffect(() => {
-    // Why: suppression is per-trigger-occurrence AND per-context. The composer
-    // is reused across pane/agent switches, so a stale dismissal must clear or
-    // the picker stays closed for an in-progress token when that context returns.
+    // Reset dismissal/origin on context changes so a reused composer cannot retain a prior pane’s suppression.
     skillOriginRef.current = null
     setDismissed(null)
   }, [dismissalContext])
@@ -149,20 +155,30 @@ export function useNativeChatPickerState(args: {
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
       emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
+      onPickerOpened?.()
     }
-  }, [agent, autocomplete, dismissalContext])
+  }, [agent, autocomplete, dismissalContext, onPickerOpened])
+
+  // The editor may be ahead of this render when a key lands just before the pick.
+  const liveDraft = useCallback((): [string, number] => {
+    const input = textareaRef.current
+    return input ? [input.value, input.selectionStart ?? input.value.length] : [draft, caret]
+  }, [caret, draft, textareaRef])
 
   const commitCompletion = useCallback(
     (result: { draft: string; caret: number }) => {
+      const textarea = textareaRef.current
+      // Mark the draft dirty before the suppressed transaction saves its chip document.
       setDraft(result.draft)
+      // An IME composition owns the field; the draft reaches it once the composition settles.
+      if (textarea && !isComposing()) {
+        writeNativeChatComposerText(textarea, result.draft, result.caret)
+      }
       setCaret(result.caret)
       setActiveSuggestion(0)
       setDismissed(null)
-      const textarea = textareaRef.current
-      textarea?.focus()
-      requestAnimationFrame(() => textarea?.setSelectionRange(result.caret, result.caret))
     },
-    [setActiveSuggestion, setCaret, setDraft, textareaRef]
+    [isComposing, setActiveSuggestion, setCaret, setDraft, textareaRef]
   )
 
   const completeItem = useCallback(
@@ -170,16 +186,17 @@ export function useNativeChatPickerState(args: {
       if (disabledRef.current || autocomplete.mode !== 'slash') {
         return
       }
-      const result = applyPickerSuggestion(draft, caret, item)
+      const [text, at] = liveDraft()
+      const result = applyPickerSuggestion(text, at, item)
       if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
         const from = result.caret - result.insertedToken.length - 1
-        textareaRef.current.insertSkill(from, caret, result.insertedToken)
+        textareaRef.current.insertSkill(from, at, result.insertedToken, item.path)
       }
       commitCompletion(result)
       skillOriginRef.current = item.kind === 'skill' ? result.insertedToken : null
       emitNativeChatPickerItemAccepted({ agent, itemKind: item.kind })
     },
-    [agent, autocomplete, caret, commitCompletion, draft, textareaRef]
+    [agent, autocomplete, commitCompletion, liveDraft, textareaRef]
   )
 
   const completeMention = useCallback(
@@ -187,9 +204,9 @@ export function useNativeChatPickerState(args: {
       if (disabledRef.current || autocomplete.mode !== 'mention') {
         return
       }
-      commitCompletion(applyMentionSuggestion(draft, caret, path))
+      commitCompletion(applyMentionSuggestion(...liveDraft(), path))
     },
-    [autocomplete, caret, commitCompletion, draft]
+    [autocomplete, commitCompletion, liveDraft]
   )
 
   const handleDraftOrCaretChange = useCallback(
@@ -201,9 +218,7 @@ export function useNativeChatPickerState(args: {
       if (!dismissed || dismissed.context !== dismissalContext) {
         return
       }
-      // Why: a single edit that replaces the dismissed token wholesale (e.g.
-      // select-all + paste) is a new trigger occurrence even though a trigger
-      // character lands back on the same draft position.
+      // Whole-token replacement starts a new trigger even at the same position (select-all/paste).
       if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
         setDismissed(null)
         return

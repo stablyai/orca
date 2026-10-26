@@ -17,8 +17,7 @@ import {
   type IntegrationCredentialService
 } from '../shared/integration-credential-errors'
 
-// Why: connection status treats a token file as a saved credential; empty
-// files read as "missing", so counting them would split-brain getStatus.
+// Empty files mean no saved credential; keep status consistent with token reads.
 export function credentialFileHasContent(path: string): boolean {
   try {
     return statSync(path).size > 0
@@ -27,8 +26,7 @@ export function credentialFileHasContent(path: string): boolean {
   }
 }
 
-// Falls back to 0600 plaintext when the OS keyring is unavailable, matching the
-// Linear/Jira token writers so a keyring-less box still connects.
+// Owner-only plaintext permits connections when the OS keyring is unavailable.
 export function writeEncryptedCredential(
   service: IntegrationCredentialService,
   path: string,
@@ -44,29 +42,24 @@ export function writeEncryptedCredential(
   writeCredentialFileAtomic(path, Buffer.from(value, 'utf-8'))
 }
 
-// Why (STA-3941): a direct write can truncate the previous credential if it
-// fails or the app dies mid-write, leaving nothing to authenticate with. Write
-// a sibling temp file, fsync it, then rename — readers only ever observe the
-// old bytes or the complete new ones.
+// Stage and fsync before rename so failed writes cannot truncate the saved credential (STA-3941).
 export function writeCredentialFileAtomic(
   path: string,
   data: Buffer,
   shouldPublish?: () => boolean
 ): boolean {
-  // Why unique: a concurrent writer sharing one temp name could truncate the bytes we publish.
+  // Unique temp names prevent concurrent writers from truncating staged bytes.
   const tempPath = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
   let handle: number | null = null
   try {
     if (process.platform === 'win32') {
-      // Why born restricted: a sibling would otherwise inherit the directory's DACL and replace
-      // the previous credential's owner-only ACL.
+      // Create owner-only staging files so replacement cannot inherit a permissive Windows DACL.
       writeRestrictedWindowsFile(tempPath, data)
       fsyncFileSync(tempPath)
       return publishStagedCredential(tempPath, path, shouldPublish)
     }
     handle = openSync(tempPath, 'w', 0o600)
-    // Why: write(2) is allowed to return a short count, so a single writeSync
-    // could publish a truncated credential — the very corruption this avoids.
+    // writeSync can return a short count; publish only after all bytes are written.
     let written = 0
     while (written < data.length) {
       const bytes = writeSync(handle, data, written, data.length - written)
@@ -83,15 +76,11 @@ export function writeCredentialFileAtomic(
     if (handle !== null) {
       try {
         closeSync(handle)
-      } catch {
-        // Already closed or invalid; the unlink below is what matters.
-      }
+      } catch {}
     }
     try {
       unlinkSync(tempPath)
-    } catch {
-      // Nothing to clean up.
-    }
+    } catch {}
     throw error
   }
 }
@@ -110,9 +99,7 @@ function publishStagedCredential(
   return true
 }
 
-// Why: writeFileSync's `mode` only applies when it creates the file, so
-// rewriting an existing credential would silently keep looser permissions.
-// Best-effort: Windows has no POSIX modes; its staging file is created owner-only instead.
+// Creation mode does not tighten existing files; Windows hardens the staging ACL instead.
 export function restrictCredentialFileToOwner(path: string): void {
   try {
     chmodSync(path, 0o600)
@@ -128,9 +115,7 @@ export class CredentialDecryptionError extends Error {
   }
 }
 
-// Returns the stored token, null when the file is empty, and throws
-// CredentialDecryptionError when the file holds ciphertext we cannot decrypt
-// (e.g. the user denied the OS keychain prompt after an app re-sign).
+// Undecryptable ciphertext throws CredentialDecryptionError; an empty file returns null.
 export function readStoredCredentialToken(
   service: IntegrationCredentialService,
   raw: Buffer
@@ -155,8 +140,7 @@ function readPlaintextLegacyCredential(
   raw: Buffer
 ): string | null {
   const plaintext = decodeUtf8(raw)
-  // Why: legacy plaintext tokens are printable UTF-8; sealed ciphertext
-  // such as macOS v10 blobs must not be decoded into auth-header junk.
+  // Legacy plaintext is printable UTF-8; reject ciphertext masquerading as an auth-header value.
   if (plaintext === null || hasControlCharacter(plaintext)) {
     throw new CredentialDecryptionError(service)
   }

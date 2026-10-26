@@ -101,8 +101,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
     worktreeId: string
   ): RuntimeMobileSessionTabsSnapshot | undefined {
     const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
-    // Why: only the persisted session feeds a headless-built snapshot, so an empty one is never an
-    // answer — as a base it made the next pass seed browser rows alone and hide every terminal.
+    // Empty headless-built snapshots cannot seed refreshes or browser-only rebuilds hide every terminal.
     return stored &&
       stored.tabs.length === 0 &&
       this.isHeadlessBuiltMobileSessionPublicationBase(stored.publicationEpoch)
@@ -120,8 +119,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       workspaceSession?: WorkspaceSessionState
     } = {}
   ): Set<string> {
-    // Why: report which worktrees were reconciled in place so callers don't
-    // reconcile them a second time (see notifyMobileSessionTabsChanged).
+    // Report in-place reconciliations so callers avoid repeating them.
     const reconciledWorktreeIds = new Set<string>()
     const hasAuthoritativeWindow = Boolean(this.getAvailableAuthoritativeWindow())
     if (hasAuthoritativeWindow && options.allowAttachedWindow !== true) {
@@ -135,11 +133,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
     if (!session) {
       return reconciledWorktreeIds
     }
-    // Why: with no runtime-owned candidate in the session and no offscreen
-    // browser backend, this hydrate provably builds zero tabs for
-    // every worktree — skip the per-worktree rebuild entirely (hot on every
-    // graph sync). Scoped to onlyRuntimeOwnedTerminals so full hydrates are
-    // untouched.
+    // Runtime-only hydration without owned terminals/offscreen backend always yields zero rows; skip per-workspace rebuilds on graph sync.
     if (
       options.onlyRuntimeOwnedTerminals === true &&
       !this.offscreenBrowserBackend &&
@@ -165,14 +159,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               ...Object.keys(session.openFilesByWorktree ?? {})
             ])
           ].map((id) => [id, session.tabsByWorktree?.[id] ?? []] as const)
-    // Why: workspaceSession keys are `${repoId}::${path}` and are not pruned when
-    // a repo disappears from this client's view (e.g. removed on another client,
-    // or a stale browser-persisted session). Hydrating such a key would surface a
-    // phantom "unknown"/duplicate workspace with no live repo behind it. Only
-    // hydrate sessions whose repo still exists; leave unparseable keys alone.
-    // Resolved lazily so unparseable keys (floating terminals) never pay for a
-    // repo inventory on the hot poll path, and `null` when the store cannot
-    // report repos — an unavailable list must not read as "every repo is gone".
+    // Skip removed-repo session keys to avoid phantom workspaces; resolve inventory lazily for parseable keys and preserve unknown inventory as unavailable.
     let liveRepoIds: Set<string> | null | undefined
     for (const [entryWorktreeId, persistedTabs] of entries) {
       const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
@@ -192,38 +179,33 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         options.force !== true &&
         options.onlyRuntimeOwnedTerminals !== true
       ) {
-        // Why: terminals are stable/persisted so we normally skip a rebuild, but
-        // offscreen browser tabs are live and may have been created/closed since.
-        // Reconcile just the browser tabs against the live bridge instead of
-        // leaving a stale snapshot that omits a freshly-opened browser tab.
+        // Terminal rows are stable; refresh only live browser rows to capture creates/closes without rebuilding terminals.
         this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, stored)
         reconciledWorktreeIds.add(entryWorktreeId)
-        // Why: closing the last browser row empties a browser-only snapshot; rebuild it now
-        // rather than serve that empty answer once.
+        // Rebuild immediately after the last browser closes instead of serving one empty browser-only snapshot.
         if (this.readRebuildableMobileSessionSnapshot(entryWorktreeId)) {
           continue
         }
       }
       const existing = this.readRebuildableMobileSessionSnapshot(entryWorktreeId)
-      // Why: windowless, nothing publishes the other tabs, and a filtered seed would make the full pass skip this worktree.
+      // Windowless hosts have no other row publisher; a filtered seed would suppress the full rebuild.
       const runtimeOwnedOnly =
         options.onlyRuntimeOwnedTerminals === true &&
         (existing !== undefined || hasAuthoritativeWindow)
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
-        session
+        session,
+        this.store?.getSettings?.()?.tabAutoGenerateTitle === true
       ).filter(
         (tab) =>
           !runtimeOwnedOnly ||
           this.hasServeOrSshOwnedBinding(tab) ||
           this.hasRecentExpiredSshLeasePane(entryWorktreeId, tab)
       )
-      // Why: offscreen browser panes are live-only (no persisted session entry),
-      // so include them on every hydrate regardless of the onlyRuntimeOwnedTerminals
-      // filter, which is about terminal PTY ownership and never applies to browsers.
+      // Always include offscreen browsers; the runtime-only filter limits PTY ownership, not browser rows.
       const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
-      // Why not in the runtime-owned pass: that merges into a renderer's publication, which owns its editors.
+      // Runtime-only merges inherit renderer editors instead of publishing their own.
       const editorTabs = runtimeOwnedOnly
         ? []
         : buildHeadlessMobileSessionEditorTabs(entryWorktreeId, session)
@@ -259,9 +241,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const mergedBrowserOrder = mergedTabs
         .filter((tab) => tab.type === 'browser' || tab.type === 'markdown' || tab.type === 'file')
         .map((tab) => tab.id)
-      // Why: a persisted multi-group split must be restored on cold rebuild, or
-      // the headless serve coalesces the user's group layout back into one group
-      // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
+      // Restore persisted split groups or cold rebuilds coalesce them into one.
       const persistedGroups = session.tabGroups?.[entryWorktreeId]
       const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
       const hasPersistedSplit =
@@ -285,8 +265,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
             ),
             mergedBrowserOrder,
             undefined,
-            // Why: distribute drops browser ids (terminal-only), so carry each
-            // browser's persisted group forward instead of coalescing left.
+            // Terminal-only distribution drops browsers; retain their persisted groups separately.
             collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
           )
         : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroups
@@ -294,7 +273,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               mergeMobileSessionTabGroups(
                 entryWorktreeId,
                 existing.tabGroups,
-                mergedTerminalTabs,
+                mergedTabs,
                 mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
               ),
               mergedBrowserOrder
@@ -309,11 +288,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               }
             ]
       const nextTabGroups = appendChatTabOrder(rebuiltTabGroups, existing?.tabGroups, mergedTabs)
-      // Why: merging runtime tabs INTO a renderer publication must not reclass
-      // the snapshot as headless-built — the preservation predicate would then
-      // treat the renderer's own tabs as runtime-owned and resurrect tabs the
-      // renderer later closes. Keep the renderer base epoch with a merge suffix
-      // (idempotent) so ownership stays derivable from the epoch.
+      // Keep renderer base epochs when merging runtime rows, or preservation misclassifies renderer tabs as runtime-owned and resurrects closed tabs.
       const mergedIntoRendererPublication =
         options.onlyRuntimeOwnedTerminals === true &&
         existing !== undefined &&
@@ -334,8 +309,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         activeTabId: mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
         tabGroups: nextTabGroups,
-        // Why: the runtime-owned rebuild runs on every graph sync — carry the
-        // existing split layout forward or each sync drops it and fans out.
+        // Carry split layout through runtime hydration on every graph sync to avoid dropping/rebroadcasting it.
         ...(hasPersistedSplit && persistedLayout
           ? { tabGroupLayout: persistedLayout }
           : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroupLayout
@@ -343,10 +317,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
             : {}),
         tabs: mergedTabs
       }
-      // Why: the runtime-owned hydrate runs on EVERY graph sync; when the rebuilt
-      // projection matches the existing snapshot, keep the existing object and
-      // (epoch, version) untouched so identity-based change detection stays a
-      // pure no-op and unchanged runtime/browser worktrees never fan out.
+      // Retain the existing object and version for equal projections so unchanged graph syncs do not fan out.
       if (existing && headlessMobileSnapshotContentUnchanged(existing, nextSnapshot)) {
         continue
       }

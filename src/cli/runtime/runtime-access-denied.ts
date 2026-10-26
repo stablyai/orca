@@ -1,13 +1,13 @@
 import { RuntimeClientError } from './types'
 import { isProcessRunning } from './runtime-pid-liveness'
 
-// Why: the errno decides the classification; CODEX_SANDBOX only picks the wording.
+// Errno determines denial; CODEX_SANDBOX only selects wording.
 export function runtimeAccessDeniedError(
   socketError: Error,
   pid: number
 ): RuntimeClientError | null {
   const systemCode = 'code' in socketError ? socketError.code : undefined
-  // Why: a sandbox still sees ESRCH, so a dead Orca's leftover socket gets not-running advice.
+  // ESRCH identifies a dead runtime even when its socket is access denied.
   if ((systemCode !== 'EPERM' && systemCode !== 'EACCES') || !isProcessRunning(pid)) {
     return null
   }

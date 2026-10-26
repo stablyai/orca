@@ -8,11 +8,7 @@ import type {
 } from '../../../src/shared/github/check-types'
 import { prCount, prText } from './github-pr-entity-reply-schema'
 
-// `github.prCheckDetails`: one expanded check run, with the annotations, jobs and steps the panel
-// lists under it. Checked against PRCheckRunDetails in src/shared/github/check-types.ts, which
-// src/main/runtime/rpc/methods/github-pull-request-methods.ts returns from the GitHub client
-// verbatim. Every member but the run's own name carries main's default rather than a requirement,
-// because the panel renders each one unguarded and the host omits them freely.
+// Require check name; default optional details because hosts may omit fields the panel renders unguarded.
 
 const checkAnnotationSchema = z
   .looseObject({
@@ -79,7 +75,6 @@ const checkJobSchema = z
     steps: job.steps ?? []
   }))
 
-/** One check run, expanded. `name` is the only requirement, exactly as it was main's null gate. */
 export const githubPrCheckDetailsSchema = z
   .looseObject({
     name: prText('name'),

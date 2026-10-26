@@ -1,7 +1,7 @@
 import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
@@ -162,6 +162,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 } {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
@@ -169,6 +170,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
     id: repo.id,
     path: repo.path,
     executionHostId: repo.executionHostId,
+    connectionId: repo.connectionId,
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

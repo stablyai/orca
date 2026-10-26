@@ -5,7 +5,6 @@ import {
   type AgentRowUnreadState
 } from '@/components/dashboard/dashboard-row-bucket'
 
-/** Projects only the unread flags rendered by one card. */
 export function selectAgentRowsUnread(
   state: AgentRowUnreadState,
   agents: readonly Pick<DashboardAgentRow, 'paneKey'>[]

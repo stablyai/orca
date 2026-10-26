@@ -1,16 +1,7 @@
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from './plugins/plugin-panel-shell'
 
-/**
- * The document wrapped around an agent-written chat visual before it enters its sandboxed frame.
- * Same placement rule as the plugin panel shell: the CSP meta parses before any visual markup, so
- * nothing later in the document can loosen it, and the visual's own <html>/<head> merge into ours.
- *
- * Network: scripts, styles, fonts and images may load from a pinned set of public CDNs; nothing may
- * fetch, open sockets, frame, or submit. A page can still encode data in a request to an allowed
- * CDN — an accepted, disclosed risk, not a guarantee that no data leaves.
- *
- * Electron-free string builder: desktop, the web client and mobile build the same document.
- */
+/** Shared Electron-free sandbox document. Parse CSP before visual markup so later HTML cannot loosen it.
+ * Allow pinned-CDN scripts/styles/fonts/images only; block fetch/sockets/frames/forms. Allowed-CDN requests can still carry data: disclosed accepted risk, not a no-egress guarantee. */
 
 export const NATIVE_CHAT_VISUAL_CDN_ORIGINS = [
   'https://cdn.jsdelivr.net',
@@ -24,8 +15,7 @@ export const NATIVE_CHAT_VISUAL_CDN_ORIGINS = [
 const ASSET_SOURCES = `'unsafe-inline' data: blob: ${NATIVE_CHAT_VISUAL_CDN_ORIGINS.join(' ')}`
 const MEDIA_SOURCES = `data: blob: ${NATIVE_CHAT_VISUAL_CDN_ORIGINS.join(' ')}`
 
-// A srcdoc page otherwise resolves '#x' against Orca's own URL, so an in-page link would leave it.
-// It precedes the CSP, whose `base-uri 'none'` then refuses any base the visual declares.
+// Set about:srcdoc base before CSP to keep #links inside the frame; subsequent base-uri none rejects visual-supplied overrides.
 const INERT_BASE = '<base href="about:srcdoc">'
 
 const POLICY_WITHOUT_BASE = [
@@ -46,11 +36,8 @@ const POLICY_WITHOUT_BASE = [
 
 export const NATIVE_CHAT_VISUAL_CSP = [...POLICY_WITHOUT_BASE, "base-uri 'none'"].join('; ')
 
-/**
- * For a page that hosts the visual frame and has no URL of its own (mobile). The srcdoc child
- * inherits this policy before its own meta parses, so it must admit the shell's `about:srcdoc` base
- * (CSP cannot name that URL exactly); the child's own policy then refuses every other base.
- */
+/** Mobile URL-less visual hosts must admit about: bases so inherited CSP permits the child’s about:srcdoc base.
+ * The child’s own policy then rejects every other base; CSP cannot name that exact URL. */
 export const NATIVE_CHAT_VISUAL_HOST_CSP = [...POLICY_WITHOUT_BASE, 'base-uri about:'].join('; ')
 
 /** Frame names carry this prefix so the main process registers them before content runs. */
@@ -104,8 +91,7 @@ export function nativeChatVisualThemeCss(theme: NativeChatVisualTheme): string {
   return `:root{${declarations.join(';')}}`
 }
 
-// A visual sits in the reply on the thread's own background; its scrollbar stays hidden because the
-// frame grows to fit it. The visual's own CSS comes later and wins.
+// Grow frames to fit, hide their scrollbar and inherit the thread background; later visual CSS may override defaults.
 const BASE_CSS =
   'html{background:var(--background);color:var(--foreground);font-family:var(--font-sans);' +
   'font-size:14px;line-height:1.5;scrollbar-width:none}html::-webkit-scrollbar{display:none}' +
@@ -136,8 +122,8 @@ if (window.navigation && typeof window.navigation.addEventListener === 'function
     if (!event.hashChange && event.cancelable) event.preventDefault()
   })
 }
-try { Object.defineProperty(window, 'open', { value: function () { return null }, writable: false, configurable: false }) }
-catch (_) { try { window.open = function () { return null } } catch (_) {} }
+// Keep open configurable for visual declarations; the iframe sandbox blocks popups.
+try { window.open = function () { return null } } catch (_) {}
 document.addEventListener('click', function (event) {
   var node = event.target
   while (node && node.nodeType !== 1) node = node.parentNode
@@ -210,10 +196,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule)
 })()`
 }
 
-/**
- * The full srcdoc for one visual. `channel` is unique per built document and rides on every message
- * the shell sends, so the host can tell this document's messages from anything else.
- */
+/** Build per-document srcdoc; unique channel tags every shell message so the host can reject other documents’ traffic. */
 export function buildNativeChatVisualDocument(args: {
   html: string
   channel: string

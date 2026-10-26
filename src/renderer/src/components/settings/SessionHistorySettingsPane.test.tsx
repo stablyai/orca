@@ -97,7 +97,6 @@ const OFFLINE_DETAILS = {
   compatibility: null,
   error: 'unreachable'
 }
-/** Answers status per host so one pane can hold servers in different states. */
 function statusByHost(): void {
   mocks.status.mockImplementation(async (hostId: string) => {
     const answer = mocks.statusByHost[hostId]
@@ -366,7 +365,6 @@ it('offers only this computer to a paired client, with no server rows', async ()
   expect(mocks.status).not.toHaveBeenCalled()
 })
 
-/** Local on, one server on, one off, one offline, one too old. */
 function mixedFleet(): void {
   mocks.environments = [
     { id: 'on', name: 'build-01' },
@@ -404,7 +402,6 @@ it('offers the button only while a paired server is reachable and off', async ()
   await act(async () => {})
   expect(enableAllButton()).toBeInTheDocument()
 
-  // gpu-a was the only eligible one; with it on, the offline and too-old rows leave nothing to do.
   mocks.statusByHost = { ...mocks.statusByHost, 'runtime:off': current }
   statusByHost()
   cleanup()
@@ -432,7 +429,7 @@ it('enables every reachable server and skips the ones it cannot', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable on all computers' }))
   })
   expect(confirm).not.toHaveBeenCalled()
-  // linux 1 is offline and m4 air is too old, so neither is asked; build-01 is already on.
+  // Ask only the reachable off host; exclude offline, too-old and already-on servers.
   expect(mocks.setEnabled.mock.calls.map((call) => call[0])).toEqual(['runtime:off'])
 })
 
@@ -482,7 +479,6 @@ it('remembers nothing after a server is turned back off by hand', async () => {
   await act(async () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Search sessions on gpu-a' }))
   })
-  // The row went off, so the offer comes straight back; no preference was written either way.
   expect(enableAllButton()).toBeInTheDocument()
   expect(save).not.toHaveBeenCalled()
 })
@@ -515,7 +511,7 @@ it('folds the list past six computers and orders it by what the user can act on'
   statusByHost()
   pane(true)
   await act(async () => {})
-  // The local row's label is the host's own name, which differs per platform; the servers are the order under test.
+  // Exclude the platform-dependent local machine name from server-order assertions.
   const serverNames = (): string[] =>
     screen
       .getAllByRole('switch')

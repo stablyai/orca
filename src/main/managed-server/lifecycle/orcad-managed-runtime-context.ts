@@ -1,4 +1,5 @@
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
@@ -10,8 +11,11 @@ import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'
 import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
 import type { OrcadHostTarget } from '../../ssh/orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
-import { refuseOrcadHostDowngrade } from '../../ssh/orcad-host-version-admission'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-managed-update-decision'
+import {
+  type OrcadTerminalCensus,
+  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+} from '../../../shared/orcad-terminal-census'
 import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
@@ -21,17 +25,16 @@ import {
   getSshTargetRegistryStore
 } from '../../ssh/targets/ssh-target-registry'
 
-export const ORCAD_BIND_HOST = '127.0.0.1'
+const ORCAD_BIND_HOST = '127.0.0.1'
 
-// Why empty: managed slots always carry their pinned runtime marker, so a marker-less slot
-// fails to launch instead of silently running on whatever Node the host has.
-export const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
+// Pinned slots must fail on absent markers rather than silently use host Node.
+const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
 
 export function requireManagedOrcadInfrastructure() {
   const targetStore = requireManagedOrcadTargetStore()
   const connectionManager = getSshConnectionManager()
   if (!connectionManager) {
-    throw new Error('SSH is unavailable on this client; the managed Orca server is unverifiable.')
+    throw new Error('SSH is unavailable on this client; this host’s Orca server is unverifiable.')
   }
   return { connectionManager, targetStore, claims: targetStore.getOrcadRuntimeClaims() }
 }
@@ -39,7 +42,7 @@ export function requireManagedOrcadInfrastructure() {
 export function requireManagedOrcadTargetStore() {
   const targetStore = getSshTargetRegistryStore()
   if (!targetStore) {
-    throw new Error('SSH target state is unavailable; the managed Orca server is unverifiable.')
+    throw new Error('SSH target state is unavailable; this host’s Orca server is unverifiable.')
   }
   return targetStore
 }
@@ -68,13 +71,12 @@ export async function resolveLinkedOrcadContext(
     target.generation !== deployment.sshTargetGeneration ||
     getManagedOrcadFenceEnvironmentId(target) !== environment.id
   ) {
-    throw new Error('The managed Orca server SSH registration is no longer valid.')
+    throw new Error('The SSH registration for this host’s Orca server is no longer valid.')
   }
   const connection = await connectionManager.connect(target)
   return resolveOrcadRemoteContext(target, sshOrcadHostTransport(connection), signal)
 }
 
-/** The slot options every remote lifecycle step takes for this managed server. */
 export function managedOrcadSlot(
   context: OrcadRemoteContext<OrcadHostTarget>,
   port: number,
@@ -104,7 +106,7 @@ export function managedOrcadInstallDir(
   )
 }
 
-/** The active slot's readiness, accepted only if it is the build this client holds. */
+/** Accept readiness only from the build this client holds. */
 export function probeManagedOrcadReadiness(
   context: OrcadRemoteContext<OrcadHostTarget>,
   localOrcadDir: string,
@@ -122,39 +124,32 @@ export function probeManagedOrcadReadiness(
   )
 }
 
-/** The census and version admission every first deploy onto a host applies, SSH or WSL. */
 export function managedOrcadDeployPolicy(
   context: Pick<OrcadRemoteContext<OrcadHostTarget>, 'activationRecord'>,
   appVersion: string,
-  force?: boolean
+  intent: OrcadUpdateIntent
 ): {
   census: OrcadTerminalCensus
   recountCensus: () => Promise<OrcadTerminalCensus>
+  releaseIncumbentAdmission: () => Promise<void>
   censusRecord: OrcadActivationRecord
   admitRecord: (record: OrcadActivationRecord, candidateVersion: string) => string | null
 } {
-  // Why unknown when a version is active: only the daemon can count its sessions, and
-  // a deploy that guessed zero would restart over live terminals.
+  // Only the active daemon can count sessions; guessing zero risks restarting live terminals.
   const census: OrcadTerminalCensus = context.activationRecord.active
-    ? { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
+    ? UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
     : { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
   return {
     census,
     recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {},
     censusRecord: context.activationRecord,
-    // Why: a host another desktop stopped may hold state its newer build migrated, and this
-    // path has no linked record to check first, so only the fenced read can refuse it.
-    // An explicit force runs this version anyway, as `environment update --force` does.
-    admitRecord: (record, candidateVersion) =>
-      !force && refuseOrcadHostDowngrade(record, candidateVersion, appVersion)
-        ? `Orca ${record.activeAppVersion} last ran this host's server, newer than this ` +
-          `Orca (${appVersion}). Update Orca to start it.`
-        : null
+    // Only the fenced read can reject newer migrated state or rolled-back builds on this unlinked path.
+    admitRecord: admitOrcadRecordForIntent(intent, appVersion)
   }
 }
 
-// Why only this code: deploy never has a session count to force past, so forcing an unknown
-// census lands on the daemon-protocol deferral, which force cannot clear.
+// Force can override live terminal counts, never unknown census or protocol deferrals.
 export function isForceableOrcadDeferral(code: string): boolean {
-  return code === 'orcad_update_terminals_running'
+  return code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
 }

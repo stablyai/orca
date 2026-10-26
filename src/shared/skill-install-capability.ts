@@ -5,20 +5,23 @@ export const SKILL_UPLOAD_CAPABILITY = 'skills.upload.v1' as const
 export const SKILL_MANAGEMENT_CAPABILITY = 'skills.manage.v1' as const
 export const SKILL_BUNDLE_INSTALL_CAPABILITY = 'skills.install.bundle.v1' as const
 export const SKILL_INSTALL_PROGRESS_CAPABILITY = 'skills.install-progress.v1' as const
-/** Why: the install request schema is strict, so a host that predates the agent
- *  picker rejects the whole request rather than ignoring the new field. */
+/** Gate providers because strict older hosts reject the whole request instead of ignoring the new field. */
 export const SKILL_INSTALL_PROVIDERS_CAPABILITY = 'skills.install-providers.v1' as const
 
 export const SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE =
   'Update Orca on the selected machine to install shared skills.'
 
-/** Why capability-gated rather than Rule 1: `skills.delete` is a new RPC method,
- *  and an old host answers method-not-found, which surfaces as an unexplained
- *  failure instead of a disabled action with a reason. */
+/** Gate the new method so old hosts show a disabled action rather than a method-not-found failure. */
 export const SKILL_DELETE_CAPABILITY = 'skills.delete.v1' as const
 
 export const SKILL_DELETE_UPDATE_REQUIRED_MESSAGE =
   'Update Orca on the selected machine to delete skills.'
+
+/** skills.planBundledOrca/executeBundledOrca v1 freezes op/reason enums; unknown values render “Needs attention”. */
+export const BUNDLED_ORCA_SKILL_CAPABILITY = 'skills.bundled-orca.v1' as const
+
+export const BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE =
+  'Update Orca on the server to update its Orca skills.'
 
 export const SKILL_RUNTIME_CAPABILITIES = [
   SKILL_INSTALL_CAPABILITY,
@@ -29,5 +32,6 @@ export const SKILL_RUNTIME_CAPABILITIES = [
   SKILL_UPLOAD_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
-  SKILL_DELETE_CAPABILITY
+  SKILL_DELETE_CAPABILITY,
+  BUNDLED_ORCA_SKILL_CAPABILITY
 ] as const

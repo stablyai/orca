@@ -14,11 +14,7 @@ const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 /** `wslDistro` names the Git that listed the roots; undefined is host Git. */
 type ListedRoots = { roots: Set<string>; listingFailed: boolean; wslDistro: string | undefined }
 
-/**
- * Why the project runtime's distro: the catalog and removal list through it, and WSL Git records a
- * `C:\` worktree as `/mnt/c/...`, which host Git reading that metadata names as another path. A
- * runtime awaiting repair has no distro, so it keeps the host Git this listing always used.
- */
+/** List through project-runtime Git so WSL/host path spellings match catalog/removal; repair-pending runtimes retain host listing. */
 export async function listWorktreeRootsWithConcurrency(
   store: RootStore,
   repos: readonly Repo[]

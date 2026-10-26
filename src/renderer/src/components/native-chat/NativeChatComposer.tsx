@@ -36,14 +36,7 @@ export type {
   NativeChatComposerProps
 } from './native-chat-composer-types'
 
-/**
- * Rich native input for the chat view. Sends prompts into the running agent
- * through the same verified runtime path as typed input (KTD4), so the agent
- * cannot distinguish native input from keystrokes. Enter sends; Shift+Enter
- * inserts a newline; multi-line is bracketed-paste wrapped; Esc interrupts.
- * Slash-command and `@file` autocomplete are agent-aware; image paste persists a
- * temp file and injects the agent-appropriate path (or reports unsupported).
- */
+/** Send through the chat’s structured transport or verified PTY route, with agent-aware autocomplete and image handling. */
 const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
   function NativeChatComposerPane(
     {
@@ -75,10 +68,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     },
     ref
   ): React.JSX.Element {
-    // Scope key shared with image attachments so an unsent draft + its attached
-    // images survive both TUI/GUI toggles and PTY replacement on reconnect.
-    // Why: local, SSH, and runtime reconnects can replace or temporarily clear
-    // the PTY id. Pane (or conversation) identity is the stable owner of unsent input.
+    // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
     const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
       draftScopeKey,
@@ -127,6 +117,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       caret,
       recalledFromHistory: recall.active,
       disabled,
+      isComposing: imeEnterGesture.isComposing,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
@@ -146,7 +137,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       structuredWorktreeId: structuredTransport?.worktreeId
     })
 
-    // Resolve the live ptyId for this chat leaf; the id names its owning host.
     const resolveTarget = useCallback((): NativeChatResolvedTarget | null => {
       if (!targetPtyId) {
         return null
@@ -173,6 +163,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
     const sendHeld =
+      attachments.pastedTextSaving ||
       disabled ||
       structuredTransport?.sendOut === true ||
       imageBlock.holdsSend ||
@@ -199,8 +190,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      isComposing: imeEnterGesture.isComposing,
       caret,
-      draft,
       setDraft,
       setCaret,
       setActiveSuggestion,
@@ -222,6 +213,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+      pastesInline: () => goalMode.active,
+      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
       setNotice
     })
 
@@ -260,7 +253,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setCaret
     })
 
-    // What both terminal send paths share: where a command goes and what the composer resets.
     const ptyCommandRouting = {
       agent,
       disabled,
@@ -278,6 +270,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      draftScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,
@@ -375,7 +368,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isWorking={isWorking}
         isStopping={isStopping}
         afterStop={afterStop}
-        attachDisabled={disabled}
+        attachDisabled={
+          disabled ||
+          (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
+        }
         dictationDisabled={dictation.dictationDisabled}
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}

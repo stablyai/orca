@@ -1,34 +1,15 @@
-// The ids today's `session.tabs.*` payload gives its rows, and the way back from a row id an old
-// client sends to the model tab (and pane) it names. Rows keep today's ids so old clients' keys and
-// selections stay valid (wire rule 3).
+// Resolve compatible published row IDs back to model tabs/panes without changing older client keys/selections (wire rule 3).
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 import { layoutContainsLeafId } from '../terminal-pane-tree'
+import { AGENT_SESSION_ROW_PREFIX, TERMINAL_ROW_SEPARATOR } from './old-client-session-row-ids'
 
-const TERMINAL_ROW_SEPARATOR = '::'
-const AGENT_SESSION_ROW_PREFIX = 'agent-session:'
-
-/** One row per pane: `<terminal id>::<pane id>`, as the window and headless publishers write it. */
-export function terminalRowId(entityId: string, leafId: string): string {
-  return `${entityId}${TERMINAL_ROW_SEPARATOR}${leafId}`
-}
-
-/** The runtime publishes chat tabs under their session id, in rows and in group tab orders. */
-export function agentSessionRowId(sessionId: string): string {
-  return `${AGENT_SESSION_ROW_PREFIX}${sessionId}`
-}
-
-/** A tab's entry in a published group tab order. */
-export function publishedTabOrderId(tab: LayoutTab): string {
-  return tab.kind === 'agent-session' ? agentSessionRowId(tab.entityId) : tab.id
-}
+export { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
+export { projectSessionTabs } from './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 
-/**
- * What a row id names. `<terminal>::<pane>` names a pane, a bare terminal id its tab (the close
- * handler reads the intent the same way); browser workspace ids and chat row ids name their tab.
- */
+/** terminal::pane names a pane, bare terminal names its tab; browser-workspace and chat row IDs name tabs. */
 export function resolveSessionTabRow(
   workspace: WorkspaceLayout,
   rowId: string

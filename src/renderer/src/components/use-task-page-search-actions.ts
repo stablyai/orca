@@ -1,10 +1,10 @@
-import type { TaskPageGitHubQuietRefreshModel } from './use-task-page-github-quiet-refresh'
+import type { TaskPageGitHubQuietRefreshModel } from './task-page/github/use-task-page-github-quiet-refresh'
 import React, { useCallback, useEffect } from 'react'
 import type { PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import {
   scopeGitHubTaskSearch,
   getDefaultPresetForGitHubTaskKind
-} from '@/components/task-page-github-task-kind'
+} from '../../../shared/task-github-search'
 import { withQualifier } from '../../../shared/task-query'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import { toast } from 'sonner'
@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -36,7 +37,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
       let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
-      // Why: withQualifier round-trips through parseTaskQuery so each dropdown's patch preserves prior filters and free-text.
+      // Round-trip through parseTaskQuery so dropdown patches preserve other filters and free text.
       if ('author' in change) {
         next = withQualifier(next, 'author', change.author ?? null)
       }
@@ -122,7 +123,6 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   )
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
-      // Why: the default task view is a durable preference, so persist it instead of only changing page state.
       void updateSettings({
         defaultTaskViewPreset: presetId
       }).catch(() => {
@@ -218,13 +218,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       input.focus()
       input.select()
     }
-    window.addEventListener('keydown', onKeyDown, {
-      capture: true
-    })
-    return () =>
-      window.removeEventListener('keydown', onKeyDown, {
-        capture: true
-      })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
     dialogWorkItem,

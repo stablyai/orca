@@ -1,9 +1,4 @@
-// An ACP agent's subagents, read as evidence for the host's child records, plus each completed
-// subagent's reply as its own row.
-//
-// The host decides what every subagent is doing and writes its saved row; this only reads the
-// dialect's updates. It lives as long as the provider child: a subagent an earlier run spawned is
-// not known here.
+// Track evidence for this provider child; the host owns durable subagent records.
 
 import { createHash } from 'node:crypto'
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
@@ -14,21 +9,16 @@ import type {
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
 import type { AcpTimelineEvent } from './acp-timeline-event'
 
 type KnownSubagent = {
-  /** Where its reply row goes: the turn that spawned it. */
+  /** Pin replies to the spawning turn. */
   placement: ProviderTimelineJoin
-  /** The reply already written, so a repeated result writes nothing. */
   reply?: string
-  /** How it first ended: a reply belongs only to a run that completed. */
+  /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
 }
 
@@ -42,7 +32,6 @@ const OUTCOMES: Record<
   unverifiable: 'unknown'
 }
 
-/** How a subagent's run ended, by the state the dialect read; undefined while it runs. */
 export function acpSubagentOutcome(
   state: NativeChatSubagentState
 ): AgentChildWorkOutcome | undefined {
@@ -50,11 +39,10 @@ export function acpSubagentOutcome(
 }
 
 export class AcpSubagents {
-  /** Every subagent this provider child reported, so a later report is still known as one's. */
   private readonly known = new Map<string, KnownSubagent>()
   private readonly pending: AgentChildWorkEvidence[] = []
 
-  /** Known children include settled ones, so they cannot become background tasks. */
+  /** Include settled subagents so they cannot be reclassified as background tasks. */
   has(id: string): boolean {
     return this.known.has(id)
   }
@@ -64,7 +52,6 @@ export class AcpSubagents {
     this.pending.length = 0
   }
 
-  /** What the updates translated since the last drain said, for the host's records. */
   drainEvidence(): AgentChildWorkEvidence[] {
     return this.pending.splice(0)
   }
@@ -89,8 +76,7 @@ export class AcpSubagents {
       }
       this.known.set(update.id, subagent)
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
-      // A late report about an ended run is not a new run: the host drops the run's record at the
-      // next send, so a live edge then would bring it back as working.
+      // Late live reports must not resurrect an ended run after the host retires its record.
       if (ending || subagent.ended === undefined) {
         this.pending.push(subagentEvidence(update, at))
       }
@@ -105,16 +91,15 @@ export class AcpSubagents {
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): AcpTimelineEvent[] {
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-    if (subagent.reply === bounded) {
+    if (subagent.reply === text) {
       return []
     }
-    subagent.reply = bounded
+    subagent.reply = text
     return [
       {
         type: 'item.update',
         item: `subagent-result:${id}`,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: bounded }] },
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
         producer: { agentId: id, producerKind: 'agent' },
         join: subagent.placement
       }
@@ -122,7 +107,7 @@ export class AcpSubagents {
   }
 }
 
-/** A subagent runs on past the prompt turn that spawned it, and the provider names no run. */
+// Subagents outlive their spawning prompt and have no provider run identity.
 function subagentEvidence(update: AcpSubagentUpdate, observedAt: number): AgentChildWorkEvidence {
   const handle = subagentHandle(update.id)
   const outcome = update.state === undefined ? undefined : acpSubagentOutcome(update.state)
@@ -135,10 +120,9 @@ function subagentEvidence(update: AcpSubagentUpdate, observedAt: number): AgentC
         kind: 'agent',
         residency: 'background',
         state: update.state === 'idle' ? 'idle' : 'working',
-        // The strip and the saved row show the same label.
         ...(update.label !== undefined ? { description: boundSubagentLabel(update.label) } : {}),
         ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
-        // An id the handle had to digest cannot address the provider's cancellation.
+        // Hashed handles cannot address provider cancellation.
         stoppable: handle.id === update.id
       }
     }
@@ -160,7 +144,7 @@ function subagentHandle(id: string): AgentChildWorkEvidenceHandle {
   return {
     idKind: 'task_id',
     id: bounded,
-    // Invocation fences are smaller than handles; keep the full stable handle.
+    // Hash the smaller invocation fence while retaining the full handle.
     ...(bounded.length > AGENT_CHILD_WORK_ID_MAX_LENGTH
       ? { runId: `acp-child:${createHash('sha256').update(bounded).digest('hex')}` }
       : {})

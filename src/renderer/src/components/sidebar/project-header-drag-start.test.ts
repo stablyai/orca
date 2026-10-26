@@ -74,8 +74,6 @@ describe('createProjectHeaderDragSession', () => {
   it('arms a drag session when pressing the project icon svg (SVGElement target)', () => {
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
-    // The project icon renders as an <svg>; pressing it makes the event target
-    // an SVGElement, which must still arm the drag.
     const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     header.append(iconSvg)
     const scrollContainer = document.createElement('div')
@@ -101,8 +99,6 @@ describe('createProjectHeaderDragSession', () => {
   })
 
   it('does not arm a drag session when pressing an svg icon inside an action button', () => {
-    // Why: the row is still the drag handle for hit-testing; action targets must
-    // be filtered even though closest(drag-handle) would match the row.
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
     const actionButton = document.createElement('button')
@@ -133,8 +129,6 @@ describe('createProjectHeaderDragSession', () => {
   })
 
   it('does not arm a drag session when pressing the actions overlay even if the row is the drag handle', () => {
-    // Why: the row keeps data-repo-header-drag-handle so indent/padding can arm
-    // drag; actions must still be excluded via data-repo-header-actions.
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
     const dragSurface = document.createElement('div')

@@ -57,11 +57,9 @@ function ActionButton({
       variant={variant}
       size="sm"
       onClick={action.onClick}
-      // Why: hashing a 160 MB package takes seconds, and a native `disabled` would blur the button the
-      // user just pressed. The handlers self-guard, so keep focus and mark the state instead.
+      // Keep pressed actions focused during long package hashing; aria-disabled and handler guards replace native disabled.
       aria-disabled={action.isPending || action.disabled}
-      // Why: ui/button styles only `disabled:`, so aria-disabled needs its own dimming or a busy
-      // action looks fully live while it silently refuses.
+      // Explicitly dim aria-disabled because ui/button styles only native disabled.
       className="flex-1 gap-1.5 aria-disabled:cursor-default aria-disabled:opacity-50"
     >
       {action.isPending ? <Loader2 className="size-3.5 animate-spin" /> : leadingIcon}
@@ -86,7 +84,7 @@ export function UpdateErrorCardContent({
   footnote,
   onClose
 }: UpdateErrorCardModel & { onClose: () => void }) {
-  // Why: raw error starts collapsed so the card leads with the plain summary, not a stack dump.
+  // Lead with the summary; raw diagnostics stay collapsed.
   const [showDetails, setShowDetails] = useState(false)
   const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
@@ -155,7 +153,7 @@ export function UpdateErrorCardContent({
         </ul>
       )}
 
-      {/* Caret disclosure that reveals the raw error while the plain summary stays the lead. */}
+      {/* Keep raw diagnostics behind disclosure so the summary leads. */}
       {detail ? (
         <div className="flex flex-col gap-2">
           <Button

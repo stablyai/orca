@@ -2,8 +2,6 @@ import { wslAwareSpawn } from '../git/runner'
 import { bundledRipgrepCommand, bundledRipgrepWslSpawnOptions } from './bundled-ripgrep-path'
 import { RIPGREP_MISSING_CWD_EXIT_CODE } from '../../shared/ripgrep-process-availability'
 
-// Why derived rather than imported from node:child_process: a direct import would land this file
-// on the child_process ratchet's allowlist, which only ever shrinks.
 type WslAwareSpawnOptions = Parameters<typeof wslAwareSpawn>[2]
 
 export type BundledRipgrepSpawnOptions = Omit<
@@ -17,11 +15,7 @@ export type BundledRipgrepSpawnOptions = Omit<
   wslDistroForOutput?: string
 }
 
-/**
- * The single way Orca spawns ripgrep: its own binary, routed into WSL when the workspace lives
- * there. Why one entry point: a bare `rg` must never reach spawn, because Windows resolves a bare
- * name in the spawn cwd — the repo — before PATH.
- */
+/** Centralize bundled rg spawning; bare names let Windows execute binaries from the workspace before PATH. */
 export function spawnBundledRipgrep(
   args: string[],
   options: BundledRipgrepSpawnOptions
@@ -31,8 +25,7 @@ export function spawnBundledRipgrep(
   return wslAwareSpawn(command, args, {
     ...spawnOptions,
     ...(wslDistro ? { wslDistro } : {}),
-    // Why only when routed into WSL: a native spawn reports an unusable cwd as a spawn error,
-    // but inside `bash -c` a failed `cd` is just exit 1 -- the same code rg uses for "no matches".
+    // Shell cd failure is exit 1 like rg no-match; WSL needs a distinct cwd verdict.
     ...(wslDistro || wslDistroForOutput
       ? { cwdFailureExitCode: RIPGREP_MISSING_CWD_EXIT_CODE }
       : {}),

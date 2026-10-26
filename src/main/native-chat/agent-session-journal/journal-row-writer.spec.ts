@@ -1,9 +1,3 @@
-// The write path's transaction.
-//
-// A transaction either commits or does not, so the old "a post-append failure
-// makes durability ambiguous" latch has nothing left to latch on: the case that
-// used to assert the latch asserts the rollback instead.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,9 +48,7 @@ export function registerJournalRowWriterTests(): void {
     afterEach(async () => {
       try {
         database.close()
-      } catch {
-        // Already closed by the case.
-      }
+      } catch {}
       await rm(root, { recursive: true, force: true })
     })
 
@@ -82,7 +74,6 @@ export function registerJournalRowWriterTests(): void {
 
     it('rolls the transaction back and sets no latch when the insert fails', async () => {
       const { writer, committedRows } = writerHarness()
-      // A row already occupies sequence 1, so the insert violates the primary key.
       insertTestJournalRow(database.db, SESSION_ID, row(1, 1))
 
       await expect(writer.enqueue(row)).rejects.toThrow()
@@ -90,7 +81,7 @@ export function registerJournalRowWriterTests(): void {
       expect(readOnly).toBe(false)
       expect(committedRows).toHaveLength(0)
       expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
-      // Still writable: there is no ambiguity for a latch to protect against.
+      // Rolled-back inserts leave the writer usable.
       await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
         kind: 'item'
       })
@@ -98,7 +89,6 @@ export function registerJournalRowWriterTests(): void {
 
     it('writes several rows as one: a failure on the last leaves none', async () => {
       const { writer, committedRows } = writerHarness()
-      // Sequence 2 is taken, so the second of the two rows violates the primary key.
       insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
 
       await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()

@@ -39,7 +39,7 @@ export function TaskPageGitLabItemList({
           </div>
         ) : null}
         {gitlabLoading && gitlabItems.length === 0 ? (
-          // Why: shimmer rows fill the viewport so the card never flashes empty and the table doesn't jump when real rows land.
+          // Fill the viewport with shimmer rows to prevent a loading height jump.
           <div className="divide-y divide-border/50">
             {Array.from({
               length: 12
@@ -71,7 +71,7 @@ export function TaskPageGitLabItemList({
             <div
               role="button"
               tabIndex={0}
-              key={`${item.repoId}:${item.id}`}
+              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               onClick={() => {
                 useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                 openGitLabDetailPage(item)

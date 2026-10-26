@@ -1,11 +1,4 @@
-/**
- * The managed tunnel's second transport, for hosts whose sshd refuses port forwarding: the same
- * local listener the forward gives, but each accepted socket rides its own exec channel running
- * the stdio bridge. Nothing above the tunnel can tell the two apart.
- *
- * Disconnects match the forward: a lost channel drops its socket and the listener stays, so the
- * tunnel's own reconnect logic decides, and a lost transport never reads as a dead server.
- */
+// Lost channels drop their sockets but keep the listener; tunnel reconnect logic owns recovery.
 import { OrcadStdioBridgeUnavailableError } from '../../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
@@ -41,8 +34,6 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
     private readonly dependencies: OrcadStdioBridgeDependencies = ORCAD_STDIO_BRIDGE_DEPENDENCIES
   ) {}
 
-  // System SSH runs each bridge socket as an exec over its ControlMaster, or as its own login
-  // when multiplexing is off; the transport only picks it once forwarding was refused.
   canHandle(conn: SshConnection): boolean {
     return conn.getClient() !== null || conn.usesSystemSshTransport()
   }
@@ -52,14 +43,13 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
   }
 }
 
-/** Transport-agnostic: any orcad host whose exec can run the bridge (SSH, a WSL distro). */
 export async function startOrcadStdioBridge(
   host: OrcadHostTransport,
   options: PortForwardStartOptions,
   deps: OrcadStdioBridgeDependencies
 ): Promise<StartedPortForward> {
   let bridge: Promise<OrcadStdioBridge> | null = null
-  // Memoized once it resolves; a failed resolve is retried by the next socket.
+  // Retry failed bridge resolution on the next socket.
   const resolveBridge = (): Promise<OrcadStdioBridge> => {
     bridge ??= deps.resolveBridge(host, options.remotePort).catch((error: unknown) => {
       bridge = null
@@ -73,7 +63,7 @@ export async function startOrcadStdioBridge(
     if (error instanceof OrcadStdioBridgeUnavailableError) {
       throw error
     }
-    // A slow or dropped check is loss of contact; sockets resolve the bridge again.
+    // Lost contact does not prove bridge absence; let new sockets resolve it again.
     console.warn('[ssh] Orca stdio bridge check was unverifiable:', error)
   }
   return listenOrcadStdioBridge(options, async () => {

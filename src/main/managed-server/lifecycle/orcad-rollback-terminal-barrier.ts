@@ -1,11 +1,4 @@
-/**
- * The rollback's terminal barrier. The census a rollback plans on is taken while orcad still
- * admits work, so it cannot vouch for the moment the older snapshot replaces the state. The
- * incumbent is stopped through its managed stop with idle-daemon retirement instead: orcad closes
- * terminal admission on every daemon generation, counts live sessions under that fence, and
- * retires the daemon only when none exist. Only `retired` proves no terminal ran then or could
- * start after; anything else keeps the incumbent's state and puts it back.
- */
+// Pre-stop census can go stale; only fenced idle-daemon retirement proves snapshot replacement safe.
 import {
   readRemoteOrcadManagedStopTarget,
   type OrcadManagedStopTarget
@@ -14,16 +7,14 @@ import { settleOrcadDecommissionStop } from './orcad-decommission-stop'
 import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import type { OrcadManagedStopContext } from '../../../shared/orcad-stop-request'
 
-export type OrcadRollbackBarrier =
+type OrcadRollbackBarrier =
   | { state: 'retired' }
-  /** orcad withdrew the stop and keeps serving: nothing changed. */
   | { state: 'withdrawn'; reason: string }
-  /** orcad may still be stopping, or the host could not say: the fence must stay. */
+  /** Stop underway or unconfirmed; retain the fence. */
   | { state: 'unsettled'; reason: string }
-  /** orcad exited, but live or unproven work remains: the incumbent must be restarted. */
+  /** Exit without proof of idle terminals requires restarting the incumbent. */
   | { state: 'unproven'; reason: string }
 
-/** Names the incumbent instance before any mutation; a build without managed stop is refused. */
 export async function readOrcadRollbackBarrierTarget(
   options: OrcadSlotOptions,
   version: string
@@ -65,17 +56,15 @@ export async function stopIncumbentBehindTerminalBarrier(
   }
 }
 
-export type OrcadRollbackBarrierRefusal = {
+type OrcadRollbackBarrierRefusal = {
   outcome: 'refused' | 'failed'
   code: string
   reason: string
-  /** orcad may still be stopping, so the fence stays. */
   retainFence: boolean
-  /** orcad exited without proving it ran no terminal, so its own state goes back up. */
   restartIncumbent: boolean
 }
 
-/** Null only for a retired daemon, the one answer that lets the older snapshot replace state. */
+/** Only retired daemons permit replacing current state with an older snapshot. */
 export function rollbackBarrierRefusal(
   barrier: OrcadRollbackBarrier
 ): OrcadRollbackBarrierRefusal | null {

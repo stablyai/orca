@@ -3,7 +3,6 @@ import { formatCurrencyAmount } from './currency-format'
 
 describe('formatCurrencyAmount', () => {
   it('formats USD amounts with the dollar symbol', () => {
-    // Force a stable locale-independent expectation by asserting substrings.
     const formatted = formatCurrencyAmount(12.4, 'USD')
     expect(formatted).toMatch(/12[.,]40/)
     expect(formatted).toContain('$')

@@ -8,7 +8,7 @@ import {
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -97,9 +97,7 @@ export function getActiveAgentNoteTarget(
   if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }
-  // Why: freshly opened agents can be idle before their first hook event. Use
-  // renderer title/launch hints only to show the option; runtime still verifies
-  // the focused terminal is an idle agent before sending Enter.
+  // Idle-before-first-hook hints only expose the option; runtime still verifies the focused agent is idle before Enter.
   if (!hasFocusedPaneAgentHint(state, worktreeId, noteTarget)) {
     return null
   }
@@ -119,10 +117,9 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  // Route by the worktree's owner host so the probe targets the host that runs
-  // this worktree's agent terminal, not the focused runtime.
+  // Probe the worktree’s owner host rather than the focused runtime.
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
@@ -195,8 +192,7 @@ function getActivePanePtyId(
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
   if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
     const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
-    // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
-    // PTY source of truth for whether submitting with Enter is currently safe.
+    // Layout maps can survive reconnect; only live ptyIdsByTabId bindings make Enter safe.
     return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
   }
   return livePtyIds[0] ?? null

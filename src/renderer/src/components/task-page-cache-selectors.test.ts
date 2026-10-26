@@ -11,15 +11,17 @@ import {
   selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
-  findTaskPageLinearDrawerIssue,
   reconcileTaskPageItemsAfterLandingRefresh,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
   selectTaskPageWorkItemsCacheEntries,
   shouldResetTaskPagePaginationAfterLandingRefresh,
   shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
+import {
+  findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh
+} from './task-page/linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
@@ -96,6 +98,7 @@ describe('task page cache selectors', () => {
       {
         repoId: 'repo-1',
         repoPath: '/repo/one',
+        hostId: 'local',
         sourceKey: 'repo-1::local',
         sources: null,
         error: null
@@ -233,6 +236,48 @@ describe('task page cache selectors', () => {
         clickedIssue
       )
     ).toBe(origin)
+  })
+
+  it('opens the copy the clicked twin host returned, not the other host cached copy', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const cache = {
+      local: entry<GitHubWorkItem[]>([local]),
+      remote: entry<GitHubWorkItem[]>([remote])
+    }
+
+    expect(
+      findTaskPageDialogWorkItem(cache, {
+        id: remote.id,
+        repoId: remote.repoId,
+        url: remote.url,
+        repoHostId: remote.repoHostId
+      })
+    ).toBe(remote)
+  })
+
+  it('keeps each twin host row on its own copy when the cache syncs the table', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const pages = [[local, { ...remote }]]
+
+    const nextPages = reconcileTaskPagePagesWithWorkItemsCache(pages, [
+      entry<GitHubWorkItem[]>([local]),
+      entry<GitHubWorkItem[]>([remote])
+    ])
+
+    expect(nextPages[0]?.map((item) => item.repoHostId)).toEqual(['local', 'ssh:builder'])
+    expect(nextPages[0]?.[1]).toBe(remote)
+  })
+
+  it('names each twin row host in source state, even when the twins share a path', () => {
+    const local = { id: 'repo-1', path: '/same/path' }
+    const ssh = { id: 'repo-1', path: '/same/path', connectionId: 'devbox' }
+
+    expect(buildTaskPageRepoSourceState([local, ssh], []).map((state) => state.hostId)).toEqual([
+      'local',
+      'ssh:devbox'
+    ])
   })
 
   it('reconciles paged table rows with patched work-item cache entries', () => {
@@ -396,9 +441,9 @@ describe('task page cache selectors', () => {
       all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
     }
 
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, null)).toBeNull()
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearDrawerIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
-    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
+    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, null)).toBeNull()
+    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
+    expect(findTaskPageLinearIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

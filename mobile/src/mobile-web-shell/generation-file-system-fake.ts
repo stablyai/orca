@@ -1,14 +1,6 @@
 import type { GenerationFileSystem } from './generation-store-file-system'
 
-/**
- * The generation store's disk, in memory: the port it is written against, plus the faults a cache
- * really takes.
- *
- * Shared rather than copied because more than one suite drives the real store against it, and two
- * in-memory trees answering the same port differently is how a passing suite stops being evidence
- * about the adapter. The write ordering, the interruption windows and the move semantics are the
- * adapter's own; each is commented where it differs from the obvious thing.
- */
+// Share the adapter’s move/failure semantics across store suites so their in-memory disks cannot disagree.
 export const FAKE_GENERATION_ROOT = 'file:///cache/mobile-web'
 
 type FakeNode = { kind: 'directory' } | { kind: 'file'; bytes: Uint8Array }
@@ -108,6 +100,23 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     },
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
+    },
+    async fileSize(target) {
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? node.bytes.byteLength : null
+    },
+    async copyFile(fromUri, toUri) {
+      if (failReadAt !== null && fromUri === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
+      }
+      const node = nodes.get(fromUri)
+      if (node?.kind !== 'file') {
+        throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      if (nodes.has(toUri)) {
+        throw new Error(`fake filesystem refuses to copy onto ${toUri}`)
+      }
+      write(toUri, node.bytes)
     },
     async delete(target) {
       for (const key of Array.from(nodes.keys())) {

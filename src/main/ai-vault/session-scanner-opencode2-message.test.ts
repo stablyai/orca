@@ -1,3 +1,4 @@
+import { transcriptMessagesFromDecodedMessage } from './session-transcript-message-content'
 import { describe, expect, it } from 'vitest'
 import {
   decodeOpenCode2Message,
@@ -21,7 +22,9 @@ describe('OpenCode 2 message decoding', () => {
         }
       ]
     })
-    const messages = decodeOpenCode2Message(data, 'assistant', null)
+    const messages = transcriptMessagesFromDecodedMessage(
+      decodeOpenCode2Message(data, 'assistant', null)
+    )
     expect(messages).toEqual(
       expect.arrayContaining([
         { role: 'assistant', text: 'Checking the result\nFinished', timestamp: null },

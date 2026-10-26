@@ -224,3 +224,18 @@ describe('MobileMarkdown tone', () => {
     expect(styleOf(renderer!.root, 'Cell').fontSize).toBe(24)
   })
 })
+
+it('renders document images through the image renderer, including reference syntax', () => {
+  const renderImage = vi.fn((href: string, alt: string) => createElement('View', { href, alt }))
+  act(() => {
+    renderer = create(
+      createElement(MobileMarkdown, {
+        content:
+          '![Architecture](assets/diagram.png)\n\n![Reference][diagram]\n\n[diagram]: assets/other.png',
+        renderImage
+      })
+    )
+  })
+  expect(renderImage).toHaveBeenCalledWith('assets/diagram.png', 'Architecture')
+  expect(renderImage).toHaveBeenCalledWith('assets/other.png', 'Reference')
+})

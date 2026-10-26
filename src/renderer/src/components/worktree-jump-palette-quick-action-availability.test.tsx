@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => RUNTIME_ID
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => RUNTIME_ID
 }))
 vi.mock('@/components/sidebar/delete-worktree-flow', () => ({ runWorktreeDelete: vi.fn() }))
 
@@ -23,8 +23,7 @@ function runtimeStatuses(capabilities: string[]): Map<string, unknown> {
   return new Map([[RUNTIME_ID, { status: { capabilities, hostPlatform: 'darwin' } }]])
 }
 
-// Every input except runtimeStatusByEnvironmentId keeps a stable identity across rerenders,
-// so a recomputation can only come from the runtime status dependency itself.
+// Hold every input except runtime status stable so only that dependency can trigger recomputation.
 function buildStableProps(query: string) {
   return {
     openModal: vi.fn(),

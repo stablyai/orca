@@ -42,7 +42,6 @@ vi.mock('./github-api-repository', () => ({
   getOriginGitHubApiRepository: vi.fn(),
   githubHostExecOptions: (repository?: { host?: string } | null) =>
     repository?.host ? { host: repository.host } : {},
-  // Why: getWorkItemDetails awaits resolveGitHubRepoExecution and reads .ownerRepo.
   resolveGitHubRepoExecution: vi.fn(
     async (
       _repoPath: string,

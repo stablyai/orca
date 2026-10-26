@@ -55,7 +55,8 @@ export function buildRuntimeTerminalOrphanSession(args: {
         worktreeId: worktreeId,
         title,
         defaultTitle: title,
-        customTitle: null,
+        // An orphan's rename lives on its PTY until a tab owns it.
+        customTitle: pty.manualTitle ?? null,
         color: null,
         sortOrder: tabsById.size,
         createdAt: Date.now()
@@ -202,10 +203,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
   )
 }
 
-/**
- * The client's topology names only the panes it adopts; the tab's other panes keep their place
- * beside them, so recovering one split never drops a healthy sibling.
- */
+/** Adopt only named panes while retaining healthy siblings; one split recovery must not drop the rest of its tab. */
 function mergeAdoptedTopologyRoot(
   existingRoot: TerminalPaneLayoutNode | null,
   adoptedRoot: TerminalPaneLayoutNode

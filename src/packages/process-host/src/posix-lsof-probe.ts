@@ -20,19 +20,14 @@ function groupExists(pid) {
   try { process.kill(-pid, 0); return true; }
   catch (error) { return error.code !== 'ESRCH'; }
 }
-// An empty lsof answer means "nobody holds it" only if lsof could see. Running as a uid that
-// does not own the holder, lsof exits 1 with no stdout and no stderr -- byte-identical to a
-// genuinely stale socket. /proc/net/unix is world-readable and lists every bound unix socket
-// regardless of owner, so an entry for this path alongside no pid proves lsof was blind.
-// Absent off Linux, where this returns false and the marker stays whatever it already was.
+// lsof cannot distinguish other-UID holders from stale sockets; corroborate with /proc/net/unix.
 function pathStillBound(target) {
   var text;
   try { text = require('fs').readFileSync('/proc/net/unix', 'utf8'); }
   catch (error) { return false; }
   var lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
-    // Num: RefCount Protocol Flags Type St Inode Path -- the path is the line remainder, so
-    // one containing spaces survives intact.
+    // The path is the line remainder and may contain spaces.
     var match = lines[i].match(/^\S+:(?:\s+\S+){5}\s+\d+ (.*)$/);
     if (match && match[1] === target) return true;
   }
@@ -54,7 +49,6 @@ function finish(unconfirmed) {
     unavailable = true;
     return false;
   });
-  // Only an otherwise-clean empty answer needs corroborating; a reported pid stands on its own.
   if (!unconfirmed && !unavailable && !stderrSeen && !pids.length && pathStillBound(process.argv[1])) {
     unavailable = true;
   }

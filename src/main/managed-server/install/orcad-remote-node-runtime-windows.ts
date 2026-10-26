@@ -1,14 +1,8 @@
-/**
- * The Windows half of the pinned-Node runtime store: `runtimes\node-<sha>\node.exe` with a
- * `.verified` marker, beside the relay version directories (design D2, D5 "Windows").
- *
- * Each phase is ONE PowerShell invocation through `powerShellCommand`, which adds no new
- * `-EncodedCommand` site, spells no `-ExecutionPolicy` and compiles nothing (`Add-Type`); see
- * docs/reference/windows-edr-posture.md. node.exe keeps upstream's name and layout.
- */
+// Keep each phase to one PowerShell invocation; see docs/reference/windows-edr-posture.md.
 import {
   pinnedNodeRuntimeAsset,
   NODE_RUNTIME_PIN,
+  NODE_RUNTIME_WINDOWS_MINIMUM_BUILD,
   nodeRuntimeExecutablePath
 } from '../../../shared/node-runtime-pin'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
@@ -16,10 +10,12 @@ import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../../shared/orcad-art
 import {
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
   REMOTE_NODE_RUNTIME_MISSING,
+  REMOTE_NODE_RUNTIME_NO_EXTRACTOR,
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_SECURITY_MODIFIED,
   REMOTE_NODE_RUNTIME_SELFTEST_FAILED,
-  REMOTE_NODE_RUNTIME_VERIFIED_MARKER
+  REMOTE_NODE_RUNTIME_VERIFIED_MARKER,
+  REMOTE_WINDOWS_BUILD_UNSUPPORTED
 } from '../../ssh/orcad-remote-node-runtime-report'
 import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
@@ -30,11 +26,10 @@ function windowsPath(...segments: string[]): string {
     .join('/')
 }
 
-// Why no `$ErrorActionPreference = 'Stop'`: under Windows PowerShell 5.1 it turns any stderr
-// line from a native command (tar.exe, node.exe) into a terminating error.
+// PowerShell 5.1 turns native stderr into terminating errors with ErrorActionPreference=Stop.
 function prelude(): string[] {
   return [
-    // Why: PS 5.1 progress records slow Expand-Archive badly and leak CLIXML into stdout.
+    // Suppress slow progress records and CLIXML leakage into stdout.
     "$ProgressPreference = 'SilentlyContinue'",
     'function Get-OrcaSha256([string]$p) { if (Test-Path -LiteralPath $p -PathType Leaf) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() } else { "" } }'
   ]
@@ -48,10 +43,20 @@ function runtimeVariables(runtimeDir: string): string[] {
   ]
 }
 
-/**
- * Ready only when node.exe hashes to the pin under its marker. When it is not, and a stage is
- * named, the same invocation creates the upload stage so the install costs no extra spawn.
- */
+// Git/MSYS tar.exe may precede System32 on PATH and cannot read ZIPs.
+const SYSTEM_TAR = "$tar = Join-Path $env:SystemRoot 'System32\\tar.exe'"
+
+// Read-only; an unreadable build proves nothing, so only a known old one refuses.
+function hostPreflight(): string[] {
+  return [
+    "$build = 0; try { $build = [int](Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -ErrorAction Stop).CurrentBuildNumber } catch { }",
+    `if (($build -gt 0) -and ($build -lt ${NODE_RUNTIME_WINDOWS_MINIMUM_BUILD})) { Write-Output (${powerShellLiteral(`${REMOTE_WINDOWS_BUILD_UNSUPPORTED} `)} + $build); exit 0 }`,
+    SYSTEM_TAR,
+    `if (-not (Test-Path -LiteralPath $tar -PathType Leaf) -and -not (Get-Command Expand-Archive -ErrorAction SilentlyContinue)) { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_NO_EXTRACTOR)}; exit 0 }`
+  ]
+}
+
+/** Create an upload stage during a failed probe to avoid another PowerShell spawn; first refuse hosts that can't unpack or run it. */
 export function windowsNodeRuntimeProbeCommand(
   runtimeDir: string,
   target: NodeRuntimeTarget,
@@ -63,12 +68,12 @@ export function windowsNodeRuntimeProbeCommand(
       ...runtimeVariables(runtimeDir),
       `if ((Get-OrcaSha256 $exe) -eq ${powerShellLiteral(pinnedNodeRuntimeAsset(target).executableSha256)}) {`,
       `if (Test-Path -LiteralPath $verified -PathType Leaf) { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_READY)}; exit 0 }`,
-      // Why adopt: earlier Windows vault readers left the pinned node.exe here with no marker.
-      // Running it is the same check promotion makes before it writes one.
+      // Adopt markerless runtimes left by older clients after the same version check used in promotion.
       `try { $adoptOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join ''; if (($LASTEXITCODE -eq 0) -and ($adoptOut.Trim() -eq ${powerShellLiteral(`v${NODE_RUNTIME_PIN.version}`)})) { [IO.File]::WriteAllText($verified, ''); Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_READY)}; exit 0 } } catch { }`,
       '}',
       ...(stageDir
         ? [
+            ...hostPreflight(),
             `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(stageDir)} -ErrorAction Stop`
           ]
         : []),
@@ -77,8 +82,7 @@ export function windowsNodeRuntimeProbeCommand(
   )
 }
 
-/** Cheap warm-path check: a published runtime has its marker and node.exe; no re-hash. */
-/** `runs`: also run node.exe, reporting a refusal as promotion does (see the POSIX twin). */
+/** Warm checks skip hashing; runs also detects execution-policy changes. */
 export function windowsNodeRuntimePresentCommand(runtimeDir: string, runs = false): string {
   const ready = runs
     ? [
@@ -101,11 +105,7 @@ export function windowsNodeRuntimePresentCommand(runtimeDir: string, runs = fals
   )
 }
 
-/**
- * Verify the uploaded zip, extract node.exe (tar.exe, else Expand-Archive), verify it, run it,
- * then publish the runtime directory with one directory rename. Bytes that were verified and
- * then change or vanish are reported as security software, never retried as a transfer fault.
- */
+/** Changed verified bytes indicate security-software interference, not a retryable transfer fault. */
 export function windowsNodeRuntimePromoteCommand(args: {
   stageDir: string
   archive: string
@@ -125,14 +125,13 @@ export function windowsNodeRuntimePromoteCommand(args: {
       `$extracted = ${powerShellLiteral(windowsPath(args.stageDir, ...member.split('/')))}`,
       `$candidate = ${powerShellLiteral(windowsPath(args.stageDir, 'promote'))}`,
       `$pin = ${powerShellLiteral(asset.executableSha256)}`,
-      // Why a function: `return` leaves it and the stage cleanup below still runs, which `exit` would skip.
+      // return leaves the function and reaches stage cleanup; exit would skip it.
       '$script:code = 0',
       'function Invoke-OrcaPromote {',
       `$archiveHash = Get-OrcaSha256 $archive`,
       `if ($archiveHash -eq '') { Write-Output 'ORCA_NODE_RUNTIME_ARCHIVE_MISSING'; $script:code = 1; return }`,
       `if ($archiveHash -ne ${powerShellLiteral(asset.archiveSha256)}) { ${modified('the uploaded archive changed after it was written')}; return }`,
-      // Why the System32 path: a Git or MSYS tar.exe earlier on PATH cannot read a zip.
-      "$tar = Join-Path $env:SystemRoot 'System32\\tar.exe'",
+      SYSTEM_TAR,
       '$extractedBy = $null',
       'if (Test-Path -LiteralPath $tar -PathType Leaf) {',
       `$null = & $tar -xf $archive -C $stage ${powerShellLiteral(member)} 2>&1`,
@@ -143,7 +142,7 @@ export function windowsNodeRuntimePromoteCommand(args: {
       '}',
       `if (-not (Test-Path -LiteralPath $extracted -PathType Leaf)) { ${modified('node.exe vanished after extraction')}; return }`,
       `if ((Get-OrcaSha256 $extracted) -ne $pin) { ${modified('node.exe changed after extraction')}; return }`,
-      // Why run it: executing is the only reliable check for application control and AV blocks.
+      // Hashes alone cannot detect application-control or antivirus execution blocks.
       "$runOut = ''; $runStatus = $null",
       'try { $runOut = ((& $extracted --version 2>&1) | ForEach-Object { "$_" }) -join "`n"; $runStatus = $LASTEXITCODE } catch { $runStatus = -1; $runOut = $_.Exception.Message }',
       `if (($runStatus -ne 0) -or ($runOut.Trim() -ne ${powerShellLiteral(`v${NODE_RUNTIME_PIN.version}`)})) {`,
@@ -158,8 +157,8 @@ export function windowsNodeRuntimePromoteCommand(args: {
       `[IO.File]::WriteAllText((Join-Path $candidate ${powerShellLiteral(REMOTE_NODE_RUNTIME_VERIFIED_MARKER)}), '')`,
       '$null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $runtimeDir) -ErrorAction Stop',
       'if ((Test-Path -LiteralPath $runtimeDir) -and ((Get-OrcaSha256 $exe) -ne $pin)) { Remove-Item -LiteralPath $runtimeDir -Recurse -Force -ErrorAction Stop }',
-      // Why Directory.Move: it refuses an existing target, where Move-Item would nest inside it.
-      // Why retry: an on-access scan of the new node.exe can briefly hold the directory.
+      // Directory.Move refuses an existing target; Move-Item would nest inside it.
+      // Retry while on-access scanning briefly holds the directory.
       'for ($attempt = 1; ($attempt -le 5) -and -not (Test-Path -LiteralPath $runtimeDir); $attempt++) { try { [IO.Directory]::Move($candidate, $runtimeDir) } catch { Start-Sleep -Milliseconds 400 } }',
       "if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'The pinned Node runtime directory could not be published' }",
       "if (-not (Test-Path -LiteralPath $verified -PathType Leaf)) { [IO.File]::WriteAllText($verified, '') }",

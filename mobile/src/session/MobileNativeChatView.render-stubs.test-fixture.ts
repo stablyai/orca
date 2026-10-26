@@ -3,34 +3,29 @@ import { vi } from 'vitest'
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
-// The page list's live DOM geometry.
-const pageScroller = vi.hoisted(() => {
-  const listeners = new Map<string, Set<(event?: unknown) => void>>()
-  return {
-    scrollTop: 0,
-    scrollHeight: 0,
-    clientHeight: 500,
-    clientWidth: 320,
-    style: { overflowAnchor: '' },
-    getInnerViewNode: () => ({}),
-    getBoundingClientRect: () => ({ top: 0, bottom: 500 }),
-    addEventListener: (type: string, listener: (event?: unknown) => void) => {
-      listeners.set(type, (listeners.get(type) ?? new Set()).add(listener))
-    },
-    removeEventListener: (type: string, listener: (event?: unknown) => void) => {
-      listeners.get(type)?.delete(listener)
-    },
-    // The browser's scroll event at the scroller's current position.
-    scroll: () => listeners.get('scroll')?.forEach((listener) => listener()),
-    // The reader's hand on the scroller, e.g. a wheel turn.
-    input: (type: string) => listeners.get(type)?.forEach((listener) => listener())
-  }
-})
+const pageScroller = vi.hoisted(() => ({
+  scrollTop: 0,
+  scrollHeight: 0,
+  clientHeight: 500,
+  getInnerViewNode: () => ({}),
+  getBoundingClientRect: () => ({ top: 0, bottom: 500 }),
+  getAttribute: () => null,
+  querySelectorAll: () => [],
+  addEventListener: () => {},
+  removeEventListener: () => {}
+}))
 
 export async function reactNativeStub() {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
+    Animated: {
+      Value: class {
+        constructor(readonly value: number) {}
+      },
+      timing: () => ({ start: () => {}, stop: () => {} }),
+      View: 'Animated.View'
+    },
     FlatList: React.forwardRef((props, ref) => {
       const handle = { scrollToEnd, scrollToOffset, getScrollableNode: () => pageScroller }
       React.useImperativeHandle(ref, () => handle, [])
@@ -38,13 +33,13 @@ export async function reactNativeStub() {
     }),
     Platform: platform,
     Pressable: 'Pressable',
-    // The page's list scrolls through it.
     ScrollView: React.forwardRef((props, ref) => {
       const handle = {
         scrollTo: ({ y, animated }: { y: number; animated: boolean }) =>
           scrollToOffset({ animated, offset: y }),
         scrollToEnd,
-        getScrollableNode: () => pageScroller
+        getScrollableNode: () => pageScroller,
+        getInnerViewNode: () => pageScroller.getInnerViewNode()
       }
       React.useImperativeHandle(ref, () => handle, [])
       return React.createElement('ScrollView', props)
@@ -81,7 +76,6 @@ export async function composerStub() {
       React.createElement(
         'Composer',
         { ...props, accessibilityLabel: 'Send message', onPress: () => props.onSend('hi') },
-        // The real composer draws Stop in Send's slot while its draft is empty, as here.
         props.stop ? React.createElement(MobileNativeChatStopButton, props.stop) : null
       )
   }

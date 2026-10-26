@@ -98,8 +98,7 @@ describe('orchestration skill agent coverage', () => {
   })
 
   it('marks Claude from an enabled plugin install', () => {
-    // Why: Claude Code loads skills from enabled plugins, so an owned plugin root
-    // counts the same as the Codex plugin cache does.
+    // Claude Code’s enabled plugin roots count as installed coverage, like Codex’s plugin cache.
     expect(
       agentHasOrchestrationSkill(
         'claude',
@@ -257,8 +256,7 @@ describe('orchestration skill agent coverage', () => {
   })
 
   it('keeps the owning home root when a repo root duplicates its path', () => {
-    // Why: a workspace whose cwd is the home dir scans ~/.claude/skills as both a
-    // home and a repo root, and the repo duplicate sorts last by label.
+    // Home cwd discovers the same skills path as home and repo; repo label order must not shadow home ownership.
     const skills = [
       skill({
         providers: ['claude'],

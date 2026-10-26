@@ -1,12 +1,3 @@
-/*
- * Coverage for the FORKING console-attachment reader.
- *
- * These assertions moved here with the code when the job-object reader took
- * over the polling path (#16419). They cover the module that caused #10857 --
- * the bounded timeout, the single kill, spawn errors, malformed messages and
- * helper-pid removal -- so none of it is left untested just because the file
- * it used to live in now answers a different question.
- */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'

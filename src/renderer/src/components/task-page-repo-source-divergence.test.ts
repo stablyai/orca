@@ -8,6 +8,7 @@ function state(
   return {
     repoId: 'repo-1',
     repoPath: '/tmp/repo',
+    hostId: 'local',
     sourceKey: 'repo-1',
     sources: {
       issues: null,

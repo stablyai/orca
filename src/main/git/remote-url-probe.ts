@@ -4,16 +4,7 @@ import type { GitAdmissionTier } from './command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
-/**
- * The `git remote get-url` probe every forge integration runs to decide whether
- * a repo is theirs (P1-D).
- *
- * Why: it is a local config read, so the only way it outlasts this bound is a
- * wedged host — a dead network mount or stalled WSL interop. Unbounded, the call
- * never returns and every caller above it hangs with it. Passing a timeout is
- * also what arms the runner's kill path; Node's own waits forever on a child
- * that ignores signals.
- */
+// Bound config probes so stalled mounts or WSL cannot hold every forge lookup indefinitely.
 export const REMOTE_URL_PROBE_TIMEOUT_MS = 30_000
 
 export type RemoteUrlProbeContext = {
@@ -48,11 +39,7 @@ const TRANSIENT_PROBE_PATTERNS = [
   /connection (?:dropped|closed|refused|reset)/i
 ]
 
-/**
- * A probe that was killed on its deadline, or died with its transport, says
- * nothing about the remote. Callers must neither cache it as an answer nor
- * report it as "no review": it is an unavailable result, not a negative one.
- */
+/** Timeout or transport failure leaves remote state unknown; never cache it as absence. */
 export function isTransientGitProbeError(error: unknown): boolean {
   // Why: an abort — this probe's deadline, or a caller cancelling — carries no
   // message a pattern could match, but it is the emptiest answer of all.
@@ -83,11 +70,7 @@ export function isTransientGitProbeError(error: unknown): boolean {
   return TRANSIENT_PROBE_PATTERNS.some((pattern) => pattern.test(text))
 }
 
-/**
- * Throws when the remote could not be read, and returns normally for every
- * answer — including a repo with no remote at all. Lets a caller that treats
- * "nothing found" as cacheable tell that apart from a lookup that never got to ask.
- */
+/** Throw on unavailable reads; a proven missing remote is a valid negative answer. */
 export async function assertRemoteUrlReadable(
   context: RemoteUrlProbeContext,
   remoteName = 'origin'

@@ -10,7 +10,10 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { TuiAgent } from '../../shared/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'
-import { isVerifiedOpenCodeLegacyModelVersion } from './opencode-model-version-policy'
+import {
+  isVerifiedOpenCodeConfigModelVersion,
+  isVerifiedOpenCodeLegacyModelVersion
+} from './opencode-model-version-policy'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
@@ -92,7 +95,7 @@ export async function prepareOpenCodeModelStartupInputs(
     }
     return { inputs }
   }
-  if (capabilities?.version !== '2.0.16' || inputs.agentArgs?.trim()) {
+  if (!isVerifiedOpenCodeConfigModelVersion(capabilities?.version) || inputs.agentArgs?.trim()) {
     refuseModel()
   }
   const before = await probeOpenCodeLaunchModelContext({
@@ -167,7 +170,6 @@ export async function buildExecutionHostAgentStartupPlan(
   return plan
 }
 
-/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
 export async function planExecutionHostStartupWithPromptCandidate(
   options: StartupScope & {
     prompt: string

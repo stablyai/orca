@@ -80,12 +80,14 @@ describe('WSL host deployment store', () => {
     })
   }
 
-  // Why a plain pairing: orca-environments.json holds nothing an older build cannot read.
+  // Keep the pairing store readable by older builds.
   function addWslManaged(record = wslRecord()) {
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Ubuntu',
+      // Each pairing key identifies one server; duplicate keys are rejected.
       pairingCode: encodePairingOffer({
         ...pairing,
+        publicKeyB64: Buffer.alloc(32, 2).toString('base64'),
         endpoint: `ws://127.0.0.1:${record.localPort}/runtime`
       }),
       now: 150
@@ -153,7 +155,6 @@ describe('WSL host deployment store', () => {
       addSshManaged()
       const wslId = addWslManaged()
 
-      // main's readEnvironmentStore: persisted records with their sidecar entries overlaid.
       const sidecar = readRuntimeEnvironmentSidecar(userDataPath)
       const mainView = readPersistedEnvironmentStore(userDataPath).environments.map((entry) =>
         overlayRuntimeEnvironmentSidecar(entry, sidecar.entries[entry.id])
@@ -255,7 +256,6 @@ describe('WSL host deployment store', () => {
       )
     })
 
-    // Regression: with the gate closed a corrupt WSL file must not hide SSH and paired servers.
     it('keeps every other server listed when the file is corrupt and the gate is closed', () => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
       addSshManaged()
@@ -263,7 +263,6 @@ describe('WSL host deployment store', () => {
       expect(listEnvironments(userDataPath).map((entry) => entry.id)).toEqual(['ssh-managed'])
     })
 
-    // Regression: a stale record must not hide a re-paired loopback server while the gate is closed.
     it('hides nothing for an unreadable record while the gate is closed', () => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
       const wslId = addWslManaged()
@@ -276,6 +275,7 @@ describe('WSL host deployment store', () => {
         name: 'Remote',
         pairingCode: encodePairingOffer({
           ...pairing,
+          publicKeyB64: Buffer.alloc(32, 3).toString('base64'),
           endpoint: 'wss://build.example.com/runtime'
         }),
         now: 150

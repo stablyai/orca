@@ -170,7 +170,6 @@ describe('useNativeChatHostOutage', () => {
       (id: string) => entry(id, { verification: 'unavailable', transport: 'unknown' }),
       true
     ],
-    // Auth or protocol refusals turn a reconnect away the same way, so none is offered.
     ['refused', refused, false]
   ])('says a %s host is offline at once', (_name, offline, canReconnect) => {
     const { result } = renderHook(() => useNativeChatHostOutage(remote))

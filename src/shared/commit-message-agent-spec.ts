@@ -17,17 +17,12 @@ import {
   withOpenAiThinking
 } from './commit-message-model-parsers'
 
-// Why: this file is the source of truth for non-interactive agent invocation
-// (commit-message generation). It is intentionally separate from
-// `tui-agent-config.ts`, which describes interactive PTY launching — mixing
-// the two confuses both code paths.
+// Keep noninteractive generation separate from tui-agent-config’s interactive PTY launch contract.
 
 export type ThinkingLevel = { id: string; label: string }
 
 export type CommitMessageModel = {
-  /** Value passed to the agent CLI's --model flag. */
   id: string
-  /** Visible label in the model dropdown. */
   label: string
   /** Discovery-provided detail, e.g. what a CLI alias resolves to on this host. */
   description?: string
@@ -39,8 +34,7 @@ export type CommitMessageModel = {
   supportsFastMode?: boolean
   /** Whether Claude's listing says the model runs its auto permission mode; absent is unknown. */
   supportsAutoMode?: boolean
-  /** Set when the listing marks this as the id the CLI runs with no --model flag.
-   *  Optional so an older remote host that never reports it simply omits it. */
+  /** CLI default model ID; older remote hosts may omit this discovery field. */
   isDefault?: boolean
   /** Tokens the model's context window holds, where the listing states it. */
   contextWindowTokens?: number
@@ -48,20 +42,21 @@ export type CommitMessageModel = {
 
 export type CommitMessageAgentSpec = {
   id: TuiAgent
-  /** Visible label in the agent dropdown. */
   label: string
-  /** Binary spawned in non-interactive mode. */
   binary: string
   /** Where the prompt is delivered. Large diffs go via stdin to avoid argv limits. */
   promptDelivery: 'argv' | 'stdin'
-  buildArgs: (params: { prompt: string; model: string; thinkingLevel?: string }) => string[]
-  /** Alias groups the CLI accepts at most once. Recipe CLI arguments repeating one
-   *  replace the generated flag instead of being appended: yargs-based CLIs collapse
-   *  a repeated flag into an array and crash. Defaults to the model flag alone. */
+  buildArgs: (params: {
+    prompt: string
+    model: string
+    thinkingLevel?: string
+    strictMcp?: boolean
+    userArgs?: readonly string[]
+  }) => string[]
+  /** User recipe args replace generated singleton alias groups; repeats make yargs parse arrays and crash. Default: model flag only. */
   singletonOptions?: readonly (readonly string[])[]
-  /** Whether the model list is static or discovered from the agent CLI. */
   modelSource: 'static' | 'dynamic'
-  /** Command used by the main process to discover models when modelSource is dynamic. */
+  /** Discover models on main for dynamic sources. */
   modelDiscovery?: {
     binary: string
     args: string[]
@@ -138,11 +133,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
 
 export const DEFAULT_COMMIT_MESSAGE_AGENT_ID: TuiAgent = 'claude'
 
-// Why: the "custom" choice is not a TuiAgent — it lets the user point Orca
-// at any CLI by typing a command template (see customAgentCommand setting +
-// planCustomCommand in commit-message-prompt.ts). Keeping it as its own
-// sentinel avoids polluting TuiAgent (which is shared with PTY launch /
-// new-workspace flows that have nothing to do with this feature).
+// Keep custom-command sentinel separate from TuiAgent, whose PTY/workspace flows do not accept user templates.
 export const CUSTOM_AGENT_ID = 'custom' as const
 export type CustomAgentId = typeof CUSTOM_AGENT_ID
 export type CommitMessageAgentChoice = TuiAgent | CustomAgentId
@@ -200,9 +191,7 @@ function toCommitMessageAgentCapability(
     label: spec.label,
     modelSource: spec.modelSource,
     defaultModelId: spec.defaultModelId,
-    // Why: renderer/settings should consume provider capabilities, not the
-    // spawn contract. Copy the model metadata so future dynamic probes can
-    // swap this source without leaking binary/argv details into UI code.
+    // Expose copied model capabilities to UI/settings without coupling them to spawn binary/argv or future discovery sources.
     models: spec.models.map((model) => ({
       id: model.id,
       label: model.label,

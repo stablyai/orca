@@ -21,6 +21,7 @@ import type { StatsCollector } from '../stats/collector'
 import {
   applyRegisteredRepoToPRRefreshCandidate,
   assertRegisteredGitHubRepo,
+  assertRegisteredPRRefreshCandidateRepo,
   getGitHubLocalGitOptionArgs,
   getGitHubRepoConnectionId,
   isPRRefreshCandidateRegistered,
@@ -115,7 +116,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       _event,
       args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
     ) => {
-      const repo = assertRegisteredGitHubRepo(args.candidate, store)
+      const repo = assertRegisteredPRRefreshCandidateRepo(args.candidate, store)
       const outcome = await refreshPRNow(
         applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
         args.reason

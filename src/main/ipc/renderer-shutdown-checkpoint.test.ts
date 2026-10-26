@@ -24,12 +24,18 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   registerRendererShutdownCheckpointHandler,
   SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
 } from './renderer-shutdown-checkpoint'
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
+
+const windowSave = (state: Partial<WorkspaceSessionState>): unknown =>
+  ORCA_LAYOUT_OWNER_IS_MAIN ? expect.any(Object) : state
 
 describe('registerRendererShutdownCheckpointHandler', () => {
   beforeEach(() => {
@@ -41,6 +47,8 @@ describe('registerRendererShutdownCheckpointHandler', () => {
   it('stages every shutdown mutation before queueing persistence', () => {
     const callOrder: string[] = []
     const store = {
+      // Read by the switch-on staging, which keeps main's own layout.
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
       stageWorkspaceSessionBeforeUnload: vi.fn((_state, hostId?: string) => {
         callOrder.push(`session:${hostId ?? 'local'}`)
       }),
@@ -64,17 +72,17 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       1,
-      localSession,
+      windowSave(localSession),
       undefined
     )
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       2,
-      remoteSession,
+      windowSave(remoteSession),
       'runtime:host-1'
     )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-    // Why: Store fences the staged generation without draining unrelated live mutations.
+    // Fence this staged generation without waiting for unrelated live mutations.
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith(
       expect.objectContaining({ drainToStableGeneration: false })
     )
@@ -84,6 +92,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
   it('never stages the source partition of a fenced host', () => {
     const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
       stageWorkspaceSessionBeforeUnload: vi.fn(),
       getSshTarget: vi.fn(() => ({ orcadFence: { environmentId: 'env-1' } })),
       updateUI: vi.fn(),
@@ -98,7 +107,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     })
 
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(1)
-    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith({}, undefined)
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(windowSave({}), undefined)
     expect(event.returnValue).toEqual({ ok: true })
   })
 

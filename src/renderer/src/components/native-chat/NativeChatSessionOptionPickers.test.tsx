@@ -39,8 +39,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 
-// The popover is always mounted here, so a test reads its rows without opening it; real
-// focus and dismissal are covered in the focus-return file.
+// Keep mocked rows mounted for assertions; focus-return tests exercise real dismissal and focus.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
     <div data-testid="picker-root" data-open={open ? 'true' : 'false'}>
@@ -117,8 +116,7 @@ const effort: SessionOptionDescriptor = {
   settable: true
 }
 
-/** A select with nothing picked. Only a select can be in this shape: it renders
- *  "nothing selected" truthfully, which is why the boolean kind requires a value. */
+/** Only selects can truthfully have no current value; booleans require a baseline. */
 const unknownEffort: SessionOptionDescriptor = {
   ...effort,
   kind: { type: 'select', choices: EFFORT_CHOICES },
@@ -151,25 +149,29 @@ describe('NativeChatSessionOptionPickers', () => {
   it.each(['model', 'effort'])(
     'opens the one picker when a slash command asks for the %s',
     async (id) => {
+      const demandModelCatalog = vi.fn()
+      const demanding = { ...surface, demandModelCatalog }
       const { rerender } = render(
         <NativeChatSessionOptionPickers
-          surface={surface}
+          surface={demanding}
           snapshot={[model(), effort]}
           isWorking={false}
           pickerRequest={null}
         />
       )
       expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(false)
+      expect(demandModelCatalog).not.toHaveBeenCalled()
 
       rerender(
         <NativeChatSessionOptionPickers
-          surface={surface}
+          surface={demanding}
           snapshot={[model(), effort]}
           isWorking={false}
           pickerRequest={{ id, consume: () => {} }}
         />
       )
       await waitFor(() => expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(true))
+      expect(demandModelCatalog).toHaveBeenCalledTimes(1)
     }
   )
 
@@ -193,13 +195,11 @@ describe('NativeChatSessionOptionPickers', () => {
         pickerRequest={request}
       />
     )
-    // Still the same visit: open, with the effort row it opened on kept in place.
     expect(isOpen(pill('Model Opus 4.8'))).toBe(true)
     expect(effortLevels().every((level) => level.hasAttribute('disabled'))).toBe(true)
   })
 
-  // Why: the session holds the request across the pill's unmount; a request left standing
-  // reopened the picker each time a prompt card handed the composer back.
+  // Consume session-held requests even across composer remounts so prompts cannot reopen the picker.
   it.each<[string, { composerShown?: boolean; snapshot?: SessionOptionDescriptor[] }]>([
     ['the composer comes back after a prompt card', { composerShown: false }],
     ['the session reports its model again', { snapshot: [] }]
@@ -243,7 +243,6 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('model', 'sonnet'))
   })
 
-  // End-aligned: the pill grows leftwards as its label changes, and the picker stays open.
   it('opens one picker upwards from the pill, anchored at its right edge', () => {
     render(
       <NativeChatSessionOptionPickers
@@ -269,7 +268,6 @@ describe('NativeChatSessionOptionPickers', () => {
     )
     expect(pill('Model Opus 4.8, Effort High · Fast').textContent).toBe('Opus 4.8High · Fast')
 
-    // An option nobody has reported a value for adds nothing to the pill.
     rerender(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -326,9 +324,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(pill('Model').textContent).toBe('Model')
   })
 
-  // The terminal transport typed the value at the agent and has not read it back,
-  // so the pill says so; the structured transport's own per-turn report is the
-  // confirmation, which makes the same hedge transient noise there.
+  // Terminal dispatch lacks confirmation; structured per-turn reporting makes the same hedge unnecessary.
   it('hedges a dispatched value the terminal transport produced', () => {
     render(
       <NativeChatSessionOptionPickers
@@ -509,7 +505,6 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    // One control, not an On/Off pair, and the row carries the label itself.
     expect(screen.queryByRole('radio')).toBeNull()
     const fastSwitch = screen.getByRole('switch', { name: 'Fast mode' })
     expect(fastSwitch.getAttribute('aria-checked')).toBe('true')
@@ -528,8 +523,7 @@ describe('NativeChatSessionOptionPickers', () => {
             id: 'thinking',
             label: 'Thinking',
             category: 'mode',
-            // What the producer now emits for an unreported `thinking`: the
-            // catalog default, with provenance still saying nothing confirmed it.
+            // Model the producer’s catalog fallback with unconfirmed provenance.
             kind: { type: 'boolean', currentValue: true },
             valueSource: 'unknown',
             transport: 'catalog',
@@ -539,8 +533,6 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    // The producer resolves the value, so the row renders it instead of a caption
-    // apologising for a switch that had already collapsed to off.
     expect(screen.queryByText('Current value unknown')).toBeNull()
     const thinkingSwitch = screen.getByRole('switch', { name: 'Thinking' })
     expect(thinkingSwitch.getAttribute('aria-checked')).toBe('true')
@@ -548,7 +540,6 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  // The switch row is the label and the switch, whatever said the value; no provenance caption.
   it.each([
     { valueSource: 'unknown', transport: 'agent-session' },
     { valueSource: 'default', transport: 'catalog' },
@@ -593,7 +584,6 @@ describe('NativeChatSessionOptionPickers', () => {
     // An arrow key moves focus without writing: each write is a round trip to the agent.
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'ArrowLeft' })
     await waitFor(() => expect(document.activeElement).toBe(low))
-    // The level already in use is not a write either.
     high?.click()
     expect(setOption).not.toHaveBeenCalled()
 
@@ -670,7 +660,6 @@ describe('NativeChatSessionOptionPickers', () => {
       expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
     )
     expect(pill('Model Opus 4.8, Effort Low')).not.toBeNull()
-    // Effort saving leaves the model usable.
     expect(held()).toEqual(['false', 'true'])
     screen.getByRole('option', { name: 'Sonnet 5' }).click()
     expect(setOption.mock.calls).toEqual([

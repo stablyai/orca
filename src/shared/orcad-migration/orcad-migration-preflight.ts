@@ -2,13 +2,6 @@ import type { FolderWorkspace } from '../folder-workspace-types'
 import type { Repo } from '../repo-types'
 import type { SavedPortForward, SshRemotePtyLease } from '../ssh-types'
 
-export type OrcadMigrationBlockerCategory =
-  | 'registration'
-  | 'exclusive-ownership'
-  | 'drainable-static-state'
-  | 'live-or-unverifiable'
-  | 'client-owned-state'
-
 export const ORCAD_MIGRATION_DEPENDENCY_KINDS = [
   'saved-port-forward',
   'terminal-lease',

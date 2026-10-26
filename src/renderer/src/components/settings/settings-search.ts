@@ -110,8 +110,7 @@ export function scoreSettingsSearch(
 
   const values = Array.isArray(entries) ? entries : [entries]
   return values.reduce((score, entry, index) => {
-    // Why: Settings passes the pane entry first so pane-title hits outrank
-    // lower-level setting titles without adding a second search-entry shape.
+    // The first entry is the pane title; rank it above setting titles.
     const titleScore = index === 0 ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
     return Math.max(
       score,
@@ -127,8 +126,7 @@ export function getSettingsSectionSearchEntries(section: {
   description: string
   searchEntries: readonly SettingsSearchEntry[]
 }): SettingsSearchEntry[] {
-  // Why: sidebar ranking and active content filtering must receive the same
-  // pane-level entry, otherwise pane-title-only hits can rank but render blank.
+  // Ranking and filtering need the same pane entry so title-only hits render content.
   return [{ title: section.title, description: section.description }, ...section.searchEntries]
 }
 

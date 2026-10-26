@@ -174,11 +174,7 @@ describe('empty remote worktree activation', () => {
   })
 
   it('does not create a terminal for a workspace the user emptied', async () => {
-    // The second re-seed door. The stream-frame path declines on the tombstone, but it only runs
-    // when the mirror has rows to send; an emptied workspace routes exclusively here, and
-    // activation calls this on every `activateAndRevealWorktree`, not only after a wake. Reading
-    // the explicit empty row as "never initialized" re-seeds the workspace on every focus, which is
-    // the defect this PR exists to close.
+    // Empty mirror workspaces use this activation door without stream rows. Honor explicit empty tombstones here too or every focus reseeds terminals.
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn()
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
@@ -215,9 +211,7 @@ describe('empty remote worktree activation', () => {
   })
 
   it('declines when tab rows exist but none of them render', async () => {
-    // The arm the seed guard must not swallow in the other direction: rows are present and nothing
-    // renders, so the model is mid-reconcile and a create here duplicates a pane. Pinned because the
-    // restructure moved this line, and reverting only this arm broke no other test.
+    // Present-but-unrenderable rows indicate mid-reconcile; seed must not duplicate their pending panes.
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn()
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
@@ -267,8 +261,7 @@ describe('empty remote worktree activation', () => {
   })
 
   it('still respawns a woke workspace whose tab rows outlived their PTYs', async () => {
-    // The other branch that used to share the same line: rows are present and renderable, the host
-    // PTYs are gone. Tombstone-irrelevant, and the case the seed guard must not swallow.
+    // Renderable rows with gone host PTYs need separate recovery; tombstone guards must not swallow it.
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({ ok: true, result: {} })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true

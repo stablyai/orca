@@ -46,8 +46,7 @@ describe('native chat ask row', () => {
   })
 
   it('aggregates the per-question calls Codex journals for a single prompt', () => {
-    // Codex writes one call per question, so a per-call row would stack two
-    // pulsing lines for a prompt the reader was shown once.
+    // Codex journals one call per question; aggregate the prompt to avoid duplicate pulsing rows.
     expect(
       nativeChatAskRunSubject([
         askCall({ questions: [{ question: 'Which branch?' }] }, 'request_user_input'),
@@ -65,6 +64,14 @@ describe('native chat ask row', () => {
         )
       ])
     ).toEqual({ kind: 'question', text: 'Which branch?' })
+  })
+
+  it('draws a Codex async question as the ask row, named by its titles', () => {
+    expect(
+      nativeChatAskRunSubject([
+        askCall({ questions: [{ title: 'Which color?' }] }, 'request_user_input_async')
+      ])
+    ).toEqual({ kind: 'question', text: 'Which color?' })
   })
 
   it('still reports an ask whose payload names no question', () => {

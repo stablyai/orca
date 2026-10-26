@@ -101,7 +101,6 @@ describe('useChecksPanelTerminalWorktree', () => {
   })
 
   it('returns the default worktree (no blank flicker) while the cwd is unresolved', async () => {
-    // getCwd stays pending: the panel must keep showing the sidebar worktree.
     getCwdMock.mockReturnValue(new Promise<string>(() => {}))
 
     await renderHook(parentWorktree)
@@ -142,7 +141,6 @@ describe('useChecksPanelTerminalWorktree', () => {
     try {
       await renderHook(parentWorktree)
       await flushMicrotasks()
-      // Hidden window: no lsof-backed cwd probe at all.
       expect(getCwdMock).not.toHaveBeenCalled()
       expect(latest?.worktree).toBe(parentWorktree)
 
@@ -151,8 +149,7 @@ describe('useChecksPanelTerminalWorktree', () => {
         document.dispatchEvent(new Event('visibilitychange'))
       })
       await flushMicrotasks()
-      // Becoming visible runs an immediate refresh (a `cd` made while hidden
-      // is picked up promptly on return).
+      // Visibility recovery must pick up cwd changes made while hidden.
       expect(getCwdMock).toHaveBeenCalledWith('pty-1')
       expect(latest?.worktree).toBe(childWorktree)
     } finally {
@@ -259,10 +256,7 @@ describe('useChecksPanelTerminalWorktree', () => {
   })
 
   it('does not match an SSH worktree that shares the local cwd path', async () => {
-    // A local PTY cwd must never resolve to a same-path remote worktree — that
-    // would surface the wrong host's linked PR. The ONLY worktree at this path
-    // is the SSH one, so a correct host filter must fall back to the default
-    // (and this assertion fails if host scoping is removed).
+    // Only an SSH worktree matches this local path; removing host filtering must fail instead of surfacing its PR.
     const SSH_REPO_ID = 'sshRepo'
     const SSH_PATH = '/shared/project'
     const sshRepo: Repo = {
@@ -286,7 +280,6 @@ describe('useChecksPanelTerminalWorktree', () => {
     await renderHook(parentWorktree)
     await flushMicrotasks()
 
-    // The SSH worktree is filtered out; nothing local matches → default.
     expect(latest?.worktree).toBe(parentWorktree)
   })
 })

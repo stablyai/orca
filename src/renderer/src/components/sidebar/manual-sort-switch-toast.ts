@@ -5,7 +5,7 @@ import { SORT_OPTIONS } from './sidebar-workspace-option-items'
 
 const MANUAL_SORT_SWITCH_TOAST_ID = 'sidebar-manual-sort-switch'
 
-// Why: a drop that reorders must switch to Manual so the placement sticks; say so, since it changes a shared setting.
+// Notify that reordering switches the shared sort setting to Manual.
 export function switchSortToManualAfterDrop(): void {
   const { sortBy: previousSortBy, setSortBy } = useAppStore.getState()
   if (previousSortBy === 'manual') {
@@ -46,7 +46,6 @@ export function switchSortToManualAfterDrop(): void {
                 label: previousLabel
               }
             ),
-            // The sortBy change retires the toast through the subscription above.
             onClick: () => {
               if (!retired) {
                 setSortBy(previousSortBy)

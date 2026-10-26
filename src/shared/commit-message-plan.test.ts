@@ -48,12 +48,28 @@ describe('planCommitMessageGeneration', () => {
           '--permission-mode',
           'plan',
           '--effort',
-          'high'
+          'high',
+          '--strict-mcp-config',
+          '--settings',
+          '{"disableAllHooks":true}'
         ],
         stdinPayload: 'PROMPT',
         label: 'Claude'
       }
     })
+  })
+
+  it('preserves a literal --settings prompt value without generating hooks settings', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'claude', model: 'sonnet', agentArgs: '--append-system-prompt "--settings"' },
+      'PROMPT'
+    )
+    expect(result.ok && result.plan.args.slice(-3)).toEqual([
+      '--strict-mcp-config',
+      '--append-system-prompt',
+      '--settings'
+    ])
+    expect(result.ok && result.plan.args).not.toContain('{"disableAllHooks":true}')
   })
 
   it('plans OpenCode run with prompt on stdin and model variant', () => {
@@ -162,8 +178,7 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'jcode',
-        // --tool-profile none: the prompt is a staged patch, and jcode's default
-        // profile would expose shell/read/write/MCP to it.
+        // Staged patches must not inherit jcode’s default shell/read/write/MCP tools.
         args: [
           '--no-update',
           '--quiet',
@@ -244,10 +259,7 @@ describe('planCommitMessageGeneration', () => {
     ])
   })
 
-  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
-  // that exactly matches a registered flag name (its own heuristic, independent of this
-  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
-  // literally a bare flag name, so this doesn't affect actual generation.
+  // argv construction only: agy 1.2.1 still rejects bare-flag print values, even --print=--sandbox; real generation prompts are not bare flags.
   it('still glues an Antigravity prompt that collides with a flag name onto --print', () => {
     const result = planCommitMessageGeneration(
       { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
@@ -258,11 +270,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result.ok && result.plan.args.slice(0, 2)).toEqual(['--print=--sandbox', '--sandbox'])
   })
 
-  // Why: agy has no documented stdin mode for --print (#19539's body: "--print ... is
-  // not a boolean flag that automatically reads from stdin; it expects the prompt
-  // string as its option argument"), so a large staged patch now rides on argv. This
-  // is the same unguarded argv delivery cursor/kimi/copilot already use (see the
-  // parity assertion below) — pinned here as a known property, not a regression.
+  // agy has no documented print-stdin mode (#19539); large prompts remain unguarded argv like cursor/kimi/copilot. Pin this known limitation.
   it('puts a large Antigravity prompt on argv with no size guard, same as other argv-delivery agents', () => {
     const bigPrompt = 'y'.repeat(70_000)
     const result = planCommitMessageGeneration(
@@ -283,11 +291,7 @@ describe('planCommitMessageGeneration', () => {
     expect(cursorResult.ok && cursorResult.plan.stdinPayload).toBeNull()
   })
 
-  // Why: real #14059 reproduction config — CLI arguments field repeats --model and adds
-  // --add-dir/--effort/--dangerously-skip-permissions. Confirms none of it gets swallowed
-  // into the --print operand and the duplicate --model is deduped the same way every
-  // other spec's recipe args already are (DEFAULT_SINGLETON_OPTIONS, unaffected by
-  // argument order).
+  // #14059 recipe: preserve extra CLI args outside print’s operand while deduping repeated model flags regardless of argument order.
   it('keeps #14059-style recipe CLI arguments intact and deduped around the print operand', () => {
     const result = planCommitMessageGeneration(
       {

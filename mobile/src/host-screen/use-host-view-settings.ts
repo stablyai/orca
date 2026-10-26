@@ -46,19 +46,16 @@ export function useHostViewSettings(args: {
   const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
 
   const localEditsRef = useRef(0)
-  // Null unless the page lists from the feed: the changes the desktop has not answered.
   const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
   const pendingChanges = pendingViewChanges?.controls ?? null
 
-  // The one writer of the view: the ref is its synchronous mirror for edits made before a render.
   const applyViewState = useCallback((next: MobileViewState) => {
     viewRef.current = next
     setView(next)
   }, [])
 
-  // Merge the desktop's shared view settings (PersistedUIState) onto local state so desktop changes appear here.
   const syncViewSettingsFromDesktop = useCallback(
-    async (options: { reconnected?: boolean } = {}) => {
+    async (options: { resend?: boolean } = {}) => {
       if (!client || connState !== 'connected') {
         return
       }
@@ -66,7 +63,6 @@ export function useHostViewSettings(args: {
       const editsAtRequest = localEditsRef.current
       const opsAtRequest = pendingChanges?.lastOpId() ?? 0
       try {
-        // Each half applies on its own, so one failing read does not hold back the other.
         const [uiReply, settingsReply] = await Promise.all([
           hostViewSettingsRead.request(requestClient).catch(() => null),
           hostListSettingsRead.request(requestClient).catch(() => null)
@@ -89,7 +85,7 @@ export function useHostViewSettings(args: {
         const waiting =
           pendingChanges && ui
             ? pendingChanges.reconcile(ui, {
-                reconnected: options.reconnected === true,
+                resend: options.resend === true,
                 sentByOpId: opsAtRequest
               })
             : []
@@ -119,7 +115,6 @@ export function useHostViewSettings(args: {
     void syncViewSettingsFromDesktop()
   }, [setActionError, syncViewSettingsFromDesktop])
 
-  // Apply the change locally, then patch the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: MobileViewPatch, options: { cardLayoutPreset?: boolean } = {}) => {
       localEditsRef.current += 1
@@ -133,9 +128,7 @@ export function useHostViewSettings(args: {
       if (!client) {
         return
       }
-      // Send only the touched fields: the host merges partial updates, so a stale
-      // mirror can no longer revert sibling settings another client just changed
-      // (STA-5781; supersedes the #8873 whole-payload special case).
+      // Patch only touched fields so a stale mirror cannot revert another client’s sibling edits (STA-5781).
       const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next, options)
       if (Object.keys(payload).length === 0) {
         return
@@ -146,9 +139,7 @@ export function useHostViewSettings(args: {
           .then((outcome) => outcome === 'refused' && refused())
         return
       }
-      void hostViewSettingsWrite.request(client, payload).catch(() => {
-        // Best-effort: view settings are a convenience preference.
-      })
+      void hostViewSettingsWrite.request(client, payload).catch(() => {})
     },
     [client, applyViewState, pendingChanges, refused]
   )
@@ -215,8 +206,7 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
-  // Why both halves: a layout is a preset, so the desktop also resets the shown properties.
-  // Why the setting first: a host that refuses it must not be left with the other layout's preset.
+  // Layout presets also reset shown properties; write settings first so refusal cannot leave the other layout’s preset.
   const setCardLayout = useCallback(
     (layout: 'detailed' | 'compact') => {
       if (!client) {

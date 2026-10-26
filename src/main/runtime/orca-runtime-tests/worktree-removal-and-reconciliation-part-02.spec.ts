@@ -8,11 +8,9 @@ import {
   assertWorktreeCleanForRemoval,
   beginWatcherInstall,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   getEffectiveHooks,
   gitRunner,
   join,
@@ -24,7 +22,6 @@ import {
   removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   rm,
   runHook,
   setPlatform,
@@ -44,8 +41,7 @@ import {
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
-// Why: these fixtures register an SSH provider, which models a connected relay session — and a
-// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+// Connected SSH fixtures need the host HOME for removal guards.
 
 describe('OrcaRuntimeService', () => {
   it('warns that a missing-repo removal only forgot the workspace', async () => {
@@ -61,7 +57,6 @@ describe('OrcaRuntimeService', () => {
 
     const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-    // Regression: CLI and mobile share this method, so success alone must not read as "deleted".
     expect(result.warning).toEqual(expect.stringContaining(TEST_WORKTREE_PATH))
     expect(result.warning).toEqual(expect.stringContaining(TEST_REPO_ID))
     expect(removeWorktree).not.toHaveBeenCalled()
@@ -89,13 +84,9 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
-    expect(closeRemoteWatcherForWorktreePathMock).toHaveBeenCalledWith('ssh-1', TEST_WORKTREE_PATH)
-    // The remote directory survives, so its watchers are restored, not forgotten.
-    expect(restoreRemoteWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(
-      'ssh-1',
-      TEST_WORKTREE_PATH
-    )
-    expect(forgetRemoteWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
+    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
+    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
+    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {
@@ -215,8 +206,7 @@ describe('OrcaRuntimeService', () => {
 
   it('proceeds when a wedged install never releases the removal fence', async () => {
     vi.useFakeTimers()
-    // Held across the whole acquire and never released — models a native subscribe that ignores abort
-    // and never settles. The removal must abandon the fence slot rather than leak it into later suites.
+    // Model an unabortable native subscribe; removal must abandon its fence slot instead of leaking it.
     beginWatcherInstall(TEST_WORKTREE_PATH)
     try {
       const runtime = createRuntime()
@@ -234,7 +224,6 @@ describe('OrcaRuntimeService', () => {
       expect(acquired).toBe(true)
       expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledTimes(2)
 
-      // The fence must not stay armed: releasing the gate re-admits installs under this root.
       await gate.finish(true)
       const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
       finishRetry()
@@ -393,8 +382,7 @@ describe('OrcaRuntimeService', () => {
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
         cwd: TEST_REPO_PATH
       })
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
+      // Host-qualified metadata purge preserves same-id rows on other hosts.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
       )

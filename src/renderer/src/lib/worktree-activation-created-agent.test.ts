@@ -13,6 +13,13 @@ import {
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 
 function makeWebRuntimeWorktree() {
@@ -103,9 +110,7 @@ describe('activateAndRevealWorktree', () => {
     for (let cycle = 0; cycle < 3; cycle += 1) {
       activateAndExpectNoRelaunch(worktree.id)
 
-      // Return to zero tabs, the state that used to re-arm the relaunch. Sets state
-      // directly rather than via closeTab — the sleeping-record purge is covered in
-      // worktree-reactivation-tab-forkbomb.test.ts.
+      // Return directly to zero tabs; closeTab’s sleeping purge is covered by worktree-reactivation-tab-forkbomb.test.ts.
       useAppStore.setState({ tabsByWorktree: {}, activeTabIdByWorktree: {} })
     }
   })
@@ -123,9 +128,7 @@ describe('activateAndRevealWorktree', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
 
-    // The opts shape CLI/relay navigation and notification clicks arrive with; those
-    // callers are asserted in useIpcEvents.test.ts. The host's `didSpawnStartup` leg is
-    // a main-process concern and is not reachable from here.
+    // Match CLI/relay/notification option shapes pinned in useIpcEvents; backend didSpawnStartup is main-only.
     activateAndExpectNoRelaunch(worktree.id, { notifyHostRuntime: false })
   })
 

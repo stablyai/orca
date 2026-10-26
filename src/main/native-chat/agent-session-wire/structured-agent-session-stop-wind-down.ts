@@ -1,6 +1,3 @@
-// A session-ending Stop's second step: the provider's wind-down, then the child's end, and what
-// the Stop's note says when that end fails while the work runs on.
-
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -18,26 +15,18 @@ import { structuredAgentSessionFailedStopMark } from './structured-agent-session
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 
-/** What a Stop that ends the provider's session leaves its next serialized step: whether the
- *  provider took the interrupt, so its wind-down is worth waiting on, and when the interrupt went
- *  out. No turn id: that step runs right behind the Stop, so no later turn can slip in between. */
+/** Queued immediately behind Stop, so no later turn can intervene; wait only for an accepted interrupt. */
 export type StructuredAgentSessionStopWindDown = {
   waitsForProvider: boolean
   stoppedAt: number
-  /** The note the Stop wrote, which a failed wind-down revises. */
   stopNote: AgentJournalItemIdentity
-  /** Closes the Stop's settle once the wind-down finishes, whether or not the child's exit was
-   *  proven, marking the turn running on after an end that failed (`JournalStopSettle.failedOn`):
-   *  until then, what ends is the Stop's. */
+  stopNoteWrite?: Promise<void>
+  /** End settlement regardless of exit proof; failedOn identifies work still running. */
   settled?: (failedOn?: JournalStopFailedOn) => void
 }
 
-/**
- * A session-ending Stop's second step, queued behind its first in the same tick so nothing sent
- * meanwhile reaches the child it ends. The Stop has answered: a failure here is reported, and while
- * the work runs on its note is revised to say the Stop went unconfirmed. A close it could not prove
- * keeps the child on record, and the next operation that reaches the agent joins that close.
- */
+/** Queue in the Stop’s tick to exclude intervening input; failures revise its note.
+ * Unproven closes retain the child, and later agent operations join that close. */
 export async function endStoppedStructuredAgentSession(
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'adapter' | 'journal' | 'fence' | 'currentWork'>,
   windDown: StructuredAgentSessionStopWindDown,
@@ -50,20 +39,21 @@ export async function endStoppedStructuredAgentSession(
       await ctx.adapter.awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
     }
     await stopChild()
+    await windDown.stopNoteWrite?.catch(onError)
   } catch (error) {
     onError(error)
     failedOn = structuredAgentSessionFailedStopMark(
       contextStructuredAgentSessionCurrentWork(ctx),
       ctx.journal
     )
+    await windDown.stopNoteWrite?.catch(onError)
     await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)
   } finally {
     windDown.settled?.(failedOn)
   }
 }
 
-/** While the work it stopped runs on, the Stop's own note, if it wrote one, says what a lost
- *  interrupt's says. Work that ended took the Stop, whatever became of the child. */
+/** Revise only while work runs; ended work took the Stop regardless of child exit. */
 async function reviseStopNoteUnconfirmed(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   identity: AgentJournalItemIdentity
@@ -85,10 +75,8 @@ async function reviseStopNoteUnconfirmed(
     kind: 'status',
     ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
   }
-  // The note now speaks of the work running on, so it moves onto that work's turn, keyed by it as a
-  // Stop of that turn writes it: its proven end finds it there. A row keeps the scope it was created
-  // with, so a note a Stop wrote before the turn showed is re-keyed, in one batch. Known limit: with
-  // no turn open yet, the note keeps its key and scope, and no turn's end revises it.
+  // Row scopes are immutable: atomically rekey a turnless note onto running work so its proven end finds it.
+  // With no open turn, key/scope stay unchanged and no turn end revises it.
   const running = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
   const turnScope =
     running !== null ? structuredAgentSessionNamedTurnScope(ctx.journal, running) : null

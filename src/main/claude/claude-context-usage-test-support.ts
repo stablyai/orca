@@ -1,5 +1,3 @@
-// A translator over an in-memory journal, for tests of the context facts it writes.
-
 import { vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -17,8 +15,6 @@ import type { ClaudeContextReportTarget } from './claude-context-facts'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { claudeTurnLifecycleIdentity } from './claude-turn-lifecycle-item'
 
-/** A journal in miniature: the latest revision per row, its creation clock
- *  pinned, and revisions resolved against it as a bound sink would. */
 export function journal({ deferred = false } = {}) {
   const queued: (() => void)[] = []
   const run = (write: () => void): void => {
@@ -174,7 +170,6 @@ export const compactBoundary = (at: number) =>
 export const turnIdentity = (turnId: string) =>
   claudeTurnLifecycleIdentity('claude-session', turnId)
 
-/** Every turn the CLI runs opens with an init naming the main model as `modelUsage` keys it. */
 export function setup({
   init = 'claude-fable-5-1[1m]',
   deferred = false

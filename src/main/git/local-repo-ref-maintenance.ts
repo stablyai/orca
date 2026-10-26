@@ -20,15 +20,7 @@ import {
 import { gitExecFileAsync } from './runner'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
 
-/**
- * Main-process wiring for idle loose-ref packing on the local execution host
- * (native and WSL).
- *
- * SSH-hosted repos are deliberately out of scope: the execution host owns
- * anything that touches execution, so maintaining them means running host-side
- * on the relay, which today has neither admission control nor spans. Keying all
- * state by execution host is what keeps this path from reaching across.
- */
+// Maintain native/WSL repos locally; SSH maintenance belongs on its execution host.
 
 export type RepoMaintenanceActivityProbe = () => boolean
 
@@ -36,9 +28,7 @@ const REPO_BUSY_PROBE_MAX = 64
 
 let activityProbe: RepoMaintenanceActivityProbe | null = null
 let shared: RepoRefMaintenance | null = null
-// Why keyed here rather than captured in the target: a repo can be armed from
-// the fetch controller or from a user-initiated fetch, and every arming must see
-// the same "this repo has work in flight" answer, not whichever closure was last.
+// All arming paths must share the current per-repo busy probe.
 const repoBusyProbes = new Map<string, () => boolean>()
 
 /** Register the owner of "this repo has a fetch in flight" for `key`. */
@@ -54,24 +44,18 @@ export function setRepoRefMaintenanceBusyProbe(key: string, probe: () => boolean
   }
 }
 
-/**
- * Register the app-wide "do not start maintenance now" signal. Owned by the
- * main entry point because the inputs (live agents, battery, quit) are not
- * visible from the git layer.
- */
+/** The main entry point supplies agent, battery, creation and quit activity unavailable in the Git layer. */
 export function setRepoMaintenanceActivityProbe(probe: RepoMaintenanceActivityProbe | null): void {
   activityProbe = probe
 }
 
-/** Support escape hatch: kills the sweep without touching the user's git config. */
 function isDisabled(): boolean {
   return process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE === '1'
 }
 
 function localMaintenanceOptions(): RepoRefMaintenanceOptions {
   return {
-    // Fail closed: without the app-level gate installed we cannot see agents,
-    // creates, or battery, and running blind is worse than not running.
+    // Without the app activity gate, defer maintenance.
     isBusy: () => activityProbe?.() ?? true,
     observe: (attempt) =>
       withSpan('repo.ref_maintenance', (span) => attempt(span), {
@@ -88,14 +72,7 @@ export function getLocalRepoRefMaintenance(): RepoRefMaintenance {
   return shared
 }
 
-/**
- * Cancels every armed timer and waits out any `packed-refs` rewrite in progress.
- *
- * Deliberately does not kill the child. A pack orphaned by the app quitting
- * finishes on its own; a pack signalled mid-prune strands a ref lock about one
- * time in five, and on Windows a force-kill inside the rewrite strands
- * `packed-refs.lock` every time -- which blocks every later ref deletion.
- */
+/** Cancel timers and await the rewrite window; never kill pack-refs, which can strand ref locks. */
 export function disposeLocalRepoRefMaintenance(): Promise<void> {
   const settling = shared?.awaitPackedRefsLockRelease() ?? Promise.resolve()
   shared?.dispose()
@@ -105,24 +82,12 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
   return settling
 }
 
-/**
- * Hold every repository open while `run` touches refs.
- *
- * A ref deletion needs `packed-refs.lock`, which a running pack holds only while
- * it rewrites the file -- 0.03-1.37s of a 23-32s run. Waiting that out turns the
- * collision into a short pause. Cancelling the pack instead would strand a
- * `refs/**` lock about one time in five, which Git never clears, so the ref
- * stays undeletable indefinitely.
- */
+/** Wait out packed-refs rewrites before ref work; killing the pack can strand persistent per-ref locks. */
 export async function withRepoRefMaintenancePaused<T>(
   reason: string,
   run: () => Promise<T>
 ): Promise<T> {
-  // Taken unconditionally rather than only when something is already armed: a
-  // fetch inside `run` can arm the sweep, and one counter bump against an idle
-  // instance costs a microtask. This can rebuild the instance after the
-  // quit-time dispose; harmless, because a fresh one has no armed timers and its
-  // activity probe is gone, so it fails closed.
+  // Pause even before arming: run may schedule maintenance. Recreated shutdown instances fail closed.
   const release = await getLocalRepoRefMaintenance().pause(reason)
   try {
     return await run()
@@ -136,13 +101,7 @@ export function awaitPackedRefsLockRelease(): Promise<void> {
   return shared ? shared.awaitPackedRefsLockRelease() : Promise.resolve()
 }
 
-/**
- * Count user-initiated ref work as activity and restart every armed countdown.
- *
- * Deliberately not keyed to a repo: resolving one would cost a `rev-parse` on a
- * path the user is waiting on, and a manual fetch or pull says the user is at
- * the keyboard, which is a reason to defer every repository.
- */
+/** User ref work postpones every repo; resolving one would add a probe to the interactive path. */
 export function postponeRepoRefMaintenance(): void {
   shared?.postponeAll()
 }
@@ -158,12 +117,7 @@ export function _resetLocalRepoRefMaintenanceForTests(
   clearRepoPackIndexMaintenanceCache()
 }
 
-/**
- * Git reports the common dir in its own execution space, so a WSL repo answers
- * with a Linux path the Windows main process cannot open. Translate it back to
- * the UNC spelling for the dirent walk; the walk reads directories, not files,
- * so the handful of round trips stays cheap even over the share.
- */
+/** Translate WSL Git's common dir to a UNC refs directory the main process can enumerate. */
 function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | undefined): string {
   if (wslDistro && !isWslUncPath(commonDir) && !isWindowsAbsolutePathLike(commonDir)) {
     return win32.join(toWindowsWslPath(commonDir, wslDistro), 'refs')
@@ -172,12 +126,7 @@ function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | unde
   return (isWindowsAbsolutePathLike(commonDir) ? win32 : posix).join(commonDir, 'refs')
 }
 
-/**
- * `maintenance.auto=false` and `gc.auto=0` are the two knobs a user reaches for
- * to tell Git to stop maintaining a repository on its own. Orca sets both on its
- * own fetches, but only as per-invocation `-c` flags, so this probe sees the
- * user's persisted config and never Orca's own suppression.
- */
+/** Read user opt-outs; Orca's per-command maintenance suppression never appears in persisted config. */
 export function isGitAutoMaintenanceDisabled(configOutput: string): boolean {
   return configOutput
     .split('\n')
@@ -188,13 +137,7 @@ export function isGitAutoMaintenanceDisabled(configOutput: string): boolean {
     )
 }
 
-/**
- * The common dir in the spelling the main process can open.
- *
- * Derived from the converted refs path, not the raw one: a WSL answer arrives as
- * a Linux path but converts to a UNC path with no `/` in it, so choosing the
- * path flavour before conversion collapses the whole thing to `.`.
- */
+/** Choose path syntax after WSL-to-UNC conversion; choosing before it would derive . instead. */
 function gitCommonDirForMainProcess(commonDir: string, wslDistro: string | undefined): string {
   const refs = refsDirectoryForMainProcess(commonDir, wslDistro)
   return (isWindowsAbsolutePathLike(refs) ? win32 : posix).dirname(refs)
@@ -207,11 +150,7 @@ export type LocalRepoRefMaintenanceTargetArgs = {
   readonly wslDistro?: string
 }
 
-/**
- * Record a write to this repo and restart its quiet-period countdown. The only
- * entry point callers need: the kill switch is honoured before anything is
- * scheduled, so a disabled build arms no timers at all.
- */
+/** Restart the quiet period after a write; check the kill switch before arming timers. */
 export function armLocalRepoRefMaintenance(args: LocalRepoRefMaintenanceTargetArgs): void {
   if (isDisabled()) {
     return
@@ -223,8 +162,7 @@ export function createLocalRepoRefMaintenanceTarget(
   args: LocalRepoRefMaintenanceTargetArgs
 ): RepoRefMaintenanceTarget {
   const gitOptions = args.wslDistro ? { wslDistro: args.wslDistro } : {}
-  // The engine always probes before it packs, so the pack reuses this answer
-  // rather than spending a second rev-parse on the same repository.
+  // Reuse the required pre-pack probe instead of spending another rev-parse.
   let commonDir: string | undefined
   const resolveCommonDir = async (signal?: AbortSignal): Promise<string | undefined> => {
     commonDir ??= await readRepoCommonDirFromGit(args.repoPath, {
@@ -282,9 +220,7 @@ export function createLocalRepoRefMaintenanceTarget(
       if (!claim.ok) {
         throw new RefMaintenanceRepoLocked(claim.reason)
       }
-      // Only admission is cancellable. A pack that is
-      // killed mid-prune strands a `refs/**` lock about one time in five, and
-      // Git never clears those; waiting out the window costs at most ~1.4s.
+      // Cancel admission only: killing a running pack can strand persistent per-ref locks.
       const watch = owner?.watchLock((held) => lock.setHeld(held))
       try {
         await gitExecFileAsync([...PACK_REFS_ARGS], {

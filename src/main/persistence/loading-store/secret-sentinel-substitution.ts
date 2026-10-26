@@ -2,11 +2,9 @@ import { createHash } from 'node:crypto'
 import { escapeRegex } from '../../../shared/string-utils'
 
 export type SecretSentinelSubstitution = {
-  /** The `orca-secret-slot-<uuid>` placeholder standing in the serialized state. */
   sentinel: string
-  /** What the on-disk payload gets: the ciphertext. */
   blob: string
-  /** What the guard hash gets: a value stable across non-deterministic encryption. */
+  /** Stable hash input despite nondeterministic encryption. */
   hashValue: string
 }
 
@@ -25,7 +23,7 @@ const textOutput: SecretSubstitutionOutput<string> = {
   concat: (chunks) => chunks.join('')
 }
 
-/** One traversal keeps ciphertext and guard hashes aligned without copying once per secret. */
+/** Build ciphertext payload and stable guard hash together without per-secret full-state copies. */
 export function applySecretSentinelSubstitutions(
   serialized: string,
   substitutions: readonly SecretSentinelSubstitution[],
@@ -64,7 +62,7 @@ function substituteSentinels<T extends string | Buffer>(
   const replacementBySentinel = new Map<string, { blob: T; hashValue: T }>()
   const alternatives: string[] = []
   for (const { sentinel, blob, hashValue } of substitutions) {
-    // Match escaped JSON contents, including quotes and backslashes inside a secret.
+    // Match JSON-escaped sentinel contents rather than raw secret text.
     const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
     if (replacementBySentinel.has(escapedSentinel)) {
       continue
@@ -76,7 +74,7 @@ function substituteSentinels<T extends string | Buffer>(
     })
   }
 
-  // Substitute every occurrence so a repeated sentinel cannot survive on disk.
+  // Global matching prevents repeated placeholders from reaching disk.
   const pattern = new RegExp(alternatives.join('|'), 'g')
   const chunks: T[] = []
   let cursor = 0
@@ -86,7 +84,7 @@ function substituteSentinels<T extends string | Buffer>(
     if (replacement === undefined) {
       throw new Error('Secret substitution matched an unregistered sentinel')
     }
-    // The Buffer output reuses each literal's UTF-8 bytes for both the payload and hash.
+    // Reuse literal UTF-8 bytes in both disk payload and guard hash.
     const literal = output.encode(serialized.slice(cursor, match.index))
     chunks.push(literal, replacement.blob)
     hash.update(literal)

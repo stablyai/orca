@@ -1,9 +1,3 @@
-// Stopping one Codex app-server child, in the four ways the host asks for it.
-//
-// Every path funnels through `settled` so the ephemeral surfaces a closed
-// session owns are cleared exactly once, and only when the child was actually
-// proven stopped — a refused close leaves the session indexed for a retry.
-
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
@@ -39,11 +33,12 @@ export class CodexStructuredSessionTeardown {
         this.deps.sessions,
         this.deps.acquisitions,
         this.deps.onEvent,
-        this.deps.logger
+        this.deps.logger,
+        true
       )
     )
     if (closed && connection?.processTreeUnproven) {
-      // The root exited, so the close is proven; its owner reports the children left unconfirmed.
+      // Root exit settles the close; report unproven descendants separately.
       throw new AgentSessionAcquisitionRootExitObservedError(
         new Error('codex app-server exited, but its process tree was not proven gone')
       )
@@ -63,8 +58,7 @@ export class CodexStructuredSessionTeardown {
     return this.settled(sessionId, closed)
   }
 
-  /** Terminates this exact child as an unexpected death. Every ownership check
-   *  stays here so a stale caller cannot close a replacement child. */
+  /** Ownership checks prevent stale callers from killing replacement children. */
   forceCloseUnexpected = (
     sessionId: string,
     fence: number,

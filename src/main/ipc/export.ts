@@ -24,9 +24,7 @@ export function registerExportHandlers(): void {
       try {
         const pdfBuffer = await htmlToPdf(html)
 
-        // Why: sanitize to keep the suggested filename legal on every platform.
-        // Windows forbids /\:*?"<>| in filenames; truncate to keep the OS save
-        // dialog stable when titles are pathologically long.
+        // Keep long titles and Windows-forbidden characters out of suggested save filenames.
         const sanitizedTitle = title.replace(/[/\\:*?"<>|]/g, '_').slice(0, 100) || 'export'
         const defaultFilename = `${sanitizedTitle}.pdf`
 

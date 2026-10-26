@@ -8,7 +8,7 @@ import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-as
 let renderer: ReactTestRenderer | undefined
 afterEach(() => act(() => renderer?.unmount()))
 
-function fixture() {
+function fixture(agent = 'claude') {
   const sendRequest = vi.fn<RpcClient['sendRequest']>().mockResolvedValue({
     id: 'send',
     ok: true,
@@ -27,6 +27,7 @@ function fixture() {
   }
   const cancelPending = vi.fn()
   const onSendError = vi.fn()
+  const agentRef = { current: agent }
   let cancelAsk: (() => Promise<boolean>) | undefined
   function Probe(): null {
     cancelAsk = useMobileNativeChatCancelAsk({
@@ -34,6 +35,7 @@ function fixture() {
       enabled: true,
       handleRef: { current: 'terminal' },
       deviceTokenRef: { current: 'device' },
+      agentRef,
       cancelPending,
       onSendError
     })
@@ -46,6 +48,7 @@ function fixture() {
     sendRequest,
     cancelPending,
     onSendError,
+    agentRef,
     cancel: () => {
       if (!cancelAsk) {
         throw new Error('Cancel hook did not mount')
@@ -56,13 +59,33 @@ function fixture() {
 }
 
 describe('mobile question rejection', () => {
+  it('refuses a retained cancel callback when the live agent becomes OMP', async () => {
+    const f = fixture()
+    f.agentRef.current = 'omp'
+    await expect(f.cancel()).resolves.toBe(false)
+    expect(f.sendRequest).not.toHaveBeenCalled()
+    expect(f.onSendError).toHaveBeenCalledWith('Answer this question in terminal view')
+  })
   it('cancels pending answer writes then sends exactly one Escape without submitting', async () => {
     const f = fixture()
     await expect(f.cancel()).resolves.toBe(true)
     expect(f.cancelPending).toHaveBeenCalledOnce()
     const sends = f.sendRequest.mock.calls.filter(([method]) => method === 'terminal.send')
     expect(sends).toHaveLength(1)
-    expect(sends[0]?.[1]).toMatchObject({ terminal: 'terminal', text: '\x1b', enter: false })
+    expect(f.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'terminal',
+        text: '\x1b',
+        enter: false,
+        requireWriteSettlement: true,
+        client: { id: 'device', type: 'mobile' }
+      },
+      { timeoutMs: 15_000, budgetSpansConnect: true }
+    )
+    expect(f.cancelPending.mock.invocationCallOrder[0]).toBeLessThan(
+      f.sendRequest.mock.invocationCallOrder[0]!
+    )
     expect(f.onSendError).not.toHaveBeenCalled()
   })
 

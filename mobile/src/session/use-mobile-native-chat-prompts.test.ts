@@ -1,9 +1,20 @@
 import { createElement } from 'react'
-import TestRenderer from 'react-test-renderer'
-import { describe, expect, it } from 'vitest'
+import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { buildOmpPlanReviewAnswer } from '../../../src/shared/omp-plan-review-prompt'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
+
+const renderers: ReactTestRenderer[] = []
+afterEach(() => {
+  TestRenderer.act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.length = 0
+})
 
 const APPROVAL = JSON.stringify({
   approval: { tool: 'Bash', summary: 'pnpm build > build.log 2>&1' }
@@ -29,7 +40,7 @@ function promptsFor(
     return null
   }
   TestRenderer.act(() => {
-    TestRenderer.create(createElement(Probe))
+    renderers.push(TestRenderer.create(createElement(Probe)))
   })
   return captured!
 }
@@ -39,6 +50,29 @@ function permissionFor(status: Partial<AgentStatusEntry> | null): unknown {
 }
 
 describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
+  it('keeps the OMP plan review card authoritative over approval-sounding prose', () => {
+    const planReview = JSON.stringify({
+      planReview: {
+        reviewId: 'review-1',
+        plan: '# Plan',
+        options: [{ id: 'execute', label: 'Approve and execute' }]
+      }
+    })
+    expect(
+      permissionFor({
+        state: 'blocked',
+        agentType: 'omp',
+        interactivePrompt: planReview,
+        lastAssistantMessage: 'Please approve this plan.\n1. Yes\n2. No'
+      })
+    ).toMatchObject({
+      subject: { kind: 'plan', text: '# Plan' },
+      options: [
+        { label: 'Approve and execute', send: buildOmpPlanReviewAnswer('review-1', 'execute') }
+      ]
+    })
+  })
+
   it.each(['opencode', 'opencode2'])(
     'keeps the %s approval event authoritative over numbered assistant prose',
     (agentType) => {
@@ -133,7 +167,6 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('renders no ask card from a sticky prompt while the agent is working or done', () => {
-    // The prompt payload outlives its answer — same paused gate as permission.
     const working = promptsFor({ state: 'working', interactivePrompt: ASK })
     expect(working.ask).toBeNull()
     expect(working.detectedAsk).not.toBeNull()
@@ -144,9 +177,7 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('keeps the transcript-derived pending ask outside the paused gate', () => {
-    // A hook row idle past AGENT_STATUS_STALE_AFTER_MS projects to `done` with no
-    // interactivePrompt, so gating this too would make a still-pending question
-    // unanswerable from mobile. `extractPendingAsk` clears on the tool result.
+    // Stale status loses interactivePrompt; transcript pending asks must remain answerable until their tool result lands.
     expect(promptsFor({ state: 'waiting' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'done' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'working' }, askMessages).ask).not.toBeNull()
@@ -166,10 +197,7 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('does not leak a paused-out sticky status prompt through the transcript fallback', () => {
-    // The post-answer window: the status still carries the prompt while flipping
-    // to `working`, and the transcript's tool-result row has not landed yet, so
-    // both sources still describe the answered question. The paused gate only
-    // holds because a status prompt suppresses the transcript fallback outright.
+    // Sticky answered status suppresses transcript fallback; only the paused gate prevents a duplicate card while its result is in flight.
     const working = promptsFor({ state: 'working', interactivePrompt: ASK }, askMessages)
     expect(working.ask).toBeNull()
     expect(working.detectedAsk).not.toBeNull()
@@ -189,4 +217,50 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
     expect(promptsFor({ state: 'done', interactivePrompt: ASK }, answered).ask).toBeNull()
     expect(promptsFor({ state: 'done' }, answered).ask).toBeNull()
   })
+})
+
+describe('useMobileNativeChatPrompts in a structured chat', () => {
+  it.each([
+    ['accepted', true],
+    ['queued', true],
+    ['unknown', true],
+    ['rejected', false]
+  ] as const)(
+    'answers a Codex async question through an ordinary %s send',
+    async (outcome, accepted) => {
+      const sendWithOutcome = vi.fn(async () => outcome)
+      const questions = [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+      const message: NativeChatMessage = {
+        id: 'ask',
+        role: 'assistant',
+        blocks: [
+          { type: 'text', text: 'Which color?\n- Red\n- Blue' },
+          { type: 'tool-call', name: 'request_user_input_async', input: { questions } }
+        ],
+        timestamp: null,
+        source: 'transcript'
+      }
+      let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
+      function Probe(): null {
+        captured = useMobileNativeChatPrompts({
+          enabled: true,
+          structured: { permission: null, question: null, sendWithOutcome },
+          status: null,
+          messages: [message],
+          transcriptLoading: false
+        })
+        return null
+      }
+      TestRenderer.act(() => {
+        renderers.push(TestRenderer.create(createElement(Probe)))
+      })
+
+      const ask = captured?.ask
+      expect(ask?.questions[0]?.question).toBe('Which color?')
+      await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
+        accepted
+      )
+      expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+    }
+  )
 })

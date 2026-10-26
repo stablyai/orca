@@ -27,13 +27,7 @@ function repoAddonPath() {
   }
 }
 
-/**
- * Stage a stale addon and keep it loaded, exactly as a running Orca does.
- *
- * The bytes are the repo's own patched build with the flagged import appended,
- * because the guard keys on that symbol and the patched binary does not carry
- * it. Trailing bytes are PE overlay, so the file still loads.
- */
+// Keep stale addon loaded as running Orca does; append flagged import to real patched build as loadable PE overlay.
 async function stageLoadedStaleAddon(projectDir) {
   const source = repoAddonPath()
   const releaseDir = join(
@@ -61,10 +55,7 @@ async function stageLoadedStaleAddon(projectDir) {
   return holder
 }
 
-// Why an end-to-end run: the defect was purely one of placement. The guard threw
-// a real EPERM, and the classifier that turns that into "close running Orca"
-// already existed -- the throw simply happened before the try that reaches it.
-// Only the whole script exercises that.
+// Run whole script: EPERM guard used to throw outside existing lock classifier’s try, bypassing close-Orca message.
 describe.runIf(process.platform === 'win32')('rebuild-native-deps stale addon under lock', () => {
   it.skipIf(!repoAddonPath())(
     'reports a locked stale addon as a Windows file lock instead of an EPERM stack',

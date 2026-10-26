@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -194,9 +195,32 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
       defaultTabs,
       ports
     })
-    expect(ports.provision).not.toHaveBeenCalled()
-    expect(ports.activate).toHaveBeenCalledWith(repo.id, worktree.id, startup, setup, defaultTabs)
     expect(createTerminal).toHaveBeenCalledTimes(1)
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(ports.provision).not.toHaveBeenCalled()
+      expect(ports.activate).toHaveBeenCalledWith(repo.id, worktree.id, startup, setup, defaultTabs)
+      return
+    }
+    // Main keeps the agent's pane to show the failure and lays setup and default tabs out itself.
+    expect(createTerminal).toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.objectContaining({ command: 'codex', keepPaneOnStartFailure: true })
+    )
+    expect(ports.provision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup,
+        defaultTabs,
+        primaryTerminalHandle: null,
+        hasStartupTerminal: true
+      })
+    )
+    expect(ports.activate).toHaveBeenCalledWith(
+      repo.id,
+      worktree.id,
+      undefined,
+      undefined,
+      undefined
+    )
   })
 
   it('does not treat agent attribution alone as a promised chat on activation', async () => {

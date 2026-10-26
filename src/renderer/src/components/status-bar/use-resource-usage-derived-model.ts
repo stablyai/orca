@@ -48,7 +48,7 @@ export function useResourceUsageDerivedModel({
   projectGroups: AppState['projectGroups']
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   workspaceSessionReady: boolean
-  sessionCount: number
+  sessionCount: number | null
   sessionsError: boolean
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null
@@ -71,7 +71,7 @@ export function useResourceUsageDerivedModel({
     return map
   }, [repos, projectGroups])
 
-  // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
+  // Use execution-host metadata for SSH status; an absent sample cannot establish remoteness.
   const repoConnectionIdById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const repo of repos) {
@@ -96,8 +96,7 @@ export function useResourceUsageDerivedModel({
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
-  // Why: a bare resource identity cannot choose between the same workspace id on different
-  // hosts, but the id still exists; keep the map whole and let the merge gate attribution only.
+  // Keep duplicate workspace IDs in the catalog; gate host attribution where the resource identity is ambiguous.
   const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
@@ -105,9 +104,7 @@ export function useResourceUsageDerivedModel({
     () =>
       open
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
-            // Why spread: the rows and the bulk selector must classify from the identical binding
-            // inputs. Re-listing them here let the row path miss deferred SSH sessions, so their
-            // single-row kill skipped confirmation while bulk cleanup correctly spared them (#8459).
+            // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
             ...resourceSessionBindings,
             runtimePaneTitlesByTabId,
             repoDisplayNameById,
@@ -143,15 +140,13 @@ export function useResourceUsageDerivedModel({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
-  // Why: open and closed badges share the same daemon inventory cache. The old
-  // closed path used boundPtyIds (wake hints) and inflated the chip to 60+.
+  // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
   const triggerSessionCount = sessionCount
 
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  // Why null-not-zero: a host that cannot read commit (every Unix host, and any
-  // host older than the field) must render nothing here, never "0 B committed".
+  // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy()
     : null

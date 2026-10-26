@@ -1,3 +1,4 @@
+import { installRealWorkerThreadChildProcesses } from './worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -69,8 +70,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
       git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/churn', worktreePath])
       const head = git(worktreePath, ['rev-parse', 'HEAD'])
 
-      // Why: a producer racing Git's recursive delete deterministically exposes
-      // the Windows ENOTEMPTY state reported by real workspace deletions.
+      // Race Git’s recursive deletion to reproduce Windows ENOTEMPTY deterministically.
       const churn = spawn(
         process.execPath,
         [
@@ -126,3 +126,5 @@ describe('local Windows worktree removal recovery (live Git)', () => {
     }
   )
 })
+
+installRealWorkerThreadChildProcesses()

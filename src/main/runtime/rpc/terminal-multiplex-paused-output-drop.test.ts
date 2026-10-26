@@ -4,18 +4,28 @@ import type { RuntimeTerminalDataMeta } from '../orca-runtime'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
+import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
 
 async function subscribePausable(capabilities: Record<string, 1>) {
   const listeners: ((data: string, meta?: RuntimeTerminalDataMeta) => void)[] = []
+  const viewSubscribers = new RuntimeTerminalViewSubscribers({
+    notifyPresenceChanged: () => {},
+    hasMobileSubscribers: () => false,
+    isUnattachedLocalCandidate: () => false,
+    attachProvider: () => null
+  })
   const harness = startDesktopMultiplexSubscribe({
     subscribeToTerminalData: vi.fn((_ptyId, listener) => {
       listeners.push(listener)
       return vi.fn()
-    })
+    }),
+    registerRemoteTerminalViewSubscriber: (ptyId, isOutputPaused) =>
+      viewSubscribers.registerRemote(ptyId, isOutputPaused)
   })
   await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
   harness.handlers.get(0)?.(
@@ -60,11 +70,27 @@ async function subscribePausable(capabilities: Record<string, 1>) {
       (bytes) =>
         decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.PausedOutputDropped
     ).length
+  const outputText = (): string =>
+    harness.binaryFrames
+      .map((bytes) => decodeTerminalStreamFrame(bytes))
+      .map((frame) =>
+        frame?.opcode === TerminalStreamOpcode.Output ? decodeTerminalStreamText(frame.payload) : ''
+      )
+      .join('')
   const close = async (): Promise<void> => {
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   }
-  return { subscribed: subscribedEvent(), setPaused, emitOutput, dropNotices, close }
+  const remoteViewHoldsAuthority = (): boolean => viewSubscribers.hasRemoteReceivingOutput('pty-1')
+  return {
+    subscribed: subscribedEvent(),
+    setPaused,
+    emitOutput,
+    dropNotices,
+    outputText,
+    remoteViewHoldsAuthority,
+    close
+  }
 }
 
 describe('terminal multiplex paused-output drop notice', () => {
@@ -91,12 +117,27 @@ describe('terminal multiplex paused-output drop notice', () => {
     await host.close()
   })
 
-  it('announces output still batched when the pause lands', async () => {
+  // #32944: main yielded the batched bytes' replies to this view, so a DA1 dropped here went unanswered.
+  it('delivers output still batched when the pause lands', async () => {
     const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
-    host.emitOutput('batched-before-pause')
+    host.emitOutput('batched-before-pause\x1b[c')
     host.setPaused(true)
-    expect(host.dropNotices()).toBe(1)
+    expect(host.outputText()).toContain('batched-before-pause\x1b[c')
+    expect(host.dropNotices()).toBe(0)
     await host.close()
+  })
+
+  // #32944: the dropped output can carry a query, so main must answer it while this view is paused.
+  it('yields query authority while paused and takes it back on resume and close', async () => {
+    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
+    expect(host.remoteViewHoldsAuthority()).toBe(true)
+    host.setPaused(true)
+    expect(host.remoteViewHoldsAuthority()).toBe(false)
+    host.setPaused(false)
+    expect(host.remoteViewHoldsAuthority()).toBe(true)
+    host.setPaused(true)
+    await host.close()
+    expect(host.remoteViewHoldsAuthority()).toBe(false)
   })
 
   it('never sends the frame to a client that did not negotiate it', async () => {

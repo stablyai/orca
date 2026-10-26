@@ -3,7 +3,7 @@ import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-typ
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
-import { getRequiredEntry } from './issue-context-client'
+import { getRequiredEntry } from './issue-context/client'
 import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
@@ -203,9 +203,7 @@ export async function searchIssues(
       }
     })
   )
-  // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
-  // updatedAt would discard relevance order for single-workspace results,
-  // diverging from Linear's web UI and pre-PR behavior.
+  // Single-workspace results must retain Linear relevance ranking instead of updatedAt order.
   if (entries.length === 1) {
     return results.flat().slice(0, limit)
   }

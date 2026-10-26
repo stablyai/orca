@@ -14,12 +14,10 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 
-// Why: these fixtures register an SSH provider, which models a connected relay session — and a
-// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+// Connected SSH fixtures need the host HOME for removal guards.
 
 describe('OrcaRuntimeService', () => {
-  // Why: this process holds no SSH PTY provider, so an SSH delete cannot stop its terminals and
-  // must never fall back to sweeping the same-id local workspace.
+  // Without an SSH PTY provider, deletion must refuse rather than sweep a same-id local workspace.
   it('refuses an SSH delete without stopping a same-id local terminal', async () => {
     const remoteRepo = {
       id: TEST_REPO_ID,

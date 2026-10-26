@@ -28,9 +28,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     return undefined
   }
 
-  // Why (issue #1158): the app shell still needs persistedUIReady=true when
-  // startup fails before ui.get(), but these defaults must never replace a
-  // successfully loaded UI snapshot after a later session hydration failure.
+  // Startup failure still needs persistedUIReady (#1158), but defaults must not replace UI loaded before a later session failure.
   return {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,

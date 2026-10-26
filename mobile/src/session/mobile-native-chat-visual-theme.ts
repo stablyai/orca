@@ -1,11 +1,7 @@
 import type { NativeChatVisualTheme } from '../../../src/shared/native-chat-visual-shell'
 import { colors, radii } from '../theme/mobile-theme'
 
-/**
- * The phone's one (dark) theme, as the variables a visual styles against. The app has no theme
- * switch, so a visual receives this before its content runs and never needs a live update.
- * Chart colors are desktop's dark `--chart-1..5` (the blue 300-800 ramp), as hex.
- */
+// Match desktop’s dark chart tokens; initialize visual styles before author content runs.
 export const MOBILE_NATIVE_CHAT_VISUAL_THEME: NativeChatVisualTheme = {
   colorScheme: 'dark',
   tokens: {

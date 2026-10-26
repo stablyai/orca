@@ -40,6 +40,7 @@ import {
   getVisibleWorktreeTerminalActivityTabs,
   getWorktreeIdsWithStructuredChat
 } from '../../visible-worktree-activity-inputs'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -50,10 +51,7 @@ type RevealContext = {
   targetHostId: ExecutionHostId
 }
 
-/**
- * For each active filter, how to make one workspace visible again. Keyed on the shared filter
- * keys, so a new filter fails to compile until it says how a hidden workspace is revealed.
- */
+/** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
   filterRepoIds: ({ state, worktree }) => {
     if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
@@ -114,7 +112,10 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
         state.ptyIdsByTabId,
         browserTabsByWorktree,
         liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
+        getWorktreeIdsWithStructuredChat(
+          state.unifiedTabsByWorktree,
+          state.structuredChatSleptAtByPaneKey
+        )
       )
     ) {
       state.setShowSleepingWorkspaces(true)
@@ -128,7 +129,7 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const workspaceScope = parseWorkspaceKey(worktree.id)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (candidate) => candidate.id === workspaceScope.folderWorkspaceId
     )
     if (folderWorkspace) {
@@ -144,7 +145,6 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
   return getWorktreeExecutionHostId(worktree, repo, defaultHostId)
 }
 
-// Every sidebar filter, plus the single escape hatch that resets all of them.
 export function useSidebarWorktreeFilters() {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
 

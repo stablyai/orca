@@ -29,7 +29,6 @@ function processError(code: string): Error {
   return Object.assign(new Error(code), { code })
 }
 
-// Writer liveness by pid; any other pid (e.g. a daemon record) answers as alive.
 function stubWriterLiveness(): void {
   vi.spyOn(process, 'kill').mockImplementation((pid) => {
     if (pid === DEAD_WRITER_PID) {
@@ -76,7 +75,6 @@ function selectedBuild(): string {
   return dirname(host.execPath)
 }
 
-// Leftovers a crash mid-copy, a repaired mirror, and the pre-build-dir layout leave behind.
 function seedLeftovers(): { staleBuild: string; staging: string; legacyExe: string } {
   const staleBuild = join(versionRoot, 'build-stale-000000000000')
   mkdirSync(join(staleBuild, 'resources'), { recursive: true })
@@ -224,7 +222,6 @@ describe('current-version daemon-host staging cleanup', () => {
     expect(existsSync(staleBuild)).toBe(true)
     expect(existsSync(join(selected, 'Orca.exe'))).toBe(true)
 
-    // Publication also preserves all current-version mirrors.
     mkdirSync(secondStale, { recursive: true })
     writeFileSync(record, JSON.stringify({ pid: LIVE_WRITER_PID, appVersion: '9.9.9' }))
     pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))

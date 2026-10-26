@@ -10,6 +10,7 @@ import {
   linkWorkspaces,
   writeWorkspaceMeta
 } from './helpers/repo-with-workspaces'
+import { dismissSetupScriptPrompts } from './helpers/sidebar-setup-prompt'
 import { seedLineageScenario, seedWorkspaceLiveTerminal } from './worktree-lineage-state'
 
 test.use({ launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
@@ -286,6 +287,7 @@ test.describe('Toggle Child Workspaces shortcut', () => {
     const folder = sidebarWorktreeRow(orcaPage, folderKey)
     await expect(folder).toBeVisible()
     await expect(folder.getByRole('button', { name: /child workspace/ })).toHaveCount(0)
+    await dismissSetupScriptPrompts(orcaPage)
     await sidebarWorktreeRow(orcaPage, parentId).click()
     await orcaPage.locator('[data-worktree-sidebar]').focus()
     await folder.hover()

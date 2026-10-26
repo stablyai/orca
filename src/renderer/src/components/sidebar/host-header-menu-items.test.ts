@@ -129,4 +129,15 @@ describe('buildHostHeaderMenuModel', () => {
       }).actions
     ).not.toContain('runtime-repair')
   })
+
+  it('offers Check connection, not an access link, for a server Orca pairs over SSH', () => {
+    const actions = buildHostHeaderMenuModel({
+      kind: 'runtime',
+      health: 'blocked',
+      blockedReason: 'access-revoked',
+      repairableWithAccessLink: false
+    }).actions
+    expect(actions).not.toContain('runtime-repair')
+    expect(actions).toContain('runtime-check-connection')
+  })
 })

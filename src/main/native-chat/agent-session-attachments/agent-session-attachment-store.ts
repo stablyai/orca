@@ -1,13 +1,9 @@
-// The host-owned store for files a client attaches to a structured chat: a paired server's for its
-// clients, and this machine's for its own local chats' pastes.
-//
-// `<root>/<upload id>/<original file name>`: one directory per upload keeps the user's file name
-// intact (agents read meaning into it) without two uploads colliding. Bytes land in a hidden part
-// file and are renamed into place on commit, so a stored name is always complete. Which chats hold
-// an upload is recorded by the message that names it (`agent-session-attachment-claims.ts`).
+// Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { constants, createWriteStream } from 'node:fs'
+import { appendFile, lstat, mkdir, open, rm, writeFile } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -30,6 +26,7 @@ import {
 
 const UPLOAD_MAX_CONCURRENT = 8
 const UPLOAD_IDLE_TTL_MS = 5 * 60 * 1000
+const FRESH_FILE_STREAM_HIGH_WATER_MARK = 1024 * 1024
 const NOT_FOUND = 'Attachment upload was not found'
 const NOT_AN_IMAGE = 'Not an attachment image'
 const PREVIEW_TOO_LARGE = 'file_too_large'
@@ -48,7 +45,6 @@ type InFlightUpload = {
 }
 
 export type AgentSessionAttachmentStoreOptions = {
-  /** Whether this host holds the chat: an upload for any other chat is refused at its start. */
   hasSession: (sessionId: string) => boolean
 }
 
@@ -66,7 +62,6 @@ export class AgentSessionAttachmentStore {
     private readonly options: AgentSessionAttachmentStoreOptions
   ) {}
 
-  /** Upload ids whose bytes are still arriving; the sweep leaves their directories alone. */
   isUploadInFlight(uploadId: string): boolean {
     return this.uploads.has(uploadId)
   }
@@ -135,14 +130,14 @@ export class AgentSessionAttachmentStore {
     if (upload.writing) {
       throw new Error('Attachment chunk is still being written')
     }
-    // In flight until the rename lands, so the sweep never takes a slow upload's part file.
+    // Keep uploads in flight until rename so slow commits cannot race part-file sweeping.
     upload.writing = true
     try {
       if (upload.receivedLength !== upload.expectedLength) {
         throw new Error('Attachment upload is incomplete')
       }
       const finalPath = join(upload.uploadDir, upload.name)
-      // An antivirus or indexer briefly holding the part file on Windows must not lose the upload.
+      // Retry transient Windows antivirus/indexer holds instead of discarding the upload.
       await renameFileWithWindowsRetryAsync(
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
@@ -156,8 +151,7 @@ export class AgentSessionAttachmentStore {
     }
   }
 
-  /** Stores bytes this process already holds as one committed upload; returns its path. Not in
-   *  flight meanwhile: the sweep leaves a folder this new alone for an hour. */
+  /** Fresh files rely on the sweep's one-hour grace rather than in-flight tracking. */
   async storeFile(name: string, bytes: Buffer): Promise<string> {
     const uploadDir = join(this.rootDir, randomUUID())
     const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
@@ -173,6 +167,64 @@ export class AgentSessionAttachmentStore {
     return finalPath
   }
 
+  /** Accept only trusted, unpublished 0600 snapshots, never arbitrary user paths. */
+  async importFreshFile(name: string, sourcePath: string, byteLength: number): Promise<string> {
+    const uploadDir = join(this.rootDir, randomUUID())
+    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    try {
+      await mkdir(uploadDir, { recursive: true })
+      try {
+        // Nothing fallible may follow rename: it transfers ownership of the source file.
+        await renameFileWithWindowsRetryAsync(sourcePath, finalPath)
+        return finalPath
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'EXDEV')) {
+          throw error
+        }
+      }
+      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      const handle = await open(sourcePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+      try {
+        const before = await handle.stat()
+        if (!before.isFile() || before.size !== byteLength) {
+          throw new Error('Snapshot changed')
+        }
+        await (byteLength === 0
+          ? writeFile(partPath, '', { flag: 'wx', mode: 0o600 })
+          : pipeline(
+              handle.createReadStream({
+                start: 0,
+                end: byteLength - 1,
+                autoClose: false,
+                highWaterMark: FRESH_FILE_STREAM_HIGH_WATER_MARK
+              }),
+              createWriteStream(partPath, {
+                flags: 'wx',
+                mode: 0o600,
+                highWaterMark: FRESH_FILE_STREAM_HIGH_WATER_MARK
+              })
+            ))
+        const after = await handle.stat()
+        if (
+          (await lstat(partPath)).size !== byteLength ||
+          after.size !== before.size ||
+          after.mtimeMs !== before.mtimeMs ||
+          after.ino !== before.ino ||
+          after.dev !== before.dev
+        ) {
+          throw new Error('Snapshot changed')
+        }
+      } finally {
+        await handle.close()
+      }
+      await renameFileWithWindowsRetryAsync(partPath, finalPath)
+      return finalPath
+    } catch (error) {
+      await removeQuietly(uploadDir)
+      throw error
+    }
+  }
+
   async abortUpload(args: { callerKey: string; uploadId: string }): Promise<{ aborted: true }> {
     const upload = this.uploads.peek(args.uploadId)
     if (upload) {
@@ -185,11 +237,7 @@ export class AgentSessionAttachmentStore {
     return { aborted: true }
   }
 
-  /**
-   * A stored image's bytes, for a client that shows it. Anything outside the store is refused, and
-   * the read is protected and bounded: `maxContentBytes` is the reply's budget on a remote
-   * connection, and an image over it is refused as too large rather than sent.
-   */
+  /** Refuse out-of-store paths and previews exceeding the remote reply budget. */
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {
     if (
       !IMAGE_FILE_MIME_TYPES[extname(filePath).toLowerCase()] ||
@@ -212,7 +260,7 @@ export class AgentSessionAttachmentStore {
             : previewableBinaryByteLimit(maxContentBytes)
       })
     } catch (error) {
-      // One answer for everything else, so a read says nothing about the server's other files.
+      // Uniform failures reveal nothing about unrelated server files.
       throw new Error(isTooLarge(error) ? PREVIEW_TOO_LARGE : NOT_AN_IMAGE)
     }
     if (!read.isBinary || !read.mimeType?.startsWith('image/')) {
@@ -230,7 +278,7 @@ export class AgentSessionAttachmentStore {
 
   private requireOwned(uploadId: string, callerKey: string): InFlightUpload {
     const upload = this.uploads.require(uploadId)
-    // Another client's upload reads as absent, not as forbidden.
+    // Do not reveal another caller's upload existence.
     if (upload.callerKey !== callerKey) {
       throw new Error(NOT_FOUND)
     }
@@ -239,6 +287,6 @@ export class AgentSessionAttachmentStore {
 }
 
 export async function removeQuietly(path: string): Promise<void> {
-  // Cleanup is best effort: a file that will not go is retried by the next sweep.
+  // Retry cleanup failures at the next sweep.
   await rm(path, { recursive: true, force: true }).catch(() => {})
 }

@@ -18,9 +18,7 @@ describe('hashOrcaHookScript', () => {
     expect(await hashOrcaHookScript('  echo hi  ')).toBe(hash)
   })
 
-  // Why: LAN web clients run on plain HTTP where crypto.subtle is undefined.
-  // The hash must still compute (no "crypto.subtle is undefined" throw) and stay
-  // deterministic so trust comparisons keep working.
+  // Plain-HTTP LAN clients lack crypto.subtle; fallback must still produce deterministic matching trust hashes.
   it('falls back to a deterministic hash when crypto.subtle is unavailable', async () => {
     stubCrypto(undefined)
     const hash = await hashOrcaHookScript('echo hi')

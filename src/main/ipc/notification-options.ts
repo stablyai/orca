@@ -58,9 +58,7 @@ function buildAgentTaskCompleteNotificationOptions(
   }
 }
 
-// Why (#4375): a still-working agent must never be announced as finished. Only an
-// explicit terminal state, or no state at all (the hook snapshot expired and the
-// notification itself is the completion signal), may say "finished".
+// Announce finished only for proved terminal state or an expired snapshot's completion signal (#4375).
 function formatAgentNotificationStatusText(
   args: NotificationDispatchRequest,
   translate: NotificationStatusTranslator
@@ -79,8 +77,7 @@ function formatAgentNotificationStatusText(
     case 'failure':
     case 'interruption':
       return translate('notifications.agentStatus.failed', 'failed')
-    // Why: a Stop the user asked for, a turn a newer request replaced, or an end Orca cannot
-    // prove, still never reads finished.
+    // User stops, supersession and unproved endings must not read as finished.
     case 'cancellation':
     case 'superseded':
     case 'unconfirmed':

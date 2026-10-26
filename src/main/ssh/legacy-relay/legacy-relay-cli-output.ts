@@ -18,7 +18,7 @@ export type CliResult = {
   exitCode: number
   postOutput?: PostOutput
 }
-export type PostOutput =
+type PostOutput =
   | { kind: 'legacy_check_ack'; terminal: string; messageIds: string[]; types?: string[] }
   | { kind: 'legacy_question_ack'; terminal: string; questionId: string; answerMessageId: string }
 

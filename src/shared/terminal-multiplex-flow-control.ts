@@ -12,7 +12,7 @@ export const TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS = 1000
 // 128 covers large paired clients while fixed ACK windows and per-stream queues bound pressure.
 export const TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION = 128
 export const TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION = 32
-// Why: waits past the running cap queue instead of failing, so restoring more panes than 32 never errors; sized to the active-stream cap.
+// Queue above the running cap so restoring over 32 panes does not fail; bound the queue by the active-stream cap.
 export const TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION =
   TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION
 export const TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR = 'terminal_stream_limit_exceeded'

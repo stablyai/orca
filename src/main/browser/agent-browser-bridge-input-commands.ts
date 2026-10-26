@@ -97,8 +97,6 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     })
   }
 
-  // ── Keyboard commands ──
-
   async keyboardInsertText(
     text: string,
     worktreeId?: string,

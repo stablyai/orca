@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraTransition } from '../../../shared/jira-types'
+import type { JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { jiraListTransitionsForTarget } from '@/runtime/runtime-jira-client'
 import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'

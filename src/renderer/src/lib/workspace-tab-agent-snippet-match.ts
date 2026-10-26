@@ -11,12 +11,7 @@ import {
 import type { PaletteQueryToken } from './palette-match/palette-query'
 import type { AgentMetadata } from './workspace-tab-agent-metadata'
 
-/**
- * Agent prompts and assistant messages are deliberately outside the structured tab
- * matcher — they have no evidence contract and no performance gate yet. This
- * fallback preserves the pre-existing ability to find a terminal by what its agent
- * said, as a strictly last-place tier that never contributes to token coverage.
- */
+/** Keep agent-text fallback last and outside token coverage; it preserves snippet search until structured evidence/performance contracts exist. */
 const AGENT_SNIPPET_RANK: PaletteDocumentRank = createPaletteFallbackRank()
 
 export type WorkspaceTabAgentSnippetMatch = {
@@ -26,8 +21,7 @@ export type WorkspaceTabAgentSnippetMatch = {
 }
 
 function coverAllTokens(text: string, tokens: readonly PaletteQueryToken[]): MatchRange[] | null {
-  // Why the cheap path first: this tier runs over long agent text for every row the
-  // structured matcher rejected, so full folding is reserved for strings that need it.
+  // Use cheap matching before full folding on long agent text rejected by structured matching.
   const lowered = text.toLowerCase()
   const folded = lowered.length === text.length ? null : normalizePaletteText(text)
   const haystack = folded ? folded.normalized : lowered

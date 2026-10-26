@@ -270,6 +270,83 @@ describe('GitHub GraphQL rate-limit guard', () => {
     })
   })
 
+  it('preserves a provider rejection when eligibility changes before enabling auto-merge', async () => {
+    const providerError =
+      'gh: Pull request Pull request is in unstable status (enablePullRequestAutoMerge)'
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
+      })
+      .mockRejectedValueOnce(new Error(providerError))
+
+    await expect(
+      setPRAutoMerge('/repo-root', 7, true, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: `Failed to enable auto-merge for pull request: ${providerError}`
+    })
+    expect(
+      ghExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'pr' && args[1] === 'merge')
+    ).toBe(false)
+  })
+
+  it('names a failed disable-auto-merge operation', async () => {
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('gh: pull request is already closed'))
+    await expect(
+      setPRAutoMerge('/repo-root', 7, false, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Failed to disable auto-merge for pull request: gh: pull request is already closed'
+    })
+  })
+
+  it('preserves REST merge eligibility and an existing auto-merge request in PR details', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL unavailable'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 7,
+          title: 'PR',
+          state: 'open',
+          html_url: 'https://github.com/stablyai/orca/pull/7',
+          mergeable: true,
+          mergeable_state: 'blocked',
+          auto_merge: { enabled_by: { login: 'octocat' }, merge_method: 'squash' },
+          head: { ref: 'feature', sha: 'head-oid' },
+          base: { ref: 'main' }
+        })
+      })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ reviewRequests: [], latestReviews: [] }) })
+
+    await expect(
+      getWorkItemByOwnerRepo(
+        '/repo-root',
+        {
+          owner: 'stablyai',
+          repo: 'orca',
+          host: 'github.com'
+        },
+        7,
+        'pr'
+      )
+    ).resolves.toMatchObject({
+      state: 'open',
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      autoMergeEnabled: true
+    })
+  })
+
   it('uses the queue-aware gh merge path when the base branch has a merge queue', async () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
@@ -564,6 +641,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         })
       })
     gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '/repo-root/.git\n' })
       .mockResolvedValueOnce({ stdout: '' })
       .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })

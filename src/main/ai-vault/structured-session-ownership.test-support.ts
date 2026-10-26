@@ -15,15 +15,13 @@ import {
 
 export const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
-/** Installs a host whose one record owns a conversation: by default a Codex chat on
- *  PROVIDER_SESSION, or the agent `handle` names. */
 export function installOwnership(
-  overrides: Partial<StructuredProviderSessionOwnership> & {
+  overrides: Partial<Omit<StructuredProviderSessionOwnership, 'role' | 'key'>> & {
     handle?: AgentSessionProviderHandle
   } = {}
 ): void {
   const { handle, ...ownershipOverrides } = overrides
-  const ownership: StructuredProviderSessionOwnership = {
+  const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
     provider: handle?.agent ?? 'codex',
@@ -61,8 +59,6 @@ export function installOwnership(
   } as never)
 }
 
-/** A host whose one chat, `chat-1`, owns `handle`'s conversation, and whose adapter copies a
- *  conversation through `copy`. */
 export function installCopyingChat(
   handle: AgentSessionProviderHandle,
   copy: StructuredAgentSessionAdapter['copyConversation'],
@@ -88,6 +84,28 @@ export function installCopyingChat(
       adapter: { copyConversation: copy }
     }
   } as never)
+}
+
+/** A live Codex chat whose chain held `threadIds` in order; the last is its head. */
+export function codexChatHolding(sessionId: string, threadIds: string[]): AgentSessionRecord {
+  const lease = { ...agentSessionLeaseFixture(), sessionId }
+  const fixture = agentSessionRecordFixture(lease)
+  return {
+    ...fixture,
+    sessionId,
+    provider: 'codex',
+    providerHandleChain: threadIds.map((threadId, index) => ({
+      ...fixture.providerHandleChain[0]!,
+      linkId: `${sessionId}-${index}`,
+      handle: codexProviderHandle(threadId)
+    })),
+    lease
+  }
+}
+
+export function installChats(records: AgentSessionRecord[]): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listRecords`; the rest of the host is never reached.
+  setStructuredAgentSessionHost({ deps: { store: { listRecords: () => records } } } as never)
 }
 
 export function listResult(): AiVaultListResult {

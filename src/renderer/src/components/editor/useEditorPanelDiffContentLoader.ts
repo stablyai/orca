@@ -12,6 +12,7 @@ import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -89,14 +90,12 @@ export function useEditorPanelDiffContentLoader({
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced diff reloads must not attach to a read started before
-          // the external change landed.
+          // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every branch resolves a git diff result, which DiffContent mirrors.
-          const promise = (
+          const promise: Promise<DiffContent> =
             effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
@@ -146,7 +145,6 @@ export function useEditorPanelDiffContentLoader({
                       compareAgainstHead
                     }
                   )
-          ) as Promise<DiffContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -160,6 +158,14 @@ export function useEditorPanelDiffContentLoader({
           return
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        // Why: an unstaged diff saves its modified side to the working-tree file, so that side is its baseline.
+        if (
+          file.diffSource === 'unstaged' &&
+          result.kind === 'text' &&
+          result.largeDiffRenderLimit === undefined
+        ) {
+          stampCleanTabDiskBaseline(file.id, { content: result.modifiedContent, isBinary: false })
+        }
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return

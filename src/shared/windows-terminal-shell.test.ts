@@ -108,8 +108,7 @@ describe('canonicalizeWindowsShellOverride', () => {
     expect(canonicalizeWindowsShellOverride('')).toBeUndefined()
   })
 
-  // Bare `cmd` falls through resolveWindowsShellStartupFamily to PowerShell quoting; the canonical
-  // name is what keeps the PTY shell and the queued-command quoting in the same family.
+  // Bare cmd falls through to PowerShell quoting; canonical cmd.exe must align spawn and queued-command grammar.
   it('yields the cmd startup family for a bare cmd override', () => {
     expect(resolveWindowsShellStartupFamily('cmd')).toBe('powershell')
     expect(resolveWindowsShellStartupFamily(canonicalizeWindowsShellOverride('cmd'))).toBe('cmd')

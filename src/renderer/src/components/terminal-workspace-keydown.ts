@@ -227,11 +227,17 @@ export function handleTerminalWorkspaceKeyDown(
   ) {
     return
   }
-  if (!event.repeat && matchShortcut('tab.previousRecent')) {
+  // Claim held repeats without switching again, or the newly active terminal receives the shortcut’s byte fallback.
+  const claimTabSwitch = (): boolean => {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    return !event.repeat
+  }
+  if (matchShortcut('tab.previousRecent')) {
+    if (claimTabSwitch()) {
+      dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    }
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')
@@ -244,10 +250,10 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousAllTypes')
       ? -1
       : null
-  if (!event.repeat && (switchSameTypeDirection !== null || switchAllTypesDirection !== null)) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (switchSameTypeDirection !== null || switchAllTypesDirection !== null) {
+    if (!claimTabSwitch()) {
+      return
+    }
     notifyTerminalCapture(
       switchAllTypesDirection !== null
         ? switchAllTypesDirection === 1
@@ -268,10 +274,7 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousTerminal')
       ? -1
       : null
-  if (!event.repeat && terminalTabDirection !== null) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (terminalTabDirection !== null && claimTabSwitch()) {
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: terminalTabDirection,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import { terminalOwnerRows } from '../terminal/terminal-tab-owner-rows.test-fixture'
 
 vi.mock('../confirmation-dialog-context', () => ({
   useConfirmationDialog: () => async () => true
@@ -42,8 +43,8 @@ const storeBox = vi.hoisted(() => ({
   state: null as Record<string, unknown> | null
 }))
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('react'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,
@@ -343,6 +344,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     storeBox.state = {
       ...storeBox.state,
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      ...terminalOwnerRows('env-1'),
       tabsByWorktree: {
         'wt-1': [...currentState.tabsByWorktree['wt-1'], secondTerminal]
       },
@@ -616,14 +618,10 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
   })
 
   it('closes a host-mirrored browser with an empty page list via the host (no dead-end)', async () => {
-    // Regression: a host-owned browser whose local page list was momentarily
-    // empty had no remote-owned PAGES, so the close skipped the host RPC and the
-    // local close couldn't resolve it — the tab became un-closable. It must now
-    // route to the host close AND remove the visible unified tab.
+    // A host-owned tab with no local pages still needs host retirement and visible-tab removal.
     mocks.isWebRuntimeSessionActive.mockReturnValue(true)
     storeBox.state = {
       ...storeBox.state,
-      // No pages for this workspace — the corrupt/transient state.
       browserPagesByWorkspace: {},
       browserTabsByWorktree: { 'wt-1': [] },
       groupsByWorktree: {
@@ -661,7 +659,6 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     model.commands.closeItem('browser-unified-1')
 
-    // Host close fires (idempotent) and the visible unified tab is removed.
     expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
     )

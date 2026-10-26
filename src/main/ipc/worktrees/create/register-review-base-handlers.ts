@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { gitExecFileAsync } from '../../../git/runner'
 import {
   getLocalProjectGitExecOptions,
@@ -40,13 +41,15 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
       if (isFolderRepo(repo)) {
         return { error: 'Folder mode does not support creating worktrees.' }
       }
+      // SSH ownership may exist only in executionHostId.
+      const connectionId = getRepoRoutingConnectionId(repo)
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
-        if (!repo.connectionId) {
+        if (!connectionId) {
           return gitExecFileAsync(args, getLocalProjectGitExecOptions(store, repo))
         }
-        throw new SshHostNotServedError(repo.connectionId, SSH_GIT_RECONNECT_MESSAGE)
+        throw new SshHostNotServedError(connectionId, SSH_GIT_RECONNECT_MESSAGE)
       }
-      const localGhOptions = repo.connectionId
+      const localGhOptions = connectionId
         ? repo.ghAccount
           ? { ghAccount: repo.ghAccount }
           : undefined
@@ -67,18 +70,17 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         baseRefName: args.baseRefName,
         isCrossRepository: args.isCrossRepository,
         issueSourcePreference: repo.issueSourcePreference,
-        connectionId: repo.connectionId ?? null,
+        connectionId,
         localGitOptions: localGhOptions,
         gitExec,
         fetchRemoteTrackingRef,
         fetchPullRequestHeadRef,
-        // Why: one resolver keeps source preference and hosting identity aligned
-        // across local, WSL, and SSH worktree creation.
+        // Share source preference and hosting identity across local, WSL and SSH creation.
         resolveRemote: () =>
           resolveGitHubReviewHeadRemote({
             repoPath: repo.path,
             issueSourcePreference: repo.issueSourcePreference,
-            connectionId: repo.connectionId ?? null,
+            connectionId,
             localGitOptions: localGhOptions,
             gitExec
           })

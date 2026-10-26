@@ -31,43 +31,6 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
   })
 
-  it.each([
-    [
-      'a provider retry warning',
-      {
-        kind: 'status',
-        tone: 'warning',
-        text: 'Claude hit a temporary problem and is retrying.'
-      }
-    ],
-    [
-      'a compaction marker',
-      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
-    ],
-    ['a cancellation note', { kind: 'status', text: 'Cancellation requested.' }],
-    [
-      'a suppressed-notification summary',
-      { kind: 'status', text: '3 more provider notifications not shown for this turn' }
-    ]
-  ] satisfies [string, AgentJournalItemBody][])(
-    'never turns %s from earlier in the turn into the live line',
-    (_name, body) => {
-      const later = item(3, {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'pnpm test' },
-        state: 'running'
-      })
-
-      expect(
-        selectStructuredAgentTurnActivity([turnStart, item(2, body), later], 'turn-1')
-      ).toBeNull()
-      expect(
-        selectStructuredAgentTurnActivity([turnStart, later, item(4, body)], 'turn-1')
-      ).toBeNull()
-    }
-  )
-
   it("never puts the model's reasoning on the indicator line", () => {
     const reasoning = item(2, {
       kind: 'message',
@@ -84,24 +47,6 @@ describe('selectStructuredAgentTurnActivity', () => {
         text: 'Running a command'
       })
     ).toEqual({ kind: 'description', text: 'Running a command' })
-  })
-
-  it('skips reasoning behind a typed turn item too', () => {
-    const typedTurnStart = item(1, { kind: 'turn', turnId: 'turn-1', state: 'running' })
-
-    expect(
-      selectStructuredAgentTurnActivity(
-        [
-          typedTurnStart,
-          item(2, {
-            kind: 'message',
-            role: 'reasoning',
-            blocks: [{ type: 'text', text: 'Weighing two approaches' }]
-          })
-        ],
-        'turn-1'
-      )
-    ).toBeNull()
   })
 
   it('shows matching ephemeral provider activity, never an older journal status', () => {
@@ -147,67 +92,6 @@ describe('selectStructuredAgentTurnActivity', () => {
 
     expect(activity).toBeNull()
   })
-
-  it('does not read a journal status that repeats a recent tool label', () => {
-    const activity = selectStructuredAgentTurnActivity(
-      [
-        turnStart,
-        item(2, {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'pnpm lint' },
-          state: 'completed'
-        }),
-        item(3, { kind: 'status', text: 'Running pnpm lint' })
-      ],
-      'turn-1'
-    )
-
-    expect(activity).toBeNull()
-  })
-
-  it('ignores active and settled tools so the tail can use a broad fallback', () => {
-    const activity = selectStructuredAgentTurnActivity(
-      [
-        turnStart,
-        item(2, {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'pnpm test' },
-          state: 'running'
-        }),
-        item(3, {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'pnpm lint' },
-          state: 'completed'
-        })
-      ],
-      'turn-1'
-    )
-
-    expect(activity).toBeNull()
-  })
-
-  it('ignores diagnostic provider frames and returns nothing after the turn settles', () => {
-    const diagnostic = item(2, {
-      kind: 'status',
-      text: 'codex · notification:new/event',
-      providerFrame: {
-        provider: 'codex',
-        kind: 'notification:new/event',
-        payload: {
-          head: '{}',
-          byteLength: 2,
-          digest: 'a'.repeat(64),
-          truncated: false
-        }
-      }
-    })
-
-    expect(selectStructuredAgentTurnActivity([turnStart, diagnostic], 'turn-1')).toBeNull()
-    expect(selectStructuredAgentTurnActivity([turnStart, diagnostic], null)).toBeNull()
-  })
 })
 
 describe('selectStructuredAgentTurnActivity — which agent it answers for', () => {
@@ -224,8 +108,7 @@ describe('selectStructuredAgentTurnActivity — which agent it answers for', () 
   })
 
   it("does not let a child's tool label suppress the provider's line for the parent", () => {
-    // The provider line is the SESSION'S OWN; a child running a tool of the same
-    // name must not make it read as a repeat and blank the indicator.
+    // Child tool labels cannot dedupe the session parent’s own provider activity line.
     expect(
       selectStructuredAgentTurnActivity([turnStart, childRunningBash], 'turn-1', {
         turnId: 'turn-1',

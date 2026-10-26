@@ -2,10 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
-import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { MobileNativeChatComposerAttachments } from './native-chat/composer/MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './native-chat/composer/mobile-native-chat-file-attachment'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { mobileNativeChatAttachActions } from './mobile-native-chat-attach-actions'
 import {
@@ -13,7 +14,7 @@ import {
   type MobileNativeChatPickerPresentation,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
@@ -25,25 +26,19 @@ const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-/** What only a structured chat's composer has: the + sheet, files, and the session's skills. */
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
-  /** The `/` menu opened, so the session's list is worth reading again. */
   onSlashMenuOpen: () => void
-  /** Any file from the phone, uploaded to the host; absent where the host cannot take one. */
   onAttachFiles?: () => void
-  /** Files riding on the next send; one still uploading holds Send. */
+  // An uploading attachment must hold Send.
   files: readonly PendingNativeChatFile[]
   onRemoveFile: (id: string) => void
 }
 
 type Props = {
-  /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.RefObject<TextInput | null>
-  /** Absent on a terminal-backed chat, whose + only adds photos and whose menu keeps its curated
-   *  commands. */
+  // Terminal-backed chats keep curated commands and image-only attachment actions.
   structured?: MobileNativeChatStructuredComposer | null
-  /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
   onSend: (text: string) => Promise<boolean>
@@ -51,21 +46,15 @@ type Props = {
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
   getSendCompletionGeneration: () => number
-  /** Reads user draft mutations owned above this renderable composer. */
   getComposerEditGeneration: () => number
-  /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
-  /** The model pill and its sheet; null when the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
-  /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
-   *  and ridden along on the next send (desktop native-chat parity). */
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
-  /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
@@ -101,7 +90,7 @@ export function MobileNativeChatComposer({
   onMicPressOut,
   disabled = false,
   sendDisabled = false,
-  placeholder = 'Message, @files, /commands',
+  placeholder = NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
   stop = null

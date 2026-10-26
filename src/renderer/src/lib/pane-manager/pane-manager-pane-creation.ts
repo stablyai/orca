@@ -46,8 +46,7 @@ export function createManagedPaneInternal(
     host.options,
     host.dragState,
     host.getDragCallbacks(),
-    // Why: always re-focus even if already active — after splits the
-    // browser's real textarea focus can lag the manager's activePaneId.
+    // Refocus even when already active: browser textarea focus can lag activePaneId after splits.
     (paneId, options) => {
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, { focus: options?.focusTerminal !== false })
@@ -72,8 +71,7 @@ export function publishManagedPaneCreated(
   pane: ManagedPaneInternal,
   spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
 ): void {
-  // Why: onPaneCreated wires PTY/status identity synchronously. After this
-  // point, replacing the leaf id would fork ORCA_PANE_KEY from layout state.
+  // onPaneCreated binds PTY/status identity synchronously; later leaf replacement would fork ORCA_PANE_KEY from layout state.
   host.identities.markPublished(pane.id)
   void host.options.onPaneCreated?.(toPublicPane(pane), spawnHints)
 }

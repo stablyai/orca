@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
 import type { AppState } from '../store/types'
@@ -110,9 +111,7 @@ describe('buildMobileSessionTabSnapshots', () => {
     expect(snapshot?.activeTabType).toBeNull()
   })
 
-  // Why held back: a workspace document is served to one desktop guest through a grant no mobile
-  // client holds, and the wire has no tab kind for it — an old client would take it for an ordinary
-  // browser tab and offer navigation for a page that has no URL.
+  // Desktop-only document grants and missing wire kind prevent mobile rendering; old clients would mistake it for a navigable URL browser.
   it('omits a browser tab located by a workspace document from mobile snapshots', () => {
     const docWorkspaceId = 'browser-doc'
     const urlWorkspaceId = 'browser-url'
@@ -159,16 +158,11 @@ describe('buildMobileSessionTabSnapshots', () => {
 
     const snapshot = buildMobileSessionTabSnapshots(state)[0]
 
-    // The presence half: the ordinary browser tab beside it does publish, so a filter that dropped
-    // every browser tab — or a publisher that had stopped emitting them — fails here rather than
-    // passing on an empty list.
+    // Require adjacent URL tab so dropping all browser output cannot pass.
     expect(snapshot?.tabs).toMatchObject([{ type: 'browser', browserWorkspaceId: urlWorkspaceId }])
   })
 
-  // Why the same claim is driven again through tab groups: the test above takes the legacy nav
-  // order, where the only thing that has to hold the document back is the per-tab guard. With
-  // groups the projection runs first and publishes group metadata of its own, so a document reaching
-  // it leaves a group whose tabOrder and activeTabId name a tab the phone is never sent.
+  // Legacy navigation tests only per-tab guards; grouped projection must also remove metadata referencing withheld document tabs.
   it('keeps a workspace document out of published tab groups as well as the tab list', () => {
     const docWorkspaceId = 'browser-doc'
     const urlWorkspaceId = 'browser-url'
@@ -258,12 +252,10 @@ describe('buildMobileSessionTabSnapshots', () => {
 
     const snapshot = buildMobileSessionTabSnapshots(state)[0]
 
-    // The presence half: the grouped URL tab beside it does publish, so a projection that had
-    // stopped emitting browser tabs — or groups — fails here rather than passing on emptiness.
+    // Require grouped URL output so broken browser/group publishing cannot pass vacuously.
     expect(snapshot?.tabs).toMatchObject([{ type: 'browser', browserWorkspaceId: urlWorkspaceId }])
     expect(snapshot?.tabGroups).toMatchObject([{ id: 'group-right', tabOrder: ['unified-url'] }])
-    // Mechanical rather than by name: nothing a group points at may be missing from the tab list,
-    // whatever the reason it was held back.
+    // Every published group reference must exist in published tab list, whatever caused exclusion.
     const publishedTabIds = new Set(snapshot?.tabs.map((tab) => tab.id) ?? [])
     for (const group of snapshot?.tabGroups ?? []) {
       expect(group.tabOrder.filter((tabId) => !publishedTabIds.has(tabId))).toEqual([])
@@ -271,8 +263,7 @@ describe('buildMobileSessionTabSnapshots', () => {
       expect(group.activeTabId === null || publishedTabIds.has(group.activeTabId)).toBe(true)
     }
     expect(snapshot?.activeTabId === null || publishedTabIds.has(snapshot.activeTabId)).toBe(true)
-    // What the reader would actually see go wrong: a group held back has to leave the layout tree
-    // with it, or the phone renders a split whose pane can never have anything in it.
+    // Withheld groups must also leave layout tree or mobile renders empty splits.
     expect(collectLayoutGroupIds(snapshot?.tabGroupLayout)).toEqual(['group-right'])
   })
 
@@ -498,15 +489,28 @@ describe('buildMobileSessionTabSnapshots', () => {
 
     const snapshot = buildMobileSessionTabSnapshots(state)[0]
 
+    // Layout-owner build (L280): a row goes out under its tab id only, so a diff no group shows
+    // gets no row; the same-path edit tab keeps its own.
+    const diffRows = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? []
+      : [
+          {
+            type: 'file',
+            id: diffId,
+            mode: 'diff',
+            diffSource: 'unstaged',
+            relativePath: 'src/app.ts'
+          }
+        ]
     expect(snapshot?.tabs).toMatchObject([
       { type: 'file', id: 'editor-tab-1', mode: 'edit', relativePath: 'src/app.ts' },
-      { type: 'file', id: diffId, mode: 'diff', diffSource: 'unstaged', relativePath: 'src/app.ts' }
+      ...diffRows
     ])
     expect(snapshot?.tabGroups).toEqual([
       {
         id: 'group-1',
         activeTabId: 'editor-tab-1',
-        tabOrder: ['editor-tab-1', diffId],
+        tabOrder: ['editor-tab-1', ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [] : [diffId])],
         recentTabIds: ['editor-tab-1']
       }
     ])
@@ -751,6 +755,12 @@ describe('buildMobileSessionTabSnapshots', () => {
       })
     )[0]
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Layout-owner build (L280): a file no group shows as a tab gets no row.
+      expect(terminalSnapshot?.tabs ?? []).toEqual([])
+      expect(editorSnapshot?.tabs ?? []).toEqual([])
+      return
+    }
     expect(terminalSnapshot?.tabs).toMatchObject([
       { type: 'file', id: fileId, relativePath: 'src/app.ts', isActive: false }
     ])

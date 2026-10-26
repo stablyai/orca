@@ -2,11 +2,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 
 export type DiscardAllArea = 'staged' | 'unstaged' | 'untracked'
 
-/**
- * Collect the paths a "Discard all" bulk action should operate on for a given
- * area. Unresolved and locally-resolved conflicts are excluded — discarding
- * those can silently re-create the conflict or lose the resolution.
- */
+/** Exclude unresolved/local resolutions from bulk discard to avoid recreating conflicts or losing resolved work. */
 export function getDiscardAllPaths(
   entries: readonly GitStatusEntry[],
   area: DiscardAllArea
@@ -14,7 +10,7 @@ export function getDiscardAllPaths(
   return entries
     .filter(
       (entry) =>
-        entry.area === area &&
+        (entry.area === area || (area === 'unstaged' && entry.area === 'untracked')) &&
         entry.conflictStatus !== 'unresolved' &&
         entry.conflictStatus !== 'resolved_locally'
     )
@@ -27,13 +23,7 @@ export function getDiscardAllPaths(
 
 export type StageAllArea = 'unstaged' | 'untracked'
 
-/**
- * Collect the paths a "Stage all" action should operate on.
- * Unresolved conflict rows are excluded — `git add` on a conflicted file
- * silently clears the `u` record before the user has reviewed it.
- * `resolved_locally` rows are intentionally INCLUDED: staging them is how the
- * user finalises the resolution and mirrors the per-row Stage button.
- */
+/** Exclude unresolved conflicts before git add clears u records; include local resolutions so staging can finish them. */
 export function getStageAllPaths(entries: readonly GitStatusEntry[], area: StageAllArea): string[] {
   return entries
     .filter((entry) => entry.area === area && isStageableStatusEntry(entry))
@@ -44,8 +34,7 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
   return (
     (entry.area === 'unstaged' || entry.area === 'untracked') &&
     entry.conflictStatus !== 'unresolved' &&
-    // Why: changes inside a submodule (lazily expanded) are read-only from the
-    // parent — `git add` here can't stage the submodule's own working tree.
+    // Parent git add cannot stage inner submodule worktree files.
     !entry.submoduleRoot &&
     !isSubmoduleWorktreeOnlyChange(entry)
   )
@@ -53,16 +42,11 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
 
 export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {
   const submodule = entry.submodule
-  // Why: parent-repo `git add <submodule>` can stage a changed gitlink commit,
-  // but it cannot stage tracked/untracked file dirtiness inside the submodule.
+  // Parent git add stages changed gitlinks, not submodule file dirtiness.
   return entry.area === 'unstaged' && !!submodule && !submodule.commitChanged
 }
 
-/**
- * Collect the paths an "Unstage all" action should operate on.
- * Every staged row is eligible — `git reset HEAD` on a staged conflict
- * row is safe and mirrors the per-row Unstage action.
- */
+/** All staged rows may unstage, including conflicts; git reset HEAD safely mirrors the per-row action. */
 export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[] {
   return entries
     .filter((entry) => entry.area === 'staged' && !entry.submoduleRoot)
@@ -74,19 +58,11 @@ export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[]
 export type DiscardAllDeps = {
   /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
   bulkUnstage: (paths: string[]) => Promise<void>
-  /**
-   * Discard the given paths in one IPC round-trip. Callers may omit this to
-   * keep the legacy per-file sequence in tests or older surfaces.
-   */
+  /** Optional bulk IPC; omission retains per-file behavior for older surfaces/tests. */
   discardMany?: (paths: string[]) => Promise<void>
   /** Discard a single path (restore from the index, or remove an untracked file). */
   discardOne: (path: string) => Promise<void>
-  /**
-   * Called when either the pre-step (bulkUnstage) rejects OR an individual
-   * `discardOne` rejects. Invoked once per failure; callers are expected to
-   * collect them and report ONE aggregated failure (see
-   * `use-discard-confirmation.ts`), not a toast per stuck file.
-   */
+  /** Report once per failure; callers must aggregate toasts instead of posting one per stuck file. */
   onError?: (error: unknown) => void
 }
 
@@ -95,27 +71,11 @@ export type DiscardAllResult = {
   discarded: string[]
   /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
   failed: string[]
-  /**
-   * True only when the pre-step (bulk unstage for the 'staged' area) failed
-   * and we never entered the per-file discard loop. Per-file failures do
-   * NOT set this flag — they are reported via `failed`.
-   */
+  /** True only when bulk unstage failed before discarding; per-file failures populate failed instead. */
   aborted: boolean
 }
 
-/**
- * Run the "Discard all" sequence for a given area.
- *
- * For 'staged', this first bulk-unstages the paths — without that step,
- * restoring from the index would preserve the staged changes. If the unstage
- * fails, skip discard so it cannot remove working edits while leaving that
- * staged delta behind.
- *
- * Per-file `discardOne` failures are best-effort: we continue past a failed
- * file so a single stuck path does not block the rest of the bulk action.
- * Failed paths are reported via `failed`, `onError` is invoked once per
- * failure, and `aborted` remains `false` because the loop ran end-to-end.
- */
+/** Unstage before discard so staged deltas cannot survive; abort on unstage failure, then continue best-effort past individual failures. */
 export async function runDiscardAllForArea(
   area: DiscardAllArea,
   paths: readonly string[],
@@ -139,8 +99,7 @@ export async function runDiscardAllForArea(
       await deps.discardMany([...paths])
       return { discarded: [...paths], failed: [], aborted: false }
     } catch {
-      // Why: older SSH relays may not support the bulk discard RPC yet. Fall
-      // back to the long-standing per-file path so the action still completes.
+      // Older SSH relays may lack bulk discard; fall back to the established per-file calls.
     }
   }
 
@@ -151,8 +110,6 @@ export async function runDiscardAllForArea(
       await deps.discardOne(path)
       discarded.push(path)
     } catch (error) {
-      // Best-effort: record and continue so one stuck file doesn't block the
-      // rest of the bulk action.
       failed.push(path)
       deps.onError?.(error)
     }

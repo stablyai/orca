@@ -42,7 +42,6 @@ let appHome: string
 let realHome: string
 let managedHome: string
 
-// Why: stand in for a missing codex binary so no real app-server ever starts.
 function stubMissingCodexBinary(): never {
   throw Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' })
 }
@@ -73,7 +72,7 @@ beforeEach(() => {
   realHome = join(root, 'real-home')
   managedHome = join(appUserData, 'codex-runtime-home', 'home')
   mkdirSync(managedHome, { recursive: true })
-  // The app, running with its own HOME, installed the pane's home at spawn.
+  // Simulate an app that installed the pane home under a different HOME at spawn.
   const appCommand = getManagedCommand(join(appHome, '.orca', 'agent-hooks', SCRIPT_NAME))
   writeFileSync(
     join(managedHome, 'hooks.json'),
@@ -102,8 +101,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-// Why: the pane shell can run under the real HOME (login(1)) or the app's own;
-// on a native host the pane step neither writes a Codex home nor asks the app to.
+// Native pane preparation must leave Codex homes unchanged, whichever HOME its login shell uses.
 it.each([
   ['the real HOME', 'real'],
   ["the app's HOME", 'app']

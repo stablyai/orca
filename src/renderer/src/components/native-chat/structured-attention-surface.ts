@@ -1,11 +1,4 @@
-/**
- * Structured-chat implementation of the provider-neutral attention surface.
- *
- * Addressing: the subject key is the pane key the structured status producer already publishes,
- * `structuredAgentSessionPaneKey(unifiedTabId, sessionId)`, so the container this surface reports
- * as `groupId` is the unified tab id that prefixes it — never the split-layout group the tab sits
- * in. One structured tab owns exactly one session, so tab and subject are one-to-one.
- */
+/** Structured subjects pair tab/session ids one-to-one; groupId is the unified tab id, never its enclosing split-layout group. */
 import type { useAppStore } from '@/store'
 import type {
   AgentAttentionSubject,
@@ -26,10 +19,7 @@ function structuredTabsIn(state: StoreSnapshot, workspaceId: string): Structured
   return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
 }
 
-/**
- * The structured tab a subject key addresses, and only while the key still names that tab's
- * current session — a tab rebound to a new session no longer owns the old key.
- */
+/** Resolve a subject only while its tab still owns that session; rebound tabs reject old keys. */
 function findSubjectTab(
   state: StoreSnapshot,
   workspaceId: string,
@@ -75,11 +65,9 @@ function isViewedStructuredTab(
   return isTabOnScreen(state, workspaceId, tab.id, 'structured')
 }
 
-/** Binds the neutral surface contract to one store snapshot. */
 export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAttentionSurface {
   return {
-    // Why: a structured session runs on the execution host with no renderer PTY, so an open tab
-    // still bound to the session is the only liveness evidence this process holds.
+    // Without a renderer PTY, a tab still bound to the host session is this process’s liveness evidence.
     hasLiveSession: (subject: AgentAttentionSubject) =>
       subject.surfaceKey === undefined
         ? structuredTabsIn(state, subject.workspaceId).length > 0

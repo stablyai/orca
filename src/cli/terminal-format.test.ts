@@ -200,8 +200,7 @@ describe('formatTerminalSend', () => {
   })
 })
 
-// Why: an older host still publishes the codex-* tokens for dialogs its matcher never proved were
-// Codex's, so a Gemini/Cursor/Antigravity user reads a Codex label unless the CLI names the neutral one.
+// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
 describe('blocked-reason rendering against a mixed-version host', () => {
   function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
     terminal: RuntimeTerminalShow
@@ -242,16 +241,13 @@ describe('blocked-reason rendering against a mixed-version host', () => {
     }
   }
 
-  // Why one assertion over every reason: a test that only asserts the *absence* of an alias suffix
-  // passes when the aliasing code is deleted, so each case is paired with a legacy token that must
-  // gain one.
+  // Pair alias additions with unchanged tokens so missing alias logic cannot pass on absence alone.
   it.each([
     ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
     ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
     ['codex-cwd-prompt', 'codex-cwd-prompt (agent-cwd-prompt)'],
     ['codex-hooks-review-prompt', 'codex-hooks-review-prompt (agent-hooks-review-prompt)'],
     ['codex-interactive-prompt', 'codex-interactive-prompt (agent-interactive-prompt)'],
-    // This build published these itself, so there is nothing to reinterpret.
     ['agent-trust-workspace', 'agent-trust-workspace'],
     ['codex-model-migration-prompt', 'codex-model-migration-prompt']
   ] as const)('renders %s as %s on both wait and show', (reason, rendered) => {

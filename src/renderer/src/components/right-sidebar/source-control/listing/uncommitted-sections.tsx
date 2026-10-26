@@ -1,5 +1,5 @@
 import React from 'react'
-import { Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { Minus, Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -17,7 +17,7 @@ import {
   getSourceControlSectionViewAction,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
-  type SourceControlSectionArea,
+  type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
 } from './section-order'
 import type {
@@ -26,7 +26,7 @@ import type {
 } from './submodule-expansion'
 import type { SourceControlRowOpenEvent } from './split-open'
 
-const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: string }> = {
+const SECTION_LABELS: Record<SourceControlDisplaySectionArea, { key: string; fallback: string }> = {
   staged: {
     key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
     fallback: 'Staged Changes'
@@ -34,10 +34,6 @@ const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: 
   unstaged: {
     key: 'auto.components.right.sidebar.SourceControl.d4ef4bafc5',
     fallback: 'Changes'
-  },
-  untracked: {
-    key: 'auto.components.right.sidebar.SourceControl.522f44dce5',
-    fallback: 'Untracked Files'
   }
 }
 const CONFLICTS_SECTION_LABEL = {
@@ -63,7 +59,6 @@ export function SourceControlUncommittedSections(props: {
     sectionId: SourceControlDisplaySectionId,
     paths: readonly string[]
   ) => Promise<void>
-  isStatusTruncated: boolean
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   sourceControlViewMode: SourceControlViewMode
   visibleTreeRowsBySection: Partial<
@@ -97,18 +92,13 @@ export function SourceControlUncommittedSections(props: {
       {props.displaySections.map((section) => {
         const { area, id, items } = section
         const isCollapsed = props.collapsedSections.has(id)
-        // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
-        // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
+        // Bulk actions use unfiltered groups; hide them while filtering and share execution eligibility to avoid empty actions.
         const actionSection = props.unfilteredDisplaySectionsById.get(id) ?? section
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
         const unstageAllPaths = getUnstageAllPaths(actionItems)
         const discardAllPaths = getDiscardAllPaths(actionItems, area)
-        // Why: a capped listing cannot name every untracked file, and the host has no untracked-only stage.
-        const canStageAll =
-          !props.normalizedFilter &&
-          stageAllPaths.length > 0 &&
-          !(props.isStatusTruncated && id === 'untracked')
+        const canStageAll = !props.normalizedFilter && stageAllPaths.length > 0
         const canUnstageAll = !props.normalizedFilter && unstageAllPaths.length > 0
         const canRevertAll = !props.normalizedFilter && discardAllPaths.length > 0
         const sectionLabel = id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
@@ -125,18 +115,11 @@ export function SourceControlUncommittedSections(props: {
                 <div className="flex items-center">
                   {canRevertAll && (
                     <ActionButton
-                      icon={area === 'untracked' ? Trash : Undo2}
-                      title={
-                        area === 'untracked'
-                          ? translate(
-                              'auto.components.right.sidebar.SourceControl.2f609a2e7c',
-                              'Delete all untracked'
-                            )
-                          : translate(
-                              'auto.components.right.sidebar.SourceControl.ce41708855',
-                              'Discard all'
-                            )
-                      }
+                      icon={Undo2}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.ce41708855',
+                        'Discard all'
+                      )}
                       onClick={(event) => {
                         event.stopPropagation()
                         props.requestDiscardAllInArea(area, discardAllPaths)

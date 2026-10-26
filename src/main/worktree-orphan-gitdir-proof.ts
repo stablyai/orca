@@ -122,8 +122,7 @@ async function repoGitdirIsLinkedWorktreeAdminEntry(
     }
     const resolvedRepoGitPath = resolveGitdirPath(repoGitPath, resolvedRepoGitdirPath, pathOps)
     const resolvedExpectedGitPath = pathOps.resolve(repoPath, '.git')
-    // Why: a separate git dir can live under a directory named `worktrees`;
-    // only the admin backlink proves the repo path is itself a linked worktree.
+    // Only the admin backlink distinguishes a linked checkout from a separate git dir named worktrees.
     return areResolvedPathsEqual(resolvedRepoGitPath, resolvedExpectedGitPath, pathOps)
   } catch {
     return false
@@ -174,8 +173,7 @@ async function adminGitdirPointsAtCandidate(
       pathOps
     )
     const resolvedExpectedGitPath = pathOps.resolve(worktreePath, '.git')
-    // Why: copied .git files can target another worktree's admin entry; only
-    // Git's back-reference proves that entry still belongs to this candidate.
+    // A copied .git file can name another checkout; verify the admin entry's backlink.
     return areResolvedPathsEqual(resolvedCandidateGitPath, resolvedExpectedGitPath, pathOps)
   } catch (error) {
     if (!isMissingPathError(error)) {
@@ -192,7 +190,7 @@ async function adminGitdirPointsAtCandidate(
 
 function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
   const relativePath = pathOps.relative(parentPath, childPath)
-  // Why: `..name` is a valid child name; only `..` and `../...` escape.
+  // ..name is a child name; only .. and ../... escape.
   return (
     relativePath === '' ||
     (!!relativePath &&

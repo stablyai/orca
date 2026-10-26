@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { linearError } from '../../../linear/issue-context-errors'
+import { linearError } from '../../../linear/issue-context/errors'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import {
   AgentIssueContext,

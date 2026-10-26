@@ -16,8 +16,7 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
   }
-  // Why: manual/created GitLab jobs have no web_url, so they would otherwise key on
-  // the list index and lose their cached log whenever the pipeline re-sorts.
+  // Use job IDs for URL-less GitLab jobs so pipeline reordering preserves cached logs.
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}`
   }
@@ -40,16 +39,10 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
 }
 
 export function isFailedCheck(check: PRCheckDetail): boolean {
-  // Why: action_required blocks merge just like a failure, so it must count as
-  // not-passing — otherwise the summary reads "all checks passing" while
-  // auto-merge stays blocked.
+  // action_required blocks merge; counting it as passing would contradict auto-merge readiness.
   return ['failure', 'cancelled', 'timed_out', 'action_required'].includes(
     getCheckConclusion(check)
   )
-}
-
-export function isFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
 }
 
 export function getCheckStatusLabel(check: PRCheckDetail): string {

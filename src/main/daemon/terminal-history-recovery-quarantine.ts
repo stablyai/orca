@@ -28,10 +28,7 @@ export function getTerminalHistoryQuarantineOwnerDir(basePath: string, sessionId
   return join(basePath, QUARANTINE_DIR_NAME, sessionHash)
 }
 
-// Why process-wide and not a HistoryManager field: the freeze lives in this process's memory while
-// the backlog permission sweep walks the same tree from an unrelated module, and its chmod moves the
-// `mode`/`ctimeMs` that fingerprintTerminalHistorySession hashes. Refcounted because the legacy and
-// current daemon adapters each hold their own HistoryManager over one base path.
+// Reference-count across managers so permission sweeps cannot change frozen recovery fingerprints.
 const recoveryFrozenSessionDirs = new Map<string, number>()
 
 export function markTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
@@ -52,8 +49,7 @@ export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): 
   }
 }
 
-/** True while a session tree must not be touched by anything outside its own recovery handshake:
- *  an open freeze holds a fingerprint of it, or a failed quarantine left it fail-closed on disk. */
+/** Protect frozen or quarantined session trees from mutations outside their recovery handshake. */
 export function isTerminalHistorySessionDirRecoveryProtected(sessionDir: string): boolean {
   return (
     recoveryFrozenSessionDirs.has(resolve(sessionDir)) ||
@@ -69,7 +65,7 @@ export function clearTerminalHistoryRecoveryProtection(dir: string): void {
   try {
     unlinkSync(join(dir, RECOVERY_PROTECTION_MARKER))
   } catch {
-    // Missing or locked markers remain fail-closed.
+    // Leave undeletable markers in place so recovery remains blocked.
   }
 }
 
@@ -108,7 +104,7 @@ export function quarantineTerminalHistorySession(
 
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
   const ownerDir = getTerminalHistoryQuarantineOwnerDir(basePath, sessionId)
-  // Why: if rename is blocked, a later adapter must not attach a writer to the unreadable generation.
+  // Block future writers even if the quarantine rename fails.
   writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '', { mode: PRIVATE_FILE_MODE })
   ensurePrivateDir(ownerDir)
   const quarantineDir = join(ownerDir, randomUUID())

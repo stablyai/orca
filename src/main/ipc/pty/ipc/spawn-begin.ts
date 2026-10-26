@@ -1,26 +1,25 @@
+import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
-import { createPtySpawnTiming } from '../../pty-spawn-timing'
+import { createPtySpawnTiming } from '../pty-spawn-timing'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
 import { snapshotCodexPaneHomeRoutes } from '../host-env/codex-home'
 import { getAppPtyId } from '../provider/registry'
 import {
   makePaneSpawnReservationKey,
-  reservePaneSpawn,
-  paneSpawnReservationsByOwnerKey,
-  pendingRuntimePaneCreatesByOwnerKey
+  pendingRuntimePaneCreatesByOwnerKey,
+  type PaneSpawnReservationResult
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
-import { excludeReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 
-/** The pane key a spawn names before preflight; null when it names no stable pane. */
 export function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
   const leafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
@@ -39,10 +38,9 @@ export function resolveEarlyPaneSpawnReservationKey(args: PtySpawnIpcArgs): stri
 
 export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
-): Promise<PtySpawnResult | { isReattach: true } | null> {
+): Promise<PaneSpawnReservationResult | void> {
   const args = ctx.args
-  // A pane an agent launch laid out attaches to its agent or says why it can't, never runs a shell.
-  // A replacing spawn already holds the pane: the user restarted it, and that is theirs to run.
+  // Launch panes adopt their agent instead of starting a shell; explicit restarts already own the reservation.
   const launchPaneKey = ctx.paneSpawnReservation ? null : resolveEarlyPaneKey(args)
   const launchVerdict =
     launchPaneKey && args.worktreeId && args.tabId && args.leafId
@@ -58,7 +56,6 @@ export async function beginPtyIpcSpawn(
       : null
   if (launchVerdict && args.worktreeId && args.tabId && args.leafId) {
     const verdict = await launchVerdict
-    // The window keeps a final verdict on the tab, clears a settled one, takes a withdrawn pane back.
     ctx.deps.runtime?.reportAgentLaunchPaneVerdict?.(
       { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.leafId },
       verdict
@@ -102,20 +99,26 @@ export async function beginPtyIpcSpawn(
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
 
   const earlyReservationKey = resolveEarlyPaneSpawnReservationKey(args)
-  // Why: a replacing spawn reserved its pane before stopping the owner; joining itself would deadlock.
+  // Replacement holds the reservation before stopping; joining itself would deadlock.
   const heldReservation = ctx.paneSpawnReservation
   if (!heldReservation) {
     const pendingRuntimeCreate = earlyReservationKey
       ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
       : undefined
     if (pendingRuntimeCreate) {
-      await pendingRuntimeCreate.promise
-    }
-    const existingPaneSpawn = earlyReservationKey
-      ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
-      : undefined
-    if (existingPaneSpawn) {
-      return { ...(await existingPaneSpawn.promise), isReattach: true }
+      const created = await pendingRuntimeCreate.promise
+      // Reuse main's current start payload when available to avoid a second provider attach round trip.
+      if (
+        attachOnlyViewOf(args) &&
+        created &&
+        created.id === args.sessionId &&
+        (created.coldRestore || typeof created.snapshot === 'string') &&
+        ptyOwnership.has(created.id) &&
+        (created.incarnationId === undefined ||
+          ptyIncarnationById.get(created.id) === created.incarnationId)
+      ) {
+        return created
+      }
     }
   }
   ctx.earlyStablePaneOwner =
@@ -132,26 +135,16 @@ export async function beginPtyIpcSpawn(
         )
       : null
   ctx.earlyWorktreeId = args.worktreeId
-  // Reserve early so renderer/runtime materialization cannot start duplicate provider spawns.
   ctx.paneSpawnReservationKey = earlyReservationKey
-  ctx.paneSpawnReservation =
-    heldReservation ??
-    (ctx.paneSpawnReservationKey ? reservePaneSpawn(ctx.paneSpawnReservationKey) : null)
+  ctx.paneSpawnReservation = heldReservation ?? null
   ctx.finishTerminalInstall = (): void => {}
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null
   ctx.pendingRegistrationPtyId = null
-  // Why hoisted to the reply scope: main reconciles the provider sequence
-  // deep inside the spawn path, but the pane needs that renderer-domain
-  // boundary beside the daemon snapshot's kitty flags.
+  // Carry renderer-domain sequence reconciliation into the spawn reply beside proven kitty flags.
   ctx.reconciledSnapshotSeq = null
-  // False when bytes crossed the data socket during the spawn RPC: the
-  // reconciled boundary covers them, but the daemon proved its kitty flags
-  // before they existed, so the claim must not erase what the pane may
-  // have scanned from those bytes live.
+  // Bytes arriving during spawn can postdate proven flags; do not let old flags erase their live negotiation.
   ctx.snapshotKittyFlagsCoverReconciledSeq = true
   ctx.preparedProvisionalExecutionContext = false
-
-  return null
 }

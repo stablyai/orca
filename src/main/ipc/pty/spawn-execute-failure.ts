@@ -1,3 +1,4 @@
+import type { PtyRegistrationClaim } from '../../runtime/runtime-terminal-state-records'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { classifyError } from '../../telemetry/classify-error'
@@ -8,7 +9,6 @@ import { normalizeNodePtySpawnError } from './provider/liveness'
 import { ptySizes } from './delivery/visibility-state'
 import { clearProviderPtyState } from './provider/state-cleanup'
 
-/** What both spawn lanes' execute step claims before the provider call, under the same names. */
 type PtySpawnExecuteState = {
   deps: { runtime?: OrcaRuntimeService }
   isClaudeLaunch: boolean
@@ -17,10 +17,10 @@ type PtySpawnExecuteState = {
   sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
   preparedProvisionalExecutionContext: boolean
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   rejectedRegistrationCandidate: PtySpawnResult | null
 }
 
-/** Undoes what the execute step claimed for a start that threw, and returns the error to rethrow. */
 export function failPtySpawnExecute(
   ctx: PtySpawnExecuteState,
   err: unknown,
@@ -42,17 +42,11 @@ export function failPtySpawnExecute(
       resetIncarnation: true
     })
   }
-  const rawMessage = err instanceof Error ? err.message : String(err)
-  if (rawMessage === 'agent_session_exited_during_start' && ctx.rejectedRegistrationCandidate) {
-    runtime?.releaseRejectedPtyRegistrationFence?.(
-      ctx.rejectedRegistrationCandidate.id,
-      ctx.rejectedRegistrationCandidate.incarnationId
-    )
-  }
   if (ctx.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(
       ctx.pendingRegistrationPtyId,
-      ctx.rejectedRegistrationCandidate?.incarnationId
+      ctx.rejectedRegistrationCandidate?.incarnationId,
+      ctx.pendingRegistrationClaim
     )
     ctx.pendingRegistrationPtyId = null
   }
@@ -65,11 +59,11 @@ export function failPtySpawnExecute(
       ptySizes.delete(ctx.effectiveSessionAppId)
     }
   }
-  // Why: provider state the env build materialized for this minted id leaks if spawn failed.
+  // Environment assembly may create per-PTY state; remove it only for this request's minted ID.
   if (lane.ownsNewSession && lane.sessionId !== undefined) {
     clearProviderPtyState(lane.sessionId)
   }
-  // Why: telemetry-plan.md§agent_error — attribute the error to the threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
+  // Prefer validated threaded agent kind; fallback detects Claude and never records raw error messages.
   const threadedKind =
     lane.telemetry?.agent_kind !== undefined
       ? agentKindSchema.safeParse(lane.telemetry.agent_kind)

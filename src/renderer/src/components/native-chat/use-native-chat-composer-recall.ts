@@ -7,16 +7,12 @@ import {
   type NativeChatRecallSource
 } from './native-chat-sent-prompt-history'
 
-/**
- * Where prompt recall stands. Ends itself once the composer stops holding the recalled
- * text, whoever changed it: an edit, a send, a returned message, another window's draft.
- */
+/** End recall after any draft change once the recalled text has actually appeared in the composer. */
 export function useNativeChatRecallPosition(
   draft: string
 ): [NativeChatRecallPosition | null, (position: NativeChatRecallPosition | null) => void] {
   const [position, setPosition] = useState<NativeChatRecallPosition | null>(null)
-  // Why: the position and its draft come from different stores and may not render together,
-  // so only a position already seen in the composer can be ended by a mismatch.
+  // Separate stores can render position before draft; only an already-shown position may end on mismatch.
   const [shown, setShown] = useState<NativeChatRecallPosition | null>(null)
   if (position !== null) {
     if (position.recalled === draft) {
@@ -31,8 +27,7 @@ export function useNativeChatRecallPosition(
   return [position, setPosition]
 }
 
-/** Prompt recall for one composer: what its keydown walks, and whether the draft is a recalled
- *  prompt still untouched. Without a source there is nothing to recall. */
+/** Build keydown recall only with a source, tracking whether recalled text remains untouched. */
 export function useNativeChatComposerRecall(args: {
   draft: string
   source: NativeChatRecallSource | undefined

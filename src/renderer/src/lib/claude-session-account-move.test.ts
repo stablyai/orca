@@ -4,6 +4,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { getDefaultSettings } from '../../../shared/constants'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
 import type * as paneSelectionLane from './codex-pane-selection-lane'
@@ -20,14 +21,16 @@ import {
 } from './claude-session-account-move'
 
 const laneByPtyId: Record<string, string> = {}
+let projectRuntime: ProjectExecutionRuntimeResolution | undefined
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(),
   confirmRuntimeTerminalForegroundProcess: vi.fn()
 }))
+vi.mock('./renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
-  getLocalProjectExecutionRuntimeContext: () => undefined
+  getLocalProjectExecutionRuntimeContext: () => projectRuntime
 }))
 vi.mock('./codex-pane-selection-lane', async (importOriginal) => ({
   ...(await importOriginal<typeof paneSelectionLane>()),
@@ -144,6 +147,7 @@ const movable = async (
   )
 
 beforeEach(() => {
+  projectRuntime = undefined
   for (const key of Object.keys(laneByPtyId)) {
     delete laneByPtyId[key]
   }
@@ -218,6 +222,104 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('zsh')
 
     expect(await movable()).toEqual([])
+  })
+
+  it('leaves a node or python program the user started in a pane Claude has left', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude' },
+      { n: 2, agentType: 'claude' }
+    ])
+    const program = (id: string): string => (id === ptyId(1) ? 'node' : 'python3')
+    vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+      foregroundProcess: program(id),
+      hasChildProcesses: true
+    }))
+    // A fresh read of `npm run dev` or `python manage.py runserver` places it as no agent.
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) => program(id))
+
+    expect(await movable()).toEqual([])
+  })
+
+  it('still finds a Claude installed with npm, which the fresh read names from its command line', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'node',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockClear().mockResolvedValue('claude')
+
+    expect(await movable()).toEqual([ptyId(1)])
+    expect(confirmRuntimeTerminalForegroundProcess).toHaveBeenCalledWith(ptyId(1))
+  })
+
+  it('reports a node pane whose fresh read failed as unchecked rather than dropping it silently', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'node',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue(null)
+    const onUnchecked = vi.fn()
+
+    const found = await findMovableClaudeSessions({
+      owner: LOCAL,
+      target: HOST,
+      fromAccountId: 'acct-a',
+      onUnchecked
+    })
+
+    expect(found).toEqual([])
+    expect(onUnchecked.mock.calls[0][0].map((pane: { ptyId: string }) => pane.ptyId)).toEqual([
+      ptyId(1)
+    ])
+  })
+
+  // WSL stores UNC and guest config paths, hooks report guest transcripts, and Windows sees only wsl.exe in the pane tree.
+  it('finds WSL panes from the guest hook evidence the Windows process table cannot see', async () => {
+    const guestHome = (id: string): string =>
+      `/home/dev/.local/share/orca/claude-profiles/${id}/home`
+    const wslAccount = (id: string): ClaudeManagedAccount => ({
+      ...account(id, `\\\\wsl.localhost\\Ubuntu-24.04${guestHome(id).replace(/\//g, '\\')}`),
+      managedAuthRuntime: 'wsl',
+      wslDistro: 'Ubuntu-24.04',
+      wslLinuxAuthPath: guestHome(id)
+    })
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: guestHome('acct-a') },
+      { n: 2, agentType: 'claude', configDir: guestHome('acct-a') }
+    ])
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu-24.04'
+    laneByPtyId[ptyId(2)] = 'wsl:Ubuntu-24.04'
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings!,
+        claudeManagedAccounts: [wslAccount('acct-a'), wslAccount('acct-b')]
+      },
+      // OSC 133;D from the guest shell: pane 2's Claude has exited.
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: { agent: null, shellForeground: true }
+      }
+    }))
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'wsl.exe',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue(null)
+    projectRuntime = {
+      status: 'resolved',
+      runtime: {
+        kind: 'wsl',
+        hostPlatform: 'wsl',
+        projectId: 'project-1',
+        distro: 'Ubuntu-24.04',
+        reason: 'project-override',
+        cacheKey: 'project-1:wsl:Ubuntu-24.04'
+      }
+    }
+
+    expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu-24.04' })).toEqual([
+      ptyId(1)
+    ])
   })
 })
 

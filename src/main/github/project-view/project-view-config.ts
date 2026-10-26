@@ -15,8 +15,6 @@ import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
 const VIEWS_PAGE_SIZE = 20
 const FIELDS_PAGE_SIZE = 50
 
-// ─── Project config fetch (views + fields, paginated) ──────────────────
-
 type RawProjectConfig = {
   id?: string
   title?: string
@@ -47,7 +45,6 @@ export type RawProjectView = {
 // Older GHES hosts omit vertical grouping so one missing field cannot break all views.
 const hostsWithoutVerticalGroupBy = new Set<string>()
 
-/** Test-only: capability state is module-level so real runs memoize per host. */
 export function resetVerticalGroupByCapabilityForTests(): void {
   hostsWithoutVerticalGroupBy.clear()
 }
@@ -160,7 +157,7 @@ export async function fetchViewFieldsContinuation(
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
-  // Why: address the view directly via node(id:) instead of re-walking all views each page — one round-trip per field page.
+  // Address view ID directly to avoid rewalking every view for each field page.
   const query = `
     query($after:String!, $viewId:ID!) {
       node(id:$viewId) {
@@ -249,7 +246,6 @@ export function finalizeView(
       number: typeof raw.number === 'number' ? raw.number : 0,
       name: typeof raw.name === 'string' ? raw.name : '',
       layout,
-      // Why: `ProjectV2View.filter` is nullable — normalize to ''.
       filter: typeof raw.filter === 'string' ? raw.filter : '',
       fields,
       groupByFields,
@@ -259,8 +255,6 @@ export function finalizeView(
     }
   }
 }
-
-// ─── View selection ───────────────────────────────────────────────────
 
 export function matchesSelector(
   raw: RawProjectView,

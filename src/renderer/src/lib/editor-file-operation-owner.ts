@@ -16,6 +16,11 @@ import {
   type WorktreeOperationRoute
 } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
@@ -87,7 +92,7 @@ function resolveEditorOwnerRoute(
   worktreeId: string,
   capturedHostId?: ExecutionHostId | null
 ): WorktreeOperationRoute | null {
-  // Workspace focus cannot replace a file's catalog owner.
+  // Neither workspace focus nor the Active Server focus can replace a file's catalog owner.
   const ownerState = { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
   const route = resolveWorktreeOperationRoute(ownerState, worktreeId)
   const scope = parseWorkspaceKey(worktreeId)
@@ -140,8 +145,7 @@ function resolveCurrentEditorRoute(
   if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
     return null
   }
-  // Why: ordinary folder workspaces have no published worktree row, so re-resolve their live
-  // folder owner after preserving the explicit-owner fail-closed contract above (#10251).
+  // Folder workspaces lack worktree rows; re-resolve their live owner while preserving explicit-owner fail-closed checks (#10251).
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return resolveEditorOwnerRoute(state, worktreeId, provenance.generation.route.executionHostId)
   }
@@ -150,10 +154,10 @@ function resolveCurrentEditorRoute(
 
 function isWorktreePublished(state: EditorOwnerState, worktreeId: string): boolean {
   return (
-    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
+    Object.values(selectWorktreesByRepo(state) ?? {}).some((worktrees) =>
       worktrees.some((worktree) => worktree.id === worktreeId)
     ) ||
-    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+    Object.values(selectDetectedWorktreesByRepo(state) ?? {}).some((result) =>
       result.worktrees.some((worktree) => worktree.id === worktreeId)
     )
   )
@@ -193,7 +197,7 @@ export function getEditorFileOperationContext(
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
     (workspaceScope?.type === 'folder'
-      ? (state.folderWorkspaces.find(
+      ? (selectFolderWorkspaces(state).find(
           (workspace) => workspace.id === workspaceScope.folderWorkspaceId
         )?.folderPath ?? null)
       : null)

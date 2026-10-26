@@ -85,8 +85,8 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
-    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
-    if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+    // Why: automated checks must honor the endpoint's Retry-After even when live display is available.
+    if (!options?.force && this.shouldSkipAutomatedFetch('claude', this.state.claude)) {
       return
     }
     const claudeTarget = this.claudeFetchTarget

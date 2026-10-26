@@ -5,15 +5,12 @@ import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-id
 
 export type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
-/** Loose signature: one mock stands in for many unrelated store methods. */
+/** One loose mock type covers unrelated store methods. */
 type StoreMock = Mock<(...args: unknown[]) => unknown>
-/** Store lookups tests re-implement per id, so the first arg stays narrowed. */
 type KeyedStoreMock = Mock<(id: string, ...rest: unknown[]) => unknown>
-/** Store writers tests re-implement by merging the patch they receive. */
 type KeyedStoreWriteMock = Mock<
   (target: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => unknown
 >
-/** Host-qualified store removals. */
 type TargetStoreMock = Mock<(target: HostWorktreeTarget) => unknown>
 
 export type TestMainWindow = {
@@ -37,6 +34,8 @@ export type TestStore = {
   removeWorktreeMeta: TargetStoreMock
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: StoreMock
   removeWorkspaceSessionStateForWorktree: KeyedStoreMock
+  getWorkspaceSessionHostIds: StoreMock
+  getWorkspaceSession: StoreMock
   getAllWorktreeLineage: StoreMock
   removeWorktreeLineage: TargetStoreMock
   getAllWorkspaceLineage: StoreMock
@@ -47,7 +46,6 @@ export type TestStore = {
   mergeRetiredWorktreeNames: StoreMock
 }
 
-/** Channel handlers captured from the mocked ipcMain.handle during registration. */
 export const handlers: HandlerMap = {}
 export const mainWindow: TestMainWindow = {
   isDestroyed: () => false,
@@ -72,6 +70,8 @@ export const store: TestStore = {
   removeWorktreeMeta: vi.fn(),
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),
   removeWorkspaceSessionStateForWorktree: vi.fn(),
+  getWorkspaceSessionHostIds: vi.fn(),
+  getWorkspaceSession: vi.fn(),
   getAllWorktreeLineage: vi.fn(),
   removeWorktreeLineage: vi.fn(),
   getAllWorkspaceLineage: vi.fn(),

@@ -1,16 +1,4 @@
-import {
-  Copy,
-  CopyX,
-  ExternalLink,
-  Eye,
-  ListX,
-  PanelLeftClose,
-  PanelRightClose,
-  Pencil,
-  Pin,
-  PinOff,
-  X
-} from 'lucide-react'
+import { Copy, CopyX, ExternalLink, Eye, ListX, Pencil, Pin, PinOff, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,8 +70,6 @@ export function EditorFileTabContextMenu({
   groupId,
   isPinned,
   isRenaming,
-  hasTabsToRight,
-  hasTabsToLeft,
   tabCount,
   canRename,
   canShowMarkdownPreview,
@@ -97,8 +83,6 @@ export function EditorFileTabContextMenu({
   onClose,
   onCloseOthers,
   onCloseAll,
-  onCloseToRight,
-  onCloseToLeft,
   onCloseSplitPane,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
@@ -133,8 +117,7 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
-          // Why: opening the input in onSelect lets the still-closing menu reclaim
-          // focus, and the resulting blur commits the rename away before the user types.
+          // Open rename after menu autofocus closes; onSelect would let menu focus restoration blur-commit it immediately.
           onActivate()
           onOpenRenameInput()
         }}
@@ -181,20 +164,6 @@ export function EditorFileTabContextMenu({
           {closeAllShortcut ? (
             <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
           ) : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-          <PanelRightClose className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
-            'Close All Tabs To The Right'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
-          <PanelLeftClose className="size-3.5" />
-          {translate(
-            'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
-            'Close All Tabs To The Left'
-          )}
         </DropdownMenuItem>
         <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
         {isVirtualEditorFile(file) ? null : <DropdownMenuSeparator />}

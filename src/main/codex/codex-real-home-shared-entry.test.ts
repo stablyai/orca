@@ -33,10 +33,6 @@ import {
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { resolveStartupManagedHookAction } from '../agent-hooks/managed-agent-hook-controls'
 
-// Why this file: every Orca on one HOME shares the current entry in ~/.codex.
-// Opening any pane once stripped it (4139 -> 18 bytes) and its trust; only the
-// user's explicit opt-out may remove it now.
-
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 const USER_HOOK = { type: 'command', command: 'user-stop-hook.sh' }
 
@@ -44,7 +40,6 @@ function systemCodexHome(): string {
   return join(homes.tmpHome, '.codex')
 }
 
-/** The real home as the real-home lane (or another Orca) leaves it, trust and ledger included. */
 function seedSharedEntry(): void {
   const material = getCodexManagedHookInstallMaterial()
   const hooksPath = join(systemCodexHome(), 'hooks.json')
@@ -103,7 +98,7 @@ async function reconcileWithHooksOff(): Promise<void> {
     pathReady: Promise.resolve()
   })
   await reconcileCodexHooks({ convertOlderForms: true, realHomeLaunch: true })
-  // Why: the start also lets the lookup ask Codex, and no Codex stands in here.
+  // Cancel the startup lookup; this fixture supplies no Codex process.
   reconcileInternals.resetForTesting()
   lookupInternals.resetForTesting()
 }
@@ -140,9 +135,7 @@ describe('the shared real-home Codex entry', () => {
     const before = snapshotRealCodexHome()
     const settings = { agentStatusHooksEnabled: false, disabledTuiAgents: [] }
 
-    // Startup: the managed installs are skipped.
     expect(resolveStartupManagedHookAction(settings)).toBe('skip')
-    // First pane: both lanes run with hooks off.
     await reconcileWithHooksOff()
     await new CodexHookService().prepareRuntimeHomeForLaunch(
       getOrcaManagedCodexHomePath(),

@@ -46,9 +46,7 @@ describe('openDocumentInFloatingWorkspace', () => {
 
     openDocumentInFloatingWorkspace(openFile, markdownDocument())
 
-    // Why: the caller already resolved an absolute local path, so a null runtime plus the
-    // fallback suppression is what keeps the read off a remote SSH host the user is focused on.
-    // Dropping either one silently reads the file on the wrong machine.
+    // Pin both null runtime and fallback suppression so a resolved local path cannot be read on the focused remote host.
     expect(openFile.mock.calls[0][0].runtimeEnvironmentId).toBeNull()
     expect(openFile.mock.calls[0][1]?.suppressActiveRuntimeFallback).toBe(true)
   })

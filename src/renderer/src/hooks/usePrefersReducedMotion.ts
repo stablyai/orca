@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
-function readPrefersReducedMotion(): boolean {
+export function readPrefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false
   }

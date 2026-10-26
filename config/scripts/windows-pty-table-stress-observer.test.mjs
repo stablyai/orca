@@ -146,7 +146,9 @@ describe('Windows PTY stress observer', () => {
     writeFileSync(addon, 'actual-loaded-bytes')
     const hashes = loadedStressInputHashes(addon, () => addon)
     expect(hashes[0]).toMatchObject({ name: 'conpty.node', bytes: 19 })
-    expect(hashes[0].sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(hashes[0].sha256).toBe(
+      'e61479b6ebc4f1f1ffd0a3cf819cbae5713843d250a9cbc6ad5fcfde1c922737'
+    )
     expect(hashes[1]).toEqual({ name: 'conpty.dll', unavailable: 'ENOENT' })
     expect(hashes[2]).toEqual({ name: 'OpenConsole.exe', unavailable: 'ENOENT' })
     expect(hashes.slice(3).every((hash) => hash.sha256 === hashes[0].sha256)).toBe(true)

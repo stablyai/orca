@@ -1,3 +1,4 @@
+import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
@@ -5,7 +6,6 @@ import type {
   SpawnIntent
 } from '../../shared/host-spawn-admission'
 import type {
-  AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
@@ -23,7 +23,9 @@ import type {
 } from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -38,6 +40,8 @@ export type RuntimePtyController = {
     leafId: string
   }): () => void
   adoptStablePane?(opts: {
+    signal?: AbortSignal
+    spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
     cols: number
     rows: number
     cwd?: string
@@ -63,11 +67,14 @@ export type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    launchConfig?: WorktreeStartupLaunch['launchConfig']
+    launchToken?: string
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
@@ -96,6 +103,9 @@ export type RuntimePtyController = {
     signal?: AbortSignal
     refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
+    /** Layout-owner build: whether a fresh start resumed its agent, told before its bind is written. */
+    onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
+    paneSpawnOperation?: PaneSpawnOperation
     adoptedStablePane?: {
       result: PtySpawnResult
       owner: {
@@ -107,14 +117,13 @@ export type RuntimePtyController = {
       }
       materialized?: true
     }
-  }): Promise<{
-    id: string
-    pid?: number | null
-    incarnationId?: PtyIncarnationId
-    wslDistro?: string
-    stablePaneOwner?: { handle: string; tabId: string; leafId: string }
-    agentSessionEnsure?: AgentSessionClaimedSpawnResult
-  }>
+  }): Promise<
+    PtySpawnResult & {
+      stablePaneOwner?: { handle: string; tabId: string; leafId: string }
+      startupCwdFallback?: StartupCwdFallback
+      savedStartupCwd?: string
+    }
+  >
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
@@ -125,9 +134,7 @@ export type RuntimePtyController = {
     data: string,
     inputKind: TerminalInputKind
   ): WriteSettlement | Promise<WriteSettlement>
-  /** Attach-only adoption of a live local daemon session so its output streams
-   *  to main without a renderer pane; never creates, resizes, or focuses.
-   *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
+  /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
   kill(ptyId: string): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
@@ -148,7 +155,7 @@ export type RuntimePtyController = {
   clearBuffer?(ptyId: string): Promise<void>
   resetInputModes?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
-  // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
+  // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   /** Omitting the host lists every registered host. */
   listProcesses?(
@@ -179,9 +186,7 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null>
-  // Why: synchronous probe used by maybeHydrateHeadlessFromRenderer to skip
-  // hydration when no renderer is authoritative for this PTY. See
-  // docs/mobile-prefer-renderer-scrollback.md.
+  // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number
   waitForRendererSerializer?(
@@ -203,9 +208,10 @@ export type PtyControllerTerminalIdentity = Readonly<{
 
 export type PtyControllerInventory = Readonly<{
   livePtyIds: ReadonlySet<string>
-  // Why: livePtyIds is worktree-scoped when a target is given; absence proofs
-  // must consult the unscoped inventory or a misattributed live PTY reads as dead.
+  // Use unscoped inventory for absence proof; worktree-scoped livePtyIds could misclassify misattributed live terminals.
   allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
   queriedHostIds: ReadonlySet<ExecutionHostId>
+  /** Live PTYs the host is killing: still live work, but no longer any pane's to show. */
+  exitingPtyIds?: ReadonlySet<string>
 }>

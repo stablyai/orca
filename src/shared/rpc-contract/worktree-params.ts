@@ -45,9 +45,7 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
-// Why no dispatch token (unlike automation provenance): this is a descriptive
-// origin marker for sidebar filtering, not an authority grant. The host stamps
-// createdAt itself so a client clock can't skew sort order.
+// Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
 })
@@ -88,6 +86,11 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+// Why optional: an older host strips the unknown field and marks its chats asleep as before.
+export const WorktreeSleepParams = WorktreeSelector.extend({
+  markChatsAsleep: z.boolean().optional()
+})
+
 export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
@@ -114,12 +117,9 @@ export function assertLinkedWorkItemSourceContextMatch(
 }
 
 export const WorktreeSet = WorktreeSelector.extend({
-  // Why: '' is the blanking contract — "fall back to the branch/folder name".
-  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
-  // name was dropped here and the old name came back on the next refresh.
+  // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
-  // Why: empty comments are meaningful metadata updates, so use the plain
-  // string parser instead of OptionalString's empty-as-undefined behavior.
+  // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
@@ -175,13 +175,10 @@ export const WorktreeSet = WorktreeSelector.extend({
 export const WorktreeRemove = WorktreeSelector.extend({
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
-  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
-  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
-  // waiver travels on its own field.
+  // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
-  // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
-  // in the result; it is NOT `force`, and it does not decide whether the hook runs.
+  // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
   allowFailedArchiveHook: OptionalBoolean
 })
 

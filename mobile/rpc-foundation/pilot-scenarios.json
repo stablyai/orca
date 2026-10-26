@@ -5,7 +5,7 @@
       "id": "b1",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["a-b-a", "stale-inflight-cleanup"],
       "steps": [
         {
@@ -2508,7 +2508,7 @@
       "id": "inventory-lifecycle",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["reset", "unmount-remount", "blur-retained-route"],
       "steps": [
         {
@@ -2572,7 +2572,7 @@
       "id": "inventory-repeat-query",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
       "steps": [
         {
@@ -7219,7 +7219,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "repoId": "repo-1"
           },
           "reply": {
             "ok": true,
@@ -15971,7 +15971,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16122,7 +16122,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false
           },
           "reply": {
@@ -16143,7 +16143,7 @@
       "id": "native-chat-image-paste-single",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16199,7 +16199,7 @@
       "id": "native-chat-image-paste-two-images",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16275,7 +16275,7 @@
       "id": "native-chat-image-paste-stops-on-rejection",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16331,7 +16331,7 @@
       "id": "native-chat-image-paste-trailing-image",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16387,7 +16387,7 @@
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16435,7 +16435,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16471,7 +16471,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16503,7 +16503,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16539,7 +16539,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18346,7 +18346,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18412,7 +18412,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18479,7 +18479,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18514,7 +18514,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18550,7 +18550,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18586,7 +18586,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18628,7 +18628,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18983,7 +18983,7 @@
       "id": "native-chat-image-upload-start-refused",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19013,7 +19013,7 @@
       "id": "native-chat-image-upload-single",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19066,7 +19066,7 @@
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19156,7 +19156,7 @@
       "id": "native-chat-image-upload-second-fails",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19223,7 +19223,7 @@
       "id": "native-chat-image-upload-cancelled",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22880,7 +22880,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -22955,7 +22955,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [

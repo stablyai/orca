@@ -29,10 +29,7 @@ describe('resolveWindowCloseAction', () => {
     ).toBe('bypass-gone')
   })
 
-  // Why (#5787): the data-loss cascade — a HUNG but alive renderer (force-killed
-  // via the OS "not responding" dialog) must still route through the renderer's
-  // save/running-process confirmation. It is neither gone nor crashed at the
-  // moment the user decides to close, so it MUST request confirmation, not bypass.
+  // #5787: hung-but-live renderers still need save/process confirmation; only proven gone/crashed renderers may bypass.
   it('requests confirmation for an alive renderer (no gone/crashed flag)', () => {
     expect(
       resolveWindowCloseAction({
@@ -44,8 +41,7 @@ describe('resolveWindowCloseAction', () => {
   })
 
   it('prefers the confirmed-close path even if a stale gone/crashed flag is set', () => {
-    // Why: a renderer that already confirmed close (windowCloseConfirmed) is
-    // proceeding through the normal teardown; never re-route it.
+    // A confirmed close must proceed rather than request confirmation again.
     expect(
       resolveWindowCloseAction({
         windowCloseConfirmed: true,

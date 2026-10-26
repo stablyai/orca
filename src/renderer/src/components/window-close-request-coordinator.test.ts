@@ -31,8 +31,7 @@ describe('window-close-request-coordinator', () => {
   beforeEach(() => {
     confirmWindowClose.mockClear()
     vi.mocked(toast.error).mockClear()
-    // Why: dispatch falls back to the preload bridge when no rich handler is
-    // registered; stub just the surface it touches.
+    // Without a rich close handler, dispatch uses only this preload fallback surface.
     const windowTarget = new EventTarget() as EventTarget & {
       api: { ui: { confirmWindowClose: () => void } }
     }
@@ -47,8 +46,7 @@ describe('window-close-request-coordinator', () => {
   })
 
   it('has no handler by default, so the App root falls back to confirming the close', () => {
-    // Why: on the no-workspace landing page Terminal is not mounted, so no rich
-    // handler is registered and the App-root subscription must close directly.
+    // Terminal is absent on the landing page; App must still service close directly.
     expect(getWindowCloseRequestHandler()).toBeNull()
   })
 
@@ -64,7 +62,6 @@ describe('window-close-request-coordinator', () => {
     expect(getWindowCloseRequestHandler()).toBeNull()
   })
 
-  // The #5144 contract: a close request must always be acted on.
   it('confirms the close directly when no rich handler is registered (no-workspace path)', async () => {
     await dispatchWindowCloseRequest({ isQuitting: true })
 
@@ -131,12 +128,10 @@ describe('window-close-request-coordinator', () => {
     await dispatchWindowCloseRequest({ isQuitting: false })
 
     expect(handler).toHaveBeenCalledWith({ isQuitting: false })
-    // Why: confirmation is the rich handler's responsibility (after save dialogs
-    // / running-process checks) — dispatch must not short-circuit it.
+    // Only the rich handler confirms after save/process guards; dispatch must not bypass them.
     expect(confirmWindowClose).not.toHaveBeenCalled()
   })
 
-  // Pre-close guards (e.g. unsaved Settings prompt drafts).
   it('cancels the close — no confirm, no handler — when a guard vetoes', async () => {
     const handler = vi.fn()
     setWindowCloseRequestHandler(handler)
@@ -180,7 +175,6 @@ describe('window-close-request-coordinator', () => {
     addGuard(guard)
 
     const first = dispatchWindowCloseRequest({ isQuitting: true })
-    // Second request arrives while the first guard's dialog is still open.
     await dispatchWindowCloseRequest({ isQuitting: true })
     expect(guard).toHaveBeenCalledTimes(1)
 

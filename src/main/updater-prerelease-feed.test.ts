@@ -197,7 +197,7 @@ describe('fetchNewerReleaseTag', () => {
   })
 
   it('picks semver-newest across a mixed-order feed', async () => {
-    // atom feed sort by publish time, not version — verify we pick by semver
+    // Atom order follows publish time, not semver.
     respondWithAtom(['v1.2.0', 'v1.3.19', 'v1.3.19-rc.6', 'v1.3.20-rc.1', 'v1.3.18'])
     const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
     expect(await fetchNewerReleaseTag('1.3.19-rc.6')).toBe('v1.3.20-rc.1')

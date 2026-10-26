@@ -1,4 +1,3 @@
-/** Opens a managed tunnel at the port orcad bound and keeps it only if orcad is what answers. */
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -9,7 +8,7 @@ import {
   type OrcadTunnelPortInput
 } from './orcad-managed-bound-port'
 import {
-  OrcadManagedIdentityError,
+  orcadIdentityRefusal,
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
@@ -17,18 +16,14 @@ import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import type {
-  PortForwardEntry,
-  SshPortForwardManager
-} from '../../ssh/port-forwarding/ssh-port-forward'
+import type { PortForwardEntry } from '../../../shared/ssh-types'
+import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 
 export type OrcadManagedTunnelTargeting = {
   resolveRemotePort: (input: OrcadTunnelPortInput) => Promise<number>
-  /** Checks the runtime the environment's pairing endpoint (the tunnel's local port) reaches. */
   verifyIdentity: (environment: KnownRuntimeEnvironment) => Promise<OrcadTunnelIdentity>
-  /** Starts the active slot only on proven exit, before a foreign answer re-reads the port. */
+  /** Wake only proven-stopped slots before rereading ports after foreign answers. */
   wakeStoppedServer?: (input: OrcadTunnelPortInput) => Promise<void>
-  /** The port the host's readiness names now, or null; a tunnel that stopped answering follows it. */
   readPublishedPort?: (input: OrcadTunnelPortInput) => Promise<number | null>
 }
 
@@ -39,10 +34,7 @@ export const MANAGED_ORCAD_TUNNEL_TARGETING: OrcadManagedTunnelTargeting = {
   readPublishedPort: readManagedOrcadPublishedPort
 }
 
-/**
- * A stopped slot's readiness still names the port it bound, which another runtime may hold by
- * now; starting it moves it to a free port the re-read then follows.
- */
+// Stopped slots may have lost their port; waking publishes a new free port for the reread.
 async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Promise<void> {
   const access = getRuntimeSshAccess(input.environment)
   if (!access) {
@@ -52,28 +44,27 @@ async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Pr
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
     await wakeStoppedManagedOrcad(managedOrcadSlot(context, access.remotePort))
   } catch (error) {
-    // The re-read and its identity check still decide; a failed wake only leaves the port as is.
+    // Failed wake does not settle identity; reread and validate the resulting forward.
     console.warn('[ssh] Could not start the managed Orca server behind a foreign answer:', error)
   }
 }
 
-/** Test default: the persisted port, and no identity round trip. */
+/** Tests may trust persisted ports without an identity round trip. */
 export const PERSISTED_PORT_TARGETING: OrcadManagedTunnelTargeting = {
   resolveRemotePort: async ({ environment }) => getRuntimeSshAccess(environment)?.remotePort ?? 0,
   verifyIdentity: async () => ({ verdict: 'verified' })
 }
 
-export type VerifiedOrcadForwardArgs = {
+type VerifiedOrcadForwardArgs = {
   targetId: string
   connection: SshConnection
   forwards: SshPortForwardManager
-  /** 0 picks a free local port. */
   localPort: number
   label: string
   remotePort: number
-  /** Defaults to the same port, so a foreign answer fails at once. */
+  /** Without a reread, foreign answers fail immediately. */
   rereadRemotePort?: () => Promise<number>
-  /** Defaults to trusting the forward, for callers that verify on their own. */
+  /** Omit when the caller validates identity itself. */
   verify?: (localPort: number) => Promise<OrcadTunnelIdentity>
   stillCurrent: () => boolean
 }
@@ -82,11 +73,10 @@ export type OrcadTunnelStartChecks = Pick<
   VerifiedOrcadForwardArgs,
   'rereadRemotePort' | 'verify'
 > & {
-  /** The persisted launch port, when the forward targets a port orcad fell back to. */
+  /** Persisted preferred port when the server bound elsewhere. */
   preferredPort?: number
 }
 
-/** The manager's targeting, bound to one environment's tunnel, with the port it reads now. */
 export async function environmentForwardChecks(
   targeting: OrcadManagedTunnelTargeting,
   input: OrcadTunnelPortInput
@@ -101,12 +91,7 @@ export async function environmentForwardChecks(
   }
 }
 
-/**
- * Null when `stillCurrent` turned false mid-setup; the forward is already removed then.
- * An answer from another runtime re-reads the port once, since orcad may have restarted onto a
- * new one or been started there by that re-read, and throws if the port did not move or the new
- * one is foreign too.
- */
+/** Remove superseded forwards; retry foreign ports once. Pinned-server token refusals fail immediately. */
 export async function forwardToVerifiedOrcad(
   args: VerifiedOrcadForwardArgs
 ): Promise<PortForwardEntry | null> {
@@ -123,9 +108,9 @@ export async function forwardToVerifiedOrcad(
       await args.forwards.removeForwardAndWait(forward.id)
       return null
     }
-    if (identity.verdict !== 'foreign') {
+    if (identity.verdict === 'verified' || identity.verdict === 'unreachable') {
       if (identity.verdict === 'unreachable') {
-        // Why not fail: a server that is down or still starting is not a wrong server.
+        // Unreachable servers may be down or starting; this is not proof of a foreign server.
         console.warn(
           `[ssh] Managed Orca server did not answer through its tunnel: ${identity.detail}`
         )
@@ -133,10 +118,14 @@ export async function forwardToVerifiedOrcad(
       return forward
     }
     await args.forwards.removeForwardAndWait(forward.id)
+    // Token refusal from our pinned server is not a moved port; waking cannot repair pairing.
+    if (identity.verdict === 'unpaired') {
+      throw orcadIdentityRefusal(remotePort, identity)
+    }
     const reread =
       attempt === 0 && args.rereadRemotePort ? await args.rereadRemotePort() : remotePort
     if (reread === remotePort || !args.stillCurrent()) {
-      throw new OrcadManagedIdentityError(remotePort, identity.detail)
+      throw orcadIdentityRefusal(remotePort, identity)
     }
     remotePort = reread
   }

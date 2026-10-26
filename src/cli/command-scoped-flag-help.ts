@@ -1,8 +1,7 @@
-// Why: the shared --focus line describes terminal create's terminal session.
+// File focus differs from terminal create's shared --focus help.
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
-/** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
@@ -72,6 +71,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     sort: '--sort <order>         relevance (default) or newest',
     debug: '--debug                Include the planner route the host used',
     'index-status': '--index-status         Report the index instead of searching'
+  },
+  ports: {
+    all: '--all                  List every listener on the workspace host, not just this workspace'
   }
 }
 

@@ -5,18 +5,15 @@ import {
 } from '../workspace-view/workspace-row-sort'
 import {
   classifySortStampEvent,
-  nextAgentPaneState,
+  enterAgentPaneState,
   REST_PANE,
   type AgentPaneState,
   type SortStamps
 } from './sort-stamps'
-import type { AgentPhase } from '../agent-transitions'
+import { agentPhaseTransition, nextAgentPhase, type AgentPhase } from '../agent-transitions'
 import { compareSmartStamps, recentStamp } from './stamp-order'
 
-/**
- * Every row of the before/after table in the sort-stamps design note, replayed through the host's
- * classifier and the stamp order every client sorts by.
- */
+/** Replay the sort-stamps design table through the host classifier and shared client ordering. */
 type Row = { id: string; stamps: SortStamps; pane: AgentPaneState; unread: boolean }
 
 const T0 = 10_000_000
@@ -45,11 +42,17 @@ class Host {
 
   agent(id: string, observed: AgentPhase): void {
     const row = this.rows.get(id)!
-    const pane = nextAgentPaneState(row.pane, observed, this.now)
+    const pane = enterAgentPaneState(row.pane, nextAgentPhase(row.pane.phase, observed), this.now)
     if (pane === row.pane) {
       return
     }
-    this.apply(row, { kind: 'agent', from: row.pane.phase, to: pane.phase, panes: [pane] })
+    this.apply(row, {
+      kind: 'agent',
+      from: row.pane.phase,
+      to: pane.phase,
+      transition: agentPhaseTransition(row.pane.phase, pane.phase),
+      panes: [pane]
+    })
     row.pane = pane
     if (pane.phase === 'done' && id !== this.openId) {
       row.unread = true

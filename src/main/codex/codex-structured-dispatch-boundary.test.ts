@@ -62,8 +62,7 @@ it('stops a refused steer before its fallback write', async () => {
   }
   await expect(sending).rejects.toBe(reason)
   expect(connection.calls.some((call) => call.method === 'turn/start')).toBe(false)
-  // An exact echo is passed on; the journal keeps the stopped send rejected (see
-  // structured-agent-session-late-settlement.test.ts).
+  // The journal keeps stopped sends rejected even if an exact echo arrives.
   echoUserMessage(connection, { turnId: 'running', itemId: 'stopped', clientId: 'stopped' })
   expect(settlements.map((entry) => entry.clientMessageId)).toEqual(['stopped'])
   await adapter.closeAll()
@@ -82,7 +81,7 @@ it('abandons only the stopped message while waiting for a previous turn to open'
       body: CODEX_TEST_USER_MESSAGE,
       signal
     })
-  await expect(dispatch('first')).resolves.toEqual({ state: 'admitted' })
+  await expect(dispatch('first')).resolves.toMatchObject({ state: 'admitted' })
   const controller = new AbortController()
   const stopped = dispatch('waiting', controller.signal)
   await new Promise<void>((resolve) => setTimeout(resolve, 10))
@@ -92,7 +91,6 @@ it('abandons only the stopped message while waiting for a previous turn to open'
   expect(connection.calls.filter((call) => call.method === 'turn/start')).toHaveLength(1)
   startTurn(connection, 'opening')
   echoUserMessage(connection, { turnId: 'opening', itemId: 'first', clientId: 'first' })
-  // The abandoned wait leaves the earlier send's receipt intact.
   expect(settlements.map((entry) => entry.clientMessageId)).toEqual(['first'])
   await adapter.closeAll()
 })
@@ -120,7 +118,7 @@ it.each(['accepted', 'uncertain'] as const)(
     controller.abort(new Error('Stop after write'))
     if (outcome === 'accepted') {
       answer.resolve({ turnId: 'running' })
-      await expect(sent).resolves.toEqual({ state: 'admitted' })
+      await expect(sent).resolves.toMatchObject({ state: 'admitted' })
     } else {
       const lost = new Error('Reply lost after write')
       answer.reject(lost)

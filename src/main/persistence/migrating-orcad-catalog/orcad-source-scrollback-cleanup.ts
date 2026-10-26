@@ -6,7 +6,7 @@ import {
 } from '../../terminal-scrollback-snapshots'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 
-/** Deletes the given snapshot files unless a session or a pending export still names them. */
+/** Retain files still referenced by sessions or pending exports. */
 export function deleteUnreferencedOrcadMigrationScrollback(
   runtime: Pick<
     StoreRuntimeState,

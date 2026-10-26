@@ -8,6 +8,7 @@ import {
   ProfileStateRecoveryCommandError,
   isProfileStateRecoveryCommandError,
   profileStateRecoveryRequestSchema,
+  type ProfileStateRecoveryRequest,
   type ProfileStateRecoveryResponse
 } from '../../shared/profile-state-recovery-command'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
@@ -42,10 +43,9 @@ export function runProfileStateRecoveryPreflight(argv: readonly string[] = proce
   return true
 }
 
-/** Build the relaunch argv that applies a startup-dialog choice before ordinary startup. */
 export function profileStateDesktopRecoveryArgs(
   argv: readonly string[],
-  request: { userDataPath: string; selector: { kind: 'current-json' | 'current-sqlite' } }
+  request: ProfileStateRecoveryRequest
 ): string[] {
   return [
     ...stripRecoveryArgs(argv.slice(1)),
@@ -75,7 +75,7 @@ function runDesktopRecovery(argv: readonly string[]): void {
       dialog.showMessageBox({
         type: 'error',
         buttons: ['Quit'],
-        title: 'Orca profile state was not changed',
+        title: 'Orca could not finish recovering this profile',
         message: 'Orca could not apply the selected profile state.',
         detail: `${response.message}\n\nReopen Orca to choose again.`
       })

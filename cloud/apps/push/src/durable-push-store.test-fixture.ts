@@ -39,7 +39,7 @@ function scopeFixtureLocks(database: PushDatabase, scope: string): PushDatabase 
 }
 
 // ownDatabase keeps production lock keys for mixed-revision tests.
-export async function fixture({ ownDatabase = false } = {}) {
+export async function fixture({ ownDatabase = false, poolMax = 4 } = {}) {
   const databaseUrl = durablePushTestDatabaseUrl
   if (databaseUrl && !process.env.CI && new URL(databaseUrl).port !== '55440') {
     throw new Error('isolated_postgres_port_required')
@@ -73,7 +73,7 @@ export async function fixture({ ownDatabase = false } = {}) {
       await admin.query(`CREATE SCHEMA ${name}`)
       url.searchParams.set('options', `-c search_path=${name}`)
     }
-    scoped = await openPushDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax: 4 })
+    scoped = await openPushDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax })
     db = ownDatabase ? scoped : scopeFixtureLocks(scoped, name)
   } else {
     db = await openInMemoryPushDatabase()

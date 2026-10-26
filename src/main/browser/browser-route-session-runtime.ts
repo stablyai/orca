@@ -22,7 +22,6 @@ const routeWebContentsRegistryRef: {
   current: BrowserRouteWebContentsRegistry | null
 } = { current: null }
 
-// Why: a retained partition's storage is in use right now, so eviction must never pick it.
 const currentBindingStore = (): BrowserRoutePartitionBindingStore =>
   currentBrowserRoutePartitionBindingStore({
     isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
@@ -30,13 +29,17 @@ const currentBindingStore = (): BrowserRoutePartitionBindingStore =>
 
 const bindingStore = {
   get: (partition: string): string | null => currentBindingStore().get(partition),
-  set: (partition: string, fingerprint: string, storageScope: string): readonly string[] =>
-    currentBindingStore().set(partition, fingerprint, storageScope),
+  set: (
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[] => currentBindingStore().set(partition, fingerprint, storageScope, alias),
   touch: (partition: string): void => currentBindingStore().touch(partition),
   findPartitionByFingerprint: (fingerprint: string): string | null =>
     currentBindingStore().findPartitionByFingerprint(fingerprint),
-  rebind: (partition: string, fingerprint: string, storageScope: string): void =>
-    currentBindingStore().rebind(partition, fingerprint, storageScope)
+  rebind: (partition: string, fingerprint: string, storageScope: string, alias?: string): void =>
+    currentBindingStore().rebind(partition, fingerprint, storageScope, alias)
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
@@ -50,13 +53,17 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
     }
   },
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId, profileMetadata }) =>
-    profileMetadata
-      ? installBrowserRoutePartitionPolicies(
-          { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null },
-          partition
-        )
-      : browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
+  setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
+    // Default profiles arrive without metadata.
+    const profile = profileMetadata
+      ? { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null }
+      : browserSessionRegistry.getProfile(browserProfileId)
+    if (!profile) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    // Keep remote profile permissions in the session; their ids may collide with local profiles.
+    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+  },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },
@@ -88,8 +95,7 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 
-// Why: downloads must fail closed for client-hosted content, so the router needs to tell a route
-// guest (or one of its popups) from an ordinary browser guest before it decides where bytes land.
+// Identify route guests and popups so downloads fail closed when remote ownership is unavailable.
 setBrowserClientRouteWebContentsProbe((webContentsId) => {
   if (isBrowserRouteGuestPopup(webContentsId)) {
     return true

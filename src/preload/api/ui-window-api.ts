@@ -18,10 +18,16 @@ export type UiWindowApi = {
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }) => Promise<string | null>
+  /** Saves paste text on the execution host so the agent can read it. */
+  savePastedTextAsFile: (args: {
+    text: string
+    runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  }) => Promise<string>
   clipboardHasImage: () => Promise<boolean | null>
-  /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
+  /** Empty if no files were copied or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
-  /** Which restored draft pastes are still kept: files really in Orca's paste folder. */
+  /** Only files inside Orca's paste folder count as kept. */
   restoreNativeChatPastes: (
     paths: string[]
   ) => Promise<{ path: string; kept: boolean; exists: boolean }[]>
@@ -47,6 +53,7 @@ export type UiWindowApi = {
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
+  markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
   setShortcutRecorderFocused: (focused: boolean) => void

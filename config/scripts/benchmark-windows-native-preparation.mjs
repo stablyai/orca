@@ -180,7 +180,7 @@ export async function benchmarkWindowsNativePreparation(
 ) {
   assert.equal(process.platform, 'win32', 'This hosted comparison requires Windows')
   assert(['x64', 'arm64'].includes(process.arch), 'Unsupported Windows runner')
-  assert.equal(process.versions.node, '24.21.0', 'Comparison requires pinned Node')
+  assert.equal(process.versions.node, '24.22.1', 'Comparison requires pinned Node')
   assert(
     !hasWindowsCompilerSelection(process.env),
     'Explicit compiler selection prevents a qualified automatic-capture comparison'

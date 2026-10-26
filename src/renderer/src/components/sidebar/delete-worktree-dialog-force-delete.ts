@@ -8,14 +8,8 @@ import {
 import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 
-/**
- * The dialog's explicit "Force Delete" retry.
- *
- * Runs the destructive retry directly rather than through the shared toast
- * wrapper, preserving the legacy button behaviour, and closes immediately
- * because the workspace cards already show the deleting state.
- */
 export function runDialogForceDelete(args: {
   worktreeId: string
   currentWorktrees: readonly Worktree[]
@@ -26,27 +20,21 @@ export function runDialogForceDelete(args: {
   ) => Promise<({ ok: true } & RendererRemoveWorktreeResult) | { ok: false; error: string }>
   closeModal: () => void
   onDeleted: ((deleted: WorktreeRemovalTarget[]) => void) | null | undefined
+  confirmedDiscards: ConfirmedUnsavedDiscards
 }): void {
   const { worktreeId, currentWorktrees, removeWorktree, closeModal, onDeleted } = args
-  // Why: this branch preserves the legacy "Force Delete" button behavior
-  // inside the dialog — it runs the destructive retry directly without
-  // the shared toast wrapper. Close immediately because workspace cards
-  // already show the deleting state while the retry runs.
-  // Why the lookup (STA-4343): the confirmed row carries the host the
-  // removal must land on; a bare id would let force delete another host's
-  // checkout at the same path.
+  // Use the confirmed row’s host so same-path checkouts on other hosts cannot be force-deleted.
   const forceTarget = currentWorktrees.find((entry) => entry.id === worktreeId)
   if (!forceTarget) {
-    // Same recovery as a stale confirmed batch: say so and close, rather
-    // than leaving a destructive button that silently does nothing.
+    // Stale confirmations must explain changed targets and close rather than leave a silent destructive button.
     showWorkspaceListChangedToast()
     closeModal()
     return
   }
-  // Why (#11960): this IS the explicit Force Delete, so it may also waive
-  // the PTY-stop proof — unlike the confirmed delete in the branch below.
+  // Explicit Force Delete may waive PTY-stop proof, unlike ordinary confirmed deletion.
   const deletePromise = removeWorktree(toWorktreeRemovalTarget(forceTarget), true, {
-    allowUnverifiedPtyStop: true
+    allowUnverifiedPtyStop: true,
+    confirmedDiscards: args.confirmedDiscards
   })
   closeModal()
   deletePromise

@@ -15,16 +15,11 @@ import {
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
 const DOUBLE_CLICK_SETTLE_MS = 500
 
-/** The selected text, and the point the offer is drawn at, which moves with that text. */
 type QuoteRequest = {
   text: string
   anchor: { getBoundingClientRect: () => DOMRect; contextElement?: Element }
 }
 
-/**
- * Offers "Add to chat" beside a selection made in an agent's reply, and copies a finished
- * transcript selection when Copy on Select is on.
- */
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
@@ -72,7 +67,6 @@ export function NativeChatSelectionQuote({
       }
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
-        // Only offered where the text would land.
         const quotable = composerRef.current?.acceptsText()
           ? readNativeChatQuotableSelection(root)
           : null

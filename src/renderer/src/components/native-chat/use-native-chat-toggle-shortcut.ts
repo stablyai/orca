@@ -12,6 +12,7 @@ import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
@@ -36,10 +37,7 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
   )
 }
 
-/** Toggles a workspace's focused agent-terminal tab between the terminal and native
- *  chat views via the keyboard. Gated to the surface the key press came from (main
- *  window or floating panel) so only one listener acts, and to agent terminals so
- *  the chord is inert on plain shells / non-terminal surfaces. */
+/** Toggle supported agent-terminal views only on the key event’s originating workspace surface. */
 export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive: boolean): void {
   useEffect(() => {
     if (!isWorktreeActive) {
@@ -51,8 +49,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         return
       }
       const state = useAppStore.getState()
-      // Why: the floating panel and the main window can both be on screen; only the one the key
-      // press came from toggles.
+      // Main and floating surfaces can coexist; only the key’s originating surface may act.
       if (resolveKeyboardWorkspaceId(e.target, state.activeWorktreeId) !== worktreeId) {
         return
       }
@@ -64,17 +61,13 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === group.activeTabId
       )
-      // contentType gates out standalone structured (agent-session) tabs.
       if (!tab || tab.contentType !== 'terminal') {
         return
       }
       const terminalTab = (state.tabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === tab.entityId
       )
-      // Carry the agent identity (not just "an agent exists") so the chord stays
-      // inert on unsupported agents (e.g. Gemini), matching the menu/header gate.
-      // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
-      // the unified tab id.
+      // Resolve the actual supported agent from backing terminal-tab pane keys, matching the menu/header gate.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
       const tabWideFallbackSafe = isNativeChatTabWideFallbackSafe(terminalLayout)
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
@@ -104,9 +97,9 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       e.stopPropagation()
       state.toggleTabViewMode(tab.id)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
     }
   }, [worktreeId, isWorktreeActive])
 }

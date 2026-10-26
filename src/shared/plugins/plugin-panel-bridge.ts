@@ -1,16 +1,8 @@
 import { z } from 'zod'
 import { isPluginPanelAction } from './plugin-host-api'
 
-/**
- * postMessage protocol between a sandboxed plugin panel iframe and the host
- * renderer, plus the action call shape relayed to main. The frame has an
- * opaque origin (sandbox="allow-scripts"), so neither side can use origins
- * for trust: the host verifies the sending window's identity and re-validates
- * every payload here; main re-checks capabilities before executing.
- *
- * Param/result schemas come from the host API v0 spec table — the panel
- * bridge is a transport, not a second contract.
- */
+/** Opaque-origin sandbox panels cannot authenticate by origin. Verify sender window and payload; main rechecks capabilities.
+ * Transport uses host API params/results rather than a second contract. */
 
 export const PANEL_ACTION_REQUEST_TYPE = 'orca-panel-action'
 export const PANEL_ACTION_RESULT_TYPE = 'orca-panel-action-result'
@@ -22,16 +14,11 @@ export const PLUGIN_PANEL_FRAME_NAME_PREFIX = 'orca-plugin-panel:'
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
 export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
 
-/** Size cap for the reserved liveness lane. Deliberately size-only: any
- *  per-window count on this lane can be spent by the panel's own pongs and
- *  would drop the next genuine reply, which is the starvation this reserved
- *  lane exists to prevent. Aggregate cost stays bounded because pongs are also
- *  charged to the data budget and cost O(1) plus a walk capped here. */
+/** Size-only liveness lane: count limits let a panel’s pongs exhaust the budget and starve genuine replies.
+ * Pongs also spend the data budget, bounding aggregate cost; walks are capped here. */
 export const PANEL_CONTROL_MESSAGE_MAX_BYTES = 1024
 
-/** Watchdog cadence: a panel that misses a pong deadline is demoted to an
- *  errored badge. Busy-loop detection is valid only while the runtime frame-
- *  process gate confirms the sandbox stays outside the host renderer. */
+/** Missed pongs demote panels; busy-loop detection is valid only while the frame-process gate proves isolation from host renderer. */
 export const PANEL_WATCHDOG_PING_INTERVAL_MS = 10_000
 export const PANEL_WATCHDOG_PONG_TIMEOUT_MS = 5_000
 
@@ -79,8 +66,7 @@ export type PluginPanelActionOutcome =
 
 export const panelSessionTokenSchema = z.string().min(32).max(128)
 
-/** Call shape relayed by a trusted panel host. The opaque session is issued
- *  while loading one approved panel, so the caller never supplies identity. */
+/** Host-issued opaque sessions identify approved panels; plugin callers never supply their own identity. */
 export const panelActionCallSchema = z
   .object({
     sessionToken: panelSessionTokenSchema,
@@ -100,9 +86,7 @@ export type PanelActionRequestParseResult =
   | { ok: true; request: PluginPanelActionRequest }
   | { ok: false; requestId: string | null; error: string }
 
-/** Validates a raw `message` event payload from the panel iframe. On failure
- *  still surfaces a best-effort requestId so the host can answer with an
- *  error instead of silently dropping the request. */
+/** On invalid requests, retain a best-effort requestId so the host can return an error instead of silently dropping them. */
 export function parsePanelActionRequest(data: unknown): PanelActionRequestParseResult {
   const parsed = panelActionRequestSchema.safeParse(data)
   if (parsed.success) {
@@ -124,8 +108,6 @@ export function parsePanelActionRequest(data: unknown): PanelActionRequestParseR
   }
 }
 
-/** True when `data` even looks like a bridge request (right `type`). Used to
- *  ignore unrelated window messages without replying to them. */
 export function looksLikePanelActionRequest(data: unknown): boolean {
   return (
     typeof data === 'object' &&
@@ -134,10 +116,7 @@ export function looksLikePanelActionRequest(data: unknown): boolean {
   )
 }
 
-/** Reads a valid pong's pingId, or null. Hand-rolled rather than
- *  `panelPongSchema.safeParse` because a rejected parse allocates an issue
- *  list, which is ~90x the accepted-path cost — free CPU for a panel spamming
- *  near-miss pongs. The schema stays the contract; this mirrors it exactly. */
+/** Mirror panelPongSchema without rejected-parse issue allocations (~90x accepted cost), bounding near-miss spam cost. */
 export function readPanelPongId(data: unknown): number | null {
   if (typeof data !== 'object' || data === null) {
     return null
@@ -146,7 +125,6 @@ export function readPanelPongId(data: unknown): number | null {
   if (frame.type !== PANEL_PONG_TYPE || typeof frame.pingId !== 'number') {
     return null
   }
-  // isSafeInteger, not isInteger: zod's .int() rejects 2**53 and above, and a
-  // wider reader would admit ids the watchdog can never have issued.
+  // Match Zod’s safe integer domain; broader integers admit ping IDs the watchdog could not issue.
   return Number.isSafeInteger(frame.pingId) && frame.pingId >= 0 ? frame.pingId : null
 }

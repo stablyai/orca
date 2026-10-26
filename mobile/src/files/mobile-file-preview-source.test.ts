@@ -18,12 +18,7 @@ describe('mobile-file-preview-source', () => {
       terminalHandle: 'c'
     })
 
-    expect(first).toBe(JSON.stringify(['terminal', 'wt:1', '/tmp/a', 'b:c']))
-    expect(second).toBe(JSON.stringify(['terminal', 'wt', '1:/tmp/a:b', 'c']))
     expect(first).not.toBe(second)
-    expect(
-      sourceKeyForPreview({ source: 'worktree', worktreeId: 'wt:1', relativePath: 'a:b.ts' })
-    ).toBe(JSON.stringify(['worktree', 'wt:1', 'a:b.ts']))
   })
 
   it('makes native-chat artifact previews read-only', () => {

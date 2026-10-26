@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../persistence-session-fixtures'
 import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,
@@ -42,7 +42,6 @@ function unifiedTab(
   }
 }
 
-/** A consistent session: each tab in group `g1` (or its own `group`), rows in group order. */
 function session(tabs: TabSpec[]): WorkspaceSessionState {
   const groupIds = [...new Set(tabs.map((tab) => tab.group ?? 'g1'))]
   const groups: TabGroup[] = groupIds.map((id) => ({
@@ -112,7 +111,7 @@ describe('checkWorkspaceLayoutRules', () => {
     expect(rules(getDefaultWorkspaceSession())).toEqual([])
   })
 
-  // STA-9417: the activation sweep minted a second tab for a terminal the split already shows.
+  // STA-9417: startup minted a second tab for an already-shown terminal.
   it('flags a terminal shown in two panes', () => {
     const state = session([
       {
@@ -139,7 +138,7 @@ describe('checkWorkspaceLayoutRules', () => {
     expect(rules(state)).toEqual([])
   })
 
-  // STA-9259: a dragged-out pane stayed in its source tab.
+  // STA-9259: drag-out left its source copy behind.
   it('flags a pane in two tabs', () => {
     const state = session([
       {
@@ -201,7 +200,6 @@ describe('checkWorkspaceLayoutRules', () => {
     expect(rules(state)).toEqual(['group_lists_missing_tab'])
   })
 
-  // Lost or resurrected tabs: the tab rows and the tab bar are two lists of one thing.
   it('flags terminal tab rows and tab bar entries that disagree', () => {
     const rowOnly = session(SPLIT)
     rowOnly.unifiedTabs![WT] = rowOnly.unifiedTabs![WT]!.filter((tab) => tab.id !== 'tab-b')

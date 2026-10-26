@@ -78,8 +78,7 @@ export function useAddRepoHostSelection({
   const requestedHost =
     resolvedHost && selectableHostOptions.includes(resolvedHost) ? resolvedHost : undefined
   const requestedHostSelectable = requestedHost ? canSelectAddRepoHost(requestedHost) : false
-  // Why: right after a connect the SSH host is still coming up on its server (or not yet merged
-  // into its row); that blocks the actions rather than silently turning into this computer.
+  // A connecting or unmerged SSH target must block actions rather than silently select this computer.
   const requestedHostPending =
     requestedHost !== undefined &&
     !requestedHostSelectable &&
@@ -105,7 +104,7 @@ export function useAddRepoHostSelection({
       const hostsById = indexExecutionHostsById(hostOptions)
       const preferredHost = preferredHostId ? hostsById.get(preferredHostId) : undefined
       const focusedHost = hostsById.get(getSettingsFocusedExecutionHostId(settings))
-      // Why no selectability check: a dropped folder's WSL host may still be starting.
+      // A dropped folder’s WSL host may still be starting; do not require canSelectAddRepoHost yet.
       const nextHostId =
         preferredHost && selectableHostOptions.includes(preferredHost)
           ? preferredHost.id
@@ -170,8 +169,7 @@ export function useAddRepoHostSelection({
       }
 
       const previousState = sshConnectionStates.get(parsed.targetId)
-      // Why: ssh.connect can complete before the global state-change event
-      // reaches the renderer; optimistic state keeps this picker responsive.
+      // Optimistically mark connecting because the global SSH state event may arrive after connect returns.
       setSshConnectionState(parsed.targetId, {
         targetId: parsed.targetId,
         status: 'connecting',

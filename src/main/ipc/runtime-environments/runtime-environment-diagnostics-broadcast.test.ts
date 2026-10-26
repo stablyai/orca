@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const getAllWindows = vi.hoisted(() => vi.fn())
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows } }))
 
-import {
-  publishRuntimeEnvironmentDiagnostics,
-  RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL
-} from './runtime-environment-diagnostics-broadcast'
+import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../../shared/runtime-environment-diagnostics'
+import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
 
 describe('runtime environment diagnostics broadcast', () => {
   beforeEach(() => getAllWindows.mockReset())

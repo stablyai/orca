@@ -1,6 +1,4 @@
-// Why: owner/repo overrides become authenticated REST paths, so the slug gate
-// must keep rejecting path-shaped input while accepting every real login shape —
-// including Enterprise Managed User logins, which end in `_<shortcode>`.
+// Authenticated REST overrides must reject path-shaped slugs while accepting Enterprise managed-user suffixes.
 import { describe, expect, it } from 'vitest'
 import { isValidGitHubApiRepository } from './github-api-repository-validation'
 

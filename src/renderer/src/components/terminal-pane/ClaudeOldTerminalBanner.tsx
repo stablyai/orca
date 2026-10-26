@@ -13,8 +13,7 @@ import { PaneBannerLearnMore, PaneTopWarningBanner } from './PaneTopWarningBanne
 // Why module scope: a pane remounts on tab switches, and Dismiss must hold for the app session.
 const dismissedPtyIds = new Set<string>()
 
-// Why a selection, not just saved accounts: with System default selected, this terminal already
-// matches a new one. A key, so a switch asks again whether this terminal runs another account.
+// System default already matches new terminals; key explicit selections so account switches recheck old shells.
 function selectedClaudeAccountKey(state: AppState): string | null {
   const settings = state.settings
   if (!settings || settings.claudeManagedAccounts.length === 0) {

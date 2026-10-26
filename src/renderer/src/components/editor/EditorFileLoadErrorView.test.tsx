@@ -11,8 +11,7 @@ describe('EditorFileLoadErrorView', () => {
   afterEach(cleanup)
 
   it('offers Retry as its only action', () => {
-    // Why: closing must stay with the tab strip, whose path carries the pin, shared-
-    // reference, and unsaved-changes checks; a second close control here would not.
+    // Only the tab-strip close path enforces pins, shared references and unsaved-change checks.
     const onRetry = vi.fn()
 
     render(<EditorFileLoadErrorView message="selector_not_found" onRetry={onRetry} />)
@@ -36,8 +35,7 @@ describe('EditorFileLoadErrorView', () => {
   })
 
   it('localizes the host-unresolved state by its sentinel code, not by the stored text', () => {
-    // Why: the stored `loadError` is an English fallback; the code is what selects the
-    // localized copy, so a translated catalog cannot desynchronize from the comparison.
+    // Select localized text by machine code so stored English cannot affect state classification.
     render(
       <EditorFileLoadErrorView
         message="stored fallback text"

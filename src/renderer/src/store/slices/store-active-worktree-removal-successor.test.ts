@@ -4,6 +4,7 @@ import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-rem
 import { createTestStore, makeWorktree, seedStore, TEST_REPO } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const storeAccess = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: storeAccess }))
@@ -20,6 +21,16 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
@@ -34,10 +45,13 @@ beforeEach(() => {
   removeForHost.mockReset().mockResolvedValue(undefined)
 })
 let dispose: (() => void) | null = null
+let layoutMain: TabsDrawnFromMain | undefined
 
 afterEach(() => {
   dispose?.()
   dispose = null
+  layoutMain?.close()
+  layoutMain = undefined
 })
 
 const active = makeWorktree({ id: 'repo1::/active', repoId: 'repo1', hostId: 'ssh:host' })
@@ -83,9 +97,12 @@ describe('deleting the active workspace', () => {
 
   it('respects a user closing the last browser tab after startup dropped its row', async () => {
     const store = setup()
+    layoutMain = await drawTabsFromMain(store)
     const tabId = store.getState().createBrowserTab(active.id, 'https://example.com')
+    await layoutMain.settle()
     store.setState({ worktreesByRepo: { repo1: [sibling] } })
     store.getState().closeBrowserTab(tabId.id)
+    await layoutMain.settle()
     await Promise.resolve()
     expect(store.getState().activeWorktreeId).toBeNull()
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()

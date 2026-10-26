@@ -1,6 +1,4 @@
-// Why: under sustained writes watch batches can outpace slow (SSH/WSL) reads; restarting the
-// read on every batch supersedes each result before it lands, so the tab never updates.
-// Allow one watcher-triggered read per key and run exactly one follow-up with the latest change.
+// Coalesce watcher reads so sustained writes cannot continually supersede slow SSH/WSL reads before they land.
 
 // Why: a read through a dead transport may never settle; don't let it block later reloads forever.
 const STALE_WATCHER_READ_MS = 10_000

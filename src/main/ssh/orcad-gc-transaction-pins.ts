@@ -1,10 +1,4 @@
-/**
- * What an in-flight activation, rollback or decommission still needs from GC.
- *
- * The journal names every slot the transaction may restart or settle; GC must keep them all.
- * A held fence without a journal, or a journal this client cannot read, means a transaction
- * this client cannot see into, so GC keeps everything rather than guess.
- */
+/** Pin every journaled slot needed for recovery. An unreadable journal or unjournaled held fence hides transaction state, so GC must retain everything. */
 import { orcadInstallDirNames } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction'
 import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
@@ -12,7 +6,7 @@ import { orcadActivationFenceExists } from '../managed-server/activation/orcad-a
 import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 import type { OrcadRemoteExecTarget } from '../managed-server/install/orcad-remote-runtime-control'
 
-export type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
+type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
 
 function transactionVersions(transaction: OrcadActivationTransaction): (string | null)[] {
   const records = [transaction.recordBefore, transaction.recordAfter]
@@ -20,7 +14,6 @@ function transactionVersions(transaction: OrcadActivationTransaction): (string |
   if (transaction.operation === 'activate') {
     return [...fromRecords, transaction.candidateVersion]
   }
-  // Any other operation names its slots through its records.
   return transaction.operation === 'rollback'
     ? [...fromRecords, transaction.incumbentVersion, transaction.targetVersion]
     : fromRecords
@@ -32,7 +25,7 @@ export async function readOrcadGcTransactionPins(
   try {
     const transaction = await readOrcadActivationTransaction(target)
     if (!transaction) {
-      // A fence without a journal is a transaction starting or a release cut short.
+      // An unjournaled fence may be a transaction starting or an interrupted release.
       return (await orcadActivationFenceExists(target))
         ? { state: 'keep-all' }
         : { state: 'pinned', dirNames: [] }

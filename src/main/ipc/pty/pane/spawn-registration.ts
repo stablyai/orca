@@ -1,3 +1,5 @@
+import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import { PaneOwnerContentionError } from './pane-spawn-operation'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
@@ -14,8 +16,7 @@ import { PtyExitProof } from '../../../pty-exit-proof'
 import { errorMessage } from '../../../../shared/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
-/** Tracks a PTY from its spawn reply, before any save: only an observed exit, or a stop on proof,
- *  removes it, so a spawn whose save or stop fails is never forgotten. */
+/** Track before saving; failed save/stop must not make a potentially live process disappear from ownership. */
 export function admitPtySpawnOwnership(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult
@@ -35,8 +36,7 @@ export function admitPtySpawnOwnership(
   }
 }
 
-/** The runtime's incarnation-scoped start fence, read without failing the commit: registration
- *  reports the early exit itself. */
+/** Read incarnation-scoped early-exit proof without throwing; registration reports refusal itself. */
 function exitedBeforeAdmission(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult
@@ -55,7 +55,10 @@ function exitedBeforeAdmission(
 export async function discardUnpersistedPtySpawn(
   provider: IPtyProvider,
   result: PtySpawnResult,
-  runtime: Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> | undefined
+  runtime:
+    | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
+        Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
+    | undefined
 ): Promise<void> {
   if (
     result.isReattach ||
@@ -64,44 +67,59 @@ export async function discardUnpersistedPtySpawn(
   ) {
     return
   }
-  let proof: PtyExitProof
+  // Discard cleanup is intentional stop, not agent completion; preserve the pane tab.
+  const settleStop = runtime?.intentionalPtyStops?.mark(
+    result.id,
+    'replaced',
+    result.incarnationId ?? null
+  )
+  let stopped = false
   try {
-    await provider.shutdown(result.id, {
-      immediate: true,
-      ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
-    })
-    proof = PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
-  } catch (error) {
-    if (!isPtyAlreadyGoneError(error)) {
-      console.warn('[pty] failed to clean up PTY after persistence failure:', error)
-      // An observed exit, or a same-id replacement, outranks a lost control reply.
-      if (
-        !ptyOwnership.has(result.id) ||
-        ptyIncarnationById.get(result.id) !== result.incarnationId
-      ) {
+    let proof: PtyExitProof
+    try {
+      await provider.shutdown(result.id, {
+        immediate: true,
+        ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
+      })
+      proof = PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
+    } catch (error) {
+      if (!isPtyAlreadyGoneError(error)) {
+        console.warn('[pty] failed to clean up PTY after persistence failure:', error)
+        // An observed exit, or a same-id replacement, outranks a lost control reply.
+        if (
+          !ptyOwnership.has(result.id) ||
+          ptyIncarnationById.get(result.id) !== result.incarnationId
+        ) {
+          return
+        }
+        // Keep potentially live ownership as unverifiable until observed exit or successful cleanup.
+        runtime?.markPtyLivenessUnverifiable?.(
+          result.id,
+          `discard shutdown failed: ${errorMessage(error)}`
+        )
         return
       }
-      // Keep ownership: the process may still run, so it reads unverifiable until it exits or an
-      // orphan sweep reaps it, never forgotten.
-      runtime?.markPtyLivenessUnverifiable?.(
-        result.id,
-        `discard shutdown failed: ${errorMessage(error)}`
-      )
-      return
+      proof = PtyExitProof.from('absent', result.incarnationId)
     }
-    proof = PtyExitProof.from('absent', result.incarnationId)
+    stopped = true
+    // The proof names this incarnation, so a replacement that arrived meanwhile keeps its own.
+    finishPtyShutdown(result.id, null, undefined, proof)
+  } finally {
+    settleStop?.(stopped)
   }
-  // The proof names this incarnation, so a replacement that arrived meanwhile keeps its own.
-  finishPtyShutdown(result.id, null, undefined, proof)
 }
 
-// Successful registration must not yield before the remaining spawn publication.
+// Successful registration must remain synchronous through spawn publication.
 export function registerPersistedPtySpawn(
   runtime: OrcaRuntimeService | undefined,
   store: Store | undefined,
+  claim: PtyRegistrationClaim | undefined,
   ...args: Parameters<OrcaRuntimeService['registerPty']>
 ): Promise<never> | undefined {
   try {
+    if (claim && !runtime?.narrowPtyRegistration(args[0], claim, args[3]?.incarnationId)) {
+      throw new PaneOwnerContentionError()
+    }
     runtime?.registerPty(...args)
   } catch (error) {
     const [ptyId, worktreeId, connectionId, binding] = args

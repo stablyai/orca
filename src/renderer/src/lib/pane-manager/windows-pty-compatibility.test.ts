@@ -70,8 +70,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
 
     await writeTerminal(terminal, `${'─'.repeat(20)}\r\nNEXT\r\n`)
 
-    // Why: the Chinese report said scrollback stopped working; with the legacy
-    // xterm Windows wrap heuristic, a full-width row falsely wraps the next row.
+    // Old Windows wrapping falsely joins full-width rows, breaking reported Chinese scrollback.
     expect(terminal.buffer.active.getLine(1)?.translateToString(true)).toBe('NEXT')
     expect(terminal.buffer.active.getLine(1)?.isWrapped).toBe(false)
   })
@@ -89,7 +88,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     ).toEqual({})
   })
 
-  it('skips compatibility options for WSL cwd terminals', () => {
+  // ConPTY hosts local WSL shells too, so their emulator needs its resize model (awin verify-14).
+  it('uses the ConPTY model for local WSL cwd terminals', () => {
     for (const cwd of [
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
       '\\\\wsl$\\Debian\\home\\me\\repo',
@@ -105,11 +105,11 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
           shellOverride: null,
           executionHostId: 'local'
         })
-      ).toEqual({})
+      ).toEqual({ windowsPty: { backend: 'conpty', buildNumber: 26100 } })
     }
   })
 
-  it('skips compatibility options when the shell override launches WSL', () => {
+  it('uses the ConPTY model when the shell override launches WSL', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -119,7 +119,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         shellOverride: 'C:\\Windows\\System32\\wsl.exe',
         executionHostId: 'local'
       })
-    ).toEqual({})
+    ).toEqual({ windowsPty: { backend: 'conpty', buildNumber: 26100 } })
   })
 
   it('returns no options outside Windows', () => {
@@ -136,9 +136,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
   })
 
   it('does NOT return ConPTY options for a serve/remote-runtime pane even when the raw Windows heuristic matches', () => {
-    // Regression: a serve pane on a Windows client has no SSH connectionId and a
-    // Linux cwd, so the raw heuristic matches; the execution-host gate must still
-    // exclude it so a remote Linux PTY is not given the native-Windows ConPTY backend.
+    // Serve panes look local to the raw heuristic; execution-host gating must exclude their remote Linux PTYs from ConPTY backend options.
     const serveContext = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       osRelease: '10.0.26100',
@@ -166,10 +164,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
   })
 
   it('classifies a global-WSL default shell as non-native, matching main', () => {
-    // Why: main folds the global terminalWindowsShell into its spawn
-    // classification (isNativeWindowsLocalPtySpawn). Without the fold the
-    // renderer would call a tab with no override native-ConPTY while main
-    // never marks it.
+    // Match main’s global terminalWindowsShell fold or renderer classifies tabs as ConPTY that main does not.
     const windowsUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     expect(
       isLocalNativeWindowsPty({
@@ -179,7 +174,6 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         shellOverride: resolveWindowsShellOverride(undefined, 'wsl.exe')
       })
     ).toBe(false)
-    // A tab-level override beats the global setting, both directions.
     expect(
       isLocalNativeWindowsPty({
         userAgent: windowsUserAgent,
@@ -219,8 +213,6 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
 })
 
 describe('isLocalNativeWindowsConpty', () => {
-  // A genuine local native Windows ConPTY (Windows UA, no SSH connectionId,
-  // Windows cwd) on a 'local' execution host must keep the ConPTY workarounds.
   const localNativeWindowsContext = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     connectionId: null,
@@ -241,10 +233,7 @@ describe('isLocalNativeWindowsConpty', () => {
   })
 
   it('does NOT treat a remote-runtime (serve) pane as a native ConPTY even when the raw Windows heuristic matches', () => {
-    // Regression: a serve-hosted pane on a Windows client has no SSH connectionId
-    // and a Linux cwd, so isLocalNativeWindowsPty returns true. Without the
-    // execution-host gate, ConPTY transient cursor-show (?25h) stripping is
-    // wrongly applied and the agent cursor disappears.
+    // Windows serve panes match the raw heuristic; exclude their remote PTYs from ConPTY cursor-show stripping or repainting hides agent cursors.
     expect(isLocalNativeWindowsPty(remoteServePaneOnWindowsClientContext)).toBe(true)
     expect(
       isLocalNativeWindowsConpty({
@@ -276,8 +265,6 @@ describe('isLocalNativeWindowsConpty', () => {
   })
 
   it('stays false on a local host when the pane is not a native Windows PTY', () => {
-    // Non-Windows client: the raw heuristic is false, so the gate result is false
-    // regardless of the local execution host.
     expect(
       isLocalNativeWindowsConpty({
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
@@ -290,9 +277,7 @@ describe('isLocalNativeWindowsConpty', () => {
   })
 
   it('does not let a local execution host re-enable protection the raw heuristic already suppressed', () => {
-    // Guards the AND: even on a 'local' host, a Windows pane excluded for a
-    // non-execution-host reason (here an SSH connectionId) must stay false, so a
-    // future refactor cannot make the local host bypass the raw checks.
+    // Local execution host is necessary, not sufficient; SSH and other raw exclusions must still win.
     expect(
       isLocalNativeWindowsConpty({
         ...localNativeWindowsContext,

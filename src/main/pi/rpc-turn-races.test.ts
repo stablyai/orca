@@ -94,6 +94,55 @@ describe('Pi turn settlement races', () => {
       expect(errors[0]?.text).toContain('`/login`')
     }
   })
+  it('keeps a reply whose finished thinking and text blocks outnumber the open-stream bound', async () => {
+    const h = await setup()
+    await h.start()
+    const content = Array.from({ length: 300 }, (_, index) =>
+      index % 2
+        ? { type: 'text', text: `text ${index}` }
+        : { type: 'thinking', thinking: `thought ${index}` }
+    )
+    const message = { role: 'assistant', content: [] }
+    h.turns.receive({ type: 'message_start', message })
+    content.forEach((block, contentIndex) => {
+      const kind = block.type === 'text' ? 'text' : 'thinking'
+      const text = block.text ?? block.thinking ?? ''
+      h.turns.receive({
+        type: 'message_update',
+        message,
+        assistantMessageEvent: { type: `${kind}_delta`, contentIndex, delta: text }
+      })
+      h.turns.receive({
+        type: 'message_update',
+        message,
+        assistantMessageEvent: { type: `${kind}_end`, contentIndex, content: text }
+      })
+    })
+    h.turns.receive({ type: 'message_end', message: { role: 'assistant', content } })
+    h.turns.receive({ type: 'agent_end' })
+    h.turns.receive({ type: 'agent_settled' })
+    await h.flush()
+    expect(h.failed).not.toHaveBeenCalled()
+    const texts = (await h.rig.rows()).flatMap(({ body }) =>
+      body.kind === 'message' && body.blocks[0]?.type === 'text' ? [body.blocks[0].text] : []
+    )
+    expect(texts).toEqual(content.map((block) => block.text ?? block.thinking))
+    expect((await h.rig.turns())[0]?.outcome).toBe('success')
+  })
+  it.each(['user', 'custom'])(
+    'accepts a steer only at its own echo after a %s message starts an idle run',
+    async (role) => {
+      const h = await setup()
+      h.turns.receive({ type: 'agent_start' })
+      await h.turns.submit('steer', 1, { type: 'prompt', message: 'steer' })
+      h.turns.receive({ type: 'message_end', message: { role, content: [] } })
+      await h.flush()
+      expect(h.accepted).not.toHaveBeenCalled()
+      h.turns.receive({ type: 'message_end', message: { role: 'user', content: [] } })
+      await h.flush()
+      expect(h.accepted).toHaveBeenCalledWith('steer')
+    }
+  )
   it('chooses steering after asynchronous dispatch admission finishes', async () => {
     const h = await setup()
     await h.turns.submit('first', 1, { type: 'prompt', message: 'first' })

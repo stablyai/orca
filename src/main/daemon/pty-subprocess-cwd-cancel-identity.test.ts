@@ -1,6 +1,4 @@
-// A canceled cwd probe must leave the daemon as the one cancellation identity
-// the wire carries. Clients key recovery off it, and an unrecognized message
-// takes the rollback branch that closes a terminal the user still has (#7718).
+// Recovery keys off the daemon’s cancellation identity; a different error takes terminal-closing rollback.
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
