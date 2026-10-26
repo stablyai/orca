@@ -3,6 +3,7 @@ import type {
   JiraIssue,
   JiraIssueFilter,
   JiraIssueListFilters,
+  JiraIssueSuggestions,
   JiraSiteSelection
 } from '../../shared/jira/jira-types'
 import { buildJiraPresetJql } from '../../shared/jira/jira-preset-jql'
@@ -13,6 +14,7 @@ import { ISSUE_LIST_FIELDS, mapJiraIssue, type JiraAgileFieldIds } from './jira-
 import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
 import type { JiraSearchResponse } from './jira-record-pages'
 import { readProjectsForClient } from './jira-project-queries'
+import { readIssueSuggestionJql } from './jira-issue-picker'
 import {
   requireStrictJiraSite,
   shouldSurfaceSiteFailure,
@@ -23,7 +25,9 @@ import {
 
 const ISSUE_SEARCH_TIMEOUT_MS = 30_000
 const PROJECTS_PER_QUERY = 100
-type JiraIssueQuery = { filter: JiraIssueFilter; filters?: JiraIssueListFilters } | { jql: string }
+type JiraIssueQuery =
+  | { filter: JiraIssueFilter; filters?: JiraIssueListFilters }
+  | { jql: string; suggestions?: JiraIssueSuggestions }
 
 function clampLimit(limit: number | undefined, fallback = 30): number {
   return Math.min(Math.max(1, Number.isFinite(limit) ? Number(limit) : fallback), 100)
@@ -41,6 +45,17 @@ async function readIssuesForClient(
   signal: AbortSignal
 ): Promise<JiraIssue[]> {
   if ('jql' in query) {
+    if (query.suggestions) {
+      const jql = await readIssueSuggestionJql(entry, query.suggestions, signal)
+      if (jql) {
+        const issues = await searchIssuesForClient(entry, jql, limit, agileFields, signal, {
+          requireIssues: true
+        })
+        if (issues.length > 0) {
+          return issues
+        }
+      }
+    }
     return searchIssuesForClient(entry, query.jql, limit, agileFields, signal)
   }
   const jql = buildJiraPresetJql(query.filter, query.filters)
@@ -63,7 +78,7 @@ async function readIssuesForClient(
         limit,
         agileFields,
         signal,
-        true
+        { collectPages: true }
       ))
     )
   }
@@ -76,7 +91,10 @@ async function searchIssuesForClient(
   limit: number,
   agileFields: JiraAgileFieldIds,
   signal?: AbortSignal,
-  collectPages = false
+  {
+    collectPages = false,
+    requireIssues = false
+  }: { collectPages?: boolean; requireIssues?: boolean } = {}
 ): Promise<JiraIssue[]> {
   // Server/DC only has the classic /search resource; /search/jql is Cloud-only.
   const searchPath =
@@ -97,7 +115,7 @@ async function searchIssuesForClient(
       }),
       signal
     })
-    if (collectPages && !Array.isArray(result.issues)) {
+    if ((collectPages || requireIssues) && !Array.isArray(result?.issues)) {
       throw new Error('Jira returned an invalid issue page.')
     }
     issues.push(
@@ -138,9 +156,10 @@ export async function searchIssues(
   limit = 30,
   siteId?: JiraSiteSelection | null,
   signal?: AbortSignal,
-  strict = false
+  strict = false,
+  suggestions?: JiraIssueSuggestions
 ): Promise<JiraIssue[]> {
-  return runIssueSearch({ jql: jql.trim() }, limit, siteId, signal, strict)
+  return runIssueSearch({ jql: jql.trim(), suggestions }, limit, siteId, signal, strict)
 }
 
 async function runIssueSearch(
