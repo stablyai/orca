@@ -1,3 +1,5 @@
+import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { getMainHttpClient } from '../network/http-client'
 import {
   readGoogleIdentityClaims,
@@ -9,7 +11,6 @@ const REJECTED =
   'Google rejected the current Antigravity credential. Run agy once to refresh it, then save again.'
 const UNCONFIRMED = 'Google did not confirm the signed-in Antigravity account; nothing was saved.'
 
-// Why: agy stores no id_token, so Google names the account. Errors never include the token.
 export async function fetchGoogleIdentity(
   accessToken: string
 ): Promise<AntigravityCredentialIdentity> {
@@ -26,10 +27,13 @@ export async function fetchGoogleIdentity(
     )
   }
   if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined)
+    await cancelUnreadResponseBody(response)
     throw new Error(response.status === 401 ? REJECTED : UNCONFIRMED)
   }
-  const identity = readGoogleIdentityClaims(await response.json().catch(() => null))
+  const claims = await readFetchResponseJsonWithinLimit<unknown>(response, 16 * 1024).catch(
+    () => null
+  )
+  const identity = readGoogleIdentityClaims(claims)
   if (!identity) {
     throw new Error(UNCONFIRMED)
   }
