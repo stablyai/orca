@@ -2690,25 +2690,13 @@ private enum Input {
     }
 
     static func pasteText(_ text: String, pid: pid_t) throws {
-        let pasteboard = NSPasteboard.general
-        let previousItems: [NSPasteboardItem] = pasteboard.pasteboardItems?.map { item in
-            let copy = NSPasteboardItem()
-            for type in item.types {
-                if let data = item.data(forType: type) {
-                    copy.setData(data, forType: type)
-                }
+        do {
+            try ClipboardTextPaste.perform(text, pasteboard: .general) {
+                try pressKey("cmd+v", pid: pid)
             }
-            return copy
-        } ?? []
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        defer {
-            pasteboard.clearContents()
-            if !previousItems.isEmpty {
-                pasteboard.writeObjects(previousItems)
-            }
+        } catch ClipboardTextPaste.Failure.textWriteFailed {
+            throw ProviderError.coded("accessibility_error", "failed to write paste text to the clipboard")
         }
-        try pressKey("cmd+v", pid: pid)
     }
 
     private static func mouse(
@@ -2748,12 +2736,25 @@ private enum TextInput {
         let start = String.Index(utf16Offset: startOffset, in: current)
         let end = String.Index(utf16Offset: endOffset, in: current)
         let next = String(current[..<start]) + text + String(current[end...])
-        guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString) == .success else {
+        let outcome = AccessibilityTextWrite.perform(
+            write: {
+                guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString) == .success else {
+                    return false
+                }
+                setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
+                return true
+            },
+            read: { rawStringAttribute(element, kAXValueAttribute as String) }
+        )
+        guard case let .written(actual) = outcome else {
             return nil
         }
-        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        guard rawStringAttribute(element, kAXValueAttribute as String) == next else {
-            return nil
+        guard actual == next else {
+            return unverifiedAction(
+                reason: actual == nil ? "provider_unavailable" : "value_mismatch",
+                expected: text,
+                actualPreview: actual.map { preview($0) }
+            )
         }
         return verifiedAction(
             property: "focusedText",
