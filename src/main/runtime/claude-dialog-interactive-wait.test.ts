@@ -79,13 +79,15 @@ describe('hand-typed native Claude, whose process name is its version', () => {
     })
   }
 
-  it('reports its trust dialog and reuses the scan for later refreshes', async () => {
+  it('reports its trust dialog without storing the scanned identity', async () => {
     const { runtime, handle, counts } = await typedPane()
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
       reason: 'agent-trust-workspace'
     })
+    const before = runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent
     await runtime.refreshPtyForegroundAgentFromController(TRANSCRIPT_PANE_PTY_ID)
-    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).toBe('claude')
+    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).toBe(before)
+    expect(before).not.toBe('claude')
     expect(counts.scans).toBe(1)
   })
 
