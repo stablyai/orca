@@ -143,6 +143,9 @@ export function useMobileAgentHistoryOpenTabActions(input: {
   const [fallbackOpenTabs, setFallbackOpenTabs] = useState<
     ReadonlyMap<string, AiVaultSessionOpenTab>
   >(() => new Map())
+  const [fallbackOpenTabAliases, setFallbackOpenTabAliases] = useState<
+    ReadonlyMap<string, AiVaultSessionOpenTab | null>
+  >(() => new Map())
   const [fallbackOpenTabsPending, setFallbackOpenTabsPending] = useState(false)
 
   // A fresh scan is the host's list again; drop optimistic closes from the previous rows.
@@ -160,6 +163,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
       sessions.some((s) => Boolean(s.openTab))
     ) {
       setFallbackOpenTabs((prev) => (prev.size === 0 ? prev : new Map()))
+      setFallbackOpenTabAliases((prev) => (prev.size === 0 ? prev : new Map()))
       setFallbackOpenTabsPending(false)
       return
     }
@@ -187,13 +191,9 @@ export function useMobileAgentHistoryOpenTabActions(input: {
           extractOpenTabsFromSnapshot(wtId, sessionTabsListRead.interpret(reply), next, aliases)
         })
       )
-      for (const [alias, target] of aliases) {
-        if (target && !next.has(alias)) {
-          next.set(alias, target)
-        }
-      }
       if (!cancelled) {
         setFallbackOpenTabs(next)
+        setFallbackOpenTabAliases(aliases)
         setFallbackOpenTabsPending(false)
       }
     })()
@@ -203,7 +203,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
   }, [client, connected, sessions, worktreeId, worktrees])
 
   const sessionsWithOpenTabs = useMemo(() => {
-    if (fallbackOpenTabs.size === 0) {
+    if (fallbackOpenTabs.size === 0 && fallbackOpenTabAliases.size === 0) {
       return sessions
     }
     return sessions.map((session) => {
@@ -215,11 +215,11 @@ export function useMobileAgentHistoryOpenTabActions(input: {
         : session.sessionId
       const resolved =
         fallbackOpenTabs.get(session.sessionId) ??
-        fallbackOpenTabs.get(bare) ??
+        fallbackOpenTabAliases.get(bare) ??
         fallbackOpenTabs.get(session.id)
       return resolved ? { ...session, openTab: resolved } : session
     })
-  }, [fallbackOpenTabs, sessions])
+  }, [fallbackOpenTabAliases, fallbackOpenTabs, sessions])
 
   const claim = useCallback(
     (sessionId: string, closing: boolean): OpenTabClient | null => {
