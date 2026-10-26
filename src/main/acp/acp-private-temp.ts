@@ -45,7 +45,7 @@ export async function acpPrivateTempConnect<
   closedBeforeSpawn: () => void
 ): Promise<ConnectAcpAgent<Connection>> {
   const dataRoot = join(deps.dataDirectory, 'acp-temp', deps.spec.agent)
-  const root = await resolveAcpTempRoot({
+  const root = resolveAcpTempRoot({
     dataDirectory: deps.dataDirectory,
     agent: deps.spec.agent,
     logger: deps.logger

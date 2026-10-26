@@ -53,9 +53,9 @@ it.skipIf(process.platform === 'win32')(
     const legacyRoot = join(dataDirectory, 'acp-temp', 'grok')
     const legacyLeftover = join(legacyRoot, 'run-earlier-build', 'bundle')
     await mkdir(legacyLeftover, { recursive: true })
-    const shortRoot = await resolveAcpTempRoot({ dataDirectory, agent: 'grok' })
+    const shortRoot = resolveAcpTempRoot({ dataDirectory, agent: 'grok' })
     ownedDirectories.add(base)
-    ownedDirectories.add(dirname(shortRoot))
+    ownedDirectories.add(shortRoot)
     expect(shortRoot).not.toBe(legacyRoot)
     const rig = await openAcpAdapterRig({
       spec: { ...GROK, privateTempDirectory: true },
