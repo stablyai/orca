@@ -88,11 +88,12 @@ function TreeRow(props: {
   const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
+  const isPdf = /\.pdf$/i.test(item.relativePath)
   const previewable =
     item.kind !== 'directory' &&
-    canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
+    (isPdf || canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath }))
   const isImage = item.kind === 'binary' && classifyMobileArtifact(item.relativePath) === 'image'
-  const disabled = item.kind === 'binary' && !previewable
+  const disabled = item.kind === 'binary' && !previewable && !isPdf
   const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
 
   return (
