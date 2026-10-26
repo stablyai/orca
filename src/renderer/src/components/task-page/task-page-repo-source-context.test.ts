@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import { buildGitLabProviderIdentity, getTaskPageRepoCacheInput } from './task-page-source-context'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 describe('buildGitLabProviderIdentity', () => {
   it('splits namespace and project and builds the web URL', () => {

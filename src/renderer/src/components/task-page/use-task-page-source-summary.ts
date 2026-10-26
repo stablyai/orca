@@ -9,7 +9,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import {
   getTaskSourceHostAvailabilityForHost,
   getTaskPageRepoSourceContext
-} from '../task-page-source-context'
+} from './task-page-source-context'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import {
   getTaskSourceAvailabilityNotice,

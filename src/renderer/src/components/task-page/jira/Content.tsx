@@ -13,7 +13,7 @@ import { TaskPageJiraTextFallbackNotice } from '../../task-page-jira-text-fallba
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
 import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
 import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { formatRelativeTime } from '../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'

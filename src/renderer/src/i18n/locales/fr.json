@@ -14494,6 +14494,7 @@
             "prepareSessionResumeFailed": "Impossible de préparer cette session pour la reprise.",
             "sessionDeleted": "Session supprimée",
             "sessionDeleteFailed": "Impossible de supprimer la session",
+            "sessionDeleteCheckingHost": "Vérification de {{value0}}…",
             "resumeInChatConflict": "Un autre chat tient déjà cette conversation.",
             "resumeInChatTranscriptMissing": "L'historique de cette conversation n'a pas pu être chargé, elle ne peut donc pas être reprise dans le chat.",
             "resumeInChatFailed": "Impossible de reprendre cette session dans un nouveau chat.",
@@ -14635,6 +14636,7 @@
             "subagentCountPlural": "{{value0}} sous-agents",
             "delete": "Supprimer",
             "deleteReasonNonLocalHost": "Seules les sessions de cet appareil peuvent être supprimées.",
+            "deleteReasonHostUpdateRequired": "Mettez à jour {{value0}} pour supprimer ses sessions depuis ici.",
             "deleteReasonSyntheticPath": "Cette session ne peut pas être supprimée depuis Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions ne peuvent pas être supprimées depuis Orca.",
             "resumeInNewNativeChat": "Reprendre dans un nouveau chat",
@@ -14645,6 +14647,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Supprimer cette session ?",
             "description": "« {{value0}} » sera supprimée. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
+            "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "confirm": "Supprimer"
           },
           "FileExplorerNameFilter": {

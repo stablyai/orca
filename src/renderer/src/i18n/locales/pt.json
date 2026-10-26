@@ -9892,6 +9892,7 @@
             "prepareSessionResumeFailed": "Não foi possível preparar esta sessão para retomada.",
             "sessionDeleted": "Sessão excluída",
             "sessionDeleteFailed": "Não foi possível excluir a sessão",
+            "sessionDeleteCheckingHost": "Verificando {{value0}}…",
             "resumeInChatConflict": "Outro chat já está mantendo esta conversa.",
             "resumeInChatTranscriptMissing": "O histórico desta conversa não pôde ser carregado, então ela não pode ser retomada no chat.",
             "resumeInChatFailed": "Não foi possível retomar esta sessão em um novo chat.",
@@ -9929,6 +9930,7 @@
             "subagentCountPlural": "{{value0}} subagentes",
             "delete": "Excluir",
             "deleteReasonNonLocalHost": "Somente sessões neste dispositivo podem ser excluídas.",
+            "deleteReasonHostUpdateRequired": "Atualize {{value0}} para excluir as sessões dele daqui.",
             "deleteReasonSyntheticPath": "Esta sessão não pode ser excluída do Orca.",
             "deleteReasonUnsupportedAgent": "Sessões de {{value0}} não podem ser excluídas do Orca.",
             "resumeInNewNativeChat": "Retomar em novo chat",
@@ -10376,6 +10378,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Excluir esta sessão?",
             "description": "\"{{value0}}\" será excluída. Depois de excluída, ela também não poderá mais ser retomada pela própria linha de comando de {{value1}}.",
+            "remoteDescription": "\"{{value0}}\" será excluída de {{value2}}. Depois de excluída, também não poderá mais ser retomada pela linha de comando do {{value1}}.",
             "confirm": "Excluir"
           },
           "FileExplorerNameFilter": {

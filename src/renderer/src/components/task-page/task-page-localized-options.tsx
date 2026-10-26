@@ -13,10 +13,10 @@ import {
   type LinearGroupBy,
   type LinearOrderBy,
   type LinearViewMode
-} from '../../../shared/linear/issue-view-resume-state'
-import { getTaskPresetQuery } from '../../../shared/task-preset-query'
-import type { TaskProvider } from '../../../shared/task-providers'
-import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
+} from '../../../../shared/linear/issue-view-resume-state'
+import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -42,12 +42,6 @@ export type JiraPreset = { id: JiraPresetId; label: string }
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
 export type LinearMode = 'issues' | 'projects' | 'views' | 'in-orca'
-export type {
-  LinearDisplayProperty,
-  LinearGroupBy,
-  LinearOrderBy,
-  LinearViewMode
-} from '../../../shared/linear/issue-view-resume-state'
 
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (

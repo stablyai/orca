@@ -1,11 +1,11 @@
 import { workItemsCacheKey } from '@/store/github/cache-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   CacheEntry,
   WorkItemsCacheError,
   WorkItemsCacheSources
 } from '@/store/github/cache-model'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,

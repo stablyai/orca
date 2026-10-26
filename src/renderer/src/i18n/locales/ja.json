@@ -14317,6 +14317,7 @@
             "prepareSessionResumeFailed": "このセッションを再開用に準備できませんでした。",
             "sessionDeleted": "セッションを削除しました",
             "sessionDeleteFailed": "セッションを削除できませんでした",
+            "sessionDeleteCheckingHost": "{{value0}} を確認しています…",
             "resumeInChatConflict": "別のチャットですでにこの会話が行われています。",
             "resumeInChatTranscriptMissing": "この会話の履歴を読み込めなかったため、チャットで再開できません。",
             "resumeInChatFailed": "新規チャットでこのセッションを再開できませんでした。",
@@ -14458,6 +14459,7 @@
             "subagentCountPlural": "{{value0}} 件のサブ Agent",
             "delete": "削除",
             "deleteReasonNonLocalHost": "このデバイス上のセッションのみ削除できます。",
+            "deleteReasonHostUpdateRequired": "ここからセッションを削除するには {{value0}} を更新してください。",
             "deleteReasonSyntheticPath": "このセッションは Orca では削除できません。",
             "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。",
             "resumeInNewNativeChat": "新しいチャットで再開",
@@ -14468,6 +14470,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "このセッションを削除しますか?",
             "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
+            "remoteDescription": "「{{value0}}」は {{value2}} から削除されます。削除後は {{value1}} 自身のコマンドラインからも再開できなくなります。",
             "confirm": "削除"
           },
           "FileExplorerNameFilter": {

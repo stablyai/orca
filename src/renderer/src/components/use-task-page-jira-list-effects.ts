@@ -15,7 +15,7 @@ import {
 } from '@/components/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
-import { JIRA_ITEM_LIMIT } from './task-page-source-context'
+import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'
 import { useTaskSearchDebouncedApply } from './task-page/use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'

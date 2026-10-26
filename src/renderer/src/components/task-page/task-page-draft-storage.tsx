@@ -1,5 +1,5 @@
-import type { TaskPageRepoSourceState } from '@/components/task-page-cache-selectors'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
+import type { TaskPageRepoSourceState } from '@/components/task-page/task-page-cache-selectors'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   type NewLinearProjectDraft,
@@ -7,7 +7,7 @@ import {
   type NewLinearIssueDraft,
   type NewJiraIssueDraft
 } from '@/store/slices/task-creation-drafts'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 export const hasDivergentSources = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {

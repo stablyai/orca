@@ -14,7 +14,7 @@ import {
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import { useAppStore } from '@/store/index'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
     pageData,

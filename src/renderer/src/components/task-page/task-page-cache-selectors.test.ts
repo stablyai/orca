@@ -3,9 +3,9 @@ import { shallow } from 'zustand/shallow'
 
 import { workItemsCacheKey } from '@/store/github/cache-identity'
 import type { CacheEntry } from '@/store/github/cache-model'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
@@ -21,7 +21,7 @@ import {
 import {
   findTaskPageLinearIssue,
   reconcileTaskPageLinearIssuesAfterLandingRefresh
-} from './task-page/linear/task-page-linear-cache-selectors'
+} from './linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }

@@ -25,7 +25,7 @@ import {
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
   getTaskPageRepoSourceContext,
   formatRelativeTime
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'

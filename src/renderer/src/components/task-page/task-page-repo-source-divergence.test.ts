@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskPageRepoSourceState } from '@/components/task-page-cache-selectors'
+import type { TaskPageRepoSourceState } from '@/components/task-page/task-page-cache-selectors'
 import { hasDivergentSources, hasUpstreamCandidateDivergence } from './task-page-draft-storage'
 
 function state(
