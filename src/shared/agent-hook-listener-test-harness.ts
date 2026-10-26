@@ -1,4 +1,4 @@
-import { normalizeHookPayload } from './agent-hook-listener'
+import { normalizeHookPayload, prepareJcodeHookPayload } from './agent-hook-listener'
 import {
   seedLegacyAgentStatusForTests,
   type HookListenerState
@@ -15,6 +15,18 @@ export function normalizeAndAccept(
   source: Parameters<typeof normalizeHookPayload>[1],
   payload: Record<string, unknown>
 ): ReturnType<typeof normalizeHookPayload> {
+  if (source === 'jcode') {
+    const prepared = prepareJcodeHookPayload(state, { paneKey: PANE_KEY, payload }, 'production')
+    if (!prepared) {
+      return null
+    }
+    const event = prepared.event
+    if (event && !event.providerSessionOnly) {
+      seedLegacyAgentStatusForTests(state, event)
+    }
+    prepared.commit()
+    return event
+  }
   const event = normalizeHookPayload(state, source, { paneKey: PANE_KEY, payload }, 'production')
   if (event) {
     seedLegacyAgentStatusForTests(state, event)

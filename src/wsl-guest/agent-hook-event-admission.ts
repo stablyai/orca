@@ -32,7 +32,7 @@ export function applyRelayHookEvent(
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: { isReplay?: boolean; checkPresence?: boolean; onCommitted?: () => void } = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
@@ -93,6 +93,7 @@ export function applyRelayHookEvent(
   ) {
     return undefined
   }
+  options.onCommitted?.()
   const claudeSettledRequests = retainClaudeSettledRequests(
     host.metadata.get(event.paneKey)?.claudeSettledRequests,
     previous,

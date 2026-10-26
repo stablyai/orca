@@ -30,6 +30,30 @@ describe('sameAgentStateHistory', () => {
 })
 
 describe('agentStatusEntryEqual', () => {
+  it('compares last turn usage by value for paired clients', () => {
+    const usage = {
+      inputTokens: 616,
+      outputTokens: 138,
+      cacheReadTokens: 85906,
+      cacheWriteTokens: 589,
+      durationMs: 12632
+    }
+    const entry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'p',
+      updatedAt: 2_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-1:1',
+      stateHistory: [],
+      lastTurnUsage: usage
+    }
+    expect(agentStatusEntryEqual(entry, { ...entry, lastTurnUsage: { ...usage } })).toBe(true)
+    expect(
+      agentStatusEntryEqual(entry, { ...entry, lastTurnUsage: { ...usage, outputTokens: 131 } })
+    ).toBe(false)
+    expect(agentStatusEntryEqual(entry, { ...entry, lastTurnUsage: undefined })).toBe(false)
+  })
+
   // A paired client must take a host row whose only change is a new turn under the same state.
   it('sees a new host turn start under an unchanged state', () => {
     const entry: AgentStatusEntry = {

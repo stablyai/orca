@@ -26,6 +26,20 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
   })
 
+  it.each([
+    [false, 'jcode'],
+    [true, 'claude']
+  ] as const)('ranks Jcode process against Claude hook with live=%s', (hookIsLive, expected) => {
+    expect(
+      resolve({
+        launchAgent: 'claude',
+        hookAgent: 'claude',
+        hookIsLive,
+        foregroundAgent: 'jcode'
+      })
+    ).toBe(expected)
+  })
+
   describe('title is the last resort, and the parser is what makes that safe', () => {
     // Strict title evidence rejects names in task prose that the old substring matcher accepted.
     it('does not name a Codex pane Claude from its task text', () => {

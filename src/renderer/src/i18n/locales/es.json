@@ -18534,6 +18534,15 @@
         "copyFailed": "No se pudo copiar el enlace.",
         "signingIn": "Iniciando sesión…",
         "cancel": "Cancelar"
+      },
+      "agentRowMetrics": {
+        "usageHeading": "Último turno",
+        "usageInput": "Entrada: {{value}}",
+        "usageCacheRead": "Lectura de caché: {{value}}",
+        "usageCacheWrite": "Escritura de caché: {{value}}",
+        "usageOutput": "Salida: {{value}}",
+        "usageDuration": "Duración: {{value}}",
+        "diffTitle": "Toda la sesión: +{{added}} -{{removed}} líneas modificadas, no solo este turno"
       }
     },
     "i18n": {

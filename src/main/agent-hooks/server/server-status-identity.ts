@@ -1,3 +1,7 @@
+import type { AgentProcessIdentity } from '../../../shared/agent-process-presence'
+import { resolveAgentStatusIdentity } from '../../../shared/agent-status-identity'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status-terminal-owner'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import {
   getAgentResumeArgv,
@@ -42,12 +46,16 @@ export function isValidPaneKey(value: unknown): value is string {
   )
 }
 
-// Remote identity-only rows are a Pi contract; dismissed rows use a separate retained marker.
-export function isValidPiProviderSessionOnly(
+// Remote identity-only hooks must carry a resumable provider session.
+export function isValidProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
 ): boolean {
-  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
+  return Boolean(
+    providerSession &&
+    (agentType === 'pi' || agentType === 'jcode') &&
+    getAgentResumeArgv(agentType === 'pi' ? 'pi' : 'jcode', providerSession)
+  )
 }
 
 export function toAgentStatusIpcPayload(
@@ -87,4 +95,29 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
+}
+
+export function resolveStatusRowAgentIdentity(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  incoming: AgentHookEventPayload,
+  now: number,
+  incomingProcess: AgentProcessIdentity | undefined
+) {
+  return resolveAgentStatusIdentity({
+    existing:
+      previous && sameAgentStatusTerminalOwner(previous, incoming)
+        ? {
+            agentType: previous.payload.agentType,
+            state: previous.payload.state,
+            updatedAt: previous.receivedAt,
+            restoredUnconfirmed: previous.restoredUnconfirmed,
+            agentPresence: previous.providerSessionOnly ? undefined : previous.agentPresence
+          }
+        : undefined,
+    incoming: incoming.payload.agentType,
+    // Relay presence names the execution host owner, not the hook sender.
+    incomingProcess: incoming.connectionId ? undefined : incomingProcess,
+    incomingSession: incoming.providerSession?.id,
+    now
+  })
 }

@@ -19123,6 +19123,15 @@
         "cancelled": "Este terminal SSH simples foi fechado antes de iniciar.",
         "terminalUnavailable": "O Orca não conseguiu abrir um terminal aqui.",
         "openHint": "Permite continuar trabalhando no host enquanto o Orca não consegue se configurar nele."
+      },
+      "agentRowMetrics": {
+        "usageHeading": "Último turno",
+        "usageInput": "Entrada: {{value}}",
+        "usageCacheRead": "Leitura de cache: {{value}}",
+        "usageCacheWrite": "Gravação de cache: {{value}}",
+        "usageOutput": "Saída: {{value}}",
+        "usageDuration": "Duração: {{value}}",
+        "diffTitle": "Sessão inteira: +{{added}} -{{removed}} linhas alteradas, não só este turno"
       }
     },
     "startup": {

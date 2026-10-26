@@ -12,7 +12,7 @@ type WorktreeTabs = NonNullable<AppState['tabsByWorktree'][string]>
 
 const tabIndexByTabs = new WeakMap<WorktreeTabs, ReadonlyMap<string, WorktreeTabs[number]>>()
 
-function getIndexedTab(
+export function getIndexedTab(
   tabs: WorktreeTabs | undefined,
   tabId: string
 ): WorktreeTabs[number] | undefined {
@@ -27,13 +27,17 @@ function getIndexedTab(
   return tabIndex.get(tabId)
 }
 
-export function useAgentRowConversationName(agent: DashboardAgentRow): string | null {
+export function agentRowCannotOwnTabTitle(agent: DashboardAgentRow): boolean {
   const parentPaneKey = agent.entry.orchestration?.parentPaneKey
   const usesParentTab =
     agent.lineage?.depth === 1 &&
     parentPaneKey !== undefined &&
     parsePaneKey(parentPaneKey)?.tabId === agent.tab.id
-  const cannotOwnTabName = agent.rowSource === 'subagent' || usesParentTab
+  return agent.rowSource === 'subagent' || usesParentTab
+}
+
+export function useAgentRowConversationName(agent: DashboardAgentRow): string | null {
+  const cannotOwnTabName = agentRowCannotOwnTabTitle(agent)
   const generatedTitlesEnabled = useAppStore(
     (s) => !cannotOwnTabName && s.settings?.tabAutoGenerateTitle === true
   )

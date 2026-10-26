@@ -160,4 +160,50 @@ describe('a resume launch seeds the pane identity', () => {
     })
     expect(server.getStatusSnapshot()).toEqual([])
   })
+
+  it('binds a trusted Jcode resume before its first hook without local files', async () => {
+    const server = await startServer()
+    vi.stubEnv('JCODE_HOME', userDataPath)
+    try {
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        agentType: 'jcode',
+        providerSession: RESUMED,
+        launchedAt: Date.now()
+      })
+      expect(server._getStateForTests().jcodeSessions.roots.get(PANE)).toBe(RESUMED.id)
+      await postHookEvent(
+        server,
+        buildBody({
+          event: 'turn_start',
+          session_id: RESUMED.id,
+          prompt: 'resume prompt',
+          model: 'claude-opus-5-5'
+        }),
+        '/hook/jcode'
+      )
+      await postHookEvent(
+        server,
+        buildBody({ event: 'turn_start', session_id: 'unknown-worker', prompt: 'must not leak' }),
+        '/hook/jcode'
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        providerSession: RESUMED,
+        state: 'working',
+        prompt: 'resume prompt',
+        model: 'claude-opus-5-5'
+      })
+      expect(server.getStatusSnapshot()[0].subagents).toBeUndefined()
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        agentType: 'jcode',
+        providerSession: { key: 'session_id', id: 'obsolete-root' },
+        launchedAt: Date.now() - 1000
+      })
+      expect(server._getStateForTests().jcodeSessions.roots.get(PANE)).toBe(RESUMED.id)
+      expect(server.getStatusSnapshot()[0].providerSession).toEqual(RESUMED)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

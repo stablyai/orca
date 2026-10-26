@@ -18533,6 +18533,15 @@
         "cancelled": "この通常の SSH ターミナルは開始前に閉じられました。",
         "terminalUnavailable": "Orca はここでターミナルを開けませんでした。",
         "openHint": "Orca がホスト上でセットアップできない間も、ホストで作業を続けられます。"
+      },
+      "agentRowMetrics": {
+        "usageHeading": "直前のターン",
+        "usageInput": "入力: {{value}}",
+        "usageCacheRead": "キャッシュ読み取り: {{value}}",
+        "usageCacheWrite": "キャッシュ書き込み: {{value}}",
+        "usageOutput": "出力: {{value}}",
+        "usageDuration": "所要時間: {{value}}",
+        "diffTitle": "セッション全体: +{{added}} -{{removed}} 行を変更(このターンだけではありません)"
       }
     },
     "i18n": {

@@ -50,6 +50,7 @@ function serializeAgentStatusEntry(
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
+    lastTurnUsage: entry.lastTurnUsage ?? null,
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent),

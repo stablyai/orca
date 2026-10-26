@@ -18533,6 +18533,15 @@
         "cancelled": "此普通 SSH 终端在启动前已关闭。",
         "terminalUnavailable": "Orca 无法在此处打开终端。",
         "openHint": "在 Orca 无法在该主机上完成设置时，仍可让你继续在主机上工作。"
+      },
+      "agentRowMetrics": {
+        "usageHeading": "上一轮",
+        "usageInput": "输入:{{value}}",
+        "usageCacheRead": "缓存读取:{{value}}",
+        "usageCacheWrite": "缓存写入:{{value}}",
+        "usageOutput": "输出:{{value}}",
+        "usageDuration": "耗时:{{value}}",
+        "diffTitle": "整个会话:+{{added}} -{{removed}} 行变更,不只是本轮"
       }
     },
     "i18n": {

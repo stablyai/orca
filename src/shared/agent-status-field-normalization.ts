@@ -9,6 +9,8 @@ export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
 /** Maximum character length for the agentType label. Truncated on parse. */
 export const AGENT_TYPE_MAX_LENGTH = 40
 export const AGENT_MODEL_MAX_LENGTH = 120
+/** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
+export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 
 const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
 const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8

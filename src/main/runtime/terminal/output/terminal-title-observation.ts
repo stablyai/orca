@@ -3,16 +3,14 @@ import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
 } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
+import { OrcaRuntimeWithTitleClassification } from './terminal-title-classification'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
 import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
 import type { OrchestrationMailboxLeaf } from '../../orchestration/mailbox-owner'
 import type { PtyLaneMailboxTarget } from '../query/pty-terminal-summary'
 
-export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
-  protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
+export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithTitleClassification {
   protected abstract recordAgentPromptLifecycleState(
     ptyId: string,
     status: AgentStatus | null
@@ -59,15 +57,6 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     }
   }
 
-  /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
-   *  reports one, else what the title glyph says. */
-  protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
-    return (
-      this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
-      detectAgentStatusFromTitle(rawTitle)
-    )
-  }
-
   /** Re-classifies the PTY under new program activity; on null the title's own glyph decides again. */
   protected applyPtyProgramActivity(ptyId: string, activity: AgentStatus | null): void {
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -110,6 +99,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     }
     if (!statusOnly) {
       this.observeClaudeTerminalEvidence(ptyId, { kind: 'title', title: rawTitle })
+      if (this.ptyTitleTrackersByPtyId.get(ptyId)?.applyingChunk) {
+        this.observeJcodeTerminalTitle(ptyId, rawTitle)
+      }
     }
     // Classify raw titles but store normalized labels to collapse spinner churn (#7880). Identity-only cursor titles affect display without activity evidence (#10258).
     const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
@@ -263,6 +255,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string): void {
     this.observeClaudeTerminalEvidence(ptyId, { kind: 'reset' })
+    this.observeJcodeTerminalTitle(ptyId, null)
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
     this.ptyForegroundAgent.forget(ptyId)

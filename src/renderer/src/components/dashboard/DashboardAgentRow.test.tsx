@@ -9,6 +9,11 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 
 const NOW = 120_000
 
+vi.mock('./use-agent-row-jcode-diff-stat', () => ({
+  useAgentRowJcodeDiffStat: (agent: DashboardAgentRowData) =>
+    agent.agentType === 'jcode' ? { added: 2, removed: 1 } : null
+}))
+
 function makeAgent(
   overrides: Partial<DashboardAgentRowData> = {},
   entryOverrides: Partial<AgentStatusEntry> = {}
@@ -126,6 +131,32 @@ function classTokensForTaggedElement(markup: string, dataAttribute: string): str
 }
 
 describe('DashboardAgentRow', () => {
+  it('places usage and diff after the model and omits metrics when absent', () => {
+    const markup = renderRow(
+      makeAgent(
+        { agentType: 'jcode' },
+        {
+          agentType: 'jcode',
+          model: 'claude-opus-5-5',
+          lastTurnUsage: {
+            inputTokens: 616,
+            outputTokens: 138,
+            cacheReadTokens: 85906,
+            cacheWriteTokens: 589,
+            durationMs: 12632
+          }
+        }
+      )
+    )
+    const text = markup.replace(/<[^>]*>/g, '')
+    expect(text.indexOf('claude-opus-5-5')).toBeGreaterThanOrEqual(0)
+    expect(text.indexOf('↑87.1k ↓138')).toBeGreaterThan(text.indexOf('claude-opus-5-5'))
+    expect(text.indexOf('+2 -1')).toBeGreaterThan(text.indexOf('↑87.1k ↓138'))
+    const withoutMetrics = renderRow(makeAgent({ agentType: 'claude' }, { agentType: 'claude' }))
+    expect(withoutMetrics).not.toContain('↑')
+    expect(withoutMetrics).not.toContain('Whole session')
+  })
+
   it('renders orchestration task preview instead of the raw dispatch preamble prompt', () => {
     const markup = renderRow(
       makeAgent(

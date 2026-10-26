@@ -16,6 +16,72 @@ const TAB: RuntimeMobileSessionTerminalTab = {
 }
 
 describe('mobile agent status builder', () => {
+  it.each(['working', 'waiting', 'done'] as const)(
+    'ignores a foreign retained %s row entirely under a Jcode owner',
+    (state) => {
+      const retained: RuntimeAgentRowSnapshot = {
+        paneKey: 'tab:leaf',
+        connectionId: null,
+        payload: {
+          state,
+          prompt: 'old Claude prompt',
+          agentType: 'claude',
+          toolName: 'read',
+          interactivePrompt: '{"question":"old Claude question"}'
+        },
+        stateStartedAt: 10,
+        updatedAt: 10,
+        providerSession: PROVIDER_SESSION
+      }
+      expect(
+        buildRuntimeMobileAgentStatus(
+          null,
+          { ...TAB, launchAgent: 'jcode' },
+          'term-1',
+          retained,
+          () => [],
+          {
+            getPaneKey: () => 'tab:leaf',
+            getLeaf: () => null,
+            getTrackedTitle: () => null
+          }
+        )
+      ).toEqual({})
+    }
+  )
+
+  it.each(['jcode', 'claude'] as const)(
+    'keeps a retained %s row under its own owner',
+    (agentType) => {
+      const retained: RuntimeAgentRowSnapshot = {
+        paneKey: 'tab:leaf',
+        connectionId: null,
+        payload: { state: 'working', prompt: 'keep my prompt', agentType, toolName: 'read' },
+        stateStartedAt: 10,
+        updatedAt: 10,
+        providerSession: PROVIDER_SESSION
+      }
+      const result = buildRuntimeMobileAgentStatus(
+        null,
+        { ...TAB, launchAgent: agentType },
+        'term-1',
+        retained,
+        () => [],
+        {
+          getPaneKey: () => 'tab:leaf',
+          getLeaf: () => null,
+          getTrackedTitle: () => null
+        }
+      )
+      expect(result.agentStatus).toMatchObject({
+        ...retained.payload,
+        providerSession: PROVIDER_SESSION,
+        updatedAt: 10,
+        stateStartedAt: 10
+      })
+    }
+  )
+
   it('keeps provider-session identity from a terminal-handle row rejoin', () => {
     const retained: RuntimeAgentRowSnapshot = {
       paneKey: 'old-tab:old-leaf',

@@ -18533,6 +18533,15 @@
         "cancelled": "이 일반 SSH 터미널은 시작되기 전에 닫혔습니다.",
         "terminalUnavailable": "Orca에서 여기의 터미널을 열 수 없습니다.",
         "openHint": "Orca가 호스트에서 설정할 수 없는 동안에도 호스트에서 계속 작업할 수 있습니다."
+      },
+      "agentRowMetrics": {
+        "usageHeading": "마지막 턴",
+        "usageInput": "입력: {{value}}",
+        "usageCacheRead": "캐시 읽기: {{value}}",
+        "usageCacheWrite": "캐시 쓰기: {{value}}",
+        "usageOutput": "출력: {{value}}",
+        "usageDuration": "소요 시간: {{value}}",
+        "diffTitle": "전체 세션: +{{added}} -{{removed}}줄 변경 (이번 턴만이 아님)"
       }
     },
     "i18n": {

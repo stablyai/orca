@@ -13,6 +13,7 @@ import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
+import { AgentRowTurnMetrics } from './AgentRowTurnMetrics'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
@@ -287,7 +288,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
         <span
           className={cn(
-            'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
+            // Reserve primary text only when this row renders metric chips.
+            'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug group-has-[[data-agent-turn-metrics]]/agent-row:min-w-11',
             'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
@@ -307,13 +309,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
                 ? 'min-w-0'
                 : 'shrink-0',
-              'truncate font-mono text-[10px] text-muted-foreground/70'
+              'truncate font-mono text-[10px] text-muted-foreground/70 group-has-[[data-agent-turn-metrics]]/agent-row:min-w-0 group-has-[[data-agent-turn-metrics]]/agent-row:shrink'
             )}
             title={model}
           >
             {model}
           </span>
         )}
+        <AgentRowTurnMetrics agent={agent} />
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
           <span

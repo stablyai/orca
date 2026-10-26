@@ -5,12 +5,14 @@ import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentTurnOutcome } from './agent-turn-outcome'
+import { normalizeAgentTurnUsage, type AgentTurnUsage } from './agent-turn-usage'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { TerminalAgent } from './terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
@@ -28,6 +30,7 @@ import {
 
 export {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
@@ -44,6 +47,7 @@ export type {
   MigrationUnsupportedPtyEntry,
   RefusedPaneResume
 } from './agent-status-ipc-payload'
+export type { AgentTurnUsage } from './agent-turn-usage'
 export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
 export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'
 
@@ -97,6 +101,8 @@ export type AgentStatusEntry = {
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
+  /** Last completed turn usage; see AgentTurnUsage for uncached input and cache counts. */
+  lastTurnUsage?: AgentTurnUsage
   /** Command installed by the running OMP extension; absent on older hosts. */
   modelSwitchCommand?: 'orca-model'
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
@@ -165,6 +171,8 @@ export type AgentStatusPayload = {
   prompt?: string
   agentType?: AgentType
   model?: string
+  /** Last completed turn usage; see AgentTurnUsage for uncached input and cache counts. */
+  lastTurnUsage?: AgentTurnUsage
   modelSwitchCommand?: 'orca-model'
   toolName?: string
   toolInput?: string
@@ -203,6 +211,7 @@ export function pickParsedAgentStatusPayload(
     prompt: row.prompt,
     ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
     ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.lastTurnUsage ? { lastTurnUsage: row.lastTurnUsage } : {}),
     ...(row.modelSwitchCommand ? { modelSwitchCommand: row.modelSwitchCommand } : {}),
     ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
     ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
@@ -227,8 +236,6 @@ export function pickParsedAgentStatusPayload(
 /** Hook set/snapshot IPC shares one shape so renderers use one setAgentStatus path. */
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
-/** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
-export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 /** Keep full question JSON/options, with a cap to bound cache; preview cuts would corrupt it. */
 export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
@@ -306,6 +313,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   if (!VALID_STATES.has(state)) {
     return null
   }
+  const usage = normalizeAgentTurnUsage(obj.lastTurnUsage)
   return {
     state: state as AgentStatusState,
     workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
@@ -313,6 +321,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: normalize like the other single-line fields so embedded newlines (e.g. `agentType: "claude\nrogue"`) can't break single-line UI and equality checks.
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
+    // Old peers must retain their payload shape without an undefined usage key.
+    ...(usage ? { lastTurnUsage: usage } : {}),
     ...(obj.modelSwitchCommand === 'orca-model'
       ? { modelSwitchCommand: 'orca-model' as const }
       : {}),

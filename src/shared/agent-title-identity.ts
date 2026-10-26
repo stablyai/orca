@@ -1,4 +1,5 @@
 import { isQoderTerminalTitle } from './qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { getPiStateTitleBrand } from './pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
@@ -106,7 +107,7 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
-  if (titleHasAgentName(title, 'jcode')) {
+  if (isJcodeIdentityTerminalTitle(title)) {
     return 'Jcode'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {

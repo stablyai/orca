@@ -7,6 +7,7 @@ import {
 } from '../shared/agent-hook-relay'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+import { usageA } from '../shared/agent-hook-listener-jcode-usage-fixtures'
 
 type BoundedClient = {
   frames: Buffer[]
@@ -166,6 +167,24 @@ describe('publishAgentHookEnvelope', () => {
       expect(published[0].paneKey).toBe('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
       expect(published[0].connectionId).toBeNull()
       expect(primary.closes).toBe(0)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('never sheds last-turn usage', () => {
+    const primary = makeBoundedClient(16384)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const envelope = makeEnvelope({ lastAssistantMessage: 20_000 })
+      envelope.payload.lastTurnUsage = usageA
+      publishAgentHookEnvelope(dispatcher, envelope)
+
+      const published = decodeEnvelopes(primary)
+      expect(published).toHaveLength(1)
+      expect(published[0].payload.lastTurnUsage).toEqual(usageA)
+      expect(published[0].payload).not.toHaveProperty('lastAssistantMessage')
+      expect(published[0].shedFields).toEqual(['lastAssistantMessage'])
     } finally {
       dispatcher.dispose()
     }

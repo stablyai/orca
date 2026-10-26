@@ -1,3 +1,4 @@
+import type { HookServerStartOptions } from './server-types'
 import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -18,13 +19,6 @@ import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
-
-type HookServerStartOptions = {
-  env?: string
-  userDataPath?: string
-  endpointNamespace?: string
-  statusHooksEnabled?: boolean
-}
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
@@ -147,6 +141,12 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
+        if (source === 'jcode') {
+          this.ingestJcodeHook(aliasedBody)
+          res.writeHead(204)
+          res.end()
+          return
+        }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -249,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.claudeAgentViews.clear()
+    this.clearJcodeTitleInference()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

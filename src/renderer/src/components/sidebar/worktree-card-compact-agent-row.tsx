@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+import { AgentRowTurnMetrics } from '@/components/dashboard/AgentRowTurnMetrics'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -235,8 +236,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
+          {/* Reserve primary text only when this row renders metric chips. */}
           <span
-            className="min-w-0 flex-1 truncate"
+            className="min-w-0 flex-1 truncate group-has-[[data-agent-turn-metrics]]/compact-agent-row:min-w-11"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
             <span className={leadClassName}>{leadingText}</span>
@@ -261,6 +263,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           {model}
         </span>
       )}
+      <AgentRowTurnMetrics agent={agent} focused={isFocusedPane} className="gap-x-1 before:-mr-1" />
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
           className={cn(

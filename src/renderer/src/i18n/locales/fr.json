@@ -18674,6 +18674,15 @@
         "copyFailed": "Impossible de copier le lien.",
         "signingIn": "Connexion…",
         "cancel": "Annuler"
+      },
+      "agentRowMetrics": {
+        "usageHeading": "Dernier tour",
+        "usageInput": "Entrée : {{value}}",
+        "usageCacheRead": "Lecture du cache : {{value}}",
+        "usageCacheWrite": "Écriture du cache : {{value}}",
+        "usageOutput": "Sortie : {{value}}",
+        "usageDuration": "Durée : {{value}}",
+        "diffTitle": "Toute la session : +{{added}} -{{removed}} lignes modifiées, pas seulement ce tour"
       }
     },
     "i18n": {

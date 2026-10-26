@@ -25,7 +25,7 @@ import {
   canAdmitLegacyAgentStatus,
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
-import { isValidPiProviderSessionOnly } from './server-status-identity'
+import { isValidProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
   type RemoteAgentStatusEnvelope
@@ -153,7 +153,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (
       envelope.providerSessionOnly === true &&
       !readAgentProcessPresence(envelope.agentPresence)?.ended &&
-      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+      !isValidProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
       return
     }

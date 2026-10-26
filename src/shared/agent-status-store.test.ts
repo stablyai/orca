@@ -4,6 +4,7 @@ import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import type { AgentChildWorkInput } from './agent-status-child-work'
 import { serializeAgentStatusProviderAliasKey } from './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
+import { dolphinHooks } from './agent-hook-listener-jcode-swarm-fixtures'
 import {
   AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
@@ -369,6 +370,41 @@ describe('AgentStatusStore', () => {
     expect(restarted.getSnapshot().revision).toBe(3)
     expect(restarted.getChildren(parent)[0]?.childWorkId).toBe('child-1')
     expect(restarted.getChildren(parent)[0]?.firstObservedAt).toBe(12)
+  })
+
+  it('persists worker report prose independently of the root message', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const { prompt } = JSON.parse(dolphinHooks[2].tool_input)
+    const parent = subject({ workspaceKind: 'folder', executionHostId: 'ssh:host-a' })
+    const store = createAgentStatusStore({ epoch: 'before', mode: 'authority' })
+    const subagents = [
+      {
+        id: dolphinHooks[4].session_id,
+        state: 'idle' as const,
+        startedAt: 10,
+        agentType: 'octopus',
+        description: prompt,
+        model: dolphinHooks[3].model,
+        lastAssistantMessage: message
+      }
+    ]
+    expect(
+      store.applyMutation({
+        parent: {
+          subject: parent,
+          status: status(parent, { lastAssistantMessage: 'root message', subagents })
+        }
+      })
+    ).not.toBeNull()
+    const persisted = deserializeAgentStatusStoreSnapshot(
+      serializeAgentStatusStoreSnapshot(store.getSnapshot())
+    )
+    const restarted = createAgentStatusStore({ epoch: 'after', mode: 'authority' })
+    expect(restarted.applySnapshot(persisted)).toBe(true)
+    expect(restarted.getParent(parent)?.status).toMatchObject({
+      lastAssistantMessage: 'root message',
+      subagents
+    })
   })
 
   it('refuses a parent status beyond its field limit', () => {

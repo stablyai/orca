@@ -18913,6 +18913,15 @@
         "viewing": "Currently viewing",
         "viewingChild": "Viewing subagent {{name}}",
         "returnHint": "Click the parent row to return. Esc stops this subagent. Enter sends your draft to this subagent."
+      },
+      "agentRowMetrics": {
+        "usageHeading": "Last turn",
+        "usageInput": "Input: {{value}}",
+        "usageCacheRead": "Cache read: {{value}}",
+        "usageCacheWrite": "Cache write: {{value}}",
+        "usageOutput": "Output: {{value}}",
+        "usageDuration": "Duration: {{value}}",
+        "diffTitle": "Whole session: +{{added}} -{{removed}} lines changed, not just this turn"
       }
     },
     "i18n": {

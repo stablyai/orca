@@ -6,7 +6,8 @@ import {
   isWslAgentHookRelayEnabled,
   restoreShedStatusFields
 } from './agent-hook-relay'
-import type { ParsedAgentStatusPayload } from './agent-status-types'
+import { normalizeAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
+import { dolphinHooks } from './agent-hook-listener-jcode-swarm-fixtures'
 
 describe('agent-hook-relay wire shape', () => {
   it('validates hook sources crossing persisted and relay trust boundaries', () => {
@@ -49,6 +50,58 @@ describe('restoreShedStatusFields', () => {
     interactivePrompt: '{"questions":["old"]}'
   }
   const shed: ParsedAgentStatusPayload = { state: 'done', prompt: 'p', agentType: 'claude' }
+
+  it('keeps the exact old-reader digest for snapshots without reports', () => {
+    expect(createShedSubagentsField(roster)).toBe(
+      'subagents:sha256:q6uU3y9CE7oWyfGIMoSw8d2KpJiKSCHi2J6j9-XIwEk'
+    )
+    expect(createShedSubagentsField([{ ...roster[0], lastAssistantMessage: undefined }])).toBe(
+      createShedSubagentsField(roster)
+    )
+  })
+
+  it('round-trips a child report and accepts its snapshot on an old reader', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const subagents = [
+      {
+        id: dolphinHooks[4].session_id,
+        state: 'idle' as const,
+        startedAt: 10,
+        agentType: 'octopus',
+        model: dolphinHooks[3].model,
+        lastAssistantMessage: message
+      }
+    ]
+    const envelope = JSON.parse(
+      JSON.stringify({
+        source: 'jcode',
+        paneKey: 'remote-pane',
+        connectionId: null,
+        payload: { ...cached, subagents }
+      })
+    )
+    const received = normalizeAgentStatusPayload(envelope.payload)
+    expect(received?.subagents).toEqual(subagents)
+    const marker = createShedSubagentsField(subagents)
+    expect(restoreShedStatusFields(shed, [marker], received ?? undefined).subagents).toEqual(
+      subagents
+    )
+    // An old reader selects only its known fields and still accepts the child.
+    const oldShape = subagents.map(({ lastAssistantMessage: _report, ...child }) => child)
+    expect(normalizeAgentStatusPayload({ ...cached, subagents: oldShape })?.subagents).toEqual(
+      oldShape
+    )
+  })
+
+  it('refuses stale cached roster prose after a report-only update', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const subagents = [{ ...roster[0], lastAssistantMessage: message }]
+    const marker = createShedSubagentsField(subagents)
+    expect(marker).not.toBe(createShedSubagentsField(roster))
+    const changed = [{ ...subagents[0], lastAssistantMessage: 'updated report' }]
+    expect(createShedSubagentsField(changed)).not.toBe(marker)
+    expect(restoreShedStatusFields(shed, [marker], { ...cached, subagents: changed })).toBe(shed)
+  })
 
   it('restores a matching shed roster, so a done pane is not falsely hibernation-eligible', () => {
     const restored = restoreShedStatusFields(shed, [createShedSubagentsField(roster)], cached)

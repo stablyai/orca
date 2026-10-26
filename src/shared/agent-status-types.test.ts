@@ -21,6 +21,8 @@ import {
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
 import { parseAskFromStatus } from './native-chat-ask'
+import { dolphinHooks } from './agent-hook-listener-jcode-swarm-fixtures'
+import { decodeAgentSubagentsField } from './agent-status-subagent-snapshot'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -631,10 +633,60 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(parseAgentStatusPayload('{"state":"done"}')?.subagents).toBeUndefined()
     expect(parseAgentStatusPayload('{"state":"done","subagents":[]}')?.subagents).toBeUndefined()
   })
+
+  it('preserves a worker report through admission and published snapshot decoding', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const child = {
+      id: dolphinHooks[4].session_id,
+      state: 'idle',
+      startedAt: 10,
+      agentType: 'octopus',
+      model: dolphinHooks[3].model,
+      lastAssistantMessage: message
+    }
+    const payload = normalizeAgentStatusPayload({ state: 'done', subagents: [child] })
+    expect(payload?.subagents?.[0]).toMatchObject(child)
+    expect(decodeAgentSubagentsField(JSON.parse(JSON.stringify([child])))?.[0]).toMatchObject(child)
+    const { lastAssistantMessage: _report, ...oldChild } = child
+    expect(
+      normalizeAgentStatusPayload({ state: 'done', subagents: [oldChild] })?.subagents
+    ).toEqual([expect.objectContaining(oldChild)])
+  })
+
+  it('bounds and normalizes child report prose and drops non-string negative controls', () => {
+    const reports = ['  line\r\none\n\n\nend  ', 'x'.repeat(8_500), 42, {}, null, '   ']
+    const payload = normalizeAgentStatusPayload({
+      state: 'done',
+      subagents: reports.map((lastAssistantMessage, i) => ({
+        id: `child-${i}`,
+        state: 'idle',
+        startedAt: 1,
+        lastAssistantMessage
+      }))
+    })
+    expect(payload?.subagents?.map((child) => child.lastAssistantMessage)).toEqual([
+      'line\none\n\nend',
+      'x'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH),
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    ])
+  })
 })
 
 describe('agentSubagentsEqual', () => {
   const snapshot = { id: 'a1', state: 'working' as const, startedAt: 1 }
+
+  it('detects report-only updates', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const reported = { ...snapshot, lastAssistantMessage: message }
+    expect(agentSubagentsEqual([snapshot], [reported])).toBe(false)
+    expect(agentSubagentsEqual([reported], [{ ...reported }])).toBe(true)
+    expect(
+      agentSubagentsEqual([reported], [{ ...reported, lastAssistantMessage: 'updated' }])
+    ).toBe(false)
+  })
 
   it('compares structurally and treats undefined/empty as distinct from populated', () => {
     expect(agentSubagentsEqual(undefined, undefined)).toBe(true)
@@ -792,5 +844,41 @@ describe('the main agent field on a status payload', () => {
     expect(mainAgentStatusEqual(mainAgent, { ...mainAgent, stateStartedAt: 8 })).toBe(false)
     expect(mainAgentStatusEqual(undefined, undefined)).toBe(true)
     expect(mainAgentStatusEqual(mainAgent, undefined)).toBe(false)
+  })
+})
+
+describe('lastTurnUsage', () => {
+  const usage = {
+    inputTokens: 616,
+    outputTokens: 138,
+    cacheReadTokens: 85906,
+    cacheWriteTokens: 589,
+    durationMs: 12632
+  }
+
+  it('keeps lastTurnUsage through normalize, JSON parse and the client-visible pick', () => {
+    const parsed = parseAgentStatusPayload(
+      JSON.stringify({ state: 'done', prompt: '', agentType: 'jcode', lastTurnUsage: usage })
+    )
+    expect(parsed?.lastTurnUsage).toEqual(usage)
+    expect(pickParsedAgentStatusPayload(parsed!).lastTurnUsage).toEqual(usage)
+  })
+  it.each([
+    ['string numbers', { inputTokens: '616', outputTokens: '138' }],
+    ['missing output', { inputTokens: 616 }],
+    ['negative', { inputTokens: -1, outputTokens: 1 }],
+    ['fractional', { inputTokens: 1.5, outputTokens: 1 }],
+    ['null', { inputTokens: null, outputTokens: 1 }],
+    ['unsafe', { inputTokens: Number.MAX_SAFE_INTEGER + 1, outputTokens: 1 }],
+    ['array', [616, 138]]
+  ])('drops unusable usage: %s', (_name, bad) => {
+    expect(
+      normalizeAgentStatusPayload({ state: 'done', prompt: '', lastTurnUsage: bad })
+    ).not.toHaveProperty('lastTurnUsage')
+  })
+  it('adds no key to an old-shape payload', () => {
+    const parsed = normalizeAgentStatusPayload({ state: 'done', prompt: 'x' })
+    expect(parsed).not.toHaveProperty('lastTurnUsage')
+    expect(pickParsedAgentStatusPayload(parsed!)).not.toHaveProperty('lastTurnUsage')
   })
 })

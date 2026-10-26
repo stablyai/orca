@@ -4,9 +4,11 @@ import type { JcodeUserPromptEvidence } from '../../jcode-session-files'
 const { readMock } = vi.hoisted(() => ({
   readMock: vi.fn<() => JcodeUserPromptEvidence | null>()
 }))
-vi.mock('../../jcode-session-files', () => ({
-  readLastJcodeUserPromptFromHookPayload: readMock
-}))
+vi.mock('../../jcode-session-files', async (importOriginal) => {
+  // oxlint-disable-next-line typescript/consistent-type-imports -- importOriginal types the real module
+  const actual = await importOriginal<typeof import('../../jcode-session-files')>()
+  return { ...actual, readLastJcodeUserPromptFromHookPayload: readMock }
+})
 
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { readJcodeTurnPrompt } from './jcode-turn-prompt'

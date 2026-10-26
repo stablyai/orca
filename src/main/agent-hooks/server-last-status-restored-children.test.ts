@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, postHookEvent, recentTs, PANE, GOOD_PANE } from './server.test-fixtures'
+import { usageA } from '../../shared/agent-hook-listener-jcode-usage-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -104,6 +105,48 @@ describe('Last-status persistence', () => {
       ])
     } finally {
       server.stop()
+    }
+  })
+
+  it('hydrates persisted Jcode usage', async () => {
+    vi.stubEnv('JCODE_HOME', join(userDataPath, 'jcode'))
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const entry = {
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      receivedAt,
+      stateStartedAt: receivedAt,
+      payload: {
+        state: 'done',
+        prompt: 'survived restart',
+        agentType: 'jcode'
+      }
+    }
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: { ...entry, paneKey: PANE, payload: { ...entry.payload, lastTurnUsage: usageA } },
+          [GOOD_PANE]: { ...entry, paneKey: GOOD_PANE, tabId: 'tab-good' }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    try {
+      await server.start({ env: 'production', userDataPath })
+      const rows = server.getStatusSnapshot()
+      expect(rows).toHaveLength(2)
+      expect(rows.find((row) => row.paneKey === PANE)?.lastTurnUsage).toEqual(usageA)
+      const oldShape = rows.find((row) => row.paneKey === GOOD_PANE)
+      expect(oldShape).toMatchObject(entry.payload)
+      expect(oldShape).not.toHaveProperty('lastTurnUsage')
+    } finally {
+      server.stop()
+      vi.unstubAllEnvs()
     }
   })
 

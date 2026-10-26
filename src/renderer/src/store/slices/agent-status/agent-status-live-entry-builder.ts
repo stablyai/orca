@@ -226,6 +226,7 @@ export function buildAgentStatusLiveEntry(
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
     ...(payload.modelSwitchCommand ? { modelSwitchCommand: payload.modelSwitchCommand } : {}),
+    ...(payload.lastTurnUsage ? { lastTurnUsage: payload.lastTurnUsage } : {}),
     paneKey,
     terminalHandle: statusTerminalHandle,
     worktreeId:

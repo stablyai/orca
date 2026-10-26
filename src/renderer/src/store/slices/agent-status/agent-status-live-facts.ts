@@ -1,5 +1,6 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import { agentTurnUsageEqual } from '../../../../../shared/agent-turn-usage'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
@@ -72,6 +73,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.agentType !== existing.agentType ||
       entry.model !== existing.model ||
       entry.modelSwitchCommand !== existing.modelSwitchCommand ||
+      !agentTurnUsageEqual(entry.lastTurnUsage, existing.lastTurnUsage) ||
       entry.terminalTitle !== existing.terminalTitle ||
       entry.toolName !== existing.toolName ||
       entry.toolInput !== existing.toolInput ||

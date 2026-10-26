@@ -12,6 +12,11 @@ vi.mock('@/components/dashboard/use-agent-row-conversation-name', () => ({
   useAgentRowConversationName: () => null
 }))
 
+vi.mock('@/components/dashboard/use-agent-row-jcode-diff-stat', () => ({
+  useAgentRowJcodeDiffStat: (agent: DashboardAgentRowData) =>
+    agent.agentType === 'jcode' ? { added: 2, removed: 1 } : null
+}))
+
 vi.mock('./CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
@@ -75,6 +80,28 @@ function rerenderRow(agent: DashboardAgentRowData): void {
 }
 
 describe('CompactAgentRow stable assistant message', () => {
+  it('places usage and diff after the model and omits metrics when absent', () => {
+    const agent = makeAgent({ stateStartedAt: 1000 })
+    agent.agentType = 'jcode'
+    agent.entry.model = 'claude-opus-5-5'
+    agent.entry.lastTurnUsage = {
+      inputTokens: 616,
+      outputTokens: 138,
+      cacheReadTokens: 85906,
+      cacheWriteTokens: 589,
+      durationMs: 12632
+    }
+    const container = renderRow(agent)
+    const text = container.textContent ?? ''
+    const model = container.querySelector('[title="claude-opus-5-5"]')?.textContent ?? ''
+    expect(model).not.toBe('')
+    expect(text.indexOf('↑87.1k ↓138')).toBeGreaterThan(text.indexOf(model))
+    expect(text.indexOf('+2 -1')).toBeGreaterThan(text.indexOf('↑87.1k ↓138'))
+    rerenderRow(makeAgent({ stateStartedAt: 1000 }))
+    expect(container.textContent).not.toContain('↑')
+    expect(container.querySelector('[title^="Whole session"]')).toBeNull()
+  })
+
   it('holds the last assistant line when a same-turn ping omits it', () => {
     const container = renderRow(
       makeAgent({ stateStartedAt: 1000, lastAssistantMessage: 'First reply' })

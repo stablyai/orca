@@ -30,6 +30,7 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
+  onJcodeTerminalTitle?: (paneKey: string, title: string | null) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink

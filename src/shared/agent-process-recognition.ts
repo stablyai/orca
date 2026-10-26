@@ -74,6 +74,13 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
+  // Jcode execs a platform binary; macOS p_comm truncates its name to 16 characters.
+  if (
+    /^jcode-(?:linux|darwin|macos|windows)-(?:x86_64|aarch64|arm64)(?:\.bin)?$/.test(normalized) ||
+    /^jcode-(?:macos-(?:aarc|arm6|x86_)|darwin-(?:aar|arm|x86))$/.test(normalized)
+  ) {
+    return PROCESS_TO_AGENT.get('jcode')
+  }
   // Qoder's launcher resolves to a versioned native binary.
   if (/^(?:qoderclicn|qodercn)-\d/.test(normalized)) {
     return PROCESS_TO_AGENT.get('qoderclicn')
@@ -180,6 +187,8 @@ export function isExpectedAgentProcess(
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    // Jcode's packaged and p_comm names must pass the same bounded identity rule.
+    (normalizedExpected === 'jcode' && agentForNormalizedProcess(normalizedProcess) === 'jcode') ||
     (['qoderclicn', 'qodercn'].includes(normalizedExpected) &&
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (['qoder', 'qodercli'].includes(normalizedExpected) &&

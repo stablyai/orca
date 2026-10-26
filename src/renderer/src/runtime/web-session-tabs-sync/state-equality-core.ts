@@ -4,6 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentTurnUsageEqual } from '../../../../shared/agent-turn-usage'
 import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
 import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
@@ -62,6 +63,7 @@ export function agentStatusEntryEqual(
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
+    agentTurnUsageEqual(a.lastTurnUsage, b.lastTurnUsage) &&
     a.interrupted === b.interrupted &&
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&

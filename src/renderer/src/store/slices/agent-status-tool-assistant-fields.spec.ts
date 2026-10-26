@@ -5,9 +5,62 @@ import { createTestStore } from './store-test-helpers'
 
 export function registerAgentStatusToolAssistantFieldsTests(): void {
   describe('agent status tool + assistant fields', () => {
+    const usageA = {
+      inputTokens: 616,
+      outputTokens: 138,
+      cacheReadTokens: 85906,
+      cacheWriteTokens: 589,
+      durationMs: 12632
+    }
+    const usageB = {
+      inputTokens: 236,
+      outputTokens: 131,
+      cacheReadTokens: 87247,
+      cacheWriteTokens: 344,
+      durationMs: 4731
+    }
+
     // Fake timers prevent queueMicrotask’s real 30-minute freshness handles keeping Vitest alive.
     afterEach(() => {
       vi.useRealTimers()
+    })
+
+    it('writes last turn usage straight onto the entry', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store.getState().setAgentStatus('tab-1:1', {
+        state: 'done',
+        prompt: 'p',
+        agentType: 'jcode',
+        lastTurnUsage: usageA
+      })
+      expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastTurnUsage).toEqual(usageA)
+    })
+
+    it('clears last turn usage when a later payload omits it', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store.getState().setAgentStatus('tab-1:1', {
+        state: 'done',
+        prompt: 'p',
+        agentType: 'jcode',
+        lastTurnUsage: usageA
+      })
+      expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastTurnUsage).toEqual(usageA)
+      store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p', agentType: 'jcode' })
+      expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastTurnUsage).toBeUndefined()
+    })
+
+    it('bumps the done retention epoch only when last turn usage changes', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const payload = { state: 'done' as const, prompt: 'p', agentType: 'jcode' }
+      store.getState().setAgentStatus('tab-1:1', { ...payload, lastTurnUsage: usageA })
+      const firstEpoch = store.getState().agentStatusEpoch
+      store.getState().setAgentStatus('tab-1:1', { ...payload, lastTurnUsage: { ...usageA } })
+      expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
+      store.getState().setAgentStatus('tab-1:1', { ...payload, lastTurnUsage: usageB })
+      expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     })
 
     it('writes toolName, toolInput, and assistant preview provenance straight onto the entry', () => {

@@ -14,6 +14,7 @@ export function normalizeAgentStatusEvent(
     prompt: data.prompt,
     agentType: data.agentType,
     model: data.model,
+    lastTurnUsage: data.lastTurnUsage,
     toolName: data.toolName,
     toolInput: data.toolInput,
     interactivePrompt: data.interactivePrompt,

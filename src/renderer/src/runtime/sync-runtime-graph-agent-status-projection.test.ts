@@ -42,6 +42,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
+        lastTurnUsage: entry.lastTurnUsage ?? null,
         interrupted: entry.interrupted ?? null,
         mainAgent: mainAgentKey(entry.mainAgent),
         programStatus: entry.programStatus
@@ -78,6 +79,25 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
 }
 
 describe('mobile agent-status projection equivalence', () => {
+  it('republishes changed last turn usage but keeps equal-valued usage stable', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const usage = {
+      inputTokens: 616,
+      outputTokens: 138,
+      cacheReadTokens: 85906,
+      cacheWriteTokens: 589,
+      durationMs: 12632
+    }
+    const project = (lastTurnUsage?: typeof usage): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, { lastTurnUsage })
+      })
+    const initial = project(usage)
+    expect(project({ ...usage })).toBe(initial)
+    expect(project({ ...usage, outputTokens: 131 })).not.toBe(initial)
+    expect(project()).not.toBe(initial)
+  })
+
   it('matches the whole-array serialization across status maps and cache reuse', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
     const statusMaps: AppState['agentStatusByPaneKey'][] = []
