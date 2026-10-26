@@ -38,7 +38,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       layoutSeqRef.current.delete(handle)
       // A new subscription needs its own snapshot before cell diffs can safely redraw.
       initializedHandlesRef.current.delete(handle)
-      // Signal teardown when rendered lease was already false: batched subscribed/end or end alone would otherwise never rerun chat recovery.
+      // Signal teardown when rendered lease was already false: batched subscribed/end or end alone would otherwise never rerun stream recovery, covered or not.
       // An actually rendered lease already triggers recovery through state; another signal there would rerender the route twice.
       const leaseWasOnScreen = nativeChatInputLeaseReadyRef.current
       const leaseDropped = clearNativeChatInputLease(handle)

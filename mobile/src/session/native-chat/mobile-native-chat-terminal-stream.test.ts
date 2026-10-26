@@ -62,9 +62,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('resumes only the ready active terminal after chat closes', () => {
-    expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamActive: false })).toBe(
-      'resume'
-    )
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,
@@ -74,6 +71,13 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     ).toBe('none')
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamCovered: true })).toBe(
       'resume'
+    )
+  })
+
+  it('rearms a rendered terminal whose stream ended', () => {
+    // Uncovered streams share the covered rearm budget so a dead PTY cannot resubscribe forever.
+    expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamActive: false })).toBe(
+      'rearm'
     )
   })
 

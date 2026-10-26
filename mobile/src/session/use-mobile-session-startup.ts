@@ -42,9 +42,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     showToast,
     clearTerminalCache,
     fetchTerminals,
-    ensureSessionTabs,
-    terminalUnsubsRef,
-    subscribeToTerminal
+    ensureSessionTabs
   } = scope
   useEffect(() => {
     // Reset reused-route state so the next workspace cannot inherit stale UI or snapshot gates.
@@ -146,16 +144,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       if (disposed) {
         return
       }
-      // Why: if the active terminal stream ended during a disconnect/freeze and
-      // `ensureSessionTabs` rejected the unchanged snapshot epoch/version, resubscribe
-      // the active terminal handle so its output and input lease recover immediately.
-      if (
-        activeSessionTabTypeRef.current === 'terminal' &&
-        activeHandleRef.current &&
-        !terminalUnsubsRef.current.has(activeHandleRef.current)
-      ) {
-        subscribeToTerminal(activeHandleRef.current)
-      }
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
@@ -199,7 +187,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     ensureSessionTabs,
     isFloatingWorkspaceRoute,
     showToast,
-    subscribeToTerminal,
     worktreeId
   ])
 }

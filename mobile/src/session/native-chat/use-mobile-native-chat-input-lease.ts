@@ -19,9 +19,6 @@ export function useMobileNativeChatInputLease(args: {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   // Mirrors the state so `clear` can report synchronously whether it changed anything.
   const readyHandlesRef = useRef(readyHandles)
-  const activeHandleRef = useRef(args.activeHandle)
-  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
-  activeHandleRef.current = args.activeHandle
   const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
   // Missing acknowledgement proves only pending setup, never ownership by another client.
   const lockReason: MobileNativeChatInputLockReason | null = !args.connected
@@ -30,11 +27,9 @@ export function useMobileNativeChatInputLease(args: {
       ? null
       : 'waiting'
   const readyRef = useRef(ready)
-  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   readyRef.current = ready
   const replace = useCallback((next: Set<string>) => {
     readyHandlesRef.current = next
-    readyRef.current = activeHandleRef.current != null && next.has(activeHandleRef.current)
     setReadyHandles(next)
   }, [])
   useEffect(() => {

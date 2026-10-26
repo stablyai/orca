@@ -46,11 +46,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     refreshCanPaste,
     activeSessionTab,
     agentSessionHostSupport,
-    hostId,
-    terminalUnsubsRef,
-    subscribingHandlesRef,
-    subscribeToTerminal,
-    unsubscribeTerminal
+    hostId
   } = scope
   const clipboardContents = useClipboardReader().contents
   const agent = resolveMobileImageAttachmentAgent(
@@ -83,20 +79,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     activeHandleRef,
     activeSessionTabTypeRef,
     nativeChatInputLeaseReadyRef,
-    showToast,
-    recoverTerminalInputLease: (handle, forceResubscribe) => {
-      if (connStateRef.current !== 'connected') {
-        return
-      }
-      if (forceResubscribe) {
-        unsubscribeTerminal(handle)
-        subscribeToTerminal(handle)
-        return
-      }
-      if (!terminalUnsubsRef.current.has(handle) && !subscribingHandlesRef.current.has(handle)) {
-        subscribeToTerminal(handle)
-      }
-    }
+    showToast
   })
 
   const structuredNativeChat = activeSessionTab?.type === 'agent-session'
