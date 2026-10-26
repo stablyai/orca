@@ -57,6 +57,29 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.general.search.editorCenteredLayout',
+      'Centered Layout'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorCenteredLayoutDesc',
+      'Center the file editor in a readable column on wide panes, like VS Code.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.centeredLayoutKw',
+        'centered layout'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.centerEditorKw',
+        'center editor'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.maxWidthKw', 'max width'),
+      ...translateSearchKeyword('auto.components.settings.general.search.ultrawideKw', 'ultrawide')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.collapseUnchanged',
       'Collapse Unchanged Regions'
     ),

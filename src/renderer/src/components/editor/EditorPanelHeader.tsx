@@ -13,6 +13,7 @@ import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
+import { canToggleFileEditorCenteredLayout } from './file-editor-centered-layout'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
@@ -94,6 +95,7 @@ export function EditorPanelHeader({
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
+  const editorCenteredLayout = useAppStore((s) => s.settings?.editorCenteredLayout === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
@@ -102,6 +104,11 @@ export function EditorPanelHeader({
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
+  // Why: isDiffSurface is single-diff OR changes; combined diffs still hide via mode.
+  const showCenteredLayout = canToggleFileEditorCenteredLayout({
+    mode: activeFile.mode,
+    isChangesMode: isDiffSurface && !isSingleDiff
+  })
 
   return (
     <div className="editor-header">
@@ -329,6 +336,8 @@ export function EditorPanelHeader({
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}
         editorWordWrap={editorWordWrap}
+        editorCenteredLayout={editorCenteredLayout}
+        showCenteredLayout={showCenteredLayout}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
@@ -338,6 +347,9 @@ export function EditorPanelHeader({
           void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
         }
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
+        onToggleEditorCenteredLayout={() =>
+          void updateSettings({ editorCenteredLayout: !editorCenteredLayout })
+        }
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

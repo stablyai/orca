@@ -112,6 +112,7 @@ export function EditorContent({
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
+  const centeredLayout = useAppStore((state) => state.settings?.editorCenteredLayout === true)
   const markdownDocuments = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =
@@ -270,6 +271,7 @@ export function EditorContent({
         handleDirtyStateHint={handleDirtyStateHint}
         handleSave={handleSave}
         reloadContent={reloadContent}
+        centeredLayout={centeredLayout}
       />
     )
   }

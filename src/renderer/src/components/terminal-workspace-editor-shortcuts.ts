@@ -5,6 +5,7 @@ import {
   type EditorRequestCmdSaveDetail
 } from './editor/editor-autosave'
 import { getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
+import { canToggleFileEditorCenteredLayout } from './editor/file-editor-centered-layout'
 import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
@@ -60,6 +61,26 @@ export function handleTerminalWorkspaceEditorShortcut({
         void state.updateSettings({ editorWordWrap: !wrapOn })
       }
       return true
+    }
+  }
+  // Why: VS Code's centered-layout command is unbound; keep the same opt-in shortcut (#31236).
+  if (!event.repeat && matchShortcut('editor.toggleCenteredLayout')) {
+    const state = useAppStore.getState()
+    if (state.activeTabType === 'editor' && state.activeFileId) {
+      const activeFile = state.openFiles.find((file) => file.id === state.activeFileId)
+      if (
+        activeFile &&
+        canToggleFileEditorCenteredLayout({
+          mode: activeFile.mode,
+          isChangesMode: state.editorViewMode?.[activeFile.id] === 'changes'
+        })
+      ) {
+        event.preventDefault()
+        notifyTerminalCapture('editor.toggleCenteredLayout')
+        const centeredOn = state.settings?.editorCenteredLayout === true
+        void state.updateSettings({ editorCenteredLayout: !centeredOn })
+        return true
+      }
     }
   }
   return false
