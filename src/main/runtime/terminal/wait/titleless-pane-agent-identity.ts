@@ -25,7 +25,7 @@ export abstract class OrcaRuntimeWithTitlelessPaneAgentIdentity extends OrcaRunt
     }
     // A timed-out scan cannot rule out a dialog, so it answers unknown rather than none.
     return identity.then((agent) =>
-      agent === undefined
+      agent === undefined || this.getTerminalAgentStatusPtyId(handle) !== ptyId
         ? undefined
         : super.readTerminalInteractiveWaitEvidence(handle, ptyId, agent)
     )

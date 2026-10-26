@@ -17,7 +17,6 @@ type Dependencies = {
   finishDelayedSnapshot(ptyId: string, changed: boolean): void
 }
 
-// Windows native Claude is claude.exe (recognized by name), and confirm there forces a full scan.
 const NATIVE_CLAUDE_VERSION_NAME = /^\d+\.\d+\.\d+$/
 
 export class RuntimePtyForegroundAgent {
@@ -196,6 +195,7 @@ export class RuntimePtyForegroundAgent {
     if (confirmed?.foregroundName === foregroundName) {
       return confirmed.agent
     }
+    // Windows native Claude is claude.exe (recognized by name), and confirm there forces a full scan.
     if (process.platform === 'win32') {
       return null
     }
