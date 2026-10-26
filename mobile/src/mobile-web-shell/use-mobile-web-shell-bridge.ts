@@ -157,6 +157,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
     })
     hostRef.current = { sessionId, host }
+    // An adopted spare may have sent ready while parked, before this host existed.
+    void viewRef.current?.handle.replayPageReady?.().catch(() => undefined)
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
     latest.onBinaryFramesDropped(0)
     return () => {

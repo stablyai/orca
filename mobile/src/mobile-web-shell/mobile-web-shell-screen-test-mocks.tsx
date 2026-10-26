@@ -8,6 +8,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
   return {
     'react-native': () => ({
       ActivityIndicator: 'ActivityIndicator',
+      AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
       AccessibilityInfo: {
         isReduceMotionEnabled: () => Promise.resolve(false),
         addEventListener: () => ({ remove: () => {} })
@@ -114,7 +115,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         dispatch: dependencies.dispatch
       }),
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
-      useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
+      useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect]),
+      useIsFocused: () => true
     }),
     // Use a component to observe keyed remounts; host-string prop updates cannot prove WebView replacement.
     '../../modules/orca-mobile-web-shell/src': () => {
@@ -147,7 +149,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
           }, [attach])
           return React.createElement('ShellViewProbe', props)
         },
-        parseMobileWebShellLoadState: parseMobileWebShellLoadState
+        parseMobileWebShellLoadState: parseMobileWebShellLoadState,
+        // A binary without the spare pool, which is every screen here: each mount builds its own page.
+        OrcaMobileWebShellSpares: null
       }
     },
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),

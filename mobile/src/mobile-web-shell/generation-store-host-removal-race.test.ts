@@ -16,6 +16,8 @@ vi.mock('./generation-store-file-system', () => ({
   createExpoGenerationFileSystem: () => fake.fileSystem
 }))
 vi.mock('../transport/host-store', () => ({ removeHost: async () => undefined }))
+// A binary without the spare pool: this race is about the cache, not the pages booted from it.
+vi.mock('./removed-host-spare-pages', () => ({ discardHostSparePages: () => {} }))
 vi.mock('../notifications/push-registration', () => ({
   unregisterPushForRemovedHost: async () => () => undefined
 }))

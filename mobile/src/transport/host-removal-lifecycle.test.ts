@@ -5,6 +5,7 @@ const restorePushMock = vi.hoisted(() => vi.fn())
 const unregisterPushMock = vi.hoisted(() => vi.fn(async (_hostId: string) => restorePushMock))
 const forgetUpdateFailuresMock = vi.hoisted(() => vi.fn(async (_hostId: string) => undefined))
 const deletePageCacheMock = vi.hoisted(() => vi.fn(async (_hostId: string) => undefined))
+const discardSparesMock = vi.hoisted(() => vi.fn((_hostId: string) => undefined))
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
@@ -19,6 +20,10 @@ vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
   deleteHostPageCache: (hostId: string) => deletePageCacheMock(hostId)
 }))
 
+vi.mock('../mobile-web-shell/removed-host-spare-pages', () => ({
+  discardHostSparePages: (hostId: string) => discardSparesMock(hostId)
+}))
+
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
 
 describe('host removal lifecycle', () => {
@@ -28,6 +33,7 @@ describe('host removal lifecycle', () => {
     restorePushMock.mockClear()
     forgetUpdateFailuresMock.mockClear()
     deletePageCacheMock.mockClear()
+    discardSparesMock.mockClear()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -98,9 +104,12 @@ describe('host removal lifecycle', () => {
     removeHostMock.mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
     expect(deletePageCacheMock).not.toHaveBeenCalled()
+    expect(discardSparesMock).not.toHaveBeenCalled()
     removeHostMock.mockResolvedValue(undefined)
     await removeHostAndCloseClient('host-1', vi.fn())
     expect(deletePageCacheMock).toHaveBeenCalledWith('host-1')
+    // A page booted ahead from the tree is dropped with it; the pool is not awaited.
+    expect(discardSparesMock).toHaveBeenCalledWith('host-1')
     expect(removeHostMock.mock.invocationCallOrder.at(-1)).toBeLessThan(
       deletePageCacheMock.mock.invocationCallOrder[0]
     )

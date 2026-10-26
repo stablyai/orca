@@ -2,6 +2,7 @@ import {
   deleteHostPageCache,
   forgetHostUpdateFailures
 } from '../mobile-web-shell/removed-host-shell-cache'
+import { discardHostSparePages } from '../mobile-web-shell/removed-host-spare-pages'
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { forgetHostDescriptor } from './host-descriptor-store'
 import { removeHost } from './host-store'
@@ -23,5 +24,6 @@ export async function removeHostAndCloseClient(
   forgetHostDescriptor(hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
+  discardHostSparePages(hostId)
   void deleteHostPageCache(hostId).catch(() => undefined)
 }

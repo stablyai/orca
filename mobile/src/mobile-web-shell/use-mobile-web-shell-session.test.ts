@@ -10,6 +10,11 @@ import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import type {
+  MobileWebShellFailureReason,
+  OrcaMobileWebShellSparesModule
+} from '../../modules/orca-mobile-web-shell/src'
+import { deriveHostCacheKey } from './host-cache-key'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
 // Test effect abandonment, fetch aborts and retry wiring around the table-tested reducer; cancellation must free read slots and prevent writes for retired screens.
@@ -211,6 +216,7 @@ type Mounted = {
   documentLoaded: () => void
   pageReady: () => void
   pagePainted: () => void
+  shellFailed: (reason: MobileWebShellFailureReason) => void
   downloadProgress: () => DownloadProgressFeed
   timers: ReturnType<typeof createTimerSeam>
 }
@@ -235,7 +241,10 @@ afterEach(async () => {
   })
 })
 
-async function mount(store: GenerationStore): Promise<Mounted> {
+async function mount(
+  store: GenerationStore,
+  spares?: OrcaMobileWebShellSparesModule
+): Promise<Mounted> {
   const timers = createTimerSeam()
   const handle: {
     retry: () => void
@@ -243,6 +252,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => void
     pageReady: () => void
     pagePainted: () => void
+    shellFailed: (reason: MobileWebShellFailureReason) => void
     states: MobileWebShellSessionState[]
     handshakes: boolean[]
     downloadProgress: DownloadProgressFeed | null
@@ -252,6 +262,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => {},
     pageReady: () => {},
     pagePainted: () => {},
+    shellFailed: () => {},
     states: [],
     handshakes: [],
     downloadProgress: null
@@ -263,11 +274,13 @@ async function mount(store: GenerationStore): Promise<Mounted> {
       runtime: {
         createStore: () => store,
         mintSessionId: () => 'session-id',
+        ...(spares === undefined ? {} : { spares }),
         now: () => 0,
         setTimer: timers.setTimer
       }
     })
     handle.retry = session.retry
+    handle.shellFailed = session.reportShellFailure
     handle.documentStarted = session.reportDocumentStarted
     handle.documentLoaded = session.reportDocumentLoaded
     handle.pageReady = session.reportPageReady
@@ -295,6 +308,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     pagePainted: () => handle.pagePainted(),
+    shellFailed: (reason) => handle.shellFailed(reason),
     downloadProgress: () => {
       if (handle.downloadProgress === null) {
         throw new Error('the hook never rendered')
@@ -487,15 +501,75 @@ describe('the wait for the page to speak', () => {
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
   })
 
-  async function ready(): Promise<Mounted> {
+  async function ready(spares?: OrcaMobileWebShellSparesModule): Promise<Mounted> {
     const fake = createFakeStore()
-    const mounted = await mount(fake.store)
+    const mounted = await mount(fake.store, spares)
     fake.settleCacheRead(activeGeneration())
     await flush()
     expect(mounted.states().at(-1)?.kind).toBe('ready')
     return mounted
   }
 
+  function fakeSpares(spareId: string | null) {
+    const taken: [string, string][] = []
+    const discarded: (string | null)[] = []
+    const spares: OrcaMobileWebShellSparesModule = {
+      prepareSpare: async () => undefined,
+      takeSpare: async (hostKey, directory) => {
+        taken.push([hostKey, directory])
+        return spareId
+      },
+      discardSpares: async (hostKey) => {
+        discarded.push(hostKey)
+      }
+    }
+    return { spares, taken, discarded }
+  }
+
+  function readySessionId(mounted: Mounted): string | null {
+    const state = mounted.states().at(-1)
+    return state?.kind === 'ready' ? state.sessionId : null
+  }
+
+  it('opens the generation under the id of a page already booted from it', async () => {
+    const fake = fakeSpares('spare-id')
+    const mounted = await ready(fake.spares)
+    const state = mounted.states().at(-1)
+    // Asked for this host's spare from the directory the view is about to be handed.
+    expect(fake.taken).toEqual([
+      [deriveHostCacheKey(HOST_ID), state?.kind === 'ready' ? state.generationDirectory : null]
+    ])
+    expect(readySessionId(mounted)).toBe('spare-id')
+  })
+
+  it('mints its own id when no page was booted from the generation, or the pool refuses', async () => {
+    const none = await ready(fakeSpares(null).spares)
+    expect(readySessionId(none)).toBe('session-id')
+    const failing = fakeSpares(null)
+    failing.spares.takeSpare = () => Promise.reject(new Error('module gone'))
+    const refused = await ready(failing.spares)
+    expect(readySessionId(refused)).toBe('session-id')
+  })
+
+  it('remounts a dead adopted page under a fresh id, never the spare one again', async () => {
+    const mounted = await ready(fakeSpares('spare-id').spares)
+    await act(async () => {
+      mounted.shellFailed('render-process-gone')
+    })
+    expect(readySessionId(mounted)).toBe('session-id')
+  })
+
+  it('drops a spare booted from a generation it is about to delete', async () => {
+    const fake = fakeSpares(null)
+    const mounted = await ready(fake.spares)
+    await act(async () => {
+      mounted.documentLoaded()
+    })
+    await act(async () => {
+      mounted.timers.fire()
+    })
+    expect(fake.discarded).toEqual([deriveHostCacheKey(HOST_ID)])
+  })
   it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
     const mounted = await ready()
     await act(async () => {

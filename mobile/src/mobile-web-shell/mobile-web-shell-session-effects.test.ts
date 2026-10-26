@@ -1,3 +1,4 @@
+import type { OrcaMobileWebShellSparesModule } from '../../modules/orca-mobile-web-shell/src'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-contract'
 
@@ -82,7 +83,8 @@ function collect(): {
 async function downloadEvents(
   client: RpcClient | null,
   store: GenerationStore,
-  downloads = new Set<AbortController>()
+  downloads = new Set<AbortController>(),
+  spares?: OrcaMobileWebShellSparesModule
 ) {
   const { events, send } = collect()
   await download({
@@ -93,6 +95,7 @@ async function downloadEvents(
     runtime: {
       createStore: () => store,
       mintSessionId: () => 's',
+      ...(spares === undefined ? {} : { spares }),
       now: () => 0,
       setTimer: () => () => {}
     },
@@ -103,8 +106,14 @@ async function downloadEvents(
   return events
 }
 
-async function runDownload(client: RpcClient | null, store: GenerationStore) {
-  return (await downloadEvents(client, store)).filter((event) => event.type === 'download-failed')
+async function runDownload(
+  client: RpcClient | null,
+  store: GenerationStore,
+  spares?: OrcaMobileWebShellSparesModule
+) {
+  return (await downloadEvents(client, store, new Set(), spares)).filter(
+    (event) => event.type === 'download-failed'
+  )
 }
 
 describe('the manifest read', () => {
@@ -216,6 +225,21 @@ describe('the download', () => {
       }
     ])
     expect(downloads.size).toBe(0)
+  })
+
+  it('that commits drops a spare booted from the generation it replaced', async () => {
+    const discarded: (string | null)[] = []
+    const spares: OrcaMobileWebShellSparesModule = {
+      prepareSpare: async () => undefined,
+      takeSpare: async () => null,
+      discardSpares: async (hostKey) => {
+        discarded.push(hostKey)
+      }
+    }
+    await runDownload(CLIENT, storeThat('commit'), spares)
+    expect(discarded).toEqual([])
+    await runDownload(CLIENT, storeThat(null), spares)
+    expect(discarded).toEqual(['k'])
   })
 })
 
