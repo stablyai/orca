@@ -230,7 +230,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         localWorktreeGitOptions: localOptions,
         registeredWorktree: refreshed,
         deleteBranch: args.deleteBranch,
-        closeWatcher: args.closeWatchers
+        closeWatcher: args.closeWatchers,
+        signal: checkoutDeleteSignal
       })
       if (recovered) {
         removalResult = recovered
