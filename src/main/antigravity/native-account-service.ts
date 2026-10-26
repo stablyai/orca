@@ -55,6 +55,9 @@ export class AntigravityAccountService {
         return this.state({ vault, current })
       }
       const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
+      if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
+        throw new Error('The native Antigravity account changed. Save the current account again.')
+      }
       const identified = { ...current, identity }
       const latest = this.store.read()
       if (!latest.accounts.some((entry) => matches(entry, identified))) {

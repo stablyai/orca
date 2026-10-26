@@ -177,4 +177,19 @@ describe('Antigravity native account identity and selection', () => {
     expect(resaved.activeAccountId).toBe(saved.activeAccountId)
     expect(h.getVault().accounts[0].credentials).toBe(refreshedWithoutIdToken(2, 'refresh-new'))
   })
+
+  it('rejects a save if the native account changes during identity lookup, then allows retry', async () => {
+    const h = harness(refreshedWithoutIdToken(1))
+    h.lookupIdentity.mockImplementationOnce(async () => {
+      h.setNative(credential('b'))
+      return { issuer: 'https://accounts.google.com', subject: 'a', email: 'a@example.invalid' }
+    })
+
+    await expect(h.service.addCurrentAccount()).rejects.toThrow(
+      'native Antigravity account changed'
+    )
+    expect(h.getVault().accounts).toHaveLength(0)
+    expect(h.getNative()).toBe(credential('b'))
+    expect((await h.service.addCurrentAccount()).accounts).toMatchObject([{ subject: 'b' }])
+  })
 })
