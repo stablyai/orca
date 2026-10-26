@@ -28,7 +28,10 @@ import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
-import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
+import {
+  maybePushMode2031Flip,
+  setThemeWithoutXtermColorSchemeReport
+} from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
@@ -133,7 +136,10 @@ function composedTerminalThemesEqual(a: ITheme | undefined, b: ITheme): boolean 
 }
 
 export function applyTerminalAppearance(
-  manager: PaneManager,
+  manager: Pick<
+    PaneManager,
+    'getPanes' | 'setPaneLigaturesEnabled' | 'setPaneInlineImagesEnabled' | 'setPaneStyleOptions'
+  >,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
   paneFontSizes: Map<number, number>,
@@ -159,9 +165,25 @@ export function applyTerminalAppearance(
   )
 
   for (const pane of manager.getPanes()) {
+    const transport = paneTransports.get(pane.id)
+    const appearancePtyId = transport?.getPtyId()
+    const fitOverride = appearancePtyId ? getFitOverrideForPty(appearancePtyId) : null
+    const connected = transport !== undefined && transport.isConnected()
+    // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
+    const desktopSizesPty = connected && !fitOverride
+    // Why mobile-fit only: a phone answers for itself; a parked desktop that skipped this would repeat the flip later.
+    const reportsColorScheme = connected && fitOverride?.mode !== 'mobile-fit'
+    // Why before the theme write: that write makes xterm report too, so it is muted only when this report went out.
+    const reportedFlip =
+      reportsColorScheme &&
+      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+      if (reportedFlip) {
+        setThemeWithoutXtermColorSchemeReport(pane.terminal, theme)
+      } else {
+        pane.terminal.options.theme = theme
+      }
     }
     // Use configured background: preserving live OSC-11 mutations above means a TUI background change does not re-gate contrast.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
@@ -206,11 +228,7 @@ export function applyTerminalAppearance(
       pane.id,
       resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
     )
-    const transport = paneTransports.get(pane.id)
-    // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
-    const appearancePtyId = transport?.getPtyId()
-    if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
-      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+    if (desktopSizesPty) {
       safeFitAndThen(pane, 'appearance-pty-resize', () => {
         const currentTransport = paneTransports.get(pane.id)
         if (
