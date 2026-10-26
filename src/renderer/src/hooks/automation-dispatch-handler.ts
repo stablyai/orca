@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
@@ -5,7 +6,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
-import { useAppStore } from '@/store'
+import '@/store'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import type {
   AutomationDispatchRequest,
@@ -36,7 +37,7 @@ export async function handleAutomationDispatchRequest({
     // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
     await window.api.automations.markDispatchResult(result)
   }
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
@@ -100,7 +101,7 @@ export async function handleAutomationDispatchRequest({
         currentRunId: run.id,
         // Dispatch runs only on desktop authority, so history reads explicitly target the local runtime.
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
-        state: useAppStore.getState()
+        state: getAgentStatusState()
       })
       if (reusableSession) {
         const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
@@ -211,7 +212,7 @@ export async function handleAutomationDispatchRequest({
       completion.cleanupRunObservers()
       throw error
     }
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     // Scheduled/Run Now dispatch stays in background; explicit row clicks alone navigate.
     if (
       focusBeforeDispatch.activeWorktreeId !== worktree.id &&

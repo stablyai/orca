@@ -33,18 +33,25 @@ const petUrlMock = vi.hoisted(() => ({
 }))
 
 // Mock IPC/assets so this test isolates overlay hit-area structure.
-vi.mock('../../store', () => {
-  const storeState = {
-    petSize: 180,
-    agentStatusByPaneKey: {},
-    agentStatusEpoch: 0,
-    retainedAgentsByPaneKey: {}
-  }
-  const useAppStore = Object.assign(
-    (selector: (state: unknown) => unknown) => selector(storeState),
-    { getState: () => storeState }
-  )
-  return { useAppStore }
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const storeState = {
+      petSize: 180,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      retainedAgentsByPaneKey: {}
+    }
+    const useAppStore = Object.assign(
+      (selector: (state: unknown) => unknown) => selector(storeState),
+      { getState: () => storeState }
+    )
+    return { useAppStore }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('./usePetUrl', () => ({

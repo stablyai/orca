@@ -1,8 +1,9 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -57,7 +58,7 @@ function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   }
 }
 
-function makeState(): AppState {
+function makeState(): AgentStatusReadState {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     activeRepoId: 'repo-1',
@@ -71,11 +72,11 @@ function makeState(): AppState {
       ]
     }
   })
-  return useAppStore.getState()
+  return getAgentStatusOwner(useAppStore).getState()
 }
 
 /** What AiVaultPanel + AiVaultVirtualRow compute for this row while WORKTREE_ID is active. */
-function panelTargets(state: AppState, session: AiVaultSession) {
+function panelTargets(state: AgentStatusReadState, session: AiVaultSession) {
   const { result } = renderHook(() =>
     useAiVaultPanelSessionResume({
       sessions: [session],
@@ -104,7 +105,7 @@ beforeEach(() => {
 
 describe('the tab menu offers exactly what the Session History row offers', () => {
   it('Switch to Chat for a CLI conversation', () => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const session = row()
     const subject: TabSessionHistorySubject = {
       kind: 'cli',
@@ -123,7 +124,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
   })
 
   it('nothing for a CLI conversation a native chat already holds', () => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const owned = row({
       structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
     })
@@ -140,7 +141,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
   })
 
   it("Switch to Chat in the conversation's own worktree when that differs", () => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const session = row({ cwd: '/repo/sibling' })
     const panel = panelTargets(state, session)
 
@@ -157,7 +158,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
   })
 
   it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const subject: TabSessionHistorySubject = {
       kind: 'chat',
       sessionId: 'orca-chat-1',
@@ -201,7 +202,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
         }
       ]
     })
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const session = row({ cwd: '/work/notes' })
     const panel = panelTargets(state, session)
 

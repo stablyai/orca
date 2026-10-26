@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -21,13 +23,10 @@ import {
 } from '../components/sidebar/worktree-card-status-inputs'
 
 // Why: web-session-tabs-sync imports the app-level store singleton; this drives a test store.
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'remote-env-1'
@@ -84,9 +83,12 @@ function mirroredRows(outcome: string) {
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
   })
-  const state = store.getState()
-  store.setState(applyFreshWebSessionTabsSnapshot(state, hostSnapshot(outcome), ENV, T0))
-  const next = store.getState()
+  const state = getAgentStatusOwner(store).getState()
+  applyAgentStatusPatch(
+    store,
+    applyFreshWebSessionTabsSnapshot(state, hostSnapshot(outcome), ENV, T0)
+  )
+  const next = getAgentStatusOwner(store).getState()
   const tabs = next.tabsByWorktree[WT] ?? []
   return buildWorktreeAgentRows({
     tabs,

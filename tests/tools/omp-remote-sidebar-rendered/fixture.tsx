@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { createRoot } from 'react-dom/client'
 import { CompactAgentRow } from '../../../src/renderer/src/components/sidebar/worktree-card-compact-agent-row'
 import { buildWorktreeAgentRows } from '../../../src/renderer/src/components/sidebar/worktree-agent-rows'
@@ -10,8 +11,9 @@ import './fixture.css'
 
 const now = Date.now()
 const worktreeId = 'folder:remote-project'
+const entries: Record<string, AgentStatusEntry> = {}
 const state: Parameters<typeof selectLiveAgentStatusEntriesForWorktree>[0] = {
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: entries,
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
   retainedAgentsByPaneKey: {},
@@ -23,7 +25,7 @@ for (const [tabId, connectionId, prompt] of [
   ['local-tab', undefined, 'Local completed orphan']
 ] as const) {
   const paneKey = makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
-  state.agentStatusByPaneKey[paneKey] = {
+  entries[paneKey] = {
     paneKey,
     tabId,
     worktreeId,

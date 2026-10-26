@@ -36,37 +36,37 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 const TAB = 'tab-main-start'
 const PANE_KEY = `${TAB}:${leafIdForPane(1)}`
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-function setStore(patch: Partial<StoreState>): void {
-  mockStoreState = { ...mockStoreState, ...patch }
+function setStore(patch: Parameters<typeof storeFixture.patch>[0]): void {
+  storeFixture.patch({ ...storeFixture.read(), ...patch })
   for (const listener of storeSubscribers) {
-    listener(mockStoreState)
+    listener(storeFixture.read())
   }
 }
 
 /** Main's frame binding the pane to `ptyId`, as the store shows it. */
 function bindLeaf1(ptyId: string): void {
-  bindsPaneInStore(() => mockStoreState, TAB, leafIdForPane(1))(ptyId)
+  bindsPaneInStore(storeFixture.store, TAB, leafIdForPane(1))(ptyId)
 }
 
 /** Main's start: the frame binds the pane and clears its start status, as main's does. */
 function startLeaf1(ptyId: string): void {
   bindLeaf1(ptyId)
-  mockStoreState = { ...mockStoreState, terminalPaneStartsByPaneKey: {} }
+  storeFixture.patch({ ...storeFixture.read(), terminalPaneStartsByPaneKey: {} })
 }
 
 async function connectWithStart(start: TerminalPaneStart | undefined) {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
   const transport = createMockTransport()
   transportFactoryQueue.push(transport)
   setStore({
     tabsByWorktree: { 'wt-1': [{ id: TAB, ptyId: null }] },
     terminalPaneStartsByPaneKey: start ? { [PANE_KEY]: start } : {}
   })
-  const deps = buildPaneConnectionDeps(() => mockStoreState, { tabId: TAB })
+  const deps = buildPaneConnectionDeps(storeFixture, { tabId: TAB })
   const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
   connectPanePty(...args)
   await flushAsyncTicks()
@@ -79,9 +79,10 @@ describe('a pane main is starting a terminal for', () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     bindPtyConnectionTestMocks({
-      getState: () => mockStoreState,
+      getState: () => storeFixture.read(),
+      getStore: () => storeFixture.store,
       getTransportQueue: () => transportFactoryQueue,
       getTransportOptions: () => [],
       getStoreSubscribers: () => storeSubscribers,
@@ -94,6 +95,7 @@ describe('a pane main is starting a terminal for', () => {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -126,7 +128,7 @@ describe('a pane main is starting a terminal for', () => {
   })
 
   it('attaches a split pane to the terminal main bound it to, not its tab’s', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const newLeaf = leafIdForPane(2)
@@ -136,7 +138,7 @@ describe('a pane main is starting a terminal for', () => {
     })
     // The source pane already shows the tab's terminal.
     const source = createMockTransport('pty-source')
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       tabId: TAB,
       paneTransportsRef: { current: new Map([[1, source]]) }
     })

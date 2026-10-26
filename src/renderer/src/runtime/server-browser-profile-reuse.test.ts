@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-types'
 import {
@@ -24,7 +25,7 @@ function desktopSnapshot(profileId: string | null | undefined) {
   host.setState({
     browserTabsByWorktree: { [WORKSPACE]: [{ ...workspace, sessionProfileId: profileId }] }
   })
-  const snapshot = buildMobileSessionTabSnapshots(host.getState()).find(
+  const snapshot = buildMobileSessionTabSnapshots(getAgentStatusOwner(host).getState()).find(
     (candidate) => candidate.worktree === WORKSPACE
   )
   if (!snapshot) {
@@ -46,7 +47,9 @@ function mirrorOnClient(snapshot: ReturnType<typeof desktopSnapshot>) {
       repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:server' })]
     }
   })
-  client.setState(applyWebSessionTabsSnapshot(client.getState(), snapshot, 'server'))
+  client.setState(
+    applyWebSessionTabsSnapshot(getAgentStatusOwner(client).getState(), snapshot, 'server')
+  )
   return client
 }
 
@@ -101,7 +104,7 @@ describe('server browser profile publication and link reuse', () => {
 
   it('does not infer a remote page profile from its mirrored workspace metadata', () => {
     const client = mirrorOnClient(desktopSnapshot('isolated-login'))
-    const republished = buildMobileSessionTabSnapshots(client.getState()).find(
+    const republished = buildMobileSessionTabSnapshots(getAgentStatusOwner(client).getState()).find(
       (snapshot) => snapshot.worktree === WORKSPACE
     )
     const row = republished?.tabs.find((tab) => tab.type === 'browser')
@@ -114,7 +117,7 @@ describe('server browser profile publication and link reuse', () => {
     const client = mirrorOnClient(snapshot)
     client.setState(
       applyWebSessionTabsSnapshot(
-        client.getState(),
+        getAgentStatusOwner(client).getState(),
         {
           ...snapshot,
           snapshotVersion: snapshot.snapshotVersion + 1,

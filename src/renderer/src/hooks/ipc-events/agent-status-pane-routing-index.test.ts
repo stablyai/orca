@@ -1,6 +1,10 @@
+import type { AppState } from '@/store/types'
+
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '../../store/types'
+
 import {
   createTestStore,
   makeLayout,
@@ -38,7 +42,7 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
     ]
     paneKeys.push(makePaneKey(tabId, LEAF_ID))
   }
-  store.setState({
+  applyAgentStatusPatch(store, {
     repos: [TEST_REPO],
     worktreesByRepo: {
       [TEST_REPO.id]: Array.from({ length: WORKTREE_COUNT }, (_, index) =>
@@ -48,7 +52,7 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
     tabsByWorktree,
     unifiedTabsByWorktree,
     terminalLayoutsByTabId: {}
-  } as Partial<AppState>)
+  })
   return { tabsByWorktree, paneKeys }
 }
 
@@ -63,14 +67,14 @@ describe('agent-status pane routing index memoization', () => {
     resetAgentStatusPaneRoutingIndexCounters()
 
     for (let commit = 0; commit < 100; commit += 1) {
-      const index = createAgentStatusPaneRoutingIndex(store.getState())
+      const index = createAgentStatusPaneRoutingIndex(getAgentStatusOwner(store).getState())
       expect(resolvePaneKeyFromRoutingIndex(index, paneKeys[commit % paneKeys.length]).exists).toBe(
         true
       )
-      store.setState({
-        agentStatusByPaneKey: { ...store.getState().agentStatusByPaneKey },
+      applyAgentStatusPatch(store, {
+        agentStatusByPaneKey: { ...getAgentStatusOwner(store).getState().agentStatusByPaneKey },
         agentStatusEpoch: commit
-      } as Partial<AppState>)
+      })
     }
 
     expect(agentStatusPaneRoutingIndexCounters.indexBuilds).toBe(1)
@@ -84,13 +88,13 @@ describe('agent-status pane routing index memoization', () => {
   it('rebuilds the tab index when the tab map is replaced', () => {
     const store = createTestStore()
     seedLineage(store)
-    createAgentStatusPaneRoutingIndex(store.getState())
+    createAgentStatusPaneRoutingIndex(getAgentStatusOwner(store).getState())
     resetAgentStatusPaneRoutingIndexCounters()
 
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: { ...store.getState().tabsByWorktree }
-    } as Partial<AppState>)
-    createAgentStatusPaneRoutingIndex(store.getState())
+    })
+    createAgentStatusPaneRoutingIndex(getAgentStatusOwner(store).getState())
 
     expect(agentStatusPaneRoutingIndexCounters.tabIndexBuilds).toBe(1)
   })
@@ -98,13 +102,13 @@ describe('agent-status pane routing index memoization', () => {
   it('reuses the index across a layout replacement without re-indexing tabs', () => {
     const store = createTestStore()
     seedLineage(store)
-    createAgentStatusPaneRoutingIndex(store.getState())
+    createAgentStatusPaneRoutingIndex(getAgentStatusOwner(store).getState())
     resetAgentStatusPaneRoutingIndexCounters()
 
-    store.setState({
+    applyAgentStatusPatch(store, {
       terminalLayoutsByTabId: { 'tab-0': makeLayout() }
-    } as Partial<AppState>)
-    createAgentStatusPaneRoutingIndex(store.getState())
+    })
+    createAgentStatusPaneRoutingIndex(getAgentStatusOwner(store).getState())
 
     expect(agentStatusPaneRoutingIndexCounters.indexBuilds).toBe(1)
     expect(agentStatusPaneRoutingIndexCounters.tabIndexBuilds).toBe(0)
@@ -149,7 +153,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
         })
       ]
     }
-    store.setState({
+    applyAgentStatusPatch(store, {
       repos: [TEST_REPO],
       worktreesByRepo: {
         [TEST_REPO.id]: [
@@ -179,7 +183,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
           titlesByLeafId: { [LEAF_ID]: 'Pane title', [OTHER_LEAF_ID]: '' }
         }
       }
-    } as Partial<AppState>)
+    })
 
     const corpus = [
       makePaneKey(duplicateTabId, LEAF_ID),
@@ -192,7 +196,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
       'not-a-pane-key'
     ]
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     const index = createAgentStatusPaneRoutingIndex(state)
     for (const paneKey of corpus) {
       expect({ paneKey, ...resolvePaneKeyFromRoutingIndex(index, paneKey) }).toEqual({

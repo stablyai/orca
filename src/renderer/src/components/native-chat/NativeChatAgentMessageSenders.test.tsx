@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
@@ -22,7 +23,7 @@ const TAB = 'tab-coder'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_coder'
 const SESSION = orcaSessionId('22222222-2222-4222-8222-222222222222')
-const initialState = useAppStore.getInitialState()
+const initialState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 
 function orcaSessionId(id: string): OrcaSessionId {
   if (!isOrcaSessionId(id)) {
@@ -100,17 +101,20 @@ function renderSenders(from: AgentMessageSource, queued = false) {
 
 beforeEach(() => {
   conversationNames.clear()
-  useAppStore.setState({ activeWorktreeId: 'wt-chat', activeWorkspaceExecutionHostId: 'local' })
+  applyAgentStatusPatch(useAppStore, {
+    activeWorktreeId: 'wt-chat',
+    activeWorkspaceExecutionHostId: 'local'
+  })
 })
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  applyAgentStatusPatch(useAppStore, initialState)
 })
 
 describe('the name a sender is shown under', () => {
   it('keeps the host-recorded CLI name even while a different pane title is visible', () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Parser worker' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
@@ -120,13 +124,13 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded CLI name after the terminal is renamed', () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Old name' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
     renderSenders(source({}), true)
     act(() => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'New name' })] }
       })
     })
@@ -136,7 +140,7 @@ describe('the name a sender is shown under', () => {
 
   it("is the chat's tab name for a chat sender open here, as its tab shows it", () => {
     conversationNames.set(SESSION, 'Port the parser')
-    useAppStore.setState({ unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
+    applyAgentStatusPatch(useAppStore, { unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
     renderSenders(
       source({
         address: `orca_session_id:${SESSION}`,
@@ -148,7 +152,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name for a chat sender whose tab has no name of its own', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
+    applyAgentStatusPatch(useAppStore, { unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
     renderSenders(
       source(
         { address: `orca_session_id:${SESSION}`, terminalHandle: null, orcaSessionId: SESSION },
@@ -159,7 +163,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name when its agent row has no name of its own', () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ title: 'Claude Code' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
@@ -173,7 +177,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name for a sender on another host, whatever runs here', () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Local agent' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })

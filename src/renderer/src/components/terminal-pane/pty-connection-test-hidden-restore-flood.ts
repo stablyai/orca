@@ -21,7 +21,7 @@ import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore
 
 // Shared visible-pane driver for the hidden-restore flood/unhide suites (STA-4869).
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -60,9 +60,10 @@ export function installHiddenRestoreFloodSuiteHooks(): void {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     bindPtyConnectionTestMocks({
-      getState: () => mockStoreState,
+      getState: () => storeFixture.read(),
+      getStore: () => storeFixture.store,
       getTransportQueue: () => transportFactoryQueue,
       getTransportOptions: () => createdTransportOptions,
       getStoreSubscribers: () => storeSubscribers,
@@ -74,6 +75,7 @@ export function installHiddenRestoreFloodSuiteHooks(): void {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 }
@@ -89,7 +91,7 @@ export async function connectVisiblePane(): Promise<PaneDrive> {
   })
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
+  const deps = buildPaneConnectionDeps(storeFixture, {
     isVisibleRef: { current: true }
   })
   const disposable = await connectMockPanePty(pane, createManager(1), deps)

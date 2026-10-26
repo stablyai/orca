@@ -1,4 +1,4 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '../agent-status-observers'
 import type {
   AgentStatusEntry,
   AgentType,
@@ -32,7 +32,7 @@ export function getTabIdFromPaneKey(paneKey: string): string | null {
 
 /** True when auto-title generation would no-op without replace (custom/quick/generated). */
 export function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
-  state: AppState,
+  state: AgentStatusReadState,
   tabId: string | null,
   worktreeId?: string | null
 ): boolean {
@@ -65,7 +65,7 @@ export function getLeafIdFromPaneKey(paneKey: string): string | null {
 
 /** Unified chat/nonterminal rows own their cleanup. Terminal ownership requires terminal inventory because unified metadata can lag close. */
 export function openNonTerminalTabIds(
-  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  state: Pick<AgentStatusReadState, 'unifiedTabsByWorktree'>,
   worktreeId: string
 ): Set<string> {
   const tabIds = new Set<string>()
@@ -113,7 +113,10 @@ export function isRecentlyClosedAgentStatusTab(
   return closedTabs[tabId] === true
 }
 
-export function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
+export function findAgentPaneWorktreeId(
+  state: AgentStatusReadState,
+  paneKey: string
+): string | null {
   const tabId = getTabIdFromPaneKey(paneKey)
   if (!tabId) {
     return null
@@ -127,7 +130,7 @@ export function findAgentPaneWorktreeId(state: AppState, paneKey: string): strin
 }
 
 export function findTabForAgentEntry(
-  state: AppState,
+  state: AgentStatusReadState,
   worktreeId: string,
   entry: AgentStatusEntry
 ): TerminalTab | undefined {
@@ -153,7 +156,7 @@ export function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: stri
 }
 
 export function retainedAgentEntryFromLive(
-  state: AppState,
+  state: AgentStatusReadState,
   worktreeId: string,
   entry: AgentStatusEntry,
   agentType: AgentType

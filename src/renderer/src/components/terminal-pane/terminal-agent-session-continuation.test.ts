@@ -23,7 +23,14 @@ const store = {
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>
 }
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: () => store } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))

@@ -54,7 +54,10 @@ const store = {
   setTabBarOrder: vi.fn()
 }
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  return withAgentStatusFixture({ useAppStore: { getState: () => store } }, () => store)
+})
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({

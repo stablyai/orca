@@ -36,15 +36,22 @@ type WorktreeListComponent = React.ComponentType<{
 
 let WorktreeList: WorktreeListComponent
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
-    {
-      getState: () => mockStore.state,
-      subscribe: () => () => {}
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+      {
+        getState: () => mockStore.state,
+        subscribe: () => () => {}
+      }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 // Honor getItemKey so toggling standalone/lineage-group rows changes React keys and reproduces the card remount.
 vi.mock('@tanstack/react-virtual', () => ({

@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
@@ -22,17 +24,21 @@ function status(tabId: string, state: AgentStatusEntry['state']): AgentStatusEnt
 }
 
 function setStatuses(...entries: AgentStatusEntry[]): void {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     agentStatusByPaneKey: Object.fromEntries(entries.map((entry) => [entry.paneKey, entry]))
   })
 }
 
-const ready = (): string[] => selectReadyAccountRestartPtyIds(useAppStore.getState(), 'tab-1')
+const ready = (): string[] =>
+  selectReadyAccountRestartPtyIds(getAgentStatusOwner(useAppStore).getState(), 'tab-1')
 
 describe('selectReadyAccountRestartPtyIds', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
+    applyAgentStatusPatch(useAppStore, {
       terminalLayoutsByTabId: Object.fromEntries(
         ['tab-1', 'tab-2'].map((tabId) => [
           tabId,

@@ -1,3 +1,4 @@
+import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -17,13 +18,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionDeliberateSleepGuardTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('deliberate sleep keeps mounted panes cold', () => {
@@ -33,9 +34,10 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -49,20 +51,21 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     afterEach(async () => {
       const { clearWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       clearWorktreeSleepIntent('wt-1')
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     // Manual sleep retains tab.ptyId as a wake hint; unguarded remount would reattach and respawn its dead shell (#10205).
     it('does not reattach a slept pane through its retained session id', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         activeWorktreeId: 'wt-other',
         tabsByWorktree: { 'wt-1': [{ id: 'tab-slept', ptyId: 'wt-1@@dead' }] }
-      }
+      })
       markWorktreeSleepIntent('wt-1')
       const deps = createDeps({
         tabId: 'tab-slept',
@@ -78,11 +81,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('does not fresh-spawn a slept pane that has no session id', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = { ...mockStoreState, activeWorktreeId: 'wt-other' }
+      storeFixture.patch({ ...storeFixture.read(), activeWorktreeId: 'wt-other' })
       markWorktreeSleepIntent('wt-1')
       const deps = createDeps({ tabId: 'tab-slept-bare', isVisibleRef: { current: false } })
 
@@ -93,16 +96,16 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('connects a waiting pane once the workspace is woken', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         activeWorktreeId: 'wt-other',
         tabsByWorktree: { 'wt-1': [{ id: 'tab-woken', ptyId: 'wt-1@@dead' }] }
-      }
+      })
       markWorktreeSleepIntent('wt-1')
       const deps = createDeps({
         tabId: 'tab-woken',
@@ -122,16 +125,16 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('does not connect a waiting pane whose tab was remounted by the wake', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         activeWorktreeId: 'wt-other',
         tabsByWorktree: { 'wt-1': [{ id: 'tab-remounted', ptyId: 'wt-1@@dead', generation: 0 }] }
-      }
+      })
       markWorktreeSleepIntent('wt-1')
       const deps = createDeps({
         tabId: 'tab-remounted',
@@ -143,10 +146,10 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       await flushAsyncTicks()
 
       // Why: activation bumps generation in the same set() that precedes the clear.
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-remounted', ptyId: 'wt-1@@dead', generation: 1 }] }
-      }
+      })
       clearWorktreeSleepIntent('wt-1')
       await flushAsyncTicks()
 
@@ -154,18 +157,26 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('resumes a waiting pane mounted under a unified tab id', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         activeWorktreeId: 'wt-other',
         tabsByWorktree: { 'wt-1': [{ id: 'tab-entity', ptyId: null, generation: 3 }] },
         getTab: (id: string) =>
-          id === 'unified-1' ? { id, contentType: 'terminal', entityId: 'tab-entity' } : null
-      } as never
+          id === 'unified-1'
+            ? makeUnifiedTab({
+                id,
+                worktreeId: 'wt-1',
+                groupId: 'group-1',
+                contentType: 'terminal',
+                entityId: 'tab-entity'
+              })
+            : null
+      })
       markWorktreeSleepIntent('wt-1')
       const deps = createDeps({ tabId: 'unified-1', isVisibleRef: { current: false } })
 
@@ -180,7 +191,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('re-arms after a wake so a second sleep can hold the pane again', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -225,7 +236,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
           })
         )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         sleepIntent.markWorktreeSleepIntent('wt-1')
@@ -253,7 +264,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('still connects a slept pane that carries a queued startup', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -271,7 +282,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('connects normally once the marker is released', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const deps = createDeps({

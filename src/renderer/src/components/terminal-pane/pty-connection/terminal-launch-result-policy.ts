@@ -2,7 +2,7 @@ import {
   agentProviderSessionsEqual,
   type TerminalLaunchResult
 } from '../../../../../shared/agent-session-resume'
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -14,7 +14,7 @@ export function captureTerminalLaunchContext(
   session: ConnectPanePtySession | ReattachPayloadSession,
   startup: SavedStartup
 ) {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   return {
     startup,
     registration: state.agentLaunchConfigByPaneKey[session.cacheKey],
@@ -48,7 +48,7 @@ export function applyTerminalLaunchResult(
   const rejected = Boolean(
     result.agentResumeRefused || result.agentResumeUnavailable || candidateRejected
   )
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const currentStartup = session.paneStartup
   const currentRegistration = state.agentLaunchConfigByPaneKey[session.cacheKey]
   const superseded =

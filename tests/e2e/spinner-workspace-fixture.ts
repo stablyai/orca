@@ -48,21 +48,23 @@ export async function seedSpinnerWorkspaces(
 ) {
   await attachRepoAndOpenTerminal(page, repoPath)
   await page.evaluate(async () => {
-    const store = window.__store!
-    const repo = store.getState().repos[0]
-    await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
-    const paths = (store.getState().detectedWorktreesByRepo[repo.id]?.worktrees ?? [])
+    const repo = window.__agentStatus!.getState().repos[0]
+    await window.__agentStatus!.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
+    const paths = (
+      window.__agentStatus!.getState().detectedWorktreesByRepo[repo.id]?.worktrees ?? []
+    )
       .filter((worktree) => !worktree.selectedCheckout)
       .map((worktree) => worktree.path)
-    await store.getState().updateRepo(repo.id, {
+    await window.__agentStatus!.getState().updateRepo(repo.id, {
       externalWorktreeVisibility: 'show',
       importedExternalWorktreePaths: paths,
       externalWorktreeInboxBaselinePaths: paths
     })
-    await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
+    await window.__agentStatus!.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
   })
   await page.waitForFunction(
-    (count) => Object.values(window.__store!.getState().worktreesByRepo).flat().length === count,
+    (count) =>
+      Object.values(window.__agentStatus!.getState().worktreesByRepo).flat().length === count,
     options.worktrees
   )
   return configureRendererScaleFixture(page, options, repoPath)
@@ -70,12 +72,11 @@ export async function seedSpinnerWorkspaces(
 
 export async function refreshSpinnerAgents(page: Page) {
   return page.evaluate(() => {
-    const store = window.__store!
-    const agents = Object.values(store.getState().agentStatusByPaneKey).filter((entry) =>
-      entry.prompt?.startsWith('Idle CPU agent ')
+    const agents = Object.values(window.__agentStatus!.getState().agentStatusByPaneKey).filter(
+      (entry) => entry.prompt?.startsWith('Idle CPU agent ')
     )
     for (const entry of agents) {
-      store.getState().setAgentStatus(
+      window.__agentStatus!.getState().setAgentStatus(
         entry.paneKey,
         {
           state: 'working',
@@ -97,16 +98,16 @@ export async function refreshSpinnerAgents(page: Page) {
 
 export async function startSpinnerStatusTraffic(page: Page) {
   return page.evaluateHandle(() => {
-    const store = window.__store!
-    const keys = Object.values(store.getState().agentStatusByPaneKey)
+    const keys = Object.values(window.__agentStatus!.getState().agentStatusByPaneKey)
       .filter((entry) => entry.prompt?.startsWith('Idle CPU agent '))
       .map((entry) => entry.paneKey)
     let cursor = 0
     let updates = 0
     const timer = setInterval(() => {
       for (let index = 0; index < Math.min(8, keys.length); index++) {
-        const entry = store.getState().agentStatusByPaneKey[keys[cursor++ % keys.length]]
-        store.getState().setAgentStatus(
+        const entry =
+          window.__agentStatus!.getState().agentStatusByPaneKey[keys[cursor++ % keys.length]]
+        window.__agentStatus!.getState().setAgentStatus(
           entry.paneKey,
           {
             state: 'working',

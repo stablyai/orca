@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 
@@ -27,7 +28,7 @@ function reclaim(session?: string) {
         }
       : undefined
   )
-  return store.getState().agentStatusByPaneKey[PANE_KEY]
+  return getAgentStatusOwner(store).getEntry(PANE_KEY)
 }
 
 describe('pane owner reclaim', () => {

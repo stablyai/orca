@@ -19,8 +19,13 @@ import { openFileInBrowserTab } from './file-preview'
 import { openWorkspaceBrowserTabForLink } from './workspace-browser-tab-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
-const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.getState() } }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    get getState() {
+      return store.getState
+    }
+  }
+}))
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
@@ -33,7 +38,6 @@ let store: BrowserLinkTestStore
 
 beforeEach(() => {
   store = createBrowserLinkTestStore()
-  mocks.getState.mockImplementation(() => store.getState())
 })
 
 function context(explicit = false) {

@@ -19,23 +19,30 @@ vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   findStructuredAgentSessionTab: vi.fn(() => null)
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/store', () => {
-  const state = {
-    agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
-    sleepingAgentSessionsByPaneKey: {},
-    tabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    unifiedTabsByWorktree: {},
-    get folderWorkspaces() {
-      return mocks.folderWorkspaces
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const state = {
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {},
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabsByWorktree: {},
+      get folderWorkspaces() {
+        return mocks.folderWorkspaces
+      }
     }
-  }
-  return {
-    useAppStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
-      getState: () => state
-    })
-  }
+    return {
+      useAppStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
+        getState: () => state
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'

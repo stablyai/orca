@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict'
+import { TEST_REPO, makeWorktree, makeTab } from '@/store/slices/store-test-helpers'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-harness'
@@ -14,19 +17,22 @@ describe('useIpcEvents updater integration', () => {
     const { focusTerminalTabSurface, storeState, createTerminalListenerRef } = scenario
     const { requestTerminalCreateListenerRef, focusTerminalListenerRef } = scenario
 
+    assert.ok(storeState.settings, 'Expected initialized fixture settings')
+
     // The harness registers the listener before returning; narrow it once.
     if (!createTerminalListenerRef.current) {
       throw new Error('Expected create-terminal listener to be registered')
     }
 
     // Reproduce local default → remote navigation → local reveal → restart; transient connection/navigation must not change durable default.
-    storeState.repos.push({
+    storeState.repos = storeState.repos.concat({
+      ...TEST_REPO,
       id: 'windows-2-repo',
       connectionId: null,
       executionHostId: 'runtime:windows-2'
     })
     storeState.worktreesByRepo['windows-2-repo'] = [
-      { id: 'windows-2-worktree', repoId: 'windows-2-repo' }
+      makeWorktree({ id: 'windows-2-worktree', repoId: 'windows-2-repo' })
     ]
     storeState.activeWorktreeId = 'windows-2-worktree'
     createTab.mockClear()
@@ -59,10 +65,7 @@ describe('useIpcEvents updater integration', () => {
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
 
-    storeState.settings = {
-      ...storeState.settings,
-      activeRuntimeEnvironmentId: 'windows-2'
-    }
+    storeState.settings.activeRuntimeEnvironmentId = 'windows-2'
 
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -89,10 +92,7 @@ describe('useIpcEvents updater integration', () => {
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
     expect(storeState.settings.activeRuntimeEnvironmentId).toBe('windows-2')
 
-    storeState.settings = {
-      ...storeState.settings,
-      activeRuntimeEnvironmentId: undefined
-    }
+    storeState.settings.activeRuntimeEnvironmentId = undefined
 
     createTab.mockClear()
     setActiveView.mockClear()
@@ -182,10 +182,7 @@ describe('useIpcEvents updater integration', () => {
     queueTabStartupCommand.mockClear()
     focusRuntimeTerminalSurface.mockClear()
     focusTerminalTabSurface.mockClear()
-    storeState.settings = {
-      ...storeState.settings,
-      experimentalNativeChat: true
-    }
+    storeState.settings.experimentalNativeChat = true
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
       worktreeId: 'wt-2',
@@ -284,17 +281,15 @@ describe('useIpcEvents updater integration', () => {
 
     createTab.mockClear()
     replyTerminalCreate.mockClear()
-    storeState.repos = [
-      ...storeState.repos,
-      {
-        id: 'repo-remote',
-        connectionId: null,
-        executionHostId: 'runtime:focused-runtime'
-      }
-    ]
+    storeState.repos = storeState.repos.concat({
+      ...TEST_REPO,
+      id: 'repo-remote',
+      connectionId: null,
+      executionHostId: 'runtime:focused-runtime'
+    })
     storeState.worktreesByRepo = {
       ...storeState.worktreesByRepo,
-      'repo-remote': [{ id: 'wt-remote', repoId: 'repo-remote' }]
+      'repo-remote': [makeWorktree({ id: 'wt-remote', repoId: 'repo-remote' })]
     }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-remote-owner-blocked',
@@ -311,18 +306,21 @@ describe('useIpcEvents updater integration', () => {
 
     createTab.mockClear()
     replyTerminalCreate.mockClear()
-    storeState.repos = [
-      ...storeState.repos,
-      {
-        id: 'repo-conflicting-owner',
-        connectionId: null,
-        executionHostId: 'runtime:focused-runtime'
-      }
-    ]
+    storeState.repos = storeState.repos.concat({
+      ...TEST_REPO,
+      id: 'repo-conflicting-owner',
+      connectionId: null,
+      executionHostId: 'runtime:focused-runtime'
+    })
     storeState.worktreesByRepo = {
       ...storeState.worktreesByRepo,
-      'repo-1': [...storeState.worktreesByRepo['repo-1'], { id: 'wt-ambiguous', repoId: 'repo-1' }],
-      'repo-conflicting-owner': [{ id: 'wt-ambiguous', repoId: 'repo-conflicting-owner' }]
+      'repo-1': [
+        ...storeState.worktreesByRepo['repo-1'],
+        makeWorktree({ id: 'wt-ambiguous', repoId: 'repo-1' })
+      ],
+      'repo-conflicting-owner': [
+        makeWorktree({ id: 'wt-ambiguous', repoId: 'repo-conflicting-owner' })
+      ]
     }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-ambiguous-owner',
@@ -600,7 +598,9 @@ describe('useIpcEvents updater integration', () => {
     )
 
     storeState.tabsByWorktree = {
-      'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
+      'wt-2': [
+        makeTab({ id: 'tab-existing', worktreeId: 'wt-2', ptyId: 'pty-bg', title: 'Terminal 1' })
+      ]
     }
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     createTab.mockClear()
@@ -633,7 +633,7 @@ describe('useIpcEvents updater integration', () => {
     const pendingTabId = 'ba416891-cbcb-4778-8d9c-d8907f31a68c'
     const pendingLeafId = 'e4583c63-2d9a-4877-b66f-05c0150f05f9'
     storeState.tabsByWorktree = {
-      'wt-2': [{ id: pendingTabId, ptyId: null, title: 'Terminal 3' }]
+      'wt-2': [makeTab({ id: pendingTabId, worktreeId: 'wt-2', ptyId: null, title: 'Terminal 3' })]
     }
     storeState.ptyIdsByTabId = { [pendingTabId]: [] }
     storeState.terminalLayoutsByTabId = {
@@ -690,7 +690,9 @@ describe('useIpcEvents updater integration', () => {
     })
 
     storeState.tabsByWorktree = {
-      'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
+      'wt-2': [
+        makeTab({ id: 'tab-existing', worktreeId: 'wt-2', ptyId: 'pty-bg', title: 'Terminal 1' })
+      ]
     }
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     storeState.terminalLayoutsByTabId = {
@@ -799,7 +801,7 @@ describe('useIpcEvents updater integration', () => {
       }
     })
 
-    const splitLayout = {
+    const splitLayout: TerminalLayoutSnapshot = {
       root: {
         type: 'split',
         direction: 'vertical',

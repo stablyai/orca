@@ -20,6 +20,7 @@ import { makeWorktree, makeUnifiedTab, TEST_REPO } from '@/store/slices/store-te
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import { WorkspaceAttachmentOrigins } from '@/components/sidebar/WorkspaceAttachmentOrigins'
 import { useAppStore } from '@/store'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'
 import { readStructuredChatTabName } from './structured-chat-tab-name'
@@ -135,7 +136,7 @@ function partitionedSessionApi(partitions: Record<string, WorkspaceSessionState>
 const stops: (() => void)[] = []
 beforeEach(() => {
   vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  applyAgentStatusPatch(useAppStore, { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} })
   mock.activates.mockClear()
   mock.deactivates.mockClear()
   mock.rpc.mockReset()
@@ -265,7 +266,7 @@ function seedTwin(tab: Tab) {
   seed(tab)
   const folder = makeFolderWorkspace({ id: 'twin' })
   const paneKey = makePaneKey(tab.id, '11111111-1111-4111-8111-111111111111')
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeWorktreeId: tab.worktreeId,
     activeWorkspaceExecutionHostId: 'runtime:paired',
     folderWorkspaces: [

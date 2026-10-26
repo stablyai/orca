@@ -1,6 +1,6 @@
+import type { connectPanePty as ConnectPanePty } from './pty-connection'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connectPanePty } from './pty-connection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
@@ -31,7 +31,8 @@ const {
   toastInfo: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let connectPanePty: typeof ConnectPanePty
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -48,7 +49,12 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => mockStoreState,
+    get getState() {
+      return storeFixture.store.getState
+    },
+    get setState() {
+      return storeFixture.store.setState
+    },
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
       return () => {
@@ -94,7 +100,7 @@ function connectPlainPane(
   const connectArgs = [
     createPane(1),
     createManager(1),
-    buildPaneConnectionDeps(() => mockStoreState, overrides)
+    buildPaneConnectionDeps(storeFixture, overrides)
   ]
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
   return connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
@@ -106,13 +112,15 @@ describe('connectPanePty pre-connect input', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
+    ;({ connectPanePty } = storeFixture.own(await import('./pty-connection')))
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
     layoutOwner.isMain = false
     clearWorktreeSleepIntent('wt-1')
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -153,10 +161,16 @@ describe('connectPanePty pre-connect input', () => {
 
   it('keeps today’s drop for a pane that resumes a sleeping agent', async () => {
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+    storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
       tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      prompt: '',
+      state: 'working',
+      capturedAt: 1_000,
+      updatedAt: 1_000
     }
     transportFactoryQueue.push(createMockTransport())
 
@@ -168,7 +182,7 @@ describe('connectPanePty pre-connect input', () => {
 
   it('keeps today’s drop for a pane that resumes its live agent status entry', async () => {
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: '',
       agentType: 'claude',
@@ -177,7 +191,7 @@ describe('connectPanePty pre-connect input', () => {
       stateStartedAt: 1_000,
       stateHistory: [],
       providerSession: { key: 'session_id', id: 'session-1' }
-    }
+    })
     transportFactoryQueue.push(createMockTransport())
 
     const binding = connectPlainPane()
@@ -205,7 +219,7 @@ describe('connectPanePty pre-connect input', () => {
     expect(typeof release === 'function' && release()).toBe(true)
 
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: '',
       agentType: 'claude',
@@ -214,7 +228,7 @@ describe('connectPanePty pre-connect input', () => {
       stateStartedAt: 1_000,
       stateHistory: [],
       providerSession: { key: 'session_id', id: 'session-1' }
-    }
+    })
 
     expect(typeof release === 'function' && release()).toBe(false)
     binding.dispose()
@@ -227,10 +241,16 @@ describe('connectPanePty pre-connect input', () => {
     const binding = connectPlainPane({ cwdPromise: new Promise<string>(() => {}) })
     const release = createdTransportOptions[0]?.releasePreconnectInput
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+    storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
       tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      prompt: '',
+      state: 'working',
+      capturedAt: 1_000,
+      updatedAt: 1_000
     }
 
     expect(typeof release === 'function' && release()).toBe(false)

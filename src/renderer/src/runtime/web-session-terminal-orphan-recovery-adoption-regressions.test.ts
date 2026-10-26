@@ -20,7 +20,12 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))

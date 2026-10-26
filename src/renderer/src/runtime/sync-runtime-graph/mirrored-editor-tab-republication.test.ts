@@ -13,7 +13,12 @@ import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } from './sync-key'
 import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'
 
-vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 describe('mirrored editor tab republication', () => {
   beforeEach(resetWebSessionTabsSyncTestState)

@@ -1,20 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import {
-  resetAgentPaneAuthorityAliasesForTests,
-  resolveAgentPaneAuthorityKey
-} from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 
 describe('setTabLayout PTY ownership', () => {
-  beforeEach(() => {
-    resetAgentPaneAuthorityAliasesForTests()
-  })
-
   it('normalizes duplicate PTY surfaces at the renderer state boundary', () => {
     const store = createTestStore()
 
@@ -88,16 +81,24 @@ describe('setTabLayout PTY ownership', () => {
       }
     })
 
-    expect(store.getState().agentStatusByPaneKey[removedPaneKey]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[retainedPaneKey]?.prompt).toBe('before repair')
-    expect(resolveAgentPaneAuthorityKey(removedPaneKey)).toBe(retainedPaneKey)
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[removedPaneKey]
+    ).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[retainedPaneKey]?.prompt
+    ).toBe('before repair')
+    expect(
+      getAgentStatusOwner(store).authority().resolveAgentPaneAuthorityKey(removedPaneKey)
+    ).toBe(retainedPaneKey)
 
     store.getState().setAgentStatus(removedPaneKey, {
       state: 'working',
       prompt: 'after repair',
       agentType: 'codex'
     })
-    expect(store.getState().agentStatusByPaneKey[retainedPaneKey]?.prompt).toBe('after repair')
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[retainedPaneKey]?.prompt
+    ).toBe('after repair')
   })
 
   it('moves hydrated pane authority onto the retained PTY leaf', () => {
@@ -142,9 +143,15 @@ describe('setTabLayout PTY ownership', () => {
       }
     })
 
-    expect(store.getState().agentStatusByPaneKey[removedPaneKey]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[retainedPaneKey]?.prompt).toBe('before hydration')
-    expect(resolveAgentPaneAuthorityKey(removedPaneKey)).toBe(retainedPaneKey)
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[removedPaneKey]
+    ).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[retainedPaneKey]?.prompt
+    ).toBe('before hydration')
+    expect(
+      getAgentStatusOwner(store).authority().resolveAgentPaneAuthorityKey(removedPaneKey)
+    ).toBe(retainedPaneKey)
   })
 
   it('does not steal authority from a pane that was already detached to another tab', () => {
@@ -179,9 +186,15 @@ describe('setTabLayout PTY ownership', () => {
       }
     })
 
-    expect(resolveAgentPaneAuthorityKey(removedPaneKey)).toBe(detachedPaneKey)
-    expect(resolveAgentPaneAuthorityKey(detachedPaneKey)).toBe(detachedPaneKey)
-    expect(resolveAgentPaneAuthorityKey(retainedPaneKey)).toBe(retainedPaneKey)
+    expect(
+      getAgentStatusOwner(store).authority().resolveAgentPaneAuthorityKey(removedPaneKey)
+    ).toBe(detachedPaneKey)
+    expect(
+      getAgentStatusOwner(store).authority().resolveAgentPaneAuthorityKey(detachedPaneKey)
+    ).toBe(detachedPaneKey)
+    expect(
+      getAgentStatusOwner(store).authority().resolveAgentPaneAuthorityKey(retainedPaneKey)
+    ).toBe(retainedPaneKey)
   })
 
   it('repairs duplicate legacy leaf ownership without throwing', () => {

@@ -38,9 +38,16 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('../store', () => ({
-  useAppStore: { getState: mocks.getState, setState: mocks.setState, subscribe: mocks.subscribe }
-}))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: mocks.getState, setState: mocks.setState, subscribe: mocks.subscribe }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('../lib/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => ENVIRONMENT_ID
 }))

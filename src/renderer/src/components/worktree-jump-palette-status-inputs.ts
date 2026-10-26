@@ -1,7 +1,7 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 
 export type PaletteStatusInputsState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'runtimePaneTitlesByTabId'
   | 'ptyIdsByTabId'
@@ -57,7 +57,7 @@ export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
 
 /** Keep tab membership and PTY liveness live through close animation; hot status maps stay in the open-time snapshot. */
 export function selectPaletteStatusInputs(
-  s: PaletteStatusInputsState,
+  s: PaletteStatusInputs,
   active: boolean
 ): PaletteStatusInputs {
   if (!active) {

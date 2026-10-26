@@ -24,9 +24,16 @@ const mocks = vi.hoisted(() => ({
   buildDashboardBucketCounts: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+  }
+  const readFixture = () => mocks.state
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('./build-dashboard-bucket-counts', () => ({
   buildDashboardBucketCounts: mocks.buildDashboardBucketCounts,

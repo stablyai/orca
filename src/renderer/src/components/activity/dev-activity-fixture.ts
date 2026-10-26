@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -62,7 +63,7 @@ function fixtureTab(id: string, title: string, sortOrder: number): TerminalTab {
 
 /** Populate a fresh development profile with representative activity rows. */
 export function seedDevActivityFixture(): void {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   if (state.repos.length > 0 || Object.keys(state.agentStatusByPaneKey).length > 0) {
     return
   }

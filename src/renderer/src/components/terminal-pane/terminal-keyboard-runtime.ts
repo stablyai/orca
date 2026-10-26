@@ -25,6 +25,7 @@ import {
 } from './terminal-captured-input-dispatch'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { useAppStore } from '@/store'
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
@@ -208,7 +209,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     if (foreground?.agent && !foreground.shellForeground) {
       return false
     }
-    const hookRow = state.agentStatusByPaneKey[paneKey]
+    const hookRow = getAgentStatusEntry(paneKey)
     if (hookRow && hookRow.state !== 'done') {
       return false
     }

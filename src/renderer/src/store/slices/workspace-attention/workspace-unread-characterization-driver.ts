@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../../agent-status-commit'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
@@ -20,7 +21,7 @@ export function completeAgentTurn(
   store: AttentionStore,
   target: { worktreeId: string; paneKey: string | null }
 ): void {
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   const decision = resolveAgentAttention(
     {
       subject: { workspaceId: target.worktreeId, surfaceKey: target.paneKey ?? undefined },
@@ -64,7 +65,7 @@ export function toggleUnreadByUser(
 
 /** on-screen-attention-scan: the viewed terminal tab's agent is acknowledged (markers are the scan's). */
 export function autoAckViewedTab(store: AttentionStore, target: PaneTarget): void {
-  acknowledgeViewedAutoAckTarget(store.getState(), {
+  acknowledgeViewedAutoAckTarget(getAgentStatusOwner(store).getState(), {
     tabId: target.tabId,
     worktreeId: target.worktreeId,
     surfaceKind: 'terminal'

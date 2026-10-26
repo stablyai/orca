@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 /** Host tab retraction must sweep renderer status and plant close markers like local close (STA-4593). Client-owned rows bypass normal mirror deletion and lose their only reachable pane keys at retraction; done rows otherwise become retained ghosts. Exercise real mirror, retention and sidebar logic with fake clocks. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -7,7 +9,7 @@ import type {
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { AppState } from '../store/types'
+
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import {
   markRendererOwnedAgentStatusWrite,
@@ -32,15 +34,6 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../components/sidebar/worktree-card-status-inputs'
-
-// Mirror imports app store singleton; redirect it to this createTestStore harness.
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'web-env-1'
@@ -136,13 +129,14 @@ function applyHostSnapshot(
   now: number,
   opts?: { expectChange?: boolean }
 ): void {
-  vi.setSystemTime(now)
-  const state = store.getState()
-  const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
-  if (opts?.expectChange !== false) {
-    expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
-  }
-  store.setState(patch as Partial<AppState>)
+  applyAgentStatusPatch(store, (state) => {
+    vi.setSystemTime(now)
+    const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
+    if (opts?.expectChange !== false) {
+      expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
+    }
+    return patch
+  })
 }
 
 /** Replay paired pty-connection ownership: claim on transport creation, verify on byte writes, release on unmount. */
@@ -178,7 +172,7 @@ function replayRetainedAgentsSync(
   previousAgents: RetainedSyncAgents,
   now: number
 ): RetainedSyncAgents {
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
     repos: state.repos,
     worktreesByRepo: state.worktreesByRepo,
@@ -210,7 +204,7 @@ function seedPairedClientStore(): TestStore {
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -222,7 +216,7 @@ type SidebarObservation = {
 
 /** Byte-identical to useWorktreeAgentRows' inputs, minus React. */
 function observeSidebar(store: TestStore, now: number): SidebarObservation {
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   const tabs = state.tabsByWorktree[WT] ?? []
   const rows = buildWorktreeAgentRows({
     tabs,
@@ -267,7 +261,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       }),
       T0
     )
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]).toBeDefined()
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]).toBeDefined()
     // Migration entries can also render ghosts; sweep them with retracted status.
     for (const [ptyId, hostTabId, leafId] of [
       ['pty-migration-ghost', RETRACTED_TAB, RETRACTED_LEAF],
@@ -295,10 +289,12 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0 + 2_000
     )
 
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]).toBeUndefined()
     expect(store.getState().migrationUnsupportedByPtyId['pty-migration-ghost']).toBeUndefined()
     // Negative safety: the surviving tab keeps its row and its migration entry.
-    expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(KEEP_TAB, KEEP_LEAF)]).toBeDefined()
+    expect(
+      getAgentStatusOwner(store).getSnapshot()[mirrorPaneKey(KEEP_TAB, KEEP_LEAF)]
+    ).toBeDefined()
     expect(store.getState().migrationUnsupportedByPtyId['pty-migration-keep']).toBeDefined()
   })
 
@@ -314,7 +310,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0
     )
     const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('working')
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state).toBe('working')
 
     applyHostSnapshot(
       store,
@@ -333,13 +329,13 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
 
     const observed = observeSidebar(store, T0 + 4_000)
     const evidence = JSON.stringify(
-      { observed, ghost: store.getState().agentStatusByPaneKey[GHOST_PANE_KEY] },
+      { observed, ghost: getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY] },
       null,
       2
     )
     expect(observed.tabIds, evidence).toEqual([mirrorTabId(KEEP_TAB)])
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY],
       `a live agent row outlived the tab the host retracted\n${evidence}`
     ).toBeUndefined()
     expect(
@@ -420,7 +416,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
     previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 2_500)
 
     expect(store.getState().retainedAgentsByPaneKey[GHOST_PANE_KEY]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]).toBeUndefined()
   })
 
   it('a worktree tombstone frame must not sweep a client-owned row it merely un-mirrors', () => {
@@ -435,14 +431,14 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0
     )
     const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('working')
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state).toBe('working')
 
     // Inventory omission clears the mirror but proves no host close; sibling environments may still publish the tab.
     applyHostSnapshot(store, makeWorktreeRemovalFrame(), T0 + 1_000)
     expect(store.getState().tabsByWorktree[WT] ?? []).toEqual([])
 
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY],
       'a tombstone frame swept a client-owned row whose tab is still open on the host'
     ).toBeDefined()
     expect(
@@ -463,7 +459,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
     expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toContain(
       mirrorTabId(RETRACTED_TAB)
     )
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('working')
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state).toBe('working')
     release()
   })
 
@@ -485,7 +481,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
     expect(store.getState().tabsByWorktree[WT] ?? []).toEqual([])
 
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY],
       'a host removal tombstone swept a client-owned row it merely un-mirrors'
     ).toBeDefined()
     expect(
@@ -545,7 +541,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0 + 4_500
     )
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state,
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state,
       'a returning mirrored tab was left permanently unable to acquire agent status'
     ).toBe('working')
     release2()
@@ -593,7 +589,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
         { tabId: mirrorTabId(RETRACTED_TAB), worktreeId: WT }
       )
     previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 4_000)
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('done')
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state).toBe('done')
 
     // After unmount, ordinary disappearance of non-client-owned done status must remain retainable.
     release()
@@ -607,7 +603,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0 + 601_000
     )
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY],
       'precondition: the released done row must be removed by the mirror delete loop'
     ).toBeUndefined()
     previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 601_500)
@@ -630,27 +626,28 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0
     )
     const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('working')
+    expect(getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY]?.state).toBe('working')
 
     // Reconnect batches retraction then status republication; later rows must not undo the sweep.
     vi.setSystemTime(T0 + 2_000)
-    const state = store.getState()
-    const patch = applyFreshWebSessionTabsSnapshots(
-      state,
-      [
-        makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),
-        makeHostSnapshot({
-          snapshotVersion: 3,
-          hostTabIds: [KEEP_TAB],
-          hostNow: T0 + 1_500,
-          hostAgentStatusTabIds: [KEEP_TAB]
-        })
-      ],
-      ENV,
-      T0 + 2_000
-    )
-    expect(patch, 'the batch must pass the freshness gate').not.toBe(state)
-    store.setState(patch as Partial<AppState>)
+    applyAgentStatusPatch(store, (state) => {
+      const patch = applyFreshWebSessionTabsSnapshots(
+        state,
+        [
+          makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),
+          makeHostSnapshot({
+            snapshotVersion: 3,
+            hostTabIds: [KEEP_TAB],
+            hostNow: T0 + 1_500,
+            hostAgentStatusTabIds: [KEEP_TAB]
+          })
+        ],
+        ENV,
+        T0 + 2_000
+      )
+      expect(patch, 'the batch must pass the freshness gate').not.toBe(state)
+      return patch
+    })
     release()
 
     const observed = observeSidebar(store, T0 + 3_000)
@@ -658,11 +655,13 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       mirrorTabId(KEEP_TAB)
     ])
     expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      getAgentStatusOwner(store).getSnapshot()[GHOST_PANE_KEY],
       'the batch apply left a ghost row the singular apply sweeps'
     ).toBeUndefined()
     expect(observed.rowPaneKeys.filter((paneKey) => paneKey === GHOST_PANE_KEY)).toEqual([])
     // Negative safety: the batch's later snapshot still landed its host row.
-    expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(KEEP_TAB, KEEP_LEAF)]).toBeDefined()
+    expect(
+      getAgentStatusOwner(store).getSnapshot()[mirrorPaneKey(KEEP_TAB, KEEP_LEAF)]
+    ).toBeDefined()
   })
 })

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 // Verify sidebar/status and chat/channel child views agree through parent transport loss and stale rows.
@@ -19,12 +20,12 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import type { AppState } from '@/store/types'
+
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState> & { testRuntimeOwner?: string | null }) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -44,8 +45,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
   const useAppStore = createTestStore()
-  mocks.holder.store = useAppStore
+  mocks.holder.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 

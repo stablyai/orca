@@ -27,25 +27,25 @@ export type ConnectCallbacks = {
 
 export type MockTransport = {
   retryRecovery?: () => boolean
-  attach: ReturnType<typeof vi.fn>
-  connect: ReturnType<typeof vi.fn> & {
+  attach: Mock
+  connect: Mock & {
     mockImplementation: (
       impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
     ) => unknown
   }
-  disconnect: ReturnType<typeof vi.fn>
-  detach?: ReturnType<typeof vi.fn>
-  sendInput: ReturnType<typeof vi.fn>
-  sendInputImmediate: ReturnType<typeof vi.fn>
-  sendInputAccepted?: ReturnType<typeof vi.fn>
-  claimViewport: ReturnType<typeof vi.fn>
-  setOutputPaused?: ReturnType<typeof vi.fn>
-  resize: ReturnType<typeof vi.fn>
-  isConnected?: ReturnType<typeof vi.fn>
-  getPtyId: ReturnType<typeof vi.fn>
-  getConnectionId: ReturnType<typeof vi.fn>
-  serializeBuffer?: ReturnType<typeof vi.fn>
-  serializeBufferOutcome?: ReturnType<typeof vi.fn>
+  disconnect: Mock
+  detach?: Mock
+  sendInput: Mock
+  sendInputImmediate: Mock
+  sendInputAccepted?: Mock
+  claimViewport: Mock
+  setOutputPaused?: Mock
+  resize: Mock
+  isConnected: Mock
+  getPtyId: Mock
+  getConnectionId: Mock
+  serializeBuffer?: Mock
+  serializeBufferOutcome?: Mock
 }
 
 export function createMockTransport(initialPtyId: string | null = null): MockTransport {

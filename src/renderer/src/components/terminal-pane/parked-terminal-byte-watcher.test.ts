@@ -60,7 +60,16 @@ vi.mock('@/lib/terminal-theme', () => ({
   getSystemPrefersDark: () => true
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
+function mockCanonicalFixtureStore(): void {
+  vi.doMock('@/store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixture = { useAppStore: { getState: () => mockStoreState } }
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
+}
 
 function createMockStoreState(): MockStoreState {
   return {
@@ -115,6 +124,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     vi.useFakeTimers()
     dispatchTerminalNotification.mockClear()
     commandStatusPolicy.onCommandFinished.mockClear()
@@ -942,6 +952,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
       // Use fresh modules/store with main-derived facts from the same bytes.
       vi.resetModules()
+      mockCanonicalFixtureStore()
       mockStoreState = createMockStoreState()
       dispatchTerminalNotification.mockReset()
       const factModeCalls = recordPolicyOutcomes()

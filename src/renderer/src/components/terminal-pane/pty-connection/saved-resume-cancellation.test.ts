@@ -1,3 +1,6 @@
+import type { AppState } from '@/store/types'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { subscribeAgentStatusState } from '@/store/agent-status'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
@@ -16,14 +19,23 @@ import {
   captureTerminalLaunchContext
 } from './terminal-launch-result-policy'
 
-const fixture = vi.hoisted(() => ({
-  state: {},
-  setState: vi.fn(),
-  paste: vi.fn(),
-  parsed: vi.fn(async () => {})
-}))
+const fixture = vi.hoisted(() => {
+  const activeStore: { getState?: () => AppState } = {}
+  return {
+    activeStore,
+    state: {},
+    setState: vi.fn(),
+    paste: vi.fn(),
+    parsed: vi.fn(async () => {})
+  }
+})
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => fixture.state, setState: fixture.setState }
+  useAppStore: {
+    get getState() {
+      return fixture.activeStore.getState ?? (() => fixture.state)
+    },
+    setState: fixture.setState
+  }
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   waitForTerminalOutputParsed: fixture.parsed
@@ -39,6 +51,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
   fixture.setState.mockReset()
+  fixture.activeStore.getState = undefined
   vi.unstubAllGlobals()
 })
 
@@ -244,12 +257,20 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
   createStoreSessionMockApi()
   for (const newer of [true, false]) {
     const store = createTestStore()
-    fixture.state = store.getState()
+    fixture.activeStore.getState = store.getState
     fixture.setState.mockImplementation(store.setState)
+    const owner = getAgentStatusOwner(store)
     let notifications = 0
-    const unsubscribe = store.subscribe((state) => {
-      fixture.state = state
+    let rawNotifications = 0
+    let canonicalNotifications = 0
+    const unsubscribe = subscribeAgentStatusState(() => {
       notifications += 1
+    }, store)
+    const unsubscribeRaw = store.subscribe(() => {
+      rawNotifications += 1
+    })
+    const unsubscribeCanonical = owner.subscribeAggregate(() => {
+      canonicalNotifications += 1
     })
     const source = { cancelled: false }
     const startup = {
@@ -332,8 +353,12 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       pendingStartupByTabId: counted(population('tab', startup)),
       automaticAgentResumeClaimsByTabId: counted(population('tab', claim)),
       agentLaunchConfigByPaneKey: counted(population('tab:leaf', registration)),
-      agentStatusByPaneKey: counted(population('tab:leaf', status)),
       tabsByWorktree: { wt: tabs }
+    })
+    owner.transact((transaction) => {
+      for (const [key, row] of Object.entries(population('tab:leaf', status))) {
+        transaction.setEntry(key, row)
+      }
     })
     const context = captureTerminalLaunchContext(session, startup)
     const successor = { ...startup, resumeSource: { cancelled: false } }
@@ -344,14 +369,83 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       store.setState({
         pendingStartupByTabId: counted(population('tab', successor)),
         automaticAgentResumeClaimsByTabId: counted(population('tab', { ...claim })),
-        agentLaunchConfigByPaneKey: counted(population('tab:leaf', successorRegistration)),
-        agentStatusByPaneKey: counted(population('tab:leaf', { ...status, updatedAt: 2 }))
+        agentLaunchConfigByPaneKey: counted(population('tab:leaf', successorRegistration))
       })
+    }
+    if (newer) {
+      owner.transact((transaction) => {
+        for (const [key, row] of Object.entries(
+          population('tab:leaf', { ...status, updatedAt: 2 })
+        )) {
+          transaction.setEntry(key, row)
+        }
+      })
+    }
+    let statusRowReads = 0
+    let statusEnumerations = 0
+    const armStatusMeasurement = () => {
+      const snapshot = owner.getSnapshot()
+      const descriptors = new Map<string, PropertyDescriptor>()
+      for (const key of Object.keys(snapshot)) {
+        if (key === 'tab:leaf') {
+          continue
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(snapshot, key)!
+        const row = snapshot[key]
+        descriptors.set(key, descriptor)
+        Object.defineProperty(snapshot, key, {
+          configurable: true,
+          enumerable: true,
+          get: () => {
+            statusRowReads += 1
+            return row
+          }
+        })
+      }
+      const keys = Object.keys
+      const entries = Object.entries
+      const values = Object.values
+      const ownKeys = Reflect.ownKeys
+      const spies = [
+        vi.spyOn(Object, 'keys').mockImplementation((value) => {
+          if (value === snapshot) {
+            statusEnumerations += 1
+          }
+          return keys(value)
+        }),
+        vi.spyOn(Object, 'entries').mockImplementation((value) => {
+          if (value === snapshot) {
+            statusEnumerations += 1
+          }
+          return entries(value)
+        }),
+        vi.spyOn(Object, 'values').mockImplementation((value) => {
+          if (value === snapshot) {
+            statusEnumerations += 1
+          }
+          return values(value)
+        }),
+        vi.spyOn(Reflect, 'ownKeys').mockImplementation((value) => {
+          if (value === snapshot) {
+            statusEnumerations += 1
+          }
+          return ownKeys(value)
+        })
+      ]
+      return () => {
+        spies.forEach((spy) => spy.mockRestore())
+        for (const [key, descriptor] of descriptors) {
+          Object.defineProperty(snapshot, key, descriptor)
+        }
+      }
     }
     enumerated = 0
     copied = 0
     notifications = 0
+    rawNotifications = 0
+    canonicalNotifications = 0
     tabVisits = 0
+    let restoreStatus = armStatusMeasurement()
     const result = {
       agentResumeRefused: 'chat-home' as const,
       savedResumeDecision: {
@@ -361,13 +455,17 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       }
     }
     try {
-      expect(applyTerminalLaunchResult(session, result, context, 'creator')).toBe(true)
+      const applied = applyTerminalLaunchResult(session, result, context, 'creator')
+      restoreStatus()
+      expect(applied).toBe(true)
       expect(source.cancelled).toBe(true)
-      // Four independent whole-map spreads, once each; this is work per result, not a latency bound.
+      // Three app-map copies plus one canonical materialization, measured on the actual sources.
       expect([enumerated, copied, notifications, tabVisits]).toEqual(
-        newer ? [0, 0, 0, 0] : [4 * size, 4 * size, 4, size]
+        newer ? [0, 0, 0, 0] : [3 * size, 3 * size, 4, size]
       )
-      const current = store.getState()
+      expect([statusRowReads, statusEnumerations]).toEqual(newer ? [0, 0] : [size - 1, 0])
+      expect([rawNotifications, canonicalNotifications]).toEqual(newer ? [0, 0] : [3, 1])
+      const current = owner.getState()
       if (newer) {
         expect(current.pendingStartupByTabId.tab).toBe(successor)
         expect(current.agentLaunchConfigByPaneKey['tab:leaf']).toBe(successorRegistration)
@@ -387,10 +485,25 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       copied = 0
       notifications = 0
       tabVisits = 0
+      rawNotifications = 0
+      canonicalNotifications = 0
+      statusRowReads = 0
+      statusEnumerations = 0
+      restoreStatus = armStatusMeasurement()
       applyTerminalLaunchResult(session, result, context, 'creator')
+      restoreStatus()
       expect([enumerated, copied, notifications, tabVisits]).toEqual([0, 0, 0, 0])
+      expect([
+        statusRowReads,
+        statusEnumerations,
+        rawNotifications,
+        canonicalNotifications
+      ]).toEqual([0, 0, 0, 0])
     } finally {
+      restoreStatus()
       unsubscribe()
+      unsubscribeRaw()
+      unsubscribeCanonical()
     }
   }
 })

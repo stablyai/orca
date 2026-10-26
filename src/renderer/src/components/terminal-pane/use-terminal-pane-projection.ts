@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from 'react'
-import type { CSSProperties } from 'react'
+import { useAgentStatusSelector } from '@/store/agent-status'
+import { useCallback, useEffect, type CSSProperties } from 'react'
+
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
@@ -18,7 +19,7 @@ import {
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
@@ -175,7 +176,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const { menuAgentSessionId, activePaneCanResumeInChat } = useAgentStatusSelector(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
@@ -189,7 +190,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
           worktreeId,
           paneKey: makePaneKey(tabId, activeLeafId)
         })
-    }))
+    })),
+    undefined,
+    tabId
   )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {

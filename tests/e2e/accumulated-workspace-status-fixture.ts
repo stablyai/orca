@@ -51,7 +51,7 @@ type StatusTrafficWindow = Window & {
 
 async function syntheticStatusPanes(page: Page): Promise<SyntheticStatusPane[]> {
   return page.evaluate((syntheticTabPrefix) => {
-    const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
+    const statuses = window.__agentStatus?.getState().agentStatusByPaneKey ?? {}
     return Object.values(statuses)
       .filter(({ paneKey }) => paneKey.startsWith(syntheticTabPrefix))
       .map((entry) => ({
@@ -71,7 +71,7 @@ async function waitForStatusReceipts(
 ): Promise<void> {
   await page.waitForFunction(
     (expected) => {
-      const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
+      const statuses = window.__agentStatus?.getState().agentStatusByPaneKey ?? {}
       return expected.every(
         ({ paneKey, receivedAt }) => statuses[paneKey]?.updatedAt === receivedAt
       )
@@ -155,7 +155,7 @@ export async function startAccumulatedStatusTraffic(
       const baselineSequenceByPaneKey = Object.fromEntries(
         paneKeys.map((paneKey) => [
           paneKey,
-          store.getState().agentStatusByPaneKey[paneKey]?.acceptedStatusSeq ?? 0
+          window.__agentStatus!.getState().agentStatusByPaneKey[paneKey]?.acceptedStatusSeq ?? 0
         ])
       )
       const target: StatusTrafficWindow = window
@@ -165,7 +165,7 @@ export async function startAccumulatedStatusTraffic(
         unsubscribe: () => {}
       }
       target.__accumulatedStatusTrafficProbe = probe
-      probe.unsubscribe = store.subscribe((next, previous) => {
+      probe.unsubscribe = window.__agentStatus!.subscribeTransitions(({ next, previous }) => {
         if (next.agentStatusByPaneKey !== previous.agentStatusByPaneKey) {
           const activeProbe = target.__accumulatedStatusTrafficProbe
           if (activeProbe) {
@@ -251,7 +251,7 @@ export async function stopAccumulatedStatusTraffic(
   )
   await waitForStatusReceipts(page, receipts)
   return page.evaluate(({ completedRounds, generatedUpdates, lastReceivedAtByPaneKey }) => {
-    const state = window.__store?.getState()
+    const state = window.__agentStatus?.getState()
     const target: StatusTrafficWindow = window
     const probe = target.__accumulatedStatusTrafficProbe
     if (!state || !probe) {

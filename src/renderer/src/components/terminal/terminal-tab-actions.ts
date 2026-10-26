@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
+import '@/store'
 import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
@@ -51,7 +52,7 @@ export function closeTerminalTab(
     onCancel?: () => void
   }
 ): void {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const precomputedCloseState = validatePrecomputedTerminalCloseState(
     tabId,
     options?.precomputedRetirementPlan,
@@ -210,7 +211,7 @@ export function closeTerminalTab(
   })
   if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
     // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
-    const current = useAppStore.getState()
+    const current = getAgentStatusState()
     if (current.activeWorktreeId === owningWorktreeId) {
       // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)

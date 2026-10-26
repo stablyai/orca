@@ -29,19 +29,25 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
-vi.mock('../../store', () => {
-  const state = {
+vi.mock('../../store', async () => {
+  const { createTestStore, makeTab } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  const { getDefaultSettings, getDefaultVoiceSettings } =
+    await import('../../../../shared/constants')
+  const settings = getDefaultSettings('/tmp')
+  useAppStore.setState({
     dictationState: 'idle',
-    settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    settings: {
+      ...settings,
+      voice: { ...getDefaultVoiceSettings(), enabled: false },
+      nativeChatSessionOptions: {}
+    },
     activeWorktreeId: 'wt-1',
     activeWorkspaceExecutionHostId: 'ssh:box',
-    tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+    tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] },
     unifiedTabsByWorktree: {},
     clearNativeChatLaunchDraft: vi.fn()
-  }
-  const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
-  useAppStore.getState = () => state
+  })
   return { useAppStore }
 })
 vi.mock('../right-sidebar/ai-vault-panel-workspace', () => ({

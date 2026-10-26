@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -58,7 +59,7 @@ beforeEach(() => {
   })
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   read.mockResolvedValue(null)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     settings: null,
     repos: [referenceRepo],
     worktreesByRepo: { repo: [workspace] },
@@ -103,16 +104,16 @@ it.each(['not-visible', 'hidden', 'sleeping', 'archived', 'bare', 'unready', 'we
   'does not poll %s workspaces',
   async (condition) => {
     if (condition === 'not-visible') {
-      useAppStore.setState({ visibleReviewWorktreeIds: [] })
+      applyAgentStatusPatch(useAppStore, { visibleReviewWorktreeIds: [] })
     }
     if (condition === 'hidden') {
       Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     }
     if (condition === 'sleeping') {
-      useAppStore.setState({ browserTabsByWorktree: {} })
+      applyAgentStatusPatch(useAppStore, { browserTabsByWorktree: {} })
     }
     if (condition === 'archived' || condition === 'bare') {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         worktreesByRepo: {
           repo: [
             { ...workspace, isArchived: condition === 'archived', isBare: condition === 'bare' }
@@ -139,7 +140,7 @@ it('shares exact results across hover and scheduler without replacing the primar
     true
   )
   const primary = { data: referenceReview(7), fetchedAt: Date.now() }
-  useAppStore.setState({ hostedReviewCache: { [primaryKey]: primary } })
+  applyAgentStatusPatch(useAppStore, { hostedReviewCache: { [primaryKey]: primary } })
   read.mockImplementation(async (args) =>
     referenceReview(
       typeof args === 'object' &&
@@ -157,7 +158,7 @@ it('shares exact results across hover and scheduler without replacing the primar
 })
 it('keeps failed exact refreshes stale while retaining their last known details', async () => {
   const request = getWorkspaceReferenceRequest(referenceAttachment(1), workspace, referenceRepo)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     hostedReviewCache: {
       [request.key]: { data: referenceReview(1), fetchedAt: Date.now() - 61_000 }
     }
@@ -172,7 +173,7 @@ it('keeps failed exact refreshes stale while retaining their last known details'
 })
 it.each(['host', 'remote', 'account'])('drops cached success after %s rebinding', (kind) => {
   const request = getWorkspaceReferenceRequest(referenceAttachment(1), workspace, referenceRepo)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     hostedReviewCache: { [request.key]: { data: referenceReview(1), fetchedAt: Date.now() } }
   })
   const hook = renderHook(
@@ -220,7 +221,7 @@ it('bounds native reads and cancels queued hover demand without adding a negativ
 it.each(['hide', 'unmount'])('stops queued scheduler work on %s', async (action) => {
   const finish: (() => void)[] = []
   read.mockImplementation(() => new Promise((resolve) => finish.push(() => resolve(null))))
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     worktreesByRepo: {
       repo: [{ ...workspace, linkedItems: [20, 21, 22, 23, 24].map(referenceAttachment) }]
     }
@@ -267,7 +268,7 @@ it('projects task mutations directly from the source provider cache', () => {
     taskSourceContext: source
   } as const
   const key = `${getTaskSourceCacheScope(source)}::all::ENG-1`
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     linearIssueCache: { [key]: { data: referenceLinearIssue(), fetchedAt: Date.now() } }
   })
   const hook = renderHook(() =>
@@ -275,7 +276,7 @@ it('projects task mutations directly from the source provider cache', () => {
   )
   expect(hook.result.current[getWorkspaceAttachmentKey(item)]?.title).toBe('Task')
   act(() =>
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       linearIssueCache: {
         [key]: { data: referenceLinearIssue({ title: 'Edited' }), fetchedAt: Date.now() }
       }

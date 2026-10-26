@@ -1,10 +1,12 @@
+import { getAgentStatusState, useAgentStatusSelector } from '@/store/agent-status'
+
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { useAppStore } from '@/store'
+import '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
@@ -28,7 +30,7 @@ export function useAiVaultOriginalPaneActions(): {
   jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
   jumpToWorktree: (worktreeId: string) => void
 } {
-  const originalPaneLookupState = useAppStore(
+  const originalPaneLookupState = useAgentStatusSelector(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
@@ -76,7 +78,7 @@ export function useAiVaultOriginalPaneActions(): {
       if (session.structuredSession && isStructuredSessionOpen(session)) {
         return activateAiVaultStructuredSession(session)
       }
-      const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
+      const target = findOriginalAiVaultSessionPane(getAgentStatusState(), session)
       if (!target) {
         toast.error(
           translate(
@@ -90,7 +92,7 @@ export function useAiVaultOriginalPaneActions(): {
       if (!revealSessionWorkspace(target.worktreeId)) {
         return false
       }
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       state.setActiveTabType('terminal', target.worktreeId)
       activateTabAndFocusPane(target.tabId, target.leafId, {
         flashFocusedPane: true,
@@ -122,7 +124,7 @@ function revealSessionWorkspace(workspaceId: string): boolean {
   const scope = parseWorkspaceKey(workspaceId)
   const reported =
     scope?.type === 'folder' &&
-    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId) !== null
+    findFolderWorkspaceOwner(getAgentStatusState(), scope.folderWorkspaceId) !== null
   if (!reported) {
     toast.error(
       scope?.type === 'folder'

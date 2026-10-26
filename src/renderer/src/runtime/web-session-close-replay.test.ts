@@ -38,13 +38,20 @@ const { replayWebSessionTabCloses, intentStore } = vi.hoisted(() => {
   return { replayWebSessionTabCloses: vi.fn(async () => {}), intentStore: holder }
 })
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    // The held closes are the only store state this suite reads.
-    getState: () => intentStore.current?.getState()
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      setState: vi.fn(),
+      // The held closes are the only store state this suite reads.
+      getState: () => intentStore.current?.getState()
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))

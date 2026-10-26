@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
@@ -12,14 +14,6 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'remote-env-1'
@@ -72,8 +66,9 @@ function hostSnapshot(
 }
 
 function applyHostSnapshot(store: TestStore, snapshot: RuntimeMobileSessionTabsResult): void {
-  const state = store.getState()
-  store.setState(applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, Date.now()))
+  applyAgentStatusPatch(store, (state) => {
+    return applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, Date.now())
+  })
 }
 
 /** The renderer's OSC pipeline claims the pane and writes a byte-derived row without a facet. */
@@ -118,12 +113,12 @@ describe('mirrored program-status facet on a client-owned pane', () => {
 
   it("takes the host's facet without bumping the agent-status or sort epochs", () => {
     const store = seedClientOwnedPane()
-    const before = store.getState()
+    const before = getAgentStatusOwner(store).getState()
     expect(before.agentStatusByPaneKey[PANE_KEY]?.programStatus).toBeUndefined()
 
     applyHostSnapshot(store, hostSnapshot(2, FACET))
 
-    const after = store.getState()
+    const after = getAgentStatusOwner(store).getState()
     expect(after.agentStatusByPaneKey[PANE_KEY]?.programStatus).toEqual(FACET)
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
     expect(after.sortEpoch).toBe(before.sortEpoch)
@@ -135,6 +130,6 @@ describe('mirrored program-status facet on a client-owned pane', () => {
 
     applyHostSnapshot(store, hostSnapshot(3))
 
-    expect(store.getState().agentStatusByPaneKey[PANE_KEY]).not.toHaveProperty('programStatus')
+    expect(getAgentStatusOwner(store).getSnapshot()[PANE_KEY]).not.toHaveProperty('programStatus')
   })
 })

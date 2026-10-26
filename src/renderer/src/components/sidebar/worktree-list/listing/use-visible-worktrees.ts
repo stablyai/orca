@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
@@ -85,7 +86,7 @@ export function useVisibleSidebarWorktrees(args: {
     return showSleepingWorkspaces
       ? EMPTY_WORKTREE_ID_SET
       : getWorktreeIdsWithLiveAgent(
-          useAppStore.getState().agentStatusByPaneKey,
+          getAgentStatusState().agentStatusByPaneKey,
           tabsByWorktree,
           agentStatusNow
         )

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '../agent-status-observers'
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -41,7 +42,7 @@ export type WorkspaceCleanupRemoveOptions = {
 }
 
 export async function removeWorkspaceCleanupCandidates(
-  get: () => AppState,
+  get: () => AgentStatusReadState,
   set: (
     partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
     replace?: false

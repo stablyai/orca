@@ -27,8 +27,14 @@ import {
 } from '@/components/native-chat/native-chat-workspace-test-fixtures'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 
-const mocks = vi.hoisted(() => ({ getState: vi.fn(), mint: vi.fn(), revoke: vi.fn() }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.getState() } }))
+const mocks = vi.hoisted(() => ({ mint: vi.fn(), revoke: vi.fn() }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    get getState() {
+      return store.getState
+    }
+  }
+}))
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
@@ -50,7 +56,6 @@ beforeEach(() => {
   }))
   mocks.revoke.mockReset().mockResolvedValue(undefined)
   store = createBrowserLinkTestStore()
-  mocks.getState.mockImplementation(() => store.getState())
 })
 afterEach(() => {
   for (const id of grants.splice(0)) {

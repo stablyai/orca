@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AutomationRun } from '../../../shared/automations-types'
 import { findReusableAutomationRun } from '../../../shared/automation-session-reuse'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -17,7 +18,7 @@ export function findReusableAutomationSession(args: {
   currentRunId: string
   runs: AutomationRun[]
   state: Pick<
-    AppState,
+    AgentStatusReadState,
     'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
   >
 }): ReusableAutomationSession | null {

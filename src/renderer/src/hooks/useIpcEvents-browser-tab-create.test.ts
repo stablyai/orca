@@ -1,3 +1,4 @@
+import type { AppState } from '@/store/types'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,12 +29,16 @@ describe('useIpcEvents browser tab create routing', () => {
         | ((data: { worktreeId?: string | null; browserPageId?: string | null }) => void)
         | null
     } = { current: null }
+    const { createTestStore, makeUnifiedTab } = await import('@/store/slices/store-test-helpers')
+    const { makeBrowserTab } = await import('@/store/slices/store-session-test-harness')
+    const { getDefaultSettings } = await import('../../../shared/constants')
+    const store = createTestStore()
     const state = {
+      ...store.getState(),
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
       setActiveView: vi.fn(),
-      activeModal: null,
       closeModal: vi.fn(),
       openModal: vi.fn(),
       activeWorktreeId: 'wt-1',
@@ -58,43 +63,80 @@ describe('useIpcEvents browser tab create routing', () => {
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
-      settings: { terminalFontSize: 13 },
+      settings: { ...getDefaultSettings('/tmp'), terminalFontSize: 13 },
       activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-active' },
       browserTabsByWorktree: {
-        'wt-1': [{ id: 'workspace-active', activePageId: 'page-active', pageIds: ['page-active'] }],
+        'wt-1': [
+          makeBrowserTab({
+            id: 'workspace-active',
+            worktreeId: 'wt-1',
+            url: 'about:blank',
+            activePageId: 'page-active',
+            pageIds: ['page-active']
+          })
+        ],
         'wt-2': [
-          { id: 'workspace-detached', activePageId: 'page-detached', pageIds: ['page-detached'] }
+          makeBrowserTab({
+            id: 'workspace-detached',
+            worktreeId: 'wt-2',
+            url: 'about:blank',
+            activePageId: 'page-detached',
+            pageIds: ['page-detached']
+          })
         ]
       },
       browserPagesByWorkspace: {
-        'workspace-active': [{ id: 'page-active', worktreeId: 'wt-1' }],
-        'workspace-detached': [{ id: 'page-detached', worktreeId: 'wt-2' }]
+        'workspace-active': [
+          {
+            ...makeBrowserTab({ id: 'page-active', worktreeId: 'wt-1', url: 'about:blank' }),
+            workspaceId: 'workspace-active'
+          }
+        ],
+        'workspace-detached': [
+          {
+            ...makeBrowserTab({ id: 'page-detached', worktreeId: 'wt-2', url: 'about:blank' }),
+            workspaceId: 'workspace-detached'
+          }
+        ]
       },
       unifiedTabsByWorktree: {
         'wt-1': [
-          {
+          makeUnifiedTab({
             id: 'unified-active',
+            worktreeId: 'wt-1',
             groupId: 'group-1',
             contentType: 'browser',
             entityId: 'workspace-active'
-          }
+          })
         ]
       },
       createBrowserTab: vi.fn(
         (
           _worktreeId: string,
           _url: string,
-          options: { activate?: boolean; browserPageId?: string }
+          options: { activate?: boolean; browserPageId?: string } = {}
         ) => {
           const pageId = options.browserPageId ?? 'page-new'
-          const workspace = { id: 'workspace-new', activePageId: pageId, pageIds: [pageId] }
+          const workspace = makeBrowserTab({
+            id: 'workspace-new',
+            worktreeId: 'wt-1',
+            url: 'about:blank',
+            activePageId: pageId,
+            pageIds: [pageId]
+          })
           state.browserTabsByWorktree['wt-1'].push(workspace)
-          state.browserPagesByWorkspace['workspace-new'] = [{ id: pageId, worktreeId: 'wt-1' }]
+          state.browserPagesByWorkspace['workspace-new'] = [
+            {
+              ...makeBrowserTab({ id: pageId, worktreeId: 'wt-1', url: 'about:blank' }),
+              workspaceId: 'workspace-new'
+            }
+          ]
           expect(options.activate).toBe(false)
           return workspace
         }
       )
-    }
+    } satisfies AppState
+    store.setState(state)
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
@@ -105,12 +147,7 @@ describe('useIpcEvents browser tab create routing', () => {
         }
       }
     })
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => state
-      }
-    }))
+    vi.doMock('../store', () => ({ useAppStore: store }))
     vi.doMock('@/components/browser-pane/host-guest/browser-automation-visibility', () => ({
       acquireBrowserAutomationVisibility,
       releaseBrowserAutomationVisibility

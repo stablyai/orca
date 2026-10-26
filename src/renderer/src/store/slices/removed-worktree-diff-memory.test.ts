@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -65,16 +66,18 @@ describe('removed workspace diff memory', () => {
     const renamed = 'repo::/workspace/renamed'
     const store = createTestStore()
     const sections = readCombinedDiffViewMemory(key)?.view?.sections
-    store.setState(buildWorktreeRenameState(store.getState(), removed, renamed))
+    store.setState(
+      buildWorktreeRenameState(getAgentStatusOwner(store).getState(), removed, renamed)
+    )
     expect(readCombinedDiffViewMemory(key)).toMatchObject({
       worktreeId: renamed,
       scrollTop: 42,
       scrollAnchor: { key: 'source', offset: 0 }
     })
     expect(readCombinedDiffViewMemory(key)?.view?.sections).toBe(sections)
-    buildWorktreePurgeState(store.getState(), [removed])
+    buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [removed])
     expect(readCombinedDiffViewMemory(key)).toBeDefined()
-    buildWorktreePurgeState(store.getState(), [renamed])
+    buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [renamed])
     expect(readCombinedDiffViewMemory(key)).toBeUndefined()
     expect(readCombinedDiffViewMemory(keptKey)).toBeDefined()
   })
@@ -87,7 +90,7 @@ describe('removed workspace diff memory', () => {
       const overlappingKey = seedDiff(`${removed}::all-diffs::nested-directory`)
       const store = createTestStore()
       if (path === 'listing') {
-        store.setState(buildWorktreePurgeState(store.getState(), [removed]))
+        store.setState(buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [removed]))
       } else {
         applyRemoveWorktreeSuccessState(store.setState, removed, new Set())
       }
@@ -130,7 +133,7 @@ describe('removed workspace diff memory', () => {
         ]
       }
     })
-    buildWorktreePurgeState(store.getState(), [
+    buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [
       hostWorktreeTarget({ id: removed, hostId: 'runtime:remote' })
     ])
     expect(readCombinedDiffViewMemory(key)?.scrollTop).toBe(42)
@@ -140,7 +143,7 @@ describe('removed workspace diff memory', () => {
     const workspaceId = folderWorkspaceKey('folder-1')
     const key = seedDiff(workspaceId)
     const store = createTestStore()
-    buildWorktreePurgeState(store.getState(), [workspaceId])
+    buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [workspaceId])
     expect(readCombinedDiffViewMemory(key)).toBeUndefined()
   })
 })

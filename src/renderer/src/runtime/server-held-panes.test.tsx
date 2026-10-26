@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 // Frame-drawn server holds use this desktop’s newer-build banner; Reopen goes to server main and applies nothing locally.
 
@@ -183,7 +184,7 @@ describe("a layout-owner server's held pane on a paired desktop", () => {
     let answer!: (result: NewerDaemonReopenResult) => void
     hoisted.callRuntimeRpc.mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const store = await heldServerPane()
-    const before = treeOf(store.getState(), WT)
+    const before = treeOf(getAgentStatusOwner(store).getState(), WT)
 
     await act(async () => button('Reopen terminal').click())
 
@@ -198,7 +199,7 @@ describe("a layout-owner server's held pane on a paired desktop", () => {
     await act(async () => answer({ reopened: true }))
     // The server's frames, not the answer, end the hold.
     expect(button('Reopening…')).toBeTruthy()
-    expect(treeOf(store.getState(), WT)).toEqual(before)
+    expect(treeOf(getAgentStatusOwner(store).getState(), WT)).toEqual(before)
     await publish(layoutWith('held'))
     await render()
     expect(button('Reopening…')).toBeTruthy()
@@ -207,9 +208,9 @@ describe("a layout-owner server's held pane on a paired desktop", () => {
     await publish(layoutWith(undefined))
     await render()
     expect(paneElement.textContent).toBe('')
-    expect(store.getState().terminalLayoutsByTabId[TAB_1]?.ptyIdsByLeafId?.[LEAF_ID]).toMatch(
-      /^remote:/
-    )
+    expect(
+      getAgentStatusOwner(store).getState().terminalLayoutsByTabId[TAB_1]?.ptyIdsByLeafId?.[LEAF_ID]
+    ).toMatch(/^remote:/)
   })
 
   it.each([

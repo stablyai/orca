@@ -1,5 +1,8 @@
+import type { AgentStatusEntry } from '@/store/slices/agent-status-contract'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../store/types'
+
 import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harness'
 import type * as EditorDraftHashModule from './sync-runtime-graph/editor-draft-hash'
 
@@ -31,7 +34,7 @@ const {
   buildRuntimeMobileOpenFilesProjection
 } = await import('./sync-runtime-graph/sync-projections')
 
-type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+type MainAgentStatus = Record<string, AgentStatusEntry>[string]['mainAgent']
 function mainAgentKey(mainAgent: MainAgentStatus) {
   return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
 }
@@ -63,7 +66,7 @@ function referenceOpenFilesProjection(openFiles: AppState['openFiles']): string 
   )
 }
 
-function referenceBrowserProjection(state: AppState): string {
+function referenceBrowserProjection(state: AgentStatusReadState): string {
   return JSON.stringify({
     workspacesByWorktree: Object.fromEntries(
       Object.entries(state.browserTabsByWorktree ?? {}).map(([worktreeId, workspaces]) => [
@@ -96,7 +99,7 @@ function referenceBrowserProjection(state: AppState): string {
 }
 
 /** The pre-change agent-status serialization, including its `localeCompare` sort. */
-function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): string {
+function referenceAgentStatusProjection(map: Record<string, AgentStatusEntry>): string {
   return JSON.stringify(
     Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -296,7 +299,7 @@ describe('agent-status projection sort', () => {
       return seed.toString(16).padStart(8, '0')
     }
     const paneKeys = Array.from({ length: 500 }, () => `${nextHex()}-${nextHex()}:${nextHex()}`)
-    const map: AppState['agentStatusByPaneKey'] = {}
+    const map: Record<string, AgentStatusEntry> = {}
     for (const [index, paneKey] of paneKeys.entries()) {
       map[paneKey] = makeAgentStatusEntry({ paneKey, prompt: `prompt ${index}` })
     }
@@ -329,7 +332,7 @@ describe('agent-status projection sort', () => {
   })
 
   it('is deterministic for keys where locale and code-unit order disagree', () => {
-    const map: AppState['agentStatusByPaneKey'] = {}
+    const map: Record<string, AgentStatusEntry> = {}
     for (const paneKey of ['b:leaf', 'A:leaf', 'a:leaf', 'á:leaf', 'B:leaf']) {
       map[paneKey] = makeAgentStatusEntry({ paneKey })
     }
@@ -381,7 +384,7 @@ describe('open-files and browser projections', () => {
       browserPagesByWorkspace: pagesByWorkspace as never
     })
     const writes = 50
-    const driveWrites = (project: (state: AppState) => string): void => {
+    const driveWrites = (project: (state: AgentStatusReadState) => string): void => {
       let state = initial
       project(state)
       for (let write = 0; write < writes; write += 1) {
@@ -428,7 +431,7 @@ describe('open-files and browser projections', () => {
       })
     }
 
-    const browserCases: AppState[] = [
+    const browserCases: AgentStatusReadState[] = [
       makeState({}),
       makeState({ browserTabsByWorktree: { 'wt-1': [makeBrowserWorkspace(0)] } as never }),
       makeState({
@@ -462,7 +465,7 @@ describe('sync key transitions', () => {
     const workspaces = [makeBrowserWorkspace(0)] as never
     const status = {
       'tab-0:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-0:leaf-0' })
-    } as AppState['agentStatusByPaneKey']
+    }
 
     const base = makeState({
       editorDrafts: drafts,
@@ -473,7 +476,7 @@ describe('sync key transitions', () => {
     })
 
     // Each step returns the next state; the flag is whether a mobile-visible input really moved.
-    const steps: { name: string; next: (from: AppState) => AppState }[] = [
+    const steps: { name: string; next: (from: AgentStatusReadState) => AgentStatusReadState }[] = [
       { name: 'no-op re-spread', next: (from) => makeState({ ...from }) },
       {
         name: 'keystroke in one draft',
@@ -554,7 +557,7 @@ describe('sync key transitions', () => {
       }
     ]
 
-    const referenceTuple = (state: AppState): string[] => [
+    const referenceTuple = (state: AgentStatusReadState): string[] => [
       referenceEditorDraftsProjection(state.editorDrafts),
       referenceOpenFilesProjection(state.openFiles),
       referenceBrowserProjection(state),

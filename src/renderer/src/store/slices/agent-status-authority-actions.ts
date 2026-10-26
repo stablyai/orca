@@ -1,11 +1,5 @@
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
-import {
-  resolveAgentPaneAuthorityKey,
-  retireAgentPaneAuthorityAliases,
-  transferAgentPaneAuthorityAlias
-} from './agent-pane-authority'
 import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,
@@ -34,15 +28,15 @@ export function createAgentStatusAuthorityActions(
 > {
   const { get, set, freshness } = runtime
   return {
-    scheduleAgentStatusFreshness: () => freshness.schedule(),
+    scheduleAgentStatusFreshness: () => runtime.runAfterCommit(freshness.schedule),
 
     retireAgentPaneAuthority: (paneKey, options) => {
       const retirementId = createBrowserUuid()
-      const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+      const ownerPaneKey = runtime.authority().resolveAgentPaneAuthorityKey(paneKey)
       const previousRetirement = get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey]
       const retiredPaneKeys = [
         ...new Set([
-          ...retireAgentPaneAuthorityAliases(paneKey),
+          ...runtime.authority().retireAgentPaneAuthorityAliases(paneKey),
           ...Object.keys(get().recentlyRetiredAgentStatusPaneKeys).filter(
             (key) =>
               typeof previousRetirement === 'string' &&
@@ -52,7 +46,7 @@ export function createAgentStatusAuthorityActions(
       ]
       const retiredPaneKeySet = new Set(retiredPaneKeys)
       for (const key of retiredPaneKeys) {
-        rendererAgentStatusObservations.forget(key)
+        runtime.observations().forget(key)
       }
       let hadLive = false
       settleAttentionRemovedBy(set, get, () =>
@@ -126,21 +120,22 @@ export function createAgentStatusAuthorityActions(
         })
       )
       if (hadLive) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
-      if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.retirePaneAuthority?.(
-          ownerPaneKey,
-          get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === retirementId
-            ? retirementId
-            : undefined
-        )
-      }
+      const acceptedRetirementId =
+        get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === retirementId
+          ? retirementId
+          : undefined
+      runtime.runAfterCommit(() => {
+        if (typeof window !== 'undefined') {
+          window.api?.agentStatus?.retirePaneAuthority?.(ownerPaneKey, acceptedRetirementId)
+        }
+      })
     },
 
     // Live PTY binding disproves pane tombstone (STA-4114); revive future status without restoring stale rows. Waiting for a new hook turn permanently suppresses idle/mid-turn reattachments.
     restoreAgentPaneAuthority: (paneKey) => {
-      const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+      const ownerPaneKey = runtime.authority().resolveAgentPaneAuthorityKey(paneKey)
       // Why: a closed tab is a stronger, separate claim — re-attach must not undo it.
       if (
         isRecentlyClosedAgentStatusTab(
@@ -164,20 +159,24 @@ export function createAgentStatusAuthorityActions(
         return { recentlyRetiredAgentStatusPaneKeys: next }
       })
       // Always send idempotent revival to main, even without local tombstone: main-only fences and renderer reloads make maps diverge. Main independently refuses closed tabs (STA-4114).
-      if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
-      }
+      runtime.runAfterCommit(() => {
+        if (typeof window !== 'undefined') {
+          window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
+        }
+      })
     },
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
-      const transfer = transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
+      const transfer = runtime
+        .authority()
+        .transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
       if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
         return
       }
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
       // Moved row retains old-key observation; new-key renderer writes must sort after it.
-      rendererAgentStatusObservations.forget(from)
-      rendererAgentStatusObservations.rebind(to)
+      runtime.observations().forget(from)
+      runtime.observations().rebind(to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
       set((s) => ({
@@ -229,13 +228,15 @@ export function createAgentStatusAuthorityActions(
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
       }))
-      if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.transferPaneAuthority?.({
-          fromPaneKey: from,
-          toPaneKey: to,
-          ...(transfer.ptyId ? { ptyId: transfer.ptyId } : {})
-        })
-      }
+      runtime.runAfterCommit(() => {
+        if (typeof window !== 'undefined') {
+          window.api?.agentStatus?.transferPaneAuthority?.({
+            fromPaneKey: from,
+            toPaneKey: to,
+            ...(transfer.ptyId ? { ptyId: transfer.ptyId } : {})
+          })
+        }
+      })
     }
   }
 }

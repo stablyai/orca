@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '../agent-status-observers'
 /** Carry confirmed (worktreeId, executionHostId) through cleanup; IDs repeat across hosts. Refuse ambiguous/hostless/missing refreshed owners rather than risk deleting another host’s uncommitted work (STA-4343). */
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -150,10 +151,10 @@ export function resolveWorkspaceCleanupRemovalTargets(
 
 export async function preflightWorkspaceCleanupCandidates(
   targets: readonly WorkspaceCleanupRemovalTarget[],
-  getState: () => AppState,
+  getState: () => AgentStatusReadState,
   enrich: (
     candidates: readonly WorkspaceCleanupCandidate[],
-    state: AppState
+    state: AgentStatusReadState
   ) => Promise<WorkspaceCleanupCandidate[]>,
   options: {
     unverifiedRemovalConsent?: WorkspaceCleanupUnverifiedRemovalConsent

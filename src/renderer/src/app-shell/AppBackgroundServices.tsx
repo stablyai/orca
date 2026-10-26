@@ -1,4 +1,6 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
+import { getAgentStatusOwner } from '../store/agent-status-commit'
+import { getTabAgentExitOwner } from '../lib/tab-agent-exit-owner'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
@@ -14,6 +16,7 @@ const DashboardPopoutBridge = lazy(() => import('../components/dashboard/Dashboa
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
+  useEffect(() => getTabAgentExitOwner(getAgentStatusOwner(useAppStore)).start(), [])
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true

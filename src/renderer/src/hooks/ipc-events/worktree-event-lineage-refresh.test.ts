@@ -13,6 +13,7 @@ import {
 } from '../../store/slices/worktrees-slice-test-fixtures'
 import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
+import { getAgentStatusOwner } from '../../store/agent-status-commit'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -76,6 +77,23 @@ afterEach(() => {
 })
 
 describe('remote worktree event lineage refresh', () => {
+  it('shares readiness across owner aliases while keeping other stores and bare readers independent', () => {
+    const owner = getAgentStatusOwner(store)
+    const other = createTestStore()
+    const bare = () => store.getState()
+    const secondBare = () => store.getState()
+    expect(isRemoteWorktreeLineageFresh(owner.getAppState, 'env-1')).toBe(true)
+    expect(isRemoteWorktreeLineageFresh(owner.getTransactionState, 'env-1')).toBe(true)
+    expect(isRemoteWorktreeLineageFresh(other.getState, 'env-1')).toBe(false)
+    expect(isRemoteWorktreeLineageFresh(bare, 'env-1')).toBe(false)
+    beginWorktreeLineageRefresh(bare, { kind: 'environment', environmentId: 'env-1' })(true)
+    expect(isRemoteWorktreeLineageFresh(bare, 'env-1')).toBe(true)
+    expect(isRemoteWorktreeLineageFresh(secondBare, 'env-1')).toBe(false)
+    invalidateRemoteWorktreeLineage(owner.getTransactionState, 'env-1')
+    expect(isRemoteWorktreeLineageFresh(store.getState, 'env-1')).toBe(false)
+    expect(isRemoteWorktreeLineageFresh(bare, 'env-1')).toBe(true)
+  })
+
   it('downloads zero lineage copies for a 25-repository order save, then refreshes structural changes', async () => {
     const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
     for (let index = 0; index < 25; index += 1) {

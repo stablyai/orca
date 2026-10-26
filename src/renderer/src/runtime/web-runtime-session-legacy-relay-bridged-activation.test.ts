@@ -17,7 +17,14 @@ const mocks = vi.hoisted(() => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(() => null)
 }))
 
-vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: mocks.getState } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))

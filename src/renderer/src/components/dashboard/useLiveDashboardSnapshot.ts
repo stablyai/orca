@@ -1,3 +1,4 @@
+import { useAgentStatusSnapshot } from '@/store/agent-status'
 import { watchSnapshotInputs } from './useDashboardPopoutBridge'
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect, useMemo, useRef } from 'react'
@@ -22,7 +23,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAgentStatusSnapshot()
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const runtimeAgentOrchestrationByPaneKey = useAppStore(

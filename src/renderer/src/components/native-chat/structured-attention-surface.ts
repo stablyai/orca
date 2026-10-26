@@ -1,5 +1,5 @@
 /** Structured subjects pair tab/session ids one-to-one; groupId is the unified tab id, never its enclosing split-layout group. */
-import type { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type {
   AgentAttentionSubject,
   AgentAttentionSurface,
@@ -13,7 +13,7 @@ import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden
 import type { StructuredTab } from './structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+type StoreSnapshot = AgentStatusReadState
 
 function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
   return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)

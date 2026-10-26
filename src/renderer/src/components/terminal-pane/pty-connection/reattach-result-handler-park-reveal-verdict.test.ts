@@ -23,9 +23,15 @@ const mocks = vi.hoisted(() => {
   return { state, capturedContexts, callOrder }
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mocks.state }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  return withAgentStatusFixture(
+    {
+      useAppStore: { getState: () => mocks.state }
+    },
+    () => mocks.state
+  )
+})
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))

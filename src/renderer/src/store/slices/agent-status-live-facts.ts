@@ -1,11 +1,11 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../shared/sidebar-list/smart-sort-agent-change'
-import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
   findTabForAgentEntry,
@@ -26,7 +26,7 @@ export type AgentStatusLiveFacts = {
 }
 
 export type AgentStatusLiveFactsArgs = {
-  state: AppState
+  state: AgentStatusReadState
   paneKey: string
   entry: AgentStatusEntry
   existing: AgentStatusEntry | undefined
@@ -49,9 +49,6 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   } = args
   const boundaryResolved =
     entry.state === 'done' && entry.sessionBoundary !== true && existing?.sessionBoundary === true
-  if (boundaryResolved) {
-    recordHibernationBoundaryResolved(paneKey, updatedAt)
-  }
   const completionRefreshWorktreeId =
     isAgentCompletionState(entry.state) &&
     entry.sessionBoundary !== true &&

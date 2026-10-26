@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useCallback, useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
@@ -72,7 +73,7 @@ export function StarNagAgentValueMomentObserver(): null {
       }
       const elapsedSinceTyping = Date.now() - lastTypingAtRef.current
       if (
-        hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
+        hasActiveAgent(getAgentStatusState().agentStatusByPaneKey) ||
         elapsedSinceTyping < QUIET_WINDOW_MS
       ) {
         scheduleCheck()
@@ -89,7 +90,7 @@ export function StarNagAgentValueMomentObserver(): null {
         }
         const freshElapsedSinceTyping = Date.now() - lastTypingAtRef.current
         if (
-          hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
+          hasActiveAgent(getAgentStatusState().agentStatusByPaneKey) ||
           freshElapsedSinceTyping < QUIET_WINDOW_MS
         ) {
           scheduleCheck()
@@ -120,7 +121,7 @@ export function StarNagAgentValueMomentObserver(): null {
   }, [])
 
   useEffect(() => {
-    const currentEntries = useAppStore.getState().agentStatusByPaneKey
+    const currentEntries = getAgentStatusState().agentStatusByPaneKey
     const previousEntries = previousEntriesRef.current
     previousEntriesRef.current = currentEntries
     if (!previousEntries || requestedRef.current) {

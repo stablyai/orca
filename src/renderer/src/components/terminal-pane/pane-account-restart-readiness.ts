@@ -1,9 +1,13 @@
-import type { AppState } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 /** PTYs whose queued account restart can run now: Codex at once, this tab's Claude once its turn ends. */
-export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string): string[] {
+export function selectReadyAccountRestartPtyIds(
+  state: AgentStatusReadState,
+  tabId: string
+): string[] {
   const pending = state.pendingPaneAccountRestarts
   const ready = Object.keys(pending).filter((ptyId) => pending[ptyId] === 'codex')
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
@@ -17,7 +21,7 @@ export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string):
 
 /** Whether `ptyId`'s queued restart can run against the store as it is now. */
 export function isAccountRestartReady(
-  state: AppState,
+  state: AgentStatusReadState,
   tabId: string,
   leafId: string,
   ptyId: string

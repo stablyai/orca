@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 // Lost create replies remain unmarked and recheck on reconnect; only confirmed failures earn failure marks.
@@ -8,12 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import type { AppState } from '@/store/types'
+import {
+  type StructuredAgentSessionLaunchIntent,
+  StructuredAgentSessionCreateRefusalError
+} from '@/lib/launch-structured-agent-session'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState>) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState>) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -44,8 +47,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
   const useAppStore = createTestStore()
-  mocks.store = useAppStore
+  mocks.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 
@@ -93,7 +101,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,

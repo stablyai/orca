@@ -1,3 +1,4 @@
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -20,13 +21,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -36,9 +37,10 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -50,11 +52,12 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('restores configured paired scrollback after an ordinary park reveal', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       transport.connect.mockImplementation(
@@ -72,18 +75,21 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
         source: 'headless'
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         runtimeStatusByEnvironmentId: new Map([
           [
             'env-1',
             {
               checkedAt: Date.now(),
-              status: { capabilities: ['terminal.paired-parking.v1'] }
+              status: {
+                ...createCompatibleRuntimeStatusResponse().result,
+                capabilities: ['terminal.paired-parking.v1']
+              }
             }
           ]
         ])
-      }
+      })
 
       const pane = createPane(1)
       const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
@@ -106,7 +112,7 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
     })
 
     it('keeps a parked main-model alt frame at its capture grid while hidden', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const localPtyId = 'global-floating-terminal@@terminal-1'
       const transport = createMockTransport(localPtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -125,8 +131,8 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
         alternateScreen: true,
         scrollbackAnsi: 'FLOATING-PARK-HISTORY\r\n'
       })
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'global-floating-terminal': [{ id: 'tab-1', ptyId: localPtyId }]
         },
@@ -139,7 +145,7 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
             ptyIdsByLeafId: { [LEAF_1]: localPtyId }
           }
         }
-      }
+      })
 
       const pane = createPane(1)
       pane.container.getBoundingClientRect = vi.fn(() => createRect(0, 0))

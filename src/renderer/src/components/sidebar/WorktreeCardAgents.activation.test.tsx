@@ -111,14 +111,21 @@ const structuredActivationMocks = vi.hoisted(() => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: unknown) => unknown) => selector(buildMockStoreState()),
-    {
-      getState: () => buildMockStoreState()
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: unknown) => unknown) => selector(buildMockStoreState()),
+      {
+        getState: () => buildMockStoreState()
+      }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: activationMocks.activateAndRevealWorktree

@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-types'
@@ -115,8 +116,13 @@ function publishProfileSnapshot(profileId: string | undefined): void {
     activeTabType: 'browser',
     activeTabId: null
   })
-  useAppStore.setState((state) =>
-    applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + snapshotVersion)
+  useAppStore.setState(() =>
+    applyWebSessionTabsSnapshot(
+      getAgentStatusOwner(useAppStore).getState(),
+      snapshot,
+      ENV,
+      NOW + snapshotVersion
+    )
   )
 }
 

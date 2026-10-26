@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useCallback, useRef } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
@@ -23,7 +24,7 @@ import {
 } from './terminal-pane-menu-agent-session-actions'
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
-import { useAppStore } from '@/store'
+import '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
@@ -192,7 +193,7 @@ export function useTerminalPaneContextMenu({
   const onCopyAgentSessionId = async (): Promise<void> => {
     const pane = resolveMenuPane()
     const sessionId = pane
-      ? resolvePaneAgentSessionId(useAppStore.getState(), makePaneKey(tabId, pane.leafId))
+      ? resolvePaneAgentSessionId(getAgentStatusState(), makePaneKey(tabId, pane.leafId))
       : null
     return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
   }

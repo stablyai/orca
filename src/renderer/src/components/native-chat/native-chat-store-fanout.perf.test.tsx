@@ -1,3 +1,6 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { getTabAgentExitOwner } from '@/lib/tab-agent-exit-owner'
+let stopRootExitOwner = () => {}
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { useCallback } from 'react'
@@ -18,11 +21,19 @@ import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/struct
 const initial = useAppStore.getInitialState()
 const originalApi = window.api
 const reads = { terminal: 0, unified: 0 }
+const keyVisits = { terminal: 0, unified: 0 }
 let renders = 0
 const workspace = (index: number) => `folder:workspace-${index}`
 const scope = (index: number) => `agent-session:session-${index}`
 function counted<T extends object>(map: T, kind: keyof typeof reads): T {
-  return new Proxy(map, { ownKeys: (target) => (reads[kind]++, Reflect.ownKeys(target)) })
+  return new Proxy(map, {
+    ownKeys: (target) => {
+      reads[kind]++
+      const keys = Reflect.ownKeys(target)
+      keyVisits[kind] += keys.length
+      return keys
+    }
+  })
 }
 function tab(index: number, workspaces: number): Tab {
   return {
@@ -121,6 +132,7 @@ function Composer({ index }: SubscriberProps) {
 }
 
 afterEach(() => {
+  stopRootExitOwner()
   cleanup()
   drafts.clearNativeChatComposerDraftsForTests()
   resetStructuredAgentSessionStatusFeedsForTests()
@@ -140,6 +152,7 @@ it.each(
 )('$name scan budget at $population.chats chats', async (testCase) => {
   const { name, Subscriber, population } = testCase
   seed(population.chats, population.workspaces, population.terminalsPerWorkspace)
+  stopRootExitOwner = getTabAgentExitOwner(getAgentStatusOwner(useAppStore)).start()
   const resolveOwner = vi.fn((key: string) =>
     resolveNativeChatDraftOwner(useAppStore.getState(), key)
   )
@@ -195,6 +208,7 @@ it.each(
   )
   const terminals = counted({ ...state.tabsByWorktree }, 'terminal')
   reads.terminal = reads.unified = 0
+  keyVisits.terminal = keyVisits.unified = 0
   await act(async () =>
     useAppStore.setState({
       unifiedTabsByWorktree: replacement,
@@ -204,6 +218,13 @@ it.each(
   )
   expect(reads.terminal).toBeLessThanOrEqual(1)
   expect(reads.unified).toBeLessThanOrEqual(1)
+  expect(keyVisits.terminal).toBeLessThanOrEqual(population.workspaces)
+  expect(keyVisits.unified).toBeLessThanOrEqual(population.workspaces)
+  const countedWork = { reads: { ...reads }, keyVisits: { ...keyVisits } }
+  resolveNativeChatDraftOwner(useAppStore.getState(), scope(0))
+  expect(reads).toEqual(countedWork.reads)
+  expect(keyVisits).toEqual(countedWork.keyVisits)
+  console.info('root-discovery-counts', name, population.chats, countedWork)
   expect(resolveNativeChatDraftOwner(useAppStore.getState(), scope(0))?.workspaceId).toBe(
     workspace(1)
   )

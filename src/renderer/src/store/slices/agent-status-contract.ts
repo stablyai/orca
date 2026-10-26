@@ -1,4 +1,4 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '../agent-status-observers'
 import type {
   AgentStateHistoryEntry,
   AgentStatusEntry,
@@ -159,7 +159,7 @@ export type AgentStatusBatchUpdate =
   | AgentProgramStatusUpdate
 
 export type AgentStatusBatchTransaction = {
-  getState: () => AppState
+  getState: () => AgentStatusReadState
   apply: (update: AgentStatusBatchUpdate) => boolean
   afterCommit: (effect: () => void) => void
 }

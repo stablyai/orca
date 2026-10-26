@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -92,7 +93,7 @@ export function NativeChatResumeInCliButton({
           aria-busy={pending || undefined}
           onClick={(event) => {
             event.stopPropagation()
-            const subject = resolveTabSessionHistorySubject(useAppStore.getState(), {
+            const subject = resolveTabSessionHistorySubject(getAgentStatusState(), {
               tab,
               nativeChat
             })

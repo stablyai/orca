@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { AppState } from '@/store/types'
 import type { RefusedPaneResume } from '../../../shared/agent-status-types'
 import {
@@ -49,7 +50,8 @@ export function forgetRefusedPaneResume(
   if (!identity) {
     return
   }
-  useAppStore.setState((current) => {
+  getAgentStatusOwner(useAppStore).transact((transaction) => {
+    const current = transaction.getState()
     const live = current.agentStatusByPaneKey[paneKey]
     if (
       !live ||
@@ -59,8 +61,7 @@ export function forgetRefusedPaneResume(
     ) {
       return current
     }
-    const next = { ...current.agentStatusByPaneKey }
-    delete next[paneKey]
-    return { agentStatusByPaneKey: next }
+    transaction.setEntry(paneKey, undefined)
+    return undefined
   })
 }

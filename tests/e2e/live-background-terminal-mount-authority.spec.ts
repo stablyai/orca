@@ -184,7 +184,7 @@ async function seedAgentRecoveryMetadata(
   const launchToken = `live-mount-${randomUUID()}`
   await page.evaluate(
     ({ agent, launchToken, paneKey, providerSessionId, worktreeId }) => {
-      const state = window.__store?.getState()
+      const state = window.__agentStatus?.getState()
       if (!state) {
         throw new Error('Renderer store unavailable')
       }
@@ -220,7 +220,7 @@ async function seedAgentRecoveryMetadata(
     .poll(() =>
       page.evaluate(
         ({ paneKey, providerSessionId, worktreeId }) => {
-          const state = window.__store?.getState()
+          const state = window.__agentStatus?.getState()
           const live = state?.agentStatusByPaneKey[paneKey]
           const sleeping = state?.sleepingAgentSessionsByPaneKey[paneKey]
           return {
@@ -257,7 +257,7 @@ async function seedAgentRecoveryMetadata(
 
 async function readRendererBindings(page: Page, identities: TerminalIdentity[]) {
   return page.evaluate((targets) => {
-    const state = window.__store?.getState()
+    const state = window.__agentStatus?.getState()
     return targets.map(({ leafId, tabId }) => ({
       tabId,
       tabPtyId:
@@ -369,7 +369,7 @@ async function faultProjectionAndActivate(
     .poll(() =>
       page.evaluate(
         ({ tabIds, worktreeId }) => {
-          const state = window.__store?.getState()
+          const state = window.__agentStatus?.getState()
           const tabs = state?.tabsByWorktree[worktreeId] ?? []
           return tabIds.every(
             (tabId) =>
@@ -410,7 +410,7 @@ async function faultProjectionAndActivate(
         }
         return { tabsByWorktree, ptyIdsByTabId, terminalLayoutsByTabId }
       })
-      const next = store.getState()
+      const next = window.__agentStatus!.getState()
       next.setActiveRepo(
         next.repos.find((repo) => repo.id === worktreeId.split('::')[0])?.id ?? null
       )
@@ -420,7 +420,6 @@ async function faultProjectionAndActivate(
     },
     {
       activeTabId,
-      // Why none with the switch on: main's frames own the bindings, and no window write drops one.
       identities: LAYOUT_OWNER_BUILD ? [] : terminals,
       worktreeId
     }
@@ -432,7 +431,7 @@ async function faultProjectionAndActivate(
 async function activateTerminal(page: Page, worktreeId: string, tabId: string): Promise<void> {
   await page.evaluate(
     ({ tabId, worktreeId }) => {
-      const state = window.__store?.getState()
+      const state = window.__agentStatus?.getState()
       state?.setActiveRepo(
         state.repos.find((repo) => repo.id === worktreeId.split('::')[0])?.id ?? null
       )
@@ -545,17 +544,17 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     .poll(() =>
       orcaPage.evaluate(
         async ({ repoId, command, windowsShell, hookDefaults }) => {
-          const state = window.__store?.getState()
+          const state = window.__agentStatus?.getState()
           await state?.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
           if (!repo) {
             return false
           }
           const hookSettings = repo.hookSettings ?? hookDefaults
-          await window.__store?.getState().updateRepo(repoId, {
+          await window.__agentStatus?.getState().updateRepo(repoId, {
             hookSettings: { ...hookSettings, setupAgentStartupPolicy: 'start-immediately' }
           })
-          await window.__store?.getState().updateSettings({
+          await window.__agentStatus?.getState().updateSettings({
             agentCmdOverrides: { codex: command },
             terminalWindowsShell: windowsShell,
             disabledTuiAgents: [],

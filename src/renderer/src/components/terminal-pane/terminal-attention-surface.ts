@@ -1,5 +1,5 @@
 /** Binds provider-neutral attention policy to terminal state; owns PTY/leaf/layout admission checks. */
-import type { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type {
   AgentAttentionSubject,
   AgentAttentionSurface,
@@ -17,7 +17,7 @@ import {
 import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+type StoreSnapshot = AgentStatusReadState
 
 function admitTerminalPane(
   state: StoreSnapshot,

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AppState } from '@/store/types'
 import type {
@@ -29,7 +30,7 @@ export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | und
 const EMPTY_RECORD = {}
 
 type WorktreeAgentRowsState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
@@ -271,7 +272,7 @@ export function selectRetainedAgentEntriesForWorktree(
 // Share one orchestration index across cards instead of scanning all contexts per card per publication.
 export function selectRuntimeAgentOrchestrationForWorktree(
   state: Pick<
-    AppState,
+    AgentStatusReadState,
     | 'agentStatusByPaneKey'
     | 'retainedAgentsByPaneKey'
     | 'runtimeAgentOrchestrationByPaneKey'

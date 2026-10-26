@@ -28,3 +28,16 @@ export function settleAgentLaunchPaneStart(
     settle?.(startedPtyId)
   }
 }
+
+export function prepareAgentLaunchPaneSettlement(tabId: string, leafId: string) {
+  const key = startKey(tabId, leafId)
+  const settle = pendingStarts.get(key)
+  return {
+    install: () => {
+      if (pendingStarts.get(key) === settle) {
+        pendingStarts.delete(key)
+      }
+    },
+    effects: [() => settle?.(null)]
+  }
+}

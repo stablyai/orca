@@ -1,3 +1,4 @@
+import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -24,11 +25,23 @@ const {
   toHostSessionTabIdMock: vi.fn((tabId: string) => tabId)
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: getStateMock
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  const canonical = createTestStore()
+  return {
+    useAppStore: {
+      get getState() {
+        applyAgentStatusPatch(canonical, {
+          ...canonical.getInitialState(),
+          runtimeEnvironmentCatalogHydrated: true,
+          ...getStateMock()
+        })
+        return canonical.getState
+      }
+    }
   }
-}))
+})
 
 vi.mock('@/lib/browser-uuid', () => ({
   createBrowserUuid: createBrowserUuidMock
@@ -474,20 +487,16 @@ describe('closeTerminalTab', () => {
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
-          {
+          makeUnifiedTab({
             id: 'unified-tab-1',
             entityId: 'terminal-entity-1',
-            contentType: 'terminal',
             groupId: 'group-1',
             worktreeId: 'wt-1',
             label: 'Claude',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
             createdAt: 0,
             isPreview: false,
             isPinned: false
-          }
+          })
         ]
       },
       activeWorktreeId: 'wt-1',
@@ -516,34 +525,27 @@ describe('closeTerminalTab', () => {
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
-          {
+          makeUnifiedTab({
             id: 'unified-tab-1',
             entityId: 'terminal-entity-1',
-            contentType: 'terminal',
             groupId: 'group-1',
             worktreeId: 'wt-1',
             label: 'Claude',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
             createdAt: 0,
             isPreview: false,
             isPinned: false
-          },
-          {
+          }),
+          makeUnifiedTab({
             id: 'unified-tab-2',
             entityId: 'terminal-entity-2',
-            contentType: 'terminal',
             groupId: 'group-1',
             worktreeId: 'wt-1',
             label: 'Terminal',
-            customLabel: null,
-            color: null,
             sortOrder: 1,
             createdAt: 0,
             isPreview: false,
             isPinned: false
-          }
+          })
         ]
       },
       activeWorktreeId: 'wt-1',
@@ -605,21 +607,17 @@ describe('closeTerminalTab', () => {
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
-          {
+          makeUnifiedTab({
             id: 'unified-pinned-1',
             entityId: 'pinned-entity-1',
-            contentType: 'terminal',
             groupId: 'group-1',
             worktreeId: 'wt-1',
             label: 'Server',
             generatedLabel: null,
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
             createdAt: 0,
             isPreview: false,
             isPinned: true
-          }
+          })
         ]
       },
       activeWorktreeId: 'wt-1',

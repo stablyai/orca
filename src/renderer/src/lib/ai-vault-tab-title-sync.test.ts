@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
@@ -11,7 +12,6 @@ import {
   settleAiVaultTitleRequestBatches
 } from './ai-vault-tab-title-batches'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
-import type { AppState } from '@/store/types'
 
 function terminalTab(worktreeId: string, aiVaultTitle?: TerminalTab['aiVaultTitle']): TerminalTab {
   return {
@@ -41,7 +41,7 @@ function makeState(args: {
 }) {
   const agent = args.agent ?? 'codex'
   const tab = terminalTab(args.worktreeId, args.aiVaultTitle)
-  const listeners = new Set<(state: AppState, previous: AppState) => void>()
+  const listeners = new Set<(state: AgentStatusReadState, previous: AgentStatusReadState) => void>()
   const providerSession = {
     key: 'session_id' as const,
     id: `${agent}-session`,
@@ -106,7 +106,7 @@ function makeState(args: {
         listener(state, previous)
       }
     }
-  } as unknown as AppState
+  } as unknown as AgentStatusReadState
   return {
     getState: () => state,
     pingAgentStatus: () => {
@@ -159,7 +159,7 @@ function makeState(args: {
         listener(state, previous)
       }
     },
-    subscribe: (listener: (next: AppState, previous: AppState) => void) => {
+    subscribe: (listener: (next: AgentStatusReadState, previous: AgentStatusReadState) => void) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     }

@@ -1,4 +1,5 @@
 import { useAppStore } from '../../store'
+import { getAgentStatusState } from '@/store/agent-status'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -107,7 +108,7 @@ export function createTerminalPanePasteExecution(
   const resolvePaneProtectedMultilinePasteOptions = (
     pane: ManagedPane
   ): TerminalPasteTextOptions | undefined => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const options = resolveProtectedMultilinePasteOptionsForPane({
       isWindowsClient: forceBracketedMultilineTextPaste,
       hostPlatform: resolveTerminalInputHostPlatform({

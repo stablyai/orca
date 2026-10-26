@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { runAgentHibernationTick } from './agent-hibernation-coordinator'
@@ -97,7 +98,7 @@ describe('agent sleep coordinator runtime-liveness races', () => {
       )
     )
     // Runtime ownership resolves while the `wt-bg` inventory is still outstanding.
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       worktreesByRepo: {
         'fixture-repo': ['wt-bg', 'wt-late'].map((id) => ({
           id,

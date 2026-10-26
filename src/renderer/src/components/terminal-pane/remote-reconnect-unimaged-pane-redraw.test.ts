@@ -10,7 +10,6 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -20,13 +19,23 @@ import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 // Without a recovered host image, idle differential TUIs need a real one-row resize then restoration; same-size SIGWINCH does not force Node repaint (#26887).
 
 const scheduleRuntimeGraphSync = vi.fn()
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
-}))
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: () => () => {}
+    }
+  }
+})
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -81,7 +90,7 @@ async function connectVisibleRemotePane(
   outcome: (() => Promise<Outcome>) | Outcome,
   opts: { visible?: boolean } = {}
 ): Promise<ReconnectedPane> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = vi.fn()
   transport.serializeBufferOutcome = vi.fn(
@@ -96,7 +105,7 @@ async function connectVisibleRemotePane(
   })
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
+  const deps = buildPaneConnectionDeps(storeFixture, {
     isVisibleRef: { current: opts.visible ?? true }
   })
   const disposable = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
@@ -134,7 +143,7 @@ describe('a reconnected remote pane the host could not image', () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
     Object.assign(window.api.platform, {
       get: vi.fn(() => ({ platform: 'darwin', osRelease: '25.0.0' }))
@@ -143,6 +152,7 @@ describe('a reconnected remote pane the host could not image', () => {
 
   afterEach(async () => {
     vi.useRealTimers()
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 

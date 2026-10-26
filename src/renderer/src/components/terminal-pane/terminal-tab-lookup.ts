@@ -7,7 +7,7 @@ export function getCachedTerminalTabForWorktree(
   worktreeId: string,
   tabId: string
 ): TerminalTab | null {
-  const tabs = tabsByWorktree[worktreeId]
+  const tabs = Object.hasOwn(tabsByWorktree, worktreeId) ? tabsByWorktree[worktreeId] : undefined
   if (!tabs) {
     return null
   }

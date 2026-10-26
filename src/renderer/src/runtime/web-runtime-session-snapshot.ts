@@ -1,7 +1,8 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { useAppStore } from '../store'
+import '../store'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
@@ -114,13 +115,13 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       return
     }
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
-      useAppStore.getState(),
+      getAgentStatusState(),
       snapshot,
       environmentId,
       {
         expectedEnvironmentPairingRevision,
         expectedRuntimeId: runtimeId,
-        getCurrentState: () => useAppStore.getState()
+        getCurrentState: () => getAgentStatusState()
       }
     )
     if (
@@ -179,7 +180,7 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
   worktreeId: string,
   expectedEnvironmentPairingRevision = getRuntimeEnvironmentRevision(environmentId)
 ): void {
-  const initialState = useAppStore.getState()
+  const initialState = getAgentStatusState()
   if (!('tabsByWorktree' in initialState)) {
     return
   }
@@ -202,7 +203,7 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
         await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
           expectedEnvironmentPairingRevision
         })
-        if ((useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0) {
+        if ((getAgentStatusState().tabsByWorktree[worktreeId] ?? []).length > 0) {
           return
         }
       }

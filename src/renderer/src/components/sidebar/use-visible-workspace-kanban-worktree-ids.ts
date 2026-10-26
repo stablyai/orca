@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
@@ -68,7 +69,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     void agentStatusEpoch
     return !showSleepingWorkspaces
       ? getWorktreeIdsWithLiveAgent(
-          useAppStore.getState().agentStatusByPaneKey,
+          getAgentStatusState().agentStatusByPaneKey,
           tabsByWorktree,
           agentStatusNow
         )

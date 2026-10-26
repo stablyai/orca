@@ -1,3 +1,4 @@
+import { terminalFactSetter } from '../terminal-fact-publication'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -28,7 +29,7 @@ export function createTerminalTabPresentationActions(
 > {
   return {
     updateTabTitle: (tabId, title) => {
-      set((state) => {
+      terminalFactSetter(set, get, [tabId])((state) => {
         const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }])
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
@@ -40,7 +41,11 @@ export function createTerminalTabPresentationActions(
       if (updates.length === 0) {
         return
       }
-      set((state) => {
+      terminalFactSetter(
+        set,
+        get,
+        updates.map((update) => update.tabId)
+      )((state) => {
         const result = applyTerminalTabTitleUpdates(state, updates)
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
@@ -49,7 +54,7 @@ export function createTerminalTabPresentationActions(
       })
     },
     setAiVaultTabTitle: (tabId, aiVaultTitle) => {
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         if (!ownerWorktreeId) {
           return s
@@ -102,7 +107,7 @@ export function createTerminalTabPresentationActions(
       if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
         return
       }
-      set((latestState) => {
+      terminalFactSetter(set, get, [tabId])((latestState) => {
         const result = applyGeneratedTabTitleUpdates(latestState, [{ paneKey, prompt, options }])
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
@@ -114,7 +119,13 @@ export function createTerminalTabPresentationActions(
       if (updates.length === 0) {
         return
       }
-      set((state) => {
+      terminalFactSetter(
+        set,
+        get,
+        updates
+          .map((update) => getTabIdFromPaneKey(update.paneKey))
+          .filter((id): id is string => id !== null)
+      )((state) => {
         const result = applyGeneratedTabTitleUpdates(state, updates)
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
@@ -123,7 +134,7 @@ export function createTerminalTabPresentationActions(
       })
     },
     clearTabLaunchAgent: (tabId) => {
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         if (!ownerWorktreeId) {
           return s
@@ -138,12 +149,14 @@ export function createTerminalTabPresentationActions(
         void _launchAgent
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
+        const next = { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs }
+        adoptTerminalTabOwnerMetadataOnlyBuckets(s.tabsByWorktree, next, [ownerWorktreeId])
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return { tabsByWorktree: next }
       })
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
         const prevTitle = currentByPane[paneId]
         if (prevTitle === title) {
@@ -171,7 +184,7 @@ export function createTerminalTabPresentationActions(
       })
     },
     clearRuntimePaneTitle: (tabId, paneId) => {
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const currentByPane = s.runtimePaneTitlesByTabId[tabId]
         if (!currentByPane || !(paneId in currentByPane)) {
           return s

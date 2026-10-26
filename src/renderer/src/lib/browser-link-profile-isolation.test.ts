@@ -14,8 +14,14 @@ import {
   type BrowserLinkTestStore
 } from './browser-link-open.test-fixture'
 
-const mocks = vi.hoisted(() => ({ getState: vi.fn(), ensureProfile: vi.fn() }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.getState() } }))
+const mocks = vi.hoisted(() => ({ ensureProfile: vi.fn() }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    get getState() {
+      return store.getState
+    }
+  }
+}))
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
@@ -36,7 +42,6 @@ beforeEach(() => {
   })
   mocks.ensureProfile.mockReset()
   store = createBrowserLinkTestStore()
-  mocks.getState.mockImplementation(() => store.getState())
   store.setState({
     defaultBrowserSessionProfileIdByHostId: { local: 'default' },
     browserSessionProfilesByHostId: {

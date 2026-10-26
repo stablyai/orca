@@ -46,22 +46,22 @@ import {
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionReattachModeResetTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function setReattachPaneTitle(title: string): void {
-    mockStoreState = buildReattachPaneTitleState(mockStoreState, title)
+    storeFixture.patch(buildReattachPaneTitleState(storeFixture.read(), title))
   }
 
   // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
-    mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
+    storeFixture.patch(buildActiveRuntimeEnvironmentState(storeFixture.read(), environmentId))
   }
 
   describe('connectPanePty', () => {
@@ -71,9 +71,10 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -86,19 +87,20 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('retries a fresh-spawn native follow reset when renderer dimensions return', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { getTerminalScrollIntentKind } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('fresh-pty')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
-      } as StoreState
+      })
       const pane = createPane(1)
       pane.terminal.buffer.active.viewportY = 40
       pane.terminal.buffer.active.baseY = 100
@@ -130,7 +132,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('writes the daemon pendingEscapeTailAnsi after the reset on local reattach (#7329)', async () => {
       // Why: re-arm the mid-escape tail LAST, after the reattach reset whose ESC would abort it, so a live continuation completes it.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -145,10 +147,10 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         return null
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -172,19 +174,23 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('answers cursor queries while an account notice blocks user input', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
-      mockStoreState.codexRestartNoticeByPtyId = {
-        'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
-      }
+      storeFixture.patch({
+        codexRestartNoticeByPtyId: {
+          'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
+        }
+      })
       const pane = createPane(1)
       const args = mockPanePtyArgs(pane, createManager(1), createDeps())
       const binding = connectPanePty(...args)
       transport.getPtyId.mockReturnValue('pty-live')
-      mockStoreState.codexRestartNoticeByPtyId = {
-        'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
-      }
+      storeFixture.patch({
+        codexRestartNoticeByPtyId: {
+          'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
+        }
+      })
       sendTerminalInputThroughPane(pane, '\x1b[1;1R')
       sendTerminalInputThroughPane(pane, 'do work\r')
       expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[1;1R')
@@ -194,7 +200,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('routes native onData query replies through sendInputImmediate, typed input through sendInput (#7329)', async () => {
       // Why this test: the mock aliases sendInputImmediate to sendInput, so other tests can't tell them apart; this pins the routing decision.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const transport = createMockTransport('remote:web-env-1@@pty-7329')
@@ -236,7 +242,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {
       // Why this test: the onReplayData meta pass-through had no failing test — severing it kept the suite green.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const writes: string[] = []
@@ -282,7 +288,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('preserves live modes and injects focus-in after focused agent reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -321,7 +327,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -363,7 +369,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it.each([false, true])('cold restore fallback notice: %s', async (fallback) => {
       // Persisted titles/status describe the dead agent after cold restore; preserving its modes sends junk reports to the replacement shell (#12101).
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -413,7 +419,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
       // Main can adopt during apparent fresh spawn; cold-restore mode reset must survive this second entry path (#12101).
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       let activePtyId = 'tab-pty'
       transport.getPtyId.mockImplementation(() => activePtyId)
@@ -446,7 +452,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           await mainStartsPaneAs({
             ptyId: 'adopted-pty',
-            bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
+            bind: bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_1)
           })
         }
 
@@ -479,7 +485,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('keeps ?25h in the live agent reattach reset when the snapshot leaves the cursor visible', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -515,7 +521,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -549,7 +555,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('resets stale focus and cursor modes for a focused non-agent shell reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -590,7 +596,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     // Reattach must preserve snapshot-restored mouse modes or xterm selection overrides the live TUI (#8291).
     const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId ? { id: sessionId, snapshot } : null
@@ -627,7 +633,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('does not treat persisted tab launchAgent metadata as a live agent reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -637,15 +643,15 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
       transportFactoryQueue.push(transport)
       // Why: launchAgent is launch-ownership metadata that never decays; it must not preserve stale modes for a shell left after agent death.
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'zsh', launchAgent: 'claude' }]
         },
         runtimePaneTitlesByTabId: {
           'tab-1': { 1: 'zsh' }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const textarea = {} as HTMLTextAreaElement
@@ -673,7 +679,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('does not treat an agent-name token in a shell title as a live agent reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -711,7 +717,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('does not treat ordinary shell scrollback mentioning Cursor Agent as a live agent reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -752,7 +758,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -771,8 +777,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         return null
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'Codex done' }]
         },
@@ -780,9 +786,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           'tab-1': { 1: 'Codex done' }
         },
         settings: {
-          ...mockStoreState.settings
+          ...storeFixture.read().settings
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)

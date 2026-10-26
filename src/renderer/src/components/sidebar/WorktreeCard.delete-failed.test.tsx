@@ -23,37 +23,44 @@ let worktreesByRepo: Record<string, Worktree[]> = {}
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let deleteStateByWorktreeId: Record<string, { isDeleting: boolean; error: string | null }> = {}
 
-vi.mock('@/store', () => {
-  const getState = () => ({
-    deleteStateByWorktreeId,
-    fetchHostedReviewForBranch,
-    fetchIssue,
-    fetchLinearIssue,
-    gitConflictOperationByWorktree: {},
-    hostedReviewCache: {},
-    issueCache: {},
-    linearIssueCache: {},
-    openModal,
-    projectGroups: [],
-    remoteBranchConflictByWorktreeId: {},
-    runtimeEnvironments,
-    runtimeStatusByEnvironmentId,
-    removedSshTargetLabels,
-    settings: null,
-    sshConnectionStates,
-    sshStateByEnvironment,
-    sshTargetLabels,
-    sshTargetsHydrated: true,
-    updateWorktreeMeta,
-    worktreesByRepo,
-    worktreeCardProperties
-  })
-  return {
-    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
-      getState,
-      subscribe: () => () => {}
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const getState = () => ({
+      deleteStateByWorktreeId,
+      fetchHostedReviewForBranch,
+      fetchIssue,
+      fetchLinearIssue,
+      gitConflictOperationByWorktree: {},
+      hostedReviewCache: {},
+      issueCache: {},
+      linearIssueCache: {},
+      openModal,
+      projectGroups: [],
+      remoteBranchConflictByWorktreeId: {},
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      removedSshTargetLabels,
+      settings: null,
+      sshConnectionStates,
+      sshStateByEnvironment,
+      sshTargetLabels,
+      sshTargetsHydrated: true,
+      updateWorktreeMeta,
+      worktreesByRepo,
+      worktreeCardProperties
     })
-  }
+    return {
+      useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+        getState,
+        subscribe: () => () => {}
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@/lib/worktree-activation', () => ({

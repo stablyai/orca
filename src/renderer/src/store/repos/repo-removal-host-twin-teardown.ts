@@ -125,6 +125,7 @@ export function closeRemovedHostTwinState(
     }))
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.
     cancelStructuredLaunchesForWorktrees(
+      get(),
       new Set(hostTwinIds.keys()),
       (worktreeId, launchHostId) =>
         removedHostCanonicalizer(

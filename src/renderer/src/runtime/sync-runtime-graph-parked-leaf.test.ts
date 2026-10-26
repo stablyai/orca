@@ -1,8 +1,11 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // Live parked leaves preserve paired-client terminal handles (STA-2854); unmount alone must not invalidate actively viewed streams. Park watchers prove liveness and retire on reveal/close/exit/workspace teardown so dead terminals still disappear.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { AppState } from '../store/types'
+
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
@@ -22,8 +25,8 @@ const LEAF = '22222222-2222-4222-8222-222222222222'
 const PARKED_PTY = 'wt-1::/tmp/wt@@parked-pty'
 const TAB_ID = 'parked-tab-1'
 
-function makeState(overrides: Partial<AppState> = {}): AppState {
-  return {
+function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
+  return makeAgentStatusReadState({
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -38,7 +41,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     editorDrafts: {},
     activeTabId: null,
     ...overrides
-  } as AppState
+  })
 }
 
 function parkedTab(): TerminalTab {
@@ -57,7 +60,7 @@ function parkedTab(): TerminalTab {
 function parkedState(
   ptyIdsByLeafId: Record<string, string> = { [LEAF]: PARKED_PTY },
   activeLeafId: string = LEAF
-): AppState {
+): AgentStatusReadState {
   const leafIds = Object.keys(ptyIdsByLeafId)
   const root = leafIds.slice(1).reduce<Record<string, unknown>>(
     (first, leafId) => ({

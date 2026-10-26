@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '../../../agent-status-observers'
 import type { AppState } from '../../../types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -137,15 +138,16 @@ export function collectHostTwinPurgeScopes(
  * buckets, raw-id module stores and surfaces with no host evidence stay: they may be the twin's.
  */
 export function buildHostTwinPurgeState(
-  s: AppState,
+  s: AgentStatusReadState,
   hostId: ExecutionHostId,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
-): Partial<AppState> {
+): Partial<AgentStatusReadState> {
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
   const canonical = (worktreeId: string) =>
     removedHostCanonicalizer(s, worktreeId, hostId, twinHostIds.get(worktreeId) ?? [])
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
+    s,
     twinIds,
     (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId
   )

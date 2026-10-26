@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeOpenFile } from '../../store/slices/store-session-test-harness'
@@ -36,7 +38,7 @@ import {
   flushPendingClearCompletedEvictions
 } from './activity-clear-completed'
 
-const initialState = useAppStore.getState()
+const initialState = getAgentStatusOwner(useAppStore).getState()
 const fileId = 'discarded-activity-document'
 const dropPersistedBatch = vi.fn()
 
@@ -59,13 +61,13 @@ function clearWithOpenDraft(clear: boolean = true) {
     responsePreview: '',
     events: []
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     openFiles: [makeOpenFile({ id: fileId, worktreeId: 'wt-1' })],
     retainedAgentsByPaneKey: { [paneKey]: retained },
     agentStatusByPaneKey: { [paneKey]: retained.entry }
   })
   useAppStore.getState().setEditorDraft(fileId, 'Discarded editor draft\n')
-  const state = useAppStore.getState()
+  const state = getAgentStatusOwner(useAppStore).getState()
   const retired = {
     state: new WeakRef(state),
     drafts: new WeakRef(state.editorDrafts),
@@ -92,14 +94,14 @@ async function collectRetiredState(): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  useAppStore.setState(initialState, true)
+  applyAgentStatusPatch(useAppStore, initialState)
   vi.stubGlobal('window', { api: { agentStatus: { dropPersistedBatch } } })
 })
 
 afterEach(() => {
   feedback.release()
   flushPendingClearCompletedEvictions()
-  useAppStore.setState(initialState, true)
+  applyAgentStatusPatch(useAppStore, initialState)
   vi.clearAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()

@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -94,39 +95,81 @@ vi.mock('../../../../shared/agent-title-decoration', () => ({
     title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
 }))
 
-vi.mock('../../store', () => ({
-  useAppStore: (
-    selector: (state: {
-      unreadTerminalTabs: Record<string, boolean>
-      agentStatusByPaneKey: Record<string, never>
-    }) => unknown
-  ) => selector({ unreadTerminalTabs: {}, agentStatusByPaneKey: {} })
-}))
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
 
-vi.mock('@/store', () => ({
-  useAppStore: (
-    selector: (state: {
-      openMarkdownPreview: () => void
-      settings: null
-      unreadTerminalTabs: Record<string, boolean>
-      agentStatusByPaneKey: Record<string, never>
-      browserPagesByWorkspace: Record<string, never>
-      browserAudiblePageIds: Record<string, never>
-      browserAudioMutedTabIds: Record<string, never>
-      setBrowserTabAudioMuted: () => void
-    }) => unknown
-  ) =>
-    selector({
-      openMarkdownPreview: vi.fn(),
-      settings: null,
-      unreadTerminalTabs: {},
-      agentStatusByPaneKey: {},
-      browserPagesByWorkspace: {},
-      browserAudiblePageIds: {},
-      browserAudioMutedTabIds: {},
-      setBrowserTabAudioMuted: vi.fn()
-    })
-}))
+  const fixture = {
+    useAppStore: (
+      selector: (state: {
+        unreadTerminalTabs: Record<string, boolean>
+        agentStatusByPaneKey: Record<string, never>
+        browserPagesByWorkspace: Record<string, never>
+        browserAudiblePageIds: Record<string, never>
+        browserAudioMutedTabIds: Record<string, never>
+        setBrowserTabAudioMuted: () => void
+      }) => unknown
+    ) =>
+      selector({
+        unreadTerminalTabs: {},
+        agentStatusByPaneKey: {},
+        browserPagesByWorkspace: {},
+        browserAudiblePageIds: {},
+        browserAudioMutedTabIds: {},
+        setBrowserTabAudioMuted: vi.fn()
+      })
+  }
+  const readFixture = () => ({
+    unreadTerminalTabs: {},
+    agentStatusByPaneKey: {},
+    browserPagesByWorkspace: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
+    setBrowserTabAudioMuted: vi.fn()
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
+
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (
+      selector: (state: {
+        openMarkdownPreview: () => void
+        settings: null
+        unreadTerminalTabs: Record<string, boolean>
+        agentStatusByPaneKey: Record<string, never>
+        browserPagesByWorkspace: Record<string, never>
+        browserAudiblePageIds: Record<string, never>
+        browserAudioMutedTabIds: Record<string, never>
+        setBrowserTabAudioMuted: () => void
+      }) => unknown
+    ) =>
+      selector({
+        openMarkdownPreview: vi.fn(),
+        settings: null,
+        unreadTerminalTabs: {},
+        agentStatusByPaneKey: {},
+        browserPagesByWorkspace: {},
+        browserAudiblePageIds: {},
+        browserAudioMutedTabIds: {},
+        setBrowserTabAudioMuted: vi.fn()
+      })
+  }
+  const readFixture = () => ({
+    openMarkdownPreview: vi.fn(),
+    settings: null,
+    unreadTerminalTabs: {},
+    agentStatusByPaneKey: {},
+    browserPagesByWorkspace: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
+    setBrowserTabAudioMuted: vi.fn()
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/store/selectors', () => ({
   useRepoById: () => ({ connectionId: null }),
@@ -399,4 +442,14 @@ describe('tab title tooltips', () => {
     expect(textSpanHtml(markup, 'VeryLongEditorFileName.tsx')).not.toContain('renamed')
     expectTabContainerWidth(markup, root)
   })
+})
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
 })

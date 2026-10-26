@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useMemo } from 'react'
@@ -311,7 +312,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
         collapsedGroups: new Set()
       })
       useAppStore.setState(state)
-      const fullState = useAppStore.getState()
+      const fullState = getAgentStatusState()
       const repoMap = getRepoMapFromState(fullState)
       const options = buildVisibleWorktreeOptionsFromState(fullState, repoMap)
       const lines = [

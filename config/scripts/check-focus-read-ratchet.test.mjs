@@ -37,6 +37,26 @@ describe('countFocusSettingReads', () => {
     expect(countFocusSettingReads(src)).toBe(5)
   })
 
+  it('ignores comment periods and returned action bags during reader discovery', () => {
+    const path = 'src/renderer/src/fixture.ts'
+    const code = [
+      'export function buildDefaults() {',
+      '  return {',
+      '    // Local until the user picks a runtime.',
+      '    activeRuntimeEnvironmentId: null',
+      '  }',
+      '}',
+      'export function focusedId(s) { return s.activeRuntimeEnvironmentId }',
+      'export const createActions = (s) => ({ run: () => { focusedId(s) } })'
+    ].join('\n')
+    const readers = discoverFocusReaders(new Map([[path, code]]))
+    const names = readers.namesFor(path)
+    expect(names.has('buildDefaults')).toBe(false)
+    expect(names.has('createActions')).toBe(false)
+    expect(names.has('focusedId')).toBe(true)
+    expect(countFocusSettingReads('// Default host.\nactiveRuntimeEnvironmentId: null')).toBe(0)
+  })
+
   it('discovers readers through imports, so a look-alike or a wrapper lowers nothing', () => {
     const readers = discoverFocusReaders(
       new Map([

@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '../../store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -99,7 +99,7 @@ export function useNativeChatInteractiveSend(
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Capture the question baseline before paced/remote delivery so late settlement cannot clear a replacement question’s wait.
       const questionStatusBaseline = stepsAnswer
-        ? useAppStore.getState().agentStatusByPaneKey[paneKey]
+        ? getAgentStatusState().agentStatusByPaneKey[paneKey]
         : undefined
       let settledHandle: NativeChatSendHandle | null = null
       const onSettled = (delivered: boolean): void => {

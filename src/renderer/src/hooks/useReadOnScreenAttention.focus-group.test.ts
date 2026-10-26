@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -27,7 +29,7 @@ const CHAT_SUBJECT = structuredAgentSessionPaneKey(CHAT_TAB, CHAT_SESSION)
 describe('useReadOnScreenAttention focus-group transitions', () => {
   beforeEach(() => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       activeView: 'terminal',
       activeWorktreeId: WORKSPACE,
       activeTabId: TERMINAL_TAB,

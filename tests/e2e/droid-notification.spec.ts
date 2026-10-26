@@ -71,7 +71,7 @@ async function switchToOtherExistingWorktree(page: Page): Promise<string> {
     if (!store) {
       throw new Error('Store unavailable')
     }
-    const state = store.getState()
+    const state = window.__agentStatus!.getState()
     const activeWorktreeId = state.activeWorktreeId
     if (!activeWorktreeId) {
       throw new Error('No active worktree')
@@ -111,13 +111,15 @@ async function getAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
     if (!store) {
       return []
     }
-    return Object.values(store.getState().agentStatusByPaneKey ?? {}).map((entry) => ({
-      paneKey: entry.paneKey,
-      state: entry.state,
-      agentType: entry.agentType,
-      prompt: entry.prompt,
-      lastAssistantMessage: entry.lastAssistantMessage
-    }))
+    return Object.values(window.__agentStatus!.getState().agentStatusByPaneKey ?? {}).map(
+      (entry) => ({
+        paneKey: entry.paneKey,
+        state: entry.state,
+        agentType: entry.agentType,
+        prompt: entry.prompt,
+        lastAssistantMessage: entry.lastAssistantMessage
+      })
+    )
   })
 }
 
@@ -149,7 +151,7 @@ async function isWorktreeUnread(page: Page, worktreeId: string): Promise<boolean
       return false
     }
     return (
-      Object.values(store.getState().worktreesByRepo)
+      Object.values(window.__agentStatus!.getState().worktreesByRepo)
         .flat()
         .find((worktree) => worktree.id === targetWorktreeId)?.isUnread === true
     )

@@ -12,9 +12,15 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mocks.state }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  return withAgentStatusFixture(
+    {
+      useAppStore: { getState: () => mocks.state }
+    },
+    () => mocks.state
+  )
+})
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 
@@ -30,9 +36,11 @@ function buildSession(overrides: Record<string, unknown> = {}): {
     disconnect: vi.fn(),
     serializeBuffer: vi.fn()
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial session supplies every field reached before rejection or the deliberate tracking throw.
   const session = {
     settlePaneAttachAttempt,
     transport,
+    cacheKey: 'tab-1:leaf-1',
     disposed: false,
     transportStreamGeneration: 0,
     authoritativeReattachGeneration: 0,

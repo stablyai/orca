@@ -1,3 +1,5 @@
+import { useAgentStatusSelector, getAgentStatusState } from '@/store/agent-status'
+
 import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
@@ -61,7 +63,7 @@ export function ReviewNotesSendMenuContent({
   const hasPrompt = prompt.trim().length > 0
 
   // Include every workspace agent, not just the focused pane; memoize slice-derived targets to avoid fresh selector arrays.
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAgentStatusSelector((s) => s.agentStatusByPaneKey)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -225,7 +227,7 @@ function resolveCurrentSendTargetEligibility(
     target.messageTarget.kind === 'terminal'
       ? 'Terminal is no longer available'
       : 'Chat is no longer open'
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const currentTarget = deriveNotesSendAgentTargets(
     state,
     worktreeId,

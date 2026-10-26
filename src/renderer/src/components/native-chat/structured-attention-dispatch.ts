@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 /** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
@@ -23,7 +24,7 @@ import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
-import { useAppStore } from '@/store'
+import '@/store'
 import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -70,7 +71,7 @@ function dispatchStructuredAttention(
     return
   }
   const attentionKey = agentSessionAttentionKey(edge)
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const decision = resolveAgentAttention(
     {

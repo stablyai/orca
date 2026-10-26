@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -44,7 +46,7 @@ function waitFromStatus(stateStartedAt: number): void {
 
 beforeEach(() => {
   nativeChatPromptDismissals.clearForTests()
-  useAppStore.setState({ agentStatusByPaneKey: {} })
+  applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
 })
 
 describe('dismissed prompt occurrences outlive the view but not the prompt', () => {

@@ -63,7 +63,9 @@ export function createAgentStatusCleanupActions(
       }
       set((s) => {
         const hasLive = paneKey in s.agentStatusByPaneKey
-        const next = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const next: Record<string, (typeof s.agentStatusByPaneKey)[string]> = hasLive
+          ? { ...s.agentStatusByPaneKey }
+          : s.agentStatusByPaneKey
         if (hasLive) {
           delete next[paneKey]
         }
@@ -99,7 +101,7 @@ export function createAgentStatusCleanupActions(
           sortEpoch: s.sortEpoch + 1
         }
       })
-      freshness.scheduleDeferred()
+      runtime.runAfterCommit(freshness.scheduleDeferred)
     },
 
     removeAgentStatusByTabPrefix: (tabIdPrefix) => {
@@ -163,7 +165,7 @@ export function createAgentStatusCleanupActions(
           sortEpoch: s.sortEpoch + 1
         }
       })
-      freshness.scheduleDeferred()
+      runtime.runAfterCommit(freshness.scheduleDeferred)
     },
 
     clearTransientAgentStatuses: (connectionId, clearedAt) => {
@@ -208,7 +210,7 @@ export function createAgentStatusCleanupActions(
         }
       })
       if (removed) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
     }
   }

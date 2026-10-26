@@ -1,8 +1,10 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { useStore } from 'zustand'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../../store/types'
+
 import {
   createTestStore,
   makeOpenFile,
@@ -19,10 +21,9 @@ import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-sele
 
 let store: ReturnType<typeof createTestStore>
 vi.mock('../../store', () => ({
-  useAppStore: Object.assign(
-    <Result,>(selector: (state: AppState) => Result) => useStore(store, selector),
-    { getState: () => store.getState() }
-  )
+  get useAppStore() {
+    return store
+  }
 }))
 
 function row(
@@ -68,7 +69,7 @@ function entry(paneKey: string, overrides: Partial<AgentStatusEntry> = {}): Agen
 }
 
 function seed(rows: WorkspaceSpaceWorktree[]) {
-  store.setState({
+  applyAgentStatusPatch(store, {
     worktreesByRepo: { repo: rows.map((r) => makeWorktree({ id: r.worktreeId, repoId: 'repo' })) },
     tabsByWorktree: Object.fromEntries(
       rows.map((r) => [
@@ -113,8 +114,8 @@ describe('mounted Space decision projection', () => {
     seed(Array.from({ length: 20 }, (_, i) => row(`w${i}`)))
     let liveProbes = 0,
       retainedProbes = 0
-    const live: AppState['agentStatusByPaneKey'] = {}
-    const retained: AppState['retainedAgentsByPaneKey'] = {}
+    const live: Record<string, AgentStatusEntry> = {}
+    const retained: AgentStatusReadState['retainedAgentsByPaneKey'] = {}
     for (let i = 0; i < 10; i += 1) {
       const paneKey = `w${i}-tab:legacy`
       live[paneKey] = {
@@ -138,7 +139,7 @@ describe('mounted Space decision projection', () => {
         startedAt: 0
       }
     }
-    store.setState({ agentStatusByPaneKey: live, retainedAgentsByPaneKey: retained })
+    applyAgentStatusPatch(store, { agentStatusByPaneKey: live, retainedAgentsByPaneKey: retained })
     const view = mountProjection()
     liveProbes = 0
     retainedProbes = 0
@@ -181,18 +182,20 @@ describe('mounted Space decision projection', () => {
       ])
     )
     expect(details()?.completedAgentCount).toBe(1)
-    act(() => store.setState({ openFiles: [makeOpenFile({ id: 'file', worktreeId: 'w0' })] }))
+    act(() =>
+      applyAgentStatusPatch(store, { openFiles: [makeOpenFile({ id: 'file', worktreeId: 'w0' })] })
+    )
     act(() => store.getState().setEditorDraft('file', 'Changed content'))
     expect(details()?.dirtyEditorBufferCount).toBe(1)
-    act(() => store.setState({ tabsByWorktree: { w0: [] } }))
+    act(() => applyAgentStatusPatch(store, { tabsByWorktree: { w0: [] } }))
     expect(details()?.terminalTabCount).toBe(0)
-    act(() => store.setState({ workspaceSpaceAnalysis: null }))
+    act(() => applyAgentStatusPatch(store, { workspaceSpaceAnalysis: null }))
     expect(view.result.current.decisionDetailsByWorktreeId.size).toBe(0)
   })
 
   it('keeps special own keys and migration workspace-or-tab ownership across host collisions', () => {
     seed([row('w0'), row('w0', 'ssh:host'), row('w1')])
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         w0: [makeTab({ id: 'shared', worktreeId: 'w0' })],
         w1: [makeTab({ id: 'shared', worktreeId: 'w0' })]
@@ -204,7 +207,7 @@ describe('mounted Space decision projection', () => {
         ['shared:legacy', entry('other:legacy')]
       ]),
       migrationUnsupportedByPtyId: Object.fromEntries<
-        AppState['migrationUnsupportedByPtyId'][string]
+        AgentStatusReadState['migrationUnsupportedByPtyId'][string]
       >([
         [
           '__proto__',
@@ -280,24 +283,53 @@ describe('mounted Space decision projection', () => {
         throw new Error('empty analysis enumerated global agent records')
       }
     }
-    store.setState({
-      agentStatusByPaneKey: new Proxy<AppState['agentStatusByPaneKey']>({}, trap),
-      migrationUnsupportedByPtyId: new Proxy<AppState['migrationUnsupportedByPtyId']>({}, trap),
-      retainedAgentsByPaneKey: new Proxy<AppState['retainedAgentsByPaneKey']>({}, trap)
+    applyAgentStatusPatch(store, {
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: new Proxy<AgentStatusReadState['migrationUnsupportedByPtyId']>(
+        {},
+        trap
+      ),
+      retainedAgentsByPaneKey: new Proxy<AgentStatusReadState['retainedAgentsByPaneKey']>({}, trap)
+    })
+    const live = getAgentStatusOwner(store).getSnapshot()
+    const values = Object.values,
+      entries = Object.entries,
+      keys = Object.keys
+    vi.spyOn(Object, 'values').mockImplementation((value) => {
+      if (value === live) {
+        throw new Error('empty analysis enumerated live status')
+      }
+      return values(value)
+    })
+    vi.spyOn(Object, 'entries').mockImplementation((value) => {
+      if (value === live) {
+        throw new Error('empty analysis enumerated live status')
+      }
+      return entries(value)
+    })
+    vi.spyOn(Object, 'keys').mockImplementation((value) => {
+      if (value === live) {
+        throw new Error('empty analysis enumerated live status')
+      }
+      return keys(value)
     })
     expect(mountProjection().result.current.decisionDetailsByWorktreeId.size).toBe(0)
   })
 
   it('samples freshness on epoch changes without reusing a stale verdict', () => {
     seed([row('w0')])
-    store.setState({ agentStatusByPaneKey: { 'w0-tab:legacy': entry('w0-tab:legacy') } })
+    applyAgentStatusPatch(store, {
+      agentStatusByPaneKey: { 'w0-tab:legacy': entry('w0-tab:legacy') }
+    })
     const view = mountProjection()
     expect(view.result.current.decisionDetailsByWorktreeId.get('local|w0')?.activeAgentCount).toBe(
       1
     )
     act(() => {
       vi.setSystemTime(3_000_000)
-      store.setState({ agentStatusEpoch: store.getState().agentStatusEpoch + 1 })
+      applyAgentStatusPatch(store, {
+        agentStatusEpoch: store.getState().agentStatusEpoch + 1
+      })
     })
     expect(view.result.current.decisionDetailsByWorktreeId.get('local|w0')?.activeAgentCount).toBe(
       0

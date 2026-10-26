@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -16,7 +17,7 @@ export type AiVaultOriginalPaneTarget = {
 }
 
 export type OriginalPaneState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'retainedAgentsByPaneKey'
   | 'sleepingAgentSessionsByPaneKey'
@@ -177,7 +178,7 @@ export function resolveOriginalPaneTarget(args: {
 
 /** Find live state by provider session ID, falling back to prompt matches only when unambiguous. */
 export function findAiVaultSessionLiveState(
-  state: Pick<AppState, 'agentStatusByPaneKey'>,
+  state: Pick<AgentStatusReadState, 'agentStatusByPaneKey'>,
   session: AiVaultSession
 ): AgentStatusState | null {
   const promptMatchedStates: AgentStatusState[] = []

@@ -1,9 +1,12 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../../store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
@@ -17,11 +20,7 @@ import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
 import { agentStatusEntryEqual } from './state-equality-core'
-import {
-  HOST_WORKING_CLIENT_BOUNDARY_LIMIT,
-  hostWorkingClientBoundaryByPaneKey,
-  type WebSessionTabsSyncState
-} from './state'
+import { HOST_WORKING_CLIENT_BOUNDARY_LIMIT, type WebSessionTabsSyncState } from './state'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -30,14 +29,16 @@ import {
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  buildPatch: (
+    state: AgentStatusReadState
+  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
   allowCompletionNotification = false
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
-  // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
-  let patchCommitted = false
+  const owner = getAgentStatusOwner(useAppStore)
+  const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
   const acceptedNotificationStatuses: {
     paneKey: string
     worktreeId: string
@@ -51,9 +52,10 @@ export function applyWebSessionTabsStorePatch(
   }[] = []
 
   const runStorePatch = (
-    state: AppState
+    state: AgentStatusReadState
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
     const patch = buildPatch(state)
+    const hostWorkingClientBoundaryByPaneKey = owner.mirrorBoundaries()
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
@@ -138,7 +140,10 @@ export function applyWebSessionTabsStorePatch(
                 retainedBoundary.hostPrompt === notificationStatus.prompt
               ) {
                 localStateStartedAt = retainedBoundary.clientStateStartedAt
-                retainedBoundary.stamped = true
+                hostWorkingClientBoundaryByPaneKey.set(notificationStatus.paneKey, {
+                  ...retainedBoundary,
+                  stamped: true
+                })
               }
             }
           }
@@ -176,37 +181,35 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
-    patchCommitted = true
     return patch
   }
 
-  try {
-    useAppStore.setState(runStorePatch)
-  } catch (error) {
-    if (!patchCommitted) {
-      throw error
+  let wasAccepted = () => false
+  owner.transact((transaction) => {
+    wasAccepted = transaction.captureAcceptance()
+    const previous = transaction.getState()
+    const patch = runStorePatch(previous)
+    applyAgentStatusPatch(useAppStore, patch)
+    for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
+      if (decision.apply && source) {
+        transaction.afterCommit(() =>
+          markStructuredAgentSessionLaunchesPublished(
+            toRuntimeExecutionHostId(environmentId),
+            publishedStructuredSessions([source])
+          )
+        )
+      }
     }
-    console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
-  }
-
-  for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
-    if (decision.apply && source) {
-      markStructuredAgentSessionLaunchesPublished(
-        toRuntimeExecutionHostId(environmentId),
-        publishedStructuredSessions([source])
-      )
-    }
-  }
-  const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
-  try {
     if (mirroredAgentStatusChanged) {
-      useAppStore.getState().scheduleAgentStatusFreshness()
+      transaction.afterCommit(() => getAgentStatusState().scheduleAgentStatusFreshness())
     }
     for (const status of acceptedNotificationStatuses) {
-      observeAgentHookCompletionForNotification(status)
+      transaction.afterCommit(() => observeAgentHookCompletionForNotification(status))
     }
-  } catch (error) {
-    console.warn('[web-session-tabs-sync] post-patch bookkeeping failed:', error)
+  })
+  return () => {
+    if (wasAccepted()) {
+      settleHostMirror()
+    }
   }
-  return settleHostMirror
 }

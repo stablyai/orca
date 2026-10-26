@@ -1,3 +1,6 @@
+import { getAgentStatusOwner } from '../../../agent-status-commit'
+import { applyAgentStatusPatch } from '../../../agent-status-patch'
+import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
@@ -247,4 +250,37 @@ describe('the closed-files notice', () => {
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1))
     expect(shownContents()).toEqual(['kept'])
   })
+})
+
+it('an aborted purge cannot alter an already accepted pending notice or steal its token', async () => {
+  const second = `${TEST_REPO.id}::/second`
+  const third = `${TEST_REPO.id}::/third`
+  const store = dirtyStore([GONE, second, third])
+  const owner = getAgentStatusOwner(store)
+  const purge = (id: string) =>
+    applyAgentStatusPatch(store, (state) =>
+      buildFullWorktreePurgeState(state, [{ id, hostId: 'local' }])
+    )
+  purge(GONE)
+  const kept = store.getState().editorBufferKept
+  expect(Object.values(kept).map((entry) => entry.notice)).toEqual([1])
+  expect(() =>
+    owner.transact(() => {
+      purge(second)
+      throw new Error('abort second notice')
+    })
+  ).toThrow('abort second notice')
+  expect(store.getState().editorBufferKept).toBe(kept)
+  expect(store.getState().openFiles.some((file) => file.worktreeId === second)).toBe(true)
+  purge(third)
+  expect(Object.values(store.getState().editorBufferKept).map((entry) => entry.notice)).toEqual([
+    1, 1
+  ])
+  await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1))
+  expect(shownContents()).toEqual([`draft ${GONE}`, `draft ${third}`].sort())
+  expect(show.mock.calls[0][2]).toBe(1)
+  purge(second)
+  await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2))
+  expect(shownContents(1)).toEqual([`draft ${second}`])
+  expect(show.mock.calls[1][2]).toBe(2)
 })

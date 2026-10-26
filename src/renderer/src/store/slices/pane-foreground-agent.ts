@@ -1,3 +1,4 @@
+import { terminalFactSetter } from '../terminal-fact-publication'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -38,10 +39,10 @@ export const createPaneForegroundAgentSlice: StateCreator<
   [],
   [],
   PaneForegroundAgentSlice
-> = (set) => ({
+> = (set, get) => ({
   paneForegroundAgentByPaneKey: {},
   setPaneForegroundAgent: (paneKey, entry) => {
-    set((s) => {
+    terminalFactSetter(set, get, [paneKey])((s) => {
       const current = s.paneForegroundAgentByPaneKey[paneKey]
       if (
         current &&
@@ -60,7 +61,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
     })
   },
   clearPaneForegroundAgent: (paneKey) => {
-    set((s) => {
+    terminalFactSetter(set, get, [paneKey])((s) => {
       if (!(paneKey in s.paneForegroundAgentByPaneKey)) {
         return s
       }

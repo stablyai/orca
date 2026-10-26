@@ -29,11 +29,12 @@ import {
   clearWebSessionTabsTrackingForEnvironment
 } from './web-session-tabs-sync/tracking-lifecycle'
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn()
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)

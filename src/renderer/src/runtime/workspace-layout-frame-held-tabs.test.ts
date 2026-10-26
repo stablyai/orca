@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab } from '../../../shared/tab-types'
@@ -119,7 +121,7 @@ async function boot() {
     reply: LayoutApplyReply = okReply,
     mainChange: (layout: PublishedWorkspaceLayout) => void = () => {}
   ): Promise<void> => {
-    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
+    const frame = publishedOf(buildWorkspaceSessionPayload(getAgentStatusOwner(store).getState()))
     mainChange(frame)
     seq += 1
     stream.onFrame!(frames.records(GIT_KEY, frame, seq))
@@ -169,8 +171,8 @@ function drawTab(
     createdAt: 1_700_000_900_000,
     ...tab
   }
-  const state = store.getState()
-  store.setState({
+  const state = getAgentStatusOwner(store).getState()
+  applyAgentStatusPatch(store, {
     unifiedTabsByWorktree: {
       ...state.unifiedTabsByWorktree,
       [GIT_KEY]: [...state.unifiedTabsByWorktree[GIT_KEY]!, drawn]
@@ -290,7 +292,9 @@ describe('a change main applies first, with frames flowing', () => {
       relativePath: 'src/peek.ts',
       isPreview: true
     }
-    store.setState({ openFiles: [...store.getState().openFiles, file] })
+    applyAgentStatusPatch(store, {
+      openFiles: [...store.getState().openFiles, file]
+    })
     const tab = drawTab(store, {
       id: 'editor:peek',
       entityId: file.id,
@@ -299,7 +303,11 @@ describe('a change main applies first, with frames flowing', () => {
     })
     seq += 1
     stream.onFrame!(
-      frames.records(GIT_KEY, publishedOf(buildWorkspaceSessionPayload(store.getState())), seq)
+      frames.records(
+        GIT_KEY,
+        publishedOf(buildWorkspaceSessionPayload(getAgentStatusOwner(store).getState())),
+        seq
+      )
     )
     stream.onPosition!(seq)
     await settle()
@@ -362,7 +370,9 @@ describe('a change main applies first, with frames flowing', () => {
 
   it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
     const { store, sync } = await boot()
-    store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
+    applyAgentStatusPatch(store, {
+      settings: { ...store.getState().settings!, tabAutoGenerateTitle: true }
+    })
     const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
     const paneKey = makePaneKey('tab-unbound', leafId)
     const renames = () => callsOf('renameTabs')
@@ -373,7 +383,7 @@ describe('a change main applies first, with frames flowing', () => {
     expect(renames()).toEqual([])
 
     const writes = writesOf(store, (state) => state.tabsByWorktree)
-    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
+    const frame = publishedOf(buildWorkspaceSessionPayload(getAgentStatusOwner(store).getState()))
     frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
     stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
     stream.onPosition!(seq)
@@ -391,7 +401,7 @@ describe('a change main applies first, with frames flowing', () => {
     store.getState().setTabCustomTitle('tab-unbound', 'Build')
     const rename = rpc.calls.length - 1
     const writes = writesOf(store, (state) => state.tabsByWorktree)
-    const graphBefore = getRuntimeMobileSessionSyncKey(store.getState())
+    const graphBefore = getRuntimeMobileSessionSyncKey(getAgentStatusOwner(store).getState())
 
     await answer(rename, okReply, (layout) => {
       layout.tabs.find((item) => item.id === 'tab-unbound')!.customTitle = 'Build'
@@ -402,7 +412,7 @@ describe('a change main applies first, with frames flowing', () => {
     // The frame's write changes what the phone graph publishes, so useRuntimeGraphSync republishes.
     expect(
       runtimeMobileSessionSyncKeysEqual(
-        getRuntimeMobileSessionSyncKey(store.getState()),
+        getRuntimeMobileSessionSyncKey(getAgentStatusOwner(store).getState()),
         graphBefore
       )
     ).toBe(false)

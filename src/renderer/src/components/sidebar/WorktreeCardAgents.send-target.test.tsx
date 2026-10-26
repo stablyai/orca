@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,27 +88,51 @@ function targetStoreState(now: number): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      agentActivityDisplayMode: 'full',
-      acknowledgedAgentsByPaneKey: {},
-      retainedAgentsByPaneKey: {},
-      dropAgentStatus: vi.fn(),
-      dismissRetainedAgent: vi.fn(),
-      acknowledgeAgents: vi.fn(),
-      agentSendPopoverTargetMode: null,
-      agentStatusByPaneKey: {},
-      agentStatusEpoch: 0,
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
-      runtimePaneTitlesByTabId: {},
-      sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
-      ...mockStoreState
-    })
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: unknown) => unknown) =>
+      selector({
+        agentActivityDisplayMode: 'full',
+        acknowledgedAgentsByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        dropAgentStatus: vi.fn(),
+        dismissRetainedAgent: vi.fn(),
+        acknowledgeAgents: vi.fn(),
+        agentSendPopoverTargetMode: null,
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 0,
+        tabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        ptyIdsByTabId: {},
+        runtimePaneTitlesByTabId: {},
+        sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
+        ...mockStoreState
+      })
+  }
+  const readFixture = () => ({
+    agentActivityDisplayMode: 'full',
+    acknowledgedAgentsByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    dropAgentStatus: vi.fn(),
+    dismissRetainedAgent: vi.fn(),
+    acknowledgeAgents: vi.fn(),
+    agentSendPopoverTargetMode: null,
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0,
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    ptyIdsByTabId: {},
+    runtimePaneTitlesByTabId: {},
+    sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
+    ...mockStoreState
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
@@ -238,4 +263,14 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).not.toContain('data-agent-send-target="disabled"')
     expect(markup).not.toContain('title="Agent is working"')
   })
+})
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
 })

@@ -55,17 +55,22 @@ const mocks = vi.hoisted(() => ({
   markNativeChatLaunchDraftAdopted: vi.fn()
 }))
 
-vi.mock('../../store', () => {
-  const state = {
+vi.mock('../../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  const { getDefaultSettings, getDefaultVoiceSettings } =
+    await import('../../../../shared/constants')
+  useAppStore.setState({
     dictationState: 'idle',
-    settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    settings: {
+      ...getDefaultSettings('/tmp'),
+      voice: { ...getDefaultVoiceSettings(), enabled: false },
+      nativeChatSessionOptions: {}
+    },
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted
-  }
-  const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
-  useAppStore.getState = () => state
+  })
   return { useAppStore }
 })
 

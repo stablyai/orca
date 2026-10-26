@@ -1,7 +1,10 @@
+import type { AgentStatusBatchUpdate } from '../store/slices/agent-status'
+import { getDefaultSettings } from '../../../shared/constants'
+import type { AppState } from '@/store/types'
+
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  createTestStore,
   makeTab,
   makeUnifiedTab,
   makeWorktree,
@@ -9,18 +12,14 @@ import {
 } from '../store/slices/store-test-helpers'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
-import type { AppState } from '../store/types'
+
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
-  buildStoreState,
-  expectWorktreeRouting,
   FUTURE_LEAF_ID,
   FUTURE_PANE_KEY,
   type AgentStatusSetData,
-  type StoreLike,
-  type StoreSubscribeListener,
   type MobileFitListener,
   type MobileDriverListener,
   type MobileBrowserDriverListener
@@ -63,12 +62,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }))
     stubReactSyncEffect()
     stubAuxiliaryModules()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => buildStoreState({})
-      }
-    }))
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const store = createTestStore()
+    vi.doMock('../store', () => ({ useAppStore: store }))
     vi.stubGlobal(
       'window',
       buildWindowApi({
@@ -170,12 +166,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     })
     stubAuxiliaryModules()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => buildStoreState({})
-      }
-    }))
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const store = createTestStore()
+    vi.doMock('../store', () => ({ useAppStore: store }))
     vi.stubGlobal(
       'window',
       buildWindowApi({
@@ -252,7 +245,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
   })
 
   it('ignores early push events but applies the main-process snapshot after readiness', async () => {
-    const setAgentStatus = vi.fn()
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const { getAgentStatusOwner } = await import('../store/agent-status-commit')
+    const store = createTestStore()
+    const owner = getAgentStatusOwner(store)
+    store.setState({ workspaceSessionReady: false })
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -269,27 +266,24 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
-    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
-
-    const storeState: StoreLike = buildStoreState({
-      setAgentStatus,
-      tabsByWorktree: {},
-      workspaceSessionReady: false
-    })
-    const setAgentStatuses = vi.mocked(storeState.setAgentStatuses as AppState['setAgentStatuses'])
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn((listener: StoreSubscribeListener) => {
-          subscribeListenerRef.current = listener
-          return () => {
-            subscribeListenerRef.current = null
+    const transact = store.getState().transactAgentStatuses
+    const attempted: AgentStatusBatchUpdate[] = []
+    const transactions = vi.fn()
+    const instrumentedTransact: typeof transact = (operation) => {
+      transactions()
+      return transact((transaction) =>
+        operation({
+          ...transaction,
+          apply: (update) => {
+            attempted.push(update)
+            return transaction.apply(update)
           }
-        }),
-        getState: () => storeState
-      }
-    }))
+        })
+      )
+    }
+    store.setState({ transactAgentStatuses: instrumentedTransact })
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({ useAppStore: store }))
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',
@@ -311,6 +305,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
 
+    // Early pushes must not enter the canonical owner before readiness.
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
@@ -319,43 +314,51 @@ describe('useIpcEvents agent status snapshot integration', () => {
       receivedAt: 1_700_000_000_100,
       stateStartedAt: 1_699_999_999_100
     })
-    expect(setAgentStatus).not.toHaveBeenCalled()
+    expect(transactions).not.toHaveBeenCalled()
+    expect(owner.getState().agentStatusByPaneKey[FUTURE_PANE_KEY]).toBeUndefined()
     expect(getSnapshot).not.toHaveBeenCalled()
 
-    const previousStoreState = { ...storeState }
-    storeState.workspaceSessionReady = true
-    storeState.tabsByWorktree = {
-      'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
-    }
-    storeState.terminalLayoutsByTabId = {
-      'tab-future': {
-        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
-        activeLeafId: FUTURE_LEAF_ID,
-        expandedLeafId: null
+    store.setState({
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
       }
-    }
-    if (typeof subscribeListenerRef.current !== 'function') {
-      throw new Error('Expected useAppStore.subscribe listener to be registered')
-    }
-    subscribeListenerRef.current(storeState, previousStoreState)
+    })
     await Promise.resolve()
 
-    expect(setAgentStatus).toHaveBeenCalledTimes(1)
-    expect(setAgentStatuses).toHaveBeenCalledTimes(1)
-    expect(setAgentStatuses.mock.calls[0]?.[0]).toHaveLength(1)
-    expect(setAgentStatus).toHaveBeenCalledWith(
-      FUTURE_PANE_KEY,
+    expect(transactions).toHaveBeenCalledTimes(1)
+    expect(attempted).toHaveLength(1)
+    expect(attempted[0]).toEqual(
       expect.objectContaining({
-        state: 'working',
-        workingMode: 'monitoring',
-        prompt: 'p',
-        agentType: 'claude'
-      }),
-      'Future Tab',
-      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
-      expectWorktreeRouting('wt-1'),
-      undefined
+        paneKey: FUTURE_PANE_KEY,
+        payload: expect.objectContaining({
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'p',
+          agentType: 'claude'
+        }),
+        terminalTitle: 'Future Tab',
+        timing: { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+        routing: expect.objectContaining({ worktreeId: 'wt-1' })
+      })
     )
+    expect(owner.getState().agentStatusByPaneKey[FUTURE_PANE_KEY]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring',
+      prompt: 'p',
+      agentType: 'claude',
+      updatedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    })
   })
 
   it('applies a large snapshot with one status and bounded title publications', async () => {
@@ -397,8 +400,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
           resolveSnapshot = resolve
         })
     )
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const { getAgentStatusOwner } = await import('../store/agent-status-commit')
+    const { applyAgentStatusPatch } = await import('../store/agent-status-patch')
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: { [TEST_REPO.id]: worktrees },
@@ -406,12 +412,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       terminalLayoutsByTabId,
       activeWorktreeId: worktrees[0]?.id ?? null,
       settings: {
-        ...store.getState().settings,
+        ...(store.getState().settings ?? getDefaultSettings('/tmp')),
         tabAutoGenerateTitle: true,
         terminalFontSize: 13
       }
-    } as Partial<AppState>)
-    store.setState({ unifiedTabsByWorktree })
+    })
+    applyAgentStatusPatch(store, { unifiedTabsByWorktree })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -436,20 +442,23 @@ describe('useIpcEvents agent status snapshot integration', () => {
     useIpcEvents()
     await Promise.resolve()
     let relevantPublications = 0
-    const unsubscribe = store.subscribe((state, previousState) => {
+    const { subscribeAgentStatusState } = await import('../store/agent-status')
+    const unsubscribe = subscribeAgentStatusState((state, previousState) => {
       if (
         state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey ||
         state.tabsByWorktree !== previousState.tabsByWorktree
       ) {
         relevantPublications += 1
       }
-    })
+    }, store)
     resolveSnapshot?.(snapshot)
 
     const renamed = () =>
       main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+      expect(Object.keys(getAgentStatusOwner(store).getState().agentStatusByPaneKey)).toHaveLength(
+        paneCount
+      )
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
@@ -520,8 +529,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
           resolveSnapshot = resolve
         })
     )
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const { getAgentStatusOwner } = await import('../store/agent-status-commit')
+    const { applyAgentStatusPatch } = await import('../store/agent-status-patch')
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: {
@@ -536,8 +548,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       },
       setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
-      settings: { ...store.getState().settings, terminalFontSize: 13 }
-    } as Partial<AppState>)
+      settings: {
+        ...(store.getState().settings ?? getDefaultSettings('/tmp')),
+        terminalFontSize: 13
+      }
+    })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -558,7 +573,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     resolveSnapshot(snapshot)
 
     await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+      expect(Object.keys(getAgentStatusOwner(store).getState().agentStatusByPaneKey)).toHaveLength(
+        paneCount
+      )
     })
     expect(tabIdLookupCount).toBe(1)
     expect(leafIdLookupCount).toBe(paneCount)
@@ -622,8 +639,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
           resolveUnsupportedSnapshot = resolve
         })
     )
+    const { createTestStore } = await import('../store/slices/store-test-helpers')
+    const { getAgentStatusOwner } = await import('../store/agent-status-commit')
+    const { applyAgentStatusPatch } = await import('../store/agent-status-patch')
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: {
@@ -633,11 +653,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
       terminalLayoutsByTabId: {},
       setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
       settings: {
-        ...store.getState().settings,
+        ...(store.getState().settings ?? getDefaultSettings('/tmp')),
         terminalFontSize: 13,
         tabAutoGenerateTitle: false
       }
-    } as Partial<AppState>)
+    })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -664,7 +684,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     resolveSnapshot(snapshot)
 
     await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+      expect(Object.keys(getAgentStatusOwner(store).getState().agentStatusByPaneKey)).toHaveLength(
+        paneCount
+      )
     })
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)

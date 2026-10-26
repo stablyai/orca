@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
@@ -112,11 +114,19 @@ describe('which servers get a layout stream', () => {
     await settle()
 
     // Presence: the server is paired and connected, and its workspace mirrored.
-    expect(store.getState().runtimeEnvironments.map((environment) => environment.id)).toEqual([ENV])
-    expect(store.getState().runtimeStatusByEnvironmentId.get(ENV)?.status?.runtimeId).toBe(
-      'runtime-1'
-    )
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_1])
+    expect(
+      getAgentStatusOwner(store)
+        .getState()
+        .runtimeEnvironments.map((environment) => environment.id)
+    ).toEqual([ENV])
+    expect(
+      getAgentStatusOwner(store).getState().runtimeStatusByEnvironmentId.get(ENV)?.status?.runtimeId
+    ).toBe('runtime-1')
+    expect(
+      getAgentStatusOwner(store)
+        .getState()
+        .tabsByWorktree[WT]?.map((tab) => tab.id)
+    ).toEqual([TAB_1])
     expect(streams.all).toEqual([])
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
     // The mirror still writes the layout: a renamed tab shows.
@@ -125,7 +135,7 @@ describe('which servers get a layout stream', () => {
       ENV,
       sessionTabs([{ ...surface('host-tab-1', LEAF_ID, 'terminal-1'), title: 'renamed' }], 2)
     )
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.title).toBe('renamed')
+    expect(getAgentStatusOwner(store).getState().tabsByWorktree[WT]?.[0]?.title).toBe('renamed')
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
   })
 
@@ -183,7 +193,11 @@ describe('which servers get a layout stream', () => {
     expect(second).not.toBe(first)
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
     expect(hoisted.resync).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_1])
+    expect(
+      getAgentStatusOwner(store)
+        .getState()
+        .tabsByWorktree[WT]?.map((tab) => tab.id)
+    ).toEqual([TAB_1])
   })
 
   it.each(['lost', 'refused'] as const)(
@@ -246,7 +260,7 @@ describe('frames to mirror', () => {
         isFrameDrawnServerWorkspace(ENV, WT),
         isFrameDrawnServerWorkspace(ENV, OTHER_WT)
       ]).toEqual([true, true])
-      const frameTree = treeOf(store.getState(), WT)
+      const frameTree = treeOf(getAgentStatusOwner(store).getState(), WT)
       expect(frameTree.tabIds).toEqual([TAB_1])
       // The resync never answers here: whatever the store shows meanwhile is the frames'.
       hoisted.resync.mockReturnValue(new Promise(() => {}))
@@ -265,7 +279,7 @@ describe('frames to mirror', () => {
         [ENV, WT],
         [ENV, OTHER_WT]
       ])
-      expect(treeOf(store.getState(), WT)).toEqual(frameTree)
+      expect(treeOf(getAgentStatusOwner(store).getState(), WT)).toEqual(frameTree)
       for (const recorded of states) {
         expect(treeOf(recorded, WT)).toEqual(frameTree)
       }
@@ -283,7 +297,7 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
     try {
       const stream = streams.openTo(ENV)
       const frames = mainLayoutFrameSender()
-      const before = store.getState()
+      const before = getAgentStatusOwner(store).getState()
       const recorded: AppState[] = []
       const stop = store.subscribe((state) => recorded.push(state))
 
@@ -299,7 +313,7 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
 
       hoisted.owners.set(WT, ENV)
       // A routing slice moves, as pairing does when it names the workspace's owner.
-      store.setState({ repos: [...store.getState().repos] })
+      applyAgentStatusPatch(store, { repos: [...getAgentStatusOwner(store).getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
       await settle()
       expect(check.fullBuilt).toEqual([WT])
@@ -308,7 +322,9 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
       renamed.tabs[0]!.customTitle = 'renamed on the server'
       streams.send(stream, frames.records(WT, renamed))
       await settle()
-      expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('renamed on the server')
+      expect(getAgentStatusOwner(store).getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe(
+        'renamed on the server'
+      )
 
       stream.onStatus({ state: 'lost' })
       await settle()
@@ -316,7 +332,7 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
       expect(hoisted.resync.mock.calls).toEqual([[ENV, WT]])
       // The owner still reads ENV: a routing change after the loss must not take it back.
       expect(hoisted.owners.get(WT)).toBe(ENV)
-      store.setState({ repos: [...store.getState().repos] })
+      applyAgentStatusPatch(store, { repos: [...getAgentStatusOwner(store).getState().repos] })
       await settle()
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
       expect(check.failures).toEqual([])
@@ -339,10 +355,10 @@ describe('a workspace whose owner briefly reads unknown', () => {
       expect(check.fullBuilt).toEqual([WT])
 
       hoisted.owners.delete(WT)
-      store.setState({ repos: [...store.getState().repos] })
+      applyAgentStatusPatch(store, { repos: [...getAgentStatusOwner(store).getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
       hoisted.owners.set(WT, ENV)
-      store.setState({ repos: [...store.getState().repos] })
+      applyAgentStatusPatch(store, { repos: [...getAgentStatusOwner(store).getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
       await settle()
 
@@ -374,7 +390,9 @@ describe('server frames and this window’s layout.apply positions', () => {
     streams.send(stream, frames.records(WT, renamed, 9))
     await settle()
     // Presence: the frames did show.
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('renamed')
+    expect(getAgentStatusOwner(store).getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe(
+      'renamed'
+    )
     stream.onStatus({ state: 'lost' })
     await settle()
     expect(waiter).not.toHaveBeenCalled()

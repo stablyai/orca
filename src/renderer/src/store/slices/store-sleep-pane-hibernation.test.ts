@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -85,7 +87,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       lastTerminalInputAtByPaneKey: { [targetPaneKey]: 1000, [siblingPaneKey]: 1100 },
       pendingIssueCommandSplitByTabId: { 'tab-1': { command: 'issue' } }
     })
-    store.setState({ dropAgentStatusByWorktree: dropByWorktree as never })
+    applyAgentStatusPatch(store, { dropAgentStatusByWorktree: dropByWorktree })
     store.getState().setAgentStatus(
       targetPaneKey,
       {
@@ -119,7 +121,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyId: 'pty-agent'
     })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
     expect(mockApi.pty.kill).not.toHaveBeenCalledWith('pty-shell', expect.anything())
     expect(mockUnregisterPtyDataHandlers).toHaveBeenCalledWith(['pty-agent'])
@@ -203,7 +205,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('agent_hibernation_capture_missing')
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
@@ -256,7 +258,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('kill_failed')
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     // Failed shutdown restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
@@ -304,7 +306,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     let recordAtKillTime: unknown = null
     let suppressionAtKillTime: boolean | undefined
     mockApi.pty.kill.mockImplementationOnce(async () => {
-      const atKill = store.getState()
+      const atKill = getAgentStatusOwner(store).getState()
       recordAtKillTime = atKill.sleepingAgentSessionsByPaneKey[targetPaneKey]
       suppressionAtKillTime = atKill.suppressedPtyExitIds['pty-agent']
     })
@@ -322,7 +324,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }
     })
     expect(suppressionAtKillTime).toBe(true)
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -399,7 +401,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('kill failed')
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
     // Failed kill restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
@@ -622,7 +624,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyId: 'pty-agent'
     })
 
-    expect(store.getState().agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[targetPaneKey]
+    ).toBeUndefined()
     expect(store.getState().retainedAgentsByPaneKey[targetPaneKey]).toBeUndefined()
     expect(store.getState().retentionSuppressedPaneKeys[targetPaneKey]).toBe(true)
   })
@@ -701,7 +705,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('target_still_live')
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual([
       'remote:env-1@@terminal-1',
       'remote:env-1@@terminal-2'

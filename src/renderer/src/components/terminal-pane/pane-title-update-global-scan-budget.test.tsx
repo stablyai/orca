@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 /** STA-7552: count selector reads at live-profile scale; Zustand invokes every selector on set, even when useShallow suppresses rendering. Global scans must stay absent. */
 import React, { act } from 'react'
@@ -189,7 +191,7 @@ function buildAgentStatuses(): Record<string, AgentStatusEntry> {
   )
 }
 
-const originalState = useAppStore.getState()
+const originalState = getAgentStatusOwner(useAppStore).getState()
 let container: HTMLDivElement | null = null
 let root: Root | null = null
 
@@ -236,7 +238,7 @@ function MountedWorkspaceProbe({ worktreeId }: { worktreeId: string }): null {
 }
 
 function mountAtCaptureScale(): void {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     tabsByWorktree,
     sleepingAgentSessionsByPaneKey: buildSleepingRecords(),
     agentStatusByPaneKey: buildAgentStatuses(),
@@ -303,7 +305,7 @@ afterEach(() => {
   root = null
   container?.remove()
   container = null
-  useAppStore.setState(originalState, true)
+  applyAgentStatusPatch(useAppStore, originalState)
 })
 
 describe('one pane title update at live-capture scale', () => {
@@ -312,7 +314,7 @@ describe('one pane title update at live-capture scale', () => {
     reads.sleepingRecords = 0
 
     act(() => {
-      useAppStore.setState({ sleepingAgentSessionsByPaneKey: buildSleepingRecords() })
+      applyAgentStatusPatch(useAppStore, { sleepingAgentSessionsByPaneKey: buildSleepingRecords() })
     })
 
     // Why: correctness floor — a real inventory change must still be observed.

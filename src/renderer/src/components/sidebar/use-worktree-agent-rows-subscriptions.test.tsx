@@ -1,3 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -5,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import { makeTab } from '@/store/slices/store-test-helpers'
-import type { AppState } from '@/store/types'
+
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -19,7 +22,7 @@ Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const KEY_A = makePaneKey('tab-a', LEAF)
 const KEY_B = makePaneKey('tab-b', LEAF)
-const original = useAppStore.getState()
+const original = getAgentStatusOwner(useAppStore).getState()
 let root: Root
 let container: HTMLDivElement
 let rows: DashboardAgentRow[]
@@ -48,14 +51,14 @@ function entry(key: string, worktreeId: string): AgentStatusEntry {
     stateHistory: []
   }
 }
-function patch(update: Partial<AppState>) {
-  act(() => useAppStore.setState(update))
+function patch(update: Partial<AgentStatusReadState>) {
+  act(() => applyAgentStatusPatch(useAppStore, update))
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(2_000_000)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     tabsByWorktree: {
       'folder-a': [makeTab({ id: 'tab-a', worktreeId: 'folder-a' })],
       'ssh-b': [makeTab({ id: 'tab-b', worktreeId: 'ssh-b' })]
@@ -81,7 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
-  useAppStore.setState(original, true)
+  applyAgentStatusPatch(useAppStore, original)
   vi.useRealTimers()
 })
 
@@ -99,7 +102,7 @@ describe('mounted worktree agent row subscriptions', () => {
     expect(renders).toBe(before)
     patch({
       agentStatusByPaneKey: {
-        ...useAppStore.getState().agentStatusByPaneKey,
+        ...getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey,
         [KEY_A]: { ...entry(KEY_A, 'folder-a'), prompt: 'changed while disabled' }
       }
     })
@@ -169,7 +172,7 @@ describe('mounted worktree agent row subscriptions', () => {
 
   it('observes title, PTY, layout, orchestration, foreground, migration and retention inputs', () => {
     act(() => root.render(<Probe />))
-    const updates: Partial<AppState>[] = [
+    const updates: Partial<AgentStatusReadState>[] = [
       { runtimePaneTitlesByTabId: { 'tab-a': { 0: 'Claude Code' } } },
       { ptyIdsByTabId: { 'tab-a': ['pty-a'] } },
       {

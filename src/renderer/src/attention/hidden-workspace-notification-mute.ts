@@ -1,4 +1,4 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { getIndexedAllWorktrees, getIndexedRepoMap } from '@/store/worktree-repo-index'
 import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -11,7 +11,7 @@ import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace
 /** Apply sidebar kind filters with project/host filters lifted so lineage and host twins follow sidebar visibility. Muting suppresses unread/banner/sound/push.
  * Fail open until settings/UI and terminal reconnect hydrate, or when the workspace is unknown; restored rows otherwise look asleep. */
 export function isWorkspaceNotificationMutedBySidebarFilters(
-  state: AppState,
+  state: AgentStatusReadState,
   workspaceId: string
 ): boolean {
   if (

@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { useAppStore } from '@/store'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import {
@@ -23,19 +24,21 @@ export function hasAddedPendingCodexPaneRestart(
 export function installCodexDetachedPaneRestartExecutor(): () => void {
   executorInstalled = true
   const generation = ++executorGeneration
-  const unsubscribe = useAppStore.subscribe((state, previousState) => {
-    if (
-      hasAddedPendingCodexPaneRestart(
-        state.pendingPaneAccountRestarts,
-        previousState.pendingPaneAccountRestarts
-      ) ||
-      // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
-      (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
-    ) {
-      scheduleClaimSweep()
+  const unsubscribe = getAgentStatusOwner(useAppStore).subscribeTransitions(
+    ({ next: state, previous: previousState }) => {
+      if (
+        hasAddedPendingCodexPaneRestart(
+          state.pendingPaneAccountRestarts,
+          previousState.pendingPaneAccountRestarts
+        ) ||
+        // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
+        (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
+          Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+      ) {
+        scheduleClaimSweep()
+      }
     }
-  })
+  )
   scheduleClaimSweep()
   return () => {
     unsubscribe()

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -51,7 +52,7 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
 type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
 
 export type AgentActivityInput = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'

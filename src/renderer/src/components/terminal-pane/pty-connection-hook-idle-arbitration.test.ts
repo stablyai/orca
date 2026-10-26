@@ -1,3 +1,4 @@
+import { makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
@@ -36,7 +37,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -54,17 +55,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -128,7 +136,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
@@ -140,16 +148,17 @@ describe('connectPanePty', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('dispatches agent-task-complete on working→idle and raises tab/worktree unread', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
@@ -160,7 +169,7 @@ describe('connectPanePty', () => {
     const realDispatchNotification = useNotificationDispatch('wt-1')
     const dispatchNotification = vi.fn((event) => realDispatchNotification(event))
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'done',
       prompt: 'Fix notification payloads',
       updatedAt: Date.now(),
@@ -174,12 +183,16 @@ describe('connectPanePty', () => {
       toolInput: 'src/main/ipc/notifications.ts',
       lastAssistantMessage: 'Implemented the formatter.',
       interrupted: false
-    }
-    mockStoreState.worktreesByRepo.repo2 = [
-      { id: 'wt-2', repoId: 'repo2', path: '/tmp/wt-2', displayName: 'feat/other' }
+    })
+    storeFixture.read().worktreesByRepo.repo2 = [
+      makeWorktree({ id: 'wt-2', repoId: 'repo2', path: '/tmp/wt-2', displayName: 'feat/other' })
     ]
-    mockStoreState.repos.push({ id: 'repo2', connectionId: null, displayName: 'docs' })
-    mockStoreState.activeWorktreeId = 'wt-2'
+    storeFixture.patch({
+      repos: storeFixture
+        .read()
+        .repos.concat({ ...TEST_REPO, id: 'repo2', connectionId: null, displayName: 'docs' })
+    })
+    storeFixture.patch({ activeWorktreeId: 'wt-2' })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -197,7 +210,7 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     idleHandler('* Claude done')
 
-    expect(mockStoreState.markAgentAttentionUnread).not.toHaveBeenCalled()
+    expect(storeFixture.read().markAgentAttentionUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -209,7 +222,7 @@ describe('connectPanePty', () => {
       ptyId: 'tab-pty',
       paneKey
     })
-    expect(mockStoreState.markAgentAttentionUnread).toHaveBeenCalledWith({
+    expect(storeFixture.read().markAgentAttentionUnread).toHaveBeenCalledWith({
       workspaceId: 'wt-1',
       subjectKey: paneKey,
       groupId: 'tab-1',
@@ -234,11 +247,11 @@ describe('connectPanePty', () => {
   })
 
   it('ignores title-only idle while fresh hook status is still working', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: 'still thinking',
       updatedAt: Date.now() - 60_000,
@@ -246,7 +259,7 @@ describe('connectPanePty', () => {
       agentType: 'pi',
       paneKey,
       stateHistory: []
-    }
+    })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -272,12 +285,12 @@ describe('connectPanePty', () => {
   })
 
   it('allows an explicit idle title from a different agent than fresh hook status', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: 'previous agent state',
       updatedAt: Date.now() - 60_000,
@@ -285,7 +298,7 @@ describe('connectPanePty', () => {
       agentType: 'pi',
       paneKey,
       stateHistory: []
-    }
+    })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -316,11 +329,11 @@ describe('connectPanePty', () => {
   })
 
   it('ignores an explicit idle title while fresh hook identity is unknown', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: 'still working without a known agent identity',
       updatedAt: Date.now() - 60_000,
@@ -328,7 +341,7 @@ describe('connectPanePty', () => {
       agentType: 'unknown',
       paneKey,
       stateHistory: []
-    }
+    })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -354,11 +367,11 @@ describe('connectPanePty', () => {
   })
 
   it('ignores a Pi idle title while compatible OMP hook status is active', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: 'OMP is still working',
       updatedAt: Date.now() - 60_000,
@@ -366,7 +379,7 @@ describe('connectPanePty', () => {
       agentType: 'omp',
       paneKey,
       stateHistory: []
-    }
+    })
 
     const pane = createPane(1)
     const manager = createManager(1)

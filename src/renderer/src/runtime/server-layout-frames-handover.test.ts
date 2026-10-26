@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
@@ -104,7 +105,7 @@ function publishedStoreTree(state: AppState): PublishedWorkspaceLayout {
 
 /** Every state the store passes through, from now until `stop`. */
 function recordStates(store: TestStore) {
-  const states: AppState[] = [store.getState()]
+  const states: AppState[] = [getAgentStatusOwner(store).getState()]
   const stop = store.subscribe((state) => states.push(state))
   return { states, stop }
 }
@@ -151,13 +152,13 @@ afterEach(() => {
 describe('mirror to frames', () => {
   it('gates the workspace before the snapshot shows, then shows it with no empty state and no reattach', async () => {
     const store = mirroredStore()
-    const mirrorTree = treeOf(store.getState(), WT)
+    const mirrorTree = treeOf(getAgentStatusOwner(store).getState(), WT)
     expect(mirrorTree.bindings).toEqual({ [TAB_1]: { [LEAF_ID]: REMOTE_1 } })
     // The server's snapshot translates to exactly the tree the mirror drew.
     const handleOf = (hostTabId: string, leafId: string) =>
       hostTabId === 'host-tab-1' && leafId === LEAF_ID ? 'terminal-1' : null
     expect(serverLayoutForDesktop(SERVER_LAYOUT, ENV, handleOf)).toEqual(
-      publishedStoreTree(store.getState())
+      publishedStoreTree(getAgentStatusOwner(store).getState())
     )
     install(store)
     setServers(store, [CAPABLE])
@@ -174,19 +175,19 @@ describe('mirror to frames', () => {
     // Before the frame's flush: the gate is up and the store still shows the mirror's tree.
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
     expect(check.fullBuilt).toEqual([])
-    expect(treeOf(store.getState(), WT)).toEqual(mirrorTree)
+    expect(treeOf(getAgentStatusOwner(store).getState(), WT)).toEqual(mirrorTree)
     await settle()
     recorded.stop()
 
     // Presence: the frames built the workspace; the same tree needed no store write at all.
     expect(check.fullBuilt).toEqual([WT])
     expect(recorded.states).toHaveLength(1)
-    expect(treeOf(store.getState(), WT)).toEqual(mirrorTree)
+    expect(treeOf(getAgentStatusOwner(store).getState(), WT)).toEqual(mirrorTree)
   })
 
   it('writes what the frames change over the mirror’s tree without emptying it between', async () => {
     const store = mirroredStore()
-    const mirrorTree = treeOf(store.getState(), WT)
+    const mirrorTree = treeOf(getAgentStatusOwner(store).getState(), WT)
     expect(mirrorTree.tabIds).toEqual([TAB_1])
     install(store)
     setServers(store, [CAPABLE])
@@ -204,7 +205,9 @@ describe('mirror to frames', () => {
     await settle()
     recorded.stop()
 
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('named on the server')
+    expect(getAgentStatusOwner(store).getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe(
+      'named on the server'
+    )
     expect(recorded.states.length).toBeGreaterThan(1)
     for (const state of recorded.states) {
       expect(treeOf(state, WT)).toEqual(mirrorTree)
@@ -217,9 +220,11 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     const { store, stream, frames } = await frameDrawnStore()
     streams.send(stream, frames.records(WT, WITH_TAB_2))
     await settle()
-    const tabsBefore = (store.getState().tabsByWorktree[WT] ?? []).map((tab) => tab.id)
+    const tabsBefore = (getAgentStatusOwner(store).getState().tabsByWorktree[WT] ?? []).map(
+      (tab) => tab.id
+    )
     expect(tabsBefore).toEqual([TAB_1, TAB_2])
-    const pending = store.getState().terminalLayoutsByTabId[TAB_2]
+    const pending = getAgentStatusOwner(store).getState().terminalLayoutsByTabId[TAB_2]
     expect(pending?.root).toEqual({ type: 'leaf', leafId: SECOND_LEAF_ID })
     expect(pending?.ptyIdsByLeafId ?? {}).not.toHaveProperty(SECOND_LEAF_ID)
     const recorded = recordStates(store)
@@ -239,7 +244,7 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     recorded.stop()
 
     const bound = toRemoteRuntimePtyId('terminal-2', ENV)
-    expect(bindingOf(store.getState(), TAB_2, SECOND_LEAF_ID)).toBe(bound)
+    expect(bindingOf(getAgentStatusOwner(store).getState(), TAB_2, SECOND_LEAF_ID)).toBe(bound)
     expect(bindingChanges(recorded.states, TAB_2, SECOND_LEAF_ID)).toBe(1)
     for (const state of recorded.states) {
       expect((state.tabsByWorktree[WT] ?? []).map((tab) => tab.id)).toEqual(tabsBefore)
@@ -247,7 +252,7 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     }
     // The other pane kept its binding throughout.
     expect(bindingChanges(recorded.states, TAB_1, LEAF_ID)).toBe(0)
-    expect(bindingOf(store.getState(), TAB_1, LEAF_ID)).toBe(REMOTE_1)
+    expect(bindingOf(getAgentStatusOwner(store).getState(), TAB_1, LEAF_ID)).toBe(REMOTE_1)
   })
 
   it('binds the pane in the frame’s own flush when session.tabs had its handle first', async () => {
@@ -265,7 +270,7 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     )
     await settle()
     // The gated mirror drew no tab of its own for the handle.
-    expect(store.getState().terminalLayoutsByTabId[TAB_2]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().terminalLayoutsByTabId[TAB_2]).toBeUndefined()
     const recorded = recordStates(store)
 
     streams.send(stream, frames.records(WT, WITH_TAB_2))
@@ -273,7 +278,7 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     recorded.stop()
 
     const bound = toRemoteRuntimePtyId('terminal-2', ENV)
-    expect(bindingOf(store.getState(), TAB_2, SECOND_LEAF_ID)).toBe(bound)
+    expect(bindingOf(getAgentStatusOwner(store).getState(), TAB_2, SECOND_LEAF_ID)).toBe(bound)
     // The first state holding the tab already holds its binding.
     const firstShown = recorded.states.find((state) => state.terminalLayoutsByTabId[TAB_2])
     expect(bindingOf(firstShown!, TAB_2, SECOND_LEAF_ID)).toBe(bound)
@@ -282,14 +287,14 @@ describe('a terminal handle and the frame that binds its pane, in either order',
 
   it('rebinds a pane that stays bound exactly once when its handle is replaced', async () => {
     const { store } = await frameDrawnStore()
-    expect(bindingOf(store.getState(), TAB_1, LEAF_ID)).toBe(REMOTE_1)
+    expect(bindingOf(getAgentStatusOwner(store).getState(), TAB_1, LEAF_ID)).toBe(REMOTE_1)
     const recorded = recordStates(store)
 
     mirrorSnapshot(store, ENV, sessionTabs([surface('host-tab-1', LEAF_ID, 'terminal-1b')], 2))
     await settle()
     recorded.stop()
 
-    expect(bindingOf(store.getState(), TAB_1, LEAF_ID)).toBe(
+    expect(bindingOf(getAgentStatusOwner(store).getState(), TAB_1, LEAF_ID)).toBe(
       toRemoteRuntimePtyId('terminal-1b', ENV)
     )
     expect(bindingChanges(recorded.states, TAB_1, LEAF_ID)).toBe(1)
@@ -325,9 +330,9 @@ describe('a workspace handed back to the mirror', () => {
     })
     await settle()
 
-    expect((store.getState().tabsByWorktree[other] ?? []).map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-8')
-    ])
+    expect(
+      (getAgentStatusOwner(store).getState().tabsByWorktree[other] ?? []).map((tab) => tab.id)
+    ).toEqual([toWebTerminalSurfaceTabId('host-tab-8')])
   })
 })
 

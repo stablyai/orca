@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
@@ -51,7 +52,7 @@ import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboa
 
 /** Keep builder inputs as a Pick so tests need only construct the store slices read here. */
 export type DashboardSnapshotState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'repos'
   | 'worktreesByRepo'
   | 'tabsByWorktree'

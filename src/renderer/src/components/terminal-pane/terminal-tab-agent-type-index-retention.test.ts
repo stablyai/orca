@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { selectLiveTabAgentPanes } from '../../lib/tab-agent-status-index'
@@ -43,10 +45,10 @@ describe('terminal tab agent type source lifetime', () => {
           interactivePrompt: JSON.stringify({ question: 'Choose the next step' })
         }
       }
-      store.setState({ agentStatusByPaneKey: statuses })
+      applyAgentStatusPatch(store, { agentStatusByPaneKey: statuses })
       expect(select(statuses, 'tab-1')).toEqual({ 'leaf-a': 'claude' })
-      const unsubscribe = store.subscribe((state) => {
-        select(state.agentStatusByPaneKey, 'tab-1')
+      const unsubscribe = getAgentStatusOwner(store).subscribeAggregate(() => {
+        select(getAgentStatusOwner(store).getSnapshot(), 'tab-1')
       })
       selectLiveTabAgentPanes(statuses, 'tab-1')
       selectTabBar({ agentStatusByPaneKey: statuses, settings: { experimentalNativeChat: true } })
@@ -54,7 +56,7 @@ describe('terminal tab agent type source lifetime', () => {
       // Parking removes pane subscribers while the retained tab strip still observes removals.
       unsubscribe()
       store.getState().dropAgentStatus('tab-1:leaf-a')
-      const current = store.getState().agentStatusByPaneKey
+      const current = getAgentStatusOwner(store).getState().agentStatusByPaneKey
       expect(current).toEqual({})
       selectLiveTabAgentPanes(current, 'tab-1')
       selectTabBar({ agentStatusByPaneKey: current, settings: { experimentalNativeChat: true } })
@@ -65,8 +67,8 @@ describe('terminal tab agent type source lifetime', () => {
     await collectRetiredSources()
 
     expect(retired.deref()).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey).toEqual({})
-    expect(select(store.getState().agentStatusByPaneKey, 'tab-1')).toEqual({})
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey).toEqual({})
+    expect(select(getAgentStatusOwner(store).getState().agentStatusByPaneKey, 'tab-1')).toEqual({})
   })
 
   it('releases the foreground source after the last pane unsubscribes', async () => {

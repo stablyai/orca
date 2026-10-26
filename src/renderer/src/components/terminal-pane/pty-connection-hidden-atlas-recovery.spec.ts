@@ -22,13 +22,13 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
   const { resetAndRefreshAllTerminalWebglAtlases, scheduleTerminalWebglAtlasRecovery } =
     ptyConnectionTestMocks
 
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function expectNoGlobalAtlasRecovery(): void {
@@ -44,9 +44,10 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -58,11 +59,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('keeps hidden synchronized output off the global atlas recovery path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -110,7 +112,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps split hidden synchronized output off the global atlas recovery path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -154,7 +156,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('does not schedule hidden atlas recovery for ordinary rich text or metadata output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -196,7 +198,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden TUI redraw output off the global atlas recovery path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -235,7 +237,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden rewrite frames on the pane-local output path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -282,7 +284,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps a background-origin alternate-screen chunk in the stream, pane-local', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { background?: boolean }) => void) | null
@@ -337,7 +339,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('queues visible split-pane PTY bytes when the pane is not active', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -369,7 +371,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('queues visible ANSI redraws when only another split pane is active', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -407,7 +409,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
       ;(globalThis as { document?: Pick<Document, 'visibilityState'> }).document = {
         visibilityState: 'hidden'
       }
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -442,7 +444,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden Codex telemetry startup output parsing briefly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -489,7 +491,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('does not answer hidden Jcode startup color queries (composer-text leak guard)', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -532,7 +534,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden Grok telemetry startup output parsing briefly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -579,7 +581,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden bare Codex startup commands parsing briefly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -619,7 +621,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('keeps hidden bare Grok startup commands parsing briefly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -659,7 +661,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('skips arbitrary hidden startup output parsing', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -697,7 +699,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
     })
 
     it('records a mode 2031 subscribe from the raw chunk boundary without answering', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -707,10 +709,10 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         }
       )
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        settings: { ...mockStoreState.settings, theme: 'light' }
-      }
+      storeFixture.patch({
+        ...storeFixture.read(),
+        settings: { ...storeFixture.read().settings, theme: 'light' }
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)

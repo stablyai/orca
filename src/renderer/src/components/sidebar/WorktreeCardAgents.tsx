@@ -1,3 +1,9 @@
+import {
+  getAgentStatusState,
+  useAgentStatusSelector,
+  getAgentStatusEntry
+} from '@/store/agent-status'
+
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -66,6 +72,8 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
 })
 
+const EMPTY_STATUS_KEYS: readonly string[] = []
+
 type BodyProps = {
   worktreeId: string
   agents: DashboardAgentRowData[]
@@ -85,13 +93,20 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
   )
   // Use a stable empty selector outside our send popover so unrelated title/status churn cannot wake idle cards.
-  const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
+  const sendTargetInputs = useAgentStatusSelector(
+    useShallow((s) => selectSendTargetInputs(s, worktreeId)),
+    agentSendPopoverTargetMode ? undefined : EMPTY_STATUS_KEYS
+  )
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
   // Project global acknowledgement state onto this card’s rows to avoid rerenders from other worktrees.
-  const agentRowsUnread = useAppStore(useShallow((s) => selectAgentRowsUnread(s, agents)))
+  const agentPaneKeys = useMemo(() => agents.map((agent) => agent.paneKey), [agents])
+  const agentRowsUnread = useAgentStatusSelector(
+    useShallow((s) => selectAgentRowsUnread(s, agents)),
+    agentPaneKeys
+  )
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
     for (const [index, agent] of agents.entries()) {
@@ -165,7 +180,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       }
       // Use shared activation for cross-repo reveal and navigation history.
       activateAndRevealWorktree(worktreeId)
-      const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+      const tabs = getAgentStatusState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
@@ -174,7 +189,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         })
         activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
       } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
-        const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+        const liveEntry = getAgentStatusEntry(paneKey)
         if (liveEntry?.worktreeId === worktreeId) {
           // Live worker status can precede tab hydration; retain the row and activate its owning terminal.
           activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)

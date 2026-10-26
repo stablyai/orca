@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -88,7 +89,10 @@ function RetainedBridgeChat({ visible = true }: { visible?: boolean }) {
 }
 
 beforeEach(() => {
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  applyAgentStatusPatch(useAppStore, {
+    agentStatusByPaneKey: {},
+    nativeChatLaunchPromptByTabId: {}
+  })
   vi.stubGlobal('IntersectionObserver', undefined)
   vi.stubGlobal('fetch', mocks.fetch)
   vi.stubGlobal('api', {
@@ -105,7 +109,10 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  applyAgentStatusPatch(useAppStore, {
+    agentStatusByPaneKey: {},
+    nativeChatLaunchPromptByTabId: {}
+  })
   vi.unstubAllGlobals()
   vi.resetAllMocks()
 })

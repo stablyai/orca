@@ -1,3 +1,9 @@
+import {
+  subscribeAgentStatusState,
+  getAgentStatusState,
+  getAgentStatusEntry
+} from '@/store/agent-status'
+
 import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal-output-side-effects'
 import { idleEdgeSettledAtRest, isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
@@ -53,9 +59,9 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     session.clearPendingAgentTaskCompleteNotification()
     let graceElapsed = false
     const generationAtSchedule = session.agentTaskCompleteNotificationGeneration
-    const agentStatusAtSchedule = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const agentStatusAtSchedule = getAgentStatusEntry(session.cacheKey)
     const hasNewerActiveHookStatus = (): boolean => {
-      const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const currentStatus = getAgentStatusEntry(session.cacheKey)
       const scheduledAgentType = agentStatusAtSchedule?.agentType
       const currentAgentForScheduledTurn = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
@@ -72,8 +78,8 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
         options.agentCompletionSource === 'process-exit' &&
         isFreshNonDoneAgentStatus(currentStatus) &&
         (!agentStatusAtSchedule ||
-          currentStatus.state !== agentStatusAtSchedule.state ||
-          currentStatus.stateStartedAt !== agentStatusAtSchedule.stateStartedAt ||
+          currentStatus?.state !== agentStatusAtSchedule.state ||
+          currentStatus?.stateStartedAt !== agentStatusAtSchedule.stateStartedAt ||
           hasDifferentKnownAgent)
       )
     }
@@ -115,13 +121,17 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       if (!graceElapsed) {
         return
       }
-      const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const entry = getAgentStatusEntry(session.cacheKey)
       if (canDispatchAgentNotificationAfterGrace(entry, options)) {
         dispatch()
       }
     }
 
-    session.agentTaskCompleteStatusUnsubscribe = useAppStore.subscribe(dispatchIfDetailed)
+    session.agentTaskCompleteStatusUnsubscribe = subscribeAgentStatusState(
+      dispatchIfDetailed,
+      useAppStore,
+      session.cacheKey
+    )
     session.agentTaskCompleteNotificationGraceTimer = setTimeout(() => {
       session.agentTaskCompleteNotificationGraceTimer = null
       graceElapsed = true
@@ -146,7 +156,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       session.deps.setCacheTimerStartedAt(session.cacheKey, null)
       return
     }
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     const activeHookStatus = currentState.agentStatusByPaneKey[session.cacheKey]
     if (session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
       // Idle titles can appear mid-tool while hooks still own an active turn.

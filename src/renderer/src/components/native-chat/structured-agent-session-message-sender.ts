@@ -1,3 +1,19 @@
+import {
+  prepareStructuredAgentSessionFenceRemoval,
+  attemptStructuredAgentSessionSend,
+  forgetStructuredAgentSessionFence,
+  resetStructuredAgentSessionFencesForTests
+} from './structured-agent-session-send-attempt'
+import {
+  prepareStructuredAgentSessionPendingSendRemoval,
+  clearStructuredAgentSessionPendingSends,
+  findStructuredAgentSessionPendingSend,
+  getStructuredAgentSessionPendingSends,
+  publishStructuredAgentSessionSends,
+  structuredAgentSessionsWithPendingSends,
+  updateStructuredAgentSessionPendingSend,
+  type StructuredAgentSessionPendingSend
+} from './structured-agent-session-pending-sends'
 // Allow one unanswered send per chat in memory; host rows/cards own admitted messages. Never retry a send or retain it past its deadline.
 
 import type {
@@ -15,24 +31,12 @@ import {
   structuredAgentSessionSettledSends
 } from '../../../../shared/structured-agent-session-send-settlement'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  attemptStructuredAgentSessionSend,
-  forgetStructuredAgentSessionFence,
-  resetStructuredAgentSessionFencesForTests
-} from './structured-agent-session-send-attempt'
+
 import {
   takeStructuredAgentSessionSendSlot,
   type StructuredAgentSessionSendInput
 } from './structured-agent-session-send-slot'
-import {
-  clearStructuredAgentSessionPendingSends,
-  findStructuredAgentSessionPendingSend,
-  getStructuredAgentSessionPendingSends,
-  publishStructuredAgentSessionSends,
-  structuredAgentSessionsWithPendingSends,
-  updateStructuredAgentSessionPendingSend,
-  type StructuredAgentSessionPendingSend
-} from './structured-agent-session-pending-sends'
+
 import {
   beginSend,
   finish,
@@ -264,4 +268,32 @@ export function resetStructuredAgentSessionSendsForTests(): void {
     dropStructuredAgentSessionSends(sessionId)
   }
   resetStructuredAgentSessionFencesForTests()
+}
+
+export function prepareStructuredAgentSessionSendRemoval(sessionId: string) {
+  const pending = prepareStructuredAgentSessionPendingSendRemoval(sessionId)
+  const detachFence = prepareStructuredAgentSessionFenceRemoval(sessionId)
+  const captured = getStructuredAgentSessionPendingSends(sessionId).flatMap((entry) => {
+    const runtime = runtimes.get(entry.clientMessageId)
+    return runtime ? [{ key: entry.clientMessageId, runtime }] : []
+  })
+  return {
+    install: () => {
+      pending.install()
+      detachFence()
+      for (const { key, runtime } of captured) {
+        if (runtimes.get(key) === runtime) {
+          runtimes.delete(key)
+        }
+      }
+    },
+    effects: [
+      ...captured.map(({ runtime }) => () => {
+        runtime.abort.abort()
+        clearTimeout(runtime.deadline)
+        runtime.resolve('dropped')
+      }),
+      ...pending.effects
+    ]
+  }
 }

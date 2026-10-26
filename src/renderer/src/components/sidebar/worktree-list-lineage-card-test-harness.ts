@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import type { createTestStore } from '@/store/slices/store-test-helpers'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { vi } from 'vitest'
@@ -13,6 +15,7 @@ export type WorktreeListComponent = React.ComponentType<{
 }>
 
 let WorktreeList: WorktreeListComponent | null = null
+let appStore: ReturnType<typeof createTestStore>
 
 export async function loadWorktreeList(): Promise<void> {
   const module = await import('./WorktreeList')
@@ -20,6 +23,8 @@ export async function loadWorktreeList(): Promise<void> {
 }
 
 export async function renderWorktreeListMarkup(): Promise<string> {
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  applyAgentStatusPatch(appStore, mockStore.state)
   return renderToStaticMarkup(
     React.createElement(
       ConfirmationDialogContext.Provider,
@@ -32,19 +37,15 @@ export async function renderWorktreeListMarkup(): Promise<string> {
   )
 }
 
-export function createAppStoreModuleMock(): Record<string, unknown> {
-  const getMockState = (): Record<string, unknown> => ({
-    detectedWorktreesByRepo: {},
-    ...mockStore.state
-  })
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(getMockState())) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
+export async function createAppStoreModuleMock() {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  appStore = createTestStore()
+  return {
+    useAppStore: Object.assign(
+      <Result>(selector: (state: AppState) => Result) => selector(appStore.getState()),
+      appStore
+    )
   }
-  useAppStore.getState = () => getMockState()
-  return { useAppStore }
 }
 
 export function createReactVirtualModuleMock(): Record<string, unknown> {

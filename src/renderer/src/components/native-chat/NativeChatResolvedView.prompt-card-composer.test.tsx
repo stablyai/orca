@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -150,7 +152,10 @@ beforeEach(() => {
   composer.typed.mockReset().mockReturnValue(true)
   pty.verified.mockReset().mockResolvedValue(true)
   pty.raw.mockReset().mockReturnValue(true)
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  applyAgentStatusPatch(useAppStore, {
+    agentStatusByPaneKey: {},
+    nativeChatLaunchPromptByTabId: {}
+  })
   retained.session = {
     messages: [userTurn],
     status: 'working',
@@ -170,7 +175,10 @@ afterEach(() => {
     cleanup()
     resetNativeChatPtySendQueuesForTests()
     restoreViewport()
-    useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+    applyAgentStatusPatch(useAppStore, {
+      agentStatusByPaneKey: {},
+      nativeChatLaunchPromptByTabId: {}
+    })
   } finally {
     vi.useRealTimers()
   }

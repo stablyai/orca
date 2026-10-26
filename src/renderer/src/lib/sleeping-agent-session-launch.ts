@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
@@ -49,7 +50,7 @@ export function launchSleepingAgentSession(
   record: SleepingAgentSessionRecord,
   options?: ResumeSleepingAgentSessionsOptions
 ): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({

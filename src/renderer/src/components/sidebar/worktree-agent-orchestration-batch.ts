@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import {
   EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX,
@@ -8,7 +9,7 @@ import {
 export { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from './worktree-agent-orchestration-index'
 
 type RuntimeOrchestrationState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'

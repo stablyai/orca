@@ -27,13 +27,13 @@ const REMOUNTED = { remounted: true as const, generation: 1 }
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 export function registerPtyConnectionTerminalInputGatingTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -43,9 +43,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -57,29 +58,34 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not enumerate every worktree tab for ordinary input without Codex restart notices', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
+      let inputStarted = false
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: new Proxy(
           {
             'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }],
             'wt-2': [{ id: 'tab-2', ptyId: 'pty-other' }]
           },
           {
-            ownKeys() {
-              throw new Error('tabsByWorktree should not be enumerated')
+            ownKeys(target) {
+              if (inputStarted) {
+                throw new Error('tabsByWorktree should not be enumerated')
+              }
+              return Reflect.ownKeys(target)
             }
           }
         ),
         codexRestartNoticeByPtyId: {}
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -96,33 +102,39 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+      inputStarted = true
       ;(onDataHandler as (data: string) => void)('a')
+      inputStarted = false
 
       expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     })
 
     it('uses the current worktree tab for Codex stale fallback without enumerating all worktrees', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
+      let inputStarted = false
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: new Proxy(
           {
             'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }],
             'wt-2': [{ id: 'tab-2', ptyId: 'pty-other' }]
           },
           {
-            ownKeys() {
-              throw new Error('tabsByWorktree should not be enumerated')
+            ownKeys(target) {
+              if (inputStarted) {
+                throw new Error('tabsByWorktree should not be enumerated')
+              }
+              return Reflect.ownKeys(target)
             }
           }
         ),
         codexRestartNoticeByPtyId: {
           'pty-other': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -139,33 +151,39 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+      inputStarted = true
       ;(onDataHandler as (data: string) => void)('a')
+      inputStarted = false
 
       expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     })
 
     it('blocks stale Codex fallback input from the current worktree tab without enumerating all worktrees', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
+      let inputStarted = false
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: new Proxy(
           {
             'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }],
             'wt-2': [{ id: 'tab-2', ptyId: 'pty-other' }]
           },
           {
-            ownKeys() {
-              throw new Error('tabsByWorktree should not be enumerated')
+            ownKeys(target) {
+              if (inputStarted) {
+                throw new Error('tabsByWorktree should not be enumerated')
+              }
+              return Reflect.ownKeys(target)
             }
           }
         ),
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -182,25 +200,27 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+      inputStarted = true
       ;(onDataHandler as (data: string) => void)('a')
+      inputStarted = false
 
       expect(transport.sendInput).not.toHaveBeenCalled()
     })
 
     it('restores input to a Codex pane whose restart notice the user dismissed', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-live'] },
         // Dismissal retains launch-account memory, so stale-input gating must inspect its marker rather than record existence.
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -223,18 +243,18 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('restores input through the tab fallback when the dismissed pane has no live PTY binding', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-live'] },
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -257,12 +277,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('keeps a dismissed split pane typing while a sibling still holds the prompt', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport('pty-dismissed')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         // tab.ptyId may name a sibling; its unanswered notice must not block this pane without its own prompt.
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-sibling' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-dismissed', 'pty-sibling'] },
@@ -270,7 +290,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
           'pty-dismissed': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true },
           'pty-sibling': { previousAccountLabel: 'A', nextAccountLabel: 'C' }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -297,19 +317,19 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('keeps blocking a pane with its own unanswered notice next to a dismissed sibling', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport('pty-stale')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-sibling' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-stale', 'pty-sibling'] },
         codexRestartNoticeByPtyId: {
           'pty-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' },
           'pty-sibling': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -335,12 +355,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('keeps a bound pane with no notice typing while a sibling holds a queued restart', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport('pty-plain-shell')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         // Restart hides the prompt; a recordless pane must not stay blocked by a sibling’s tab-level notice.
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-sibling' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-plain-shell', 'pty-sibling'] },
@@ -351,7 +371,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
             restartRequested: true
           }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -377,19 +397,19 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('keeps blocking input on a pane whose restart is requested but not yet run', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-live'] },
         // Queued restart retains the old account until relaunch, unlike dismissal.
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', restartRequested: true }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null
@@ -412,14 +432,14 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('blocks input to stale Codex panes until they restart', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
       const transport = createMockTransport('pty-codex-stale')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
         },
@@ -440,7 +460,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
             stateHistory: []
           }
         }
-      }
+      })
 
       const pane = createPane(1)
       const terminalTarget = createKeyboardEventTarget()
@@ -468,8 +488,8 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+    it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       vi.useFakeTimers()
@@ -480,8 +500,8 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)
         const paneKey = makePaneKey('tab-1', LEAF_1)
-        mockStoreState = {
-          ...mockStoreState,
+        storeFixture.patch({
+          ...storeFixture.read(),
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
           ptyIdsByTabId: { 'tab-1': [ptyId] },
           agentStatusByPaneKey: {
@@ -495,7 +515,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
               stateHistory: []
             }
           }
-        }
+        })
 
         const pane = createPane(1)
         const terminalTarget = createKeyboardEventTarget()
@@ -525,7 +545,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('drops xterm protocol replies from live TUI output while mobile presence lock is active', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'pty-mobile-tui-query'
@@ -533,11 +553,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       try {
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)
-        mockStoreState = {
-          ...mockStoreState,
+        storeFixture.patch({
+          ...storeFixture.read(),
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
           ptyIdsByTabId: { 'tab-1': [ptyId] }
-        }
+        })
 
         const pane = createPane(1)
         let onDataHandler: ((data: string) => void) | null = null
@@ -573,7 +593,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('blocks remote locked terminal input before it reaches the runtime transport', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'remote:env-1@@terminal-1'
@@ -581,11 +601,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       try {
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)
-        mockStoreState = {
-          ...mockStoreState,
+        storeFixture.patch({
+          ...storeFixture.read(),
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
           ptyIdsByTabId: { 'tab-1': [ptyId] }
-        }
+        })
 
         const pane = createPane(1)
         let onDataHandler: ((data: string) => void) | null = null
@@ -610,7 +630,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('does not infer interrupts when the transport rejects terminal input', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -618,7 +638,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transport.sendInput.mockReturnValue(false)
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      storeFixture.setStatus(paneKey, {
         paneKey,
         state: 'working',
         prompt: 'disconnected input',
@@ -626,7 +646,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         stateStartedAt: 900,
         agentType: 'custom-agent',
         stateHistory: []
-      }
+      })
 
       const pane = createPane(1)
       const terminalTarget = createKeyboardEventTarget()
@@ -653,7 +673,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('does not infer interrupts when the main process rejects acknowledged input', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -661,7 +681,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transport.sendInputAccepted = vi.fn().mockResolvedValue(false)
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      storeFixture.setStatus(paneKey, {
         paneKey,
         state: 'working',
         prompt: 'mobile race input',
@@ -669,7 +689,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         stateStartedAt: 900,
         agentType: 'custom-agent',
         stateHistory: []
-      }
+      })
 
       const pane = createPane(1)
       const terminalTarget = createKeyboardEventTarget()
@@ -696,12 +716,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+    it('remounts a connected pane when main reports its daemon write unavailable', async () => {
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
-      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      storeFixture.patch({ ...storeFixture.read(), remountTerminalTabForRecovery })
       const transport = createMockTransport('daemon-pty')
       let writeUnavailable: (() => void) | undefined
       transport.connect.mockImplementation(
@@ -723,11 +743,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
-      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      storeFixture.patch({ ...storeFixture.read(), remountTerminalTabForRecovery })
       const transport = createMockTransport('daemon-pty')
       let writeUnavailable: (() => void) | undefined
       transport.connect.mockImplementation(
@@ -760,11 +780,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
       vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
-      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      storeFixture.patch({ ...storeFixture.read(), remountTerminalTabForRecovery })
       const transport = createMockTransport('pty-wedged')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -790,7 +810,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('does not arm the wedge probe when acknowledged input is rejected', async () => {
       vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const transport = createMockTransport('pty-rejected')
@@ -817,19 +837,19 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('blocks input when tab-level ptyId is stale even if panePtyId is null', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'tab-level-pty' }]
         },
         codexRestartNoticeByPtyId: {
           'tab-level-pty': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '../../store'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -150,15 +151,12 @@ export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
-export const hostWorkingClientBoundaryByPaneKey = new Map<
-  string,
-  {
-    hostStateStartedAt: number
-    hostPrompt: string
-    clientStateStartedAt: number
-    stamped: boolean
-  }
->()
+export type HostWorkingClientBoundary = {
+  hostStateStartedAt: number
+  hostPrompt: string
+  clientStateStartedAt: number
+  stamped: boolean
+}
 
 export let receivedSessionTabsFrameSequence = 0
 export function nextReceivedSessionTabsFrame(): number {
@@ -195,36 +193,37 @@ export type MirroredBrowserTab = {
 }
 export type MirroredEditorTab = { file: OpenFile; unifiedTab: Tab; hostTabId: string }
 
-export type WebSessionTabsSyncState = Pick<
-  AppState,
-  | 'activeBrowserTabId'
-  | 'activeBrowserTabIdByWorktree'
-  | 'activeGroupIdByWorktree'
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-  | 'activeWorktreeId'
-  | 'agentStatusByPaneKey'
-  | 'agentStatusEpoch'
-  | 'browserPagesByWorkspace'
-  | 'browserCertificateFailuresByPageId'
-  | 'browserTabsByWorktree'
-  | 'editorBuffers'
-  | 'groupsByWorktree'
-  | 'layoutByWorktree'
-  | 'openFiles'
-  | 'ptyIdsByTabId'
-  | 'remoteBrowserPageHandlesByPageId'
-  | 'tabBarOrderByWorktree'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'unifiedTabsByWorktree'
-  | 'unreadTerminalTabs'
-  | 'sortEpoch'
-> &
+export type WebSessionTabsSyncState = Partial<Pick<AppState, 'transferAgentPaneAuthority'>> &
+  Pick<
+    AgentStatusReadState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeGroupIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+    | 'activeWorktreeId'
+    | 'agentStatusByPaneKey'
+    | 'agentStatusEpoch'
+    | 'browserPagesByWorkspace'
+    | 'browserCertificateFailuresByPageId'
+    | 'browserTabsByWorktree'
+    | 'editorBuffers'
+    | 'groupsByWorktree'
+    | 'layoutByWorktree'
+    | 'openFiles'
+    | 'ptyIdsByTabId'
+    | 'remoteBrowserPageHandlesByPageId'
+    | 'tabBarOrderByWorktree'
+    | 'tabsByWorktree'
+    | 'terminalLayoutsByTabId'
+    | 'unifiedTabsByWorktree'
+    | 'unreadTerminalTabs'
+    | 'sortEpoch'
+  > &
   Partial<
     Pick<
       AppState,

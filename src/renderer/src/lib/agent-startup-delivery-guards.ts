@@ -40,3 +40,14 @@ export function forgetAgentStartupDeliveriesForTabs(tabIds: Iterable<string>): v
     }
   }
 }
+
+export function prepareAgentStartupDeliveriesRemoval(tabIds: ReadonlySet<string>): () => void {
+  const keys = [...consumedAgentStartupDeliveries].filter((key) =>
+    tabIds.has(key.split('\0')[1] ?? '')
+  )
+  return () => {
+    for (const key of keys) {
+      consumedAgentStartupDeliveries.delete(key)
+    }
+  }
+}

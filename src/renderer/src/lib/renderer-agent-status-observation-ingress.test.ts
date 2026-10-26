@@ -6,9 +6,16 @@ import { TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID } from '@/components/sidebar/workt
 
 const { setAgentStatusMock } = vi.hoisted(() => ({ setAgentStatusMock: vi.fn() }))
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ setAgentStatus: setAgentStatusMock }) }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: () => ({ setAgentStatus: setAgentStatusMock }) }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('./agent-status-connection-ownership', () => ({
   resolveLiveAgentStatusConnectionRouting: () => ({ connectionId: null })
 }))

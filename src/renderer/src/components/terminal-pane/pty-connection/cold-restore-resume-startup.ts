@@ -1,4 +1,6 @@
-import { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState } from '@/store/agent-status'
+import '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
@@ -23,10 +25,11 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
 
-type AppState = ReturnType<typeof useAppStore.getState>
-
 /** The agent session a cold restore of this pane would resume; read-only, so pre-spawn checks can share it. */
-export function findColdRestoreResumeSource(session: ConnectPanePtySession, state: AppState) {
+export function findColdRestoreResumeSource(
+  session: ConnectPanePtySession,
+  state: AgentStatusReadState
+) {
   const entry = state.agentStatusByPaneKey[session.cacheKey]
   const sleepingRecordEntry = session.getSleepingRecordForPane(state)
   const sleepingRecord = sleepingRecordEntry?.record
@@ -46,7 +49,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (session.pendingStartupCommand) {
       return null
     }
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const source = findColdRestoreResumeSource(session, state)
     if (!source) {
       return null

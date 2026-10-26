@@ -1,5 +1,5 @@
+import { getAgentStatusState, subscribeAgentStatusState } from '@/store/agent-status'
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/github/visible-hosted-review-refresh-scheduler'
@@ -16,10 +16,10 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
     const update = (): void => {
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       const selectedOnly = isWebClientLocation()
       scheduler.update([
-        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
+        ...getVisibleHostedReviewRefreshTargets(state, getAgentStatusState, { selectedOnly }),
         ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
       ])
     }
@@ -28,7 +28,7 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       update()
       scheduler.setVisible(isWindowVisible())
     }
-    const unsubscribe = useAppStore.subscribe((state, previous) => {
+    const unsubscribe = subscribeAgentStatusState((state, previous) => {
       if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
         update()
       }

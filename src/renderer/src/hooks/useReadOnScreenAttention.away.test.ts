@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -19,7 +21,7 @@ beforeEach(() => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
   Object.assign(window, { api: { notifications: { getDesktopAwayState: readAway, dismiss } } })
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeView: 'terminal',
     activeTabId: 'away-tab',
     activeWorktreeId: 'away-workspace',
@@ -60,7 +62,7 @@ beforeEach(() => {
   useAppStore
     .getState()
     .setAgentStatus(pane, { state: 'done', prompt: 'away test', agentType: 'codex' })
-  useAppStore.setState({ unreadAgentCompletionPanes: { [pane]: 'agent-completion' } })
+  applyAgentStatusPatch(useAppStore, { unreadAgentCompletionPanes: { [pane]: 'agent-completion' } })
 })
 afterEach(() => {
   cleanup()
@@ -151,12 +153,14 @@ it('ignores unrelated writes while away but queries for a new completion', async
   expect(readAway).toHaveBeenCalledTimes(1)
   for (let i = 0; i < 20; i++) {
     await act(async () => {
-      useAppStore.setState({ settings: useAppStore.getState().settings })
+      applyAgentStatusPatch(useAppStore, {
+        settings: useAppStore.getState().settings
+      })
     })
   }
   expect(readAway).toHaveBeenCalledTimes(1)
   await act(async () => {
-    useAppStore.setState({ unreadAgentCompletionPanes: { [pane]: true } })
+    applyAgentStatusPatch(useAppStore, { unreadAgentCompletionPanes: { [pane]: true } })
   })
   expect(readAway).toHaveBeenCalledTimes(2)
   // An unclassified legacy boolean marker still drives the away query and the ack.
@@ -168,7 +172,7 @@ it('ignores unrelated writes while away but queries for a new completion', async
 })
 
 it('does not query presence for a visible pane without attention', async () => {
-  useAppStore.setState({ agentStatusByPaneKey: {}, unreadAgentCompletionPanes: {} })
+  applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {}, unreadAgentCompletionPanes: {} })
   renderHook(() => useReadOnScreenAttention())
   await act(async () => window.dispatchEvent(new Event('focus')))
   expect(readAway).not.toHaveBeenCalled()
@@ -218,7 +222,8 @@ it.each([false, true])('preserves manual unread across return signals (web=%s)',
   renderHook(() => useReadOnScreenAttention())
   await act(async () => {})
   act(() => useAppStore.getState().unacknowledgeAgents([pane]))
-  const turn = useAppStore.getState().agentStatusByPaneKey[pane]!.stateStartedAt
+  const turn =
+    getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[pane]!.stateStartedAt
   dismiss.mockClear()
   await act(async () => window.dispatchEvent(new Event('focus')))
   const input = new Event('pointerdown')

@@ -1,5 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
+
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Tab } from '../../../shared/tab-types'
@@ -58,7 +59,7 @@ function entry(
 function state(
   overrides: Partial<
     Pick<
-      AppState,
+      AgentStatusReadState,
       | 'agentStatusByPaneKey'
       | 'tabsByWorktree'
       | 'unifiedTabsByWorktree'
@@ -84,8 +85,8 @@ function state(
 }
 
 function deriveLivePtyIdsByTabId(
-  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
-): AppState['ptyIdsByTabId'] {
+  terminalLayoutsByTabId: AgentStatusReadState['terminalLayoutsByTabId']
+): AgentStatusReadState['ptyIdsByTabId'] {
   return Object.fromEntries(
     Object.entries(terminalLayoutsByTabId).map(([tabId, layout]) => [
       tabId,

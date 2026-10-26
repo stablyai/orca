@@ -20,42 +20,49 @@ const sleepMocks = vi.hoisted(() => ({
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'comment']
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => {
-  const getState = () => ({
-    browserTabsByWorktree: {},
-    createBrowserTab: vi.fn(),
-    deleteFolderWorkspace: vi.fn(),
-    deleteStateByWorktreeId: {},
-    fetchHostedReviewForBranch: vi.fn(),
-    fetchIssue: vi.fn(),
-    fetchLinearIssue: vi.fn(),
-    gitConflictOperationByWorktree: {},
-    hostedReviewCache: {},
-    issueCache: {},
-    linearIssueCache: {},
-    openModal,
-    openTaskPage: vi.fn(),
-    projectGroups: [],
-    ptyIdsByTabId: {},
-    remoteBranchConflictByWorktreeId: {},
-    renamingWorktreeId: null,
-    setActiveWorktree: vi.fn(),
-    setRemoteBrowserPageHandle: vi.fn(),
-    setRenamingWorktreeId,
-    settings,
-    sshConnectionStates: new Map(),
-    sshTargetLabels: new Map(),
-    tabsByWorktree: {},
-    updateWorktreeMeta,
-    workspacePortScan: null,
-    worktreeCardProperties
-  })
-  return {
-    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
-      getState,
-      subscribe: () => () => {}
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const getState = () => ({
+      browserTabsByWorktree: {},
+      createBrowserTab: vi.fn(),
+      deleteFolderWorkspace: vi.fn(),
+      deleteStateByWorktreeId: {},
+      fetchHostedReviewForBranch: vi.fn(),
+      fetchIssue: vi.fn(),
+      fetchLinearIssue: vi.fn(),
+      gitConflictOperationByWorktree: {},
+      hostedReviewCache: {},
+      issueCache: {},
+      linearIssueCache: {},
+      openModal,
+      openTaskPage: vi.fn(),
+      projectGroups: [],
+      ptyIdsByTabId: {},
+      remoteBranchConflictByWorktreeId: {},
+      renamingWorktreeId: null,
+      setActiveWorktree: vi.fn(),
+      setRemoteBrowserPageHandle: vi.fn(),
+      setRenamingWorktreeId,
+      settings,
+      sshConnectionStates: new Map(),
+      sshTargetLabels: new Map(),
+      tabsByWorktree: {},
+      updateWorktreeMeta,
+      workspacePortScan: null,
+      worktreeCardProperties
     })
-  }
+    return {
+      useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+        getState,
+        subscribe: () => () => {}
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@/components/ui/hover-card', () => ({

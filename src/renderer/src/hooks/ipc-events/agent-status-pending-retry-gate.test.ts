@@ -52,17 +52,24 @@ async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
   const transactAgentStatuses = vi.fn(transactImplementation)
   storeState.transactAgentStatuses = transactAgentStatuses
 
-  vi.doMock('../../store', () => ({
-    useAppStore: {
-      subscribe: vi.fn((listener: StoreSubscribeListener) => {
-        subscribeListenerRef.current = listener
-        return () => {
-          subscribeListenerRef.current = null
-        }
-      }),
-      getState: () => storeState
+  vi.doMock('../../store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixture = {
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
     }
-  }))
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
   vi.doMock('../agent-hook-completion-notifications', () => ({
     observeAgentHookCompletionForNotification: vi.fn(),
     syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()

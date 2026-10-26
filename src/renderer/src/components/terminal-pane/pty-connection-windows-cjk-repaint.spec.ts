@@ -24,13 +24,13 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
   const { resetAndRefreshAllTerminalWebglAtlases, scheduleTerminalWebglAtlasRecovery } =
     ptyConnectionTestMocks
 
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function expectNoGlobalAtlasRecovery(): void {
@@ -46,9 +46,10 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -60,13 +61,14 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not schedule WebGL atlas recovery for ordinary foreground shell rewrites', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -104,7 +106,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     it('does not schedule WebGL atlas recovery for plain synchronized foreground frames', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -133,7 +135,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     })
 
     it('forces a viewport refresh when foreground background SGR is split across PTY chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -169,7 +171,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     })
 
     it('forces a viewport refresh when the foreground CSI introducer is split across PTY chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -204,7 +206,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     })
 
     it('does not keep forcing viewport refresh after completed background redraws', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -246,7 +248,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -284,7 +286,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -321,7 +323,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -357,7 +359,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     it('does not repaint ordinary non-ASCII output on non-Windows clients', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -395,7 +397,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -434,7 +436,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     it('does not schedule a follow-up repaint for the Claude redraw pattern on non-Windows clients', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -471,7 +473,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
     it('coalesces forced foreground refreshes when WebGL is live', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(

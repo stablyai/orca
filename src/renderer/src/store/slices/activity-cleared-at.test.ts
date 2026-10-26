@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../shared/agent-status-freshness'
@@ -36,7 +38,10 @@ describe('applyActivityClearedAt', () => {
   it('merges stamps, deletes on null, and no-ops on identical patches', () => {
     const store = createTestStore()
     store.getState().applyActivityClearedAt({ 'a:1': 100, 'b:2': 200 })
-    expect(store.getState().activityClearedAtByPaneKey).toEqual({ 'a:1': 100, 'b:2': 200 })
+    expect(store.getState().activityClearedAtByPaneKey).toEqual({
+      'a:1': 100,
+      'b:2': 200
+    })
 
     const before = store.getState().activityClearedAtByPaneKey
     store.getState().applyActivityClearedAt({ 'a:1': 100 })
@@ -65,7 +70,7 @@ describe('dismissRetainedAgents', () => {
   it('plants a retention suppressor only for panes that still have a live entry', () => {
     const store = createTestStore()
     store.getState().retainAgents([makeRetained('tab-a:1'), makeRetained('tab-b:2')])
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         'tab-a:1': {
           state: 'done',
@@ -113,7 +118,7 @@ describe('dropAgentStatus cleared-at/manual-unread lifecycle', () => {
     const store = createTestStore()
     seedLiveWithClearState(store)
     store.getState().dropAgentStatus('tab-a:1')
-    expect(store.getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
     // Cutoff prevents full stateHistory republication resurrecting cleared events as unread.
     expect(store.getState().activityClearedAtByPaneKey['tab-a:1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-a:1']).toBeGreaterThan(0)
@@ -142,7 +147,7 @@ describe('dropAgentStatusByTabPrefix preserveActivityClearedState', () => {
 
     store.getState().dropAgentStatusByTabPrefix('tab-a', { preserveActivityClearedState: true })
 
-    expect(store.getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
     // Lost contact is not death; retain cutoffs across reconnect republication.
     expect(store.getState().activityClearedAtByPaneKey['tab-a:1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-a:1']).toBeGreaterThan(0)

@@ -13,28 +13,32 @@ type TabStartup = AppState['pendingStartupByTabId'][string]
 const mockCreateTab = vi.fn((..._args: unknown[]) => ({ id: 'tab-1' }))
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} },
-      repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
-      getKnownWorktreeById: () => ({ id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' }),
-      sshConnectionStates: new Map(),
-      sshStateByEnvironment: new Map(),
-      runtimeStatusByEnvironmentId: new Map(),
-      agentStatusByPaneKey: {},
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-      openFiles: [],
-      browserTabsByWorktree: {},
-      tabBarOrderByWorktree: {},
-      createTab: mockCreateTab,
-      claimAutomaticAgentResume: vi.fn(),
-      clearSleepingAgentSession: vi.fn(),
-      setActiveTabType: vi.fn(),
-      setTabBarOrder: vi.fn()
-    })
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  const fixture = {
+    useAppStore: {
+      getState: () => ({
+        settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} },
+        repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
+        getKnownWorktreeById: () => ({ id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' }),
+        sshConnectionStates: new Map(),
+        sshStateByEnvironment: new Map(),
+        runtimeStatusByEnvironmentId: new Map(),
+        agentStatusByPaneKey: {},
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+        openFiles: [],
+        browserTabsByWorktree: {},
+        tabBarOrderByWorktree: {},
+        createTab: mockCreateTab,
+        claimAutomaticAgentResume: vi.fn(),
+        clearSleepingAgentSession: vi.fn(),
+        setActiveTabType: vi.fn(),
+        setTabBarOrder: vi.fn()
+      })
+    }
   }
-}))
+  return withAgentStatusFixture(fixture, fixture.useAppStore.getState)
+})
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({

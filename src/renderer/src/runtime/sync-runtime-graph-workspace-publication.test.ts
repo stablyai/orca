@@ -1,7 +1,9 @@
+import { makeWorktree } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
-import type { AppState } from '../store/types'
 
 describe('buildMobileSessionTabSnapshots', () => {
   it('does not publish state for a removed folder workspace', () => {
@@ -53,13 +55,15 @@ describe('buildMobileSessionTabSnapshots', () => {
   })
 
   it('publishes a new instance identity when unchanged content is recreated', () => {
-    const worktree = {
+    const worktree = makeWorktree({
       id: 'wt-1',
       instanceId: 'old-instance',
       repoId: 'repo-1'
-    }
+    })
     const base = makeState({
-      worktreesByRepo: { 'repo-1': [worktree] } as unknown as AppState['worktreesByRepo'],
+      worktreesByRepo: {
+        'repo-1': [worktree]
+      },
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1' }]
       } as unknown as AppState['tabsByWorktree']
@@ -69,7 +73,7 @@ describe('buildMobileSessionTabSnapshots', () => {
       ...base,
       worktreesByRepo: {
         'repo-1': [{ ...worktree, instanceId: 'new-instance' }]
-      } as unknown as AppState['worktreesByRepo']
+      }
     }
 
     const next = buildMobileSessionTabSnapshots(recreated)[0]!
@@ -83,15 +87,20 @@ describe('buildMobileSessionTabSnapshots', () => {
     const state = makeState({
       worktreesByRepo: {
         'repo-1': [
-          { id: 'wt-duplicate', repoId: 'repo-1', hostId: 'local', instanceId: 'local-instance' },
-          {
+          makeWorktree({
+            id: 'wt-duplicate',
+            repoId: 'repo-1',
+            hostId: 'local',
+            instanceId: 'local-instance'
+          }),
+          makeWorktree({
             id: 'wt-duplicate',
             repoId: 'repo-1',
             hostId: 'ssh:ssh-1',
             instanceId: 'ssh-instance'
-          }
+          })
         ]
-      } as unknown as AppState['worktreesByRepo'],
+      },
       tabsByWorktree: {
         'wt-duplicate': [{ id: 'term-1', title: 'Terminal 1' }]
       } as unknown as AppState['tabsByWorktree']

@@ -11,6 +11,45 @@ export function findStructuredAgentSessionReadOwner(
 ): StructuredAgentSessionReadOwner | undefined {
   return owners.get(structuredReadOwnerKey(sessionId, target))
 }
+type ReadRetirement = { owner: StructuredAgentSessionReadOwner | undefined; detached: boolean }
+type PreparedReadRetirement = {
+  retirements: Map<string, ReadRetirement>
+  effects: (() => void)[]
+}
+function disposeReadOwner(owner: StructuredAgentSessionReadOwner | undefined): void {
+  try {
+    owner?.dispose()
+  } catch (error) {
+    console.warn('[native-chat] retiring a conversation reader failed', error)
+  }
+}
+export function prepareStructuredReadRetirement(
+  previous: PreparedReadRetirement | null,
+  sessionId: string,
+  target: RuntimeClientTarget
+): PreparedReadRetirement {
+  const prepared: PreparedReadRetirement = previous ?? { retirements: new Map(), effects: [] }
+  const key = structuredReadOwnerKey(sessionId, target)
+  if (!prepared.retirements.has(key)) {
+    const retirement = { owner: owners.get(key), detached: false }
+    prepared.retirements.set(key, retirement)
+    prepared.effects.push(() => {
+      if (retirement.detached) {
+        disposeReadOwner(retirement.owner)
+      }
+    })
+  }
+  return prepared
+}
+export function installStructuredReadRetirement(prepared: PreparedReadRetirement): void {
+  for (const [key, retirement] of prepared.retirements) {
+    if (retirement.owner && owners.get(key) === retirement.owner) {
+      owners.delete(key)
+      retirement.owner.lifetime.retired = true
+      retirement.detached = true
+    }
+  }
+}
 /** A closed chat no longer needs an unmounted create page or an active reader. */
 export function retireStructuredAgentSessionReadOwner(
   sessionId: string,
@@ -19,11 +58,10 @@ export function retireStructuredAgentSessionReadOwner(
   const key = structuredReadOwnerKey(sessionId, target)
   const owner = owners.get(key)
   owners.delete(key)
-  try {
-    owner?.dispose()
-  } catch (error) {
-    console.warn('[native-chat] retiring a conversation reader failed', error)
+  if (owner) {
+    owner.lifetime.retired = true
   }
+  disposeReadOwner(owner)
 }
 export function getOrCreateStructuredReadOwner(
   key: string,
@@ -41,10 +79,14 @@ export function getOrCreateStructuredReadOwner(
 export function adoptStructuredReadOwner(
   key: string,
   owner: StructuredAgentSessionReadOwner
-): void {
+): boolean {
+  if (owner.lifetime.retired) {
+    return false
+  }
   if (!owners.has(key)) {
     owners.set(key, owner)
   }
+  return owners.get(key) === owner
 }
 export function forgetStructuredReadOwner(
   key: string,
@@ -55,8 +97,12 @@ export function forgetStructuredReadOwner(
   }
 }
 export function resetStructuredAgentSessionReadOwnersForTests(): void {
-  for (const owner of owners.values()) {
-    owner.dispose()
-  }
+  const cohort = [...owners.values()]
   owners.clear()
+  for (const owner of cohort) {
+    owner.lifetime.retired = true
+  }
+  for (const owner of cohort) {
+    disposeReadOwner(owner)
+  }
 }

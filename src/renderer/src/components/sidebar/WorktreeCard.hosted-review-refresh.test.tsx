@@ -17,38 +17,45 @@ let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-vi.mock('@/store', () => {
-  const getState = () => ({
-    deleteStateByWorktreeId: {},
-    fetchHostedReviewForBranch,
-    fetchIssue,
-    fetchLinearIssue,
-    gitConflictOperationByWorktree: {},
-    hostedReviewCache: {
-      'local::repo-1::feature/branch': {
-        data: null,
-        fetchedAt: Date.now(),
-        linkedReviewHintKey: ''
-      }
-    },
-    issueCache: {},
-    linearIssueCache: {},
-    openModal,
-    projectGroups: [],
-    remoteBranchConflictByWorktreeId: {},
-    settings: { experimentalNewWorktreeCardStyle: true },
-    sshConnectionStates: new Map(),
-    sshTargetLabels: new Map(),
-    updateWorktreeMeta,
-    workspacePortScan: null,
-    worktreeCardProperties
-  })
-  return {
-    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
-      getState,
-      subscribe: () => () => {}
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const getState = () => ({
+      deleteStateByWorktreeId: {},
+      fetchHostedReviewForBranch,
+      fetchIssue,
+      fetchLinearIssue,
+      gitConflictOperationByWorktree: {},
+      hostedReviewCache: {
+        'local::repo-1::feature/branch': {
+          data: null,
+          fetchedAt: Date.now(),
+          linkedReviewHintKey: ''
+        }
+      },
+      issueCache: {},
+      linearIssueCache: {},
+      openModal,
+      projectGroups: [],
+      remoteBranchConflictByWorktreeId: {},
+      settings: { experimentalNewWorktreeCardStyle: true },
+      sshConnectionStates: new Map(),
+      sshTargetLabels: new Map(),
+      updateWorktreeMeta,
+      workspacePortScan: null,
+      worktreeCardProperties
     })
-  }
+    return {
+      useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+        getState,
+        subscribe: () => () => {}
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@/lib/sidebar-worktree-activation', () => ({

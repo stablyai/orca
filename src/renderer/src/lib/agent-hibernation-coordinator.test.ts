@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -167,7 +169,7 @@ describe('agent sleep coordinator', () => {
         nowCalls += 1
         if (nowCalls === 3) {
           const e = entry()
-          useAppStore.setState({
+          applyAgentStatusPatch(useAppStore, {
             agentStatusByPaneKey: {
               [e.paneKey]: {
                 ...e,
@@ -202,7 +204,7 @@ describe('agent sleep coordinator', () => {
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [completed.paneKey]: {
           ...completed,
@@ -486,7 +488,7 @@ describe('agent sleep coordinator', () => {
         expect.objectContaining({ method: 'terminal.list' })
       )
     )
-    useAppStore.setState({ agentStatusByPaneKey: { [first.paneKey]: first } })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: { [first.paneKey]: first } })
     delayed.resolve(runtimeListResult([]))
     await tick
 

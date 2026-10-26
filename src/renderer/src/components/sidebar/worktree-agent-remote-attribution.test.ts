@@ -14,7 +14,10 @@ import {
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { selectLiveAgentStatusEntriesForWorktree } from './worktree-agent-row-selectors'
 
-vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 function status(tabId: string, worktreeId: string): AgentStatusEntry {
   return {

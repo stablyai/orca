@@ -1,4 +1,4 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { useAppStore } from '@/store'
 import { getVisibleHostedReviewWorkspaces } from '@/store/github/visible-hosted-review-refresh-targets'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -17,7 +17,7 @@ import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-r
 import { selectIsSleepingWorktree } from './use-worktree-sleep-state'
 
 export function getWorkspaceReferenceRefreshTargets(
-  state: AppState,
+  state: AgentStatusReadState,
   options?: { selectedOnly?: boolean }
 ): VisibleHostedReviewRefreshTarget[] {
   const targets = new Map<string, VisibleHostedReviewRefreshTarget>()

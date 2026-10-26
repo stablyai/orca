@@ -50,10 +50,8 @@ describe('resolveNativeChatImageRuntimeContext', () => {
   it('keeps unrelated store writes out of the image-owner selector', () => {
     const storeState = state()
     const first = selectNativeChatImageOwnerState(storeState)
-    const second = selectNativeChatImageOwnerState({
-      ...storeState,
-      agentStatusByPaneKey: {} as AppState['agentStatusByPaneKey']
-    })
+    const unrelated = { ...storeState, agentStatusByPaneKey: {} }
+    const second = selectNativeChatImageOwnerState(unrelated)
 
     expect(shallow(second, first)).toBe(true)
   })

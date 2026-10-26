@@ -1,12 +1,24 @@
+import {
+  afterPurgeAcceptance,
+  preparePurgeOwnership
+} from './worktrees/teardown/worktree-purge-preparation'
+import {
+  prepareAgentHibernationOutputRemoval,
+  forgetAgentHibernationTabOutput
+} from '@/lib/agent-hibernation-output-activity'
+import {
+  prepareAgentStartupDeliveriesRemoval,
+  forgetAgentStartupDeliveriesForTabs
+} from '@/lib/agent-startup-delivery-guards'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AppState } from '../types'
-import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
+
 // Use store-free registry to avoid a slice-evaluation cycle through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/native-chat-prompt-dismissals'
-import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
+import { findAgentStatusOwner } from '../agent-status-commit'
 import {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState
@@ -20,7 +32,8 @@ export type RetiredTerminalTabSweepActions = Pick<
 
 /** Narrow state lets non-store callers supply their own view. */
 export type RetiredTerminalTabSweepState = AgentStatusTabPrefixDropState &
-  Pick<AppState, 'paneForegroundAgentByPaneKey'>
+  Pick<AppState, 'paneForegroundAgentByPaneKey'> &
+  Partial<Pick<AppState, 'transferAgentPaneAuthority'>>
 
 /** Shared retirement sweep prevents divergent cleanup (STA-4593); not full closeTab parity: callers still own other pane maps. Run after tabsByWorktree removal so completed-orphan detection works. */
 export function sweepRetiredTerminalTabState(
@@ -49,16 +62,19 @@ export function buildRetiredTerminalTabStateSweepPatch(
   if (tabIds.length === 0) {
     return null
   }
-  // Registry effects are idempotent for retired IDs, but still run if the caller discards this patch.
   let swept: RetiredTerminalTabSweepState = state
   for (const tabId of tabIds) {
     if (!opts?.paneKeys) {
-      retireParkedTerminalTab(tabId)
+      afterPurgeAcceptance(state, () => retireParkedTerminalTab(tabId))
     }
     const { patch } = buildAgentStatusTabPrefixDropPatch(
       swept,
       tabId,
-      opts?.paneKeys ? [] : retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
+      opts?.paneKeys
+        ? []
+        : (findAgentStatusOwner(state)
+            ?.authority()
+            .retireAgentPaneAuthorityAliasesByOwnerTab(tabId) ?? []),
       {
         ...(worktreeId ? { worktreeId } : {}),
         ...(opts?.paneKeys ? { paneKeys: opts.paneKeys } : {}),
@@ -77,13 +93,19 @@ export function buildRetiredTerminalTabStateSweepPatch(
         ])
     swept = { ...swept, ...patch, ...foreground }
     if (!opts?.paneKeys) {
-      forgetAgentHibernationTabOutput(tabId)
-      forgetNativeChatPromptDismissalsForTab(tabId)
+      preparePurgeOwnership(state, {
+        install: prepareAgentHibernationOutputRemoval(new Set([tabId])),
+        effects: []
+      })
+      afterPurgeAcceptance(state, () => forgetNativeChatPromptDismissalsForTab(tabId))
     }
   }
   if (!opts?.paneKeys) {
-    forgetForegroundTerminalTabs(tabIds)
-    forgetAgentStartupDeliveriesForTabs(tabIds)
+    afterPurgeAcceptance(state, () => forgetForegroundTerminalTabs(tabIds))
+    preparePurgeOwnership(state, {
+      install: prepareAgentStartupDeliveriesRemoval(new Set(tabIds)),
+      effects: []
+    })
   }
   const changed: Record<string, unknown> = {}
   for (const key of Object.keys(swept) as (keyof RetiredTerminalTabSweepState)[]) {

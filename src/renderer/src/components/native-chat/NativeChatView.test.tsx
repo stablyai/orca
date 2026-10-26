@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -82,11 +83,17 @@ describe('NativeChatSessionGate', () => {
   afterEach(() => {
     cleanup()
     clearNativeChatDraftCacheForTests()
-    useAppStore.setState(useAppStore.getInitialState())
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
   })
 
   it('keeps Find open with its query when the bridge first receives session metadata', () => {
-    useAppStore.setState(useAppStore.getInitialState())
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
     const paneKey = 'tab-1:leaf-1'
     render(
       <NativeChatView
@@ -103,7 +110,7 @@ describe('NativeChatSessionGate', () => {
     const input = screen.getByRole('textbox', { name: 'Find in chat' })
     fireEvent.change(input, { target: { value: 'keep this search' } })
     act(() => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: {
           [paneKey]: entry({
             paneKey,

@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session-salvage'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/runtime-types'
@@ -16,7 +17,12 @@ import {
 } from '../web-session-tabs-sync-test-harness'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 
-vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 createStoreSessionMockApi()
 beforeEach(resetWebSessionTabsSyncTestState)
 
@@ -63,19 +69,25 @@ it('does not republish a mirrored editor after persistence and hydration', () =>
 
   expect(restored.getState().openFiles).toHaveLength(1)
   expect(restored.getState().openFiles[0]?.id).not.toBe('/repo/app.ts')
-  expect(buildMobileSessionTabSnapshots(restored.getState(), false).flatMap((s) => s.tabs)).toEqual(
-    []
-  )
+  expect(
+    buildMobileSessionTabSnapshots(getAgentStatusOwner(restored).getState(), false).flatMap(
+      (s) => s.tabs
+    )
+  ).toEqual([])
   expect(persisted.openFilesByWorktree?.[WT]?.[0]).toHaveProperty(
     'mirroredFromRuntimeSession',
     true
   )
   expect(restored.getState().openFiles[0]).toHaveProperty('mirroredFromRuntimeSession', true)
 
-  restored.setState(applyWebSessionTabsSnapshot(restored.getState(), snapshot, ENV, NOW + 1))
-  expect(buildMobileSessionTabSnapshots(restored.getState(), false).flatMap((s) => s.tabs)).toEqual(
-    []
+  restored.setState(
+    applyWebSessionTabsSnapshot(getAgentStatusOwner(restored).getState(), snapshot, ENV, NOW + 1)
   )
+  expect(
+    buildMobileSessionTabSnapshots(getAgentStatusOwner(restored).getState(), false).flatMap(
+      (s) => s.tabs
+    )
+  ).toEqual([])
 
   for (const flag of [false, undefined]) {
     const local = buildEditorSessionData(

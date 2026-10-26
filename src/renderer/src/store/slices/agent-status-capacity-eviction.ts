@@ -1,8 +1,11 @@
 import type { AppState } from '../types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  type AgentStatusEntry,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status-contract'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+
 import { getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 
 const MAX_RETAINED_AGENTS = 500
@@ -82,7 +85,8 @@ export function capLiveAgentStatusesInPlace(
   buildClassifier: () => (paneKey: string) => PaneLiveness,
   now: number,
   maxEntries = MAX_LIVE_AGENT_STATUSES,
-  entryCount = countLiveAgentStatuses(freshLive)
+  entryCount = countLiveAgentStatuses(freshLive),
+  onEvict?: (entry: AgentStatusEntry) => void
 ): string[] {
   let overflow = entryCount - maxEntries
   if (overflow <= 0) {
@@ -103,6 +107,7 @@ export function capLiveAgentStatusesInPlace(
       if (liveness === 'live' || !canEvict(liveness, freshLive[key])) {
         continue
       }
+      onEvict?.(freshLive[key])
       delete freshLive[key]
       overflow -= 1
       evictedPaneKeys.push(key)

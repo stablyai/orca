@@ -15,10 +15,17 @@ const mocks = vi.hoisted(() => ({
   discoverNativeChatCatalogModels: vi.fn()
 }))
 
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { agentStatusByPaneKey: Record<string, never> }) => unknown) =>
-    selector({ agentStatusByPaneKey: {} })
-}))
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: { agentStatusByPaneKey: Record<string, never> }) => unknown) =>
+      selector({ agentStatusByPaneKey: {} })
+  }
+  const readFixture = () => ({ agentStatusByPaneKey: {} })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 

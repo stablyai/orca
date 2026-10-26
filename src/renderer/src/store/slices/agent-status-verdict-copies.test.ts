@@ -1,10 +1,10 @@
+import { makeAgentStatusReadState } from './store-test-helpers'
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 import { buildPaneActivityEvents } from '@/components/activity/activity-pane-events'
 import { makeTab, makeWorktree } from '@/components/activity/ActivityPrototypePage-test-fixtures'
-import type { AppState } from '../types'
 import { agentMeta, agentTitle } from '@/components/activity/activity-thread-presentation'
 import { activationTreatsNoteAsFinished } from '@/lib/sleeping-agent-pane-ownership'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
@@ -24,11 +24,11 @@ import {
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const FAILED_MAIN_AGENT = { state: 'done', outcome: 'failure', stateStartedAt: 2_000 } as const
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these readers touch only the three maps given; every tab lookup is answered by the tab the caller passes.
-const STATE = {
+const STATE = makeAgentStatusReadState({
   sleepingAgentSessionsByPaneKey: {},
   migrationUnsupportedByPtyId: {},
   tabsByWorktree: {}
-} as unknown as AppState
+})
 
 function failedDone(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {

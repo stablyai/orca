@@ -1,6 +1,6 @@
 // Pre-bind keys would prefix the launch command; draft until agent readiness and discard if the user starts driving the live screen.
 
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
@@ -59,7 +59,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
 
   const resolveAgent = (): TuiAgent | null => {
     if (agent === undefined) {
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       // Why not paired panes: their transport already holds and delivers type-ahead itself.
       agent =
         !session.runtimeEnvironmentId &&
@@ -125,7 +125,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       phase = 'closed'
       return
     }
-    const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
+    const status = getAgentStatusState().agentStatusByPaneKey[session.cacheKey]?.state
     // Why drop: the user is already driving the screen, or a prompt is waiting on an answer.
     if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
       dropDraft(draftAgent)

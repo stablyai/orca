@@ -37,12 +37,19 @@ vi.mock('./native-chat-cli-fork-run', () => ({
     )
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
-    { getState: () => ({}) }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
+      { getState: () => ({}) }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('./tab-session-history-switch', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

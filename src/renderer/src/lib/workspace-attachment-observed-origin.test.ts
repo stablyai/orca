@@ -1,5 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
+
 import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 import { singlePaneLayoutSnapshot } from '../store/slices/terminal-helpers'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -13,7 +14,7 @@ const leaf = '11111111-1111-4111-8111-111111111111'
 const otherLeaf = '22222222-2222-4222-8222-222222222222'
 const context = { tabId: 'tab', paneKey: makePaneKey('tab', leaf), ptyId: 'pty' }
 function state(): Pick<
-  AppState,
+  AgentStatusReadState,
   'tabsByWorktree' | 'terminalLayoutsByTabId' | 'agentStatusByPaneKey'
 > {
   return {

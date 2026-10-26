@@ -18,11 +18,12 @@ import {
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn()
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 /** The group the create targeted — where staging first put the tab. */
 const CREATE_GROUP = 'client-group-create'

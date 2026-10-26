@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useDeferredValue, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -44,7 +45,7 @@ export function useOpenTabSearch({
   )
   // Snapshot noisy agent metadata on open and tab-set changes instead of rerendering search for every status event.
   const agentState = useMemo(
-    () => (enabled ? selectOpenTabSearchAgentState(useAppStore.getState()) : null),
+    () => (enabled ? selectOpenTabSearchAgentState(getAgentStatusState()) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refresh on open or tab-set changes, never agent-status churn.
     [enabled, state?.tabsByWorktree, state?.unifiedTabsByWorktree, worktreeId]
   )

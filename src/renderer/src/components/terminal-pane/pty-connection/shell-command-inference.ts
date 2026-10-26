@@ -1,5 +1,7 @@
+import { getAgentStatusState, getAgentStatusEntry } from '@/store/agent-status'
+
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
-import { useAppStore } from '@/store'
+import '@/store'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
 import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
@@ -96,7 +98,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   }
   /** Launch ownership preserves OMP over Pi-compatible titles/hooks; typed command ownership covers manual launches without metadata. */
   session.getAuthoritativePaneAgent = (): AgentType | undefined => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (entry) => entry.id === session.deps.tabId
     )
@@ -112,14 +114,14 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   }
   // GPU veto needs current pane evidence: tab-shared/never-cleared launch seeds can describe siblings or dead agents. Use fresh active rows or command evidence; Pi/OMP titles retain their own guard (#7428).
   session.getPaneScopedRendererOwner = (): AgentType | undefined => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const entry = getAgentStatusEntry(session.cacheKey)
     return (
       session.commandInferredPaneAgent ??
-      (session.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
+      (session.isFreshActivePaneAgentEntry(entry) ? entry?.agentType : undefined)
     )
   }
   session.clearInferredInterruptWorkingTitle = (): void => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const currentTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const statusTitle = state.agentStatusByPaneKey[session.cacheKey]?.terminalTitle
     const neutralTitle = titleAfterInferredInterrupt(
@@ -143,7 +145,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     }
   }
   session.observeTitleOnlyInterrupt = (): void => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     if (state.agentStatusByPaneKey[session.cacheKey]) {
       return
     }
@@ -158,10 +160,10 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     session.clearTitleOnlyInterruptTimer()
     session.titleOnlyInterruptTimer = setTimeout(() => {
       session.titleOnlyInterruptTimer = null
-      if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
+      if (getAgentStatusEntry(session.cacheKey)) {
         return
       }
-      const currentState = useAppStore.getState()
+      const currentState = getAgentStatusState()
       const currentRuntimeTitle =
         currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
       const currentTabTitle = (currentState.tabsByWorktree[session.deps.worktreeId] ?? []).find(
@@ -185,7 +187,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     }
   }
   session.getCurrentTerminalTitle = (): string | null => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const runtimeTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const tabTitle = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (entry) => entry.id === session.deps.tabId
@@ -212,7 +214,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   }
   session.hasLiveAgentReattachStatusOrTitleSignal = (): boolean => {
     // Permanent tab launch metadata cannot prove liveness; require current status/title or restored screen shape.
-    if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
+    if (getAgentStatusEntry(session.cacheKey)) {
       return true
     }
     const title = session.getCurrentTerminalTitle() ?? ''

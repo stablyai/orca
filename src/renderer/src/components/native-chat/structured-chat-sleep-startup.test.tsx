@@ -1,3 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -39,7 +41,7 @@ it('keeps an unidentified twin visible, then follows only its named host through
   const hosts = ['local', 'runtime:paired'] as const
   mocks.supportsCapability.mockResolvedValue(true)
   mocks.subscribeStatus.mockResolvedValue({ unsubscribe: vi.fn() })
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeWorktreeId: 'another-workspace',
     activeWorkspaceExecutionHostId: null,
     repos: hosts.map((executionHostId) => repoFixture({ executionHostId })),
@@ -52,7 +54,7 @@ it('keeps an unidentified twin visible, then follows only its named host through
     tabsByWorktree: {},
     browserTabsByWorktree: {}
   })
-  const state = useAppStore.getState
+  const state = getAgentStatusState
   const awake = () =>
     getWorktreeIdsWithStructuredChat(
       state().unifiedTabsByWorktree,
@@ -64,7 +66,10 @@ it('keeps an unidentified twin visible, then follows only its named host through
   expect(sleeping()).toBe(false)
   expect(mocks.subscribeStatus).not.toHaveBeenCalled()
   act(() =>
-    useAppStore.setState({ activeWorktreeId: workspaceId, activeWorkspaceExecutionHostId: 'local' })
+    applyAgentStatusPatch(useAppStore, {
+      activeWorktreeId: workspaceId,
+      activeWorkspaceExecutionHostId: 'local'
+    })
   )
   await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
   expect(awake()).toBe(false)

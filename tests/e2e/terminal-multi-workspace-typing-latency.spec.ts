@@ -527,7 +527,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
             () =>
               orcaPage.evaluate(
                 () =>
-                  Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).filter(
+                  Object.values(window.__agentStatus?.getState().agentStatusByPaneKey ?? {}).filter(
                     (row) => row.prompt === 'Synthetic production-path typing workload'
                   ).length
               ),
@@ -581,7 +581,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
             )
           ),
           receipts: await orcaPage.evaluate(() => {
-            const state = window.__store?.getState()
+            const state = window.__agentStatus?.getState()
             return {
               statuses: Object.values(state?.agentStatusByPaneKey ?? {})
                 .filter((row) => row.prompt === 'Synthetic production-path typing workload')

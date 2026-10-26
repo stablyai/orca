@@ -1,4 +1,4 @@
-import type { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
   computeAgentAcknowledgementTargets,
@@ -14,7 +14,7 @@ import {
   type AgentSubjectRead
 } from '@/attention/agent-subject-read-actions'
 
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+type StoreSnapshot = AgentStatusReadState
 
 /** The adapter that owns a target's address; terminal and structured tab ids never mix. */
 export function surfaceForAutoAckTarget(

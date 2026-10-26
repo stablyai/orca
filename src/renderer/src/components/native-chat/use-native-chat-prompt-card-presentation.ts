@@ -1,5 +1,5 @@
+import { useAgentStatusField } from '@/store/agent-status'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { useAppStore } from '../../store'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
@@ -37,8 +37,7 @@ export function useNativeChatPromptCardPresentation({
   transcriptSettled?: boolean
 }): NativeChatPromptCardPresentation {
   // Identical prompt text may belong to separate wait occurrences.
-  const startedAt = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
+  const startedAt = useAgentStatusField(paneKey, (entry) => {
     return card && entry?.interactivePrompt ? (entry.stateStartedAt ?? null) : null
   })
   const content = nativeChatCardDismissKey(card)

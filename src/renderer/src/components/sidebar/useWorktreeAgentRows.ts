@@ -1,9 +1,11 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState, subscribeAgentStatusState } from '@/store/agent-status'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
-import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import '@/store'
+
 import {
   EMPTY_LIVE_PTY_IDS,
   EMPTY_PANE_FOREGROUND_AGENTS,
@@ -47,7 +49,7 @@ export {
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
   const selectInputs = useMemo(() => {
     const selectAgentFreshness = createWorktreeAgentFreshnessSelector(worktreeId)
-    const readInputs = (state: AppState) =>
+    const readInputs = (state: AgentStatusReadState) =>
       [
         active ? state.tabsByWorktree[worktreeId] : EMPTY_TABS,
         active ? selectLiveAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
@@ -67,7 +69,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         active ? selectAgentFreshness(state) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
       ] as const
     let previous: ReturnType<typeof readInputs> | undefined
-    return (state: AppState) => {
+    return (state: AgentStatusReadState) => {
       if (!active && previous) {
         return previous
       }
@@ -80,7 +82,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
       return next
     }
   }, [worktreeId, active])
-  const getInputs = useCallback(() => selectInputs(useAppStore.getState()), [selectInputs])
+  const getInputs = useCallback(() => selectInputs(getAgentStatusState()), [selectInputs])
   const [
     tabs,
     liveEntries,
@@ -93,7 +95,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     paneForegroundAgentByPaneKey,
     agentFreshnessSignature
   ] = useSyncExternalStore(
-    active ? useAppStore.subscribe : subscribeToNothing,
+    active ? subscribeAgentStatusState : subscribeToNothing,
     getInputs,
     getInputs
   )

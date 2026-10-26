@@ -36,22 +36,22 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionReplayPayloadHandlingTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function setReattachPaneTitle(title: string): void {
-    mockStoreState = buildReattachPaneTitleState(mockStoreState, title)
+    storeFixture.patch(buildReattachPaneTitleState(storeFixture.read(), title))
   }
 
   // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
-    mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
+    storeFixture.patch(buildActiveRuntimeEnvironmentState(storeFixture.read(), environmentId))
   }
 
   describe('connectPanePty', () => {
@@ -61,9 +61,10 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -75,11 +76,12 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('preserves a scrolled-up viewport after hidden-backlog snapshot replay', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -134,7 +136,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('cancels a delayed snapshot scroll restore when the pane binding is disposed', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { isTerminalScrollIntentRebuildInFlight } =
         await import('@/lib/pane-manager/terminal-scroll-intent-rebuild')
       const transport = createMockTransport('pty-id')
@@ -194,7 +196,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('does not apply a delayed snapshot restore after newer user intent', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
@@ -251,7 +253,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('rebuilds WebGL after remote buffered replay arrives on an already-open pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -289,7 +291,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('preserves live agent modes when queued replay data carries the Cursor Agent screen', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -328,7 +330,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     // Styled headers need CSI stripping; raw-byte lastIndexOf would silently miss this case.
     it('still detects the Cursor Agent screen when CSI styling splits the header and the marker', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -368,7 +370,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     // Bound the scan to current-screen bytes; headers buried in old scrollback must not classify the live pane.
     it('ignores a Cursor Agent screen buried beyond the payload scan tail limit', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -404,7 +406,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('downgrades a scrollback-only Cursor Agent signal when the parsed viewport shows a shell', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -452,7 +454,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('does not clear restored scrollback when eager metadata replay opts out', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedReplayCallback: {
         current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
@@ -489,7 +491,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('does not write a clear or reset for empty eager metadata replay', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedReplayCallback: {
         current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
@@ -519,7 +521,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('coalesces remote replay payloads that overlap before parsing starts', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -569,7 +571,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('holds newer live bytes until a later replay frame has fully parsed', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { deliverTerminalDataWithDeferredCredit } =
         await import('@/lib/pane-manager/terminal-delivery-credit')
       enableActiveRuntimeEnvironment()
@@ -631,7 +633,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('drops a queued relay replay instead of retagging it for a replacement PTY', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-old')
       const replayCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -667,7 +669,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
     })
 
     it('requests snapshot recovery for one oversized live frame deferred by replay', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { deliverTerminalDataWithDeferredCredit } =
         await import('@/lib/pane-manager/terminal-delivery-credit')
       const transport = createMockTransport('pty-large-live')

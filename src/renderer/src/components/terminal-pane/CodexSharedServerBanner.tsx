@@ -1,3 +1,5 @@
+import { useAgentStatusSelector, getAgentStatusState } from '@/store/agent-status'
+
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -82,10 +84,11 @@ export function CodexSharedServerBanner({
     (state) => state.settings !== null && isCodexSharedServerWarningEnabled(state.settings)
   )
   // Why either signal: a typed codex is seen by the process read, or by its hooks when that read has no command marks.
-  const codexInPane = useAppStore(
+  const codexInPane = useAgentStatusSelector(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'codex'
+      state.agentStatusByPaneKey[paneKey]?.agentType === 'codex',
+    [paneKey]
   )
   // Why a recheck: after the fix stops the server, the banner hides unless a new one is joined.
   const [recheck, setRecheck] = useState(0)
@@ -164,7 +167,7 @@ export function CodexSharedServerBanner({
             setDismissed(true)
           }}
           onDontShowAgain={() =>
-            void useAppStore.getState().updateSettings({ codexSharedServerWarning: false })
+            void getAgentStatusState().updateSettings({ codexSharedServerWarning: false })
           }
           onShown={retireCodexTerminalServerIsolationNotice}
         />

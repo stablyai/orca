@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../../types'
+import { createTestStore } from '../../store-test-helpers'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 
 const REMOVED_ID = 'repo-1::/repos/one/removed'
@@ -9,6 +10,7 @@ const SURVIVING_ID = 'repo-1::/repos/one/kept'
 function buildState(): AppState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cleanup reads only the maps listed here and tolerates the rest being absent.
   return {
+    ...createTestStore().getState(),
     worktreesByRepo: { 'repo-1': [] },
     tabsByWorktree: { [REMOVED_ID]: [], [SURVIVING_ID]: [] },
     openFiles: [],

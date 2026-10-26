@@ -1,3 +1,4 @@
+import type { AgentStatusSnapshot } from '@/store/agent-status-observers'
 import { resolveAgentStatusWorktreeId } from '../../../../shared/agent-status-worktree-attribution'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -7,7 +8,7 @@ import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-i
 export type LiveEntriesByWorktreeCache = {
   tabsByWorktree: AppState['tabsByWorktree']
   unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] | undefined
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  agentStatusByPaneKey: AgentStatusSnapshot
   entriesByWorktree: Map<string, AgentStatusEntry[]>
 }
 
@@ -41,7 +42,7 @@ export function liveEntryWorktreeId(
 /** Patch unchanged buckets on status pings; producers must not reorder keys without entry/key changes, or must invalidate this cache. */
 export function patchLiveEntriesByWorktree(
   cache: LiveEntriesByWorktreeCache,
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
+  agentStatusByPaneKey: AgentStatusSnapshot,
   tabIdToWorktreeId: Map<string, string>
 ): Map<string, AgentStatusEntry[]> | null {
   const previousMap = cache.agentStatusByPaneKey

@@ -174,16 +174,22 @@ vi.mock('@/lib/browser-uuid', () => ({
   createBrowserUuid: () => 'create-request-id'
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => state,
-    subscribe: mockStoreSubscribe
-  }
-}))
+function mockCanonicalFixtureStore(): void {
+  vi.doMock('@/store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+    const fixture = withAgentStatusFixture(
+      { useAppStore: { getState: () => state, subscribe: mockStoreSubscribe } },
+      () => state
+    )
+    latestStoreSubscriber = () => void fixture.useAppStore.getState()
+    return fixture
+  })
+}
 
 describe('useAutomationDispatchEvents setup launch', () => {
   beforeEach(() => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
     state.activeView = 'terminal'

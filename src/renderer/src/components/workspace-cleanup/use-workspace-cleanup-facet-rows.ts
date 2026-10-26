@@ -1,6 +1,7 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
@@ -88,7 +89,7 @@ export function useWorkspaceCleanupFacetRows({
   /** Skip facet count/option O(N) passes while the filter popover is closed. */
   facetPanelOpen?: boolean
 }): WorkspaceCleanupFacetRows {
-  const sources = useAppStore(
+  const sources = useAgentStatusSelector(
     useShallow((s) => ({
       worktreesByRepo: selectWorktreesByRepo(s),
       hostedReviewCache: s.hostedReviewCache,

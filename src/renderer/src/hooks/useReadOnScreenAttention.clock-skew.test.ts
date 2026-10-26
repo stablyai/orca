@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { cleanup, renderHook } from '@testing-library/react'
@@ -37,7 +39,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
     paneKey: PANE_KEY,
     stateHistory: []
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeView: 'terminal',
     activeTabId: TAB_ID,
     activeWorktreeId: 'wt-1',
@@ -71,7 +73,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
 function instrumentAcknowledgeAgents(): string[][] {
   const real = useAppStore.getState().acknowledgeAgents
   const calls: string[][] = []
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     acknowledgeAgents: (paneKeys: string[]) => {
       calls.push(paneKeys)
       if (calls.length > ACK_CALL_CEILING) {
@@ -97,7 +99,7 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
-    useAppStore.setState({ acknowledgeAgents: realAcknowledgeAgents })
+    applyAgentStatusPatch(useAppStore, { acknowledgeAgents: realAcknowledgeAgents })
   })
 
   it('acks a turn stamped ahead of the local clock exactly once', () => {
@@ -116,7 +118,7 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
     renderHook(() => useReadOnScreenAttention())
 
     const calls = instrumentAcknowledgeAgents()
-    useAppStore.setState((state) => ({
+    applyAgentStatusPatch(useAppStore, (state) => ({
       unreadTerminalTabs: { ...state.unreadTerminalTabs, 'tab-unrelated': 'terminal-bell' }
     }))
 

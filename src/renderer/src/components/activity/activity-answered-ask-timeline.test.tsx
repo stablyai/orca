@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 // An answered subagent ask restores its parent’s older turn-end timestamp. Order switches by observation time, but read unread/state from the pane’s current turn.
@@ -9,7 +10,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '@/store/types'
+
 import { makeRepo, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread-presentation'
 import { clearActivityThread } from './activity-clear-completed'
@@ -21,8 +22,8 @@ import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
 import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState> & { testRuntimeOwner?: string | null }) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -37,7 +38,12 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   const useAppStore = createTestStore()
-  mocks.store = useAppStore
+  const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  mocks.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 
@@ -219,7 +225,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
       const threads = activity.result.current.allThreads
       activity.rerender()
       expect(activity.result.current.allThreads).toBe(threads)
-      const state = useAppStore.getState()
+      const state = store().getState()
       for (const name of ['Renamed on host', null]) {
         emit({
           type: 'snapshot',
@@ -230,7 +236,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
           name ?? 'Implement the requested change'
         )
         expect(useAppStore.getState().unifiedTabsByWorktree).toBe(state.unifiedTabsByWorktree)
-        expect(useAppStore.getState().agentStatusByPaneKey).toBe(state.agentStatusByPaneKey)
+        expect(store().getState().agentStatusByPaneKey).toBe(state.agentStatusByPaneKey)
       }
     } finally {
       stop()

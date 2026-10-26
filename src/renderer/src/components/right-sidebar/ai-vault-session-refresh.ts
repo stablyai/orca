@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   isAiVaultScanCancelledError,
@@ -6,7 +7,6 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
-import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
@@ -297,10 +297,10 @@ export function useAiVaultSessionRefresh(
   useAiVaultSessionHostRefreshEvents(error, refresh)
 
   // In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions.
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
+  const sessionIdsKey = useAgentStatusSelector((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
-    const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')
+    const ids = sessionIdsKey === '' ? [] : sessionIdsKey.split('\n')
     // The mount refresh already covers sessions live at mount time.
     if (seenAgentSessionIdsRef.current === null) {
       seenAgentSessionIdsRef.current = new Set(ids)
@@ -315,7 +315,7 @@ export function useAiVaultSessionRefresh(
       seen.add(id)
     }
     requestForcedRescan()
-  }, [agentSessionIdsKey, requestForcedRescan])
+  }, [sessionIdsKey, requestForcedRescan])
 
   const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
   return {

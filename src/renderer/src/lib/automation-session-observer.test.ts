@@ -22,11 +22,18 @@ const state = {
   setAgentStatus: vi.fn()
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => state
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      getState: () => state
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   subscribeToPtyExit: mockSubscribeToPtyExit

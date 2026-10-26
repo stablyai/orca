@@ -14,7 +14,13 @@ import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
 
 export function findBrowserWorkspaceForRemotePage(
-  state: WebSessionTabsSyncState,
+  state: Pick<
+    WebSessionTabsSyncState,
+    | 'browserTabsByWorktree'
+    | 'browserPagesByWorkspace'
+    | 'remoteBrowserPageHandlesByPageId'
+    | 'unifiedTabsByWorktree'
+  >,
   worktreeId: string,
   environmentId: string,
   remotePageId: string

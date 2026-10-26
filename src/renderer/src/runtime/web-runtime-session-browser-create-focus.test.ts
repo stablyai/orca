@@ -1,3 +1,8 @@
+import type { AppState } from '../store/types'
+import { makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { useAppStore } from '../store'
+import { getDefaultSettings } from '../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activateWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
@@ -34,13 +39,14 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'subscribe').mockImplementation(mocks.subscribe)
+  return { useAppStore }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
@@ -79,7 +85,7 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('createWebRuntimeSessionBrowserTab', () => {
   beforeEach(() => {
-    stubBrowserTabCreateEnvironment(mocks)
+    stubBrowserTabCreateEnvironment(mocks, useAppStore)
   })
 
   afterEach(() => {
@@ -206,9 +212,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     const createResponse = new Promise((resolve) => {
       resolveCreate = resolve
     })
-    let state = mocks.getState()
+    let state = useAppStore.getState()
     let listener: ((next: typeof state, previous: typeof state) => void) | null = null
-    mocks.getState.mockImplementation(() => state)
+    useAppStore.setState(state)
     mocks.subscribe.mockImplementation((nextListener) => {
       listener = nextListener
       return vi.fn()
@@ -223,17 +229,19 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
     await vi.waitFor(() => expect(listener).not.toBeNull())
-    const editorBState = {
+    const editorBState: AppState = {
       ...state,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/other.html' },
       unifiedTabsByWorktree: {
         [WORKTREE_ID]: [
           ...state.unifiedTabsByWorktree[WORKTREE_ID],
-          {
+          makeUnifiedTab({
             id: 'other-editor-tab',
+            worktreeId: WORKTREE_ID,
+            groupId: 'group-1',
             entityId: '/worktree/other.html',
             contentType: 'editor'
-          }
+          })
         ]
       }
     }
@@ -244,6 +252,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     }
     listener!(editorAState, editorBState)
     state = editorAState
+    useAppStore.setState(state)
     resolveCreate({
       id: 'create',
       ok: true,
@@ -259,9 +268,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     const listResponse = new Promise((resolve) => {
       resolveList = resolve
     })
-    let state = mocks.getState()
+    let state = useAppStore.getState()
     let listener: ((next: typeof state, previous: typeof state) => void) | null = null
-    mocks.getState.mockImplementation(() => state)
+    useAppStore.setState(state)
     mocks.subscribe.mockImplementation((nextListener) => {
       listener = nextListener
       return vi.fn()
@@ -278,17 +287,19 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
-    const editorBState = {
+    const editorBState: AppState = {
       ...state,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/other.html' },
       unifiedTabsByWorktree: {
         [WORKTREE_ID]: [
           ...state.unifiedTabsByWorktree[WORKTREE_ID],
-          {
+          makeUnifiedTab({
             id: 'other-editor-tab',
+            worktreeId: WORKTREE_ID,
+            groupId: 'group-1',
             entityId: '/worktree/other.html',
             contentType: 'editor'
-          }
+          })
         ]
       }
     }
@@ -299,6 +310,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     }
     listener!(editorAState, editorBState)
     state = editorAState
+    useAppStore.setState(state)
     resolveList({ id: 'list', ok: true, result: makeSnapshot() })
     await expect(pendingCreate).resolves.toBe(true)
 
@@ -308,22 +320,22 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   it.each([
     {
       label: 'worktree',
-      leave: (state: Record<string, unknown>) => ({
+      leave: (state: AppState) => ({
         ...state,
         activeWorktreeId: 'repo::/other-worktree'
       }),
-      returnToStart: (state: Record<string, unknown>) => ({
+      returnToStart: (state: AppState) => ({
         ...state,
         activeWorktreeId: WORKTREE_ID
       })
     },
     {
       label: 'runtime owner',
-      leave: (state: Record<string, unknown>) => ({
+      leave: (state: AppState) => ({
         ...state,
-        activeWorkspaceExecutionHostId: 'local'
+        activeWorkspaceExecutionHostId: 'local' as const
       }),
-      returnToStart: (state: Record<string, unknown>) => ({
+      returnToStart: (state: AppState) => ({
         ...state,
         activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID
       })
@@ -335,9 +347,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       const listResponse = new Promise((resolve) => {
         resolveList = resolve
       })
-      let state = mocks.getState()
+      let state = useAppStore.getState()
       let listener: ((next: typeof state, previous: typeof state) => void) | null = null
-      mocks.getState.mockImplementation(() => state)
+      useAppStore.setState(state)
       mocks.subscribe.mockImplementation((nextListener) => {
         listener = nextListener
         return vi.fn()
@@ -359,6 +371,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       const returnedState = returnToStart(awayState)
       listener!(returnedState, awayState)
       state = returnedState
+      useAppStore.setState(state)
       resolveList({ id: 'list', ok: true, result: makeSnapshot() })
       await expect(pendingCreate).resolves.toBe(true)
 
@@ -370,17 +383,18 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     const snapshot = makeSnapshot()
     const setStateResults: unknown[] = []
     let focusState = {
-      ...mocks.getState(),
+      ...useAppStore.getState(),
       activeWorktreeId: 'landing',
-      activeWorkspaceExecutionHostId: 'local'
+      activeWorkspaceExecutionHostId: 'local' as const
     }
-    mocks.getState.mockImplementation(() => focusState)
+    useAppStore.setState(focusState)
     mocks.setActiveWorktree.mockImplementation((worktreeId, executionHostId) => {
       focusState = {
         ...focusState,
         activeWorktreeId: worktreeId,
         activeWorkspaceExecutionHostId: executionHostId
       }
+      useAppStore.setState(focusState)
     })
     let mockState: Record<string, unknown> = { state: 'before-stage', activeWorktreeId: 'landing' }
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
@@ -427,10 +441,19 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   })
 
   it('does not reselect an already active browser worktree on the same runtime', async () => {
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: ENVIRONMENT_ID },
       runtimeStatusByEnvironmentId: new Map([
-        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+        [
+          ENVIRONMENT_ID,
+          {
+            status: {
+              ...createCompatibleRuntimeStatusResponse().result,
+              capabilities: ['browser.screencast.v1']
+            },
+            checkedAt: 1
+          }
+        ]
       ]),
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID,
@@ -503,14 +526,22 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('does not focus a staged browser tab when the user leaves before host create resolves', async () => {
     let activeWorktreeId = WORKTREE_ID
-    mocks.getState.mockImplementation(() => ({
-      settings: {
-        activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      },
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: ENVIRONMENT_ID },
       runtimeStatusByEnvironmentId: new Map([
-        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+        [
+          ENVIRONMENT_ID,
+          {
+            status: {
+              ...createCompatibleRuntimeStatusResponse().result,
+              capabilities: ['browser.screencast.v1']
+            },
+            checkedAt: 1
+          }
+        ]
       ]),
       activeWorktreeId,
+      activeWorkspaceExecutionHostId: null,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       activeTabIdByWorktree: {},
@@ -521,11 +552,12 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
       focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
       setActiveWorktree: mocks.setActiveWorktree
-    }))
+    })
     const runtimeCall = vi
       .fn()
       .mockImplementationOnce(async () => {
         activeWorktreeId = 'other-worktree'
+        useAppStore.setState({ activeWorktreeId })
         return {
           id: 'create',
           ok: true,

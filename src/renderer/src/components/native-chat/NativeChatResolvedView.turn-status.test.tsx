@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -86,11 +88,11 @@ function setStatus(payload: Omit<AgentStatusPayload, 'prompt' | 'agentType'>, ag
   useAppStore
     .getState()
     .setAgentStatus(paneKey, { prompt: 'Rename the module', agentType: 'claude', ...payload })
-  const live = useAppStore.getState().agentStatusByPaneKey[paneKey]
+  const live = getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[paneKey]
   if (!live) {
     throw new Error('the store dropped the status row this test depends on')
   }
-  useAppStore.setState((store) => ({
+  applyAgentStatusPatch(useAppStore, (store) => ({
     agentStatusByPaneKey: {
       ...store.agentStatusByPaneKey,
       [paneKey]: { ...live, stateStartedAt: Date.now() - age }
@@ -99,7 +101,7 @@ function setStatus(payload: Omit<AgentStatusPayload, 'prompt' | 'agentType'>, ag
 }
 
 function patchStatus(fields: Partial<AgentStatusEntry>): void {
-  useAppStore.setState((store) => ({
+  applyAgentStatusPatch(useAppStore, (store) => ({
     agentStatusByPaneKey: {
       ...store.agentStatusByPaneKey,
       [paneKey]: { ...store.agentStatusByPaneKey[paneKey]!, ...fields }
@@ -131,13 +133,19 @@ function liveActivityLine(): Element | null {
 
 beforeEach(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  applyAgentStatusPatch(useAppStore, {
+    agentStatusByPaneKey: {},
+    nativeChatLaunchPromptByTabId: {}
+  })
 })
 
 afterEach(() => {
   cleanup()
   restoreViewport()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  applyAgentStatusPatch(useAppStore, {
+    agentStatusByPaneKey: {},
+    nativeChatLaunchPromptByTabId: {}
+  })
 })
 
 describe('NativeChatResolvedView turn status', () => {

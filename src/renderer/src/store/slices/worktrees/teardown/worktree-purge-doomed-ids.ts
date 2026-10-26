@@ -1,8 +1,9 @@
+import { afterPurgeAcceptance, preparePurgeOwnership } from './worktree-purge-preparation'
+import { findAgentStatusOwner } from '../../../agent-status-commit'
 import type { AppState } from '../../../types'
-import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { prepareAgentHibernationOutputRemoval } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
-import { forgetAgentPaneAuthorityAliasesByTabIds } from '../../agent-pane-authority'
+import { prepareAgentStartupDeliveriesRemoval } from '@/lib/agent-startup-delivery-guards'
 import { forgetDetachedHeadAutoDerivedDisplayName } from '../metadata/detached-head-display-name'
 
 export type WorktreePurgeDoomedIds = {
@@ -25,7 +26,7 @@ export function collectWorktreePurgeDoomedIds(
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       browserWorkspaceIds.push(workspace.id)
     }
-    forgetDetachedHeadAutoDerivedDisplayName(id)
+    afterPurgeAcceptance(s, () => forgetDetachedHeadAutoDerivedDisplayName(id))
   }
   for (const file of s.openFiles) {
     if (worktreeIdSet.has(file.worktreeId)) {
@@ -72,12 +73,18 @@ export function collectSurfacePurgeDoomedIds(
   for (const tab of surfaces.tabs) {
     doomedTabIds.add(tab.id)
     addDoomedTabPtyIds(tab.id, tab.ptyId)
-    forgetAgentHibernationTabOutput(tab.id)
   }
-  forgetForegroundTerminalTabs(doomedTabIds)
-  forgetAgentStartupDeliveriesForTabs(doomedTabIds)
+  afterPurgeAcceptance(s, () => forgetForegroundTerminalTabs(doomedTabIds))
+  preparePurgeOwnership(s, {
+    install: prepareAgentStartupDeliveriesRemoval(doomedTabIds),
+    effects: []
+  })
+  preparePurgeOwnership(s, {
+    install: prepareAgentHibernationOutputRemoval(doomedTabIds),
+    effects: []
+  })
   // Authority aliases outlive store maps; purged tabs must not leave permanent routes to missing panes.
-  forgetAgentPaneAuthorityAliasesByTabIds(doomedTabIds)
+  findAgentStatusOwner(s)?.authority().forgetAgentPaneAuthorityAliasesByTabIds(doomedTabIds)
   // Bulk reconcile skips closeBrowserTab, so collect all doomed workspace page IDs for eviction.
   for (const workspaceId of doomedBrowserWorkspaceIds) {
     for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {

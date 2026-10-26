@@ -1,5 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type { AppState } from '@/store/types'
+
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot
@@ -37,7 +38,7 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function buildMobileSessionTabSnapshots(
-  state: AppState,
+  state: AgentStatusReadState,
   systemPrefersDark = getSystemPrefersDark(),
   ambiguousTerminalTabIds: ReadonlySet<string> = collectAmbiguousTerminalTabIds(
     state.tabsByWorktree

@@ -1,6 +1,9 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+
 import { useAppStore } from '@/store'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -20,14 +23,14 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 
 /** Model old-host lost split reveal: first activation of an unmounted host-created setup split can mint a second tab for the same PTY and freeze one pane. Conditional reconstruction, not proof of STA-9417. */
 
-const initialState = useAppStore.getState()
+const initialState = getAgentStatusOwner(useAppStore).getState()
 const TAB_B = 'b3f1c1de-5e0f-4a51-9d0c-7a8e2a9f6b11'
 const PRIMARY_LEAF = '11111111-1111-4111-8111-111111111111'
 const SETUP_LEAF = '22222222-2222-4222-8222-222222222222'
 
 type CreateTerminalListener = Parameters<Window['api']['ui']['onCreateTerminal']>[0]
 
-function baseState(): Partial<AppState> {
+function baseState(): Partial<AgentStatusReadState> {
   const worktree = makeWorktree()
   return {
     repos: [
@@ -201,7 +204,7 @@ function setupSplitReveal(
 
 /** ptyId → every tab:leaf in the worktree that holds it. */
 function ownersByPty(worktreeId: string): Map<string, string[]> {
-  const state = useAppStore.getState()
+  const state = getAgentStatusOwner(useAppStore).getState()
   const owners = new Map<string, string[]>()
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     const layout = state.terminalLayoutsByTabId[tab.id]
@@ -224,7 +227,7 @@ async function activateFirstTime(worktreeId: string): Promise<void> {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  useAppStore.setState(initialState, true)
+  applyAgentStatusPatch(useAppStore, initialState)
 })
 
 describe('old-host split of an unmounted tab, then first activation', () => {
@@ -232,7 +235,7 @@ describe('old-host split of an unmounted tab, then first activation', () => {
     const worktree = makeWorktree()
     const primaryPtyId = `${worktree.id}@@primary`
     const setupPtyId = `${worktree.id}@@setup`
-    useAppStore.setState(baseState())
+    applyAgentStatusPatch(useAppStore, baseState())
     const host = stubHost(primaryPtyId, setupPtyId)
     registerTerminalPresentationIpcBridge([])
     seedRevealedPrimaryTab(worktree.id, primaryPtyId)
@@ -269,8 +272,8 @@ describe('old-host split of an unmounted tab, then first activation', () => {
         const worktree = makeWorktree()
         const primaryPtyId = `${worktree.id}@@primary-${run}`
         const setupPtyId = `${worktree.id}@@setup-${run}`
-        useAppStore.setState(initialState, true)
-        useAppStore.setState(baseState())
+        applyAgentStatusPatch(useAppStore, initialState)
+        applyAgentStatusPatch(useAppStore, baseState())
         const host = stubHost(primaryPtyId, setupPtyId)
         registerTerminalPresentationIpcBridge([])
         seedRevealedPrimaryTab(worktree.id, primaryPtyId)
@@ -290,7 +293,7 @@ describe('old-host split of an unmounted tab, then first activation', () => {
 
   it('rejects a split into a tab it lacks without switching to that workspace', () => {
     const worktree = makeWorktree()
-    useAppStore.setState({ ...baseState(), activeWorktreeId: null })
+    applyAgentStatusPatch(useAppStore, { ...baseState(), activeWorktreeId: null })
     const host = stubHost(`${worktree.id}@@primary`, `${worktree.id}@@setup`)
     registerTerminalPresentationIpcBridge([])
 

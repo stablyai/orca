@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from './agent-status-patch'
 import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
@@ -65,6 +66,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import { withAgentStatusCommit, getAgentStatusOwner } from './agent-status-commit'
 import { attachEditorBufferIdentityEvents } from './editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
@@ -81,7 +83,7 @@ const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>)
 
 // Why buffer records outermost: the probes must see each caller's own partial and frame.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
-export const useAppStore = create<AppState>()(
+export const createAppState: StateCreator<AppState, [], []> = withAgentStatusCommit(
   withEditorBufferRecords(
     withDevelopmentStoreProbes(
       withReactCommitCascadeWriteProbe((...a) => {
@@ -149,6 +151,8 @@ export const useAppStore = create<AppState>()(
   )
 )
 
+export const useAppStore = create<AppState>()(createAppState)
+
 registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
 registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
@@ -199,6 +203,9 @@ export type { AppState } from './types'
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore
+  testWindow.__agentStatus = getAgentStatusOwner(useAppStore)
+  testWindow.__setStorePatch = (patch: Parameters<typeof applyAgentStatusPatch>[1]) =>
+    applyAgentStatusPatch(useAppStore, patch)
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>

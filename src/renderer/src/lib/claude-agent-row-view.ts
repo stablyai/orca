@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { useAppStore } from '@/store'
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
@@ -12,7 +13,7 @@ import type { ClaudeAgentViewResult } from '../../../shared/claude-agent-view'
 export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<void> {
   const state = useAppStore.getState()
   const paneKey = agent.activationPaneKey ?? agent.paneKey
-  const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
+  const parent = getAgentStatusEntry(paneKey) ?? agent.entry
   if (parent?.agentType !== 'claude' || parent.structuredHostOwned) {
     return
   }

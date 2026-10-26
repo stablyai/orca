@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState } from '@/store/agent-status'
 import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import {
   agentProviderSessionsEqual,
@@ -41,7 +42,7 @@ function clearPassiveCompletedRecordsForClaimKey(
   claimKey: string,
   keepPaneKey: string
 ): void {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   for (const record of records) {
     if (record.paneKey === keepPaneKey || !sweepTreatsAsFinished(record)) {
       continue
@@ -53,7 +54,7 @@ function clearPassiveCompletedRecordsForClaimKey(
 }
 
 function getCurrentPaneOwnedClaimKeys(records: readonly SleepingAgentSessionRecord[]): Set<string> {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const keys = new Set<string>()
   for (const record of records) {
     if (
@@ -83,7 +84,7 @@ function getAgentStatusTabId(entry: {
 
 function activeOrQueuedResumeClaimsProviderSession(
   record: SleepingAgentSessionRecord,
-  state: ReturnType<typeof useAppStore.getState>,
+  state: AgentStatusReadState,
   samePaneOwnsRecovery: boolean
 ): boolean {
   const worktreeTabIds = new Set(
@@ -153,7 +154,7 @@ function activeOrQueuedResumeClaimsProviderSession(
 
 function providerSessionOwnedElsewhere(
   record: SleepingAgentSessionRecord,
-  state: ReturnType<typeof useAppStore.getState>
+  state: AgentStatusReadState
 ): boolean {
   // Claim keys handle same-workspace duplicates; finished notes, moved hosts and foreign-machine records cannot claim sessions.
   return Object.values(state.sleepingAgentSessionsByPaneKey).some(
@@ -186,7 +187,7 @@ function replayParkedWorktreeResumeSweep(
   options: ResumeSleepingAgentSessionsOptions | undefined
 ): void {
   // Mirror verdicts can settle after navigation; replayed resumes must not steal the current surface.
-  const isActive = useAppStore.getState().activeWorktreeId === worktreeId
+  const isActive = getAgentStatusState().activeWorktreeId === worktreeId
   // Drop park-time skipClaimKeys; an in-place wake that failed since parking must remain resumable.
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     ...(options?.onSessionLaunched ? { onSessionLaunched: options.onSessionLaunched } : {}),
@@ -216,7 +217,7 @@ export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   // Before the execution host answers, absent local panes are unverifiable, not exited; resume could fork a live transcript (STA-3500). Retain records for the later sweep; paired runtimes also have finer per-pane mirror parking.
   const hostAuthority = resolveWorkspaceTerminalHostAuthority(state, worktreeId)
   if (hostAuthority === 'unverifiable') {
@@ -247,7 +248,7 @@ export function resumeSleepingAgentSessionsForWorktree(
 
   let launched = 0
   for (const record of worktreeRecords) {
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     if (currentState.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
       continue
     }

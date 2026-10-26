@@ -1,3 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
@@ -432,7 +434,10 @@ it.each(['expiry', 'purge'])('created pane publication: %s', async (order) => {
     groupId
   })
   if (order === 'purge') {
-    useAppStore.setState(buildFullWorktreePurgeState(store(), [{ id: 'wt-1' }]))
+    applyAgentStatusPatch(
+      useAppStore,
+      buildFullWorktreePurgeState(getAgentStatusState(), [{ id: 'wt-1' }])
+    )
   }
   await vi.advanceTimersByTimeAsync(30_000)
   expect(unlisted.isUnlistedCreatedChat('wt-1', chat.entityId)).toBe(false)

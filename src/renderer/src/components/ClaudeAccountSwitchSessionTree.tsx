@@ -1,3 +1,5 @@
+import { useAgentStatusSelector, useAgentStatusField } from '@/store/agent-status'
+
 import { Folder, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -157,8 +159,8 @@ function SessionRow({
     )
     return tab?.customTitle || tab?.title || ''
   })
-  const lastPrompt = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.prompt?.trim())
-  const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
+  const lastPrompt = useAgentStatusField(paneKey, (entry) => entry?.prompt?.trim())
+  const busy = useAgentStatusSelector((store) => isClaudePaneMidTurn(store, paneKey), [paneKey])
   const title =
     lastPrompt || tabTitle || translate('accounts.claude.switchSessions.session', 'Claude session')
   return (

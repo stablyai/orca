@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
@@ -104,7 +105,7 @@ export function selectOpenTabSearchBrowserPageState(
 }
 
 export type OpenTabSearchAgentState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'paneForegroundAgentByPaneKey'
   | 'retainedAgentsByPaneKey'
@@ -161,7 +162,9 @@ export function selectOpenTabSearchEntryState(
   }
 }
 
-export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAgentState {
+export function selectOpenTabSearchAgentState(
+  state: AgentStatusReadState
+): OpenTabSearchAgentState {
   return {
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,

@@ -1,8 +1,9 @@
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
-import { useAppStore } from '@/store'
+
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -84,8 +85,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     // Missed DOM keydowns can still yield exact Ctrl+C/Escape bytes; infer only on acknowledged transports, excluding fire-and-forget SSH.
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && session.transport.sendInputAccepted) {
-      const interruptStatusBaseline =
-        useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
+      const interruptStatusBaseline = getAgentStatusEntry(session.cacheKey) ?? null
       // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
       if (session.sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
         session.sequencedInterruptStatusBaseline = interruptStatusBaseline

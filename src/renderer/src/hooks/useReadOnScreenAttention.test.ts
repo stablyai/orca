@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 import {
@@ -16,7 +17,7 @@ const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 type TestStore = ReturnType<typeof createTestStore>
 
 function ackTargets(store: TestStore, tabId: string, leafId: string): string[] {
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   return computeAgentAcknowledgementTargets(
     {
       liveTurns: state.agentStatusByPaneKey,
@@ -56,7 +57,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       prompt: 'sleep 10 then say hi',
       agentType: 'codex'
     })
-    const liveDone = store.getState().agentStatusByPaneKey[paneKey]
+    const liveDone = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]
     expect(liveDone.stateStartedAt).toBeGreaterThan(workingAck)
 
     const retentionSnapshot: RetainedAgentEntry = {
@@ -67,7 +68,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       startedAt: liveDone.stateStartedAt
     }
     store.getState().removeAgentStatus(paneKey)
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
 
     store.getState().retainAgents([retentionSnapshot])
@@ -89,7 +90,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       prompt: 'p',
       agentType: 'codex'
     })
-    const doneEntry = store.getState().agentStatusByPaneKey[paneKey]
+    const doneEntry = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]
     store.getState().retainAgents([
       {
         entry: doneEntry,
@@ -117,7 +118,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       prompt: 'p',
       agentType: 'codex'
     })
-    const entry = store.getState().agentStatusByPaneKey[paneKey]
+    const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]
     store.getState().retainAgents([
       {
         entry,
@@ -166,7 +167,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       prompt: 'p1',
       agentType: 'codex'
     })
-    const liveDone = store.getState().agentStatusByPaneKey[paneKey]
+    const liveDone = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]
     store.getState().retainAgents([
       {
         entry: liveDone,
@@ -366,10 +367,10 @@ describe('computeLapsedManualUnreadProtections', () => {
   it('lapses a pane that is no longer active or whose agent took a new turn', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
-    const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+    const turn = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
     const lapsed = computeLapsedManualUnreadProtections(
       {
-        liveTurns: store.getState().agentStatusByPaneKey,
+        liveTurns: getAgentStatusOwner(store).getState().agentStatusByPaneKey,
         retainedTurns: store.getState().retainedAgentsByPaneKey,
         manuallyUnreadTurnStartedAt: { [paneKey]: turn - 1, [otherPaneKey]: 5 }
       },
@@ -381,10 +382,10 @@ describe('computeLapsedManualUnreadProtections', () => {
   it('keeps an active pane whose turn is unchanged', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
-    const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+    const turn = getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
     const lapsed = computeLapsedManualUnreadProtections(
       {
-        liveTurns: store.getState().agentStatusByPaneKey,
+        liveTurns: getAgentStatusOwner(store).getState().agentStatusByPaneKey,
         retainedTurns: store.getState().retainedAgentsByPaneKey,
         manuallyUnreadTurnStartedAt: { [paneKey]: turn }
       },

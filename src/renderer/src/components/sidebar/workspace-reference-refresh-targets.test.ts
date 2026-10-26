@@ -1,3 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -20,11 +22,11 @@ vi.mock('@/store', async () => {
 const read = vi.hoisted(() => vi.fn(async () => null))
 vi.mock('./workspace-reference-detail-read', () => ({ readWorkspaceReferenceDetails: read }))
 const workspace = { ...referenceWorkspace, linkedPR: null, linkedItems: [referenceAttachment()] }
-const update = () => getWorkspaceReferenceRefreshTargets(useAppStore.getState())
+const update = () => getWorkspaceReferenceRefreshTargets(getAgentStatusState())
 beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     settings: null,
     repos: [referenceRepo],
     worktreesByRepo: { repo: [workspace] },
@@ -64,7 +66,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 it('leaves the detached primary review to its visible target while retaining sibling reviews', () => {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     worktreesByRepo: {
       repo: [
         {
@@ -82,7 +84,7 @@ it('leaves the detached primary review to its visible target while retaining sib
 })
 
 it('pauses disconnected SSH owners and only admits the owning reconnect', () => {
-  useAppStore.setState({ repos: [{ ...referenceRepo, connectionId: 'ssh-a' }] })
+  applyAgentStatusPatch(useAppStore, { repos: [{ ...referenceRepo, connectionId: 'ssh-a' }] })
   expect(update()).toEqual([])
   for (const [targetId, status, count] of [
     ['other', 'connected', 0],
@@ -96,7 +98,7 @@ it('pauses disconnected SSH owners and only admits the owning reconnect', () => 
   }
 })
 it('shares one scheduler timer and removes queued work when the workspace leaves the viewport', async () => {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     worktreesByRepo: {
       repo: [
         {
@@ -113,7 +115,7 @@ it('shares one scheduler timer and removes queued work when the workspace leaves
     await vi.advanceTimersByTimeAsync(0)
     expect(read).toHaveBeenCalledTimes(12)
     expect(vi.getTimerCount()).toBe(1)
-    useAppStore.setState({ visibleReviewWorktreeIds: [] })
+    applyAgentStatusPatch(useAppStore, { visibleReviewWorktreeIds: [] })
     scheduler.update(update())
     expect(vi.getTimerCount()).toBe(0)
     await vi.advanceTimersByTimeAsync(600_000)
@@ -132,14 +134,14 @@ it('uses the known branch provider for sparse enterprise references', () => {
     }
   }
   const key = getHostedReviewCacheKey(repo.path, workspace.branch, null, repo.id, null, null, true)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     repos: [repo],
     worktreesByRepo: {
       repo: [{ ...workspace, linkedItems: [{ provider: 'github', type: 'pr', number: 42 }] }]
     }
   })
   expect(update()).toHaveLength(0)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     hostedReviewCache: { [key]: { data: referenceReview(), fetchedAt: Date.now() } }
   })
   expect(update()).toHaveLength(1)
@@ -150,7 +152,7 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
     executionHostId: 'ssh:remote' as const,
     connectionId: 'remote'
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     repos: [referenceRepo, remoteRepo],
     worktreesByRepo: {
       local: [{ ...workspace, hostId: 'local' }],
@@ -163,19 +165,19 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
   const targets = update()
   expect(targets).toHaveLength(2)
   expect(new Set(targets.map((target) => target.key)).size).toBe(2)
-  useAppStore.setState({ visibleWorkspaceHostIds: ['local'] })
+  applyAgentStatusPatch(useAppStore, { visibleWorkspaceHostIds: ['local'] })
   expect(update()).toHaveLength(1)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeWorktreeId: workspace.id,
     activeWorkspaceExecutionHostId: 'ssh:remote'
   })
   expect(
-    getWorkspaceReferenceRefreshTargets(useAppStore.getState(), { selectedOnly: true })
+    getWorkspaceReferenceRefreshTargets(getAgentStatusState(), { selectedOnly: true })
   ).toHaveLength(1)
 })
 
 it('admits attached reviews on visible external detected worktrees', () => {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {
       repo: makeDetectedResult('repo', [workspace])

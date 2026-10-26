@@ -495,10 +495,7 @@ describe('a store subscriber that throws after the commit', () => {
 
     // Require catch evidence or settle could pass without exercising the failure branch.
     expect(threw).toBe(true)
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('a store subscriber failed after the patch landed'),
-      expect.anything()
-    )
+    expect(warn).toHaveBeenCalledWith('[agent-status] accepted observer failed', expect.anything())
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
     expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-subscriber-throw')

@@ -1,6 +1,7 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+
 import type { DashboardBucket } from '../../../../shared/dashboard-snapshot'
 import {
   buildDashboardBucketCounts,
@@ -12,7 +13,7 @@ export type AgentBucketCounts = Record<DashboardBucket, number>
 
 /** The bucket-count inputs, shaped so it doubles as the snapshot state passed to the builder. */
 export type AgentBucketCountState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'repos'
   | 'worktreesByRepo'
   | 'tabsByWorktree'
@@ -41,7 +42,7 @@ export function resetAgentBucketCountStateForTests(): void {
   previousState = null
 }
 
-export function selectAgentBucketCountState(s: AppState): AgentBucketCountState {
+export function selectAgentBucketCountState(s: AgentStatusReadState): AgentBucketCountState {
   const previous = previousState
   if (
     previous !== null &&
@@ -86,7 +87,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
 
 /** Derive sidebar buckets with shared board rules without allocating cards; subscribe only to relevant input slices. */
 export function useAgentBucketCounts(): AgentBucketCounts {
-  const state = useAppStore(selectAgentBucketCountState)
+  const state = useAgentStatusSelector(selectAgentBucketCountState)
   // Cache per worktree so status/title churn in one workspace does not rebuild every row pipeline.
   const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
   cacheRef.current ??= createDashboardBucketCountsCache()

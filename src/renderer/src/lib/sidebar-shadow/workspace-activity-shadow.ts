@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
@@ -18,7 +19,7 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(
   state: Pick<
-    AppState,
+    AgentStatusReadState,
     | 'tabsByWorktree'
     | 'ptyIdsByTabId'
     | 'browserTabsByWorktree'

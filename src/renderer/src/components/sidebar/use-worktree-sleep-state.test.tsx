@@ -27,8 +27,8 @@ type MockState = {
 
 let mockState: MockState
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
+vi.mock('@/store/agent-status', () => ({
+  useAgentStatusSelector: (selector: (state: MockState) => unknown) => selector(mockState)
 }))
 
 function makeTab(id: string, worktreeId: string): TerminalTab {

@@ -94,7 +94,7 @@ test('OMP completion retry clears the rendered working indicator', async ({
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (key) => window.__store?.getState().agentStatusByPaneKey[key]?.state,
+          (key) => window.__agentStatus?.getState().agentStatusByPaneKey[key]?.state,
           paneKey
         )
       )

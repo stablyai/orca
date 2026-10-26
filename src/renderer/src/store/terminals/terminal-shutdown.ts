@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -25,8 +26,9 @@ type ExactTerminalStopResult = {
 
 export function createTerminalShutdownActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  storeGet: TerminalStoreGet
 ): Pick<TerminalSlice, 'shutdownWorktreeTerminals'> {
+  const get = getAgentStatusOwner({ getState: storeGet }).getTransactionState
   return {
     shutdownWorktreeTerminals: async (worktreeId, opts) => {
       const keepIdentifiers = opts?.keepIdentifiers ?? false

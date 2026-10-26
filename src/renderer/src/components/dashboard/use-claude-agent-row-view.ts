@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from './useDashboardData'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/focused-agent-row-highlight'
 import { useAppStore } from '@/store'
+import { useAgentStatusField } from '@/store/agent-status'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import {
@@ -12,7 +13,7 @@ import {
 export function useClaudeAgentRowView(agent: DashboardAgentRow) {
   const paneKey = agent.activationPaneKey ?? agent.paneKey
   const focused = useFocusedAgentPaneKey(agent.tab.worktreeId) === paneKey
-  const parent = useAppStore((state) => state.agentStatusByPaneKey[paneKey]) ?? agent.entry
+  const parent = useAgentStatusField(paneKey, (entry) => entry) ?? agent.entry
   const environmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, agent.tab.worktreeId)
   )

@@ -1,5 +1,6 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useEffect } from 'react'
-import { useAppStore } from '../../store'
+
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
@@ -48,7 +49,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       if (e.repeat || !matchesNativeChatToggleShortcut(e, isMac)) {
         return
       }
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       // Main and floating surfaces can coexist; only the key’s originating surface may act.
       if (resolveKeyboardWorkspaceId(e.target, state.activeWorktreeId) !== worktreeId) {
         return

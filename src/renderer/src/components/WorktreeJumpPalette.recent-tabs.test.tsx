@@ -1,3 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -5,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
@@ -137,7 +140,7 @@ vi.mock('@/components/ui/command', async () => {
   }
 })
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 let testRoot: Root
 let testContainer: HTMLDivElement
 let setCommandQuery: ((next: string) => void) | null = null
@@ -150,8 +153,8 @@ async function flushEffects(): Promise<void> {
   })
 }
 
-async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+async function renderPalette(overrides: Partial<AgentStatusReadState>): Promise<void> {
+  applyAgentStatusPatch(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -166,7 +169,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
     alwaysShowDefaultBranchWorkspace: true,
     lastVisitedAtByWorktreeId: {},
     ...overrides
-  } as Partial<AppState>)
+  })
 
   await act(async () => {
     testRoot.render(<WorktreeJumpPalette />)
@@ -234,7 +237,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     setCommandQuery = null
     setCommandSelection = null
     activateWorkspaceTabPaletteResult.mockClear()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -245,7 +248,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
   })
 
   it('leads the empty-query list with the recent section', async () => {
@@ -326,13 +329,13 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // Narrowing away the first page must expose later ranked rows rather than an empty section.
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         unifiedTabsByWorktree: {
           'wt-many': (useAppStore.getState().unifiedTabsByWorktree['wt-many'] ?? []).filter(
             (tab) => !before.includes(tab.id)
           )
         }
-      } as Partial<AppState>)
+      })
     })
     await flushEffects()
 
@@ -342,7 +345,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   })
 
   /** A tab whose title starts with the query, against worktrees that only match mid-name. */
-  function makeTypedRelevanceState(): Partial<AppState> {
+  function makeTypedRelevanceState(): Partial<AgentStatusReadState> {
     const weak = makeWorktree('wt-weak', 'improve-agent-dashboard-performance')
     const host = makeWorktree('wt-host', 'docs-update')
     return {
@@ -508,10 +511,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         tabsByWorktree: hydrated.tabsByWorktree,
         unifiedTabsByWorktree: hydrated.unifiedTabsByWorktree
-      } as Partial<AppState>)
+      })
     })
     await flushEffects()
 
@@ -552,10 +555,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         tabsByWorktree: hydrated.tabsByWorktree,
         unifiedTabsByWorktree: hydrated.unifiedTabsByWorktree
-      } as Partial<AppState>)
+      })
     })
     await flushEffects()
 
@@ -593,7 +596,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
     await act(async () => {
-      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
+      applyAgentStatusPatch(useAppStore, {
+        tabsByWorktree: hydrated.tabsByWorktree
+      })
     })
     await flushEffects()
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
@@ -616,7 +621,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
 
     await act(async () => {
-      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
+      applyAgentStatusPatch(useAppStore, {
+        tabsByWorktree: hydrated.tabsByWorktree
+      })
     })
     await flushEffects()
 
@@ -672,11 +679,11 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         }
-      } as Partial<AppState>)
+      })
     })
     await flushEffects()
 
@@ -693,13 +700,15 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // The retained palette clears queries after the snapshot effect; reopening must not freeze an old query’s subset.
     await act(async () => {
-      useAppStore.setState({ activeModal: undefined } as Partial<AppState>)
+      applyAgentStatusPatch(useAppStore, {
+        activeModal: undefined
+      })
     })
     await flushEffects()
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         activeModal: 'worktree-palette'
-      } as Partial<AppState>)
+      })
     })
     await flushEffects()
 

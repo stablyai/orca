@@ -21,13 +21,13 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
   const { resetAndRefreshAllTerminalWebglAtlases, scheduleTerminalWebglAtlasRecovery } =
     ptyConnectionTestMocks
 
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function expectNoGlobalAtlasRecovery(): void {
@@ -43,9 +43,10 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -57,11 +58,12 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not switch renderers for Arabic output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -89,7 +91,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     })
 
     it('does not switch renderers across split background SGR PTY chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -117,7 +119,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     })
 
     it('forces a viewport refresh for foreground CJK output without CSI', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -147,7 +149,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     })
 
     it('refreshes renderer-risk output without clearing the shared glyph atlas', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -182,7 +184,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('refreshes alternate-screen redraws without clearing the shared glyph atlas', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -222,7 +224,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('refreshes a foreground rewrite entering alternate screen without an atlas clear', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -261,7 +263,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('avoids atlas clears when alternate-screen entry splits across chunks', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -303,7 +305,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('avoids atlas clears when a foreground rewrite leaves alternate screen', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -342,7 +344,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('avoids atlas clears when one chunk enters and exits alternate screen', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -379,7 +381,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
     it('avoids atlas clears for captured redraw chunks split mid-sequence', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(

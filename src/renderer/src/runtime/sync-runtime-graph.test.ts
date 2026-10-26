@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
@@ -7,11 +9,11 @@ import {
 import { buildRuntimeMobileAgentStatusProjectionForTests } from './sync-runtime-graph/agent-status-projection'
 import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harness'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { AppState } from '../store/types'
 
 // Isolate comparator inputs with one shared Partial<AppState>. makeState defaults allocate fresh collections; separate defaults would make unrelated reference changes mask the intended field. Share every reference-compared map/array while activeTabId compares by value.
-function makeSharedOverrides(): Partial<AppState> {
+function makeSharedOverrides(): Partial<AgentStatusReadState> {
   return {
+    ...makeState(),
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -226,7 +228,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   // Old JSON map keys cost ~750ms per click with accumulated tabs; unchanged map references now compare in constant time (agent-working-pane-typing-lag.md).
   it('reports equal when underlying state is reference-stable', () => {
     // Use distinct state objects sharing every inspected map; same-object input would let deep-equality regressions pass trivially.
-    const sharedOverrides: Partial<AppState> = {
+    const sharedOverrides: Partial<AgentStatusReadState> = {
       ...makeSharedOverrides(),
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null }]

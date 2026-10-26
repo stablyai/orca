@@ -9,6 +9,7 @@ import type {
 
 /** One in-flight piece per owner, including replacement subscriptions awaiting an old reply. */
 export function createAgentSessionCurrentRequestsReader(args: {
+  shouldStop?: () => boolean
   read: (request: AgentSessionCurrentRequestsRead) => Promise<AgentSessionCurrentRequestsPiece>
   complete: (marker: AgentSessionCurrentRequestsMarker, items: AgentJournalRenderItem[]) => void
   replaceMarker: (marker: AgentSessionCurrentRequestsMarker) => void
@@ -19,7 +20,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
   let running = false
   let attempted: string | undefined
   async function pump(): Promise<void> {
-    if (running || !desired || attempted === desired.version) {
+    if (args.shouldStop?.() || running || !desired || attempted === desired.version) {
       return
     }
     running = true
@@ -28,7 +29,8 @@ export function createAgentSessionCurrentRequestsReader(args: {
     attempted = marker.version
     let cursor = 0
     const chunks: string[] = []
-    const current = () => generation === ownedGeneration && desired?.version === marker.version
+    const current = () =>
+      !args.shouldStop?.() && generation === ownedGeneration && desired?.version === marker.version
     try {
       while (current()) {
         const piece = await args.read({
@@ -95,6 +97,9 @@ export function createAgentSessionCurrentRequestsReader(args: {
   }
   return {
     observe(marker: AgentSessionCurrentRequestsMarker | undefined): void {
+      if (args.shouldStop?.()) {
+        return
+      }
       if (marker && marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY) {
         return
       }

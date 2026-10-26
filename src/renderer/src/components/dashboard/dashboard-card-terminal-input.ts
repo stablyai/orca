@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -14,7 +15,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/terminal-agent-paste-bracketing'
 
 export type DashboardCardTerminalInputState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'

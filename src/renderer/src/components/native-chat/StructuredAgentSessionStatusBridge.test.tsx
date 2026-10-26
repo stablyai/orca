@@ -1,3 +1,7 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -12,7 +16,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '@/store/types'
+
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
@@ -105,7 +109,7 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
 }
 
 function statuses(): AgentStatusEntry[] {
-  return Object.values(mocks.store?.getState().agentStatusByPaneKey ?? {})
+  return Object.values(getAgentStatusOwner(useAppStore).getSnapshot() ?? {})
 }
 
 /** The host side of the most recent status subscription. */
@@ -123,7 +127,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.supportsCapability.mockResolvedValue(true)
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {},
       repos: [],
       worktreesByRepo: {},
@@ -560,7 +564,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
-    const before = mocks.store?.getState().agentStatusByPaneKey
+    const before = getAgentStatusOwner(useAppStore).getSnapshot()
 
     act(() => {
       for (let repeat = 0; repeat < 10; repeat += 1) {
@@ -569,14 +573,14 @@ describe('StructuredAgentSessionStatusBridge', () => {
     })
 
     expect(mocks.setAgentStatus).toHaveBeenCalledOnce()
-    expect(mocks.store?.getState().agentStatusByPaneKey).toBe(before)
+    expect(getAgentStatusOwner(useAppStore).getSnapshot()).toBe(before)
   })
 
   it.each(['claude', 'codex'] as const)(
     'sorts restored %s completions by host time and advances identical turns',
     async (agent) => {
       const now = Date.now()
-      mocks.store?.setState({
+      applyAgentStatusPatch(useAppStore, {
         unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, agentSessionAgent: agent }] }
       })
       render(<StructuredAgentSessionStatusBridge />)
@@ -632,35 +636,35 @@ describe('StructuredAgentSessionStatusBridge', () => {
     const paneKey = statuses()[0].paneKey
     const history = statuses()[0].stateHistory
     const acknowledged = { [paneKey]: 950 }
-    mocks.store?.setState({ acknowledgedAgentsByPaneKey: acknowledged })
+    applyAgentStatusPatch(useAppStore, { acknowledgedAgentsByPaneKey: acknowledged })
     act(() =>
       feed().emit({ type: 'snapshot', sessions: [summary({ status: 'idle', updatedAt: 200 })] })
     )
     expect(statuses()).toEqual([
       expect.objectContaining({ state: 'done', updatedAt: 200, stateStartedAt: 200 })
     ])
-    const before = mocks.store?.getState().agentStatusByPaneKey
+    const before = getAgentStatusOwner(useAppStore).getSnapshot()
     const calls = mocks.setAgentStatus.mock.calls.length
     expect(statuses()[0].stateHistory).toBe(history)
     expect(mocks.store?.getState().acknowledgedAgentsByPaneKey).toBe(acknowledged)
     act(() =>
       feed().emit({ type: 'snapshot', sessions: [summary({ status: 'idle', updatedAt: 200 })] })
     )
-    expect(mocks.store?.getState().agentStatusByPaneKey).toBe(before)
+    expect(getAgentStatusOwner(useAppStore).getSnapshot()).toBe(before)
     expect(mocks.setAgentStatus).toHaveBeenCalledTimes(calls)
   })
 
   it('keeps the host-fed chat row through Sleep and offers Sleep until its host marks the chat slept', async () => {
-    const state = (): AppState => useAppStore.getState()
+    const state = (): AgentStatusReadState => getAgentStatusOwner(useAppStore).getState()
     const sleepable = (): boolean => hasSleepableWorkspaceActivity('wt-1', state())
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, executionHostId: 'local' }] }
     })
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
     const paneKey = statuses()[0].paneKey
-    mocks.store?.setState({ acknowledgedAgentsByPaneKey: { [paneKey]: 3 } })
+    applyAgentStatusPatch(useAppStore, { acknowledgedAgentsByPaneKey: { [paneKey]: 3 } })
     expect(sleepable()).toBe(true)
 
     // Sleep's terminal teardown drops the worktree's rows before the host's revoke reaches the feed.
@@ -698,7 +702,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
     expect(statuses()).toHaveLength(1)
 
-    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { 'wt-1': [] } }))
+    act(() => applyAgentStatusPatch(useAppStore, { unifiedTabsByWorktree: { 'wt-1': [] } }))
 
     expect(statuses()).toEqual([])
     await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
@@ -723,7 +727,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
   // Two hosts can publish the same workspace id; the tab records which one holds this chat.
   it("reads a chat's status from the host recorded on its tab, not its workspace", async () => {
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       repos: [],
       worktreesByRepo: {},
       activeWorkspaceExecutionHostId: null,
@@ -739,7 +743,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
   // Hosts publish chat tabs only of agents they registered; each projects as itself.
   it("projects a host-registered agent's status as that agent, never as Codex", async () => {
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       unifiedTabsByWorktree: {
         'wt-1': [{ ...structuredTab, agentSessionAgent: 'grok' }]
       }
@@ -753,7 +757,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
   })
 
   it('does not project a tab naming no agent', async () => {
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       unifiedTabsByWorktree: {
         'wt-1': [{ ...structuredTab, agentSessionAgent: undefined }]
       }
@@ -829,7 +833,7 @@ describe('the main agent fact the bridge writes', () => {
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.supportsCapability.mockResolvedValue(true)
-    mocks.store?.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {},
       repos: [],
       worktreesByRepo: {},

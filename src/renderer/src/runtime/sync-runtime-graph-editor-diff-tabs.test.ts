@@ -1,8 +1,9 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
-import type { AppState } from '../store/types'
 
 function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
   if (!node || typeof node !== 'object') {
@@ -740,7 +741,7 @@ describe('buildMobileSessionTabSnapshots', () => {
           isDirty: false
         }
       ]
-    } satisfies Partial<AppState>
+    } satisfies Partial<AgentStatusReadState>
 
     const terminalSnapshot = buildMobileSessionTabSnapshots(
       makeState({

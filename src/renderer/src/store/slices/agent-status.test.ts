@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -100,7 +102,7 @@ afterEach(() => {
       const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
       const now = Date.now()
 
-      store.setState({
+      applyAgentStatusPatch(store, {
         agentStatusByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -139,7 +141,9 @@ afterEach(() => {
         )
 
       expect(
-        store.getState().agentStatusByPaneKey['tab-child:11111111-1111-4111-8111-111111111111']
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[
+          'tab-child:11111111-1111-4111-8111-111111111111'
+        ]
       ).toMatchObject({
         tabId: 'tab-child',
         worktreeId: 'wt-1',
@@ -159,14 +163,15 @@ afterEach(() => {
 
       const store = createTestStore()
       store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
-      const firstStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
+      const firstStart =
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
 
       vi.setSystemTime(new Date('2026-04-09T12:00:05.000Z'))
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', toolName: 'Edit' }, 'claude')
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       // Same-state content pings advance updatedAt but must preserve true stateStartedAt.
       expect(entry.stateStartedAt).toBe(firstStart)
       expect(entry.updatedAt).toBe(new Date('2026-04-09T12:00:05.000Z').getTime())
@@ -178,12 +183,13 @@ afterEach(() => {
 
       const store = createTestStore()
       store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
-      const workingStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
+      const workingStart =
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
 
       vi.setSystemTime(new Date('2026-04-09T12:00:10.000Z'))
       store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1' }, 'claude')
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.stateStartedAt).toBe(new Date('2026-04-09T12:00:10.000Z').getTime())
       expect(entry.stateStartedAt).not.toBe(workingStart)
       expect(entry.stateHistory).toHaveLength(1)
@@ -208,7 +214,7 @@ afterEach(() => {
           }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.updatedAt).toBe(new Date('2026-04-09T10:00:00.000Z').getTime())
       expect(entry.stateStartedAt).toBe(new Date('2026-04-09T09:55:00.000Z').getTime())
     })
@@ -233,7 +239,7 @@ afterEach(() => {
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.state).toBe('working')
       expect(entry.prompt).toBe('fresh')
       expect(entry.updatedAt).toBe(2_000)
@@ -260,7 +266,7 @@ afterEach(() => {
 
       store.getState().dropAgentStatus('tab-1:0')
 
-      const s = store.getState()
+      const s = getAgentStatusOwner(store).getState()
       expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
       // User dismissal suppresses next retention pass or the row reappears.
       expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
@@ -294,7 +300,7 @@ afterEach(() => {
 
       store.getState().dropAgentStatus('tab-retained:0')
 
-      const s = store.getState()
+      const s = getAgentStatusOwner(store).getState()
       expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
       // Only live→gone consumes suppressors; retained-only dismissal must not plant a permanent leak.
       expect(s.retentionSuppressedPaneKeys['tab-retained:0']).toBeUndefined()
@@ -327,7 +333,7 @@ afterEach(() => {
       }
       store.getState().retainAgents([retained])
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
       expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeDefined()
 
       const agentEpochBefore = store.getState().agentStatusEpoch
@@ -335,7 +341,7 @@ afterEach(() => {
 
       store.getState().dropAgentStatus('tab-1:0')
 
-      const s = store.getState()
+      const s = getAgentStatusOwner(store).getState()
       expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
       expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
       // Live+retained still needs a suppressor for its next disappearance, like live-only dismissal.
@@ -347,7 +353,7 @@ afterEach(() => {
     it('closeTab drops completed worktree-attributed orphan rows', () => {
       vi.useFakeTimers()
       const store = createTestStore()
-      store.setState({
+      applyAgentStatusPatch(store, {
         tabsByWorktree: {
           'wt-1': [
             makeTab({ id: 'tab-closed', worktreeId: 'wt-1' }),
@@ -401,7 +407,7 @@ afterEach(() => {
 
       store.getState().closeTab('tab-closed')
 
-      const s = store.getState()
+      const s = getAgentStatusOwner(store).getState()
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
       expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
       expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
@@ -431,7 +437,7 @@ afterEach(() => {
           structuredAgentSessionTabId('missing-chat'),
           'missing-chat'
         )
-        store.setState({
+        applyAgentStatusPatch(store, {
           tabsByWorktree: {
             [worktreeId]: [
               makeTab({ id: 'tab-closed', worktreeId }),
@@ -464,16 +470,16 @@ afterEach(() => {
             )
         }
         store.getState().acknowledgeAgents([paneKey, missingOwnerPaneKey])
-        store.setState({
+        applyAgentStatusPatch(store, {
           activityClearedAtByPaneKey: { [paneKey]: 100, [missingOwnerPaneKey]: 100 },
           manuallyUnreadTurnsByPaneKey: { [paneKey]: 200, [missingOwnerPaneKey]: 200 }
         })
         const main = await underFakeTimers(drawTabsFromMain(store))
-        const before = store.getState()
+        const before = getAgentStatusOwner(store).getState()
 
         store.getState().closeTab('tab-closed')
 
-        const after = store.getState()
+        const after = getAgentStatusOwner(store).getState()
         expect(after.agentStatusByPaneKey[paneKey]).toBe(before.agentStatusByPaneKey[paneKey])
         expect(after.acknowledgedAgentsByPaneKey[paneKey]).toBe(
           before.acknowledgedAgentsByPaneKey[paneKey]
@@ -490,7 +496,7 @@ afterEach(() => {
         store.getState().closeTab('tab-live')
         main.close()
 
-        const closed = store.getState()
+        const closed = getAgentStatusOwner(store).getState()
         expect(closed.unifiedTabsByWorktree[worktreeId]).toEqual([])
         expect(closed.agentStatusByPaneKey[paneKey]).toBeUndefined()
         expect(closed.acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
@@ -515,7 +521,7 @@ afterEach(() => {
             { worktreeId: 'wt-1' }
           )
       }
-      const before = store.getState()
+      const before = getAgentStatusOwner(store).getState()
 
       const { patch } = buildAgentStatusTabPrefixDropPatch(before, 'host-tab', [], {
         worktreeId: 'wt-1',
@@ -538,12 +544,12 @@ afterEach(() => {
       const agentEpochBefore = store.getState().agentStatusEpoch
       const sortEpochBefore = store.getState().sortEpoch
       const suppressorsBefore = store.getState().retentionSuppressedPaneKeys
-      const liveBefore = store.getState().agentStatusByPaneKey
+      const liveBefore = getAgentStatusOwner(store).getState().agentStatusByPaneKey
       const retainedBefore = store.getState().retainedAgentsByPaneKey
 
       store.getState().dropAgentStatus('tab-missing:0')
 
-      const s = store.getState()
+      const s = getAgentStatusOwner(store).getState()
       expect(s.agentStatusEpoch).toBe(agentEpochBefore)
       expect(s.sortEpoch).toBe(sortEpochBefore)
       // No-op must retain root identity or subscribed consumers rerender.

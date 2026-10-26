@@ -1,3 +1,5 @@
+import type * as AgentStatusModule from '@/store/agent-status'
+import { makeTab } from '@/store/slices/store-test-helpers'
 import React from 'react'
 import { toast } from 'sonner'
 import type * as ReactModule from 'react'
@@ -42,9 +44,7 @@ vi.mock('react', async () => {
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
       return callback
     },
-    useMemo<T>(factory: () => T): T {
-      return factory()
-    },
+    useMemo: <T,>(factory: () => T): T => factory(),
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
       if (typeof cleanup === 'function') {
@@ -68,14 +68,21 @@ vi.mock('react', async () => {
   }
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector(harness.storeState),
-    {
-      getState: () => harness.storeState
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { createStaticAgentStatusStoreFixture } = await import('@/store/slices/store-test-helpers')
+
+  return createStaticAgentStatusStoreFixture(() => harness.storeState)
+})
+
+vi.mock('@/store/agent-status', async () => {
+  const actual = await vi.importActual<typeof AgentStatusModule>('@/store/agent-status')
+  return {
+    ...actual,
+    useAgentStatusSelector: (
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => unknown
+    ) => selector(actual.getAgentStatusState())
+  }
+})
 
 vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
@@ -222,17 +229,7 @@ function agentRow({
 }
 
 function tab(id: string, overrides: Record<string, unknown> = {}) {
-  return {
-    id,
-    worktreeId: 'wt-1',
-    ptyId: null,
-    title: id,
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1,
-    ...overrides
-  }
+  return makeTab({ id, worktreeId: 'wt-1', title: id, createdAt: 1, ...overrides })
 }
 
 function leafLayout(leafId: string, ptyId: string) {

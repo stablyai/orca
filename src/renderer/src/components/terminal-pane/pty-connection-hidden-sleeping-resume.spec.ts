@@ -38,7 +38,7 @@ const MAIN_PTY_ID = 'pty-main'
 
 /** After a relaunch: one sleeping agent pane with no live PTY. */
 export function registerPtyConnectionHiddenSleepingResumeTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -49,8 +49,8 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     record: Record<string, unknown> = {}
   ): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture state carries every field connectPanePty reads; the tab and record literals are partial by design.
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId }] },
       ptyIdsByTabId: { 'tab-1': [] },
       terminalLayoutsByTabId: {
@@ -61,7 +61,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           ptyIdsByLeafId: restoredPtyId ? { [LEAF_2]: restoredPtyId } : {}
         }
       },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
+      settings: { ...storeFixture.read().settings, agentCmdOverrides: {} },
       agentStatusByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {
         [PANE_KEY]: {
@@ -78,7 +78,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           ...record
         }
       }
-    } as StoreState
+    })
   }
 
   function connectHiddenPane(restoredPtyId: string | null): {
@@ -89,7 +89,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     const transport = createResumingTransport()
     transportFactoryQueue.push(transport)
     const isVisibleRef = { current: false }
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: restoredPtyId ? { [LEAF_2]: restoredPtyId } : {},
       isVisibleRef
@@ -122,7 +122,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
   }
 
   async function expectAttachedToMainStart(transport: MockTransport): Promise<void> {
-    await expectWindowStartAskedMain(transport, PANE_KEY, mockStoreState)
+    await expectWindowStartAskedMain(transport, PANE_KEY, storeFixture.read())
     expect(transport.connect).toHaveBeenLastCalledWith(
       expect.objectContaining({ sessionId: MAIN_PTY_ID, attachOnlyView: true })
     )
@@ -135,9 +135,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -146,15 +147,16 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
         }
       })
       await installTerminalTestGlobals()
-      connectPanePtyRef = (await import('./pty-connection')).connectPanePty
+      connectPanePtyRef = storeFixture.own(await import('./pty-connection')).connectPanePty
       ;(await mainLayoutApplyTransport()).reset()
       await mainStartsPaneAs({
         ptyId: MAIN_PTY_ID,
-        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)
+        bind: bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_2)
       })
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -164,7 +166,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       await flushAsyncTicks(10)
 
       expect(transport.connect).not.toHaveBeenCalled()
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
+      expect(storeFixture.read().sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
 
       isVisibleRef.current = true
       binding.noteVisibilityResume()
@@ -195,7 +197,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({ sessionId: DEAD_SESSION_ID })
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({ attachOnlyView: true })
-        expectNoWindowStart(transport, mockStoreState)
+        expectNoWindowStart(transport, storeFixture.read())
         return
       }
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
@@ -268,7 +270,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       transport.connect.mockResolvedValueOnce(undefined).mockResolvedValue('resumed-pty')
       transportFactoryQueue.push(transport)
       connectPane(
-        buildPaneConnectionDeps(() => mockStoreState, {
+        buildPaneConnectionDeps(storeFixture, {
           restoredLeafId: LEAF_2,
           restoredPtyIdByLeafId: { [LEAF_2]: DEAD_SESSION_ID },
           isVisibleRef: { current: false }
@@ -315,7 +317,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const transport = createResumingTransport()
       transportFactoryQueue.push(transport)
       const binding = connectPane(
-        buildPaneConnectionDeps(() => mockStoreState, {
+        buildPaneConnectionDeps(storeFixture, {
           restoredLeafId: LEAF_2,
           restoredPtyIdByLeafId: {},
           consumeSuppressedPtyExit: vi.fn(() => true),
@@ -332,7 +334,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       isVisibleRef.current = false
       seedSleepingPane(null, { state: 'done', origin: 'worktree-sleep' })
       const resumedPtyId = ORCA_LAYOUT_OWNER_IS_MAIN ? MAIN_PTY_ID : 'resumed-pty'
-      mockStoreState.suppressedPtyExitIds[resumedPtyId] = true
+      storeFixture.read().suppressedPtyExitIds[resumedPtyId] = true
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       if (typeof onPtyExit !== 'function') {
         throw new Error('expected the transport exit handler')
@@ -348,7 +350,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledTimes(2)
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(2)
-        expectNoWindowStart(transport, mockStoreState)
+        expectNoWindowStart(transport, storeFixture.read())
       }
     })
 
@@ -356,8 +358,8 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { transport, binding, isVisibleRef } = connectHiddenPane(null)
       await flushAsyncTicks(10)
-      const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
-      mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY] = { ...held, updatedAt: 2 }
+      const held = storeFixture.read().sleepingAgentSessionsByPaneKey[PANE_KEY]!
+      storeFixture.read().sleepingAgentSessionsByPaneKey[PANE_KEY] = { ...held, updatedAt: 2 }
 
       isVisibleRef.current = true
       binding.noteVisibilityResume()
@@ -374,8 +376,8 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { transport, binding, isVisibleRef } = connectHiddenPane(null)
       await flushAsyncTicks(10)
-      const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
-      mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY] = {
+      const held = storeFixture.read().sleepingAgentSessionsByPaneKey[PANE_KEY]!
+      storeFixture.read().sleepingAgentSessionsByPaneKey[PANE_KEY] = {
         ...held,
         providerSession: { key: 'session_id', id: 'codex-session-2' }
       }

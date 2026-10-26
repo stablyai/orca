@@ -1,3 +1,6 @@
+import { makeBrowserTab, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { useAppStore } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { discardStagedWebRuntimeBrowserTab } from './web-runtime-browser-tab-staging'
@@ -40,13 +43,14 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'subscribe').mockImplementation(mocks.subscribe)
+  return { useAppStore }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
@@ -82,13 +86,16 @@ vi.mock('./web-runtime-browser-materialization', () => ({
 }))
 
 function advertiseKnownPageId(): void {
-  mocks.getState.mockReturnValue({
-    ...mocks.getState(),
+  useAppStore.setState({
+    ...useAppStore.getState(),
     runtimeStatusByEnvironmentId: new Map([
       [
         ENVIRONMENT_ID,
         {
-          status: { capabilities: ['browser.screencast.v1', 'browser.tab-create-known-id.v1'] },
+          status: {
+            ...createCompatibleRuntimeStatusResponse().result,
+            capabilities: ['browser.screencast.v1', 'browser.tab-create-known-id.v1']
+          },
           checkedAt: 1
         }
       ]
@@ -98,7 +105,7 @@ function advertiseKnownPageId(): void {
 
 /** The strip's cleanup close, as the store leaves things: workspace, pages and handles all gone. */
 function closeStagedWorkspace(workspaceId: string): void {
-  const state = mocks.getState()
+  const state = useAppStore.getState()
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
     delete state.remoteBrowserPageHandlesByPageId[page.id]
   }
@@ -112,13 +119,18 @@ function closeStagedWorkspace(workspaceId: string): void {
 
 /** The host publishing the page under a workspace id of its own, beside this client's rows. */
 function mirrorHostPage(workspaceId: string, remotePageId: string): void {
-  const state = mocks.getState()
+  const state = useAppStore.getState()
   state.browserPagesByWorkspace[workspaceId] = [
-    { id: remotePageId, workspaceId, url: 'https://example.com/' }
+    {
+      ...makeBrowserTab({ id: remotePageId, worktreeId: WORKTREE_ID, url: 'https://example.com/' }),
+      workspaceId,
+      url: 'https://example.com/'
+    }
   ]
   state.browserTabsByWorktree[WORKTREE_ID] = [
     ...(state.browserTabsByWorktree[WORKTREE_ID] ?? []),
     {
+      ...makeBrowserTab({ id: workspaceId, worktreeId: WORKTREE_ID, url: 'https://example.com/' }),
       id: workspaceId,
       worktreeId: WORKTREE_ID,
       activePageId: remotePageId,
@@ -131,12 +143,18 @@ function mirrorHostPage(workspaceId: string, remotePageId: string): void {
   }
   state.unifiedTabsByWorktree[WORKTREE_ID] = [
     ...(state.unifiedTabsByWorktree[WORKTREE_ID] ?? []),
-    { id: `${workspaceId}-tab`, entityId: workspaceId, contentType: 'browser' }
+    makeUnifiedTab({
+      id: `${workspaceId}-tab`,
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1',
+      entityId: workspaceId,
+      contentType: 'browser'
+    })
   ]
 }
 
 function forgetHostPage(workspaceId: string, remotePageId: string): void {
-  const state = mocks.getState()
+  const state = useAppStore.getState()
   delete state.browserPagesByWorkspace[workspaceId]
   delete state.remoteBrowserPageHandlesByPageId[remotePageId]
   state.browserTabsByWorktree[WORKTREE_ID] = (
@@ -172,7 +190,7 @@ afterEach(() => {
 
 describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   beforeEach(() => {
-    stubBrowserTabCreateEnvironment(mocks)
+    stubBrowserTabCreateEnvironment(mocks, useAppStore)
   })
 
   afterEach(() => {
@@ -251,13 +269,26 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       .fn()
       .mockImplementationOnce(() => {
         // Snapshot beat create response with host IDs; retained staging would duplicate the page.
-        const state = mocks.getState()
+        const state = useAppStore.getState()
         state.browserPagesByWorkspace['mirrored-workspace'] = [
-          { id: 'mirrored-page', workspaceId: 'mirrored-workspace', url: 'https://example.com/' }
+          {
+            ...makeBrowserTab({
+              id: 'mirrored-page',
+              worktreeId: WORKTREE_ID,
+              url: 'https://example.com/'
+            }),
+            workspaceId: 'mirrored-workspace',
+            url: 'https://example.com/'
+          }
         ]
         state.browserTabsByWorktree[WORKTREE_ID] = [
           ...(state.browserTabsByWorktree[WORKTREE_ID] ?? []),
           {
+            ...makeBrowserTab({
+              id: 'mirrored-workspace',
+              worktreeId: WORKTREE_ID,
+              url: 'https://example.com/'
+            }),
             id: 'mirrored-workspace',
             worktreeId: WORKTREE_ID,
             activePageId: 'mirrored-page',
@@ -314,7 +345,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     const runtimeCall = vi
       .fn()
       .mockImplementationOnce(() => {
-        const state = mocks.getState()
+        const state = useAppStore.getState()
         const pageId = Object.keys(state.remoteBrowserPageHandlesByPageId)[0]!
         state.remoteBrowserPageHandlesByPageId[pageId] = {
           environmentId: ENVIRONMENT_ID,
@@ -555,12 +586,25 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
 
   // Known-ID staging may already be adopted when failure unwinds; those visible rows belong to the snapshot and must survive.
   it('leaves rows a snapshot already adopted alone when the unwind runs', () => {
-    const state = mocks.getState()
+    const state = useAppStore.getState()
     state.browserPagesByWorkspace['adopted-workspace'] = [
-      { id: 'adopted-page', workspaceId: 'adopted-workspace', url: 'https://example.com/' }
+      {
+        ...makeBrowserTab({
+          id: 'adopted-page',
+          worktreeId: WORKTREE_ID,
+          url: 'https://example.com/'
+        }),
+        workspaceId: 'adopted-workspace',
+        url: 'https://example.com/'
+      }
     ]
     state.browserTabsByWorktree[WORKTREE_ID] = [
       {
+        ...makeBrowserTab({
+          id: 'adopted-workspace',
+          worktreeId: WORKTREE_ID,
+          url: 'https://example.com/'
+        }),
         id: 'adopted-workspace',
         worktreeId: WORKTREE_ID,
         activePageId: 'adopted-page',
@@ -589,7 +633,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
         // Adoption clears staged but retains the workspace row.
-        const state = mocks.getState()
+        const state = useAppStore.getState()
         const pageId = Object.keys(state.remoteBrowserPageHandlesByPageId)[0]!
         state.remoteBrowserPageHandlesByPageId[pageId] = {
           environmentId: ENVIRONMENT_ID,
@@ -644,7 +688,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       'staged-workspace-2',
       'staged-workspace-3'
     ])
-    const state = mocks.getState()
+    const state = useAppStore.getState()
     const rehomedTo = workspaces.map(
       (entry) => state.remoteBrowserPageHandlesByPageId[entry.pageId]?.remotePageId
     )

@@ -19,13 +19,13 @@ import {
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -35,9 +35,10 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -49,15 +50,18 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     describe('hidden-delivery gate', () => {
       function enableMainAuthority(): void {
-        mockStoreState.settings = {
-          ...mockStoreState.settings,
-          terminalMainSideEffectAuthority: true
-        } as StoreState['settings']
+        storeFixture.patch({
+          settings: {
+            ...storeFixture.read().settings,
+            terminalMainSideEffectAuthority: true
+          }
+        })
       }
 
       async function connectHiddenPane(deps: ReturnType<typeof createDeps>): Promise<{
@@ -69,7 +73,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
         ) => void
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -366,10 +370,12 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
         it('records a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
           // Scan before duplicate reconciliation: replay omits mode tracking, leaving this delivery as the only subscription evidence.
           enableMainAuthority()
-          mockStoreState.settings = {
-            ...mockStoreState.settings,
-            terminalHiddenDeliveryGate: false
-          } as StoreState['settings']
+          storeFixture.patch({
+            settings: {
+              ...storeFixture.read().settings,
+              terminalHiddenDeliveryGate: false
+            }
+          })
           const { pane, dataCallback, transport, deps } = await restoreVisiblePaneToBaseline()
           transport.sendInput.mockClear()
 

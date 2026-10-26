@@ -24,18 +24,18 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionHookCompletionBellArbitrationTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
-    mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
+    storeFixture.patch(buildActiveRuntimeEnvironmentState(storeFixture.read(), environmentId))
   }
 
   describe('connectPanePty', () => {
@@ -45,9 +45,10 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -59,18 +60,21 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('leaves SSH IPC OSC 9999 status ownership in the main runtime', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-ssh')
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-        sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
-      } as StoreState
+        sshConnectionStates: new Map([
+          ['conn-1', { targetId: 'conn-1', status: 'connected', error: null, reconnectAttempt: 0 }]
+        ])
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -82,12 +86,12 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': ['pty-hook'] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
+      storeFixture.patch({ ptyIdsByTabId: { 'tab-1': ['pty-hook'] } })
+      storeFixture.read().terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
 
       vi.useFakeTimers()
       const pane = createPane(1)
@@ -153,12 +157,12 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('restores a suppressed terminal bell when a delayed hook completion resumes work', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': ['tab-pty'] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'tab-pty' }
+      storeFixture.patch({ ptyIdsByTabId: { 'tab-1': ['tab-pty'] } })
+      storeFixture.read().terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'tab-pty' }
 
       vi.useFakeTimers()
       const pane = createPane(1)
@@ -213,12 +217,12 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('restores a suppressed terminal bell when a delayed hook completion resumes via title tracking', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': ['pty-hook'] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
+      storeFixture.patch({ ptyIdsByTabId: { 'tab-1': ['pty-hook'] } })
+      storeFixture.read().terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
 
       vi.useFakeTimers()
       const pane = createPane(1)
@@ -273,7 +277,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -309,7 +313,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('cancels a title task-complete notification when the agent resumes before quiet', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -354,7 +358,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     })
 
     it('forwards raw onData after a bell as a query reply', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -389,12 +393,12 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     // Why: on a stale-codex pane (pending account-switch restart), production blocks sendInput.
     it('blocks onData on a stale codex pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex-stale')
       transportFactoryQueue.push(transport)
       // isCodexPaneStale reads codexRestartNoticeByPtyId; seed a restart notice to trigger the stale branch.
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
         },
@@ -404,7 +408,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
         codexRestartNoticeByPtyId: {
           'pty-codex-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
         }
-      }
+      })
 
       const pane = createPane(1)
       let onDataHandler: ((data: string) => void) | null = null

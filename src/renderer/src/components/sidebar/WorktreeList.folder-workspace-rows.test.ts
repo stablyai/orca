@@ -99,6 +99,7 @@ function setFolderWorkspaceFixtureState(
 
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
+    activeWorkspaceExecutionHostId: 'local',
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: folderWorkspaceKey(folderWorkspace.id),

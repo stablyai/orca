@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -9,7 +10,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { findAgentStatusOwner } from '@/store/agent-status-commit'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -158,7 +159,7 @@ export function useRetainedAgentsSync(): void {
   const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
   useEffect(() => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
       repos: state.repos,
       worktreesByRepo: selectWorktreesByRepo(state),
@@ -241,7 +242,10 @@ export function collectRetainedAgentsOnDisappear(args: {
     if (args.currentAgents.has(paneKey)) {
       continue
     }
-    const transferredPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+    const transferredPaneKey =
+      findAgentStatusOwner(getAgentStatusState())
+        ?.authority()
+        .resolveAgentPaneAuthorityKey(paneKey) ?? paneKey
     const migrated =
       transferredPaneKey === paneKey ? undefined : args.currentAgents.get(transferredPaneKey)
     if (migrated && sameAgentRun(prev, migrated)) {

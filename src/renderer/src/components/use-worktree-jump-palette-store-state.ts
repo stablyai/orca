@@ -1,3 +1,4 @@
+import { getAgentStatusState, useAgentStatusSnapshot } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -78,16 +79,13 @@ export function useWorktreeJumpPaletteStoreState({
     (state) => state.structuredChatSleptAtByPaneKey
   )
   const paletteIndexStatus = useMemo(
-    () => selectPaletteIndexStatusSnapshot(useAppStore.getState(), paletteStatusInputsActive),
+    () => selectPaletteIndexStatusSnapshot(getAgentStatusState(), paletteStatusInputsActive),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- these deps are the snapshot refresh policy.
     [paletteStatusInputsActive, tabsByWorktree, unifiedTabsByWorktree]
   )
-  const {
-    agentStatusByPaneKey,
-    runtimePaneTitlesByTabId,
-    unreadTerminalTabs,
-    unreadAgentCompletionPanes
-  } = paletteIndexStatus
+  const agentStatusByPaneKey = useAgentStatusSnapshot(paletteStatusInputsActive)
+  const { runtimePaneTitlesByTabId, unreadTerminalTabs, unreadAgentCompletionPanes } =
+    paletteIndexStatus
   const openFiles = useAppStore((state) => state.openFiles)
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)

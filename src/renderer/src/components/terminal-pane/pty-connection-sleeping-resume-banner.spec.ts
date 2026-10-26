@@ -27,13 +27,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionSleepingResumeBannerTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -43,9 +43,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -58,18 +59,19 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const spawn = createDeferred<string>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_2)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: null }]
         },
@@ -85,7 +87,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
           }
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -102,7 +104,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(2)
       const manager = createManager(2)
@@ -113,7 +115,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         await mainStartsPaneAs({
           ptyId: 'pty-main',
-          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+          bind: bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_2),
           transport
         })
       }
@@ -123,14 +125,14 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main owns resume and record consumption; attach must not show a window-owned restored banner.
-        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await expectWindowStartAskedMain(transport, paneKey, storeFixture.read())
         await flushAsyncTicks(10)
         expect(transport.connect).toHaveBeenCalledTimes(1)
         expect(transport.connect).toHaveBeenCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
         )
         expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
-        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
         return
       }
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -151,7 +153,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.not.objectContaining({ sessionId: expect.any(String) })
       )
-      expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
+      expect(storeFixture.read().registerAgentLaunchConfig).toHaveBeenCalledWith(
         paneKey,
         {
           agentCommand: 'codex',
@@ -166,7 +168,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         }
       )
       expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
 
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
@@ -181,19 +183,19 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
       // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_2)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: null }]
         },
@@ -209,7 +211,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
           }
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -226,7 +228,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(2)
       const manager = createManager(2)
@@ -238,12 +240,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         await mainStartsPaneAs({
           ptyId: 'pty-main',
           bind: (ptyId) => {
-            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
-            publishesResumeOutcomeInStore(
-              () => mockStoreState,
-              paneKey,
-              'resume-unavailable'
-            )(ptyId)
+            bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(storeFixture.store, paneKey, 'resume-unavailable')(ptyId)
           },
           transport
         })
@@ -254,7 +252,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main starts the pane and declines its resume; the window attaches and says so.
-        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await expectWindowStartAskedMain(transport, paneKey, storeFixture.read())
         await flushAsyncTicks(10)
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
@@ -273,7 +271,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('lets a declined resume replace an already-shown restored banner', async () => {
       // A later declined resume must clear an earlier restored-banner latch.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       let connectCount = 0
       transport.connect.mockImplementation(async () => {
@@ -299,8 +297,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         updatedAt: 1,
         origin: 'worktree-sleep' as const
       }
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: null }]
         },
@@ -313,11 +311,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             ptyIdsByLeafId: {}
           }
         },
-        settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
+        settings: { ...storeFixture.read().settings, agentCmdOverrides: {} },
         agentStatusByPaneKey: {},
         sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingRecord },
         suppressedPtyExitIds: { 'fresh-pty': true }
-      } as StoreState
+      })
 
       const pane = createPane(2)
       const manager = createManager(2)
@@ -333,8 +331,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         await mainStartsPaneAs({
           ptyId: 'pty-main',
           bind: (ptyId) => {
-            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
-            publishesResumeOutcomeInStore(() => mockStoreState, paneKey, 'restored')(ptyId)
+            bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(storeFixture.store, paneKey, 'restored')(ptyId)
           },
           transport
         })
@@ -346,7 +344,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main starts and resumes the pane; the window attaches and shows main's outcome once.
-        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await expectWindowStartAskedMain(transport, paneKey, storeFixture.read())
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
         return
@@ -356,7 +354,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       // Hibernate the pane, then reveal it so the wake respawns the recorded session.
       // Hibernation writes the sleeping record the first spawn consumed.
-      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = sleepingRecord
+      storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = sleepingRecord
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -371,14 +369,14 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const staleSessionId = 'wt-1@@stale-session'
       const transport = createMockTransport()
       transport.connect.mockResolvedValue(undefined)
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_2)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: staleSessionId }]
         },
@@ -407,7 +405,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const deps = createDeps({
         restoredLeafId: LEAF_2,
@@ -419,12 +417,12 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
       expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+      expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     })
 
     it('forwards one sidebar resume spawn without writing the restored banner through xterm', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)

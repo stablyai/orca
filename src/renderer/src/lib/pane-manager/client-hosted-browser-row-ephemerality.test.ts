@@ -1,6 +1,9 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 /** Client-hosted UI rows own no host page and must never enter persistence/runtime graphs, which would resurrect them as local tabs. Exercise both sinks with paired live-row presence checks so empty results cannot pass vacuously. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import { buildWorkspaceSessionPayload } from '../workspace-session'
 import { buildWorkspaceSessionPatch } from '../workspace-session-patch'
 import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph/mobile-session-snapshots'
@@ -28,7 +31,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 const WT = 'wt-1'
 const CLIENT_HOSTED_PAGE_ID = 'client-hosted-page-1'
 
-let initialState: AppState
+let initialState: AgentStatusReadState
 let main: TabsDrawnFromMain | undefined
 
 async function seedLocalBrowserTab(): Promise<string> {
@@ -64,14 +67,14 @@ function serialize(value: unknown): string {
 }
 
 beforeEach(() => {
-  initialState = useAppStore.getState()
+  initialState = getAgentStatusOwner(useAppStore).getState()
   hydrateClientHostedBrowserRows([])
 })
 
 afterEach(() => {
   main?.close()
   main = undefined
-  useAppStore.setState(initialState, true)
+  applyAgentStatusPatch(useAppStore, initialState)
   hydrateClientHostedBrowserRows([])
 })
 
@@ -82,7 +85,7 @@ describe('client-hosted rows and the persisted workspace session', () => {
     // Guard the oracle itself: the row has to be live for its absence downstream to mean anything.
     expect(getClientHostedBrowserRows(WT)).toHaveLength(1)
 
-    const payload = buildWorkspaceSessionPayload(useAppStore.getState())
+    const payload = buildWorkspaceSessionPayload(getAgentStatusOwner(useAppStore).getState())
 
     expect(serialize(payload)).toContain(localWorkspaceId)
     expect(serialize(payload)).not.toContain(CLIENT_HOSTED_PAGE_ID)
@@ -93,7 +96,7 @@ describe('client-hosted rows and the persisted workspace session', () => {
     const localWorkspaceId = await seedLocalBrowserTab()
     pushClientHostedRow()
 
-    const patch = buildWorkspaceSessionPatch(useAppStore.getState(), [
+    const patch = buildWorkspaceSessionPatch(getAgentStatusOwner(useAppStore).getState(), [
       'browserTabsByWorktree',
       'browserPagesByWorkspace',
       'activeBrowserTabIdByWorktree',
@@ -127,7 +130,7 @@ describe('client-hosted rows and the runtime window graph', () => {
     pushClientHostedRow()
     expect(getClientHostedBrowserRows(WT)).toHaveLength(1)
 
-    const snapshots = buildMobileSessionTabSnapshots(useAppStore.getState())
+    const snapshots = buildMobileSessionTabSnapshots(getAgentStatusOwner(useAppStore).getState())
 
     const published = snapshots.find((snapshot) => snapshot.worktree === WT)
     expect(

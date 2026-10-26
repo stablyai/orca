@@ -14,7 +14,10 @@ import {
   resetWebSessionTabsSyncTestState
 } from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
 
-vi.mock('../../src/renderer/src/store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../../src/renderer/src/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 beforeEach(resetWebSessionTabsSyncTestState)
 
 const tabId = toWebTerminalSurfaceTabId('same-host-tab')

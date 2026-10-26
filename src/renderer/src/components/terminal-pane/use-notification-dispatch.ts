@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import {
   resolveTerminalNotificationOwner,
   type TerminalNotificationBinding
@@ -7,7 +8,7 @@ import {
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
-import { useAppStore } from '@/store'
+import '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
@@ -71,7 +72,7 @@ export function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
 ): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   // Explicit completion-title identity rejects other-agent snapshot prompts/timing as pane-reuse residue.
   const explicitTitleAgentType =
     event.source === 'agent-task-complete' && event.terminalTitle

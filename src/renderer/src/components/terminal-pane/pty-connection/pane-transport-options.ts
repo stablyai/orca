@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { mainStartsPane } from './main-starts-pane'
@@ -17,7 +18,7 @@ export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
 }
 
 function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   return Boolean(
     session.paneStartup ||
     session.getSleepingRecordForPane(state) ||

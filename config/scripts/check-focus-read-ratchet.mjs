@@ -1,3 +1,4 @@
+import { stripSlashComments } from './check-path-literal-ratchet.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -89,7 +90,7 @@ export function topLevelDeclarations(sourceText) {
 }
 
 // Follow returned values until bracket-free newline; skip object bags or store/slice exports pull in the whole graph.
-const VALUE_STATEMENT_START = /\breturn\s+(?!\(?\s*\{)|=>\s*(?!\(?\s*\{)/g
+const VALUE_STATEMENT_START = /\breturn(?!\s+\(?\s*\{)\s+|=>(?!\s*\(?\s*\{)\s*/g
 
 function statementsFrom(body, start) {
   const statements = []
@@ -166,6 +167,7 @@ function resolveModule(spec, fromRel, files) {
 }
 
 function parseModule(rel, text, files) {
+  text = stripSlashComments(text)
   const imports = new Map()
   for (const [, list, spec] of [
     ...text.matchAll(IMPORT_STATEMENT),
@@ -314,7 +316,7 @@ export function countFocusSettingReads(
   readerNames = new Set(SEED_FOCUS_READERS),
   memberNames = new Set()
 ) {
-  const body = sourceText
+  const body = stripSlashComments(sourceText)
     .replace(IMPORT_EXPORT_LIST, '')
     // A placeholder, so a dangling `const` does not read as a declaration of the next call.
     .replace(DYNAMIC_IMPORT_DESTRUCTURE, 'dynamicImport')

@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
+
 import type { CloseTerminalDialogCopyKind } from '../terminal-pane/CloseTerminalDialog'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 
@@ -11,7 +12,7 @@ export function resolveLeafCloseCopyKind(
   if (!leafId || !isTerminalLeafId(leafId) || !tabId || tabId.includes(':')) {
     return 'command'
   }
-  const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey ?? {}
+  const agentStatusByPaneKey = getAgentStatusState().agentStatusByPaneKey ?? {}
   const agentType = agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
   return agentType && agentType !== 'unknown' ? 'agent' : 'command'
 }
@@ -21,8 +22,7 @@ export function resolveBusyPtyCloseCopyKind(
   tabId: string,
   busyPtyIds: readonly string[]
 ): CloseTerminalDialogCopyKind {
-  const ptyIdsByLeafId =
-    useAppStore.getState().terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {}
+  const ptyIdsByLeafId = getAgentStatusState().terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {}
   for (const [leafId, ptyId] of Object.entries(ptyIdsByLeafId)) {
     if (busyPtyIds.includes(ptyId) && resolveLeafCloseCopyKind(tabId, leafId) === 'agent') {
       return 'agent'

@@ -1,5 +1,11 @@
+import {
+  screenState,
+  type OpenFilePayload,
+  type OpenDiffPayload
+} from './mobile-terminal-close-screen.test-fixture'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
@@ -24,12 +30,8 @@ function testStore(): ReturnType<typeof createTestStore> {
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../store', () => ({
-  useAppStore: {
-    getState: () => testStore().getState(),
-    subscribe: (...args: Parameters<ReturnType<typeof createTestStore>['subscribe']>) =>
-      testStore().subscribe(...args),
-    setState: (...args: Parameters<ReturnType<typeof createTestStore>['setState']>) =>
-      testStore().setState(...args)
+  get useAppStore() {
+    return testStore()
   }
 }))
 vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
@@ -55,15 +57,6 @@ vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { handleSwitchRecentTab } from '../ipc-tab-switch'
 
-type OpenFilePayload = {
-  worktreeId: string
-  filePath: string
-  relativePath: string
-  runtimeEnvironmentId?: string | null
-  navigation?: RuntimeNavigationTarget
-  position?: { line: number; column?: number }
-}
-type OpenDiffPayload = OpenFilePayload & { staged: boolean }
 type TestStore = ReturnType<typeof createTestStore>
 
 const VIEWED = 'repo1::/repo1/viewed'
@@ -137,7 +130,7 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
     store.getState().setActiveTabType('terminal', VIEWED)
   }
   await settle()
-  store.setState({ activeView: 'terminal', pendingRevealWorktree: null })
+  applyAgentStatusPatch(store, { activeView: 'terminal', pendingRevealWorktree: null })
   const unsubs: (() => void)[] = []
   registerMobileAndTerminalCloseIpcBridge(unsubs, vi.fn())
   const { openFile, openDiff } = listeners
@@ -155,27 +148,6 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
     },
     store,
     dispose: () => unsubs.forEach((unsubscribe) => unsubscribe())
-  }
-}
-
-function screenState(store: TestStore): unknown {
-  const s = store.getState()
-  return {
-    activeWorktreeId: s.activeWorktreeId,
-    activeView: s.activeView,
-    activeTabType: s.activeTabType,
-    activeFileId: s.activeFileId,
-    activeTabId: s.activeTabId,
-    viewedActiveFile: s.activeFileIdByWorktree[VIEWED],
-    viewedActiveTabType: s.activeTabTypeByWorktree[VIEWED],
-    viewedActiveGroup: s.activeGroupIdByWorktree[VIEWED],
-    viewedGroups: s.groupsByWorktree[VIEWED]?.map((group) => ({
-      id: group.id,
-      activeTabId: group.activeTabId
-    })),
-    pendingEditorFocusRequest: s.pendingEditorFocusRequest,
-    pendingRevealWorktree: s.pendingRevealWorktree,
-    backgroundVisitedAt: s.lastVisitedAtByWorktreeId[BACKGROUND]
   }
 }
 
@@ -217,7 +189,9 @@ describe('runtime file opens on the host desktop', () => {
 
     expect(screenState(store)).toEqual(before)
     expect(
-      store.getState().openFiles.some((file) => file.mode === 'diff' && file.worktreeId === VIEWED)
+      getAgentStatusOwner(store)
+        .getState()
+        .openFiles.some((file) => file.mode === 'diff' && file.worktreeId === VIEWED)
     ).toBe(true)
   })
 
@@ -287,8 +261,9 @@ describe('runtime file opens on the host desktop', () => {
     const { openFile, store } = await setup('editor')
     const terminal = store.getState().createTab(BACKGROUND)
     const tabId = (entityId: string): string | undefined =>
-      store.getState().unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === entityId)
-        ?.id
+      getAgentStatusOwner(store)
+        .getState()
+        .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === entityId)?.id
     const focusTimes = (): [string, number | undefined][] =>
       (store.getState().unifiedTabsByWorktree[BACKGROUND] ?? []).map((tab) => [
         tab.entityId,
@@ -306,7 +281,9 @@ describe('runtime file opens on the host desktop', () => {
     // Why: the group history must still end on the active tab, or Ctrl+Tab has nowhere to go back to.
     expect(history()?.at(-1)).toBe(tabId(APP_TS.filePath))
 
-    store.getState().activateTab(tabId(terminal.id) ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tabId(terminal.id) ?? '')
     const timesBeforeReopen = focusTimes()
     await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
 
@@ -329,7 +306,9 @@ describe('runtime file opens on the host desktop', () => {
       .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === terminal.id)?.id
     if (reopen) {
       await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-      store.getState().activateTab(terminalTabId ?? '')
+      getAgentStatusOwner(store)
+        .getState()
+        .activateTab(terminalTabId ?? '')
     }
 
     await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
@@ -367,9 +346,10 @@ describe('runtime file opens on the host desktop', () => {
     expect(state.activeTabType).toBe('editor')
     expect(state.activeFileId).toBe(diff?.id)
     expect(activeEditorEntityId(store, VIEWED)).toBe(diff?.id)
-    const snapshot = buildMobileSessionTabSnapshots(state, false).find(
-      (candidate) => candidate.worktree === VIEWED
-    )
+    const snapshot = buildMobileSessionTabSnapshots(
+      getAgentStatusOwner(store).getState(),
+      false
+    ).find((candidate) => candidate.worktree === VIEWED)
     const activeTab = snapshot?.tabs.find((tab) => tab.id === snapshot.activeTabId)
     expect(activeTab && 'relativePath' in activeTab ? activeTab.relativePath : null).toBe(
       VIEWED_APP_TS.relativePath
@@ -383,9 +363,10 @@ describe('runtime file opens on the host desktop', () => {
     await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
-    const snapshot = buildMobileSessionTabSnapshots(store.getState(), false).find(
-      (candidate) => candidate.worktree === VIEWED
-    )
+    const snapshot = buildMobileSessionTabSnapshots(
+      getAgentStatusOwner(store).getState(),
+      false
+    ).find((candidate) => candidate.worktree === VIEWED)
     expect(
       snapshot?.tabs.some(
         (tab) => 'relativePath' in tab && tab.relativePath === VIEWED_APP_TS.relativePath
@@ -449,7 +430,7 @@ describe('runtime file opens on the host desktop', () => {
     const FRESH_TS = { filePath: '/repo1/fresh/src/app.ts', relativePath: 'src/app.ts' }
 
     function focusServer(store: TestStore): void {
-      store.setState({
+      applyAgentStatusPatch(store, {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: owner routing reads only these fields.
         settings: { activeRuntimeEnvironmentId: 'srv-focused' } as never,
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: owner routing reads only the saved id.
@@ -468,7 +449,9 @@ describe('runtime file opens on the host desktop', () => {
         navigation: 'caller'
       })
 
-      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      const opened = getAgentStatusOwner(store)
+        .getState()
+        .openFiles.find((file) => file.worktreeId === FRESH)
       expect(opened?.runtimeEnvironmentId).toBeNull()
     })
 
@@ -484,7 +467,9 @@ describe('runtime file opens on the host desktop', () => {
         navigation: 'caller'
       })
 
-      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      const opened = getAgentStatusOwner(store)
+        .getState()
+        .openFiles.find((file) => file.worktreeId === FRESH)
       expect(opened?.runtimeEnvironmentId).toBeNull()
     })
 
@@ -494,7 +479,9 @@ describe('runtime file opens on the host desktop', () => {
 
       await openFile({ worktreeId: FRESH, ...FRESH_TS, navigation: 'caller' })
 
-      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      const opened = getAgentStatusOwner(store)
+        .getState()
+        .openFiles.find((file) => file.worktreeId === FRESH)
       expect(opened?.runtimeEnvironmentId).toBe('srv-focused')
     })
   })
@@ -519,7 +506,7 @@ describe('runtime file positioning', () => {
     'preserves a visible floating editor when another file opens in the background (position %s)',
     async (position) => {
       const { openFile, store } = await setup('editor')
-      store.setState({
+      applyAgentStatusPatch(store, {
         settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: true },
         floatingWorkspacePanelOpen: true,
         floatingWorkspacePath: '/tmp/floating'
@@ -580,7 +567,9 @@ describe('runtime file positioning', () => {
       .unifiedTabsByWorktree[VIEWED]?.find(
         (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
       )
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toMatchObject({
       fileId: VIEWED_APP_TS.filePath,
@@ -606,10 +595,13 @@ describe('runtime file positioning', () => {
     const tab = store
       .getState()
       .unifiedTabsByWorktree[VIEWED]?.find((candidate) => candidate.entityId === VIEWED_FILE)
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().markdownViewMode[VIEWED_FILE]).toBe('source')
-    expect(store.getState().pendingEditorReveal).toMatchObject({ fileId: VIEWED_FILE, line: 8 })
+    const reveal = store.getState().pendingEditorReveal
+    expect(reveal).toMatchObject({ fileId: VIEWED_FILE, line: 8 })
   })
 
   it('waits again if the user returns to a terminal before reveal frames run', async () => {
@@ -626,13 +618,20 @@ describe('runtime file positioning', () => {
       .unifiedTabsByWorktree[VIEWED]?.find(
         (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
       )
-    store.getState().activateTab(tab?.id ?? '')
-    store.getState().activateTab(terminal?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(terminal?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toBeNull()
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({ line: 17, viewStateId: tab?.id })
+    const reveal = store.getState().pendingEditorReveal
+    expect(reveal).toMatchObject({ line: 17, viewStateId: tab?.id })
   })
 
   it('invalidates a published reveal if navigation changes before Monaco applies it', async () => {
@@ -647,7 +646,9 @@ describe('runtime file positioning', () => {
     flushFrames()
     const reveal = store.getState().pendingEditorReveal
     expect(reveal?.canApply?.()).toBe(true)
-    store.getState().activateTab(terminal?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(terminal?.id ?? '')
     expect(reveal?.canApply?.()).toBe(false)
   })
 
@@ -713,7 +714,9 @@ describe('runtime file positioning', () => {
       .unifiedTabsByWorktree[VIEWED]?.find(
         (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
       )
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toMatchObject({ line: 19 })
   })
@@ -734,7 +737,9 @@ describe('runtime file positioning', () => {
         .unifiedTabsByWorktree[VIEWED]?.find(
           (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
         )
-      store.getState().activateTab(tab?.id ?? '')
+      getAgentStatusOwner(store)
+        .getState()
+        .activateTab(tab?.id ?? '')
       flushFrames()
       expect(store.getState().pendingEditorReveal).toBeNull()
     }
@@ -798,7 +803,8 @@ describe('runtime file positioning', () => {
     const remote = store
       .getState()
       .openFiles.find((file) => file.runtimeEnvironmentId === 'remote-1')
-    expect(store.getState().pendingEditorReveal).toMatchObject({ fileId: remote?.id, line: 19 })
+    const reveal = store.getState().pendingEditorReveal
+    expect(reveal).toMatchObject({ fileId: remote?.id, line: 19 })
     store.getState().setPendingEditorReveal(null)
     store.getState().setActiveWorktree(VIEWED)
     const tab = store
@@ -806,7 +812,9 @@ describe('runtime file positioning', () => {
       .unifiedTabsByWorktree[VIEWED]?.find(
         (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
       )
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toBeNull()
   })
@@ -848,7 +856,8 @@ describe('runtime file positioning', () => {
       .getState()
       .openFiles.find((file) => file.runtimeEnvironmentId === 'remote-1')
     expect(remote?.id).not.toBe(VIEWED_APP_TS.filePath)
-    expect(store.getState().pendingEditorReveal).toMatchObject({ fileId: remote?.id, line: 19 })
+    const remoteReveal = store.getState().pendingEditorReveal
+    expect(remoteReveal).toMatchObject({ fileId: remote?.id, line: 19 })
     store.getState().setPendingEditorReveal(null)
     store.getState().setActiveWorktree(VIEWED)
     const tab = store
@@ -856,12 +865,12 @@ describe('runtime file positioning', () => {
       .unifiedTabsByWorktree[VIEWED]?.find(
         (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
       )
-    store.getState().activateTab(tab?.id ?? '')
+    getAgentStatusOwner(store)
+      .getState()
+      .activateTab(tab?.id ?? '')
     flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({
-      fileId: VIEWED_APP_TS.filePath,
-      line: 3
-    })
+    const reveal = store.getState().pendingEditorReveal
+    expect(reveal).toMatchObject({ fileId: VIEWED_APP_TS.filePath, line: 3 })
   })
 
   it('positions a background worktree only after it becomes visible', async () => {
@@ -878,9 +887,7 @@ describe('runtime file positioning', () => {
     expect(store.getState().pendingEditorReveal).toBeNull()
     store.getState().setActiveWorktree(BACKGROUND)
     flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({
-      fileId: APP_TS.filePath,
-      line: 17
-    })
+    const reveal = store.getState().pendingEditorReveal
+    expect(reveal).toMatchObject({ fileId: APP_TS.filePath, line: 17 })
   })
 })

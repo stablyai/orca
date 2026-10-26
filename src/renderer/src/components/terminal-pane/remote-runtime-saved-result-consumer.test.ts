@@ -16,7 +16,13 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 const fixture = vi.hoisted(() => ({ state: {} }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => fixture.state } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  return withAgentStatusFixture(
+    { useAppStore: { getState: () => fixture.state } },
+    () => fixture.state
+  )
+})
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 const {

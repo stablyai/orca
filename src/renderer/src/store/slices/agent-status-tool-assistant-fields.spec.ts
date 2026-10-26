@@ -1,6 +1,9 @@
+import { getDefaultSettings } from '../../../../shared/constants'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
+
 import { createTestStore } from './store-test-helpers'
 
 export function registerAgentStatusToolAssistantFieldsTests(): void {
@@ -22,7 +25,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         lastAssistantMessage: 'Edited config.ts',
         lastAssistantMessageIsToolOutput: true
       })
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.toolName).toBe('Edit')
       expect(entry.toolInput).toBe('/src/config.ts')
       expect(entry.lastAssistantMessage).toBe('Edited config.ts')
@@ -45,7 +48,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Next step', agentType: 'claude' })
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.toolName).toBeUndefined()
       expect(entry.toolInput).toBeUndefined()
       expect(entry.lastAssistantMessage).toBeUndefined()
@@ -59,7 +62,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
       store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2' })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe(
+        'claude'
+      )
     })
 
     it('preserves prior agentType when payload sends the "unknown" sentinel', () => {
@@ -72,7 +77,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'unknown' })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe(
+        'claude'
+      )
     })
 
     it('preserves the active pane row when a nested hook sends a different known value', () => {
@@ -81,21 +88,24 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' })
-      const before = store.getState().agentStatusByPaneKey['tab-1:1']
+      const before = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1']).toBe(before)
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']).toBe(before)
     })
 
     it('ignores nested done while the parent pane agent is still active', () => {
       vi.useFakeTimers()
       const store = createTestStore()
-      const setGeneratedTabTitleFromAgentPrompt = vi.fn()
-      store.setState({
-        settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
-        setGeneratedTabTitleFromAgentPrompt
-      } as Partial<AppState>)
+      const setGeneratedTabTitlesFromAgentPrompts = vi.fn()
+      applyAgentStatusPatch(store, {
+        settings: {
+          ...(store.getState().settings ?? getDefaultSettings('/tmp')),
+          tabAutoGenerateTitle: true
+        },
+        setGeneratedTabTitlesFromAgentPrompts
+      })
       store
         .getState()
         .setAgentStatus(
@@ -120,7 +130,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         { updatedAt: 1_100, stateStartedAt: 1_100 }
       )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry).toMatchObject({
         state: 'working',
         prompt: 'parent codex',
@@ -132,11 +142,10 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(entry.toolInput).toBeUndefined()
       expect(entry.lastAssistantMessage).toBeUndefined()
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
-      expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
-      expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith(
-        'tab-1:1',
-        'parent codex'
-      )
+      expect(setGeneratedTabTitlesFromAgentPrompts).toHaveBeenCalledTimes(1)
+      expect(setGeneratedTabTitlesFromAgentPrompts).toHaveBeenLastCalledWith([
+        { paneKey: 'tab-1:1', prompt: 'parent codex' }
+      ])
     })
 
     it('does not let restored-unconfirmed identity suppress a live terminal status', () => {
@@ -163,12 +172,14 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 1_100, stateStartedAt: 1_100 }
         )
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
         state: 'done',
         prompt: 'live claude turn',
         agentType: 'claude'
       })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed).toBeUndefined()
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed
+      ).toBeUndefined()
     })
 
     it('allows pane agentType to change after the prior turn is done', () => {
@@ -180,7 +191,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe(
+        'claude'
+      )
     })
 
     it('allows stale active pane agentType to change', () => {
@@ -208,7 +221,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
             stateStartedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
           }
         )
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe(
+        'claude'
+      )
     })
 
     it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {
@@ -234,7 +249,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 2_000, stateStartedAt: 1_000 }
         )
 
-      const sameStateEntry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const sameStateEntry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(sameStateEntry.prompt).toBe('p2')
       expect(sameStateEntry.toolName).toBe('Edit')
       expect(sameStateEntry.updatedAt).toBe(2_000)
@@ -295,7 +310,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 2_000, stateStartedAt: 1_000 }
         )
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].workingMode).toBe('monitoring')
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].workingMode
+      ).toBe('monitoring')
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch)
     })
@@ -324,9 +341,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         { updatedAt: 1_000, stateStartedAt: 1_000 }
       )
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage).toBe(
-        'final answer'
-      )
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage
+      ).toBe('final answer')
       // done→done refreshes retention snapshot without changing sort class; tick only status epoch.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch)
@@ -381,7 +398,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           }
         )
 
-      const refreshedEntry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const refreshedEntry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(refreshedEntry.prompt).toBe('fresh again')
       // Stale refresh can restore attention sort class; tick freshness and sort epochs.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
@@ -410,7 +427,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 2_000, stateStartedAt: 2_000 }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.prompt).toBe('second task')
       expect(entry.stateStartedAt).toBe(2_000)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
@@ -444,7 +461,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         { updatedAt: 2_000, stateStartedAt: 2_000 }
       )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.prompt).toBe('same task')
       expect(entry.promptInteractionKey).toBe('command-code-transcript-b')
       expect(entry.stateStartedAt).toBe(2_000)
@@ -476,7 +493,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 2_000, stateStartedAt: 2_000 }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.stateStartedAt).toBe(2_000)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })

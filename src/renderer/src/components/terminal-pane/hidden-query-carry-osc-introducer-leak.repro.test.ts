@@ -29,7 +29,7 @@ const CLAUDE_PALETTE_RESET = '\x1b]104;255\x07'
 const PROMPT_SNAPSHOT = { data: '\x1b[H❯ ', cols: 120, rows: 40, seq: 1000 }
 
 describe('hidden query carry vs a following OSC', () => {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -40,9 +40,10 @@ describe('hidden query carry vs a following OSC', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     bindPtyConnectionTestMocks({
-      getState: () => mockStoreState,
+      getState: () => storeFixture.read(),
+      getStore: () => storeFixture.store,
       getTransportQueue: () => transportFactoryQueue,
       getTransportOptions: () => createdTransportOptions,
       getStoreSubscribers: () => storeSubscribers,
@@ -54,11 +55,12 @@ describe('hidden query carry vs a following OSC', () => {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('does not paint an OSC payload after the reveal restore when a hidden chunk ended mid-CSI', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const dataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -73,7 +75,7 @@ describe('hidden query carry vs a following OSC', () => {
 
     const isVisibleRef = { current: false }
     const pane = createPane(1)
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       isVisibleRef,
       startup: { command: 'claude' }
     })

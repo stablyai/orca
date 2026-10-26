@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
@@ -241,9 +242,19 @@ useAppStoreExport.getState = () => ({
   }
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: useAppStoreExport
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+  return withAgentStatusFixture({ useAppStore: useAppStoreExport }, () => storeState)
+})
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
+})
 
 type ReactElementLike = {
   type: unknown

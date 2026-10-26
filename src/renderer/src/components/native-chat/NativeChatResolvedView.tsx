@@ -1,3 +1,5 @@
+import { useAgentStatusField } from '@/store/agent-status'
+import { selectHookPreviewIsToolOutput } from './use-native-chat-hook-status'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -102,13 +104,11 @@ export function NativeChatResolvedView({
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const hookPreview = useAgentStatusField(paneKey, (entry) => entry?.lastAssistantMessage)
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
-  const hookPreviewIsToolOutput = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
-  )
+  const hookPreviewIsToolOutput = useAgentStatusField(paneKey, selectHookPreviewIsToolOutput)
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
-  const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
+  const workingEpoch = useAgentStatusField(paneKey, (entry) => entry?.stateStartedAt ?? null)
   const canSend = useNativeChatCanSend(targetPtyId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)

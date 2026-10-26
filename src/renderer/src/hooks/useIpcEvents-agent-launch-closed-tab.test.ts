@@ -1,3 +1,4 @@
+import { makeTab, makeLayout } from '@/store/slices/store-session-test-harness'
 import { describe, expect, it, vi } from 'vitest'
 import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-harness'
 
@@ -72,9 +73,17 @@ describe('a tab this window already shows, which the host reveals an agent into'
     }
     Object.assign(window.api, { pty: { kill: vi.fn(async () => {}) } })
     storeState.tabsByWorktree['wt-1'] = [
-      { id: 'tab-made', ptyId: null, agentLaunchPane: { leafId: LEAF } }
+      makeTab({
+        id: 'tab-made',
+        worktreeId: 'wt-1',
+        ptyId: null,
+        agentLaunchPane: { leafId: LEAF }
+      })
     ]
-    storeState.terminalLayoutsByTabId['tab-made'] = { root: { type: 'leaf', leafId: LEAF } }
+    storeState.terminalLayoutsByTabId['tab-made'] = {
+      ...makeLayout(),
+      root: { type: 'leaf', leafId: LEAF }
+    }
 
     createTerminalListenerRef.current({
       requestId: 'reveal-window-made-launch-tab',

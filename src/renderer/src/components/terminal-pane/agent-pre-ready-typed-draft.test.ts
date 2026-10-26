@@ -1,6 +1,6 @@
+import type { connectPanePty as ConnectPanePty } from './pty-connection'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connectPanePty } from './pty-connection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
@@ -38,7 +38,8 @@ const {
   toastInfo: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let connectPanePty: typeof ConnectPanePty
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -94,7 +95,12 @@ vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => mockStoreState,
+    get getState() {
+      return storeFixture.store.getState
+    },
+    get setState() {
+      return storeFixture.store.setState
+    },
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
       return () => {
@@ -168,7 +174,7 @@ function connectAgentPane(overrides: Record<string, unknown> = {}): ConnectedAge
   const connectArgs = [
     pane,
     createManager(1),
-    buildPaneConnectionDeps(() => mockStoreState, {
+    buildPaneConnectionDeps(storeFixture, {
       startup: { command: 'claude', launchAgent: 'claude' },
       ...overrides
     })
@@ -239,12 +245,14 @@ describe('agent pane keys typed before its PTY binds', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
+    ;({ connectPanePty } = storeFixture.own(await import('./pty-connection')))
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
     pairedRoute.runtimeEnvironmentId = null
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -332,7 +340,7 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     pane.type('make the tests pass')
     pane.bind('pty-1')
-    mockStoreState.agentStatusByPaneKey[pane.paneKey] = {
+    storeFixture.setStatus(pane.paneKey, {
       state: 'blocked',
       prompt: 'Do you trust the files in this folder?',
       agentType: 'claude',
@@ -340,7 +348,7 @@ describe('agent pane keys typed before its PTY binds', () => {
       updatedAt: 1_000,
       stateStartedAt: 1_000,
       stateHistory: []
-    }
+    })
     pane.type('1')
     pane.type('\r')
 
@@ -358,7 +366,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     await flushAsyncTicks(20)
 
     pane.type('later')
-    mockStoreState.agentStatusByPaneKey[pane.paneKey] = {
+    storeFixture.setStatus(pane.paneKey, {
       state: 'waiting',
       prompt: '',
       agentType: 'claude',
@@ -366,7 +374,7 @@ describe('agent pane keys typed before its PTY binds', () => {
       updatedAt: 1_000,
       stateStartedAt: 1_000,
       stateHistory: []
-    }
+    })
     pane.bind('pty-1')
     await flushAsyncTicks(20)
 
@@ -466,7 +474,7 @@ describe('agent pane keys typed before its PTY binds', () => {
   it('leaves a paired-server agent pane resuming a live entry on its own transport', async () => {
     pairedRoute.runtimeEnvironmentId = 'env-1'
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
+    storeFixture.setStatus(paneKey, {
       state: 'working',
       prompt: '',
       agentType: 'claude',
@@ -475,7 +483,7 @@ describe('agent pane keys typed before its PTY binds', () => {
       stateStartedAt: 1_000,
       stateHistory: [],
       providerSession: { key: 'session_id', id: 'session-1' }
-    }
+    })
     const pane = connectAgentPane({ startup: undefined })
     await flushAsyncTicks(20)
 

@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 // @vitest-environment happy-dom
 
 import { cleanup, render } from '@testing-library/react'
@@ -20,20 +21,31 @@ const mocks = vi.hoisted(
   } => ({ nativeChatViewProps: null })
 )
 
-vi.mock('@/store', () => ({
-  useAppStore: (
-    selector: (state: {
-      agentStatusByPaneKey: Record<string, never>
-      sleepingAgentSessionsByPaneKey: Record<string, never>
-      paneForegroundAgentByPaneKey: Record<string, never>
-    }) => unknown
-  ) =>
-    selector({
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {},
-      paneForegroundAgentByPaneKey: {}
-    })
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (
+      selector: (state: {
+        agentStatusByPaneKey: Record<string, never>
+        sleepingAgentSessionsByPaneKey: Record<string, never>
+        paneForegroundAgentByPaneKey: Record<string, never>
+      }) => unknown
+    ) =>
+      selector({
+        agentStatusByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {},
+        paneForegroundAgentByPaneKey: {}
+      })
+  }
+  const readFixture = () => ({
+    agentStatusByPaneKey: {},
+    sleepingAgentSessionsByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('../native-chat/NativeChatView', () => ({
   default: (props: {
@@ -148,3 +160,13 @@ function makeController(
     tabId: 'tab-1'
   } as unknown as TerminalPaneController
 }
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
+})

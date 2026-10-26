@@ -13,7 +13,7 @@ export type RuntimeEnvironmentCallRequest = {
 
 export function createCompatibleRuntimeStatusResponse(
   runtimeId = 'remote-runtime'
-): RuntimeRpcResponse<RuntimeStatus> {
+): Extract<RuntimeRpcResponse<RuntimeStatus>, { ok: true }> {
   return {
     id: 'status',
     ok: true,

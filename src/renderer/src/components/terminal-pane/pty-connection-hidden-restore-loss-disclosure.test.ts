@@ -37,7 +37,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -53,17 +53,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -182,7 +189,7 @@ async function connectHiddenPane(
   })
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
+  const deps = buildPaneConnectionDeps(storeFixture, {
     isVisibleRef: { current: false }
   })
   const disposable = await connectMockPanePty(pane, createManager(1), deps)
@@ -260,11 +267,12 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -278,7 +286,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     }
 
     async function driveToSeventhAnswer(
-      serializeBufferOutcome: ReturnType<typeof vi.fn>
+      serializeBufferOutcome: NonNullable<MockTransport['serializeBufferOutcome']>
     ): Promise<PaneDrive> {
       const drive = await connectHiddenPane(REMOTE_PTY_ID, (transport) => {
         transport.serializeBuffer = vi.fn()
@@ -345,7 +353,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     })
 
     async function exhaustBudgetWhileHidden(
-      serializeBufferOutcome: ReturnType<typeof vi.fn>
+      serializeBufferOutcome: NonNullable<MockTransport['serializeBufferOutcome']>
     ): Promise<PaneDrive> {
       const seventhAnswer = createDeferred<unknown>()
       const drive = await driveToSeventhAnswer(serializeBufferOutcome)
@@ -538,7 +546,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       )
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
-      const deps = buildPaneConnectionDeps(() => mockStoreState, {
+      const deps = buildPaneConnectionDeps(storeFixture, {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })

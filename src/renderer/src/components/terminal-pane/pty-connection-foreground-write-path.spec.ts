@@ -22,13 +22,13 @@ import {
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundWritePathTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -38,9 +38,10 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -52,11 +53,12 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('queues visible bulk output off the synchronous xterm write path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -81,7 +83,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('keeps ANSI redraws after terminal input on the immediate xterm write path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -109,7 +111,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('keeps large ANSI redraws after terminal input on the immediate xterm write path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -140,7 +142,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('routes terminal input through deferPtyInput so the host can withhold it', async () => {
       // Regression: inlining forwardPtyInput into onData dropped this hop, silently disabling link-click mouse suppression.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
@@ -159,7 +161,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
@@ -172,7 +174,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -196,7 +198,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -241,7 +243,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -285,7 +287,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -327,7 +329,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -369,7 +371,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -420,7 +422,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(

@@ -45,6 +45,7 @@ function readFailureText(error: unknown): string {
 
 /** Resume from the last applied cursor after stream end/failure with capped exponential backoff. */
 export function startStructuredAgentSessionLiveRead(args: {
+  shouldStop?: () => boolean
   applyRequests?: (action: StructuredAgentSessionAction) => void
   applyEvent: (event: AgentSessionSubscribeEvent, options?: { opensSubscription: true }) => void
   /** `message` is the failure's own text, for logs; `refusal` is what a surface words. */
@@ -66,6 +67,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   dispose: () => void
 } {
   let stopped = false
+  const shouldStop = (): boolean => stopped || args.shouldStop?.() === true
   let connected = false
   // Terminal refusals stop this run’s reconnects; reopening the chat starts a new run.
   let failedFinally = false
@@ -85,21 +87,27 @@ export function startStructuredAgentSessionLiveRead(args: {
     }
   })
   const reconnectScheduler = createReconnectScheduler({
-    shouldStop: () => stopped || connected || failedFinally,
+    shouldStop: () => shouldStop() || connected || failedFinally,
     reconnect: () => void open()
   })
   // A reachable-again host should bypass outage-expanded retry delay.
   const stopHostContactWatch = args.subscribeRetryNow(() => reconnectScheduler.retryNow())
   const loseContact = (): void => {
+    if (shouldStop()) {
+      return
+    }
     connected = false
     // Flush before marking contact lost or buffered frames would appear to restore contact.
     coalescer.flush()
     requestReader.invalidate()
+    if (shouldStop()) {
+      return
+    }
     args.onContactLost()
     reconnectScheduler.schedule()
   }
   const isCurrentOpenGeneration = (candidate: number): boolean =>
-    !stopped && candidate === openGeneration
+    !shouldStop() && candidate === openGeneration
   const clearUnattachedReadGrace = (): void => {
     unattachedSince = null
   }
@@ -115,6 +123,9 @@ export function startStructuredAgentSessionLiveRead(args: {
     }
   }
   const reportReadFailure = (error: unknown): void => {
+    if (shouldStop()) {
+      return
+    }
     if (!isUnattachedAgentSessionReadRefusal(error)) {
       clearUnattachedReadGrace()
       applyReadFailure(error)
@@ -133,6 +144,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       !isCurrentOpenGeneration(readOpenGeneration) || readStateGeneration !== stateGeneration
   }
   const requestReader = createAgentSessionCurrentRequestsReader({
+    shouldStop,
     read: args.readCurrentRequests,
     complete: (marker, items) => args.applyRequests?.({ type: 'requests-complete', marker, items }),
     replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
@@ -178,18 +190,24 @@ export function startStructuredAgentSessionLiveRead(args: {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })
-        requestReader.observe(event.currentRequests)
+        if (isCurrentOpenGeneration(eventOpenGeneration)) {
+          requestReader.observe(event.currentRequests)
+        }
       }
       return
     }
     shouldStopCoalescedEvent = captureHistoryReadGuard()
     coalescer.push(event)
-    if (event.type !== 'end' && event.currentRequests?.sessionId === args.sessionId) {
+    if (
+      isCurrentOpenGeneration(eventOpenGeneration) &&
+      event.type !== 'end' &&
+      event.currentRequests?.sessionId === args.sessionId
+    ) {
       requestReader.observe(event.currentRequests)
     }
   }
   async function open(): Promise<void> {
-    if (stopped || connected) {
+    if (shouldStop() || connected) {
       return
     }
     if (opening) {
@@ -198,7 +216,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     }
     opening = true
     coalescer.flush()
-    if (stopped) {
+    if (shouldStop()) {
       opening = false
       return
     }

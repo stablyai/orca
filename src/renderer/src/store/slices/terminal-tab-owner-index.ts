@@ -1,3 +1,5 @@
+import { ownSourceKeys } from '../../lib/structured-chat-tab-index'
+
 type TerminalTabOwnerBuckets = Readonly<Record<string, readonly { id: string }[]>>
 
 type IndexedBucket = {
@@ -17,10 +19,11 @@ export type TerminalTabOwnerIndex = {
 
 export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   let source: TerminalTabOwnerBuckets | null = null
-  let orderedKeys: string[] = []
+  let orderedKeys: readonly string[] = []
+  const answers = new WeakMap<TerminalTabOwnerBuckets, ReadonlyMap<string, string>>()
   const bucketByWorktreeId = new Map<string, IndexedBucket>()
   const worktreeIdsByTabId = new Map<string, Set<string>>()
-  const ownerByTabId = new Map<string, string>()
+  let ownerByTabId = new Map<string, string>()
 
   const removeBucketMembership = (worktreeId: string, tabIds: ReadonlySet<string>): void => {
     for (const tabId of tabIds) {
@@ -47,11 +50,13 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   }
 
   const update = (tabsByWorktree: TerminalTabOwnerBuckets): ReadonlyMap<string, string> => {
-    if (source === tabsByWorktree) {
-      return ownerByTabId
+    const cached = answers.get(tabsByWorktree)
+    if (cached) {
+      return cached
     }
+    ownerByTabId = new Map(ownerByTabId)
 
-    const nextOrderedKeys = Object.keys(tabsByWorktree)
+    const nextOrderedKeys = ownSourceKeys(tabsByWorktree)
     const orderChanged =
       orderedKeys.length !== nextOrderedKeys.length ||
       orderedKeys.some((key, index) => key !== nextOrderedKeys[index])
@@ -121,6 +126,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
 
     source = tabsByWorktree
     orderedKeys = nextOrderedKeys
+    answers.set(tabsByWorktree, ownerByTabId)
     return ownerByTabId
   }
 
@@ -145,6 +151,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     }
     // Titles preserve IDs/key order; adopt the produced map so the next owner lookup stays O(1).
     source = nextTabsByWorktree
+    answers.set(nextTabsByWorktree, ownerByTabId)
   }
 
   return {

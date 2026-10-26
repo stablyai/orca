@@ -34,19 +34,26 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       }
     )
 
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        getState: () => storeState,
-        subscribe: vi.fn(() => {
-          const record = { active: true, cleanup: vi.fn() }
-          storeSubscriptions.push(record)
-          return () => {
-            record.active = false
-            record.cleanup()
-          }
-        })
+    vi.doMock('../store', async () => {
+      const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+      const fixture = {
+        useAppStore: {
+          getState: () => storeState,
+          subscribe: vi.fn(() => {
+            const record = { active: true, cleanup: vi.fn() }
+            storeSubscriptions.push(record)
+            return () => {
+              record.active = false
+              record.cleanup()
+            }
+          })
+        }
       }
-    }))
+      const readFixture = fixture.useAppStore.getState
+
+      return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+    })
 
     const namespace = (name: string): Record<string, unknown> =>
       new Proxy(

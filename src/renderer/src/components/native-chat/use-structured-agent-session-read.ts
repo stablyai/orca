@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -6,20 +6,62 @@ import {
   getStructuredAgentSessionReadOwner,
   type StructuredAgentSessionReadSnapshot
 } from './structured-agent-session-read-owner'
+import {
+  adoptStructuredReadOwner,
+  findStructuredAgentSessionReadOwner,
+  structuredReadOwnerKey
+} from './structured-agent-session-read-owner-registry'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/structured-agent-session-reducer'
+
+const emptySnapshot: StructuredAgentSessionReadSnapshot = {
+  state: EMPTY_STRUCTURED_AGENT_SESSION,
+  loadingOlder: false,
+  olderHistoryGeneration: 0,
+  current: false
+}
+const loadUnboundOlder = () => Promise.resolve('superseded' as const)
 
 function useReadOwnerSnapshot(
   sessionId: string,
   target: RuntimeClientTarget
 ): {
-  owner: ReturnType<typeof getStructuredAgentSessionReadOwner>
+  owner: ReturnType<typeof findStructuredAgentSessionReadOwner>
   snapshot: StructuredAgentSessionReadSnapshot
 } {
-  const owner = useMemo(
-    () => getStructuredAgentSessionReadOwner(sessionId, target),
-    [sessionId, target]
+  const binding = useMemo(() => {
+    let candidate: ReturnType<typeof findStructuredAgentSessionReadOwner>
+    let token = { owner: candidate, snapshot: emptySnapshot }
+    return {
+      getSnapshot: () => {
+        const current = findStructuredAgentSessionReadOwner(sessionId, target)
+        const owner = current?.lifetime.retired ? undefined : current
+        const snapshot = owner?.getSnapshot() ?? emptySnapshot
+        if (token.owner !== owner || token.snapshot !== snapshot) {
+          token = { owner, snapshot }
+        }
+        return token
+      },
+      subscribe: (listener: () => void, selected: typeof candidate) => {
+        let current = findStructuredAgentSessionReadOwner(sessionId, target)
+        const idle = selected ?? candidate
+        if (
+          !current &&
+          idle &&
+          adoptStructuredReadOwner(structuredReadOwnerKey(sessionId, target), idle)
+        ) {
+          current = idle
+        }
+        candidate = current ?? getStructuredAgentSessionReadOwner(sessionId, target)
+        return candidate.subscribe(listener)
+      }
+    }
+  }, [sessionId, target])
+  const selected = binding.getSnapshot().owner
+  const subscribe = useCallback(
+    (listener: () => void) => binding.subscribe(listener, selected),
+    [binding, selected]
   )
-  const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot, owner.getSnapshot)
-  return { owner, snapshot }
+  return useSyncExternalStore(subscribe, binding.getSnapshot, binding.getSnapshot)
 }
 
 export function useStructuredAgentSessionRead(args: {
@@ -34,7 +76,7 @@ export function useStructuredAgentSessionRead(args: {
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
 
-  useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
+  useEffect(() => (isVisible ? owner?.activate() : undefined), [isVisible, owner])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {
@@ -43,7 +85,7 @@ export function useStructuredAgentSessionRead(args: {
     }
     if (
       !observedCursor ||
-      (lastView.current?.owner === owner && lastView.current.observationKey === observationKey)
+      (lastView.current?.owner === owner && lastView.current?.observationKey === observationKey)
     ) {
       return
     }
@@ -61,7 +103,7 @@ export function useStructuredAgentSessionRead(args: {
     readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
     olderHistoryGeneration: snapshot.olderHistoryGeneration,
-    loadOlder: owner.loadOlder,
+    loadOlder: owner?.loadOlder ?? loadUnboundOlder,
     providerSession: snapshot.providerSession
   }
 }

@@ -16,11 +16,10 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { makeAgentStatusStoreWiring } from '../../src/main/runtime/agent-status-store-wiring.test-fixture'
 
-vi.mock('../../src/renderer/src/store', () => ({
-  useAppStore: {
-    setState: vi.fn()
-  }
-}))
+vi.mock('../../src/renderer/src/store', async () => {
+  const { createTestStore } = await import('../../src/renderer/src/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 const ENVIRONMENT_ID = 'paired-runtime'
 const WORKTREE_COUNT = 24

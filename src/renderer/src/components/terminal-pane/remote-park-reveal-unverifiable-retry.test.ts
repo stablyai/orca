@@ -1,3 +1,4 @@
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -41,7 +42,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
@@ -58,17 +59,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -120,7 +128,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 /** The host advertised paired parking while it was reachable, so the reveal reattaches its pty. */
@@ -128,14 +136,22 @@ function pairedParkingHostStatus(): StoreState['runtimeStatusByEnvironmentId'] {
   return new Map([
     [
       'env-1',
-      { checkedAt: 1, status: { capabilities: [TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY] } }
+      {
+        checkedAt: 1,
+        status: {
+          ...createCompatibleRuntimeStatusResponse().result,
+          capabilities: [TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY]
+        }
+      }
     ]
   ])
 }
 
 async function revealParkedRemotePane(
-  serializeBufferOutcome: ReturnType<typeof vi.fn>
+  serializeBufferOutcome: NonNullable<MockTransport['serializeBufferOutcome']>
 ): Promise<{ transport: MockTransport; writes: string[]; dispose: () => void }> {
+  storeFixture.own(await import('./pty-connection'))
+
   const transport = createMockTransport()
   // The remote transport's park-reveal result: a bare reattach with no relay tail.
   transport.connect.mockImplementation(async () => {
@@ -145,8 +161,7 @@ async function revealParkedRemotePane(
   transport.serializeBuffer = vi.fn()
   transport.serializeBufferOutcome = serializeBufferOutcome
   transportFactoryQueue.push(transport)
-  mockStoreState = {
-    ...mockStoreState,
+  storeFixture.patch({
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: REMOTE_PTY_ID }] },
     ptyIdsByTabId: { 'tab-1': [REMOTE_PTY_ID] },
     terminalLayoutsByTabId: {
@@ -158,7 +173,7 @@ async function revealParkedRemotePane(
       }
     },
     runtimeStatusByEnvironmentId: pairedParkingHostStatus()
-  }
+  })
   const pane = createPane(1)
   const { writes } = captureCallbackTerminalWrites(pane)
   // Why the active pane: an inactive split defers its restore to the frame scheduler.
@@ -188,12 +203,13 @@ describe('parked remote pane reveal with an unverifiable host snapshot', () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
     vi.useRealTimers()
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 

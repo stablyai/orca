@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 /**
  * STA-12043, client half: once a restored host starts a new shell in a pane, it publishes the old
  * run's row as unverifiable. The paired client must replace its copy of the old Done with no tab
@@ -14,13 +16,10 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs
 import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
 import { resolveNativeChatSession } from '../components/native-chat/native-chat-pane-resolution'
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'remote-env-1'
@@ -88,16 +87,17 @@ describe('a host row published unverifiable after a cold restore', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId(HOST_TAB)
     const paneKey = makePaneKey(mirroredTabId, LEAF)
     const tabStatus = (): string => {
-      const state = store.getState()
+      const state = getAgentStatusOwner(store).getState()
       return resolveTerminalTabActivityStatus({
         tab: { id: mirroredTabId, title: 'zsh' },
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
     }
 
-    store.setState(
+    applyAgentStatusPatch(
+      store,
       applyFreshWebSessionTabsSnapshot(
-        store.getState(),
+        getAgentStatusOwner(store).getState(),
         hostSnapshot(1, { updatedAt: T0 }),
         ENV,
         T0
@@ -106,9 +106,10 @@ describe('a host row published unverifiable after a cold restore', () => {
     expect(tabStatus()).toBe('done')
 
     vi.setSystemTime(T0 + 60_000)
-    store.setState(
+    applyAgentStatusPatch(
+      store,
       applyFreshWebSessionTabsSnapshot(
-        store.getState(),
+        getAgentStatusOwner(store).getState(),
         hostSnapshot(2, { updatedAt: T0 + 30_000, restoredUnconfirmed: true }),
         ENV,
         T0 + 60_000
@@ -119,7 +120,7 @@ describe('a host row published unverifiable after a cold restore', () => {
     expect(
       resolveNativeChatSession({
         paneKey,
-        agentStatusEntry: store.getState().agentStatusByPaneKey[paneKey],
+        agentStatusEntry: getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey],
         ptyId: null
       })?.sessionId
     ).toBe(SESSION.id)

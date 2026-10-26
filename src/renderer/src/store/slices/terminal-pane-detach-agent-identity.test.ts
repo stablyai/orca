@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, expect, it } from 'vitest'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
@@ -49,7 +51,7 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       prompt: '',
       agentType: 'droid'
     })
-    store.setState({
+    applyAgentStatusPatch(store, {
       sleepingAgentSessionsByPaneKey: {
         [sourcePaneKey]: {
           paneKey: sourcePaneKey,
@@ -80,7 +82,7 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       targetTabId
     })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.paneForegroundAgentByPaneKey[sourcePaneKey]).toBeUndefined()
     expect(state.paneForegroundAgentByPaneKey[targetPaneKey]).toEqual({
       agent: 'droid',

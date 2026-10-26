@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import {
@@ -72,11 +73,16 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupError: null,
   workspaceCleanupDismissals: {},
   workspaceCleanupViewedCandidates: {},
-  scanWorkspaceCleanup: (args) => scanWorkspaceCleanup(get, set, args),
+  scanWorkspaceCleanup: (args) =>
+    scanWorkspaceCleanup(getAgentStatusOwner({ getState: get }).getState, set, args),
   hydrateWorkspaceCleanupFromCache: () =>
     hydrateWorkspaceCleanupScanFromCache({
       hasLiveScanState: () => get().workspaceCleanupScan !== null || get().workspaceCleanupLoading,
-      enrich: (candidates) => enrichWorkspaceCleanupCandidates(candidates, get()),
+      enrich: (candidates) =>
+        enrichWorkspaceCleanupCandidates(
+          candidates,
+          getAgentStatusOwner({ getState: get }).getState()
+        ),
       apply: (scan) => set({ workspaceCleanupScan: scan })
     }),
   markWorkspaceCleanupCandidateViewed: (candidate) => {
@@ -156,10 +162,15 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     return attemptId
   },
   removeWorkspaceCleanupCandidates: (worktreeIds, options) =>
-    removeWorkspaceCleanupCandidates(get, set, worktreeIds, {
-      ...options,
-      getConsentAttemptId: (identity) => unverifiedRemovalConsentByStore.get(get)?.get(identity)
-    }).finally(() => {
+    removeWorkspaceCleanupCandidates(
+      getAgentStatusOwner({ getState: get }).getState,
+      set,
+      worktreeIds,
+      {
+        ...options,
+        getConsentAttemptId: (identity) => unverifiedRemovalConsentByStore.get(get)?.get(identity)
+      }
+    ).finally(() => {
       const consent = options?.unverifiedRemovalConsent as
         | WorkspaceCleanupUnverifiedRemovalConsent
         | undefined

@@ -31,7 +31,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -45,17 +45,24 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({ scheduleTerminalWebglAtlasRecovery }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -108,22 +115,23 @@ describe('connectPanePty queued startup consume', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('spends the queued startup only after the pty is bound to the tab', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     spawnOnConnect(transport, 'fresh-pty')
     transportFactoryQueue.push(transport)
 
     const callOrder: string[] = []
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       startup: { command: 'echo queued' },
       updateTabPtyId: vi.fn(() => {
         callOrder.push('updateTabPtyId')
@@ -144,14 +152,14 @@ describe('connectPanePty queued startup consume', () => {
   })
 
   it('leaves the queued startup unspent when the spawn never reaches onPtySpawn', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     // A retired/reattached spawn resolves without ever announcing a fresh pty.
     transport.connect.mockImplementation(async () => undefined)
     transportFactoryQueue.push(transport)
 
     const onQueuedStartupSpawned = vi.fn()
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       startup: { command: 'echo queued' },
       onQueuedStartupSpawned
     })
@@ -164,7 +172,7 @@ describe('connectPanePty queued startup consume', () => {
   })
 
   it('keeps a throwing consume from escaping into the spawn', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     // onPtySpawn runs inside connect; callback throws would reject spawn and strand the pane, so cleanup must not throw.
     let escapedIntoSpawn = false
@@ -183,7 +191,7 @@ describe('connectPanePty queued startup consume', () => {
     transportFactoryQueue.push(transport)
 
     const updateTabPtyId = vi.fn()
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       startup: { command: 'echo queued' },
       updateTabPtyId,
       onQueuedStartupSpawned: vi.fn(() => {

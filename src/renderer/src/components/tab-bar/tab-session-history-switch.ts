@@ -1,6 +1,7 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
-import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   collectAgentPaneConversations,
@@ -78,7 +79,7 @@ function canHostOfferTabSessionMove(
 
 /** The pane's known identity and launch route, without a History request. */
 export function canPaneOfferResumeInNewChat(
-  state: AppState,
+  state: AgentStatusReadState,
   pane: { worktreeId: string; paneKey: string }
 ): boolean {
   const conversation = resolvePaneAgentConversation(state, pane, adoptsCliConversations)
@@ -139,7 +140,7 @@ export function resolveNativeChatCliForkIdentity(
 }
 
 export function resolveTabSessionHistorySubject(
-  state: AppState,
+  state: AgentStatusReadState,
   args: {
     tab: Pick<TerminalTab, 'id' | 'worktreeId'>
     /** Set only for a native chat tab. */
@@ -217,7 +218,7 @@ export function findTabSessionHistoryRow(
 
 /** Apply the History move gate in this tab’s workspace: chat forks to CLI, while CLI resumes into chat. */
 export function resolveTabSessionSwitch(
-  state: AppState,
+  state: AgentStatusReadState,
   session: AiVaultSession,
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {

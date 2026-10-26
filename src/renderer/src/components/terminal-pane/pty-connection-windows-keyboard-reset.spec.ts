@@ -25,18 +25,18 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionWindowsKeyboardResetTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function notifyStoreSubscribers(): void {
     for (const listener of storeSubscribers.slice()) {
-      listener(mockStoreState)
+      listener(storeFixture.read())
     }
   }
 
@@ -47,9 +47,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -61,11 +62,12 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('resets renderer cursor style when an agent becomes idle', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -94,7 +96,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -132,22 +134,26 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       {
         name: 'WSL',
         configure: (): void => {
-          mockStoreState.tabsByWorktree = {
-            'wt-1': [{ id: 'tab-1', ptyId: null, shellOverride: 'wsl.exe' }]
-          }
+          storeFixture.patch({
+            tabsByWorktree: {
+              'wt-1': [{ id: 'tab-1', ptyId: null, shellOverride: 'wsl.exe' }]
+            }
+          })
         }
       },
       {
         name: 'remote runtime',
         configure: (): void => {
-          mockStoreState.repos = [
-            {
-              id: 'repo1',
-              connectionId: null,
-              displayName: 'orca',
-              executionHostId: 'runtime:owner-runtime'
-            }
-          ]
+          storeFixture.patch({
+            repos: [
+              {
+                id: 'repo1',
+                connectionId: null,
+                displayName: 'orca',
+                executionHostId: 'runtime:owner-runtime'
+              }
+            ]
+          })
         }
       }
     ])(
@@ -156,7 +162,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -190,7 +196,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -202,7 +208,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
         connectPanePty(pane as never, manager as never, deps as never)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'working',
           prompt: 'ship it',
           updatedAt: Date.now(),
@@ -210,20 +216,20 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
         const doneStatus = {
-          state: 'done',
+          state: 'done' as const,
           prompt: 'ship it',
           updatedAt: Date.now(),
           stateStartedAt: Date.now(),
-          agentType: 'codex',
+          agentType: 'codex' as const,
           paneKey,
           stateHistory: []
         }
-        mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
+        storeFixture.setStatus(paneKey, doneStatus)
         notifyStoreSubscribers()
 
         expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -239,22 +245,22 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
       try {
         const paneKey = makePaneKey('tab-1', LEAF_1)
         const firstDoneAt = Date.now()
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'first turn',
           updatedAt: firstDoneAt,
           stateStartedAt: firstDoneAt,
-          agentType: 'codex',
+          agentType: 'codex' as const,
           paneKey,
           stateHistory: [{ state: 'working', prompt: 'first turn', startedAt: firstDoneAt - 5_000 }]
-        }
+        })
         const pane = createPane(1)
         const manager = createManager(1)
         const deps = createDeps()
@@ -264,7 +270,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
         // Batching coalesces done→working→done; only stateHistory proves the new turn re-armed Kitty.
         const secondDoneAt = firstDoneAt + 10_000
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'second turn',
           updatedAt: secondDoneAt,
@@ -276,7 +282,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
             { state: 'done', prompt: 'first turn', startedAt: firstDoneAt },
             { state: 'working', prompt: 'second turn', startedAt: secondDoneAt - 2_000 }
           ]
-        }
+        })
         notifyStoreSubscribers()
 
         expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -292,14 +298,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
       try {
         const paneKey = makePaneKey('tab-1', LEAF_1)
         const startedAt = Date.now()
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'working',
           prompt: 'ship it',
           updatedAt: startedAt,
@@ -307,7 +313,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         const pane = createPane(1)
         const manager = createManager(1)
         const deps = createDeps()
@@ -316,7 +322,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         notifyStoreSubscribers()
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'working',
           prompt: 'follow-up',
           updatedAt: startedAt + 8_000,
@@ -327,7 +333,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
             { state: 'working', prompt: 'ship it', startedAt },
             { state: 'done', prompt: 'ship it', startedAt: startedAt + 4_000 }
           ]
-        }
+        })
         notifyStoreSubscribers()
 
         expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -343,7 +349,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -356,7 +362,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
         connectPanePty(pane as never, manager as never, deps as never)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'ship it',
           updatedAt: doneAt,
@@ -364,7 +370,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
         expect(pane.terminal.write).toHaveBeenCalledWith(
           RESET_TERMINAL_CURSOR_STYLE,
@@ -372,7 +378,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         )
         const writesAfterDone = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.length
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'ship it',
           updatedAt: doneAt + 1_000,
@@ -380,7 +386,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
 
         expect((pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
@@ -395,7 +401,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -420,14 +426,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           }) as never
         )
 
-        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(storeFixture.read().agentStatusByPaneKey[paneKey]).toBeUndefined()
         transport.sendInput.mockClear()
 
         sendTerminalInputThroughPane(pane, '\x1b[O')
         sendTerminalInputThroughPane(pane, '\x1b[I')
         expect(transport.sendInput).not.toHaveBeenCalled()
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'working',
           prompt: 'continue the resumed session',
           updatedAt: Date.now(),
@@ -435,7 +441,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
 
         sendTerminalInputThroughPane(pane, '\x1b[I')
@@ -464,7 +470,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -504,7 +510,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -513,18 +519,18 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const pane = createPane(1)
         pane.terminal.modes.sendFocusMode = true
         const doneStatus = {
-          state: 'done',
+          state: 'done' as const,
           prompt: 'ship it',
           updatedAt: Date.now(),
           stateStartedAt: Date.now(),
-          agentType: 'codex',
+          agentType: 'codex' as const,
           paneKey,
           stateHistory: []
         }
 
         connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
+        storeFixture.setStatus(paneKey, doneStatus)
         notifyStoreSubscribers()
         const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
           | ((title: string) => void)
@@ -542,10 +548,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x', 'query-reply')
         expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           ...doneStatus,
           state: 'working'
-        }
+        })
         notifyStoreSubscribers()
         transport.sendInput.mockClear()
 
@@ -553,10 +559,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
         expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           ...doneStatus,
           state: 'waiting'
-        }
+        })
         notifyStoreSubscribers()
         transport.sendInput.mockClear()
         sendTerminalInputThroughPane(pane, '\x1b[O')
@@ -570,7 +576,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -581,7 +587,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
         connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'ship it',
           updatedAt: Date.now(),
@@ -589,7 +595,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'cursor',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
         transport.sendInput.mockClear()
 
@@ -608,7 +614,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -622,7 +628,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         binding.dispose()
         pane.terminal.write.mockClear()
 
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: 'ship it',
           updatedAt: Date.now(),
@@ -630,7 +636,7 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           agentType: 'codex',
           paneKey,
           stateHistory: []
-        }
+        })
         notifyStoreSubscribers()
 
         expect(pane.terminal.write).not.toHaveBeenCalled()

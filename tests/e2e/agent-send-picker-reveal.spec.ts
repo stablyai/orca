@@ -21,8 +21,7 @@ for (const host of ['local', 'ssh'] as const) {
         const ids = await evaluatePolled(
           page,
           async ({ host, hiddenBy, ssh, localWorktreeId }) => {
-            const store = window.__store!
-            const state = store.getState()
+            const state = window.__agentStatus!.getState()
             const localChild = Object.values(state.worktreesByRepo)
               .flat()
               .find((worktree) => worktree.hostId === 'local' && worktree.id !== localWorktreeId)
@@ -60,7 +59,7 @@ for (const host of ['local', 'ssh'] as const) {
             if (hiddenBy === 'parent') {
               await state.assignWorktreeParent(target, { parentWorktreeId: parent })
             }
-            const targetRepoId = Object.values(store.getState().worktreesByRepo)
+            const targetRepoId = Object.values(window.__agentStatus!.getState().worktreesByRepo)
               .flat()
               .find((worktree) => worktree.id === target)!.repoId
             const collapsedGroups = [
@@ -77,8 +76,8 @@ for (const host of ['local', 'ssh'] as const) {
             state.setFilterRepoIds([])
             state.setRightSidebarTab('source-control')
             state.setRightSidebarOpen(true)
-            const current = store.getState()
-            store.setState({
+            const current = window.__agentStatus!.getState()
+            window.__setStorePatch!({
               groupBy: 'none',
               visibleWorkspaceHostIds: ['local', ssh.hostId],
               workspaceHostScope: 'all',
@@ -174,16 +173,18 @@ for (const host of ['local', 'ssh'] as const) {
         }
         await expect(controlRow).toBeVisible()
         await expect
-          .poll(() => page.evaluate(() => window.__store!.getState().pendingRevealWorktree))
+          .poll(() => page.evaluate(() => window.__agentStatus!.getState().pendingRevealWorktree))
           .toBeNull()
         await page.keyboard.press('Escape')
         await expect
-          .poll(() => page.evaluate(() => window.__store!.getState().agentSendPopoverTargetMode))
+          .poll(() =>
+            page.evaluate(() => window.__agentStatus!.getState().agentSendPopoverTargetMode)
+          )
           .toBeNull()
         await expect(targetRow).toHaveCount(0)
-        expect(await page.evaluate(() => [...window.__store!.getState().collapsedGroups])).toEqual(
-          ids.collapsedGroups
-        )
+        expect(
+          await page.evaluate(() => [...window.__agentStatus!.getState().collapsedGroups])
+        ).toEqual(ids.collapsedGroups)
         expect(
           await page.evaluate(async () => (await window.api.ui.get()).collapsedGroups)
         ).toEqual(ids.collapsedGroups)

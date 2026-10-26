@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import {
@@ -5,7 +6,7 @@ import {
   resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session-continuation'
-import { useAppStore } from '@/store'
+import '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -31,7 +32,7 @@ function resolveSourceAgent(args: {
   worktreeId: string
   pane: ManagedPane
 }): TuiAgent | null {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const paneAgent = state.agentStatusByPaneKey[makePaneKey(args.tabId, args.pane.leafId)]?.agentType
   if (isTuiAgent(paneAgent)) {
     return paneAgent
@@ -50,7 +51,7 @@ export function prepareAgentSessionContinuationFromPane({
   workspacePath,
   initialCwd
 }: PrepareAgentSessionContinuationFromPaneArgs): AgentSessionContinuationRequest | null {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const paneKey = makePaneKey(tabId, pane.leafId)
   const status = state.agentStatusByPaneKey[paneKey]
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })

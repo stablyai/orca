@@ -20,18 +20,18 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionNotificationSettingsGatingTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function notifyStoreSubscribers(): void {
     for (const listener of storeSubscribers.slice()) {
-      listener(mockStoreState)
+      listener(storeFixture.read())
     }
   }
 
@@ -42,9 +42,10 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -56,11 +57,12 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
@@ -70,7 +72,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       vi.useFakeTimers()
       const dispatchNotification = useNotificationDispatch('wt-1')
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      storeFixture.setStatus(paneKey, {
         state: 'done',
         prompt: 'Fix notification payloads',
         updatedAt: Date.now(),
@@ -80,7 +82,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         terminalTitle: '* Codex done',
         stateHistory: [],
         lastAssistantMessage: 'Implemented the formatter.'
-      }
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -113,21 +115,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('does not suppress terminal bell notifications when agent-complete notifications are disabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: false,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -157,23 +161,25 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
     })
 
-    it('forwards agent completion to notification policy when desktop banners are disabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+    it('raises terminal attention for agent completion when OS completion notifications are disabled', async () => {
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        experimentalTerminalAttention: true,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: false,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          experimentalTerminalAttention: true,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -199,7 +205,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('shares one raw store subscriber for agent-complete notification settings across panes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
 
       vi.useFakeTimers()
@@ -224,21 +230,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('offers generic title completions while desktop completion banners are disabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: false,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const api = (
         globalThis as unknown as {
           window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
@@ -277,21 +285,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: false,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const inspection = createDeferred<string | null>()
       const api = (
         globalThis as unknown as {
@@ -317,13 +327,15 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       await flushAsyncTicks()
       expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: true
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: true
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       inspection.resolve('codex')
       await flushAsyncTicks()
@@ -342,21 +354,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('keeps raw title completion continuity across desktop banner changes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -371,22 +385,26 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
 
       titleHandler('Claude working', 'Claude working')
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: false
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: false
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       titleHandler('Claude done', 'Claude done')
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: true
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: true
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       titleHandler('Claude done', 'Claude done')
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
@@ -404,21 +422,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('keeps a scheduled agent completion across desktop banner changes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -435,21 +455,25 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       idleHandler('* Codex done')
       vi.advanceTimersByTime(500)
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: false
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: false
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: true
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: true
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 500 - 1)
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
@@ -466,21 +490,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('restores a suppressed terminal bell when disabling pending agent completion', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -502,13 +528,15 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         expect.objectContaining({ source: 'terminal-bell' })
       )
 
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: false
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: false
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       vi.advanceTimersByTime(250)
 
@@ -518,21 +546,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('delivers completion after working and desktop banner changes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -550,21 +580,25 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
 
       workingHandler()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: false
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: false
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: true
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: true
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       idleHandler('* Codex done')
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
@@ -582,21 +616,23 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
     })
 
     it('delivers completion after working starts with desktop banners disabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: false,
-          terminalBell: true,
-          suppressWhenFocused: false,
-          customSoundPath: null
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
         }
-      }
+      })
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -614,13 +650,15 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
 
       workingHandler()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        notifications: {
-          ...mockStoreState.settings.notifications,
-          agentTaskComplete: true
+      storeFixture.patch({
+        settings: {
+          ...storeFixture.read().settings,
+          notifications: {
+            ...storeFixture.read().settings?.notifications,
+            agentTaskComplete: true
+          }
         }
-      }
+      })
       notifyStoreSubscribers()
       idleHandler('* Codex done')
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)

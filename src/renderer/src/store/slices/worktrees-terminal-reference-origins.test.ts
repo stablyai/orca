@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,7 +42,7 @@ function setup() {
     updatedAt: '2026-01-01',
     mergeable: 'MERGEABLE'
   })
-  store.setState({
+  applyAgentStatusPatch(store, {
     repos: [
       { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
     ],
@@ -85,7 +87,7 @@ describe('terminal reference evidence', () => {
   it('retains independently confirmed concurrent PRs when the first becomes the primary', async () => {
     const { store, readHostedReview } = setup()
     const initial = store.getState().worktreesByRepo.repo1[0]
-    store.setState({
+    applyAgentStatusPatch(store, {
       worktreesByRepo: { repo1: [{ ...initial, linkedPR: null, linkedItems: [] }] }
     })
     const first = Promise.withResolvers<HostedReviewInfo | null>()
@@ -143,7 +145,7 @@ describe('terminal reference evidence', () => {
     const hostedReviewCache = {
       'local::repo1::feature': { data: primary, fetchedAt: Date.now() }
     }
-    store.setState({
+    applyAgentStatusPatch(store, {
       fetchHostedReviewForBranch,
       hostedReviewCache,
       worktreesByRepo: {
@@ -187,7 +189,7 @@ describe('terminal reference evidence', () => {
       mergeable: 'MERGEABLE',
       updatedAt: '2026-01-01'
     })
-    store.setState({
+    applyAgentStatusPatch(store, {
       repos: [{ ...repo, executionHostId: 'runtime:other' }, repo]
     })
     store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
@@ -216,7 +218,7 @@ describe('terminal reference evidence', () => {
       mergeable: 'MERGEABLE',
       updatedAt: '2026-01-01'
     })
-    store.setState({
+    applyAgentStatusPatch(store, {
       worktreesByRepo: {
         repo1: [
           {
@@ -322,7 +324,7 @@ describe('terminal reference evidence', () => {
     )
     store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
     await flush()
-    store.setState({
+    applyAgentStatusPatch(store, {
       terminalLayoutsByTabId: { 'tab-1': singlePaneLayoutSnapshot(leaf, 'replacement-pty') }
     })
     complete({
@@ -350,7 +352,7 @@ describe('terminal reference evidence', () => {
     )
     store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
     await flush()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         [worktreeId]: store
           .getState()

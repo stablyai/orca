@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // mainAgent can fail while subagents keep state/start/update time unchanged. Mirror that verdict and invalidate the epoch-cached worktree rollup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -10,15 +12,6 @@ import { resetRendererOwnedAgentStatusPanesForTests } from '../components/termin
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { selectWorktreeAgentActivitySummary } from '../components/sidebar/worktree-agent-activity-summary'
-
-// Mirror imports app singleton; redirect it to this createTestStore harness.
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'remote-env-1'
@@ -84,19 +77,25 @@ describe('a mirrored main agent that fails while its subagents keep the row work
       activeWorktreeId: WT
     })
     const apply = (snapshot: RuntimeMobileSessionTabsResult): void => {
-      store.setState(applyFreshWebSessionTabsSnapshot(store.getState(), snapshot, ENV, T0))
+      applyAgentStatusPatch(store, (state) =>
+        applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, T0)
+      )
     }
 
     apply(hostSnapshot(1, { state: 'working', stateStartedAt: T0 - 5_000 }))
-    expect(selectWorktreeAgentActivitySummary(store.getState(), WT)).toMatchObject({
+    expect(
+      selectWorktreeAgentActivitySummary(getAgentStatusOwner(store).getState(), WT)
+    ).toMatchObject({
       hasLiveWorking: true,
       hasFailed: false
     })
 
     apply(hostSnapshot(2, { state: 'done', outcome: 'failure', stateStartedAt: T0 - 2_000 }))
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
-    expect(store.getState().agentStatusByPaneKey[paneKey]?.mainAgent?.outcome).toBe('failure')
-    expect(selectWorktreeAgentActivitySummary(store.getState(), WT)).toMatchObject({
+    expect(getAgentStatusOwner(store).getSnapshot()[paneKey]?.mainAgent?.outcome).toBe('failure')
+    expect(
+      selectWorktreeAgentActivitySummary(getAgentStatusOwner(store).getState(), WT)
+    ).toMatchObject({
       hasLiveWorking: false,
       hasFailed: true
     })

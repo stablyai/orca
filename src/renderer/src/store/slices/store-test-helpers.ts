@@ -1,3 +1,6 @@
+import { applyAgentStatusPatch } from '../agent-status-patch'
+import type { AgentStatusReadState } from '../agent-status-observers'
+import { getAgentStatusOwner, withAgentStatusCommit } from '../agent-status-commit'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -64,72 +67,80 @@ export {
   makeTabGroup
 } from './store-session-test-harness'
 
-export function createTestStore() {
-  // Why the record middleware: views of one file share a record only through it, as in the app.
-  return create<AppState>()(
-    withEditorBufferRecords<AppState>(
-      (...a) => ({
-        ...createRepoSlice(...a),
-        ...createSparsePresetsSlice(...a),
-        ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a),
-        ...createTabsSlice(...a),
-        ...createUISlice(...a),
-        ...createSettingsSlice(...a),
-        ...createKeybindingsSlice(...a),
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a),
-        ...createLinearSlice(...a),
-        ...createPreflightSlice(...a),
-        ...createJiraSlice(...a),
-        ...createEditorSlice(...a),
-        ...createStatsSlice(...a),
-        ...createMemorySlice(...a),
-        ...createWorkspaceSpaceSlice(...a),
-        ...createClaudeUsageSlice(...a),
-        ...createCodexUsageSlice(...a),
-        ...createOpenCodeUsageSlice(...a),
-        ...createMuseUsageSlice(...a),
-        ...createBrowserSlice(...a),
-        ...createRateLimitSlice(...a),
-        ...createSshSlice(...a),
-        ...createRuntimeEnvironmentSshSlice(...a),
-        ...createWslHostsSlice(...a),
-        ...createAgentStatusSlice(...a),
-        ...createPaneForegroundAgentSlice(...a),
-        ...createDiffCommentsSlice(...a),
-        ...createDetectedAgentsSlice(...a),
-        ...createRuntimeDetectedAgentsSlice(...a),
-        ...createWorktreeNavHistorySlice(...a),
-        ...createDictationSlice(...a),
-        ...createWorkspaceCleanupSlice(...a),
-        ...createWorkspaceCleanupBrowseSlice(...a),
-        ...createRuntimeStatusSlice(...a),
-        ...createPullRequestGenerationSlice(...a),
-        ...createCommitMessageGenerationSlice(...a),
-        ...createPinnedTabCloseConfirmSlice(...a),
-        ...createRecentlyClosedTabsSlice(...a),
-        ...createOrcaProfilesSlice(...a),
-        ...createNewIssueDraftSlice(...a),
-        ...createFeedbackDraftSlice(...a),
-        ...createTaskCreationDraftsSlice(...a),
-        ...createRemoteServerUpdatesSlice(...a),
-        ...createTerminalQuickCommandHostsSlice(...a),
-        ...createStructuredSessionLaunchDirectorySlice(...a),
-        ...createStructuredChatSleptAtSlice(...a),
-        ...createWorkspaceAttentionSlice(...a)
-      }),
-      true
-    )
+// Views of one file share a record through the same middleware as the app.
+const createTestState = withAgentStatusCommit(
+  withEditorBufferRecords<AppState>(
+    (...a) => ({
+      ...createRepoSlice(...a),
+      ...createSparsePresetsSlice(...a),
+      ...createWorktreeSlice(...a),
+      ...createTerminalSlice(...a),
+      ...createTabsSlice(...a),
+      ...createUISlice(...a),
+      ...createSettingsSlice(...a),
+      ...createKeybindingsSlice(...a),
+      ...createGitHubSlice(...a),
+      ...createHostedReviewSlice(...a),
+      ...createLinearSlice(...a),
+      ...createPreflightSlice(...a),
+      ...createJiraSlice(...a),
+      ...createEditorSlice(...a),
+      ...createStatsSlice(...a),
+      ...createMemorySlice(...a),
+      ...createWorkspaceSpaceSlice(...a),
+      ...createClaudeUsageSlice(...a),
+      ...createCodexUsageSlice(...a),
+      ...createOpenCodeUsageSlice(...a),
+      ...createMuseUsageSlice(...a),
+      ...createBrowserSlice(...a),
+      ...createRateLimitSlice(...a),
+      ...createSshSlice(...a),
+      ...createRuntimeEnvironmentSshSlice(...a),
+      ...createWslHostsSlice(...a),
+      ...createAgentStatusSlice(...a),
+      ...createPaneForegroundAgentSlice(...a),
+      ...createDiffCommentsSlice(...a),
+      ...createDetectedAgentsSlice(...a),
+      ...createRuntimeDetectedAgentsSlice(...a),
+      ...createWorktreeNavHistorySlice(...a),
+      ...createDictationSlice(...a),
+      ...createWorkspaceCleanupSlice(...a),
+      ...createWorkspaceCleanupBrowseSlice(...a),
+      ...createRuntimeStatusSlice(...a),
+      ...createPullRequestGenerationSlice(...a),
+      ...createCommitMessageGenerationSlice(...a),
+      ...createPinnedTabCloseConfirmSlice(...a),
+      ...createRecentlyClosedTabsSlice(...a),
+      ...createOrcaProfilesSlice(...a),
+      ...createNewIssueDraftSlice(...a),
+      ...createFeedbackDraftSlice(...a),
+      ...createTaskCreationDraftsSlice(...a),
+      ...createRemoteServerUpdatesSlice(...a),
+      ...createTerminalQuickCommandHostsSlice(...a),
+      ...createStructuredSessionLaunchDirectorySlice(...a),
+      ...createStructuredChatSleptAtSlice(...a),
+      ...createWorkspaceAttentionSlice(...a)
+    }),
+    true
   )
+)
+
+export function createTestStore() {
+  return create<AppState>()(createTestState)
+}
+
+export function makeAgentStatusReadState(
+  overrides: Partial<AgentStatusReadState> = {}
+): AgentStatusReadState {
+  return { ...getAgentStatusOwner(createTestStore()).getState(), ...overrides }
 }
 
 export function seedStore(
   store: ReturnType<typeof createTestStore>,
-  state: Partial<AppState>
+  state: Partial<AgentStatusReadState>
 ): void {
   // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
-  store.setState({
+  applyAgentStatusPatch(store, {
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state
   })
@@ -166,4 +177,31 @@ export function runtimeOwnedRepoState(
     ],
     ...extra
   }
+}
+
+export function withAgentStatusFixture<Fixture extends { useAppStore: object }>(
+  fixture: Fixture,
+  readFixture: () => Record<string, unknown>
+): Fixture {
+  const canonical = createTestStore()
+  Object.defineProperty(fixture.useAppStore, 'getState', {
+    get() {
+      applyAgentStatusPatch(canonical, readFixture())
+      return canonical.getState
+    }
+  })
+  if (!('subscribe' in fixture.useAppStore)) {
+    Object.defineProperty(fixture.useAppStore, 'subscribe', { value: () => () => {} })
+  }
+  return fixture
+}
+
+export function createStaticAgentStatusStoreFixture(readFixture: () => Record<string, unknown>) {
+  return withAgentStatusFixture(
+    {
+      useAppStore: <Result>(selector: (state: Record<string, unknown>) => Result): Result =>
+        selector(readFixture())
+    },
+    readFixture
+  )
 }

@@ -48,12 +48,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
@@ -111,12 +110,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
@@ -181,12 +179,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',
@@ -237,12 +234,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',
@@ -323,12 +319,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',
@@ -428,12 +423,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',
@@ -536,12 +530,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
+    vi.doMock('../store', async () => {
+      const { createStaticAgentStatusStoreFixture } =
+        await import('@/store/slices/store-test-helpers')
+      return createStaticAgentStatusStoreFixture(() => storeState)
+    })
     stubAuxiliaryModules()
     vi.stubGlobal(
       'window',

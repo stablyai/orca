@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
@@ -54,7 +55,7 @@ export function registerAgentStatusNestedResumeTests(): void {
             { connectionId: after, worktreeId: newWorkspace },
             { providerSession: { key: 'session_id', id: 'other-codex' } }
           )
-        expect(store.getState().agentStatusByPaneKey[PANE]).toMatchObject({
+        expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]).toMatchObject({
           agentType: agent,
           providerSession: { id: agent === 'claude' ? 'claude-parent' : 'other-codex' }
         })
@@ -86,8 +87,8 @@ export function registerAgentStatusNestedResumeTests(): void {
             { providerSession: { key: 'session_id', id: 'nested-codex' } }
           )
         const record = sleepingRecordFromEntry({
-          state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey[PANE],
+          state: getAgentStatusOwner(store).getState(),
+          entry: getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE],
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

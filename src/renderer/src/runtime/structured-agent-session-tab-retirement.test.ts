@@ -348,31 +348,15 @@ describe('structured agent session tab retirement', () => {
     release()
   })
 
-  it('retires an unmounted created reader only on the owning host', async () => {
+  it('leaves readers untouched while host cleanup runs before committed tab removal', async () => {
     const local = getStructuredAgentSessionReadOwner('session-1', target)
     const remoteTarget = { kind: 'environment', environmentId: 'server-1' } as const
     const remote = getStructuredAgentSessionReadOwner('session-1', remoteTarget)
     const dispose = vi.spyOn(local, 'dispose')
     retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
-    expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
+    expect(findStructuredAgentSessionReadOwner('session-1', target)).toBe(local)
     expect(findStructuredAgentSessionReadOwner('session-1', remoteTarget)).toBe(remote)
-    expect(dispose).toHaveBeenCalledOnce()
+    expect(dispose).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-  })
-
-  it('still closes the host tab if reader disposal fails', async () => {
-    const owner = getStructuredAgentSessionReadOwner('session-1', target)
-    vi.spyOn(owner, 'dispose').mockImplementation(() => {
-      throw new Error('subscription cleanup failed')
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(() =>
-      retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
-    ).not.toThrow()
-    expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
-    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
-    expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
-    expect(warn).toHaveBeenCalledOnce()
-    warn.mockRestore()
   })
 })

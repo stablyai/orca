@@ -31,9 +31,16 @@ const paneStatus: PaneStatus = {
 }
 const storeState = { agentStatusByPaneKey: { 'tab-1:leaf-1': paneStatus } }
 
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
-}))
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
+  }
+  const readFixture = () => storeState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { TooltipProvider } from '@/components/ui/tooltip'

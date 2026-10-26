@@ -1,3 +1,4 @@
+import { useAgentStatusSnapshot } from '@/store/agent-status'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
@@ -15,7 +16,6 @@ import {
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import {
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_CYCLIC_LINEAGE_IDS,
   EMPTY_DELETE_STATE_BY_WORKTREE_ID,
@@ -71,7 +71,7 @@ export function useWorktreeContextMenuModel({
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
   const [menuOpen, setMenuOpen] = useState(false)
-  // Capture Option/Alt at menu open so Developer visibility cannot move items under the pointer.
+  // Capture Option/Alt at open so the Developer submenu cannot shift rows mid-menu.
   const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
@@ -119,9 +119,7 @@ export function useWorktreeContextMenuModel({
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
   )
-  const agentStatusByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
-  )
+  const agentStatusByPaneKey = useAgentStatusSnapshot(menuOpen)
   const structuredChatSleptAtByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.structuredChatSleptAtByPaneKey, EMPTY_STRUCTURED_CHAT_SLEPT_AT)
   )

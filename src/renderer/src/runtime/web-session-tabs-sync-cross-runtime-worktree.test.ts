@@ -15,11 +15,10 @@ import {
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn()
-  }
-}))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('../store/slices/store-test-helpers')
+  return withAgentStatusFixture({ useAppStore: { setState: vi.fn() } }, () => ({}))
+})
 
 // #31983: desktop B mirrors one SSH workspace from two paired runtimes — the host's server, which
 // runs its terminals, and desktop A's app, which hosts a browser tab A opened there.

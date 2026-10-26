@@ -1,5 +1,6 @@
 import { forgetRefusedPaneResume } from '@/lib/forget-refused-pane-resume'
 import { useAppStore } from '@/store'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { PtyPaneStartup } from '../pty-connection-types'
 import type { PtyConnectResult } from '../pty-transport-types'
@@ -70,13 +71,13 @@ export function installSavedResumeStartupCancellation(session: ConnectPanePtySes
     if (ownsPaneStartup) {
       const seeded = session.savedStartupStatus
       if (seeded?.source === source) {
-        useAppStore.setState((current) => {
+        getAgentStatusOwner(useAppStore).transact((transaction) => {
+          const current = transaction.getState()
           if (current.agentStatusByPaneKey[session.cacheKey] !== seeded.entry) {
             return current
           }
-          const next = { ...current.agentStatusByPaneKey }
-          delete next[session.cacheKey]
-          return { agentStatusByPaneKey: next }
+          transaction.setEntry(session.cacheKey, undefined)
+          return undefined
         })
       }
       session.cleanupStartupDraftPasteTimers?.()

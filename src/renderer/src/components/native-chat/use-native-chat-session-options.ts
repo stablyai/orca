@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-import { useAppStore } from '../../store'
+import { useAgentStatusField } from '@/store/agent-status'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
@@ -72,11 +72,10 @@ export function useNativeChatSessionOptions(args: {
     readTerminalScreen,
     paneKey
   } = args
-  const reportedModel = useAppStore((state) =>
-    paneKey ? (state.agentStatusByPaneKey[paneKey]?.model ?? null) : null
-  )
-  const canSwitchOmpModel = useAppStore((state) =>
-    paneKey ? state.agentStatusByPaneKey[paneKey]?.modelSwitchCommand === 'orca-model' : false
+  const reportedModel = useAgentStatusField(paneKey, (entry) => entry?.model ?? null)
+  const canSwitchOmpModel = useAgentStatusField(
+    paneKey,
+    (entry) => entry?.modelSwitchCommand === 'orca-model'
   )
   // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
   const appliedReportedModelRef = useRef<string | null>(null)

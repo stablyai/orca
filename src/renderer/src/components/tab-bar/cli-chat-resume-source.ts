@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation
@@ -20,7 +21,7 @@ export type CliChatResumeSource = {
 }
 
 export function resolveCliChatResumeSource(
-  state: AppState,
+  state: AgentStatusReadState,
   args: { tab: { id: string; worktreeId: string }; paneKey?: string }
 ): CliChatResumeSource | null {
   const conversation = args.paneKey

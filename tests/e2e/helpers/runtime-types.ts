@@ -1,3 +1,5 @@
+import type { AgentStatusOwner } from '../../../src/renderer/src/store/agent-status-commit'
+import type { applyAgentStatusPatch } from '../../../src/renderer/src/store/agent-status-patch'
 import type { AppState } from '../../../src/renderer/src/store/types'
 import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
 import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
@@ -68,6 +70,11 @@ declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     __store?: AppStore
+    __setStorePatch?: (patch: Parameters<typeof applyAgentStatusPatch>[1]) => void
+    __agentStatus?: Pick<
+      AgentStatusOwner,
+      'getState' | 'getSnapshot' | 'subscribeTransitions' | 'transact'
+    >
     __dictationMeterE2E?: { publish(meter: DictationMeterState): void }
     __paneManagers?: Map<string, PaneManagerLike>
     __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactCommitHook

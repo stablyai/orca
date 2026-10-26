@@ -35,23 +35,30 @@ const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo 
   })
 )
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -333,11 +340,12 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -346,7 +354,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     data: string,
     meta: PtyReplayDataMeta
   ): Promise<PaneEvent[]> {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -371,7 +379,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
       pane.terminal.rows = rows
       events.push({ cols, rows })
     })
-    const deps = buildPaneConnectionDeps(() => mockStoreState)
+    const deps = buildPaneConnectionDeps(storeFixture)
     const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS

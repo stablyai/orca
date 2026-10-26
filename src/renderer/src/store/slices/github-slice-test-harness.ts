@@ -1,7 +1,5 @@
+import type { createTestStore } from './store-test-helpers'
 import { vi, type Mock } from 'vitest'
-import { create } from 'zustand'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -117,15 +115,7 @@ export function resetRemoteRuntimeMocks() {
   )
 }
 
-export function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
-  )
-}
+export { createTestStore } from './store-test-helpers'
 
 export function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   return {

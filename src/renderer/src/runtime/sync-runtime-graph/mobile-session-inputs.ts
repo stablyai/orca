@@ -1,3 +1,4 @@
+import type { AgentStatusSnapshot } from '@/store/agent-status-observers'
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
@@ -53,10 +54,10 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
 }
 
 export function buildMobileSessionAgentStatusByWorktree(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
+  agentStatusByPaneKey: AgentStatusSnapshot,
   tabsByWorktree: AppState['tabsByWorktree']
 ): MobileSessionAgentStatusByWorktree {
-  const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
+  const byWorktreeId = new Map<string, Map<string, AgentStatusSnapshot[string]>>()
   const paneKeys = Object.keys(agentStatusByPaneKey)
   if (paneKeys.length === 0) {
     return byWorktreeId

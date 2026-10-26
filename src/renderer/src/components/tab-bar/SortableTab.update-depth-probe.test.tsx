@@ -32,17 +32,23 @@ async function createProbeStore(): Promise<StoreApiWithHook> {
   const globalKey = '__sortableTabProbeStore'
   const globals = globalThis as Record<string, unknown>
   if (!globals[globalKey]) {
-    const { create } = await import('zustand')
-    globals[globalKey] = create<ProbeState>(() => ({
+    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const { useStore } = await import('zustand')
+    const store = createTestStore()
+    store.setState({
       unreadTerminalTabs: {},
       unreadAgentCompletionPanes: {},
-      agentStatusByPaneKey: {},
       agentStatusEpoch: 0,
       runtimePaneTitlesByTabId: {},
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: {},
       keybindings: {}
-    }))
+    })
+    globals[globalKey] = Object.assign(
+      (selector: (state: ReturnType<typeof store.getState>) => unknown) =>
+        useStore(store, selector),
+      store
+    )
   }
   return globals[globalKey] as StoreApiWithHook
 }

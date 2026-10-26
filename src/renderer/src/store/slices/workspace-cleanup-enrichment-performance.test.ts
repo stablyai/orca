@@ -1,5 +1,9 @@
+import type { AgentStatusReadState } from '../agent-status-observers'
+import { getAgentStatusOwner } from '../agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import type { AppState } from '@/store/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
+
 import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanProgress,
@@ -95,7 +99,7 @@ describe('workspace cleanup enrichment performance', () => {
 
     const alphaTab = { id: 'tab-alpha', title: 'shell' }
     const betaTab = { id: 'tab-beta', title: 'shell' }
-    const alphaWorking = {
+    const alphaWorking: AgentStatusReadState['agentStatusByPaneKey'][string] = {
       paneKey: 'tab-alpha:11111111-1111-4111-8111-111111111111',
       state: 'working',
       connectionId: null,
@@ -104,7 +108,7 @@ describe('workspace cleanup enrichment performance', () => {
       stateStartedAt: NOW,
       stateHistory: []
     }
-    const betaDone = {
+    const betaDone: AgentStatusReadState['agentStatusByPaneKey'][string] = {
       paneKey: 'tab-beta:22222222-2222-4222-8222-222222222222',
       state: 'done',
       prompt: '',
@@ -167,15 +171,10 @@ describe('workspace cleanup enrichment performance', () => {
         counts.retainedAgents += 1
       }
     )
-    const agentStatusByPaneKey = countRecordScans(
-      {
-        [alphaWorking.paneKey]: alphaWorking,
-        [betaDone.paneKey]: betaDone
-      } as AppState['agentStatusByPaneKey'],
-      () => {
-        counts.agentStatuses += 1
-      }
-    )
+    const agentStatusByPaneKey: AgentStatusReadState['agentStatusByPaneKey'] = {
+      [alphaWorking.paneKey]: alphaWorking,
+      [betaDone.paneKey]: betaDone
+    }
     const candidates = [
       makeCandidate({
         worktreeId: ALPHA_ID,
@@ -208,7 +207,7 @@ describe('workspace cleanup enrichment performance', () => {
       })
     ) as unknown as AppState['tabsByWorktree']
     const store = createCleanupTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       activeWorktreeId: BETA_ID,
       tabsByWorktree,
       openFiles,
@@ -218,8 +217,24 @@ describe('workspace cleanup enrichment performance', () => {
       retainedAgentsByPaneKey,
       agentStatusByPaneKey,
       lastVisitedAtByWorktreeId: { [ALPHA_ID]: NOW - 1 }
-    } as Partial<AppState>)
+    })
 
+    const live = getAgentStatusOwner(store).getSnapshot()
+    const values = Object.values,
+      entries = Object.entries
+    vi.spyOn(Object, 'values').mockImplementation((value) => {
+      if (value === live) {
+        counts.agentStatuses += 1
+      }
+      return values(value)
+    })
+    vi.spyOn(Object, 'entries').mockImplementation((value) => {
+      if (value === live) {
+        counts.agentStatuses += 1
+      }
+      return entries(value)
+    })
+    resetGlobalCollectionScanCounts(counts)
     const scanPromise = store.getState().scanWorkspaceCleanup()
     expect(counts).toEqual({ openFiles: 1, retainedAgents: 0, agentStatuses: 1 })
     resetGlobalCollectionScanCounts(counts)
@@ -326,7 +341,7 @@ describe('workspace cleanup enrichment performance', () => {
       getForegroundProcess: vi.fn().mockResolvedValue('zsh')
     }
     const store = createCleanupTestStore()
-    store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
+    applyAgentStatusPatch(store, { tabsByWorktree, ptyIdsByTabId })
 
     const scanPromise = store.getState().scanWorkspaceCleanup()
     onProgress?.({
@@ -416,7 +431,7 @@ describe('workspace cleanup enrichment performance', () => {
       getForegroundProcess: vi.fn().mockResolvedValue('zsh')
     }
     const store = createCleanupTestStore()
-    store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
+    applyAgentStatusPatch(store, { tabsByWorktree, ptyIdsByTabId })
 
     const scanPromise = store.getState().scanWorkspaceCleanup()
     onProgress?.({
@@ -471,14 +486,14 @@ describe('workspace cleanup enrichment performance', () => {
 
     await store.getState().scanWorkspaceCleanup()
     const removal = store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         [candidate.worktreeId]: [
           { id: 'post-scan-tab', title: 'shell' }
         ] as AppState['tabsByWorktree'][string]
       },
       ptyIdsByTabId: { 'post-scan-tab': ['post-scan-pty'] }
-    } as Partial<AppState>)
+    })
     focusedScan.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
 
     await expect(removal).resolves.toMatchObject({ removedIds: [candidate.worktreeId] })

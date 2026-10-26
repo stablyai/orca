@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -22,8 +23,9 @@ import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner
 
 export function createTerminalPaneHibernationActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  storeGet: TerminalStoreGet
 ): Pick<TerminalSlice, 'shutdownCompletedAgentPaneForHibernation'> {
+  const get = getAgentStatusOwner({ getState: storeGet }).getTransactionState
   return {
     shutdownCompletedAgentPaneForHibernation: async (worktreeId, opts) => {
       const paneKeys = [opts.paneKey]

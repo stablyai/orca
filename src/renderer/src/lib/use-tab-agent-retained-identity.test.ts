@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -11,7 +12,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { useTabAgent } from './use-tab-agent'
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const TAB_ID = 'tab-1'
@@ -83,8 +84,8 @@ async function renderProbe(tab: TerminalTab = baseTab): Promise<void> {
 describe('useTabAgent retained completion identity', () => {
   beforeEach(() => {
     latestAgent = undefined
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, initialAppState)
+    applyAgentStatusPatch(useAppStore, {
       ptyIdsByTabId: { [TAB_ID]: ['pty-focused', 'pty-sibling'] },
       terminalLayoutsByTabId: { [TAB_ID]: layout() },
       agentStatusByPaneKey: {},
@@ -99,12 +100,12 @@ describe('useTabAgent retained completion identity', () => {
       root = null
     }
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
   })
 
   it('uses focused retained Codex identity over stale Claude launch metadata', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
     })
 
@@ -115,7 +116,7 @@ describe('useTabAgent retained completion identity', () => {
 
   it('keeps a live focused hook ahead of retained identity', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [paneKey]: statusEntry(paneKey, 'gemini', 'working')
       },
@@ -129,7 +130,7 @@ describe('useTabAgent retained completion identity', () => {
 
   it('lets an explicit cross-agent title reclaim a retained idle pane', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
     })
 
@@ -140,7 +141,7 @@ describe('useTabAgent retained completion identity', () => {
 
   it('keeps focused launch metadata ahead of sibling retained identity', async () => {
     const paneKey = makePaneKey(TAB_ID, SIBLING_LEAF_ID)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
     })
 

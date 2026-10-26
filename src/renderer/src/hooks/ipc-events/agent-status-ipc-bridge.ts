@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { syncAgentHookCompletionNotificationsForStoreUpdate } from '../agent-hook-completion-notifications'
 import { registerAgentStatusListeners } from './agent-status-listeners'
@@ -277,8 +278,11 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     ) {
       flushPendingAgentStatuses()
     }
-    syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
   })
+
+  const unsubscribeCompletion = getAgentStatusOwner(useAppStore).subscribeTransitions(
+    ({ next, previous }) => syncAgentHookCompletionNotificationsForStoreUpdate(next, previous)
+  )
 
   return {
     disposeAsyncState: () => {
@@ -295,6 +299,9 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
       }
       liveAgentStatusBurstQueue.length = 0
     },
-    unsubscribeStore: unsubscribeAgentStatusStore
+    unsubscribeStore: () => {
+      unsubscribeAgentStatusStore()
+      unsubscribeCompletion()
+    }
   }
 }

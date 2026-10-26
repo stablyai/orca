@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 /** Require adapters to agree on shared inputs; goldens independently verify the resulting list.
@@ -96,7 +97,7 @@ function desktopList(
   const { sectionRows } = result.current.rowModel
   const lines = projectParityRows(
     sectionRows,
-    desktopActiveRowKeys(sectionRows, useAppStore.getState())
+    desktopActiveRowKeys(sectionRows, getAgentStatusOwner(useAppStore).getState())
   )
   unmount()
   return lines
@@ -104,7 +105,7 @@ function desktopList(
 
 async function installFeed(state: Partial<AppState>) {
   useAppStore.setState(state)
-  const full = useAppStore.getState()
+  const full = getAgentStatusOwner(useAppStore).getState()
   const feed = new SidebarInputsFeed(
     () => feedDomainsFromWindowState(full),
     () => {}

@@ -1,6 +1,7 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState } from '@/store/agent-status'
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess,
@@ -64,7 +65,7 @@ async function isClaudeInForeground(
 }
 
 /** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
-export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
+export function isClaudePaneMidTurn(state: AgentStatusReadState, paneKey: string): boolean {
   const entry = state.agentStatusByPaneKey[paneKey]
   return entry?.agentType === 'claude' && entry.state !== 'done'
 }
@@ -111,7 +112,7 @@ type LocalClaudePane = {
 }
 
 function* localClaudePanesInLane(
-  state: AppState,
+  state: AgentStatusReadState,
   owner: RuntimeClientTarget,
   target: CodexAccountSelectionTarget
 ): Generator<LocalClaudePane> {
@@ -151,7 +152,7 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   target: CodexAccountSelectionTarget
   accountId: string | null
 }): string[] {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const ptyIds: string[] = []
   for (const pane of localClaudePanesInLane(state, args.owner, args.target)) {
     if (
@@ -177,7 +178,7 @@ export async function findMovableClaudeSessions(args: {
     return []
   }
   const candidates: ClaudeSessionMoveCandidate[] = []
-  for (const pane of localClaudePanesInLane(useAppStore.getState(), args.owner, args.target)) {
+  for (const pane of localClaudePanesInLane(getAgentStatusState(), args.owner, args.target)) {
     if (pane.accountId !== args.fromAccountId) {
       continue
     }
@@ -198,7 +199,7 @@ export async function findMovableClaudeSessions(args: {
   }
   // Why: a Windows host cannot see processes inside WSL, so the guest's hooks and shell marks decide.
   if (normalizeCodexAccountSelectionTarget(args.target).runtime === 'wsl') {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     return candidates.filter(
       (candidate) =>
         resolvePaneAgentSessionId(state, makePaneKey(candidate.tabId, candidate.leafId)) !== null
