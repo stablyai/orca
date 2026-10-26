@@ -493,6 +493,39 @@ describe('pty:management IPC handlers', () => {
       expect(current.listSessions).toHaveBeenCalledTimes(2)
     })
 
+    it('keeps a stop its generation already confirmed when that generation fails a later poll', async () => {
+      const current = makeAdapter(5, [])
+      // 'a' exits only at the second poll, so the sweep outlives the legacy failure.
+      current.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValue([])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce(
+          [makeSession('old', { protocolVersion: 3 })].map(
+            ({ protocolVersion: _pv, ...rest }) => rest
+          )
+        )
+        .mockResolvedValueOnce([])
+        .mockRejectedValue(new Error('legacy daemon stopped answering'))
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      // The initial listing was complete, so a later failure does not flag the sweep.
+      expect(result).toEqual({
+        killedCount: 2,
+        remainingCount: 0,
+        killedSessionIds: ['a', 'old']
+      })
+      expect(legacy.listSessions).toHaveBeenCalledTimes(3)
+    })
 
     it("flags a sweep while a newer build's daemon is held, since its sessions are never listed", async () => {
       isHoldingForNewerProtocolDaemonMock.mockReturnValue(true)
