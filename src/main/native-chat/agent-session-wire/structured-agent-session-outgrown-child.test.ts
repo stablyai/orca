@@ -14,10 +14,7 @@ import {
   retireOutgrownStructuredAgentSessionChild,
   structuredAgentSessionChildReportedSignedOut
 } from './structured-agent-session-outgrown-child'
-import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
-import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type {
   AgentJournalItemBody,
@@ -39,7 +36,7 @@ describe('a send after the agent said it is not signed in', () => {
 
   const fence = () => rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
 
-  it('goes to a new agent, and the new agent is kept for the sends after it', async () => {
+  it('recovers a signed-out child for mail after sign-in, then reuses the new child', async () => {
     await foundRestTestChat(rig)
     rig.adapter.dispatch.mockImplementationOnce(async () => ({
       state: 'rejected',
@@ -52,7 +49,18 @@ describe('a send after the agent said it is not signed in', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(1)
     rig.adapter.closeSession.mockClear()
 
-    expect((await rig.host.send(CALLER, restTestSend('signed in now', fence()))).ok).toBe(true)
+    const mail = restTestSend('signed in now: worker mail', fence())
+    mail.body.from = {
+      kind: 'agent',
+      senders: [],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'agent:worker',
+        dispatchId: null,
+        messages: []
+      }
+    }
+    expect((await rig.host.send(CALLER, mail)).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
     expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
@@ -128,6 +136,7 @@ const conversation = (
           visit(item.itemId, index, item.body, item.agentId ? { agentId: item.agentId } : {})
         ),
       itemFence: (itemId: string) => items.find((item) => item.itemId === itemId)?.fence,
+      itemBody: (itemId: string) => items.find((item) => item.itemId === itemId)?.body ?? null,
       newestTurn: (): AgentJournalTurnLifecycle | null =>
         input.newestTurnEndedAt === undefined
           ? null
@@ -235,6 +244,54 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     expect(before.stopAgent).toHaveBeenCalledWith('session')
   })
 
+  it('says why a model change waits, reading wake debt only when open work leaves that open', async () => {
+    const settled: AgentChildWorkView = {
+      ...liveChildWork,
+      state: 'done',
+      membership: 'settled',
+      outcome: 'succeeded',
+      settledAt: 200
+    }
+    const refuse = async (work: Partial<typeof idle>, children: AgentChildWorkView[]) => {
+      const childWork = vi.fn(() => children)
+      const refusal = await retireOutgrownStructuredAgentSessionChild(
+        'session',
+        conversation({ newestTurnEndedAt: 100 }),
+        {
+          work: { ...idle, childWork, ...work },
+          next: {
+            clientMessageId: 'next',
+            fence: 2,
+            payloadFingerprint: 'next',
+            dispatchState: 'pending',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 0,
+            resolvedAt: null
+          },
+          requiresModelTransitionRestart: () => true,
+          stopAgent: vi.fn(async () => undefined),
+          logger: { warn: vi.fn(), error: vi.fn() }
+        }
+      )
+      return { refusal, wakeDebtReads: childWork.mock.calls.length }
+    }
+    const waits = (reason: string, wakeDebtReads: number) => ({
+      refusal: { details: { reason } },
+      wakeDebtReads
+    })
+    expect(await refuse({ childWorkOpen: () => true }, [settled])).toMatchObject(
+      waits('backgroundTasksRunning', 0)
+    )
+    expect(await refuse({}, [settled])).toMatchObject(waits('backgroundTasksRunning', 1))
+    expect(await refuse({ providerHoldsDispatch: () => true }, [settled])).toMatchObject(
+      waits('backgroundTasksRunning', 1)
+    )
+    expect(await refuse({ providerHoldsDispatch: () => true }, [])).toMatchObject(
+      waits('messagesUnsettled', 1)
+    )
+  })
+
   it('logs a stop that fails and lets the send go on', async () => {
     const { warn } = await retire(
       signedOut,
@@ -276,87 +333,6 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       expect(
         (await retire(askChild, {}, undefined, async () => null)).stopAgent
       ).not.toHaveBeenCalled()
-    })
-
-    describe('against the mode a start launches with', () => {
-      // Model Claude’s saved catalog: resolved default alias, auto on every model except haiku.
-      const listed = [
-        { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
-        { id: 'sonnet', isDefault: false, supportsAutoMode: true },
-        { id: 'haiku', isDefault: false }
-      ]
-      const catalog = (rows: typeof listed) => ({
-        peek: () => null,
-        read: vi.fn(async () => ({
-          origin: 'probe' as const,
-          fetchedAt: 1,
-          models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
-        })),
-        retainedLiveModelIds: vi.fn(async () => []),
-        recordLiveListing: vi.fn(),
-        prewarm: vi.fn(async () => undefined),
-        stop: vi.fn(),
-        providerStarted: vi.fn()
-      })
-      const launch = ({ permissionMode, ...options }: Record<string, string>, rows = listed) => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch mode reads only the record's id, agent, options and mode.
-        const record = {
-          sessionId: 'session',
-          provider: 'claude',
-          options,
-          permissionMode
-        } as AgentSessionRecord
-        return () =>
-          structuredAgentSessionLaunchPermission(
-            { agents: claudeAndCodexDeclared(), modelCatalog: catalog(rows) },
-            record
-          )
-      }
-      const stoppedAfterLaunch = async (
-        launched: AgentChatPermissionChoice,
-        current: () => Promise<AgentChatPermissionChoice | null>
-      ) =>
-        (await retire({ child: childAt({ permissionMode: launched }) }, {}, undefined, current))
-          .stopAgent.mock.calls.length > 0
-
-      it('restarts Full access or Accept edits into Ask when auto is not confirmed', async () => {
-        const unconfirmed = [
-          launch({ model: 'haiku', permissionMode: 'auto' }),
-          launch({ permissionMode: 'auto' }, [{ id: 'opus[1m]', isDefault: true }])
-        ]
-        for (const autoPick of unconfirmed) {
-          await expect(autoPick()).resolves.toBe('ask')
-          expect(await stoppedAfterLaunch('full-access', autoPick)).toBe(true)
-          expect(await stoppedAfterLaunch('accept-edits', autoPick)).toBe(true)
-          expect(await stoppedAfterLaunch('ask', autoPick)).toBe(false)
-        }
-      })
-
-      it('never restarts a child it just started, from an alias or a resolved id', async () => {
-        const records: Record<string, string>[] = [
-          { permissionMode: 'auto' },
-          { model: 'default', permissionMode: 'auto' },
-          { model: 'opus[1m]', permissionMode: 'auto' },
-          { model: 'sonnet', permissionMode: 'auto' },
-          { model: 'haiku', permissionMode: 'auto' },
-          { model: 'claude-opus-5-5[1m]', permissionMode: 'auto' }
-        ]
-        const runsAuto = [true, true, true, true, false, false]
-        for (const [index, options] of records.entries()) {
-          const current = launch(options)
-          const launched = await current()
-          expect(launched).toBe(runsAuto[index] ? 'auto' : 'ask')
-          expect(await stoppedAfterLaunch(launched!, current)).toBe(false)
-        }
-      })
-
-      // A resolved ID initially launches Ask; the reported catalog alias enables auto after one restart.
-      it('settles after one restart once a resolved id is reported as its alias', async () => {
-        const first = await launch({ model: 'claude-opus-5-5[1m]', permissionMode: 'auto' })()
-        const reported = launch({ model: 'opus[1m]', permissionMode: 'auto' })
-        expect(await stoppedAfterLaunch(first!, reported)).toBe(true)
-        expect(await stoppedAfterLaunch((await reported())!, reported)).toBe(false)
-      })
     })
 
     it('never reads the mode for a child launched with none', async () => {

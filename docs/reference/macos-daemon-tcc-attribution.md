@@ -109,9 +109,8 @@ The helper declares no links, documents or types, has a lower `CFBundleVersion` 
 launchd leaves no record, but another process running the copy's executable directly can make
 macOS register it, so retirement runs `lsregister -u` on the bundle before deleting it.
 
-The original helper used the official Node UUID, shared by that release and architecture.
-The worker-wakeup backport builds Node from source and has a different UUID; its launchd/TCC
-attribution still needs verification. Local Network access passed in the original signed spike:
+The helper's main-executable UUID is Node's, shared by every official Node 24.21.0 binary of that
+architecture, so it is not unique to Orca. Local Network access still passed in the signed spike:
 macOS matched the client by its code signature, and the job's `AssociatedBundleIdentifiers` ties it
 to Orca. Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
 

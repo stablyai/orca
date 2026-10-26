@@ -273,6 +273,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Police",
+        "fontFamilyDescription": "Police des messages, de l’activité et de la zone de saisie.",
+        "inheritFont": "Même police que l’IDE",
+        "fontPreviewLabel": "Aperçu de la police du chat",
+        "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
         "title": "Chat",
         "textSize": "Taille du texte",
         "textSizeDescription": "Messages, activité des outils et zone de message. {{increase}} / {{decrease}} dans un chat modifient aussi ce réglage.",

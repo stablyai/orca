@@ -3,7 +3,7 @@ import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { release } from 'node:os'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
-import { buildXtermConptyOptions, parseWindowsBuildNumber } from '../../shared/xterm-conpty-options'
+import { windowsPtyForOwnerBackend } from '../../shared/xterm-conpty-options'
 
 /** Couple barrier emissions and snapshot ownership so neither can lag the output plane. */
 export function createSessionOutputPipeline(opts: {
@@ -24,12 +24,7 @@ export function createSessionOutputPipeline(opts: {
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
-    // Every Windows daemon PTY is ConPTY, WSL shells included; ConPTY repaints its own grid after a
-    // resize, so the emulator must not pull scrollback into it (xterm's windowsPty resize model).
-    windowsPty:
-      opts.ownerBackend && opts.ownerBackend !== 'posix-pty'
-        ? buildXtermConptyOptions(parseWindowsBuildNumber(release()))
-        : undefined,
+    windowsPty: windowsPtyForOwnerBackend(opts.ownerBackend, release()),
     getTerminalOwner: () => barrier?.getOwner()
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({

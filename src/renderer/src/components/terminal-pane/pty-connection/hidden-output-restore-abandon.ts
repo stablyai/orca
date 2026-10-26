@@ -17,7 +17,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
 
   session.abandonHiddenOutputRestoreAndDrainPendingForeground = function (
     expectedPtyId: string,
-    opts: { quiet?: boolean; rearmRemote?: boolean } = {}
+    opts: { quiet?: boolean; rearmRemote?: boolean; preserveReplayState?: boolean } = {}
   ): void {
     if (
       session.transport.getPtyId() !== expectedPtyId ||
@@ -68,8 +68,8 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
       session.clearHiddenOutputRestoreFloodRepaintTimer()
       session.writeRestoreUnavailableWarning()
     }
-    // Only quiet flood abandonment lacks another grounding path; warning and remote re-arm already ground before drain.
-    else if (!rearmedRemoteRestore) {
+    // Intact replay tails must reach queued live bytes without a parser or rendition reset.
+    else if (!rearmedRemoteRestore && !opts.preserveReplayState) {
       session.writeAbandonedRestoreGap()
     }
     if (hadPendingOverflow) {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
   nativeChatReasoningHeadlineText,
   selectNativeChatLiveReasoning
@@ -66,10 +65,6 @@ describe('the open block the live line discloses', () => {
     const child = row('r-2', 'reasoning', 'Child thinking', { state: 'running', agentId: 'sub-1' })
     expect(select([prompt, child])).toBeNull()
     expect(select([prompt, open, child])).toBe(open)
-  })
-
-  it('keys one block the same for the line and the row, apart from tool runs', () => {
-    expect(nativeChatReasoningDisclosureKey('r-1')).toBe('reasoning:r-1')
   })
 })
 

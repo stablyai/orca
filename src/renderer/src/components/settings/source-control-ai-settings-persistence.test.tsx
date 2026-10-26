@@ -9,7 +9,7 @@ import {
   persist,
   settingsModel,
   type SettingsPersistenceModel
-} from './settings-persistence-test-fixture'
+} from './__fixtures__/settings-persistence-test-fixture'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))

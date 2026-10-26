@@ -29,9 +29,9 @@ device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`
 `exec` work on both backends, with backend-specific output for `ax` — a `uiautomator` node
 tree on Android, a serve-sim node tree on iOS.
 
-Camera and sensor injection are not wrapped; Android virtual-scene is out of scope. Device
-control is local to the host that owns the SDK, so remote and SSH device control is out of
-scope.
+Camera and sensor injection are not wrapped; Android virtual-scene is out of scope. Commands
+drive the SDK and devices on the host that runs the Orca runtime, including a headless
+`orca serve` or SSH host.
 
 ## Prerequisites
 

@@ -16,8 +16,16 @@ import {
   type NotificationDispatchMockState
 } from './notification-dispatch-test-harness'
 
-beforeEach(() => setPresenceGated(false))
-afterEach(() => setPresenceGated(true))
+const NOW = 1_800_000_000_000
+
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  setPresenceGated(false)
+})
+afterEach(() => {
+  vi.restoreAllMocks()
+  setPresenceGated(true)
+})
 
 vi.mock('@/store', async () => {
   const harness = await import('./notification-dispatch-test-harness')
@@ -81,7 +89,7 @@ describe('dispatchTerminalNotification', () => {
   })
 
   it('builds the notification id from a completion snapshot, not the pinned working row', () => {
-    const pinnedWorkingStartedAt = Date.now() - 60_000
+    const pinnedWorkingStartedAt = NOW - 60_000
     // Match row agent identity to the event or rejection makes both fallback outcomes pass vacuously.
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
@@ -89,7 +97,7 @@ describe('dispatchTerminalNotification', () => {
       agentType: 'claude',
       terminalTitle: 'claude'
     })
-    const turnCompletedAt = Date.now()
+    const turnCompletedAt = NOW
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
@@ -480,7 +488,7 @@ describe('dispatchTerminalNotification', () => {
   it('uses accepted hook snapshot timing for the notification id when the live store row is gone before dispatch', () => {
     mockState.ptyIdsByTabId = {}
     mockState.agentStatusByPaneKey = {}
-    const stateStartedAt = Date.now() - 1_000
+    const stateStartedAt = NOW - 1_000
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
@@ -558,7 +566,7 @@ describe('dispatchTerminalNotification', () => {
         prompt: 'codex prompt',
         agentType: 'codex',
         lastAssistantMessage: 'Codex done.',
-        stateStartedAt: Date.now()
+        stateStartedAt: NOW
       }
     })
 
@@ -629,8 +637,8 @@ describe('dispatchTerminalNotification', () => {
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
       prompt: 'still running',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
+      updatedAt: NOW - 60_000,
+      stateStartedAt: NOW - 60_000,
       lastAssistantMessage: undefined
     })
 
@@ -648,8 +656,8 @@ describe('dispatchTerminalNotification', () => {
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
       prompt: 'agent crashed before its done hook',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
+      updatedAt: NOW - 60_000,
+      stateStartedAt: NOW - 60_000,
       lastAssistantMessage: undefined
     })
 
@@ -685,8 +693,8 @@ describe('dispatchTerminalNotification', () => {
       mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
         state: 'working',
         agentType,
-        updatedAt: Date.now() - 60_000,
-        stateStartedAt: Date.now() - 60_000,
+        updatedAt: NOW - 60_000,
+        stateStartedAt: NOW - 60_000,
         lastAssistantMessage: undefined
       })
 
@@ -705,8 +713,8 @@ describe('dispatchTerminalNotification', () => {
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
       agentType: 'omp',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
+      updatedAt: NOW - 60_000,
+      stateStartedAt: NOW - 60_000,
       lastAssistantMessage: undefined
     })
 
@@ -723,8 +731,8 @@ describe('dispatchTerminalNotification', () => {
   it('allows title-only completion after active hook status becomes stale', () => {
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
-      updatedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1,
-      stateStartedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1,
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       lastAssistantMessage: undefined
     })
 
@@ -741,12 +749,12 @@ describe('dispatchTerminalNotification', () => {
   })
 
   it('drops a delayed completion snapshot when the pane has already started a newer turn', () => {
-    const previousDoneStartedAt = Date.now() - 10_000
+    const previousDoneStartedAt = NOW - 10_000
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
       prompt: 'new prompt already running',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
+      updatedAt: NOW,
+      stateStartedAt: NOW,
       lastAssistantMessage: undefined
     })
 
@@ -824,7 +832,7 @@ describe('dispatchTerminalNotification', () => {
     mockState.ptyIdsByTabId = {}
     mockState.agentStatusByPaneKey[paneKey] = {
       ...makeAgentStatus(paneKey),
-      updatedAt: Date.now() - 11_000
+      updatedAt: NOW - 11_000
     }
 
     dispatchTerminalNotification('wt-primary', {

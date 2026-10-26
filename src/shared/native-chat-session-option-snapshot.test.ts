@@ -238,7 +238,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
   })
 
-  it('routes Codex model changes through its typed TUI picker', () => {
+  it('describes Codex model changes as agent-picker actions', () => {
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CODEX_SESSION_OPTION_CATALOG,
       models: CODEX_SESSION_OPTION_CATALOG.models,
@@ -368,7 +368,7 @@ describe('defaults on load', () => {
     })
     const effort = snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort).toMatchObject({ valueSource: 'default' })
-    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeDefined()
+    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBe('high')
   })
 })
 
@@ -427,7 +427,7 @@ describe('a boolean option always carries a value to render', () => {
     expect(effort).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('does not let the resolved display value reach the composed --model argument', () => {
+  it('includes composed launch defaults only when requested', () => {
     // Composed model uses caller picks, never display descriptors; resolving a switch cannot alter dispatch.
     expect(resolveAgentSessionOptionLaunch('cursor', { model: 'claude-opus-4-8' })).toEqual({
       args: ['--model', 'claude-opus-4-8-thinking-high'],

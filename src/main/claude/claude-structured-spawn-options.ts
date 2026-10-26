@@ -80,11 +80,26 @@ export function claudeStructuredSpawnOptions(input: {
 export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
-    'translator' | 'launchedModel' | 'fastModeAtStart' | 'appliedInputOptions'
+    | 'translator'
+    | 'launchedModel'
+    | 'launchPermissionMode'
+    | 'fastModeAtStart'
+    | 'appliedInputOptions'
   >,
-  spawn: Pick<ClaudeStructuredSpawnOptions, 'options' | 'fastModeAtStart'>
+  spawn: ClaudeStructuredSpawnOptions
 ): void {
   session.launchedModel = spawn.options.get('model') ?? null
+  const configuredModel = spawn.sdkOptions.extraArgs?.model
+  const modelInput = typeof configuredModel === 'string' ? configuredModel : spawn.sdkOptions.model
+  session.launchPermissionMode = Object.hasOwn(
+    spawn.sdkOptions.extraArgs ?? {},
+    'dangerously-skip-permissions'
+  )
+    ? 'bypassPermissions'
+    : spawn.sdkOptions.permissionMode
+  if (modelInput !== undefined) {
+    session.appliedInputOptions.set('model', modelInput)
+  }
   session.fastModeAtStart = spawn.fastModeAtStart
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {

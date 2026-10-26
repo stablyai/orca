@@ -149,35 +149,22 @@ export function requiresEnvOptIn(source) {
   })
 }
 
-// Treat any runs-on label/array/group/matrix that may be Windows as a lane; simple matrix axes resolve
-// from their declared values and an unresolvable expression fails closed for review.
-export function couldRunOnWindows(runsOn, matrix = {}) {
+// Treat any runs-on label/array/group/matrix that may be Windows as a lane; unresolvable expression fails closed for review.
+export function couldRunOnWindows(runsOn) {
   const labels =
     typeof runsOn === 'string'
       ? [runsOn]
       : Array.isArray(runsOn)
         ? runsOn
         : [...(runsOn?.labels ?? []), runsOn?.group ?? ''].flat()
-  return labels.some((label) => {
-    const axis = /^\$\{\{\s*matrix\.(\w+)\s*\}\}$/.exec(String(label))?.[1]
-    const values = axis && matrix[axis]
-    if (Array.isArray(values) && values.length > 0) {
-      const included = Array.isArray(matrix.include)
-        ? matrix.include.flatMap((entry) => (entry[axis] === undefined ? [] : [entry[axis]]))
-        : []
-      return [...values, ...included].some((value) => couldRunOnWindows(value))
-    }
-    return /windows/i.test(String(label)) || String(label).includes('${{')
-  })
+  return labels.some((label) => /windows/i.test(String(label)) || String(label).includes('${{'))
 }
 
 /** The Windows job's curated files: the boundary list plus any argv the lane steps spell out. */
 function readWindowsWorkflow() {
   const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
   const jobs = Object.entries(workflow.jobs ?? {})
-  const windowsJobs = jobs.filter(([, job]) =>
-    couldRunOnWindows(job?.['runs-on'], job?.strategy?.matrix)
-  )
+  const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
   const runs = WINDOWS_LANE_STEPS.map((name) => {
     const step = steps.find((candidate) => candidate?.name === name)
@@ -410,21 +397,6 @@ describe('manual opt-in classification', () => {
 })
 
 describe('Windows runner detection', () => {
-  it('resolves explicit matrix axes while keeping unknown expressions conservative', () => {
-    expect(couldRunOnWindows('${{ matrix.os }}', { os: ['macos-15', 'macos-15-intel'] })).toBe(
-      false
-    )
-    expect(couldRunOnWindows('${{ matrix.os }}', { os: ['macos-15', 'windows-2022'] })).toBe(true)
-    expect(couldRunOnWindows('${{ matrix.os }}', { os: [] })).toBe(true)
-    expect(
-      couldRunOnWindows('${{ matrix.os }}', {
-        os: ['macos-15'],
-        include: [{ os: 'windows-2022' }]
-      })
-    ).toBe(true)
-    expect(couldRunOnWindows('${{ inputs.runner }}', { os: ['macos-15'] })).toBe(true)
-  })
-
   it('reads every runs-on spelling that could land on Windows', () => {
     expect(couldRunOnWindows('windows-2022')).toBe(true)
     // The spelling that would have slipped past an equality test.

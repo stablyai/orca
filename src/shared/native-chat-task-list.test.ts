@@ -59,7 +59,7 @@ describe('normalizeNativeChatTaskList', () => {
     ).toEqual(list(task('One'), task('Two')))
   })
 
-  it.each([undefined, null, 42, [], '{', '{}', { todos: null }, { todos: [{}] }])(
+  it.each([[undefined], [null], [42], [[]], ['{'], ['{}'], [{ todos: null }], [{ todos: [{}] }]])(
     'returns null for malformed input %j',
     (input) => {
       expect(normalizeNativeChatTaskList('TodoWrite', input)).toBeNull()

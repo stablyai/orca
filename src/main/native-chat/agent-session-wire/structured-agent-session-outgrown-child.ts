@@ -1,8 +1,12 @@
-// Refresh login/permission mode by replacing outgrown children before sending; agents read them only at startup.
+// Replace outgrown launch construction before user input; work the process owns keeps its child.
 
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  readWholeAgentSessionFailureFact
+} from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -12,9 +16,51 @@ import {
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
+
+export type StructuredAgentSessionChildTransition =
+  | AgentSessionRefusalReference
+  | ((providerTurn: () => string | null) => boolean)
+  | void
+
+export async function rejectBlockedStructuredAgentSessionTransition(
+  deps: {
+    retireOutgrownChild: (
+      sessionId: string,
+      next: AgentJournalSubmission
+    ) => Promise<StructuredAgentSessionChildTransition>
+    sessions: ReadonlyMap<string, Pick<StructuredAgentSessionHostSession, 'journal'>>
+    conversationFence: (sessionId: string) => number
+    failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
+  },
+  sessionId: string,
+  next: AgentJournalSubmission
+): Promise<boolean | ((providerTurn: () => string | null) => boolean)> {
+  const refusal = await deps.retireOutgrownChild(sessionId, next)
+  if (!refusal || typeof refusal === 'function') {
+    return refusal ?? false
+  }
+  await deps.sessions.get(sessionId)?.journal.resolveDispatch({
+    clientMessageId: next.clientMessageId,
+    state: 'rejected',
+    fence: deps.conversationFence(sessionId),
+    ...agentSessionFailureWords(agentSessionFailureFact('restartFailed', { refusal }), {
+      ...deps.failureTextContext(sessionId),
+      surface: 'rejection'
+    })
+  })
+  return true
+}
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody'
+  > & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -87,19 +133,65 @@ export async function retireOutgrownStructuredAgentSessionChild(
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    turnScopedSteering?: boolean
+    next?: AgentJournalSubmission
+    requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
-): Promise<void> {
-  if (
-    !session ||
-    !(
-      structuredAgentSessionChildReportedSignedOut(session) ||
-      (await launchedWithOtherPermissionMode(session.child, deps.launchPermission))
-    ) ||
-    structuredAgentSessionChildHasOpenWork(deps.work) ||
-    owesWakeUp(session.journal, deps.work.childWork())
-  ) {
+): Promise<StructuredAgentSessionChildTransition> {
+  if (!session) {
+    return
+  }
+  const body =
+    deps.next && session.journal.itemBody(agentJournalSubmissionKey(deps.next.clientMessageId))
+  const mail = body?.kind === 'message' && body.from?.orchestration?.message === 'mail-notice'
+  const child = session.child
+  const turnId =
+    deps.turnScopedSteering &&
+    child?.phase === 'ready' &&
+    !child.close &&
+    body?.kind === 'message' &&
+    !body.command &&
+    !mail &&
+    deps.next?.queuedMessageId === undefined
+      ? deps.work.currentWork()?.activeTurnId()
+      : null
+  const steer =
+    turnId && child
+      ? (providerTurn: () => string | null) =>
+          session.child === child &&
+          !child.close &&
+          deps.work.currentWork()?.activeTurnId() === turnId &&
+          providerTurn() === turnId
+      : undefined
+  const keepOptions = mail || steer !== undefined
+  const otherReason =
+    structuredAgentSessionChildReportedSignedOut(session) ||
+    (!keepOptions && (await launchedWithOtherPermissionMode(session.child, deps.launchPermission)))
+  const modelTransition =
+    !keepOptions && deps.next && deps.requiresModelTransitionRestart?.(deps.next) === true
+  if (!otherReason && !modelTransition) {
+    return steer
+  }
+  const open = structuredAgentSessionChildHasOpenWork(
+    modelTransition && !otherReason ? { ...deps.work, hasOpenDispatch: () => false } : deps.work
+  )
+  if (open && !modelTransition) {
+    return steer
+  }
+  // Wake debt is derived only where it decides: keeping an idle child, or why a model change waits.
+  const background =
+    (open && deps.work.childWorkOpen()) || owesWakeUp(session.journal, deps.work.childWork())
+  if (open || background) {
+    return modelTransition
+      ? {
+          code: 'agent_session_operation_invalid',
+          details: { reason: background ? 'backgroundTasksRunning' : 'messagesUnsettled' }
+        }
+      : undefined
+  }
+  if (!session.child || session.child.phase === 'starting' || session.child.close) {
     return
   }
   await deps.stopAgent(sessionId).catch((error: unknown) =>

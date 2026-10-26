@@ -672,6 +672,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Fonte",
+        "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
+        "inheritFont": "Mesma fonte do IDE",
+        "fontPreviewLabel": "Prévia da fonte do chat",
+        "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Chat",
         "textSize": "Tamanho do texto",
         "textSizeDescription": "Mensagens, atividade das ferramentas e caixa de mensagem. {{increase}} / {{decrease}} em um chat também alteram este tamanho.",

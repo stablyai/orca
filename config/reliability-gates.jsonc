@@ -485,79 +485,6 @@
       "demotionRule": "Keep experimental or demote if recovery signals an unverified owner, treats loss of contact as exit, reports success before descendant exit, adds background scanning, or lets a recovery failure block the current-daemon restart."
     },
     {
-      "id": "terminal-runtime.darwin-worker-wakeup",
-      "title": "Idle Darwin workers refresh their waits and continue delivering asynchronous terminal work",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "terminal-runtime",
-      "layer": "native-runtime",
-      "surfaces": ["packaged macOS terminal helper", "terminal input", "terminal creation"],
-      "platforms": ["macos"],
-      "providers": ["daemon", "local", "ssh", "remote-runtime", "mobile-relay"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["daemon"],
-      "coverageNotes": "The repository arm64 build and x64 build under Rosetta passed real PTY input, filesystem/DNS/crypto and idle-wait generation checks; physical ARM and Intel CI passed on Node 24.21.0. Node 24.22.1 arm64 passed the same native oracle locally; its official unpatched runtime failed idle refresh. Fresh physical ARM/Intel CI remains required. An isolated signed installed helper with patched Node also served a PTY. A complete package build and older macOS remain unverified. Standalone/SSH servers and the Electron fallback do not receive the patch; mobile/relay inherit only their execution host runtime.",
-      "motivatingLinks": [
-        "docs/bug-reproductions/darwin-worker-wakeup.md",
-        "https://github.com/libuv/libuv/pull/5351"
-      ],
-      "invariant": "A packaged Darwin terminal worker must not remain indefinitely parked on a stale condition generation while asynchronous work is queued; process and session ownership must remain unchanged.",
-      "oracle": "Four real idle workers each advance their low 32-bit psynch wait generation within the 31-second observation interval, with at most sixteen generation steps, and real PTY input plus filesystem/DNS/crypto work completes. The upstream half-range witness stalls unpatched workers with queued jobs and completes with the patch.",
-      "commands": ["ORCA_BACKGROUND_LAUNCH=1 node config/scripts/verify-darwin-terminal-node.mjs"],
-      "testFiles": ["config/scripts/verify-darwin-terminal-node.mjs"],
-      "assertionRefs": [
-        {
-          "file": "config/scripts/verify-darwin-terminal-node.mjs",
-          "assertions": ["Runtime proof failed"]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-10-23",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/verify-darwin-terminal-node.mjs",
-          "result": "passed",
-          "durationSeconds": 2231,
-          "summary": "Cold source build of pinned Node 24.22.1 arm64 passed architecture/minimum-OS checks, real PTY input, fs/DNS/crypto and all four bounded idle-wait generation checks. Official Node 24.22.1 failed the same idle-refresh assertion after passing the initial PTY and I/O checks. Timing includes cold compilation and source cleanup."
-        },
-        {
-          "date": "2026-10-15",
-          "runner": "manual",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/verify-darwin-terminal-node.mjs",
-          "result": "passed",
-          "durationSeconds": 32,
-          "summary": "Repository-built Node 24.21.0 arm64 passed real PTY input, fs/DNS/crypto and all four bounded idle-generation checks. Cached verifier execution took about 32 seconds; this is not full package-build proof."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 10800,
-        "scope": "Cold pinned Node source compilation dominates; Intel exceeded the initial 90-minute job allowance, now 180 minutes. Cached native runtime probe takes about 32 seconds. No CI soak yet."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "One relative timeout per idle worker per 30 seconds, at most eight wakes/minute for the default pool; immediate signals remain. Generation advancement is bounded by the native probe. No application polling or session scans added."
-      },
-      "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Focused native and manual Node checks passed on arm64; both physical architectures passed on Node 24.21.0; the updated recipe and repeated CI soak remain pending."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Upstream real-worker half-range witness: baseline four idle workers with zero jobs/callbacks and queued work; patch four jobs/callbacks and empty queue. An ordinary sequential workload also reproduced the exact half-range signature, zero fresh stat callbacks and no real PTY echo after 15 seconds. The patched runtime completed 30 million sequential jobs, a fresh stat and real PTY echo. Idle-generation regression fails without the patch and passes with it."
-      },
-      "promotionCriteria": [
-        "Collect physical arm64/Intel CI, signed helper launch and older macOS evidence, then repeated soak before promotion."
-      ],
-      "knownGaps": [
-        "Ordinary sequential jobs reproduced half-range waiter starvation and PTY input loss; scheduling is intermittent and the exact Orca job-producer sequence remains unknown.",
-        "No older macOS, full package build, launchd/TCC attribution or battery measurement yet.",
-        "Existing daemons require deliberate restart; standalone/SSH macOS servers and Electron fallback remain unpatched."
-      ],
-      "demotionRule": "Keep experimental until native runtime and signed packaging evidence is stable; investigate failures without weakening generation bounds or silently using an official unpatched binary."
-    },
-    {
       "id": "agent-session.delayed-terminal-launch",
       "title": "Delayed terminal launches retain their harness preparation and recover process discovery",
       "maturity": "experimental",
@@ -17165,6 +17092,9 @@
           "assertions": [
             "recovers small live output when the deadline interrupts an answered snapshot",
             "recovers partially covered live output when the deadline interrupts an answered snapshot",
+            "recovers split escape live output when the deadline interrupts an answered snapshot",
+            "recovers styled live output when the deadline interrupts an answered snapshot",
+            "recovers styled gap live output when the deadline interrupts an answered snapshot",
             "recovers unmapped live output when the deadline interrupts an answered snapshot",
             "recovers unhide gap live output when the deadline interrupts an answered snapshot",
             "recovers fresh snapshot gap live output when the deadline interrupts an answered snapshot",
