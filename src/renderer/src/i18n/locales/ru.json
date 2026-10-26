@@ -82,7 +82,9 @@
         "fontFamilyDescription": "Шрифт сообщений, действий и поля ввода.",
         "inheritFont": "Как в IDE",
         "fontPreviewLabel": "Предпросмотр шрифта чата",
-        "fontPreview": "Съешь же ещё этих мягких французских булок, да выпей чаю."
+        "fontPreview": "Съешь же ещё этих мягких французских булок, да выпей чаю.",
+        "fontKeywordTypeface": "гарнитура",
+        "fontKeywordTypography": "типографика"
       },
       "statusBar": {
         "claudeToggleDescription": "Показывать расход токенов и стоимость Claude для активного рабочего пространства.",

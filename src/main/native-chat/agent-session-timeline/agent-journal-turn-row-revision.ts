@@ -196,7 +196,7 @@ export function writeAgentJournalTurnRow(
     if (write.lifecycle && 'identity' in target) {
       sink.appendItem(target.identity, write.lifecycle, options)
       if (publish) {
-        sink.publish()
+        sink.publish({ criticalRoot: delivery.criticalRoot })
       }
     }
     return

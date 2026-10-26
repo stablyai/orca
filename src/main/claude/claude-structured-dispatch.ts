@@ -7,7 +7,10 @@ import {
   waitForReplay
 } from './claude-structured-dispatch-waiters'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  AgentSessionDispatchOutcome,
+  StructuredAgentSessionAdapter
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import {
@@ -118,6 +121,9 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     sentUuid?: string
     signal?: AbortSignal
+    admitPreparedInput?: Parameters<
+      StructuredAgentSessionAdapter['dispatch']
+    >[0]['admitPreparedInput']
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -133,7 +139,7 @@ export async function dispatchClaudeTurn(
   // Classify the mapped trailing prompt so command detection matches what Claude receives.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
   const sentUuid = input.sentUuid ?? randomUUID()
-  const arm = () => {
+  const arm = (requestedAt = input.requestedAt) => {
     ++session.dispatchSequence
     // Invalidate context reports requested before this send.
     session.translator?.markContextActivity()
@@ -143,7 +149,7 @@ export async function dispatchClaudeTurn(
       sentUuid,
       claudeDispatchContentKey(content),
       input.clientMessageId ?? null,
-      input.requestedAt ?? null
+      requestedAt ?? null
     )
   }
   const message = {
@@ -153,7 +159,7 @@ export async function dispatchClaudeTurn(
     parent_tool_use_id: null,
     session_id: session.providerSessionId
   }
-  const pending = { replay: beforeDispatch ? undefined : arm() }
+  const pending = { replay: beforeDispatch || input.admitPreparedInput ? undefined : arm() }
   const authorize = beforeDispatch
     ? async () => {
         await beforeDispatch()
@@ -164,9 +170,24 @@ export async function dispatchClaudeTurn(
       }
     : undefined
   try {
-    await (authorize
-      ? session.connection.send(message, authorize)
-      : session.connection.send(message))
+    if (input.admitPreparedInput) {
+      await beforeDispatch?.()
+      await input.admitPreparedInput(
+        (requestedAt) =>
+          new Promise<void>((resolve) => {
+            if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+              throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
+            }
+            pending.replay = arm(requestedAt)
+            resolve(session.connection.send(message))
+          }),
+        () => session.translator?.currentTurnId ?? null
+      )
+    } else {
+      await (authorize
+        ? session.connection.send(message, authorize)
+        : session.connection.send(message))
+    }
   } catch (error) {
     const replay = pending.replay
     if (!replay) {

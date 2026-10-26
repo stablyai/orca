@@ -63,7 +63,8 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     expect(claude.child(SESSION).launch.options.model).toBe(RETIRED)
     expect(host.deps.store.getRecord(SESSION)?.options?.model).toBe(RETIRED)
 
-    claude.child(SESSION).handlers.onMessage?.(modelNotFoundReply('reply-1'))
+    const reply = modelNotFoundReply('reply-1')
+    claude.child(SESSION).handlers.onMessage?.(reply)
     await host.flushStreamedEvents(SESSION)
     expect(host.deps.store.getRecord(SESSION)?.options).toMatchObject({
       model: RETIRED,
@@ -88,6 +89,18 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     )
     const options = structuredAgentSessionSendSelection(reopened)
     expect(options).toEqual({ model: answer.current.model, effort: 'high' })
+    // Source-derived CLI 2.1.302 failed root result; retry starts after it ends.
+    claude.child(SESSION).handlers.onMessage?.({
+      type: 'result',
+      uuid: 'result-1',
+      session_id: claudeSessionIdForOrcaSession(SESSION),
+      parent_tool_use_id: null,
+      subtype: 'success',
+      is_error: true,
+      terminal_reason: 'api_error',
+      result: reply.message.content[0]!.text
+    })
+    await host.flushStreamedEvents(SESSION)
     const dispatch = vi.spyOn(host.deps.adapter, 'dispatch')
     const setModel = vi.spyOn(claude.child(SESSION).connection, 'setModel')
     const body = hostTestMessage('try the replacement')

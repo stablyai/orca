@@ -4,10 +4,7 @@ import type { AgentJournalDispatchRejection } from '../../shared/agent-session-f
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type {
-  StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionOptionsReportedEvent
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type * as SessionAdapter from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -63,7 +60,7 @@ export type ClaudeStructuredSessionEvent =
       fence: number
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
-  | StructuredAgentSessionOptionsReportedEvent
+  | SessionAdapter.StructuredAgentSessionOptionsReportedEvent
   | {
       type: 'ended'
       sessionId: string
@@ -185,6 +182,9 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
+  /** Construction intent and the first admitted root init belong to this process only. */
+  launchPermissionMode?: string
+  firstRootInit?: { permissionMode: string | null }
   /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
   retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */
@@ -352,7 +352,7 @@ export async function cancelClaudeAcquisitionAttempt(
 }
 
 export type ClaudeSessionAcquisitionInput = {
-  input: StructuredAgentSessionAcquireInput
+  input: SessionAdapter.StructuredAgentSessionAcquireInput
   deps: ClaudeStructuredSessionAdapterDeps
   sessions: Map<string, ClaudeSession>
   acquisitions: ClaudeAcquisitionRegistry

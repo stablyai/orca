@@ -98,46 +98,6 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "chat",
-    "dynamic": false,
-    "count": 1,
-    "reason": "Unrendered English search alias; localized font title and description remain searchable in the selected UI language."
-  },
-  {
-    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "font",
-    "dynamic": false,
-    "count": 1,
-    "reason": "Unrendered English search alias; localized font title and description remain searchable in the selected UI language."
-  },
-  {
-    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "family",
-    "dynamic": false,
-    "count": 1,
-    "reason": "Unrendered English search alias; localized font title and description remain searchable in the selected UI language."
-  },
-  {
-    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "typeface",
-    "dynamic": false,
-    "count": 1,
-    "reason": "Unrendered English search alias; localized font title and description remain searchable in the selected UI language."
-  },
-  {
-    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "typography",
-    "dynamic": false,
-    "count": 1,
-    "reason": "Unrendered English search alias; localized font title and description remain searchable in the selected UI language."
-  },
-  {
     "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
     "kind": "jsx-text",
     "text": "fontFamily",

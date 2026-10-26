@@ -95,12 +95,12 @@ not invoke tools that can overwrite an entire target catalog.
 
 The coverage gate compares current candidates against
 `config/localization-coverage-allowlist.json`. The committed allowlist is
-small (17 reviewed entries — six non-English language-name search keywords,
-four product-name search keywords, one non-UI `label` placement prop, five
-unrendered English font-search aliases, and the literal CSS property
-`fontFamily` in the font preview). The font title, description, and preview
-sentence are localized. New candidates fail the check and must be localized
-or added with a reviewed reason in the same change.
+small (15 reviewed entries — six non-English language-name search keywords,
+four product-name search keywords, one non-UI `label` placement prop, one
+language-recovery label, two developer-only fixture labels, and the literal CSS
+property `fontFamily` in the font preview). The font title, description, preview
+sentence, and font search keywords are localized. New candidates fail the check
+and must be localized or added with a reviewed reason in the same change.
 
 The script scans `src/renderer/src` by default. That is the primary UI surface.
 Use `--source-root src` for a wider audit when checking renderer-adjacent shared
