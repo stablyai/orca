@@ -72,7 +72,7 @@ export const daemonAdoptedSchema = z
 
 export const DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS = ['<1m', '1-5m', '5-30m', '30m+'] as const
 
-// Why: measures whether #29133's runtime patch makes daemon worker-pool stalls recover.
+// Why: measures how often daemon worker-pool stalls start and how long they last before clearing.
 const daemonAsyncIoHealthBase = {
   protocol_generation: z.number().int().positive().max(1_000),
   app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH)

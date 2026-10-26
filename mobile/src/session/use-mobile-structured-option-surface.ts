@@ -13,6 +13,7 @@ export function useMobileStructuredOptionSurface(args: {
   optionSnapshot: SessionOptionDescriptor[]
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   optionStateRef: RefObject<StructuredAgentSessionOptionState>
+  projectPermission: (state: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
 }) {
   const { optionSnapshot, optionStateRef, setStructuredOption, demandModelCatalog } = args
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
@@ -35,7 +36,9 @@ export function useMobileStructuredOptionSurface(args: {
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
       return {
-        snapshot: args.lockSnapshot(structuredAgentSessionShownSnapshot(optionStateRef.current))
+        snapshot: args.lockSnapshot(
+          structuredAgentSessionShownSnapshot(args.projectPermission(optionStateRef.current))
+        )
       }
     },
     [args.lockSnapshot, optionStateRef, setStructuredOption]

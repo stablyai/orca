@@ -8,6 +8,8 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { buildWorkspaceSessionHostSnapshots } from './workspace-session-host-persistence'
 
 const TARGET_ID = 'target-1'
 const SSH_HOST_ID: ExecutionHostId = `ssh:${TARGET_ID}`
@@ -537,19 +539,62 @@ describe('ssh host partition adoption on a contested bare id', () => {
   it('still fills a gap on a contested id', async () => {
     // Declining to replace is not declining to repair: a row no claimant answered is still adopted.
     const partitions = contestedPartitions()
+    partitions.local = session({ tabsByWorktree: {} })
+    const sourceTab = makeUnifiedTab({
+      id: 'chat-source',
+      entityId: 'session-1',
+      groupId: 'chat-group',
+      contentType: 'agent-session',
+      worktreeId: WORKTREE_ID,
+      executionHostId: 'runtime:chat'
+    })
+    const shadowTab = { ...sourceTab, executionHostId: 'local' as const }
     partitions[SSH_HOST_ID] = session({
       ...partitions[SSH_HOST_ID],
+      unifiedTabs: { [WORKTREE_ID]: [sourceTab] },
       activeFileIdByWorktree: { [WORKTREE_ID]: '/remote/checkout/feature/src/other.ts' }
     })
 
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
-      partitionedApi(partitions),
-      contestedRepos
+      partitionedApi({
+        ...partitions,
+        'runtime:r2': session({ unifiedTabs: { [WORKTREE_ID]: [shadowTab], 'folder:other': [] } })
+      }),
+      contestedRepos,
+      ['runtime:r1', 'runtime:r2']
     )
 
     expect(read.session.activeFileIdByWorktree?.[WORKTREE_ID]).toBe(
       '/remote/checkout/feature/src/other.ts'
     )
+    expect(read.contestedPrimaryHostBySessionKey[WORKTREE_ID]).toBe(RUNTIME_HOST_ID)
+    expect(read.session.unifiedTabs?.[WORKTREE_ID]?.[0]).toBe(sourceTab)
+    expect(read.contestedHostWorkspaceSessions['runtime:r2']?.unifiedTabs?.[WORKTREE_ID]?.[0]).toBe(
+      shadowTab
+    )
+    const saved = buildWorkspaceSessionHostSnapshots(read.session, {
+      repos: contestedRepos,
+      worktreesByRepo: {},
+      contestedPrimaryHostBySessionKey: read.contestedPrimaryHostBySessionKey,
+      contestedHostWorkspaceSessions: read.contestedHostWorkspaceSessions
+    })
+    expect(
+      saved.find((slice) => slice.hostId === RUNTIME_HOST_ID)?.state.unifiedTabs?.[WORKTREE_ID]?.[0]
+    ).toEqual(sourceTab)
+    expect(
+      saved.find((slice) => slice.hostId === 'runtime:r2')?.state.unifiedTabs?.[WORKTREE_ID]?.[0]
+    ).toEqual(shadowTab)
+    const reloaded = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(
+        Object.fromEntries(saved.map((slice) => [slice.hostId ?? 'local', slice.state]))
+      ),
+      contestedRepos,
+      ['runtime:r1', 'runtime:r2']
+    )
+    expect(reloaded.session.unifiedTabs?.[WORKTREE_ID]?.[0]).toEqual(sourceTab)
+    expect(
+      reloaded.contestedHostWorkspaceSessions['runtime:r2']?.unifiedTabs?.[WORKTREE_ID]?.[0]
+    ).toEqual(shadowTab)
   })
 
   it('does not let a legacy bare recency key move another host workspace of the same id', async () => {

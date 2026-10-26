@@ -249,6 +249,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
       "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",
       "description": "Choose how chats look and behave.",
@@ -279,7 +280,7 @@
         "antigravityAccount": "Account",
         "antigravitySignInNeeded": "Chats need an Antigravity sign-in, separate from your agy terminal account."
       },
-      "permissionsDescriptionOwnAgents": "New chats of agents set to their own settings in Settings → Agents. Other agents start chats in their permission there."
+      "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents."
     },
     "terminal": {
       "optionLayoutAlt": "ABC or U.S. — Option sends Alt/Esc sequences",
@@ -359,6 +360,13 @@
         }
       },
       "chat": {
+        "fontFamily": "Font family",
+        "fontFamilyDescription": "Font used for messages, activity, and the message box.",
+        "fontKeywordTypeface": "typeface",
+        "fontKeywordTypography": "typography",
+        "inheritFont": "Same as IDE font",
+        "fontPreviewLabel": "Chat font preview",
+        "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
@@ -516,7 +524,8 @@
       "permissionFromArgsTerminals": "{{agent}} set to {{mode}} in terminals.",
       "permissionOwnAgent": "Use {{agent}}'s own settings",
       "permissionOwnAll": "Agents' own settings",
-      "permissionOwnDescription": "Orca adds no permission flag in terminals; chats use Settings → Chat.",
+      "permissionOwnLegacyDescription": "Orca adds no permission flag in terminals; chats use Settings → Chat.",
+      "permissionOwnDescription": "Terminals and chats follow the agent’s own permission settings.",
       "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
       "permissionOwnShort": "Own settings",
       "permissionWithoutAuto": "Agents without Approve for me",
@@ -2381,6 +2390,12 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
+        "serverTitle": "{{machine}} restarted",
+        "serverBody": "These chats were working when Orca on {{machine}} restarted. Resuming restores each one where it stopped and asks the agent to carry on. Your own prompt is not re-sent.",
+        "serverDismiss": "Dismiss",
+        "serverResumeAll": "Resume all {{count}} on {{machine}}",
+        "serverResumeHereOne": "Resume 1 chat started here",
+        "serverResumeHere": "Resume {{count}} chats started here",
         "title": "Resume interrupted chats?",
         "body": "These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
         "updateBody": "These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
@@ -19771,6 +19786,10 @@
           "editors": "Close all editor tabs?",
           "description": "The selected tabs will be closed. Pinned tabs will stay open.",
           "confirm": "Close tabs"
+        },
+        "chatRename": {
+          "empty": "A chat name can't be empty",
+          "failed": "Couldn't rename this chat"
         }
       }
     },

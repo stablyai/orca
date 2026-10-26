@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "设置 → 智能体",
       "permissionsTitle": "新聊天的权限",
       "permissionsDescription": "仅适用于新聊天。各智能体的默认设置位于设置 → 智能体。",
       "description": "选择聊天的外观和行为方式。",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "字体",
+        "fontFamilyDescription": "用于消息、活动和消息输入框的字体。",
+        "inheritFont": "与 IDE 字体相同",
+        "fontPreviewLabel": "聊天字体预览",
+        "fontPreview": "这段文字用于预览聊天字体。",
         "title": "聊天",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
@@ -19423,6 +19429,10 @@
           "editors": "关闭所有编辑器标签页？",
           "description": "选中的标签页将关闭。固定的标签页将保持打开。",
           "confirm": "关闭标签页"
+        },
+        "chatRename": {
+          "empty": "聊天名称不能为空",
+          "failed": "无法重命名此聊天"
         }
       }
     },

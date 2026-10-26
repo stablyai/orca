@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionPreparedAdmission } from './structured-agent-session-prepared-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type {
   AgentSessionRewindFork,
@@ -183,6 +184,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
+    /** Prepared local input; the host commits write-ahead custody before synchronously offering it. */
+    admitPreparedInput?: StructuredAgentSessionPreparedAdmission
     /** Mark preparation before choices mutate the provider. */
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */
@@ -228,6 +231,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Host-local construction facts for the exact next input; absent providers keep their child. */
+  requiresModelTransitionRestart?(input: {
+    sessionId: string
+    fence: number
+    executionOptions?: AgentSessionExecutionOptions
+  }): boolean
   /** Captures only this input's pending answer/output in the supplied live acquisition. */
   capturePendingOutput?(input: {
     sessionId: string

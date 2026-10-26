@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionOptionsResult } from './agent-session-wire'
 import { sortNativeChatSessionOptions } from './native-chat-session-option-snapshot'
 import {
-  applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   commitStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
@@ -39,6 +38,27 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
+  it('keeps old-host fallback while capable hosts display only the nullable report', () => {
+    const pr1 = live('codex', { permissionMode: 'ask' })
+    expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
+    expect(permission({ ...pr1, permissionOwnSupported: false })).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'ask' }
+    })
+    const capable = { ...pr1, permissionOwnSupported: true, permissionMode: 'own' }
+    for (const reportedPermissionMode of [undefined, null, 'full-access', 'read-only']) {
+      const descriptor = permission({ ...capable, reportedPermissionMode })
+      expect(descriptor).toMatchObject({
+        settable: typeof reportedPermissionMode === 'string',
+        kind: {
+          currentValue: reportedPermissionMode ?? undefined,
+          choices: expect.not.arrayContaining([expect.objectContaining({ value: 'own' })])
+        }
+      })
+    }
+    expect(permission({ ...capable, permissionMode: 'ask' })?.settable).toBe(false)
+  })
+
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {
     const state = createStructuredAgentSessionOptionState(
       'codex',
@@ -77,60 +97,23 @@ describe('the permission mode picker', () => {
     ])
   })
 
-  it("shows the host's mode as stated, and offers Claude auto only on a model listed for it", () => {
-    const offered = (autoMode: boolean | undefined, mode = 'ask') => {
-      const descriptor = permission(live('claude', { permissionMode: mode }, autoMode))
-      return descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
+  it('offers all Claude modes regardless of catalog support, and shows the host mode as stated', () => {
+    for (const autoMode of [true, false, undefined]) {
+      const descriptor = permission(live('claude', { permissionMode: 'ask' }, autoMode))
+      expect(
+        descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
+      ).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
     }
-    expect(offered(true)).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
-    expect(offered(false)).toEqual(['ask', 'accept-edits', 'full-access'])
-    expect(offered(undefined)).toEqual(['ask', 'accept-edits', 'full-access'])
-    // The host decides what runs; a client catalog that cannot confirm it never relabels it.
     expect(permission(live('claude', { permissionMode: 'auto' }, false))).toMatchObject({
       kind: { currentValue: 'auto' }
     })
-    expect(offered(false, 'auto')).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
-    const changing = { ...live('claude', { permissionMode: 'ask' }, true), pendingId: 'model' }
-    expect(permission(changing)?.kind).toMatchObject({
-      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'auto' })])
-    })
-    expect(permission({ ...changing, permissionMode: 'auto' })?.kind).toMatchObject({
-      currentValue: 'auto',
-      choices: expect.arrayContaining([expect.objectContaining({ value: 'auto' })])
-    })
-  })
-
-  // A new chat names no model: the host's catalog row for the CLI default decides, as the host's does.
-  it('offers Claude auto to a new chat whose CLI default the host lists as running it', () => {
-    const seed = structuredAgentSessionSeedCatalog('claude')
-    const offered = (rows: { id: string; isDefault: boolean; supportsAutoMode?: boolean }[]) => {
-      const state = applyStructuredAgentSessionModelCatalog(
-        createStructuredAgentSessionOptionState('claude', seed),
-        seed,
-        {
-          origin: 'probe',
-          fetchedAt: 1,
-          models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
-        },
-        { newLaunch: true }
-      )
-      const descriptor = permission(
-        structuredAgentSessionOptionView(state, { permissionMode: 'ask' }, {})
-      )
-      return descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
-    }
+    const state = createStructuredAgentSessionOptionState('claude')
+    const descriptor = permission(
+      structuredAgentSessionOptionView(state, { permissionMode: 'ask' }, {})
+    )
     expect(
-      offered([
-        { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
-        { id: 'haiku', isDefault: false }
-      ])
+      descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
     ).toContain('auto')
-    expect(
-      offered([
-        { id: 'opus[1m]', isDefault: false, supportsAutoMode: true },
-        { id: 'haiku', isDefault: true }
-      ])
-    ).not.toContain('auto')
   })
 
   it("shows a held pick over the host's value, and the host's over the seed", () => {

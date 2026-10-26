@@ -9,6 +9,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))

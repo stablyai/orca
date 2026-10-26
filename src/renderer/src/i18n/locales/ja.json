@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",
       "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
       "description": "チャットの外観と動作を選びます。",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "フォント",
+        "fontFamilyDescription": "メッセージ、アクティビティ、入力欄に使用するフォント。",
+        "inheritFont": "IDE と同じフォント",
+        "fontPreviewLabel": "チャットフォントのプレビュー",
+        "fontPreview": "この文章でチャットのフォントを確認できます。",
         "title": "チャット",
         "textSize": "テキストサイズ",
         "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",
@@ -19458,6 +19464,10 @@
           "editors": "すべてのエディタータブを閉じますか？",
           "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
           "confirm": "タブを閉じる"
+        },
+        "chatRename": {
+          "empty": "チャット名を空にすることはできません",
+          "failed": "このチャットの名前を変更できませんでした"
         }
       }
     },

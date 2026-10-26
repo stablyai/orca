@@ -394,6 +394,68 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
+  it.each(['refused', 'timeout'])(
+    'observes a slow restart response finitely (%s)',
+    async (mode) => {
+      const observed = Promise.withResolvers<void>()
+      const requests = vi.fn((_request: Record<string, unknown>) => observed.resolve())
+      const close = vi.spyOn(WebSocketClient.prototype, 'close')
+      const server = await createOneShotServer({
+        onRequest: requests,
+        keepalive: false,
+        responseDelayMs: mode === 'refused' ? 20_000 : null,
+        response: (id) => ({
+          id,
+          ok: true,
+          result: { continued: [{ sessionId: 'a', outcome: 'refused' }] },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+      const timers = vi.spyOn(globalThis, 'setTimeout')
+      const clearTimer = vi.spyOn(globalThis, 'clearTimeout')
+      try {
+        const settled = vi.fn()
+        const request = sendRemoteRuntimeRequest(
+          server.pairing,
+          'agentSession.restartContinue',
+          { sessionIds: ['a'] },
+          600_000
+        )
+        const result = request.catch((error: unknown) => error)
+        void result.then(settled)
+        await observed.promise
+        await vi.advanceTimersByTimeAsync(15_001)
+        expect(settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(mode === 'refused' ? 4_999 : 584_998)
+        if (mode === 'refused') {
+          await expect(result).resolves.toMatchObject({
+            ok: true,
+            result: { continued: [{ sessionId: 'a', outcome: 'refused' }] }
+          })
+        } else {
+          expect(settled).not.toHaveBeenCalled()
+          await vi.advanceTimersByTimeAsync(1)
+          await expect(result).resolves.toMatchObject({ code: 'runtime_timeout' })
+        }
+        expect(requests).toHaveBeenCalledOnce()
+        expect(requests.mock.calls[0]?.[0]).toMatchObject({
+          method: 'agentSession.restartContinue',
+          params: { sessionIds: ['a'] }
+        })
+        expect(close).toHaveBeenCalled()
+        const timeoutIndex = timers.mock.calls.findIndex(([, delay]) => delay === 600_000)
+        expect(timeoutIndex).toBeGreaterThanOrEqual(0)
+        expect(clearTimer).toHaveBeenCalledWith(timers.mock.results[timeoutIndex].value)
+      } finally {
+        timers.mockRestore()
+        clearTimer.mockRestore()
+        vi.useRealTimers()
+        close.mockRestore()
+      }
+    }
+  )
+
   it('aborts and closes an in-flight one-shot socket', async () => {
     let requestObserved: () => void = () => {}
     const observed = new Promise<void>((resolve) => {
@@ -687,6 +749,8 @@ async function createOneShotServer(
     onAuth?: (auth: Record<string, unknown>) => void
     onRequest?: (request: Record<string, unknown>) => void
     sendUndecryptableResponse?: boolean
+    keepalive?: boolean
+    responseDelayMs?: number | null
   } = {}
 ): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
@@ -729,10 +793,16 @@ async function createOneShotServer(
         ws.send('not-an-encrypted-frame')
         return
       }
+      if (options.responseDelayMs === null) {
+        return
+      }
       const key = sharedKey
-      const keepalive = setInterval(() => {
-        sendEncrypted(ws, key, { _keepalive: true })
-      }, 100)
+      const keepalive =
+        options.keepalive === false
+          ? undefined
+          : setInterval(() => {
+              sendEncrypted(ws, key, { _keepalive: true })
+            }, 100)
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {
         clearInterval(keepalive)
@@ -746,7 +816,7 @@ async function createOneShotServer(
             _meta: { runtimeId: 'runtime-test' }
           }
         )
-      }, 550)
+      }, options.responseDelayMs ?? 550)
     })
   })
 

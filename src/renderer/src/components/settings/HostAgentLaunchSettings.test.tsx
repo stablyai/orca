@@ -2,6 +2,7 @@
 import { StrictMode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings
@@ -19,13 +20,15 @@ const transport = vi.hoisted(() => ({
   mutate: vi.fn(),
   detection: vi.fn(),
   auto: vi.fn(),
-  native: vi.fn()
+  native: vi.fn(),
+  own: vi.fn()
 }))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
   hostSupportsAutoPermissions: transport.auto,
-  hostSupportsNativeChatPermissions: transport.native
+  hostSupportsNativeChatPermissions: transport.native,
+  hostSupportsOwnChatPermissions: transport.own
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -65,9 +68,29 @@ beforeEach(() => {
   transport.detection.mockClear()
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
+  transport.own.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
+  it.each([false, true])(
+    'describes Own for the selected host capability: %s',
+    async (supported) => {
+      transport.own.mockResolvedValue(supported)
+      transport.read.mockResolvedValue(
+        projectAgentLaunchSettings({ agentPermissionDefault: 'own' })
+      )
+      render(pane(17))
+      await screen.findByText("Each agent's own settings")
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Permissions' }))
+      await screen.findByText(
+        supported
+          ? 'Terminals and chats follow the agent’s own permission settings.'
+          : 'Orca adds no permission flag in terminals; chats use Settings → Chat.'
+      )
+      expect(transport.own).toHaveBeenCalledWith({ environmentId: 'ssh-host', pairingRevision: 17 })
+    }
+  )
+
   it('shows resolved launch defaults in a collapsed legacy host row', async () => {
     transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
     render(pane(17))

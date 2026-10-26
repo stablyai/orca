@@ -217,8 +217,6 @@ export async function useIpcEventsForCloseRouting({
         respondTerminalTabClose,
         onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
-        onNewBrowserTab: () => () => {},
-        onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
         onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
@@ -231,7 +229,6 @@ export async function useIpcEventsForCloseRouting({
         replyTabClose,
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},
-        onNewTerminalTab: () => () => {},
         onCloseActiveTab: (listener: CloseActiveTabListener) => {
           if (closeActiveTabListenerRef) {
             closeActiveTabListenerRef.current = listener
@@ -250,10 +247,8 @@ export async function useIpcEventsForCloseRouting({
           }
           return () => {}
         },
-        onSwitchTab: () => () => {},
-        onSwitchTabAcrossAllTypes: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
         onSwitchRecentTab: () => () => {},
-        onSwitchTerminalTab: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},

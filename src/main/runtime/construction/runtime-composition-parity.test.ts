@@ -41,11 +41,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'orcad installs browser automation through the runtime factory when Chromium exists.'
   },
   {
-    wiring: 'runtime.setEmulatorBridge',
-    missingOn: 'orcad',
-    reason: 'Device emulators are desktop-only.'
-  },
-  {
     wiring: 'runtime.setOffscreenBrowserBackend',
     missingOn: 'orcad',
     reason: 'Offscreen WebContents need Electron.'
@@ -175,7 +170,11 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
     'src/main/startup/main-process-runtime-launch.ts',
     'src/main/window/attach-main-window-services.ts'
   ],
-  orcad: ['src/main/orcad/orcad-entry.ts', 'src/main/orcad/orcad-account-services.ts']
+  orcad: [
+    'src/main/orcad/orcad-entry.ts',
+    'src/main/orcad/orcad-account-services.ts',
+    'src/main/orcad/orcad-emulator-bridge.ts'
+  ]
 }
 
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
@@ -428,7 +427,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'host:setSecretStore',
       'host:setRuntimeBrowserCommandsFactory',
       // #31174: without it every speech call refuses with speech_unavailable.
-      'host:setSpeechServiceFactories'
+      'host:setSpeechServiceFactories',
+      // #33650: Android emulators run on headless Linux hosts too.
+      'runtime.setEmulatorBridge'
     ]) {
       expect(electron, shared).toContain(shared)
       expect(orcad, shared).toContain(shared)

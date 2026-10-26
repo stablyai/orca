@@ -25,11 +25,13 @@ export type BridgedParityEvidence = {
   // Supply reply meta in a counterfactual run to isolate that cause from other divergences.
   fixedByReplyMeta: boolean
   threwWhileRecording: boolean
-  // Classify by the first differing field; retain all paths for diagnosis and distinguish missing checkpoints.
+  // Certify every differing leaf and require causal evidence for all nonordinal residuals.
   divergingFields: readonly string[]
-  scriptsAbsentResultReply: boolean
+  absentResultExplainsResiduals: boolean
   paramsMismatch: ParamsMismatchEvidence | null
   refusalReleasedStream: boolean
+  /** Unchanged corpus membership only; these legacy labels do not certify causal parity. */
+  legacyBaseline?: { firstField: string | undefined; scriptsAbsentResultReply: boolean }
 }
 
 // Require at least one changed key and all changes to be scripted undefined; otherwise unrelated params bugs would be excluded.
@@ -44,11 +46,11 @@ function settlementField(path: string): boolean {
   return path.endsWith('.settlement') || path.includes('.settlement.')
 }
 
-function ordinalField(path: string): boolean {
-  return path.endsWith('.ordinal')
+export function ordinalField(path: string): boolean {
+  return /^(sender|payloads|effects)\[\d+\]\.ordinal$/.test(path)
 }
 
-// Test counterfactual causes before symptoms, then classify only evidence from the actual run.
+// Certify complete residuals unless an unchanged corpus member requests its legacy label.
 export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedParityClass {
   if (evidence.fixedByReplyMeta) {
     return 'reply-meta-required'
@@ -57,25 +59,37 @@ export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedP
     if (movedOnlyKeysScriptedUndefined(evidence.paramsMismatch)) {
       return 'params-undefined'
     }
-    return evidence.scriptsAbsentResultReply && evidence.refusalReleasedStream
-      ? 'result-absent-stream-release'
+    return evidence.refusalReleasedStream ? 'result-absent-stream-release' : 'unclassified'
+  }
+  const legacy = evidence.legacyBaseline
+  if (legacy !== undefined) {
+    if (legacy.firstField === undefined) {
+      return 'unclassified'
+    }
+    if (legacy.firstField.endsWith('.ordinal')) {
+      return 'write-ordinal'
+    }
+    return legacy.scriptsAbsentResultReply
+      ? settlementField(legacy.firstField)
+        ? 'result-absent-settlement'
+        : 'result-absent-observation'
       : 'unclassified'
   }
-  const [first] = evidence.divergingFields
-  if (first === undefined) {
+  if (evidence.divergingFields.length === 0) {
     return 'unclassified'
   }
-  // Ordinal-first divergence is real bridge scheduling; checking absent-result partitions first would swallow it.
-  if (ordinalField(first)) {
+  // Only ordinal residuals may receive the ordinal class.
+  const residuals = evidence.divergingFields.filter((path) => !ordinalField(path))
+  if (residuals.length === 0) {
     return 'write-ordinal'
   }
-  if (evidence.scriptsAbsentResultReply) {
-    return settlementField(first) ? 'result-absent-settlement' : 'result-absent-observation'
+  if (evidence.absentResultExplainsResiduals) {
+    return settlementField(residuals[0]!) ? 'result-absent-settlement' : 'result-absent-observation'
   }
   return 'unclassified'
 }
 
-// Only explicitly documented recorder/wire artifacts may be excluded; every other class must stay zero.
+// Changed History goldens require causal evidence; unchanged corpus labels retain their legacy limits.
 export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityClass, string>>> = {
   'result-absent-settlement':
     'the recorder injects `{ ok: true }` with no `result` at the scripted sender port, below the ' +
@@ -100,15 +114,15 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
     'while a same-turn `subscribe` payload publishes one delivery later'
 }
 
-// Pin exact totals in both directions, including identical; one exclusion class shrinking can otherwise hide another growing.
+// Pin strict History verdicts and unchanged legacy counts in both directions.
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 401,
+  identical: 396,
   'reply-meta-required': 0,
   'result-absent-settlement': 350,
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
   'params-undefined': 27,
-  'write-ordinal': 8,
+  'write-ordinal': 13,
   unclassified: 0
 }
 
@@ -150,14 +164,19 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-session.native-chat-page-nativechat.subscribe-1-1'
   ],
   'write-ordinal': [
-    'settings-home-coalesced',
-    'live-worktree-name-stream',
+    'aivault-history-scan-fulfilled',
+    'aivault-history-scan-unsupported',
+    'aivault-history-scan-worktrees-late',
+    'aivault-history-screen-listed',
+    'aivault-history-screen-worktrees',
     'host-worktree-refresh-stream',
+    'live-worktree-name-stream',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1',
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-1',
     'matrix-live-worktree-name-worktree.show-2',
-    'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-3',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1'
+    'settings-home-coalesced'
   ]
 }
 

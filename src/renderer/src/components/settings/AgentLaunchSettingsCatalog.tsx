@@ -64,6 +64,7 @@ export function AgentLaunchSettingsCatalog({
   refreshSettings,
   autoSupported = true,
   nativeChatPermissionsSupported = false,
+  chatOwnSupported = false,
   local
 }: {
   settings: AgentLaunchSettings
@@ -74,6 +75,7 @@ export function AgentLaunchSettingsCatalog({
   refreshSettings?: () => void
   autoSupported?: boolean
   nativeChatPermissionsSupported?: boolean
+  chatOwnSupported?: boolean
   local?: {
     settings: GlobalSettings
     saveEnvironment: (agent: TuiAgent, value: Record<string, string>) => Promise<void>
@@ -127,6 +129,7 @@ export function AgentLaunchSettingsCatalog({
     const chatSupport = agentChatPermissionModes(agent)
     return {
       choices,
+      chatOwnSupported,
       ...resolved,
       terminalChoice:
         agentPermissionArgs(agent, resolved.choice) ||
@@ -257,6 +260,7 @@ export function AgentLaunchSettingsCatalog({
       />
       {permissionSettings ? (
         <AllAgentsPermissionSetting
+          chatOwnSupported={chatOwnSupported}
           choice={permissionSettings.agentPermissionDefault ?? 'own'}
           withoutAutoChoice={sharedChoice(
             PERMISSION_CHOICE_AGENTS.filter(

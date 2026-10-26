@@ -15,6 +15,10 @@ import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread
 import { clearActivityThread } from './activity-clear-completed'
 import { countActivityUnread } from './useActivityUnreadCount'
 import { useAgentPaneThreads } from './use-agent-pane-threads'
+import { useAppStore } from '@/store'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
+import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 type TestStore = {
   getState: () => AppState
@@ -155,6 +159,82 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     cleanup()
     vi.restoreAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
+  })
+
+  it('keeps the saved native name across focus and follows naming-only updates', async () => {
+    const unrelated = { ...structuredTab, id: 'other-tab', entityId: 'other-session' }
+    const terminal: Tab = { ...structuredTab, id: 'terminal', contentType: 'terminal' }
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab, unrelated, terminal] },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            tabOrder: [structuredTab.id, unrelated.id, terminal.id],
+            activeTabId: structuredTab.id
+          })
+        ]
+      }
+    })
+    const emit = await connect()
+    emit({
+      type: 'snapshot',
+      sessions: [
+        summary({ latestPrompt: 'Implement the requested change' }),
+        summary({ sessionId: unrelated.entityId })
+      ],
+      conversationNames: [{ sessionId: structuredTab.entityId, conversationName: 'Saved name' }]
+    })
+    const stop = useAppStore.subscribe(() => getStructuredChatTabNames())
+    try {
+      const activity = renderActivity()
+      const row = (id = structuredTab.id) => {
+        const found = activity.result.current.allThreads.find((item) => item.tab.id === id)
+        if (!found) {
+          throw new Error('Missing Activity row')
+        }
+        return found
+      }
+      const otherRow = row(unrelated.id)
+      expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+      const focus = (current: Tab) =>
+        act(() => {
+          const state = useAppStore.getState()
+          useAppStore.setState(tabActivationPatch(state, current, 'wt-1', undefined, false))
+        })
+      for (let i = 0; i < 2; i += 1) {
+        const before = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        focus(before)
+        const current = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        expect(current).not.toBe(before)
+        expect(getStructuredChatTabNames().has(current)).toBe(true)
+        expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+        expect(activity.result.current.storeData.activityTabs['wt-1'][0]).toBe(current)
+        expect(row(unrelated.id)).toBe(otherRow)
+      }
+      const projectedTerminal = activity.result.current.storeData.activityTabs['wt-1'][2]
+      focus(terminal)
+      expect(activity.result.current.storeData.activityTabs['wt-1'][2]).toBe(projectedTerminal)
+      const threads = activity.result.current.allThreads
+      activity.rerender()
+      expect(activity.result.current.allThreads).toBe(threads)
+      const state = useAppStore.getState()
+      for (const name of ['Renamed on host', null]) {
+        emit({
+          type: 'snapshot',
+          sessions: [],
+          conversationNames: [{ sessionId: structuredTab.entityId, conversationName: name }]
+        })
+        expect(activityThreadRowCopy(row()).taskTitle).toBe(
+          name ?? 'Implement the requested change'
+        )
+        expect(useAppStore.getState().unifiedTabsByWorktree).toBe(state.unifiedTabsByWorktree)
+        expect(useAppStore.getState().agentStatusByPaneKey).toBe(state.agentStatusByPaneKey)
+      }
+    } finally {
+      stop()
+    }
   })
 
   it('reads done, lists Blocked then done, and leaves the answer read', async () => {

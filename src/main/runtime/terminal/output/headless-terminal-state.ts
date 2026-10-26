@@ -6,8 +6,26 @@ import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
 import { getTerminalViewAttributes } from '../../terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from '../../pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal-mode-reset-profiles'
+import { release } from 'node:os'
+import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { windowsPtyForOwnerBackend } from '../../../../shared/xterm-conpty-options'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
+  /** SSH and paired-runtime panes run on their host's PTY; every PTY this Windows process owns is ConPTY. */
+  private ownerBackendForHeadlessPty(ptyId: string): PtyOwnerBackend {
+    // Why the id too: main's copy starts on the first byte, before a restored relay PTY has a record.
+    if (
+      this.ptysById.get(ptyId)?.connectionId ||
+      parseAppSshPtyId(ptyId) !== null ||
+      isRemoteRuntimePtyId(ptyId)
+    ) {
+      return 'posix-pty'
+    }
+    return resolvePtyOwnerBackend({ platform: process.platform, shellPath: undefined })
+  }
+
   /** Create runtime emulators with query forwarding and ConPTY DA1 override for seed, hydration and live bytes; daemon emulators use another factory. */
   protected createPtyHeadlessTerminalState(
     ptyId: string,
@@ -24,6 +42,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       wslDistro: this.ptysById.get(ptyId)?.connectionId
         ? undefined
         : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
+      windowsPty: windowsPtyForOwnerBackend(this.ownerBackendForHeadlessPty(ptyId), release()),
       // Use provider input for query replies to retain shell-ready/SSH routing without interactive echo metering.
       onQueryReply: (reply) => {
         // Queued links can outlive disposal; only the current state may reply to a reused PTY id.

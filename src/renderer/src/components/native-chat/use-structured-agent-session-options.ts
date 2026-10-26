@@ -221,6 +221,9 @@ export function useStructuredAgentSessionOptions(args: {
       }
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
       if (
+        (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+          value === 'own' &&
+          !view.permissionOwnSupported) ||
         !isCurrentContext() ||
         !optionCatalog ||
         encoded === null ||

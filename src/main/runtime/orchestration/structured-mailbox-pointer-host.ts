@@ -80,6 +80,10 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return getStructuredAgentSessionHost()?.currentWork(sessionId)?.hasActionablePrompt() ?? null
     },
 
+    isWorkingNow(sessionId) {
+      return getStructuredAgentSessionHost()?.currentWork(sessionId)?.working() ?? false
+    },
+
     currentFence(sessionId) {
       return (
         getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
@@ -109,12 +113,14 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             body: input.body,
             // A person's plain send: every agent takes it the way it takes their own mid-turn message.
             delivery: 'now',
+            keepCurrentOptions: true,
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
+              const work = host.currentWork(input.sessionId)
               if (
                 input.body.from?.orchestration?.message === 'mail-notice' &&
-                host.currentWork(input.sessionId)?.hasActionablePrompt()
+                (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working()))
               ) {
                 throw new StructuredMailHeldError()
               }

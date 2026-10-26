@@ -163,6 +163,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "Paramètres → Agents",
       "permissionsTitle": "Autorisations pour les nouveaux chats",
       "permissionsDescription": "Uniquement pour les nouveaux chats. Les paramètres par défaut propres à chaque agent se trouvent dans Paramètres → Agents.",
       "description": "Choisissez l’apparence et le comportement des chats.",
@@ -272,6 +273,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Police",
+        "fontFamilyDescription": "Police des messages, de l’activité et de la zone de saisie.",
+        "inheritFont": "Même police que l’IDE",
+        "fontPreviewLabel": "Aperçu de la police du chat",
+        "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
         "title": "Chat",
         "textSize": "Taille du texte",
         "textSizeDescription": "Messages, activité des outils et zone de message. {{increase}} / {{decrease}} dans un chat modifient aussi ce réglage.",
@@ -19564,6 +19570,10 @@
           "editors": "Fermer tous les onglets de l’éditeur ?",
           "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
           "confirm": "Fermer les onglets"
+        },
+        "chatRename": {
+          "empty": "Le nom du chat ne peut pas être vide",
+          "failed": "Impossible de renommer ce chat"
         }
       }
     },

@@ -27,6 +27,7 @@ import { ensureAdbOk } from '../android/android-adb-result'
 import {
   findRunningAvdSerial,
   listAndroidDevices,
+  listConfirmedAdbSerials,
   listRunningAdbDevices
 } from '../android/android-device-inventory'
 import {
@@ -137,6 +138,11 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   async listDevices(): Promise<EmulatorDevice[]> {
     const sdk = this.sdkState.resolve()
     return sdk ? listAndroidDevices(this.runner, sdk) : []
+  }
+
+  async listRunningDeviceIds(): Promise<string[] | null> {
+    const sdk = this.sdkState.resolve()
+    return sdk ? listConfirmedAdbSerials(this.runner, sdk) : null
   }
 
   async ownsDevice(id: string): Promise<boolean> {

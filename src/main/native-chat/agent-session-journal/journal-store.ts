@@ -332,9 +332,10 @@ export class AgentSessionJournal {
 
   resolveDispatch(
     input: ResolveDispatchInput,
-    cards?: () => JournalQueuePlan
+    cards?: () => JournalQueuePlan,
+    receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    return this.submissionWriter.resolveDispatch(input, cards)
+    return this.submissionWriter.resolveDispatch(input, cards, receipt)
   }
 
   acceptLate: JournalSubmissionWriter['acceptLate'] = (i) => this.submissionWriter.acceptLate(i)

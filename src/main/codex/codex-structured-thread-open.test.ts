@@ -14,6 +14,39 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it.each([
+    ['workspaceWrite', 'auto'],
+    ['readOnly', 'read-only'],
+    ['read-only', 'read-only']
+  ])('leaves own policy omitted on start/resume and reports %s', async (sandboxType, expected) => {
+    const request = vi.fn(async () => ({
+      thread: { id: 'own-thread' },
+      approvalPolicy: 'on-request',
+      sandbox: { type: sandboxType },
+      approvalsReviewer: 'auto_review'
+    }))
+    for (const resumeThreadId of [null, 'own-thread']) {
+      const opened = await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId },
+        2_000
+      )
+      expect(opened.reportedPermissionMode).toBe(expected)
+    }
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      'thread/start',
+      { cwd: '/workspace' },
+      { timeoutMs: 2_000 }
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      'thread/resume',
+      { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
+      { timeoutMs: 2_000 }
+    )
+  })
+
   it('applies the resolved permission policy when starting and resuming a thread', async () => {
     const request = vi.fn(async (method: string) => ({
       thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
@@ -97,6 +130,7 @@ describe('openCodexThread', () => {
       openCodexThread(connectionFor(standard), { cwd: '/workspace', resumeThreadId: null }, 2_000)
     ).resolves.toEqual({
       threadId: 'thread-standard',
+      reportedPermissionMode: null,
       thread: { id: 'thread-standard' },
       serviceTier: null
     })

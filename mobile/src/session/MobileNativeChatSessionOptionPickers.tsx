@@ -146,17 +146,22 @@ export function MobileNativeChatSessionOptionPickers({
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
   const permissionChoice = selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
-  const fullAccess = permissionColor !== undefined
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
-  const primary = model ? mobileModelPillLabel(model) : (permissionChoice?.label ?? 'Permissions')
+  const primary = model
+    ? mobileModelPillLabel(model)
+    : permission
+      ? mobileSessionOptionSummaryValue(permission)
+      : 'Permissions'
   const secondary = model && options.length > 0 ? mobileOptionsPillLabel(options) : null
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
+    // A permission report can match a new explicit pick while the saved intent is Own.
     if (
+      descriptor !== permission &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
@@ -186,14 +191,14 @@ export function MobileNativeChatSessionOptionPickers({
       <ModelPill
         primary={primary}
         secondary={secondary}
-        warning={fullAccess}
+        warning={permissionColor !== undefined}
         icon={permissionIcon}
         accessibleName={
           model
-            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${fullAccess ? ', full access' : ''}`
+            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${permissionColor ? ', full access' : ''}`
             : `Permissions, ${primary}`
         }
-        disabled={busy}
+        disabled={busy || (!model && permission?.settable === false)}
         onPress={() => {
           onDrawerOpen(home.id)
           Keyboard.dismiss()
@@ -304,7 +309,7 @@ function OptionRows({
     <View style={[styles.group, styles.groupSpaced]}>
       {descriptors.map((descriptor, index) => {
         const isPermission = descriptor === permission
-        const disabled = isPermission ? busy : locked
+        const disabled = isPermission ? busy || !descriptor.settable : locked
         if (descriptor.kind.type === 'boolean' && !descriptor.action) {
           return (
             <View key={descriptor.id} style={index < descriptors.length - 1 && styles.divided}>

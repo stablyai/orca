@@ -13,6 +13,7 @@ import {
   readHostAgentLaunchSettings,
   hostSupportsAutoPermissions,
   hostSupportsNativeChatPermissions,
+  hostSupportsOwnChatPermissions,
   type AgentLaunchSettingsOwner
 } from './agent-launch-settings-transport'
 import { Button } from '../ui/button'
@@ -25,6 +26,7 @@ type ReadState =
       settings: AgentLaunchSettings
       autoSupported: boolean
       nativeChatPermissionsSupported: boolean
+      chatOwnSupported: boolean
     }
 
 export function HostAgentLaunchSettings({
@@ -54,15 +56,23 @@ export function HostAgentLaunchSettings({
     controllerRef.current = controller
     setRead({ kind: 'loading' })
     try {
-      const [settings, autoSupported, nativeChatPermissionsSupported] = await Promise.all([
-        readHostAgentLaunchSettings(owner, controller.signal),
-        hostSupportsAutoPermissions(owner),
-        hostSupportsNativeChatPermissions(owner)
-      ])
+      const [settings, autoSupported, nativeChatPermissionsSupported, chatOwnSupported] =
+        await Promise.all([
+          readHostAgentLaunchSettings(owner, controller.signal),
+          hostSupportsAutoPermissions(owner),
+          hostSupportsNativeChatPermissions(owner),
+          hostSupportsOwnChatPermissions(owner)
+        ])
       if (!controller.signal.aborted) {
         setRead(
           settings
-            ? { kind: 'ready', settings, autoSupported, nativeChatPermissionsSupported }
+            ? {
+                kind: 'ready',
+                settings,
+                autoSupported,
+                nativeChatPermissionsSupported,
+                chatOwnSupported
+              }
             : { kind: 'unsupported' }
         )
       }
@@ -95,7 +105,8 @@ export function HostAgentLaunchSettings({
               kind: 'ready',
               settings,
               autoSupported: read.autoSupported,
-              nativeChatPermissionsSupported: read.nativeChatPermissionsSupported
+              nativeChatPermissionsSupported: read.nativeChatPermissionsSupported,
+              chatOwnSupported: read.chatOwnSupported
             })
           }
         } catch {
@@ -144,6 +155,7 @@ export function HostAgentLaunchSettings({
           renderPermissions={renderPermissions}
           autoSupported={read.autoSupported}
           nativeChatPermissionsSupported={read.nativeChatPermissionsSupported}
+          chatOwnSupported={read.chatOwnSupported}
           refreshSettings={() => void refresh()}
         />
       </fieldset>

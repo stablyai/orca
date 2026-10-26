@@ -18,7 +18,7 @@ const base: BridgedParityEvidence = {
   fixedByReplyMeta: false,
   threwWhileRecording: false,
   divergingFields: [],
-  scriptsAbsentResultReply: false,
+  absentResultExplainsResiduals: false,
   paramsMismatch: null,
   refusalReleasedStream: false
 }
@@ -37,7 +37,7 @@ describe('classifying one diverging golden', () => {
   it('names the missing field first, but only where supplying it was enough', () => {
     const absent = {
       ...base,
-      scriptsAbsentResultReply: true,
+      absentResultExplainsResiduals: true,
       divergingFields: ['sender[0].settlement']
     }
     expect(classifyBridgedParity({ ...absent, fixedByReplyMeta: true })).toBe('reply-meta-required')
@@ -45,7 +45,7 @@ describe('classifying one diverging golden', () => {
   })
 
   it('splits the absent-result partition by what moved first', () => {
-    const absent = { ...base, scriptsAbsentResultReply: true }
+    const absent = { ...base, absentResultExplainsResiduals: true }
     expect(
       classifyBridgedParity({ ...absent, divergingFields: ['sender[0].settlement', 'effects'] })
     ).toBe('result-absent-settlement')
@@ -93,27 +93,41 @@ describe('classifying one diverging golden', () => {
     const released = {
       ...base,
       threwWhileRecording: true,
-      scriptsAbsentResultReply: true,
+      absentResultExplainsResiduals: true,
       refusalReleasedStream: true
     }
     expect(classifyBridgedParity(released)).toBe('result-absent-stream-release')
-    expect(classifyBridgedParity({ ...released, scriptsAbsentResultReply: false })).toBe(
-      'unclassified'
-    )
     expect(classifyBridgedParity({ ...released, refusalReleasedStream: false })).toBe(
       'unclassified'
     )
   })
 
-  it('names the ordinal class ahead of the partition a matrix golden also carries', () => {
+  it('requires every difference to be a recorder ordinal before naming that class', () => {
     expect(classifyBridgedParity({ ...base, divergingFields: ['sender[0].ordinal'] })).toBe(
       'write-ordinal'
     )
     expect(
       classifyBridgedParity({
         ...base,
-        scriptsAbsentResultReply: true,
-        divergingFields: ['payloads[0].ordinal', 'effects']
+        absentResultExplainsResiduals: false,
+        divergingFields: ['payloads[0].ordinal', 'effects[0].value.ordinal']
+      })
+    ).toBe('unclassified')
+    expect(classifyBridgedParity({ ...base, divergingFields: ['state.ordinal'] })).toBe(
+      'unclassified'
+    )
+  })
+
+  it('keeps an explicit legacy membership label distinct from strict certification', () => {
+    const mixed = {
+      ...base,
+      divergingFields: ['sender[0].ordinal', 'payloads[1].json']
+    }
+    expect(classifyBridgedParity(mixed)).toBe('unclassified')
+    expect(
+      classifyBridgedParity({
+        ...mixed,
+        legacyBaseline: { firstField: 'sender[0].ordinal', scriptsAbsentResultReply: true }
       })
     ).toBe('write-ordinal')
   })

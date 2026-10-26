@@ -12,6 +12,15 @@ export async function listRunningAdbDevices(
   return parseAdbDevices(result.stdout).filter((device) => device.state === 'device')
 }
 
+/** Null when adb fails, so a failed census never reads as every device gone. */
+export async function listConfirmedAdbSerials(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<string[] | null> {
+  const result = await runner(sdk.adb, adbDevicesArgs)
+  return result.code === 0 ? parseAdbDevices(result.stdout).map((device) => device.serial) : null
+}
+
 export async function resolveRunningAvdNames(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,

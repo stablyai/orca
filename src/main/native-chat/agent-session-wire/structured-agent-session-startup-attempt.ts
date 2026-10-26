@@ -8,7 +8,7 @@ export type { StructuredAgentSessionStartReadiness } from './structured-agent-se
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {
@@ -21,7 +21,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   record: AgentSessionRecord
   identity: AgentSessionJournalIdentity
   spawnToken: string
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
   startupOptions?: Readonly<Record<string, string>>

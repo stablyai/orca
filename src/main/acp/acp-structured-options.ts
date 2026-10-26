@@ -63,7 +63,7 @@ export class AcpStructuredOptions {
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
-  /** Last successful Orca writes, distinct from agent-reported values. */
+  /** Installed Orca policy and successful writes, distinct from native agent reports. */
   readonly applied = new Map<string, string>()
   private initialChoice: Readonly<Record<string, string>> = {}
   currentProof = new Set<string>()
@@ -209,6 +209,22 @@ export class AcpStructuredOptions {
     }
   }
 
+  observedCurrent(values?: Readonly<Partial<Record<string, string>>>) {
+    return { ...this.read().current, reportedPermissionMode: this.reportedPermissionMode(values) }
+  }
+
+  reportedPermissionMode(
+    values: Readonly<Partial<Record<string, string>>> | undefined
+  ): string | null {
+    if (!values) {
+      return this.applied.get('permissionMode') ?? null
+    }
+    const current = this.select('mode')?.currentValue
+    return current
+      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
+      : null
+  }
+
   // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
@@ -231,11 +247,20 @@ export async function acpSessionAcceptsImages(session: {
 }
 
 export async function readAcpLiveOptions(
-  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions }
+  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions },
+  permissionModes?: Readonly<Partial<Record<string, string>>>
 ) {
   const acceptsImages = await acpSessionAcceptsImages(session)
   // Only startup establishes config resolution; later reads may reflect changed picks.
-  return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
+  const options = withLiveCatalogListing(session.options.read())
+  return {
+    ...options,
+    current: {
+      ...options.current,
+      reportedPermissionMode: session.options.reportedPermissionMode(permissionModes)
+    },
+    acceptsImages
+  }
 }
 
 /** Only the current, still-awaited write may establish reusable option proof. */

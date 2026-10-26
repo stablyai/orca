@@ -1088,7 +1088,6 @@
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-link-worktree-root-activation.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-pane-store-subscription-budget.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts
-18 test-no-wall-clock:src/renderer/src/components/terminal-pane/use-notification-dispatch.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-workspace-surface-ids.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx

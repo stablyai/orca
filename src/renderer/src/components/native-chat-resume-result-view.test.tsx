@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import {
   createResumeModalFixture,
@@ -152,7 +152,7 @@ it('reopens a collapsed result group with tree keys', async () => {
 })
 
 it('shows a settled nonretryable failure as a result with a Done action', async () => {
-  const failed = { ...failure('a'), outcome: 'unconfirmed' as const, retryable: false }
+  const failed = { ...failure('a'), outcome: 'refused' as const, retryable: false }
   let acted = false
   rpc.mockImplementation(async (_target, method) => {
     if (method === 'agentSession.restartResumable') {
@@ -162,7 +162,7 @@ it('shows a settled nonretryable failure as a result with a Done action', async 
     return {
       sessions: [],
       failed: [failed],
-      continued: [{ sessionId: 'a', outcome: 'unknown' }]
+      continued: [{ sessionId: 'a', outcome: 'refused' }]
     }
   })
   await mountSurfaces()

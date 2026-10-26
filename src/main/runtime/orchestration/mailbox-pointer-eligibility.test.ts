@@ -36,7 +36,7 @@ describe('selectOrchestrationPointerBatch', () => {
         waiters: waiters(['question']),
         reservedTypes: undefined
       })
-      expect(batch.map((m) => m.type)).toEqual(['status', 'status'])
+      expect(batch.messages.map((m) => m.type)).toEqual(['status', 'status'])
     } finally {
       db.close()
     }
@@ -51,7 +51,7 @@ describe('selectOrchestrationPointerBatch', () => {
         waiters: undefined,
         reservedTypes: new Set(['status'])
       })
-      expect(batch.map((m) => m.type)).toEqual(['question'])
+      expect(batch.messages.map((m) => m.type)).toEqual(['question'])
     } finally {
       db.close()
     }
@@ -66,7 +66,7 @@ describe('selectOrchestrationPointerBatch', () => {
           mailboxHandle: MAILBOX,
           waiters: waiters(['question']),
           reservedTypes: new Set(['status'])
-        })
+        }).messages
       ).toEqual([])
     } finally {
       db.close()
@@ -83,8 +83,52 @@ describe('selectOrchestrationPointerBatch', () => {
           mailboxHandle: MAILBOX,
           waiters: waiters(['question'], undefined),
           reservedTypes: undefined
-        })
+        }).messages
       ).toEqual([])
+    } finally {
+      db.close()
+    }
+  })
+
+  it('selects only mail outside the unacked batch, and reselects behind the next one after an ack', () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const run = db.createRun({
+        objective: 'Held batch',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
+      })
+      const mailbox = `run:${run.id}`
+      const params = {
+        runId: run.id,
+        mailboxHandle: mailbox,
+        consumerGeneration: run.consumer_generation
+      }
+      const insert = (subject: string) =>
+        db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject })
+      const heldMessage = insert('held')
+      const first = db.getOrCreateMailboxDelivery(params)!.delivery
+      const newer = insert('newer')
+      const select = () =>
+        selectOrchestrationPointerBatch({
+          db,
+          mailboxHandle: mailbox,
+          waiters: undefined,
+          reservedTypes: undefined
+        })
+
+      const batch = select()
+      expect(batch.heldDeliveryId).toBe(first.id)
+      expect(batch.messages.map((message) => message.id)).toEqual([newer.id])
+      expect(db.getMessageById(heldMessage.id)).toMatchObject({ read: 0, delivered_at: null })
+
+      db.acknowledgeMailboxDelivery({ ...params, deliveryId: first.id })
+      const second = db.getOrCreateMailboxDelivery(params)!.delivery
+      const later = insert('later')
+      expect(select()).toEqual({
+        heldDeliveryId: second.id,
+        messages: [expect.objectContaining({ id: later.id })]
+      })
     } finally {
       db.close()
     }

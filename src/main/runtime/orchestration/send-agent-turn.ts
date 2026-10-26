@@ -33,6 +33,8 @@ export type StructuredSessionTurn = {
   delivery: AgentTurnDelivery
   /** Host-local admission for an automated send. */
   beforeRun?: () => void
+  /** Host-local: a background notice carries no changed user choices. */
+  keepCurrentOptions?: true
 }
 
 export type StructuredSessionTurnSend = {
@@ -138,7 +140,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
+    { ...message, beforeRun: turn.beforeRun, keepCurrentOptions: turn.keepCurrentOptions }
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

@@ -1,19 +1,19 @@
-// Pin agent-history closure verdicts per golden and inherit C1’s families without reclassification.
+// History goldens require complete residual certification; unchanged families retain their legacy labels.
 // Measure the .web entry; its native sibling imports shell-only bundle operations that the page never loads.
 
 import type { PageClosurePins } from './page-closure'
 
 export const C5_PAGE_CLOSURE: PageClosurePins = {
   'aiVault.history': {
-    'aivault-history-scan-fulfilled': 'identical',
-    'aivault-history-scan-unsupported': 'identical',
-    'aivault-history-scan-worktrees-late': 'identical',
+    'aivault-history-scan-fulfilled': 'write-ordinal',
+    'aivault-history-scan-unsupported': 'write-ordinal',
+    'aivault-history-scan-worktrees-late': 'write-ordinal',
     'matrix-aivault.history-aivault.listsessions-1': 'result-absent-settlement',
     'matrix-aivault.history-status.get-1': 'result-absent-settlement'
   },
   'aiVault.history-screen': {
-    'aivault-history-screen-listed': 'identical',
-    'aivault-history-screen-worktrees': 'identical',
+    'aivault-history-screen-listed': 'write-ordinal',
+    'aivault-history-screen-worktrees': 'write-ordinal',
     'matrix-aivault.history-screen-platform-status': 'result-absent-settlement',
     'matrix-aivault.history-screen-status.get-2': 'result-absent-settlement',
     'matrix-aivault.history-screen-worktree.ps-1': 'result-absent-settlement'

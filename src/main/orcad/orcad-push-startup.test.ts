@@ -133,6 +133,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     attachAgentStatusStore() {
       return () => {}
     }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'headless-runtime'
     }

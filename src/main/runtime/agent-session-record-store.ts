@@ -75,8 +75,10 @@ import { AgentSessionStoreTransactions } from './agent-session-store-transaction
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
   compareAndSetAgentSessionRecordName,
+  type AgentSessionUserNameWrite,
   type CompareAndSetConversationName,
-  setAgentSessionRecordConversationName
+  setAgentSessionRecordConversationName,
+  setAgentSessionRecordUserNameThrough
 } from './agent-session-record-conversation-name'
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
@@ -159,6 +161,10 @@ export class AgentSessionRecordStore {
     this.mutate(sessionId, (record) =>
       setAgentSessionRecordConversationName(record, name, Date.now())
     )
+
+  /** The user's name for the conversation; see `AgentSessionUserNameWrite`. */
+  setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
+    setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
   compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
     compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)

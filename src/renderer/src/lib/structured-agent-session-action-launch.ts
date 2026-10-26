@@ -1,5 +1,6 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
+import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
@@ -157,10 +158,9 @@ export async function openTerminalForDeclinedChat(
     placed.activeWorktreeId === worktreeId &&
     placed.activeGroupIdByWorktree[worktreeId] === current.groupId &&
     group.activeTabId === current.id
-  if (current.customLabel !== null) {
-    placed.setTabCustomTitle(replacement.entityId, current.customLabel, {
-      recordInteraction: false
-    })
+  const chatName = readStructuredChatTabSavedName(current, placed)
+  if (chatName !== null) {
+    placed.setTabCustomTitle(replacement.entityId, chatName, { recordInteraction: false })
   }
   if (current.color !== null) {
     placed.setTabColor(replacement.entityId, current.color, { recordInteraction: false })
