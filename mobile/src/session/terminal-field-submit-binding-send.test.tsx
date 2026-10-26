@@ -7,14 +7,7 @@ import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 
-/**
- * The page's buffered submit, end to end through the hook that owns it.
- *
- * The census beside this file reads one spelling of a frozen handler. This reads the behaviour, so
- * a `useMemo`, a module-level function or a ref captured once fails it the same way: the hook is
- * rendered first as a session is before its effects land — no client, no handle, nothing sendable —
- * then again as it is after, and the field's bound listener has to reach the second one.
- */
+// Bind once before the client/handle arrives, then dispatch after rerender to prove the frozen field listener reads current send state.
 const mocks = vi.hoisted(() => {
   const sent: Array<Record<string, unknown>> = []
   return { sent, acknowledge: async () => {} }
@@ -111,8 +104,7 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
 
 function Harness({ session }: { readonly session: Session }): null {
   const { bindCommandField } = useMobileSessionTerminalSendActions(buildScope(session))
-  // Once, as React attaches a ref whose identity does not change — which is why the handler behind
-  // it has to stay current on its own.
+  // Keep ref identity stable as React does; the bound handler must update independently.
   useEffect(() => {
     bindCommandField(fieldAsTextInput)
   }, [bindCommandField])

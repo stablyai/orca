@@ -30,6 +30,12 @@ import type { AgentGenerationFailureOutput } from '../text-generation/agent-fail
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import {
+  clearFirstWorkGenerationFailures,
+  isFirstWorkGenerationBackingOff,
+  resetFirstWorkGenerationBackoff,
+  retryFailedGeneration
+} from './first-work-generation-backoff'
 
 export type FirstWorkBranchRenameEvent = {
   paneKey: string
@@ -75,6 +81,7 @@ export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
 export function resetFirstWorkBranchRenameState(): void {
   inFlightWorktreeIds.clear()
   settledWorktreeIds.clear()
+  resetFirstWorkGenerationBackoff()
 }
 
 function rememberSettledWorktreeId(worktreeId: string): void {
@@ -106,7 +113,11 @@ export async function maybeAutoRenameBranchOnFirstWork(
   if (!worktreeId) {
     return
   }
-  if (settledWorktreeIds.has(worktreeId) || inFlightWorktreeIds.has(worktreeId)) {
+  if (
+    settledWorktreeIds.has(worktreeId) ||
+    inFlightWorktreeIds.has(worktreeId) ||
+    isFirstWorkGenerationBackingOff(worktreeId)
+  ) {
     return
   }
   const prompt = event.prompt?.trim()
@@ -117,6 +128,7 @@ export async function maybeAutoRenameBranchOnFirstWork(
   try {
     const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
     if (settled) {
+      clearFirstWorkGenerationFailures(worktreeId)
       rememberSettledWorktreeId(worktreeId)
     }
   } catch (error) {
@@ -233,10 +245,7 @@ async function runAutoRename(
     return retry('a WSL move started during generation')
   }
   if (!generated.success) {
-    if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
-    }
-    return retry(`generation failed: ${generated.error}`)
+    return retryFailedGeneration(worktreeId, generated, deps, retry)
   }
 
   // Generation can outlive a branch switch or publication.

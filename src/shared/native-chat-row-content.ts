@@ -1,20 +1,15 @@
-// One derivation of a message's renderable parts, shared by the row that draws it
-// and the list that decides whether it occupies a transcript slot. Windowing makes
-// that agreement load-bearing: a row the list counts but the row component declines
-// to draw would reserve estimated height for nothing.
-//
-// Cached on the block array itself, so a streaming turn re-deriving on every frame
-// pays once per revision rather than once per consumer.
+// Share renderability with transcript windowing or invisible rows reserve empty slots.
+// Cache by block-array revision so streaming consumers derive content once per frame.
 
 import { backgroundTaskBlocks, claimBackgroundTaskTwins } from './native-chat-background-task-row'
-import { isWordlessProviderFrameBlock } from './native-chat-provider-frame-summary'
+import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
 import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
   type NativeChatBlock
 } from './native-chat-types'
-import { splitNativeChatBlocks } from './native-chat-tool-fold'
+import { splitNativeChatBlocks } from './native-chat/tools/native-chat-tool-fold'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
 
 /** Inferred from `derive` so the shape cannot drift from what it returns. */
@@ -28,11 +23,7 @@ function derive(blocks: readonly NativeChatBlock[]) {
   )
   const groups = subagentGroupBlocks(split.prose)
   const tasks = backgroundTaskBlocks(split.prose)
-  // Both row kinds carry a plain-text twin so a client without the block type
-  // still reads them. This draws the blocks, so only the twins are dropped —
-  // never real text beside them, which a lane folding a roster into a message
-  // keeps. A task row's twin is claimed by exact text, because its sentence is
-  // often the provider's own and has no shape to match.
+  // Remove fallback twins only when rendering their blocks; preserve real adjacent prose. Task twins need exact matching because provider sentences have no stable shape.
   const taskTwins = claimBackgroundTaskTwins(split.prose)
   const prose =
     groups.length === 0 && tasks.length === 0

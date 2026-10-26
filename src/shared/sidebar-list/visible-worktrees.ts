@@ -37,8 +37,7 @@ export function selectVisibleSidebarWorktrees({
   preserveLineageParentOrder,
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
-  // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
-  // every other valid ancestor can bypass filters so children never orphan.
+  // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
   let all = filterWorkspaceRows(rows, filters, facts)
@@ -56,9 +55,7 @@ export function selectVisibleSidebarWorktrees({
     }
   }
 
-  // Apply cached sort order. Items not yet in the cache (e.g. brand-new
-  // worktrees before the next sortEpoch bump) are appended at the end.
-  // Manual placement belongs to the parent, even when a hidden child has a higher rank.
+  // Append unranked/new rows until the next sortEpoch. Manual placement follows the parent, even if a hidden child ranks higher.
   if (injectLineageAncestors !== false && preserveLineageParentOrder) {
     all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
   }
@@ -80,7 +77,7 @@ function addVisibleLineageAncestors(
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
-  // The parent nesting puts each row under, so an injected ancestor is the one it nests in.
+  // Use the same parent for ancestor injection and nesting.
   const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, ancestorByIdentity)
 
   const addWithAncestors = (worktree: Worktree): void => {
@@ -89,8 +86,7 @@ function addVisibleLineageAncestors(
       return
     }
     const parent = parentByIdentity.get(identity)
-    // Why: a repository filter is an explicit boundary; other filters keep
-    // valid ancestors so visible children retain their hierarchy.
+    // Repository filters are hard boundaries; ordinary filters may retain ancestors.
     if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
       addWithAncestors(parent)
     }

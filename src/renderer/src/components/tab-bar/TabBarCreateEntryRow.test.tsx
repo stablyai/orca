@@ -26,8 +26,7 @@ function makeFileOption(path: string): ActiveOption {
   }
 }
 
-// The tooltip itself is asserted in tests/e2e/tab-create-entry-file-paths.spec.ts,
-// where it actually opens; here we only need the row's own text layout.
+// Keep tooltip opening in E2E; this render only verifies row text layout.
 function renderRow(option: ActiveOption): HTMLButtonElement {
   act(() => {
     root.render(

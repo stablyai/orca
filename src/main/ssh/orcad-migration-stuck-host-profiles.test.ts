@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { SshRemotePtyLease, SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
   fenceOrcadMigrationSource,
@@ -28,8 +28,7 @@ import {
 import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
 import { allowsDirectSshRelay } from './connection/ssh-connection-store'
 
-// Relay-era profiles as the reporters' builds left them, loaded by the real Store and taken through
-// the conversion's source steps: terminal proof, lease retirement, then the fence and its preflight.
+// Load relay-era profiles through the real Store, then exercise terminal proof, lease retirement and fenced preflight.
 
 const TARGET: SshTarget = {
   id: 'ssh-wsl',
@@ -66,7 +65,6 @@ function relayEraProfile(projects: number): PersistedState {
   return state
 }
 
-/** One terminal tab, as the unified model and the legacy map both hold it. */
 function openTerminal(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -122,7 +120,7 @@ function load(profile: PersistedState) {
   return { userDataPath, store, claims: new SshTargetOrcadClaims(store) }
 }
 
-/** The connect's own sequence: prove the host's terminals, retire what that proves, then fence. */
+/** Match connect order: terminal proof, lease retirement, then fence. */
 async function connectMove(
   loaded: ReturnType<typeof load>,
   census: HostRelayTerminalProof = { verdict: 'exited', count: 0 }
@@ -368,7 +366,7 @@ describe('"Move anyway"', () => {
     expect(session?.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['tab-1'])
     expect(session?.unifiedTabs?.[worktreeId]?.map((tab) => tab.id)).toEqual(['tab-1'])
     expect(session?.openFilesByWorktree?.[worktreeId] ?? []).toEqual([])
-    // Nothing is deleted: the draft and the older copy are still saved on this desktop.
+    // Refusal must preserve both the draft and older desktop copy.
     expect(loaded.store.getWorkspaceSession(HOST)).toEqual(before)
     expect(
       loaded.store.getWorkspaceSession().tabsByWorktree[worktreeId]?.map((tab) => tab.id)
@@ -465,7 +463,7 @@ describe('"Move anyway"', () => {
     }
     const session = result.cutover.manifest.payload.dormantState?.workspaceSession
     expect(session?.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['tab-1'])
-    // The server gets the tab; the commit renames the draft into this desktop's server partition.
+    // Transfer tabs in the manifest, then rename drafts into this desktop's server partition.
     expect(session?.openFilesByWorktree?.[worktreeId]).toEqual([
       expect.not.objectContaining({ dirtyDraftContent: expect.anything() })
     ])

@@ -1,8 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A chat tab's pointer to the conversation it shows, driven end to end: a real record store on disk,
- * the real structured host, the real runtime, and the real RPC handlers. Only the provider is faked.
- */
+/** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

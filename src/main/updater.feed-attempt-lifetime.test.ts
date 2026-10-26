@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const { autoUpdaterMock, fetchNewerReleaseTagsMock, moduleFactories, resetUpdaterMocks } =
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
@@ -42,9 +43,7 @@ function holdFirstPreflight(): (value: FeedResult) => void {
 
 async function setup() {
   const updater = await loadUpdaterModule()
-  const mainWindow = { webContents: { send: vi.fn() } }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only webContents.send is used; all native Electron APIs are mocked.
-  updater.setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+  updater.setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => Date.now() })
   return updater
 }
 

@@ -10,17 +10,14 @@ import {
   utf8ByteLength
 } from './bridge-caps'
 
-/** A JSON document of exactly `bytes` UTF-8 bytes: a quoted run of ASCII. */
 function jsonStringOfBytes(bytes: number): string {
   return `"${'x'.repeat(bytes - 2)}"`
 }
 
-/** A scalar nested inside `levels - 1` arrays, so the scalar itself sits at `levels`. */
 function nestedArrays(levels: number): string {
   return `${'['.repeat(levels - 1)}0${']'.repeat(levels - 1)}`
 }
 
-/** An array holding `nodes - 1` scalars, so the array and its values total `nodes`. */
 function arrayOfNodes(nodes: number): string {
   return `[${Array.from({ length: nodes - 1 }, () => '0').join(',')}]`
 }
@@ -46,7 +43,6 @@ describe('utf8ByteLength', () => {
   })
 })
 
-/** A listing reply of the shape the node cap would refuse: `rows` records of four fields each. */
 function listingReply(rows: number): string {
   const records = Array.from({ length: rows }, (_, index) => ({
     id: index,
@@ -175,13 +171,7 @@ describe('parseBridgeMessage direction', () => {
   })
 })
 
-/**
- * Which URLs the shell will open for a page.
- *
- * Parsed rather than prefix-matched on purpose: a scheme is what a URL parser says it is, and a
- * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. Both sides run this —
- * the envelope refuses the frame and the page's seam refuses the call — so the rule lives once.
- */
+// Use the shared URL parser rule at both page call and shell envelope; an allowlisted absolute scheme is required before device dispatch.
 describe('the URLs a page may hand to the shell', () => {
   it('takes the three schemes a task source produces, on any host and any path', () => {
     for (const url of [
@@ -221,15 +211,7 @@ describe('the URLs a page may hand to the shell', () => {
   })
 })
 
-/**
- * What crosses is the parser's URL, not the page's string.
- *
- * The WHATWG parser strips tab, LF and CR from anywhere in a URL and trims leading and trailing C0
- * and space before it reads the scheme. So a string the check accepts is not always the string a
- * handler should be given: forwarding it raw hands the device a URL that reads as allowed here and
- * as something else there. Normalizing is the fix; refusing anything that differs from its
- * normalization is not, because `https://example.com` differs from its own href by a slash.
- */
+// Forward normalized hrefs: WHATWG strips controls and trims spaces, while valid bare origins gain a slash. Rejecting every changed spelling would reject ordinary URLs.
 describe('the URL that actually crosses', () => {
   it('is the parsed href, for the four shapes that survive the scheme check unchanged', () => {
     expect(readBridgeExternalLinkUrl('ht\ntps://example.com')).toBe('https://example.com/')
@@ -239,7 +221,6 @@ describe('the URL that actually crosses', () => {
   })
 
   it('takes an ordinary URL that differs from its own href, rather than refusing it', () => {
-    // The whole reason this normalizes instead of comparing: a bare origin gains a path slash.
     expect(readBridgeExternalLinkUrl('https://example.com')).toBe('https://example.com/')
   })
 

@@ -140,7 +140,7 @@ describe('OrcaRuntimeService', () => {
     const elapsed = performance.now() - start
 
     expect(candidates).toEqual([])
-    // Why: the extension regex is quadratic per line; unbounded it took seconds on the PTY hot path. Loose bound to avoid CI flake.
+    // Bound the formerly quadratic hot-path regex loosely to avoid timing flakes.
     expect(elapsed).toBeLessThan(500)
   })
 
@@ -513,7 +513,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-1', redraw, 101)
     await liveScreen.write(redraw)
 
-    // Why: CUU changes the mutable screen, but completed-line pagination is a distinct contract.
+    // Mutable-screen cursor movement must not alter completed-line pagination.
     expect(liveScreen.getVisibleLines().filter((line) => line.length > 0)).toEqual(['A', 'B2', 'C'])
     await expect(runtime.readTerminal(terminal.handle, { cursor: 2 })).resolves.toMatchObject({
       tail: ['C', 'B2'],

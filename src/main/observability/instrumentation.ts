@@ -1,26 +1,3 @@
-// Convenience wrappers around the tracer for the span boundaries listed in
-// telemetry-error-tracking.md §"Span boundaries worth capturing":
-//
-//   - IPC boundaries (renderer → main preload calls)
-//   - Agent session lifecycle (start, turn, stop, recover)
-//   - Git command execution
-//   - Worktree setup (clone / checkout / install)
-//   - PTY session lifecycle
-//   - External editor launches
-//   - Updater operations
-//
-// Each helper wraps `withSpan` from `tracer.ts` with a sensible default
-// span name and a small attribute pack. Call sites that already produce
-// detailed Result objects (git runner returning stdout/stderr; PTY layer
-// reporting exit codes) thread that detail in via `attributes` so the
-// span attribute pack stays cohesive without each call site re-inventing
-// keys.
-//
-// All helpers are no-ops when the tracer's active sink is unset (the
-// observability lane was disabled at startup by env var or CI). The span
-// itself becomes a `noopSpan` that swallows all calls — call sites do not
-// need to branch on whether tracing is on.
-
 import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types'
 import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
@@ -29,8 +6,6 @@ const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
 const GIT_FAST_SUCCESS_BUDGET_PER_WINDOW = 60
 const GIT_SAMPLING_MAX_BUCKETS = 512
 
-// Why: trace captures showed `git status --short` bursts dominating payloads.
-// Keep enough fast successes for timing shape while bounding memory and volume.
 const GIT_GLOBAL_OPTIONS_WITH_OPERAND = new Set([
   '-c',
   '-C',
@@ -150,8 +125,7 @@ function shouldRecordGitSpan(
 
 function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
   span.setAttribute('git.subcommand', gitSubcommandFromArgs(meta.args))
-  // Why: git args can contain commit messages, branch names, remotes, or
-  // paths. Keep cardinality without copying user-authored content.
+  // Git arguments may contain user content; record counts instead.
   span.setAttribute('git.arg_count', meta.args.length)
   if (meta.cwd) {
     span.setAttribute('cwd', meta.cwd)
@@ -171,9 +145,6 @@ export type GitSpanArgs = {
   readonly cwd?: string
 }
 
-/** Wrap a git execution in a `git.exec` span. Git accepts global options before
- *  the subcommand; promoting the parsed command to its own attribute makes it
- *  grep-friendly without copying the full args array into dashboards. */
 export async function withGitSpan<T>(
   meta: GitSpanArgs,
   fn: (span: ActiveSpan) => Promise<T>
@@ -188,7 +159,6 @@ export async function withGitSpan<T>(
   )
 }
 
-/** Start a git span whose lifetime follows a returned ChildProcess. */
 export function startGitSpan(meta: GitSpanArgs): ActiveSpan {
   const span = startSpan('git.exec', {
     attributes: { kind: 'git' },
@@ -203,8 +173,7 @@ export type WorktreeSpanArgs = {
   readonly path?: string
 }
 
-/** Wrap a worktree-setup phase in a `worktree.<stage>` span. The callback receives the span so a
- *  create can attach its own phase breakdown; the git children alone leave the waits invisible. */
+/** Expose the span to capture phase waits beyond git child processes. */
 export async function withWorktreeSpan<T>(
   meta: WorktreeSpanArgs,
   fn: (span: ActiveSpan) => Promise<T>
@@ -228,8 +197,7 @@ type WorktreeCreatePhaseTiming = {
   readonly durationMs: number
 }
 
-/** Wall-clock span covered by at least one phase. Create runs some phases concurrently, so summing
- *  durations double-counts and would report overlap as coverage the phases never had. */
+/** Union phase intervals to avoid double-counting concurrent work. */
 function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
   const intervals = [...phases]
     .map((phase) => [phase.startedAtMs, phase.startedAtMs + phase.durationMs] as const)
@@ -256,8 +224,7 @@ function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
 
 type WorktreePhaseInterval = Pick<WorktreeCreatePhaseTiming, 'startedAtMs' | 'durationMs'>
 
-/** Records a create's phase breakdown on its span. Phase names are already a closed vocabulary in
- *  the recorder, so they are safe to key on; nothing here carries a branch name or a path. */
+/** Closed phase names exclude user paths and branch names. */
 export function addWorktreeCreatePhaseAttributes(
   span: ActiveSpan,
   timing: {
@@ -270,7 +237,6 @@ export function addWorktreeCreatePhaseAttributes(
   if (timing.preparedCheckout) {
     span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
     if (timing.preparedCheckout.status === 'hit') {
-      // A hit that had to reset still paid for it, so it must not be read as a free hit.
       span.setAttribute('worktree.create.prepared_checkout_reset', timing.preparedCheckout.reset)
       span.setAttribute('worktree.create.prepared_checkout_origin', timing.preparedCheckout.origin)
     } else {
@@ -280,12 +246,9 @@ export function addWorktreeCreatePhaseAttributes(
   for (const phase of timing.phases) {
     span.setAttribute(`worktree.create.phase.${phase.phase}_ms`, Math.round(phase.durationMs))
   }
-  // What the phases do not cover is the number that matters when create feels slow for no visible
-  // reason, so name it rather than leaving it to subtraction.
   span.setAttribute('worktree.create.unattributed_ms', worktreeCreateUnattributedMs(timing))
 }
 
-/** Wall-clock time of a create that no timed phase covers; overlapping phases count once. */
 export function worktreeCreateUnattributedMs(timing: {
   totalDurationMs: number
   phases: readonly WorktreePhaseInterval[]
@@ -293,7 +256,6 @@ export function worktreeCreateUnattributedMs(timing: {
   return Math.max(0, Math.round(timing.totalDurationMs - measuredWallClockMs(timing.phases)))
 }
 
-/** Closed set so a typo can't silently mint an orphan span name. */
 export type WorktreeRemoveStage =
   | 'archive_hook'
   | 'cache_invalidation'
@@ -302,8 +264,7 @@ export type WorktreeRemoveStage =
   | 'pty_sweep'
   | 'watcher_gate'
 
-/** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered
- *  views keep the whole tree, and `worktree.flow` separates the folder/remote/local removal paths. */
+/** Share kind with children to retain the tree in filtered views; flow distinguishes removal paths. */
 export async function withWorktreeRemoveStageSpan<T>(
   stage: WorktreeRemoveStage,
   flow: 'folder' | 'remote' | 'local',

@@ -1,10 +1,4 @@
-/**
- * One xterm outside the pane system, with everything a typed-into terminal needs: Orca's Unicode
- * widths, links and IME handling, the pane's copy/paste and shortcut policy, kitty keyboard flags,
- * and input that never forwards xterm's own replies to replayed output. Callers own the transport
- * (where output comes from, where input goes, and the backpressure ack in `write`'s callback).
- * Used by the agent dashboard preview and the plain SSH terminal.
- */
+/** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
 import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -32,10 +26,7 @@ export type StandaloneTerminalArgs = {
   sessionKey: string
   /** The user's keystrokes and pastes, plus xterm's replies to output when `answersQueries`. */
   sendInput: (data: string) => boolean | Promise<boolean>
-  /**
-   * True when this xterm is the session's only emulator, so programs wait on its replies to
-   * cursor, device and keyboard queries. A mirror (the preview) leaves them to the real pane.
-   */
+  /** Only the session’s sole emulator answers terminal queries; mirrors leave replies to the real pane. */
   answersQueries: boolean
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
@@ -44,10 +35,7 @@ export type StandaloneTerminalArgs = {
 
 export type StandaloneTerminal = {
   terminal: Terminal
-  /**
-   * `live`: new output, scanned for kitty pushes as they happen; otherwise replayed bytes, applied
-   * idempotently. `onDone` runs once xterm has parsed the chunk, which is when to ack backpressure.
-   */
+  /** Scan live kitty pushes or apply replay idempotently; onDone signals parse completion for backpressure acknowledgment. */
   write: (chunk: string, options: { live: boolean; onDone?: () => void }) => void
   dispose: () => void
 }
@@ -130,8 +118,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   return {
     terminal,
     write: (chunk, { live, onDone }) => {
-      // Why: a redelivered snapshot repeats the TUI's one-time kitty push, so
-      // replayed bytes must apply as idempotent sets (see the tracker's docs).
+      // Snapshots redeliver one-time kitty pushes; replay must use idempotent sets rather than push twice.
       if (live) {
         kittyKeyboardModes.scan(chunk)
       } else {

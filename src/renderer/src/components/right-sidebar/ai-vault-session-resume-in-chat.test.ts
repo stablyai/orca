@@ -61,7 +61,6 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
   )
 
   it('refuses a row already adopted into a chat before any other check', () => {
-    // That row reopens its own chat; a second adoption is a conflict the host would refuse.
     expect(
       eligibility({
         session: {
@@ -97,7 +96,6 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
   })
 
   it('offers a zero-count row whose preview proves the turns exist', () => {
-    // Some parsers only learn the turn count from metadata that may be absent.
     expect(
       eligibility({
         session: session({

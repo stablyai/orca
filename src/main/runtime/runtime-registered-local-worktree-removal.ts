@@ -40,7 +40,7 @@ export function removeRuntimeRegisteredLocalWorktree(
   return runSerializedWorktreeRemovalAcceptance(
     args.repo.path,
     async (): Promise<RemoveWorktreeResult & { warning?: string }> =>
-      // Why: another client's removal of this worktree may have been accepted during the wait.
+      // Recheck after queue wait: another client may already have accepted this deletion.
       waitForPendingWorktreeRemoval(args.target.id)
         ? { removing: true }
         : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
@@ -71,7 +71,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   finishRemoval: (
     result: RemoveWorktreeResult | undefined,
     rememberBranch: boolean,
-    // Why: re-read after the archive hook, which can move the branch out from under the pre-hook row.
+    // Archive hooks may move the branch; re-read the fallback head afterward.
     fallbackHead: string | undefined
   ) => void
   /** Fired when Git finished, not on acceptance. */
@@ -82,8 +82,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const canonicalPath = registeredWorktree.path
   const hooks = getEffectiveHooks(repo)
   let warning: string | undefined
-  // Precondition, not an advisory: this runs before the registration refresh, the preflights, the
-  // PTY stop and `removeWorktree`, so a throw here leaves every one of them untouched (#19334).
+  // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (hooks?.scripts.archive && args.runHooks) {
     const result = await runHook(
@@ -166,8 +165,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     args.publish()
     return { ...result, ...acceptedFields }
   }
-  // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
-  // request that asked for it times out; other views read the host's `removing` marker meanwhile.
+  // After all refusals, detach slow Git deletion so request timeout cannot cancel it; clients follow the removing marker.
   void startBackgroundWorktreeRemoval({
     removal: {
       worktreeId: args.target.id,
@@ -253,7 +251,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
     }
-    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    // Removal overtakes earlier scans; invalidate their catalogs.
     runWorktreeChangeInvalidators(repo.id)
     completed = true
   } finally {

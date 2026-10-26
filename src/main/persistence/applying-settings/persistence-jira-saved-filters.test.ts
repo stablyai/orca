@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import { normalizeJiraSavedFilterState } from '../../../shared/jira/jira-saved-filters'
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))

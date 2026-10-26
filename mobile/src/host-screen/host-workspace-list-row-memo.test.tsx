@@ -13,7 +13,6 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
-  // Renders every row through the list's own renderItem, as a mounted SectionList would.
   SectionList: ({
     sections,
     keyExtractor,
@@ -42,7 +41,7 @@ vi.mock('../components/WorktreeAgentList', () => ({
     return null
   }
 }))
-// The row always renders the glyphs, so each call is one row render.
+// Each row always renders glyphs, so glyph calls count row renders.
 vi.mock('../components/WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
   WorktreeMetaGlyphs: () => {
@@ -50,7 +49,6 @@ vi.mock('../components/WorktreeMetaGlyphs', () => ({
     return null
   }
 }))
-// Off this embedded path; mocked for their native imports.
 vi.mock('../components/MobileSearchField', () => ({}))
 vi.mock('../components/NewWorkspaceFab', () => ({ FAB_SIZE: 56 }))
 
@@ -96,7 +94,7 @@ const noop = () => {}
 const stable = { ref: { current: null }, repoById: new Map() }
 
 function listProps(worktrees: Worktree[]) {
-  // Each poll re-parses the payload, so rows are fresh objects even when nothing changed.
+  // Reparse like every poll, producing fresh row objects even for unchanged data.
   const polled: Worktree[] = JSON.parse(JSON.stringify(worktrees))
   const sections = buildSections(polled, 'name', NO_WORKSPACE_ROW_FILTERS, '', 'none', new Set())
   const controller = {

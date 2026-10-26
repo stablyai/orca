@@ -141,6 +141,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
   it('clamps to the tab creation time when the activity signal predates it', () => {
     const entry = makeEntry({
       createdAt: 4000,
+      agentLastActivityAt: 1000,
       worktree: makeWorktree({ lastActivityAt: 1000 })
     })
     const [result] = searchWorkspaceTabs([entry], '')

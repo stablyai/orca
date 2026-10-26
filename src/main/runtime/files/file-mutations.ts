@@ -161,7 +161,7 @@ export class RuntimeFileMutations {
       expectedSshConnectionGeneration
     )
     requireLocalRuntimeFileRoute(tempTarget)
-    // Why: commit through the resolved (not symlink-preserving) temp and final paths.
+    // Commit resolved temp/final paths, not symlink-preserving spellings.
     const store = this.host.requireStore()
     const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
     const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
@@ -237,7 +237,7 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
+    // Remote runtimes have no client Trash; callers confirm this permanent delete.
     await requireRuntimeFileProvider(target, this.host).deletePath(target.path, recursive)
     return { ok: true }
   }

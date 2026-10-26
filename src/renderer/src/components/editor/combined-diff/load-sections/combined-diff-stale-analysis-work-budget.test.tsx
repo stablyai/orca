@@ -306,7 +306,7 @@ describe('combined diff discarded-result analysis budget', () => {
       })
       await flushLoads()
     }
-    // Every fetch superseded by the next invalidation would leave the first load on screen.
+    // Discarding every superseded fetch would permanently retain the first displayed result.
     const shown = Number(hook.result.current.sections[0]?.modifiedContent.slice(1))
     expect(shown).toBeGreaterThanOrEqual(3)
   })

@@ -6,7 +6,7 @@ import {
   readNewerDaemonHeldScreen,
   reopenNewerDaemonTerminals
 } from '../../../daemon/daemon-newer-protocol-hold'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 
 export function installPtyNewerDaemonHoldIpcHandlers(): void {
   const ipcMain = getPtyIpc()

@@ -6,10 +6,7 @@ import {
   nativeChatRequiresLocalTranscript
 } from '../../../src/shared/native-chat-agent-support'
 
-// Why: native chat renders an agent's own JSONL transcript, and the host
-// resolver knows these transcript layouts. Agents whose hook reports no
-// transcript path (Grok, omp) are additionally gated on host readability,
-// because Model-A SSH stores their transcript on the remote target.
+// Grok/omp lack hook transcript paths, so gate on serving-host readability when Model-A SSH keeps files remote.
 export function isMobileNativeChatTranscriptReadable(
   connectionId: string | null | undefined
 ): boolean {
@@ -18,18 +15,13 @@ export function isMobileNativeChatTranscriptReadable(
 
 export type MobileNativeChatResolution = {
   agent: string
-  /** The agent's own session id, or null before it has reported one (the view
-   *  then shows a waiting state instead of trying to read an unaddressable file). */
   sessionId: string | null
-  /** Hook-reported transcript path. Recent Claude sessions cannot always be
-   *  resolved from the provider session id, so mobile forwards this to runtime. */
+  // Forward the hook path because recent Claude sessions may not resolve by session id alone.
   transcriptPath: string | null
-  /** False when only this phone's memory names the agent: it may have exited to a
-   *  shell, so the chat is read-only rather than typing into a bare prompt. */
+  // Remembered identity alone permits reads only; typing could otherwise reach a bare shell.
   agentConfirmed: boolean
 }
 
-/** The last chat identity resolved for a terminal tab, bound to the handle it was seen on. */
 export type MobileNativeChatIdentity = {
   terminal: string
   agent: string
@@ -42,17 +34,12 @@ export type MobileNativeChatTab = {
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
   nativeChatIdentity?: MobileNativeChatIdentity
-  /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
   sessionId?: string | null
   agent?: string | null
 }
 
-/** Resolve a session tab to the transcript identity native chat needs, or
- *  null when the tab can't show native chat (not a terminal, no agent, or an
- *  agent whose transcript the host can't read). Agent comes from the launch
- *  hint or the live status; session id from the captured provider session. */
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
   nativeChatTranscriptIsLocalReadable = false
@@ -61,8 +48,7 @@ export function resolveMobileNativeChat(
     return null
   }
   if (tab.type === 'agent-session') {
-    // Structured tabs are journal-backed, so any agent the host lists renders here — there is no
-    // per-agent transcript layout to know.
+    // Structured tabs use journals, so no per-agent transcript layout is needed.
     return tab.sessionId && isStructuredAgentId(tab.agent)
       ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null, agentConfirmed: true }
       : null
@@ -97,9 +83,7 @@ export function resolveMobileNativeChat(
   }
 }
 
-/** Why: a status frame that omits the agent or its session (an older host, a re-subscribe) is
- *  missing evidence, not proof the pane changed, so chat must not flip to the terminal. A new
- *  handle is a new PTY and starts fresh; a pending (null) handle keeps the last identity. */
+// Missing status is not proof of pane change: retain identity until a new PTY handle replaces it, including pending/null handles.
 // Why structural, not MobileSessionTab: the route types pull React Native globals into e2e.
 export function withRememberedNativeChatIdentity<
   T extends MobileNativeChatTab & { id: string; terminal?: string | null }
@@ -128,12 +112,10 @@ export function withRememberedNativeChatIdentity<
   })
 }
 
-/** False only when this phone's memory alone names the tab's chat agent; chat writes stay locked. */
 export function isMobileNativeChatAgentConfirmed(tab: MobileNativeChatTab | null): boolean {
   return resolveMobileNativeChat(tab, true)?.agentConfirmed !== false
 }
 
-/** Whether the tab can toggle into native chat — gates the long-press item. */
 export function canShowMobileNativeChat(
   tab: MobileNativeChatTab | null,
   nativeChatTranscriptIsLocalReadable = false

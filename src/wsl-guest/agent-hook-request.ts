@@ -117,12 +117,11 @@ export async function handleRelayHookRequest(
     res.writeHead(204)
     res.end()
   } catch (err) {
-    // Why (#11217): a remote host can run the same IDS; count truncations here so a blocked SSH
-    // relay reports the cause instead of an anonymous "hook request failed".
+    // Count remote truncations too so a blocked relay names the cause rather than an anonymous request failure (#11217).
     if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
       options.transportInterference.record({ source: null, error: err })
     }
-    // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
+    // Fail open with 204 so hook errors cannot block agents, but log failures for diagnosis.
     process.stderr.write(
       `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
     )

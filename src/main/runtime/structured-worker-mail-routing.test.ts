@@ -90,7 +90,6 @@ describe('bare-handle direct mail to a structured session', () => {
   })
 
   it('withholds the pane key from a retired worker: released, with its tab gone', () => {
-    // Mail is never routed to a worker this runtime no longer owns.
     const handle = registerWorker()
     installRecord({ runtimeKind: 'native', claimStatus: 'released' }, false)
     expect(getLivePaneKey.call(paneKeyStub, handle)).toBeNull()
@@ -124,8 +123,7 @@ describe('implicit sender resolution refuses to guess', () => {
   })
 
   it('refuses rather than picking the first of several', async () => {
-    // An arbitrary pick lets a bare `send --type worker_done` settle a SIBLING's context-only
-    // dispatch, a tier that has no capability token to reject on.
+    // An arbitrary sender guess can settle a sibling's context-only Dispatch, which has no capability token to reject it.
     await expect(
       resolveActiveTerminal.call(senderStub(['leaf_a', 'leaf_b']), 'id:wt_1', {
         requireUnambiguous: true
@@ -134,9 +132,7 @@ describe('implicit sender resolution refuses to guess', () => {
   })
 
   it('refuses the same arbitrary pick before the terminal graph is ready', async () => {
-    // The snapshot carries a focused terminal on purpose: without it the refusal below would come
-    // from the ambiguous `listTerminals` fallback alone and would still hold with the pre-ready
-    // focus guess left in, proving nothing about it.
+    // Keep a focused terminal in the starting graph so only the pre-ready identity guard can refuse this request.
     const preReady = {
       graphStatus: 'starting',
       resolveWorktreeSelector: async () => ({ id: 'wt_1' }),

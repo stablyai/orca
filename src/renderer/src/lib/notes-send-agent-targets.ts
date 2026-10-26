@@ -43,8 +43,7 @@ function detectTitleHintPaneEvidence(
     const status = detectAgentSendTitleStatus(paneTitleResolution.title)
     return status ? { status, title: paneTitleResolution.title } : null
   }
-  // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
-  // when the leaf has no runtime pane title of its own yet.
+  // Use enriched tab title only before the leaf gets its own runtime title, as isTerminalRunningAgent does.
   if (paneTitleResolution.hasAnyPaneTitle) {
     return null
   }
@@ -52,23 +51,7 @@ function detectTitleHintPaneEvidence(
   return status ? { status, title: tabTitle } : null
 }
 
-/**
- * Agents of a worktree the notes dropdown can target.
- *
- * Why this exists on top of deriveRunningAgentSendTargets: that derivation only
- * sees panes with a live status entry, so a freshly launched (still idle) agent
- * stays invisible until its first hook event — i.e. until the user talks to it.
- * We augment it with recognized agent-title tabs whose pane still has a live
- * PTY. TerminalTab.launchAgent records the harness Orca started; manually typed
- * CLIs do not have that owner bit, so their runtime title is the only pre-hook
- * signal available.
- *
- * The title hint gates discoverability only. The runtime independently checks
- * current hook/process evidence before any guarded write.
- *
- * A chat before its first turn has no status either; it is added here too, since
- * its composer already takes messages.
- */
+/** Add live title-backed terminals and first-turn chats that lack hook status. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
@@ -85,9 +68,7 @@ export function deriveNotesSendAgentTargets(
       continue
     }
 
-    // Why: a launchAgent tab carries an owner bit, so its live title can promote a
-    // stale status row on the same pane. A manually started CLI has no owner bit,
-    // so it only ever adds a row and must not override existing status evidence.
+    // Launch ownership permits fresh titles to override stale same-pane status; manual hints may only add missing rows.
     if (tab.launchAgent) {
       mergeLaunchAgentTitleTarget(targets, titleHintTarget)
     } else {
@@ -142,8 +123,7 @@ function deriveTitleHintAgentTarget(
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
   const titleEvidence = detectTitleHintPaneEvidence(paneTitleResolution, tab.title)
   if (!titleEvidence) {
-    // Why: launch metadata predates TUI identity; require a matching current title
-    // before listing either launched or manually started panes.
+    // Launch metadata can precede actual TUI startup; require current matching title evidence for discovery.
     return null
   }
   const disabledReason =
@@ -160,8 +140,7 @@ function deriveTitleHintAgentTarget(
   }
 }
 
-// Why: a manual title hint is the weakest signal, so never duplicate a tab that
-// already has a status-backed or launch-agent row — even a disabled one.
+// Manual hints are weakest; never duplicate status/launch rows, including disabled ones.
 function mergeManualAgentTitleTarget(
   targets: NotesSendAgentTarget[],
   target: NotesSendAgentTarget
@@ -183,9 +162,7 @@ function mergeLaunchAgentTitleTarget(
       return
     }
 
-    // Why: hook-backed status can outlive the CLI after sleep/resume. When the
-    // same live launch-agent pane has a fresh title proof, prefer the sendable
-    // runtime evidence over the stale retained status row.
+    // Sleep/resume can leave stale hook status; prefer fresh live-title evidence on the same launch-owned pane.
     targets[samePaneIndex] = {
       ...target,
       agentType:
@@ -197,8 +174,7 @@ function mergeLaunchAgentTitleTarget(
     return
   }
 
-  // Why: dedupe by tab for fresh/permission status rows. Their active leaf may
-  // be a split shell pane, which would list a second bogus row for the same tab.
+  // Deduplicate fresh/permission rows by tab or an active split shell could create a bogus second target.
   if (
     targets.some(
       (existing) =>

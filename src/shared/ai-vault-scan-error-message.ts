@@ -1,9 +1,4 @@
-/**
- * Maps the session scanner's internal supervision errors onto copy a user can
- * act on. Applied at both surfaces the panel paints: the local leg's scan-issue
- * row and the thrown-rejection banner. Anything unrecognized passes through, so
- * scanner-authored messages (host name, remote path, cap) keep their own wording.
- */
+/** Map supervision errors at scan-issue rows and rejection banners. Pass unknown scanner-authored messages through to retain host/path/cap details. */
 const RETRY = 'Refresh to try again.'
 
 /** Electron wraps every rejected `ipcMain.handle` before the renderer sees it. */

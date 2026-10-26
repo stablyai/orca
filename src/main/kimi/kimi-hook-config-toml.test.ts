@@ -21,13 +21,14 @@ function deleteEndMarker(text: string): string {
 }
 
 describe('kimi managed hooks TOML block', () => {
-  it('installs every managed event without a matcher', () => {
+  it('installs every managed event, scoping only SessionStart to resumes', () => {
     const block = buildManagedKimiHooksBlock(COMMAND)
     for (const event of KIMI_HOOK_EVENTS) {
       expect(block).toContain(`event = "${event}"`)
     }
     // Kimi treats matcher as a regex; omitting it matches all tools.
-    expect(block).not.toContain('matcher')
+    expect(block.match(/matcher = .*/g)).toEqual(['matcher = "^resume$"'])
+    expect(block).toContain('event = "SessionStart"\nmatcher = "^resume$"')
     expect(
       readManagedKimiHookEvents(applyManagedKimiHooks('', COMMAND, isManaged), isManaged)
     ).toEqual(new Set(KIMI_HOOK_EVENTS))

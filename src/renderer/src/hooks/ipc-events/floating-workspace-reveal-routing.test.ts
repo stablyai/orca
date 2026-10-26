@@ -22,7 +22,6 @@ function testStore(): ReturnType<typeof createTestStore> {
   return mocks.store.current
 }
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -60,7 +59,6 @@ const MAIN = 'repo1::/repo1/main'
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
 
 type Listener = (payload: never) => void
-/** The fields a test sends; each named bridge listener declares the full shape. */
 type BridgeEventPayload = Record<string, unknown>
 
 function setup(): {
@@ -230,7 +228,6 @@ describe('taking the user to a floating workspace terminal', () => {
       },
       { selection: 'background' }
     )
-    // A layout-owner build draws the editor tab from main's frame.
     await main.settle()
     main.close()
     const file = testStore()

@@ -61,7 +61,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -194,8 +193,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserWorkspaces(mocks)).toEqual([
       { workspaceId: 'staged-workspace-1', pageId: expect.any(String), staged: true }
     ])
-    // Why waitFor: the create consults the main process for its placement first, so the RPC lands a
-    // few microtasks after the click that already staged the tab above.
+    // Placement preparation delays RPC by microtasks; staging above must already exist synchronously.
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledOnce())
   })
 
@@ -252,8 +250,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     const runtimeCall = vi
       .fn()
       .mockImplementationOnce(() => {
-        // A subscription snapshot beat the create response and mirrored the host page under
-        // its own ids; keeping the staged tab too would leave two tabs for one page.
+        // Snapshot beat create response with host IDs; retained staging would duplicate the page.
         const state = mocks.getState()
         state.browserPagesByWorkspace['mirrored-workspace'] = [
           { id: 'mirrored-page', workspaceId: 'mirrored-workspace', url: 'https://example.com/' }
@@ -305,16 +302,14 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserTabMocks.closeBrowserTab).toHaveBeenCalledWith('staged-workspace-1', {
       reason: 'cleanup'
     })
-    // Why: the create path owns retiring the host page, so the local unwind must not fire a
-    // second browser.tabClose through the handle.
+    // Create owns host cleanup; local unwind must not send another browser.tabClose.
     expect(
       stagedBrowserTabMocks.removeRemoteBrowserPageHandle.mock.invocationCallOrder[0]
     ).toBeLessThan(stagedBrowserTabMocks.closeBrowserTab.mock.invocationCallOrder[0]!)
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
   })
 
-  // Why: re-staging a page the snapshot already published would hide it from persistence and
-  // suppress its stream, for a tab the user can see and is already using.
+  // Restaging adopted rows would hide them from persistence and suppress a visible tab’s stream.
   it('leaves a page the snapshot adopted mid-flight alone', async () => {
     const runtimeCall = vi
       .fn()
@@ -348,9 +343,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserTabMocks.closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Why: the strip's X on a staged tab can only unwind local rows — the host page did not exist
-  // when the user clicked. Without this the create finishes into a snapshot that re-adds the tab
-  // the user just closed, and the host keeps a page nobody can see.
+  // Staged X has no host page ID to close; create must retire it later or snapshots resurrect the tab.
   it('retires the host page when the staged tab is closed before the create answers', async () => {
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) => {
@@ -376,9 +369,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       })
     ).resolves.toBe(false)
 
-    // Why: the sequence is the assertion. Left to run on, the create waits out the materialization
-    // timeout and refreshes the snapshot first — and that refresh, taken while the host page is
-    // still open, is what re-adds the tab the user just closed under a fresh workspace id.
+    // Require immediate cleanup: waiting for materialization timeout refreshes an open host page and resurrects the cancelled tab.
     expect(calledMethods(runtimeCall)).toEqual([
       'browser.tabCreate',
       'browser.tabClose',
@@ -386,15 +377,11 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
     expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
-    // Why: the cancelling close already dropped the handle, so the unwind must not fire a second
-    // teardown for rows that are gone.
+    // Cancelling close already dropped the handle; unwind must not repeat teardown.
     expect(stagedBrowserTabMocks.closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Why: materialization asks whether *some* workspace in the worktree carries the page, not whether
-  // the staged one does. A host that mirrors the page under its own workspace id answers yes for a
-  // tab the user already X-ed, so a single pre-wait liveness check lets the create report success and
-  // walk past the cleanup that owes the host a tabClose.
+  // Materialization can see the host’s row after staged X; checking liveness only before the wait skips required host tabClose.
   it('cancels when the close lands while the host mirrors the page under its own workspace', async () => {
     const { hasMaterializedWebRuntimeBrowserPage: realPredicate } = await vi.importActual<
       typeof BrowserMaterializationModule
@@ -409,8 +396,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         forgetHostPage('host-workspace-9', 'host-page-1')
         return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
       }
-      // The X lands after the pre-wait check has already passed, and the host's own snapshot row
-      // arrives in the same window — exactly the state the materialization wait sits in.
+      // X and host-owned snapshot arrive during the materialization wait, after the first liveness check.
       if (!cancelled) {
         cancelled = true
         closeStagedWorkspace('staged-workspace-1')
@@ -567,9 +553,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     })
   })
 
-  // Why: with a known-id host nothing rehomes, so `staged` still points at rows a snapshot may
-  // have adopted by the time a later failure unwinds. Those rows are the host's now, and the
-  // unwind must not take a tab the user is looking at down with it.
+  // Known-ID staging may already be adopted when failure unwinds; those visible rows belong to the snapshot and must survive.
   it('leaves rows a snapshot already adopted alone when the unwind runs', () => {
     const state = mocks.getState()
     state.browserPagesByWorkspace['adopted-workspace'] = [
@@ -600,13 +584,11 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
   })
 
-  // Why: adoption and cancellation both clear the staged flag, so the flag cannot tell them apart.
-  // Reading adoption as a cancel would close the tab the user is already looking at.
+  // Adoption and cancellation both clear staged; treating adoption as cancel would close the live tab.
   it('does not read a snapshot adopting the staged rows mid-create as a cancel', async () => {
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
-        // The host's snapshot lands first and takes the staged rows over in place: the flag goes,
-        // the workspace row stays.
+        // Adoption clears staged but retains the workspace row.
         const state = mocks.getState()
         const pageId = Object.keys(state.remoteBrowserPageHandlesByPageId)[0]!
         state.remoteBrowserPageHandlesByPageId[pageId] = {
@@ -632,8 +614,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
   })
 
-  // Why: without browser.tab-create-known-id.v1 every create rehomes onto a host-minted id, and
-  // that is the path where a mixed-up mapping would silently rekey one click's tab onto another's.
+  // Legacy hosts mint new IDs; prove rehoming cannot map one click’s tab onto another’s.
   it('keeps three rapid creates distinct when the host mints every page id', async () => {
     let hostPageCounter = 0
     const runtimeCall = vi.fn((request: { method: string }) => {

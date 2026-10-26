@@ -7,7 +7,10 @@ import {
 } from '../execution-host'
 import { taskSourceCacheScopeHostId } from '../task-source-context'
 
-type RuntimeFocusSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+export type RuntimeFocusSettings =
+  | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  | null
+  | undefined
 
 export function getGitHubRepoCacheKey(
   repoPath: string,
@@ -18,8 +21,7 @@ export function getGitHubRepoCacheKey(
   executionHostId?: string | null,
   hasRepoOwner = false
 ): string {
-  // Why: runtime/SSH lookups can observe different remotes than the local repo
-  // path, so cache keys include the repo's owning execution boundary.
+  // Scope caches by execution owner: runtime/SSH hosts may observe different remotes at the same repo path.
   return composeRepoCacheKey(
     getGitHubCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner),
     repoId ?? repoPath,
@@ -27,10 +29,7 @@ export function getGitHubRepoCacheKey(
   )
 }
 
-/**
- * The one shape of a repo-owned cache key: `[scope::]owner::suffix`, where scope is an execution
- * host id or a task-source scope and no scope means this computer. Read back by repoCacheKeyHostId.
- */
+/** Repo cache keys use [scope::]owner::suffix; absent scope means this computer. repoCacheKeyHostId reads the shape back. */
 export function composeRepoCacheKey(
   scope: string | null | undefined,
   owner: string,
@@ -75,8 +74,7 @@ function getGitHubCacheHostScope(
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
   }
-  // Why: an existing repo with no remote/runtime owner is local; only missing
-  // owner context should inherit the focused runtime fallback.
+  // Known repos without remote/runtime ownership are local; only missing owner context inherits focused runtime scope.
   if (hasRepoOwner) {
     return null
   }

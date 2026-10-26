@@ -55,8 +55,7 @@ export function resolveMobileTerminalTheme(
   return {
     mode: appearance.mode,
     theme: theme as RuntimeMobileTerminalTheme['theme'],
-    // Why publish: mobile mirrors the desktop contrast gate, so an explicit floor has to travel with
-    // the theme or the same session would render differently on the phone (#10754).
+    // Send explicit contrast floor so mobile matches desktop rendering (#10754).
     minimumContrastRatio: normalizeTerminalMinimumContrastRatio(
       settings.terminalMinimumContrastRatio
     )

@@ -26,11 +26,7 @@ export function normalizeBrowserTitle(
   docLocation?: BrowserPageDocLocation | null
 ): string {
   if (docLocation) {
-    // Why a document page cannot go through the checks below: its url is the blank URL by design,
-    // which would name every previewed document "New Tab". Its fallback is the file it shows.
-    // Why the grant URL is refused rather than trusted: Chromium reports the URL as the title when
-    // a document declares none, and this title is stored, persisted and mirrored onto the tab —
-    // a grant reaching any of them would outlive the grant and name a document nothing can read.
+    // Document blank URLs cannot supply titles; use file fallback. Reject grant-URL title echoes: persisted/mirrored titles would retain expired read authority.
     if (!title || isDocPreviewUrl(title)) {
       return basename(docLocation.filePath) || docLocation.filePath
     }
@@ -58,9 +54,7 @@ export function buildBrowserPage(
   browserPageId?: string,
   docLocation?: BrowserPageDocLocation
 ): BrowserPage {
-  // Why the url is overridden rather than trusted: this is the one place a page's url is minted,
-  // and it is read by persistence, the mobile publisher, history and the address bar. A grant URL
-  // reaching any of them would outlive the grant and name a document that machine cannot read.
+  // Override grant URLs at page creation: persistence/mobile/history/address bar read this sink and cannot use another process’s expired grant.
   const normalizedUrl = docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(url)
   return {
     id: browserPageId ?? createBrowserUuid(),
@@ -68,9 +62,7 @@ export function buildBrowserPage(
     worktreeId,
     url: normalizedUrl,
     title: normalizeBrowserTitle(title, normalizedUrl, docLocation),
-    // Why cold: only a live guest may report loading. A restored page owns no guest until first
-    // shown; a background-opened local page's guest starts under its mount admission and reports
-    // its own load.
+    // Only live guests report loading; restored/background pages stay cold until mount admission starts their guest.
     loading: false,
     faviconUrl: null,
     canGoBack: false,

@@ -106,8 +106,6 @@ describe('TruncatedSidebarLabel', () => {
     expect(container.querySelector('[data-tooltip-content]')).toBeNull()
   })
 
-  // Why: worktree titles change on the hot store-write path. Remounting the
-  // span per text change tore down and rebuilt its ResizeObserver every time.
   it('keeps one ResizeObserver across a label text change', async () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let constructed = 0

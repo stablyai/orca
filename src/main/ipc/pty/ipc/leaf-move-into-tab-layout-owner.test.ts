@@ -5,7 +5,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 import { agentHookServer } from '../../../agent-hooks/server'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalLeafIntoTabRequest } from '../../../../shared/terminal-leaf-move'
-import { makeRepo } from '../../../persistence-test-harness'
+import { makeRepo } from '../../../persistence/persistence-test-harness'
 import {
   openProfileStateDatabaseReadOnly,
   profileStateDatabaseFile
@@ -22,7 +22,7 @@ import {
   FROM,
   WT
 } from '../../../persistence/terminal-topology/terminal-leaf-move-fixture'
-import { noopPtyIpcSurface, setPtyHostBindings } from '../../pty-host-bindings'
+import { noopPtyIpcSurface, setPtyHostBindings } from '../pty-host-bindings'
 import {
   getPtyIdForPaneKey,
   paneKeyPtyId,

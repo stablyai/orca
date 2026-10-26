@@ -109,8 +109,7 @@ describe('findRtlJoinRanges', () => {
   const LRM = '\u200e'
 
   it('tunnels through ZWNJ inside a Persian word without splitting the run', () => {
-    // می‌خواهم — splitting at the ZWNJ would render the word halves in
-    // swapped visual order.
+    // Splitting at ZWNJ in می‌خواهم would swap the word halves visually.
     const text = `می${ZWNJ}خواهم`
     expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
   })
@@ -149,8 +148,7 @@ describe('findRtlJoinRanges', () => {
   })
 
   it('does not open a run at orphan combining marks after an LTR base', () => {
-    // Marks render inside their base's cell; a run opened mid-cell maps to an
-    // empty joined cell range that blanks the following glyph in WebGL.
+    // Combining marks share their base cell; starting a run there yields an empty joined range that blanks the next WebGL glyph.
     expect(findRtlJoinRanges('a\u064b\u0651b')).toEqual([])
     expect(findRtlJoinRanges('x\u05b0\u05b1y')).toEqual([])
   })
@@ -161,9 +159,7 @@ describe('findRtlJoinRanges', () => {
   })
 
   it('does not open a run at zero-width Cf controls after an LTR base', () => {
-    // BOM/ZWNBSP and Arabic number signs are width-0 in xterm, so like
-    // combining marks a run opened there maps to an empty joined cell range
-    // that blanks the following glyph in WebGL.
+    // BOM/ZWNBSP and Arabic number signs have width zero; opening there also creates an empty joined range that blanks the next glyph.
     const BOM = '\ufeff'
     expect(findRtlJoinRanges(`a${BOM}${BOM}b`)).toEqual([])
     expect(findRtlJoinRanges('x\u0600\u0602y')).toEqual([])

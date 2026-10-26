@@ -15,7 +15,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cutover-journal'
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'

@@ -1,10 +1,5 @@
-/**
- * Scratch routes for the held-press check: the surfaces whose press must outlive Android WebView's
- * long-press. Each mounts the shipped component with stubbed effects; what is under test is the
- * press responder, so handlers only count.
- */
+// Mount shipped held-press surfaces with counting callbacks; Android WebView long-press must not end responder early.
 
-/** RN Web renders `nativeID` as the DOM `id`; the check touches each mic through it. */
 export const TERMINAL_MIC_ID = 'hold-probe-terminal-mic'
 export const CHAT_MIC_ID = 'hold-probe-chat-mic'
 
@@ -71,7 +66,6 @@ export default function HoldDictationProbeRoute() {
 export const REPEAT_KEY_LABEL = 'Arrow Up'
 export const TAP_KEY_LABEL = 'Escape'
 
-/** The real dock with controller effects observed at the callback boundary. */
 export function commandDockProbeRouteSource({ commandDockModule, keyDefinitionsModule }) {
   return `import { useRef } from 'react'
 import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
@@ -142,11 +136,7 @@ export default function CommandDockProbeRoute() {
 
 export const BROWSER_VIEWPORT_ID = 'held-press-browser-viewport'
 
-/**
- * The browser pane's view with its real interactions hook, which owns the 550 ms long-press
- * right-click. The stub client records each request, so a right-click is read where the host would
- * see it, not only from the hook's "Right click" toast.
- */
+// Real interactions hook owns 550ms right-click; record host request rather than trusting hook toast.
 export function browserPaneProbeRouteSource({
   paneViewModule,
   interactionsModule,

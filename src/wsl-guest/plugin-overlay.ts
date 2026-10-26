@@ -5,23 +5,8 @@ import {
 } from '../shared/opencode-startup-prompt-install'
 import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
 import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
-// Why: relay-side equivalent of Orca's local agent integration installers.
-// OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
-// extension files installed into the remote agent homes. Host paths from the
-// renderer are meaningless on SSH targets, so the relay performs the remote
-// filesystem work itself.
-//
-// Plugin source strings ship over the JSON-RPC channel at session-ready —
-// they are NOT bundled with the relay binary because the relay is versioned
-// independently from Orca and the plugin source changes frequently as new
-// agent events get added; bundling would make every such change a relay
-// redeploy, and an old relay would silently serve stale plugin code.
-//
-// We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
-// directly: those modules import `electron` and ride on Orca's userData
-// path. The relay's electron-free constraint forces a thin parallel
-// implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
-// Pi/OMP homes for those agents.
+// Install remotely because host paths and Electron services are unavailable to the relay.
+// Receive plugin source at session-ready: relay and desktop update independently, so bundled copies could stay stale.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeOverlayOpenCodePluginAtomically } from '../shared/opencode-plugin-atomic-write'
@@ -57,29 +42,21 @@ const ORCA_OPENCODE_PLUGIN_ENTRIES = new Set([
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
-// Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
-// Mirror local userData/omp-managed-status-extension under the relay home root.
+// Bare OMP uses relay-managed status without creating ~/.omp; match the local installer.
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 function withOrcaManagedPiExtensionMarker(source: string): string {
   return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
     ? source
     : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
 }
-// Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
-// Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
-// paths on the remote disk. The renderer-chosen launch command flows in via
-// the relay PtyEnvAugmenter ctx; never derived from disk presence (a
-// cross-agent fallback shadows the other agent's user extensions when both
-// are installed).
+// Select source by launching agent, never disk presence; Pi and OMP share an env key but use different homes.
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
   'prime-agent': '.prime'
 }
 function safeDirName(input: string): string {
-  // Why: paneKey embeds tabId:paneId where tabId may itself contain
-  // filesystem-unsafe characters in some Orca builds. Hash to a fixed-width
-  // hex name so any input produces a portable directory name.
+  // Hash pane keys into portable directory names because embedded tab ids can contain unsafe characters.
   return createHash('sha256').update(input).digest('hex').slice(0, 32)
 }
 function isUsableId(id: string): boolean {
@@ -105,8 +82,7 @@ export type MaterializePiResult = {
   /** Absolute path to orca-agent-status.ts (real home or relay-managed fallback). */
   statusExtensionPath?: string
 }
-/** Presence of this file is what makes an overlay usable — a rebuild that failed
- *  after the wipe leaves the dir itself present but the plugin missing. */
+// Check the plugin file, not its directory: a failed rebuild can leave an unusable empty overlay.
 export function getRelayOpenCodePluginPath(
   overlayDir: string,
   agent: 'opencode' | 'opencode2' = 'opencode'
@@ -140,13 +116,7 @@ export class PluginOverlayManager {
       omp: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.omp)
     }
   }
-  /** Replace the cached source bodies. Called from relay.ts when Orca sends
-   *  `agent_hook.installPlugins`. The first install enables the augmenter
-   *  output; subsequent installs (e.g. Orca version upgrade in flight) refresh
-   *  the cached source so future spawns see the new strings.
-   *  Note: existing running agents keep whatever source they loaded at
-   *  process start. Future PTYs pick up the refreshed source when the relay
-   *  writes plugin/extension files before spawn. */
+  // Refresh cached source for future PTYs; running agents retain the source they loaded at startup.
   setSources(sources: PluginSources): void {
     if (typeof sources.opencodeStartupPromptSource === 'string') {
       this.opencodeStartupPromptSource = sources.opencodeStartupPromptSource
@@ -190,12 +160,7 @@ export class PluginOverlayManager {
     writeOverlayOpenCodePluginAtomically(pluginPath, source)
   }
 
-  /** Materialize the OpenCode plugin overlay for `id` (typically the
-   *  renderer-supplied paneKey or, fallback, the relay-internal pty-id) and
-   *  return the directory path. Returns null when no source is cached or
-   *  the overlay write fails — caller falls back to no plugin (the agent
-   *  CLI runs without status reporting), which is the existing fail-open
-   *  behavior on the local side. */
+  // Materialize the pane’s overlay; missing source/write failure returns null so the CLI can run without status reporting.
   materializeOpenCode(
     id: string,
     existingConfigDir?: string,
@@ -215,9 +180,7 @@ export class PluginOverlayManager {
         if (!existsSync(existingConfigDir)) {
           return null
         }
-        // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
-        // remote root into the overlay before adding Orca's plugin so status
-        // reporting does not hide their auth, models, keybinds, or plugins.
+        // Mirror the remote user config before adding Orca: replacing OpenCode’s single config root must not hide auth/models/keybinds/plugins.
         mirrorOpenCodeConfig(existingConfigDir, dir, ORCA_OPENCODE_PLUGIN_ENTRIES)
       }
       if (source) {

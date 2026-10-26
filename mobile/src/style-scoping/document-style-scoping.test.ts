@@ -6,15 +6,7 @@ import {
   scopeStyleToHost
 } from './document-style-scoping'
 
-/**
- * The rewrite's own contract, with no caller's sheet in it.
- *
- * Each page mount holds the rewrite against the sheet it actually injects — the terminal in
- * `terminal/terminal-webview-html/document-style.test.ts`, the editor in
- * `components/rich-markdown/page-stylesheet.test.ts`. What is left here is what neither of them
- * owns: which selectors read as the document's own, and the shapes the textual rewrite refuses
- * rather than passing a rule through unscoped.
- */
+// Test rewrite semantics and refused input shapes here; each page mount separately checks its injected sheet.
 const PREFIX = '.host'
 
 describe('a stylesheet held under a host element', () => {
@@ -28,8 +20,7 @@ describe('a stylesheet held under a host element', () => {
   })
 
   it('refuses a sheet whose shape it cannot rewrite, through either export', () => {
-    // The rewrite is textual because the input is flat. A sheet that grew an at-rule would have
-    // its inner selectors passed through unscoped, so both exports throw instead.
+    // Textual rewriting supports flat sheets only; at-rules would leak unscoped inner selectors.
     for (const scope of [scopeStyleToHost, scopeDocumentStyleToHost]) {
       expect(() => scope('@media (min-width: 1px) { .a { color: red; } }', PREFIX)).toThrow(
         'at-rules cannot be scoped'

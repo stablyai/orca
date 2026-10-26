@@ -349,7 +349,6 @@ it.each(['disabled', 'no-service'] as const)(
     expect(result.current.titleOnly).toBe(true)
     expect(result.current.loading).toBe(false)
 
-    // Further typing filters titles without asking that host again.
     rerender({ query: 'needles' })
     await debounce()
     expect(searchSessions).toHaveBeenCalledOnce()

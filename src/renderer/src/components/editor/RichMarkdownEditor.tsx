@@ -78,9 +78,7 @@ export default function RichMarkdownEditor({
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
-  // Why: three-way source-preserving reconciliation baseline — the raw on-disk
-  // bytes and their canonical serialization — so edits patch onto the original
-  // style rather than re-canonicalizing untouched regions (#6080).
+  // Keep raw source and canonical baselines for three-way reconciliation that preserves untouched formatting.
   const originalSourceRef = useRef(content)
   const baseCanonicalRef = useRef('')
   const onContentChangeRef = useRef(onContentChange)
@@ -90,18 +88,12 @@ export default function RichMarkdownEditor({
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
   const openAnnotationPopoverRef = useRef<(requireLiveSelection?: boolean) => boolean>(() => false)
-  // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
-  // stuck at the first-render null value unless we read the live instance here.
+  // Read the live instance because ProseMirror retains the first handleKeyDown closure, whose editor was null.
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
-  // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
-  // which triggers onUpdate. Without this guard the editor immediately marks the
-  // file dirty before the user has typed anything.
+  // onCreate repairs emit onUpdate; suppress them so initialization cannot mark untouched files dirty.
   const isInitializingRef = useRef(true)
-  // Why: internal maintenance paths can dispatch transactions after mount
-  // (external reloads, empty-list repair, image-path refresh). Those
-  // are not user edits, so onUpdate must ignore them or split panes can flip a
-  // shared file dirty without any real content change.
+  // Ignore maintenance transactions from reloads, repairs and image refreshes so split panes cannot dirty shared content without user edits.
   const isApplyingProgrammaticUpdateRef = useRef(false)
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
@@ -128,9 +120,7 @@ export default function RichMarkdownEditor({
     scrollContainerRef
   )
 
-  // Why: assigning callback refs during render keeps them current before any
-  // ProseMirror handler reads them, avoiding the one-render stale window that
-  // useEffect would introduce. Refs are mutable and never trigger re-renders.
+  // Refresh callbacks during render so ProseMirror handlers cannot observe a passive-effect delay.
   onContentChangeRef.current = onContentChange
   onDirtyStateHintRef.current = onDirtyStateHint
   onSaveRef.current = onSave
@@ -161,8 +151,7 @@ export default function RichMarkdownEditor({
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null) {
-        // Why: these transient editor resources are owned by this root; clearing
-        // them at detach keeps unmount cleanup out of passive Effects.
+        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
         clearTransientReviewState()
         cancelAutoFocusRef.current?.()
         cancelAutoFocusRef.current = null
@@ -237,8 +226,7 @@ export default function RichMarkdownEditor({
     cancelAutoFocusRef
   })
 
-  // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
-  // citation NodeSelections would leave aria status stale without useEditorState.
+  // useEditor does not rerender per transaction; subscribe to citation selection so aria status follows NodeSelections.
   const selectedCitationStatus = useEditorState({
     editor,
     selector: (snapshot) =>

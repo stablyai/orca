@@ -1,6 +1,4 @@
-// A host-side create dresses its agent's tab as the first orca.yaml default tab. That title
-// belongs to the tab, as the window's setTabCustomTitle makes it: on a headless host the
-// phone must still read the agent's own titles for its status.
+// Default-tab names belong to tabs; headless phone status must still use the agent's own titles.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -75,7 +73,6 @@ function sessionStore(initial: WorkspaceSessionState): {
     setWorkspaceSession: (next) => {
       session = next
     },
-    // Main's own layout writes, as the Store applies them (a layout-owner build sends these).
     applyLayoutCommand: async (command, hostIds = []) => {
       const change = applyCommandToSession(resolveHostId(hostIds[0]), session, command)
       session = change.session ?? session
@@ -89,7 +86,7 @@ function sessionStore(initial: WorkspaceSessionState): {
       branchPrefixCustom: ''
     })
   }
-  // Switch-on, the default tab writes target main's copy, so main's pane write must be there.
+  // Main-owned default-tab writes require the pane admission store.
   return {
     store: ORCA_LAYOUT_OWNER_IS_MAIN ? withRuntimePaneAdmission(store) : store,
     getSession: () => session
@@ -113,7 +110,6 @@ function notifierWithRename(renameTerminal: RuntimeNotifier['renameTerminal']): 
 
 async function createHeadlessRuntimeWithAgent(
   connectionId: string | null = null,
-  // Provisioning reads settings before default tabs since #28543 (setup-only skips them).
   store: RuntimeStore = sessionStore(getDefaultWorkspaceSession()).store
 ): Promise<{ runtime: DefaultTabRuntime; handle: string }> {
   const runtime = new DefaultTabRuntime(store, connectionId)
@@ -137,7 +133,7 @@ async function createHeadlessRuntimeWithAgent(
 }
 
 async function dressAgentTab(runtime: DefaultTabRuntime, handle: string): Promise<void> {
-  // Only the handle crosses: the host finds the tab, as it must for a create over SSH too.
+  // Cross-host provisioning receives only a handle; the owning host resolves its tab.
   await provisionWorktreeTerminals(runtime.provisioningHost(), {
     worktreeSelector: `id:${WORKTREE_ID}`,
     worktreeId: WORKTREE_ID,
@@ -152,7 +148,6 @@ async function dressAgentTab(runtime: DefaultTabRuntime, handle: string): Promis
   })
 }
 
-/** The window's title: from main's layout in a layout-owner build, else main's rename to it. */
 function expectWindowTitledDev(
   renameTerminal: ReturnType<typeof vi.fn>,
   session: WorkspaceSessionState
@@ -204,7 +199,7 @@ describe('the agent tab a host-side create dresses as the first default tab', ()
   })
 
   it('titles the tab, never the pane, and keeps the title across a restart', async () => {
-    // The spawn's pty binding has already saved the agent's tab when provisioning runs.
+    // Spawn binding has already persisted the agent tab before provisioning.
     const { store, getSession } = sessionStore({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -226,7 +221,6 @@ describe('the agent tab a host-side create dresses as the first default tab', ()
 
     expectWindowTitledDev(renameTerminal, getSession())
     expect(runtime.ptyTitle(AGENT_PTY_ID)).toBeNull()
-    // A restarted headless host rebuilds the phone's tabs from the saved session.
     const session = getSession()
     expect(
       buildHeadlessMobileSessionTerminalTabs(

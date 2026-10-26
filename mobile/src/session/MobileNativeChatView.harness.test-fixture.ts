@@ -61,7 +61,6 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
 
 let renderer: ReactTestRenderer | null = null
 
-// Stubs the frame clock and tears down the mounted view; call once at the top of a test file.
 export function installChatViewHooks(): void {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
@@ -103,7 +102,6 @@ export async function update(overrides: Overrides = {}): Promise<void> {
   })
 }
 
-// Ids of the rows the list is currently rendering.
 export function listIds(): string[] {
   return (list().props.data as { id: string }[]).map((row) => row.id)
 }
@@ -143,7 +141,6 @@ export async function pressSend(): Promise<void> {
   })
 }
 
-/** What the list reports from a scroll, drag or momentum event, in a 500-tall viewport. */
 export function scrollEvent(y: number, contentHeight: number) {
   return {
     nativeEvent: {

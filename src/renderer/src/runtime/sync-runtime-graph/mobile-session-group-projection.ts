@@ -186,8 +186,7 @@ export function buildMobileSessionGroupProjection(
     if (visibleOrder.length === 0) {
       continue
     }
-    // Why: main publishes chat rows under their session id; listing the window's tab id instead
-    // left main no position for them, so every chat landed after the other tabs on mobile.
+    // Publish chat session IDs like main’s rows; window tab IDs have no main position and sort chats last on mobile.
     const publishedIdByTabId = new Map(
       visibleOrder.map((item) => [
         item.tabId ?? item.id,

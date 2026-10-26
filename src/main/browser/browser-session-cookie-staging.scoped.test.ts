@@ -8,9 +8,9 @@ const { appGetPathMock } = vi.hoisted(() => ({ appGetPathMock: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { getPath: appGetPathMock } }))
 
-import { importedDomainScope } from './browser-cookie-import-policy'
-import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
-import { prepareStagedCookiesForImport } from './browser-cookie-staged-import'
+import { importedDomainScope } from './cookies/browser-cookie-import-policy'
+import { createChromiumCookieTestDatabase } from './cookies/browser-cookie-import-test-database'
+import { prepareStagedCookiesForImport } from './cookies/browser-cookie-staged-import'
 import {
   applyPendingBrowserCookieImports,
   setPendingBrowserCookieImport

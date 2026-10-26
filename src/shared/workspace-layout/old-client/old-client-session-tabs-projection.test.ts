@@ -11,11 +11,7 @@ import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
 
-/**
- * A workspace as a desktop leaves it: a renamed terminal tab split in two (one pane titled, both
- * bound), an agent terminal, a markdown file, a browser tab and a chat, with the chat and the
- * browser in a second group to the right.
- */
+/** Desktop-shaped fixture: split/agent terminals, file, browser and chat across two groups, with one titled pane. */
 function workspace() {
   const ctx = testContext()
   const { model, results } = build(ctx, [

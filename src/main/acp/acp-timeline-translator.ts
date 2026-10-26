@@ -105,6 +105,10 @@ export class AcpTimelineTranslator {
     return this.finishPrompt(clientMessageId, ending)
   }
 
+  sessionLost(error: AcpAgentError): boolean {
+    return this.dialect.sessionLost?.(error, this.options.sessionId) === true
+  }
+
   authenticationRequired(error: unknown): boolean {
     return acpAuthenticationRequired(this.dialect, error)
   }

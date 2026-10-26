@@ -38,11 +38,7 @@ export type AiVaultResumeHere = {
   confirm: ConfirmationDialogContextValue
 }
 
-/**
- * A tab is one conversation, so "resume here" opens the picked conversation's own chat right after
- * this one and closes this one once that chat exists; a busy chat asks first. False: the row can't
- * take this chat's place; otherwise the pick settles once its outcome is known.
- */
+/** Replace this chat only after the picked chat opens; confirm busy chats first. False means the row cannot replace it. */
 export function resumeAiVaultSessionHere(args: {
   session: AiVaultSession
   here: AiVaultResumeHere
@@ -151,8 +147,7 @@ function resumeInPlaceOf(
         if (settlement?.kind === 'structured') {
           closeReplacedChat(here)
         } else if (settlement?.kind === 'failed' && openedTabId) {
-          // A refusal is toasted, so its tab goes and the group falls back to the chat it would
-          // replace. An unknown outcome keeps both: that tab has its own badge and Retry.
+          // Remove toasted refusal tabs; unknown outcomes retain their own badge and Retry alongside the old chat.
           useAppStore.getState().closeUnifiedTab(openedTabId)
         }
         void Promise.resolve(ownerShown).then(resolve, resolve)
@@ -169,7 +164,7 @@ function revealInPlaceOf(
   structured: NonNullable<AiVaultSession['structuredSession']>
 ): Promise<void> {
   return activateAiVaultStructuredSession({ structuredSession: structured }).then(() => {
-    // It also settles true after a reopen it could only report, so only a tab that exists replaces.
+    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
     const reopened = findChatTabWhere(
       here.workspaceId,
       (tab) => tab.entityId === structured.sessionId
@@ -202,8 +197,7 @@ function closeReplacedChat(here: AiVaultResumeHere): void {
   }
 }
 
-/** Replying or asking (the status store), still starting (its launch, or its host's provider), or
- *  unobservable: a host that can't be seen live may still be running the chat's agent. */
+/** Treat starting, active, asking, and unobservable chats as busy; an unreachable host may still be running. */
 function isChatBusy(workspaceId: string, tab: Tab): boolean {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const status = useAppStore.getState().agentStatusByPaneKey[paneKey]?.state

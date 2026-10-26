@@ -110,8 +110,7 @@ describe('agent sleep coordinator', () => {
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
-    // Why: returning to the tab between the plan and the confirm is the eligibility change this
-    // must observe. The active worktree is no longer skipped wholesale, so it is no longer a lever.
+    // Returning to the tab must invalidate confirmation; the active worktree is no longer excluded wholesale.
     setForegroundTerminalTabIds(['tab-1'])
     await vi.advanceTimersByTimeAsync(1000)
 
@@ -655,10 +654,7 @@ describe('agent sleep coordinator', () => {
 })
 
 describe('teardown drains sequentially', () => {
-  // Why: each shutdown re-runs a full runtime-liveness sweep and then a stopExact RPC.
-  // Firing the whole confirmed set at once meant ~100 concurrent sweeps plus ~100
-  // concurrent stops on the first pass after a backlog — hundreds of near-simultaneous
-  // RPCs on an SSH runtime.
+  // Sequential shutdown avoids one liveness sweep and stop RPC per confirmed pane firing concurrently.
   it('never runs two pane teardowns at the same time', async () => {
     let inFlight = 0
     let maxInFlight = 0

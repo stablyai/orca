@@ -17,7 +17,7 @@ export function WorkspaceAttachmentSourceStatus({
   error: string | null
   onRetry: () => void
 }): React.JSX.Element {
-  // Why: on the Linear tab the empty result list explains an unreadable login.
+  // Linear’s empty result list already explains unreadable login.
   const linearLoginUnreadable = controller.mode === 'linear' && Boolean(controller.linearReadError)
   let message: string | null =
     error ?? translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
@@ -51,7 +51,6 @@ export function WorkspaceAttachmentSourceStatus({
       )
       retry = onRetry
     } else if (linearLoginUnreadable) {
-      // Why: Retry re-reads once Linear is reconnected.
       retry = onRetry
     } else if (controller.unresolvedLinearUrlIntent || controller.linearLoading) {
       message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
@@ -63,7 +62,7 @@ export function WorkspaceAttachmentSourceStatus({
       retry = onRetry
     }
   }
-  // Why: keep the row (and its action) so the sibling Reference type button doesn't shift.
+  // Retain row layout so the sibling Reference type button cannot shift.
   if (!error && linearLoginUnreadable && taskUrlProvider !== 'jira') {
     message = null
   }

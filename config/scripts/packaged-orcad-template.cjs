@@ -1,12 +1,5 @@
-/**
- * The orcad deployment template inside desktop builds (design D2): JS plus every target's
- * addons, never a Node runtime. SSH relays and managed orcad deploys materialize a target's
- * slot from it (src/main/orcad/orcad-artifact-materializer.ts, `process.resourcesPath`).
- *
- *   node config/scripts/packaged-orcad-template.cjs --reseal-signed <appDir> <signedListFile>
- *
- * reseals after an out-of-band signer (SignPath) rewrote template binaries in `<appDir>`.
- */
+// Desktop deployment template ships JS/addons for every target, with no Node runtime (D2); SSH/managed deployments materialize its slots.
+// Reseal SignPath-modified binaries: node config/scripts/packaged-orcad-template.cjs --reseal-signed <appDir> <signedListFile>.
 const { createHash } = require('node:crypto')
 const {
   closeSync,
@@ -35,8 +28,7 @@ const orcadTemplateNodeModulesExtraResource = {
   from: `${orcadTemplateExtraResource.from}/node_modules`,
   to: `${ORCAD_TEMPLATE_RESOURCE_DIR}/node_modules`
 }
-// Why the whole tree: codesign rejects its ELF/PE payloads, and the darwin ones are signed in
-// afterPack so their new hashes can be resealed into the manifest before the app is sealed.
+// Exclude whole tree from automatic codesign (ELF/PE); afterPack signs darwin files and reseals their hashes before app signing.
 const orcadTemplateMacSignIgnore = ['/orcad-template/']
 
 // Mach-O thin (both byte orders, 32/64-bit) and fat headers.
@@ -91,11 +83,7 @@ function findOrcadTemplateMachOFiles(templateDir) {
     .sort()
 }
 
-/**
- * Re-records the hashes of files a platform signer rewrote. Only the named files move; every
- * other file must still match what the template build recorded, which the verify after this
- * enforces, so a reseal cannot launder an unrelated change.
- */
+// Reseal only signer-named files; verify all others against build hashes so resealing cannot launder unrelated changes.
 function resealOrcadTemplateManifest(templateDir, signedPaths) {
   const manifestPath = join(templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME)
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
@@ -118,10 +106,7 @@ function resealOrcadTemplateManifest(templateDir, signedPaths) {
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-/**
- * afterPack: sign the darwin payloads on macOS (notarization requires every nested Mach-O to
- * carry the app's Developer ID), reseal, then verify the exact bytes that ship.
- */
+// Notarization requires Developer ID on nested Mach-O: afterPack signs, reseals and verifies exact shipped bytes.
 async function finalizePackagedOrcadTemplate(resourcesDir, options) {
   const { platform, env = process.env, signMacBinary } = options
   const templateDir = join(resourcesDir, ORCAD_TEMPLATE_RESOURCE_DIR)

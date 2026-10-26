@@ -365,7 +365,6 @@ describe('useChecksPanelCreateReview provider flow', () => {
       act(() => {
         click = result.current.handleCreatePullRequest(false)
       })
-      // The still-mounted panel switches to another worktree, as a worktree switch does.
       useAppStore.setState({ activeWorktreeId: 'worktree-2' })
       input.panelContextKeyRef.current = 'repo-1::worktree-2::feature/other'
       rerender({

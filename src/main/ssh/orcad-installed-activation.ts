@@ -1,10 +1,4 @@
-/**
- * The locked half of a deploy: stop, snapshot, start and commit, journaled at every step.
- *
- * The journal is durable before the first mutation, so a crash at any point leaves enough on
- * the host for `recoverInterruptedOrcadActivation` to finish or undo it. A run that ends with
- * the host provably back on one slot drops the fence; one that cannot prove it keeps it.
- */
+/** Journal durably before mutation so interrupted deploys can finish or recover. Release the fence only once the host is provably settled on one slot. */
 import { orcadRemoteBaseDir } from '../managed-server/install/orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadDeployOptions, OrcadDeployResult } from './orcad-remote-deploy'
@@ -76,7 +70,6 @@ import { errorMessage } from '../../shared/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
 
-/** The caller's `admitRecord` refused the record found under the fence; nothing was touched. */
 export const ORCAD_ACTIVATION_POLICY_REFUSED_CODE = 'orcad_activation_policy_refused'
 
 function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivationRecord): boolean {
@@ -86,7 +79,7 @@ function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivatio
   )
 }
 
-/** A census counted against another incumbent says nothing about this one's terminals. */
+/** A census of another incumbent cannot authorize stopping this one. */
 function censusForLockedRecord(
   options: OrcadDeployOptions,
   record: OrcadActivationRecord
@@ -171,7 +164,7 @@ export async function activateInstalledOrcad(
     }
   }
 
-  // Before the recount: a slow scan must not outdate the census that admits the stop.
+  // Scan snapshot room before recount so slow scans cannot outdate stop admission.
   const roomless = await orcadSnapshotRoomRefusal(options, record, fullVersion)
   if (roomless) {
     return notActivated(ORCAD_SNAPSHOT_SPACE_INSUFFICIENT_CODE, roomless)
@@ -188,11 +181,11 @@ export async function activateInstalledOrcad(
   })
   const beginMutating = (): void => {
     lock.retainOnError()
-    // Past the first mutation a cancel would strand a stopped host, so the run finishes or rolls back.
+    // After mutation starts, cancellation would strand a stopped host; finish or roll back.
     options = withoutAbortSignal(options)
   }
   if (incumbent) {
-    // Last check before anything stops: the census above may predate a long upload.
+    // Recount immediately before stop; the initial census may predate a long upload.
     const fenced = await runFencedStop({
       recountCensus: () =>
         countedLockedRecord(options, record)
@@ -241,7 +234,7 @@ export async function activateInstalledOrcad(
   transaction = withOrcadActivationIncumbentStopped(transaction, now())
   await writeOrcadActivationTransaction(options, transaction)
 
-  // A live SQLite WAL is not a backup boundary, so the snapshot waits for confirmed exit.
+  // Wait for confirmed exit before snapshotting; a live SQLite WAL is not a backup boundary.
   const snapshotDir = orcadSnapshotPath(options, transaction.snapshot.dirName)
   const captureOutput = await execOrcadStateMutationOr(
     options,

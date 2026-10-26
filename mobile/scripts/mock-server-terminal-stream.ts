@@ -6,8 +6,7 @@ import {
   STREAMING_CHUNKS
 } from './mock-server-terminal-fixtures'
 
-// Why: the client resubscribes on every viewport change; without cancellation
-// each resubscribe would stack another interval streaming under a dead request.
+// Cancel prior interval on viewport resubscribe or output stacks under dead request ids.
 type TerminalStream = { interval: ReturnType<typeof setInterval> | null }
 const terminalStreams = new WeakMap<WebSocket, Map<string, TerminalStream>>()
 
@@ -50,8 +49,7 @@ export function handleMockTerminalRequest(
   respond: RpcRespond,
   success: (id: string, result: unknown, streaming?: boolean) => RpcResponse,
   ws: WebSocket,
-  // Shared with `session.tabs.list` so both surfaces agree on which worktree an
-  // absent or `id:`-prefixed selector means.
+  // Share selector resolution with session.tabs.list so absent/id:-prefixed selectors name same worktree.
   resolveWorktreeId: (selector: unknown) => string | undefined
 ): boolean {
   switch (request.method) {
@@ -71,12 +69,9 @@ export function handleMockTerminalRequest(
       const terminal = String(request.params?.terminal ?? 'term-1')
       const stream = beginTerminalStream(ws, terminal)
       const isCurrent = () => isCurrentTerminalStream(ws, terminal, stream)
-      // Why: the client resubscribes until scrollback echoes its viewport dims;
-      // the legacy `lines` shape left the session screen in that loop forever.
+      // Echo scrollback viewport dims; legacy lines shape causes endless resubscription.
       const viewport = request.params?.viewport as { cols?: number; rows?: number } | undefined
-      // MOCK_TUI=1 arms SGR drag mouse tracking (1002/1006) inside the scrollback
-      // itself so every xterm re-init re-enters the mode - used by mouse/touch
-      // input repros (#8818).
+      // MOCK_TUI=1 embeds 1002/1006 SGR drag modes in scrollback so every xterm re-init restores mouse/touch repro (#8818).
       const tuiPreamble =
         process.env.MOCK_TUI === '1'
           ? '\x1b[?1002h\x1b[?1006h[mock] mouse tracking ON (1002/1006)\r\n'
@@ -99,8 +94,7 @@ export function handleMockTerminalRequest(
           return
         }
         if (chunkIndex >= STREAMING_CHUNKS.length) {
-          // Why: no `end` event - a live terminal stream stays open, and `end`
-          // makes the client tear the subscription down and blank the pane.
+          // Keep stream open: end tears down subscription and blanks pane.
           stopTerminalStreamInterval(stream)
           return
         }

@@ -143,7 +143,7 @@ describe('shouldSoftHideTaskPageGitHubWorkItem', () => {
 describe('recomputeTaskPageGitHubItemSoftHide', () => {
   it('includes sticky hide for matching queryKey', () => {
     const itemKey = 'repo\0item'
-    const result = recomputeTaskPageGitHubItemSoftHide({
+    const options = {
       item: {
         state: 'open',
         assignees: [{ login: 'me', name: null, avatarUrl: '' }],
@@ -160,8 +160,11 @@ describe('recomputeTaskPageGitHubItemSoftHide', () => {
         ]
       ]),
       itemKey
+    } satisfies Parameters<typeof recomputeTaskPageGitHubItemSoftHide>[0]
+    expect(recomputeTaskPageGitHubItemSoftHide(options)).toEqual({ hide: true, sticky: true })
+    expect(recomputeTaskPageGitHubItemSoftHide({ ...options, queryKey: 'q2' })).toEqual({
+      hide: false,
+      sticky: false
     })
-    expect(result.hide).toBe(true)
-    expect(result.sticky).toBe(true)
   })
 })

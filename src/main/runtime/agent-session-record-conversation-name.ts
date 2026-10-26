@@ -1,13 +1,7 @@
-import { normalizeAgentSessionConversationName } from '../../shared/agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from '../../shared/agent-session/agent-session-conversation-name'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
-/**
- * Set or clear the conversation name on one record.
- *
- * Deliberately unfenced: the name is a durable note, not ownership, so writing it never contends
- * with the writer lease. Normalizing here — the only writer of the field — keeps the record's own
- * validator satisfied no matter which caller supplied the text.
- */
+/** Names are durable metadata, not ownership; normalize without contending on the writer fence. */
 export function setAgentSessionRecordConversationName(
   record: AgentSessionRecord,
   name: string | null,

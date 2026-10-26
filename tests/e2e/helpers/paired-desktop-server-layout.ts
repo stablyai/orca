@@ -1,5 +1,4 @@
-// A paired desktop and a switch-on `orca serve`: the server's own layout of a workspace, the tree
-// the desktop draws, and whether the server's frames draw it there (H5b, H5c).
+// Compare the server’s authoritative workspace layout to the tree its paired desktop actually draws (H5b, H5c).
 import type { Page } from '@stablyai/playwright-test'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/pairing'

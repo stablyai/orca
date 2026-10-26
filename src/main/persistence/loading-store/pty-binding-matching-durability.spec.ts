@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import * as sessionOwnerFields from '../restoring-sessions/session-owner-fields'
 import * as bindingUpdate from './pty-binding-session-update'
 import * as ownerInvariants from '../../../shared/workspace-layout/terminal-owner-invariants'

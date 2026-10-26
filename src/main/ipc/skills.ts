@@ -21,7 +21,7 @@ import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
     const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
-    const resolvedTarget = resolveSkillDiscoveryTarget(parsedTarget)
+    const resolvedTarget = await resolveSkillDiscoveryTarget(parsedTarget)
     return discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
       providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
       refresh: parsedTarget?.refresh === true

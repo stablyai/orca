@@ -15,9 +15,7 @@ export const SendImageRefBlock = z
   .strict()
   .refine((value) => Boolean(value.path) !== Boolean(value.url), 'Provide exactly one of path/url')
 
-/** Clients may only author user turns. Accepting an assistant or tool role here
- *  would let one client write words into the agent's mouth in another's
- *  timeline, and the provider — not the client — owns those. */
+/** Clients may author only user turns; provider-owned assistant/tool content must never be forged into another client’s timeline. */
 export const SendBlock = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }).strict(),
   SendImageRefBlock
@@ -39,8 +37,7 @@ export const SendBodyStructure = z
   })
   .strict()
 
-/** UTF-8 size of a message's blocks as sent, measured where `Buffer` is absent exactly as `SendBody`
- *  measures it on the host, so a client refuses before Send what the host would. */
+/** Match SendBody’s host UTF-8 byte count where Buffer is unavailable, so clients refuse oversized sends before submission. */
 export function structuredAgentSessionBlocksByteLength(blocks: readonly unknown[]): number {
   return measureUtf8ByteLength(JSON.stringify(blocks)).byteLength
 }

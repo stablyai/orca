@@ -26,8 +26,7 @@ export type PromiseSettlementWaitOptions<T> = {
   onAbandon?: (reason: 'abort' | 'timeout') => void
 }
 
-// Why: Promise.then reactions cannot be detached. One reaction fans settlement
-// into explicit waiters so aborted or timed-out callers release their closures.
+// Promise reactions cannot detach; fan one reaction into removable waiters so timeout/abort releases caller closures.
 export class PromiseSettlementWaiters<T> {
   private readonly waiters = new Set<PromiseSettlementWaiter<T>>()
   private settlement: PromiseSettlement<T> | null = null

@@ -10,21 +10,17 @@ describe('createMobileSessionTabsNotifyCoalescer', () => {
   })
 
   it('coalesces a rapid burst of title/status flips into one trailing emit (repro)', () => {
-    // Repro of the churn bug: a spinner-in-title agent flips a PTY title many
-    // times a second. Without coalescing every flip fans out an emit; with it,
-    // the whole burst settles into a single trailing-edge emit per worktree.
+    // Title spinners generate bursts; publish only the latest state after the trailing window.
     const emit = vi.fn()
     const coalescer = createMobileSessionTabsNotifyCoalescer(emit)
 
     const FLIPS = 20
     for (let i = 0; i < FLIPS; i++) {
       coalescer.schedule('worktree-1')
-      // Each flip lands well inside the trailing window, resetting the timer.
       vi.advanceTimersByTime(10)
     }
     expect(emit).not.toHaveBeenCalled()
 
-    // Let the trailing window elapse after the last flip.
     vi.advanceTimersByTime(50)
 
     expect(emit).toHaveBeenCalledTimes(1)
@@ -35,8 +31,7 @@ describe('createMobileSessionTabsNotifyCoalescer', () => {
     const emit = vi.fn()
     const coalescer = createMobileSessionTabsNotifyCoalescer(emit)
 
-    // Keep flipping faster than the trailing window forever; the max-wait cap
-    // (250ms) must force at least one emit within that budget.
+    // Sustained churn must still publish within the 250ms cap.
     for (let i = 0; i < 100; i++) {
       coalescer.schedule('worktree-1')
       vi.advanceTimersByTime(30)
@@ -64,8 +59,7 @@ describe('createMobileSessionTabsNotifyCoalescer', () => {
     const coalescer = createMobileSessionTabsNotifyCoalescer(emit)
 
     coalescer.schedule('worktree-1')
-    // A structural change (tab add/remove) cancels the coalesced notify because
-    // it emits immediately elsewhere.
+    // Structural changes emit immediately elsewhere and cancel trailing notifications.
     coalescer.cancel('worktree-1')
     vi.advanceTimersByTime(50)
 
@@ -80,7 +74,6 @@ describe('createMobileSessionTabsNotifyCoalescer', () => {
     coalescer.flush('worktree-1')
 
     expect(emit).toHaveBeenCalledTimes(1)
-    // The timer must not double-fire afterward.
     vi.advanceTimersByTime(50)
     expect(emit).toHaveBeenCalledTimes(1)
   })

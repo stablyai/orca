@@ -8,10 +8,7 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from './host-session-mirror-hydration'
 
-// The same fan-out hazard as host-mirror-handle-gap-drain.test.ts, one module up: settling an
-// environment drains every worktree parked on it in one loop, from inside the frame apply. The
-// waiters are strangers to each other and to that apply, so one replay must not be able to reach
-// either of them.
+// Environment settlement drains unrelated worktree waiters inside frame apply; one throwing replay must not escape or strand siblings (also host-mirror-handle-gap-drain.test.ts).
 const ENVIRONMENT_ID = 'env-hydration-drain'
 
 describe('host session mirror hydration drain', () => {

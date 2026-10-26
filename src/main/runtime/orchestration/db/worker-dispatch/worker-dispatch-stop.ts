@@ -67,16 +67,7 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
-    // Why `stopping` under a DIFFERENT epoch is accepted: a stop whose runtime died mid-flight
-    // leaves the row here forever, and refusing the re-issue was the only operator escape
-    // (#16904). Re-running the stop earns the honest outcome — settled, or `stop_unknown`, from
-    // which the worker can be abandoned. It never asserts an exit the runtime did not observe.
-    //
-    // Why the epoch and not just the state: this runtime's own `stopping` row means its stop is
-    // still in flight, and a second pass would record `stop_unknown` over it. The exit event that
-    // follows claims a clean stop only from `stopping` under its own epoch
-    // (failActiveDispatchOnExit), so it would then read the operator's stop as a crash and
-    // escalate it. Same predicate as that reader, so both agree on whose stop this is.
+    // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
     if (
       !['ready', 'start_unknown'].includes(worker.state) &&
       !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)
@@ -145,7 +136,7 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-    // Why: helpers keep reporting to a stopping creator, so mail sent since begin-stop moves here.
+    // Move helper mail received while the creator was stopping.
     this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow

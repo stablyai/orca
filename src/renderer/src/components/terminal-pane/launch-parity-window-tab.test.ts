@@ -28,6 +28,7 @@ import {
   windowSpawnRequest,
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -193,8 +194,7 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     ...managerOptions.terminalOptions?.(pane.id)
   }
   pane.terminal.options.vtExtensions = { kittyKeyboard: vtExtensions?.kittyKeyboard === true }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane fixtures model every member connectPanePty reads, as in pty-connection-startup-command-delivery.test.ts.
-  modules.pane.connectPanePty(pane as never, createManager(1) as never, deps as never)
+  modules.pane.connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
   // Fixed ids so the table can name them; the color replies are this harness's theme.
@@ -206,9 +206,7 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   )
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2 and 6, window
-// half): the real producer, store and pane build the pty:spawn request each case's table row names.
-// C2 (typed-prompt tabs onto the pane trigger) and C3 (Antigravity continue) check against it.
+// Use real launch producers, store and pane to pin the spawn-request parity baseline for later convergence.
 describe('window-tab producers: the pty:spawn request a real pane sends', () => {
   // Why: the first import transforms the whole pane graph; keep that out of the first case.
   beforeAll(async () => {

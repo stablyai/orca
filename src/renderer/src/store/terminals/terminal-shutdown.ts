@@ -43,9 +43,7 @@ export function createTerminalShutdownActions(
         resolveTerminalPtyOwner(get(), worktreeId),
         rendererShutdownPtyIds
       )
-      // Why: treating an unattributable owner as local skips the host stop yet still clears
-      // bindings and writes resume records, so the agent runs on unseen and wake starts a twin.
-      // A backend-owned teardown already stopped its PTYs, so it has nothing to misroute.
+      // Unknown owners must not lose bindings while agents run unseen and wake twins; backend-owned teardown already stopped them.
       if (teardownOwner.kind === 'refused' && !backendOwnsPtyTeardown) {
         console.warn('[terminal-shutdown] refusing teardown: terminal owner is ambiguous', {
           worktreeId,

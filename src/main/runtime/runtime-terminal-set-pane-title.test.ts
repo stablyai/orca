@@ -7,8 +7,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { TERMINAL_QUERY_METHODS } from './rpc/methods/terminal/terminal-query-methods'
 
 async function createPaneTitleRuntime() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtime title routing only checks that the mocked desktop window is not destroyed.
-  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
   const runtime = createRuntime()
   syncSinglePty(runtime)
   const setPaneTitle = vi.fn(() => true)

@@ -19,11 +19,26 @@ describe('task page GitHub resume cache', () => {
       pageSize: 30
     })
 
+    const differentQuery = buildTaskPageGitHubResumeContextKey({
+      selectedReposKey: 'local:repo-a',
+      query: 'is:issue',
+      pageSize: 30
+    })
+    const differentPageSize = buildTaskPageGitHubResumeContextKey({
+      selectedReposKey: 'local:repo-a',
+      query: 'is:pr',
+      pageSize: 60
+    })
+
     cache.write(first, 2, [1])
     cache.write(second, 2, [2])
+    cache.write(differentQuery, 2, [3])
+    cache.write(differentPageSize, 2, [4])
 
     expect(cache.read(first, 2)?.items).toEqual([1])
     expect(cache.read(second, 2)?.items).toEqual([2])
+    expect(cache.read(differentQuery, 2)?.items).toEqual([3])
+    expect(cache.read(differentPageSize, 2)?.items).toEqual([4])
   })
 
   it('evicts the least recently used page at the global cap', () => {

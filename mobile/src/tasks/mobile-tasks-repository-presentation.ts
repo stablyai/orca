@@ -30,11 +30,7 @@ export function repoColor(name: string): string {
   return palette[Math.abs(hash) % palette.length]!
 }
 
-/**
- * A repo picker row's detail: its host, as the desktop's picker names it, then its path. Hosts are
- * named only in a mixed list (`sources` set); a desktop SSH repo keeps its bare path, as this screen
- * reads no SSH target labels.
- */
+// Name hosts only for mixed-source lists; SSH repos retain bare paths because no target labels are available here.
 export function getTaskRepoDetail(
   repo: RepoSummary,
   sources: HostContextLabelSources | null
@@ -50,8 +46,6 @@ export function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: s
   return repo?.badgeColor || repoColor(repo?.displayName ?? fallbackName)
 }
 
-// `undefined` as well as `null`: a checked `repo.hooks` reader does not require `source`, and the
-// recorded reply for a repo with no hooks file carries none.
 export function setupSourceLabel(source: string | null | undefined): string {
   if (source === 'orca.yaml') {
     return 'orca.yaml'
@@ -82,8 +76,7 @@ export function taskRepositoryMeta(
     }
   }
   if (item.provider === 'jira') {
-    // Jira has no per-issue color, so derive a stable one from the project the
-    // way GitLab todos do from their project path.
+    // Jira lacks issue colors; derive a stable project color as for GitLab todos.
     return {
       key: item.source.project.id,
       label: item.source.project.name || item.source.project.key,

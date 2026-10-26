@@ -1,7 +1,6 @@
 version: 2
 updates:
-  # Why only ripgrep: the bundled rg ships in every artifact and to SSH remotes, and a bump is a
-  # one-line pin change (the SSH cache keys on the binary's hash). Other dependencies stay manual.
+  # Automate only bundled ripgrep’s single pin; its hash invalidates SSH cache. Other dependency updates stay manual.
   - package-ecosystem: npm
     directory: /
     schedule:

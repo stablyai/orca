@@ -12,7 +12,12 @@ export function attachDurableMutationRecovery(
   if (method !== 'terminal.send' || !requestId || !(error instanceof RuntimeClientError)) {
     return attachMutationRecovery(error, requestId, originalCommand)
   }
-  const message = `${error.message} Terminal prompt request ID: ${requestId}. Re-issue the exact command with --retry-request ${requestId} --wait-submit <seconds>; do not retry it without that ID.`
+  // Why: a text-plus-Enter prompt refuses a menu; text-only and bare-Enter sends stay direct input.
+  const menuHint =
+    error.code === 'agent_prompt_blocked'
+      ? ' The agent is showing a permission or trust prompt; to answer it, send --text and --enter as separate commands.'
+      : ''
+  const message = `${error.message}${menuHint} Terminal prompt request ID: ${requestId}. Re-issue the exact command with --retry-request ${requestId} --wait-submit <seconds>; do not retry it without that ID.`
   const data = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
     orchestrationRequestId: requestId,

@@ -1,5 +1,4 @@
-// How a chat message's time reads: desktop formats it in the reader's locale, the phone in the
-// device's, with the same options so the two never disagree on what a message's time looks like.
+// Share formatting options across desktop/phone while retaining each reader’s locale.
 
 /** The time under a message: "3:42 PM". */
 export const NATIVE_CHAT_MESSAGE_TIME_FORMAT: Intl.DateTimeFormatOptions = {

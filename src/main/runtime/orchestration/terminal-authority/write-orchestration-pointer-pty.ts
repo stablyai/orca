@@ -35,8 +35,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     })
   }
 
-  // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer
-  // target is rebuilt from the PTY record rather than refused.
+  // A parked leaf may retain a live PTY outside the graph; rebuild its submit target from the PTY record.
   protected resolveOrchestrationPointerSubmitTarget(
     stagedLeaf: OrchestrationMailboxLeaf,
     ptyId: string
@@ -128,14 +127,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
-    // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
-    // restored surface whose PTY died with a prior run still reads connected.
-    // Demote only on a controller-proven absence, and only for locally-scoped
-    // ids the aggregate inventory authoritatively covers — SSH/remote scopes may
-    // be legitimately missing from it, and unknown liveness never demotes.
-    // The sync hasPty rescue closes the spawn/list race: a just-spawned PTY can
-    // register after the inventory snapshot, and federation reads one
-    // connected:false as exited.
+    // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
     const provenAbsent =
       provenLivePtyIds !== null &&
       leaf.ptyId !== null &&
@@ -169,7 +161,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(
-        pty?.launchAgent,
+        pty?.launchAgent ?? pty?.launchCommandAgent,
         pty?.foregroundAgent,
         title,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null

@@ -95,8 +95,7 @@ export function resolveForegroundFallbackProcess(
   return shellName ?? processName ?? null
 }
 
-/** Basename of the spawned shell path, parsed for the *target* platform.
- *  Why: POSIX `basename` won't split a Windows `\` path (non-Windows host/CI), so it'd break the foreground comparison. */
+/** Use the target platform: POSIX basename cannot split a Windows backslash path. */
 export function getSpawnedShellName(shellPath: string): string {
   return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }

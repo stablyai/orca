@@ -9,7 +9,6 @@ import type { JiraUser } from '../../../shared/jira/jira-types'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
-/** Renders the selectable user rows inside the picker popover. */
 export function JiraUserOptionList({
   users,
   onSelect
@@ -36,11 +35,7 @@ export function JiraUserOptionList({
   )
 }
 
-/**
- * Searchable single-user combobox for Jira user fields. These need an accountId,
- * not the display name a plain text box would collect, since Jira rejects a bare
- * string for user fields.
- */
+/** User fields require accountId values; Jira rejects display-name strings. */
 export type JiraUserPickerFixedOption = {
   key: string
   label: string

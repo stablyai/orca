@@ -1,12 +1,4 @@
-/**
- * Two-launch Electron helper for restart-persistence tests.
- *
- * Why: the default `orcaPage` fixture creates a fresh `userDataDir` per test
- * and deletes it on close, which is incompatible with a test that needs to
- * quit the app and relaunch against the *same* on-disk state. This helper
- * owns the shared userDataDir and gives each caller an `app`+`page` pair
- * wired to it.
- */
+// Retain one isolated user-data directory across launches; the ordinary per-test fixture deletes it on close.
 
 import {
   _electron as electron,
@@ -82,8 +74,7 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
       if (attempt === 4) {
         throw error
       }
-      // Why: on Windows, taskkill can return before Electron/PTY handles are
-      // fully released, making immediate temp-profile deletion flaky.
+      // Windows taskkill may precede profile-handle release; retry deletion.
       await delay(250)
     }
   }
@@ -112,13 +103,7 @@ function createRestartLaunchIsolation(
   })
 }
 
-/**
- * Create a restart session tied to a persistent userDataDir.
- *
- * Why: keep the launch wiring identical to the shared fixture (mainPath,
- * env stripping, headful toggle) so behavior differences between fixtures
- * don't leak in as false positives for persistence bugs.
- */
+// Keep launch policy aligned with the ordinary app fixture to avoid false persistence differences.
 export function createRestartSession(
   testInfo: TestInfo,
   extraEnv: Record<string, string> = {}
@@ -129,9 +114,7 @@ export function createRestartSession(
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
   let runtimeWsPort: number | null = null
 
-  // Why: this helper bypasses the shared `electronApp` fixture, so it must
-  // seed the same completed onboarding profile or first-run overlays cover
-  // both launches and obscure restart failures.
+  // Seed completed onboarding on both launches so first-run overlays cannot obscure persistence failures.
   writeFileSync(
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
@@ -169,8 +152,7 @@ export function createRestartSession(
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })
-    // Why: attach before firstWindow — the main-process daemon guard and the
-    // plugin-system startup metrics can both emit before the renderer is ready.
+    // Attach before firstWindow or daemon-guard/plugin startup logs may already be gone.
     if (options?.onStderr) {
       const onStderr = options.onStderr
       app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
@@ -233,11 +215,7 @@ export function createRestartSession(
   return { userDataDir, seedCodexResumeRollout, launch, launchUntilExit, close, dispose }
 }
 
-/**
- * Attach a repo to the running renderer and wait until a terminal tab is
- * active on its worktree. Matches the shared fixture's setup path so the
- * first-launch state lines up with what real users persist.
- */
+// Match ordinary repo setup so restart tests persist a realistic active terminal.
 export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): Promise<string> {
   if (!isValidGitRepo(repoPath)) {
     throw new Error(`attachRepoAndOpenTerminal: ${repoPath} is not a git repo`)
@@ -260,15 +238,13 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
             if (!store) {
               return false
             }
-            // Why: repos.add emits a concurrent refresh whose generation can
-            // supersede this fetch; poll until either refresh publishes the repo.
+            // Poll through the concurrent repos.add refresh that can supersede this fetch generation.
             await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
             if (!repo) {
               return false
             }
-            // Why: this restart fixture uses the global e2e repo, whose seeded Git
-            // worktree is external to Orca's workspace root after the visibility rollout.
+            // Show the seeded Git worktree external to Orca’s managed workspace root.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
             return true
           }, repoId)
@@ -286,10 +262,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     { timeout: 30_000 }
   )
 
-  // Why: fetchWorktrees() is async. Awaiting the outer page.evaluate returns
-  // before the Zustand worktree slice has observed the hydrated state, so a
-  // single evaluate() that reads worktreesByRepo can see an empty map. Poll
-  // the store until the seeded repo's worktree shows up.
+  // Poll until async worktree hydration reaches Zustand; page.evaluate settlement alone does not guarantee it.
   await expect
     .poll(
       async () =>
@@ -316,8 +289,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
       return null
     }
     const state = store.getState()
-    // Why: repo identity remains stable when Windows canonicalizes path casing
-    // or separators between the IPC and renderer layers.
+    // Use repo identity across Windows path casing/separator normalization.
     const repoWorktrees = state.worktreesByRepo[repoId] ?? []
     const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
     if (!primary) {
@@ -338,8 +310,7 @@ export async function readRestartRendererState<T>(read: () => Promise<T>): Promi
   try {
     return await read()
   } catch (error) {
-    // Why: initial hydration can replace the renderer document; the enclosing
-    // state poll must retry that transition without hiding other failures.
+    // Retry hydration’s document replacement without swallowing unrelated errors.
     if (error instanceof Error && error.message.includes('Execution context was destroyed')) {
       return null
     }

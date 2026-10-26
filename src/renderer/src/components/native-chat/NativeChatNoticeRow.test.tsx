@@ -131,7 +131,6 @@ describe('the row an Orca stop leaves', () => {
       'Orca on studio-mac was closed while this response was in progress.'
     )
     const button = screen.getByRole('button', { name: 'Continue' })
-    // Beside the words that say why, in the same card.
     expect(sentence.parentElement).toContainElement(button)
     fireEvent.click(button)
     expect(continueNow).toHaveBeenCalledOnce()
@@ -168,9 +167,7 @@ describe('the row an Orca stop leaves', () => {
     expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
-  // A client that re-words unnamed host rows keeps this row's presentation and cause, neutral.
   it('stays neutral, naming the cause, as a reader that re-presented it neutral hands it on', () => {
-    // Its words and tone replaced, and the failure fact the old words came from dropped with them.
     const represented: AgentJournalStatusItem = {
       kind: 'status',
       text: 'This response was interrupted. You can continue in this conversation.',

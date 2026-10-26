@@ -263,11 +263,7 @@ export function promotePreviewTab(
   return updateTab(model, command.workspace, promoted)
 }
 
-/**
- * A new tab replaces the group's preview tab of a compatible kind, as a single click does today,
- * unless closing it is refused like any close (an unsaved draft): then both stay. The new tab is
- * placed first, so closing a group's only tab, its preview, never closes the group.
- */
+/** Place the new tab before closing its compatible preview so the group survives. Refuse the preview close normally for unsaved drafts, retaining both tabs. */
 export function placeContentTab(
   model: WorkspaceLayoutModel,
   key: string,
@@ -294,7 +290,6 @@ export function placeContentTab(
       workspace,
       key,
       tab,
-      // The sender's group names a workspace's first group.
       {
         groupId: group?.id ?? placement.groupId,
         afterTabId: placement.afterTabId,

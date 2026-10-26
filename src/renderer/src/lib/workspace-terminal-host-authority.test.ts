@@ -1,7 +1,4 @@
-/**
- * The seeding predicate answers one question for both remote flavors: does some other party own
- * terminal creation for this workspace right now? Three answers, and only `none` seeds.
- */
+/** Use one remote-authority question for seeding/resume: only none authorizes local terminal creation, never unverifiable. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
@@ -139,8 +136,7 @@ describe('workspace terminal seeding authority', () => {
   )
 
   it('seeds once the SSH target connects, with no workspace snapshot to wait for', () => {
-    // The relay that served host workspace snapshots is gone (#27214), so nothing will ever answer
-    // one; waiting for it left a reconnected target unable to seed or resume for good.
+    // Host workspace snapshots no longer answer after relay removal (#27214); waiting forever strands connected targets.
     const store = createTestStore()
     seedDirectSsh(store)
     expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
@@ -219,11 +215,7 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
 
-  /**
-   * #15556: the guard this replaces asked "am I a client of a live paired session?". Rival detected
-   * publications make the owning environment unnameable, so that guard answered "no" and the client
-   * seeded a local terminal beside the one the host was creating. Ownership is unresolved, not local.
-   */
+  /** Rival detected owners make authority unresolved, not local; the old live-paired-client guard incorrectly seeded alongside host creation (#15556). */
   it('does not seed locally when the runtime owner cannot be named', () => {
     const store = createTestStore()
     store.setState({

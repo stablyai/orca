@@ -180,9 +180,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('keeps the finished turn detail a completion notification needs', () => {
-    // Why: the desktop banner only fires when the done row carries a reply, a tool
-    // name, or a tool input (hasAgentNotificationDetail). A turn that ends with no
-    // assistant prose must therefore still carry its last tool.
+    // Done banners require reply/tool detail; retain the last tool when the turn ends without prose.
     ingest(state, {
       event: 'turn_start',
       session_id: 'session_jc_6',
@@ -235,9 +233,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('reads the lifecycle point from jcode\u2019s own `event` key', () => {
-    // Why this matters: the managed script posts JCODE_HOOK_PAYLOAD verbatim through
-    // the shared hook transport, so nothing re-states the event as a form field —
-    // jcode names it `event`, and the listener has to accept that.
+    // Managed transport posts JCODE_HOOK_PAYLOAD verbatim; accept its event field without form restatement.
     const event = normalizeHookPayload(
       state,
       'jcode',
@@ -251,8 +247,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('does not count a direct jcode prompt without journal evidence as explicit', () => {
-    // Why: regression — a prompt field on a hook event has no journal backing, so
-    // it must not set hasExplicitPrompt.
+    // Hook prompt fields lack journal backing and must not imply explicit submission.
     const event = ingest(state, {
       event: 'post_tool',
       tool_name: 'read',

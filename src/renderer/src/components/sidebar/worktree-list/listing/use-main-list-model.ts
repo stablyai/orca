@@ -48,9 +48,7 @@ import { useReusedArrayIdentity } from './use-reused-array-identity'
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
 
-/** Every creation main lists, whoever started it (so the window lists what the phone does), less
- *  those the window just ended, plus the window's own main does not list: preflight, a paired
- *  server's, and its work after main's reply. */
+/** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
 export function withWindowCreations(
   domains: SidebarFeedDomains,
   pendingCreationKeys: readonly string[],
@@ -90,12 +88,7 @@ function windowFolderRecordOf(
   return records.get(folderRecordKey(folder.id, folder.executionHostId)) ?? folder
 }
 
-/**
- * Switch point. The list built from main's inputs, by the builder the phone runs: the window adds
- * only screen state (hover hold, collapse, host drag, agent-send reveal), its desktop-only cards,
- * its own view settings and host order, and its row writes main has not shown yet. Cards render
- * the window's own records for the rows main lists.
- */
+/** Use the phone’s builder over main’s domains, adding desktop state and pending writes; cards read window records. */
 export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarListModel {
   const { filterState, sortBy, groupBy, repos, defaultHostId, settings } = args
   useSidebarListSession()

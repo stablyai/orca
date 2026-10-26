@@ -21,7 +21,7 @@ import {
   latestStructuredAgentSessionRequest
 } from './structured-agent-session-latest-request'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
-import { latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
+import { latestNativeChatTurnSinceRequest } from './native-chat/native-chat-orca-stop-cut'
 import { selectStructuredAgentTurnTimings } from './structured-agent-session-turn-timing'
 
 const START_FAILURE = 'Claude is not signed in.'

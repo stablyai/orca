@@ -235,9 +235,7 @@ function resolveAiVaultResumeTargetState(args: {
   }
 }
 
-// Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Copy stays available for blocked CLI sessions, while a
-// structured owner reopens natively and must never expose a legacy command.
+// Require real turns; blocked CLI sessions may still copy commands, but native-owned sessions must reopen natively.
 export function aiVaultSessionRowResumeGating(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null

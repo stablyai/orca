@@ -27,9 +27,7 @@ describe('relay host proof failures', () => {
     vi.restoreAllMocks()
   })
 
-  // The production crash signature: a pg-pool connect timeout rejecting out of
-  // verifyCellAssignment inside beginProof killed whole cells as an unhandled
-  // rejection. The guard must contain it to this one handshake.
+  // A verifyCellAssignment connect-timeout rejection once escaped beginProof and crashed whole cells.
   it('contains a database timeout during host hello to one socket', async () => {
     const keys = await generateKeyPair('ES256')
     const publicJwk = await exportJWK(keys.publicKey)

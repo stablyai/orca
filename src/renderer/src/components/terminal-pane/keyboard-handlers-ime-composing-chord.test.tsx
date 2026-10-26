@@ -1,10 +1,5 @@
 // @vitest-environment happy-dom
-// #12871: a cursor chord pressed while a syllable is still composing reached the pty ahead of the
-// text it was typed after. With `가나` on the line, typing `가나다` and pressing Cmd+Left left
-// `다가나` — the composing `다` landed at the cursor's destination.
-//
-// The composed glyph reaches the pty from the composition session-end handler, which runs after
-// the chord's keydown. Only Enter was held for that; every other chord went straight out.
+// Hold cursor chords until composition writes the syllable, preventing the chord from moving it to the wrong position.
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -94,8 +89,7 @@ function createHarness(): {
   } as unknown as PaneManager
   const route = installTerminalImeCompositionRoute({
     terminalElement,
-    // The committed glyph takes this route; the chord takes the transport. Both land in `wire`,
-    // so the assertion is about their order rather than about either one alone.
+    // Feed composition and transport bytes into one wire log to assert their actual ordering.
     terminal: { input: (data: string) => void wire.push(data) },
     capturedTransport: transport,
     getCurrentTransport: () => transport
@@ -187,8 +181,7 @@ describe('a cursor chord pressed during a composition', () => {
     )
   }
 
-  // The Korean 2-Set shape: the platform replays the chord unmarked after keyup, so `isComposing`
-  // is already false — but xterm has not yet emitted the session end that writes the syllable.
+  // Korean chord replay may clear isComposing before xterm emits the session end that writes the syllable.
   it('sends the composed syllable before the chord, not after it', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
@@ -222,8 +215,7 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
-  // A conversion can hold its candidate window open for seconds. A timer that fired mid-preedit
-  // would put the chord back ahead of the text, which is the whole defect.
+  // Candidate windows can stay open for seconds; timer fallback during preedit would reorder chord and text.
   it('does not fall back to a timer while the composition is still open', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
@@ -248,8 +240,7 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
-  // STA-4476: an indefinite wait has no exit of its own. Without a disposer the listeners outlive
-  // the pane and a later composition on the same element flushes the stale chord.
+  // Dispose pending chord listeners so later composition cannot flush bytes from a dead pane.
   it('drops the held chord and its listeners when the pane tears down', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
@@ -283,8 +274,7 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
-  // A composition that never commits must not strand the wait forever. The chord is discarded,
-  // never sent late — a late send is #12871 again.
+  // Abandon compositions that never finish; sending the chord late would reintroduce ordering corruption.
   it('abandons a chord whose composition never ends', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))

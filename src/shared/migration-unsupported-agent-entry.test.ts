@@ -16,10 +16,16 @@ describe('migrationUnsupportedToAgentStatusEntry', () => {
     const second = migrationUnsupportedToAgentStatusEntry(unsupported)
 
     expect(second).toBe(first)
-    expect(first?.updatedAt).toBe(Number.MAX_SAFE_INTEGER)
+    expect(first).toMatchObject({
+      state: 'blocked',
+      agentType: 'unknown',
+      paneKey: unsupported.paneKey,
+      stateStartedAt: 1234,
+      updatedAt: Number.MAX_SAFE_INTEGER
+    })
   })
 
-  it('caches null for records that cannot be projected to a pane key', () => {
+  it('returns null for records that cannot be projected to a pane key', () => {
     const unsupported: MigrationUnsupportedPtyEntry = {
       ptyId: 'pty-1',
       reason: 'legacy-numeric-pane-key',
@@ -27,7 +33,6 @@ describe('migrationUnsupportedToAgentStatusEntry', () => {
       updatedAt: 1234
     }
 
-    expect(migrationUnsupportedToAgentStatusEntry(unsupported)).toBeNull()
     expect(migrationUnsupportedToAgentStatusEntry(unsupported)).toBeNull()
   })
 })

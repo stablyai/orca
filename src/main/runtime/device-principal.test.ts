@@ -132,7 +132,6 @@ describe('device principal', () => {
       authenticatedCallerFingerprint: createHash('sha256').update(phone.token).digest('hex')
     })
 
-    // A credential change bumps the revision; the open socket's next request is refused.
     registry['devices'] = registry['devices'].map((row) => ({ ...row, credentialRevision: 1 }))
     await server['handleWebSocketMessage'](
       JSON.stringify({ id: 'r2', method: 'status.get' }),

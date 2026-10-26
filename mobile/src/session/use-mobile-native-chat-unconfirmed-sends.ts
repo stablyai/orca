@@ -1,9 +1,4 @@
-// Ack-lost sends: a relay drop mid-send usually loses only the acknowledgement —
-// the desktop already delivered the message. Hold the send instead of claiming
-// failure (which baits a duplicate): stay quiet when the transcript echo lands,
-// and surface the uncertainty only if the deadline passes without it. The
-// composer was already cleared at send time, so this never touches drafts.
-// A structured chat's sends are held by `useMobileStructuredSends` instead.
+// Lost acknowledgements may hide delivered sends: hold them quietly until transcript confirmation or deadline, without restoring drafts. Structured sends own a separate hold.
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -55,7 +50,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         baselineTailMessageId: origin.baselineTailMessageId,
         deadline: null
       }
-      // Why: the transcript event can beat the lost RPC acknowledgement.
+      // The confirming transcript event can arrive before the lost-ack RPC settles.
       if (
         isActiveTranscript &&
         findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0

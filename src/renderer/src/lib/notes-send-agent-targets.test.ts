@@ -657,8 +657,7 @@ describe('notes send agent targets', () => {
     ])
   })
 
-  // Why: OpenCode publishes `OC | <session>` and no status word, so a hookless
-  // OpenCode pane used to be invisible in the send menu no matter how live it was.
+  // Hookless OpenCode has OC | session without status words; live panes must still appear in the menu.
   it('lists a manual OpenCode pane by its native session title', () => {
     const targets = deriveNotesSendAgentTargets(
       state({

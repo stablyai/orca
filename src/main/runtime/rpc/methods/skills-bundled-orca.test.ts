@@ -40,9 +40,8 @@ function method(name: string) {
 async function call<T>(name: string, params: unknown, context: RpcContext): Promise<T> {
   const entry = method(name)
   const parsed = entry.params ? entry.params.parse(params) : undefined
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `parsed` came from this method's own params schema, which is what the erased handler accepts.
-  const result = await entry.handler(parsed as never, context)
-  // Why JSON: the result crosses the wire, so the client only ever sees its serialised form.
+  const result = await entry.handler(parsed, context)
+  // Assert serialized JSON because that is what paired clients receive.
   const wire: T = JSON.parse(JSON.stringify(result))
   return wire
 }

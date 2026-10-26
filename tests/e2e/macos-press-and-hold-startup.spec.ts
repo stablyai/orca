@@ -1,20 +1,6 @@
-/**
- * Startup wiring for the macOS press-and-hold opt-out (#14746).
- *
- * What this can prove: the routine runs during startup, resolves the *real* running bundle's
- * identifier from its Info.plist, records a decision, and stays completely inert off macOS.
- *
- * What it cannot prove: that held keys repeat. Key repeat versus the accent picker is decided by
- * AppKit from a preference this process does not re-read after writing, so observing it needs a relaunch and a
- * physically held key — neither of which Playwright's synthesized CDP key events go through.
- * The preference semantics the fix depends on are pinned against the real `/usr/bin/defaults` in
- * src/main/macos-press-and-hold-default.defaults-domain.test.ts.
- *
- * The E2E app runs unpackaged, so its bundle identifier is Electron's own rather than Orca's. That
- * is the ownership guard's case, and asserting it here is the point: `defaults` resolves the user's
- * real home regardless of the harness's HOME isolation, so a run that wrote anything would be
- * writing into a domain shared with every other unpackaged Electron app on the machine.
- */
+// #14746: verify startup resolves the real bundle id and records its decision; off macOS stays inert.
+// CDP cannot prove physical held-key repeat: AppKit needs relaunch; real defaults-domain tests pin preference semantics.
+// Unpackaged Electron must refuse its foreign domain because defaults uses real HOME despite fixture isolation.
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 
@@ -40,8 +26,7 @@ async function readPressAndHoldStartupState(
         return null
       }
     }
-    // Why resolved here rather than hardcoded: this is the independent half of the cross-check —
-    // the spec derives the identifier from the launched bundle without reusing product code.
+    // Derive the bundle id independently of product code for the startup cross-check.
     const plist = read(
       nodePath.join(nodePath.dirname(nodePath.dirname(process.execPath)), 'Info.plist')
     )

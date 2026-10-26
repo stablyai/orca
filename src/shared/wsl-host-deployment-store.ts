@@ -12,8 +12,7 @@ import {
 import { hardenExistingSecureFile } from './secure-file'
 import { OrcadWslDeploymentLinkSchema } from './wsl-host-deployment-link'
 
-// Why its own file: builds before the per-record store reject orca-environments.json whole on
-// any record they cannot parse, and never open this one.
+// Isolate WSL records so older builds cannot reject the entire pairing store.
 const WSL_HOST_DEPLOYMENTS_FILE = 'orca-wsl-host-deployments.json'
 const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
@@ -120,10 +119,7 @@ export function readWslHostDeployments(userDataPath: string): WslHostDeployments
   return result
 }
 
-/**
- * Replaces (or with null, removes) one environment's record. Every other record is rewritten
- * verbatim, in place, so a newer build's records and fields survive.
- */
+/** Replace/remove one record while preserving every other record and unknown field verbatim in place. */
 export function writeWslHostDeployment(
   userDataPath: string,
   environmentId: string,
@@ -161,10 +157,7 @@ function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
   )
 }
 
-/**
- * Overlays each WSL deployment onto its environment and hides environments whose record cannot be
- * read. A record that conflicts with SSH state or with its pairing is stale and ignored.
- */
+/** Overlay WSL links and hide unreadable records’ environments. Ignore stale links that conflict with SSH state or pairing. */
 export function overlayWslHostDeployments(
   environments: readonly KnownRuntimeEnvironment[],
   { deployments, unreadableEnvironmentIds }: WslHostDeployments

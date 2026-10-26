@@ -149,8 +149,7 @@ describe('shared agent-hook-listener', () => {
         }
       ])
 
-      // Why: the child finishing wakes the lead; its final Stop reports an
-      // empty roster and the pane resolves to done with no child rows left.
+      // Child completion wakes the lead; its final empty-roster Stop must settle without child rows.
       claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       expect(finalStop?.payload.state).toBe('done')
@@ -181,8 +180,7 @@ describe('shared agent-hook-listener', () => {
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
       expect(stopped?.payload.state).toBe('done')
-      // Why: a finished one-shot leaves the sidebar instead of squatting as a
-      // permanent idle row for the rest of the session.
+      // Finished one-shots leave the roster instead of persisting as idle children.
       expect(stopped?.payload.subagents).toBeUndefined()
     })
 
@@ -201,8 +199,7 @@ describe('shared agent-hook-listener', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
       claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
 
-      // Why: hook events from inside a subagent carry agent_id; they must keep
-      // the child row live but not overwrite what the lead was last doing.
+      // Child agent_id updates its row without overwriting lead activity.
       const childTool = claudeEvent({
         hook_event_name: 'PreToolUse',
         agent_id: 'a9',
@@ -216,17 +213,41 @@ describe('shared agent-hook-listener', () => {
       ])
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a9' })
-      // Why: the lead's own last state was done, so with no working children
-      // the pane settles back to done rather than a phantom working spinner.
+      // A completed lead with no working children must settle instead of showing a phantom spinner.
       expect(stopped?.payload.state).toBe('done')
     })
 
+    it('does not mint rows for agent-hook runs on the lead or inside a subagent', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      // Why: payloads captured from Claude Code 2.1.310; a hook run inside a subagent inherits its agent_type.
+      const leadHook = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'hook-agent-f91f48da-b4db-45e3-a8a1-3debdaa4f2f5',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/README.md' }
+      })
+      expect(leadHook?.payload.state).toBe('working')
+      expect(leadHook?.payload.subagents ?? []).toEqual([])
+
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aa34e9e23451d1f6b',
+        agent_type: 'general-purpose'
+      })
+      const childHook = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'hook-agent-5179ea04-58c0-440a-b861-04ead9f87aaa',
+        agent_type: 'general-purpose',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/README.md' }
+      })
+      expect(childHook?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aa34e9e23451d1f6b' })
+      ])
+    })
+
     it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
-      // Why: the interactive agent-teams shape observed live on 2.1.217 —
-      // lifecycle events use `a<name>-<hex>` agent ids while background_tasks
-      // uses unrelated `type: "teammate"` task ids. SubagentStop + TeammateIdle
-      // fire at every TURN end while the teammate stays alive awaiting mail,
-      // so the row must park idle and survive lead Stops, not vanish.
+      // Claude 2.1.217 teams use unrelated lifecycle/task IDs; SubagentStop/TeammateIdle end turns, not teammate lifetime.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn probe' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -291,11 +312,7 @@ describe('shared agent-hook-listener', () => {
       })
       expect(stop?.payload.state).toBe('working')
 
-      // Why: teammate name and agent type are separate Agent-tool inputs; the
-      // lifecycle id embeds the former while the hook reports the latter.
-      // TeammateIdle keyed by name parks it via the id prefix (fallback when
-      // its SubagentStop was lost), so the pane settles back to the lead's
-      // done state while the row stays visible as idle.
+      // TeammateIdle names the agent, not its type; use lifecycle ID prefix when SubagentStop was lost.
       const idled = claudeEvent({
         hook_event_name: 'TeammateIdle',
         teammate_name: 'reviewer',
@@ -347,8 +364,7 @@ describe('shared agent-hook-listener', () => {
       expect(spawned?.payload.state).toBe('waiting')
       expect(spawned?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
 
-      // Why: child-origin tool events must not overwrite the lead's cached
-      // question card or read as the lead's own working state either.
+      // Child tools must not overwrite the lead's question card or working state.
       const childTool = claudeEvent({
         hook_event_name: 'PreToolUse',
         agent_id: 'a1',
@@ -391,15 +407,13 @@ describe('shared agent-hook-listener', () => {
         agent_type: 'general-purpose'
       })
       const interruptedStop = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
-      // Why: the child is still running, so the pane stays working and the
-      // parse layer clamps `interrupted` off this intermediate emit.
+      // Live children hold working state; defer interrupted until the terminal done event.
       expect(interruptedStop?.payload.state).toBe('working')
       expect(interruptedStop?.payload.interrupted).toBeUndefined()
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')
-      // Why: the user's cancellation must survive to the terminal done so the
-      // row reads "Interrupted by user" instead of a normal completion.
+      // Retain user cancellation through child drain so final done reads interrupted.
       expect(drained?.payload.interrupted).toBe(true)
     })
 
@@ -414,8 +428,7 @@ describe('shared agent-hook-listener', () => {
       })
       expect(blocked?.payload.state).toBe('waiting')
 
-      // Why: the blocked child dying (killed, errored) must not pin the
-      // permission wait on the pane forever.
+      // A blocked child ending must release its permission wait.
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
       expect(stopped?.payload.state).toBe('working')
     })
@@ -448,8 +461,7 @@ describe('shared agent-hook-listener', () => {
       })
       expect(approved?.payload.state).toBe('working')
 
-      // Why: the lead already stopped before the wait; draining the child
-      // must resolve to done, not pin the pane on an invented 'working'.
+      // Draining the last child must restore the already-completed lead.
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')
     })
@@ -481,8 +493,7 @@ describe('shared agent-hook-listener', () => {
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
-      // Why: teams sessions never send an EMPTY list — the alive teammate
-      // entry must not keep a phantom pre-restart child gating the pane.
+      // Teams never send empty rosters; live teammates must not retain phantom pre-restart children.
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [
@@ -522,8 +533,7 @@ describe('shared agent-hook-listener', () => {
         ]
       })
 
-      // Why: an unreadable entry may be this id, so omission cannot prove
-      // the lifecycle-tracked child finished or was killed.
+      // Unreadable roster entries make omission inconclusive about tracked child death.
       expect(stop?.payload.subagents).toContainEqual(
         expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
       )
@@ -537,8 +547,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
-      // Why: a CLI that stops converting child Stops to SubagentStop must not
-      // retire the pane while the lead still works.
+      // Child Stops must not retire a still-working lead if a CLI stops translating them to SubagentStop.
       const childStop = claudeEvent({ hook_event_name: 'Stop', agent_id: 'a1' })
       expect(childStop?.payload.state).toBe('working')
       expect(childStop?.payload.prompt).toBe('go')
@@ -556,8 +565,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'alane-hooks-6d3cb5b5',
         agent_type: 'lane-hooks'
       })
-      // Why: teammate "lane" must not idle "lane-hooks"'s rows via the
-      // `a<name>-` prefix — the id suffix after the name is hyphen-free hex.
+      // Teammate names containing hyphens must not match shorter prefixes; only the trailing hex is hyphen-free.
       const idledOther = claudeEvent({
         hook_event_name: 'TeammateIdle',
         teammate_name: 'lane',
@@ -572,7 +580,7 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'lane-hooks',
         team_name: 'session-x'
       })
-      // Why: the exact-name match parks the row idle (turn over, still alive).
+      // Exact teammate-name match parks its row idle without ending its lifetime.
       expect(idled?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
       ])
@@ -620,9 +628,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('rebuilds a running one-shot subagent from background_tasks after restart', () => {
-      // Why: fresh listener state (post-restart) has no roster; a Stop that
-      // reports a running non-teammate task must resurrect the child row and
-      // keep the pane working rather than declaring done.
+      // After restart, reported running tasks must restore children and keep the pane working.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'resume' })
       const stop = claudeEvent({
         hook_event_name: 'Stop',
@@ -664,8 +670,7 @@ describe('shared agent-hook-listener', () => {
         mainAgent: { state: 'working', stateStartedAt: expect.any(Number) }
       })
 
-      // Why: a child-driven refresh re-emits the cached lead state; the linger
-      // bug would come back if it could resurrect the dismissed question.
+      // Child refresh must not resurrect a dismissed lead question.
       const childDriven = claudeEvent({
         hook_event_name: 'SubagentStart',
         agent_id: 'a1',
@@ -709,8 +714,7 @@ describe('shared agent-hook-listener', () => {
       })
       expect(wait?.payload.state).toBe('waiting')
 
-      // Why: the lead already finished; the answer resumes the child, so the
-      // emitted state is gated up to working only while that child still runs.
+      // The lead is done; answering resumes the child and holds working only while it runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
         state: 'working',
         turnCompletedAt: expect.any(Number),

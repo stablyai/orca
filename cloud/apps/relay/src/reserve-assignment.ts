@@ -17,9 +17,7 @@ import {
 } from './reserve-placement.js'
 import type { OutrankedSeat, SeatFeedCell, ShadowSeat, ShadowSeatDirectory } from './shadow-seat-directory.js'
 
-// Step 5 on a director: answer a desktop from the in-memory map for cells that report
-// admitMode=reserve, and fall back to today's database path for everything else. The cell
-// decides every booking; this only estimates, picks and asks.
+// Director estimates/picks from its memory map, but the cell decides every booking; other hosts retain database placement.
 
 // A leaver may rejoin its cell from memory this long, as the cell's own rule 2 allows.
 export const RESERVE_STICKY_RECENT_MS = 10 * 60_000
@@ -61,8 +59,7 @@ export type ReservePlan =
     }
   | ({ kind: 'database' } & Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve' | 'reserveSpill'>)
 
-// A host whose seat the ledger reconcile demoted mints above its row for this long, so the
-// re-assign does not collide with the row again (the mirror refuses an equal epoch).
+// Reconcile-demoted hosts must mint above their row: equal epochs cannot replace the guarded mirror.
 export const RESERVE_ROW_FLOOR_TTL_MS = 2 * 60 * 60_000
 const RESERVE_ROW_FLOOR_MAX = 100_000
 const OWN_BOOKINGS_MAX = 100_000
@@ -123,8 +120,7 @@ export class ReserveAssignment {
       client: CellReserveClient
       // One primary-key read of the host's row: only for a host the map has never seen.
       readRow: (identity: Identity) => Promise<{ cellId: string; assignmentEpoch: number } | null>
-      // True while the pool has waiters: the optional WRONG_CELL read is skipped, so timed-out
-      // reads cannot stack up behind a stall.
+      // Skip optional WRONG_CELL reads while pool waits, avoiding timed-out queries stacking behind a stall.
       databaseBusy?: () => boolean
       // Step 1 C: rehome on reconnect; absent or at 0% it never runs.
       rehome?: ReserveRehome
@@ -210,22 +206,18 @@ export class ReserveAssignment {
       ...(rowFloor === undefined ? [] : [rowFloor])
     ]
     let row: { cellId: string; assignmentEpoch: number } | null = null
-    // A seat closed with WRONG_CELL was demoted (or failed to re-register) because its row is
-    // ahead, which every director sees in that cell's feed: read the row, so the re-assign mints
-    // above it on any director, not just the one that demoted it.
+    // Read the row after WRONG_CELL so every director mints above it, including directors that only saw the leave.
     const leftWrongCell =
       left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL && !(this.input.databaseBusy?.() ?? false)
     if ((known.length === 0 && !request.regionCorrection) || leftWrongCell) {
       try {
-        // Only the never-seen host needs the row; for the WRONG_CELL one it is an optimisation,
-        // bounded so a database stall cannot hold the reconnect (the reconcile repairs a miss).
+        // WRONG_CELL read is bounded/optional: known hosts can recover via reconcile; never-seen hosts require the row.
         row =
           known.length === 0
             ? await this.input.readRow(identity)
             : await withinMs(this.input.readRow(identity), RESERVE_WRONG_CELL_ROW_READ_MS)
       } catch {
-        // A host the map never saw, with the database down: its epoch cannot be minted safely.
-        // One the map knows places as it did before this read existed.
+        // Without row or map history the epoch cannot be minted safely; known hosts retain placement during DB outages.
         if (known.length === 0) {
           this.summary.retries.database += 1
           return { kind: 'retry', retryAfterSeconds: 2, reason: 'database' }
@@ -241,8 +233,7 @@ export class ReserveAssignment {
         return { kind: 'answer', assignment: rehomed, lane: 'rehome' }
       }
     }
-    // The database lane answers it, so the window exchange follows: no memory answer, no share
-    // draw, only the in-region fallback, once the map is complete and knows the host.
+    // Region-window exchange belongs to the database lane; bypass memory/share draws and offer only complete-map in-region fallback.
     if (request.regionCorrection) {
       if (incomplete) {
         return { kind: 'database' }
@@ -279,8 +270,7 @@ export class ReserveAssignment {
     const reserveSpill = incomplete
       ? undefined
       : this.reserveSpill(identity, request.region, epochFloor, seats, drainedFrom)
-    // Where the host was last seen decides who owns it: a database-mode cell keeps today's
-    // path, sticky included; only a fresh placement may be booked on a reserve-mode cell.
+    // Last-seen cell determines ownership: database cells retain sticky placement; reserve cells book only fresh placements.
     const lastOnReserve = lastCellId !== undefined && directory.placementModeOf(lastCellId) === 'reserve'
     if (!lastOnReserve && (seats.length > 0 || left !== undefined || row !== null)) {
       return { kind: 'database', epochFloor, placeFresh, regionReserve, reserveSpill }
@@ -297,9 +287,7 @@ export class ReserveAssignment {
     return !this.input.directory.isComplete() && now - this.input.startedAt < RESERVE_STARTUP_GATE_MS
   }
 
-  // Keyed on the cell, not the leave: a same-cap drain (graceMs 0) has the host re-ask before
-  // its leave reaches the map, but the cell's feed says draining from the first poll after.
-  // Only the newest grant counts, so a host already re-booked elsewhere is not a drain re-ask.
+  // Key drain re-asks by newest grant’s cell: zero-grace hosts redial before leave reaches the map, while feed already says draining.
   private drainSource(
     identity: Identity,
     seats: readonly ShadowSeat[],
@@ -317,9 +305,7 @@ export class ReserveAssignment {
     return drained ? newest.cellId : undefined
   }
 
-  // Only the reserve lane's own answers: a database-lane placement off the drained (isolated)
-  // cell already logs orca_relay_sticky_replaced_off_isolated_cell, and the canary sums both.
-  // Each host counts once per drain: the canary bar must never pass on a host counted twice.
+  // Count reserve answers once per host/drain; database replacements log separately and the canary sums both, so duplicates inflate success.
   private recordDrainReplaced(identity: Identity, fromCellId: string, placed: RelayAssignment): void {
     const incarnation = this.input.directory.cellState(fromCellId)?.incarnation
     let counted = this.drainCounted.get(fromCellId)
@@ -385,8 +371,7 @@ export class ReserveAssignment {
     }
   }
 
-  // For the share draw's losers: the database lane tries the region first, then this, then spills.
-  // Undefined while no in-region reserve cell has a seat, so the database lane runs as today.
+  // Share-draw losers try database in-region, then reserve fallback, then spill; absent reserve room retains database behavior.
   private regionReserve(
     identity: Identity,
     region: RelayRegion,
@@ -406,8 +391,7 @@ export class ReserveAssignment {
     }
   }
 
-  // For a database lane that found no cell with room anywhere: each region with a reserve seat,
-  // the host's own first, without the share draw. A pace is the answer only if no region places.
+  // After database exhausts all cells, try reserve regions own-first without share draw; pace only if none places.
   private reserveSpill(
     identity: Identity,
     region: RelayRegion,
@@ -457,9 +441,7 @@ export class ReserveAssignment {
     this.summary.spills[key] = (this.summary.spills[key] ?? 0) + 1
   }
 
-  // What stickyFromMemory may answer, in its order: only the newest grant (highest epoch, then
-  // the newest join), on a cell that is a candidate in its own region. Lazy, so each cell is
-  // judged after the previous candidate's sticky reserve settled.
+  // Newest epoch/join wins; judge each cell lazily after previous sticky reserves settle.
   private *stickyCandidates(
     seats: readonly ShadowSeat[],
     left: { cellId: string; epoch: number; incarnation?: string; closeCode?: number } | undefined,
@@ -574,8 +556,7 @@ export class ReserveAssignment {
     return record
   }
 
-  // The same epoch on the same cell: no booking, no database, no row lock. A cell that
-  // restarted since forgot the seat, so it is asked to hold it first.
+  // Same-cell/epoch rebind needs no booking or DB lock unless the restarted cell forgot its seat.
   private async stickyFromMemory(
     identity: Identity,
     seats: ShadowSeat[],
@@ -613,8 +594,7 @@ export class ReserveAssignment {
     seats: readonly ShadowSeat[] = [],
     // The database lane found the region full: no share draw, and no other region.
     regionFull = false,
-    // The caller counts its own outcome (spill, rehome): no database lane follows it, and a pace
-    // may not be the answer.
+    // Caller owns spill/rehome accounting; no database lane follows, and pace may be disallowed.
     spill = false,
     drainedFrom?: string
   ): Promise<RelayAssignment | null> {
@@ -763,8 +743,7 @@ export class ReserveAssignment {
     )
   }
 
-  // Supersede at placement: the old seats this director's map holds on reserve cells are told
-  // to go. Each cell checks the seat's epoch and join itself, so a stale map only misses.
+  // Supersede mapped reserve seats at placement; cells check epoch/join so stale maps only miss old seats.
   private supersede(identity: Identity, seats: readonly ShadowSeat[], cellId: string, epoch: number): void {
     for (const seat of seats) {
       if (seat.cellId === cellId || seat.epoch >= epoch) continue
@@ -773,8 +752,7 @@ export class ReserveAssignment {
     }
   }
 
-  // The feed's half of supersede: a seat the booking map did not hold, found once both joins
-  // are in this map. Without it that seat holds its cell until the 75 s silence close.
+  // Feed supersedes half-open seats the booking map missed; otherwise they linger until 75s silence close.
   supersedeOutranked(seat: OutrankedSeat): void {
     this.demoteSuperseded(seat, seat.byCellId, 'feed')
   }

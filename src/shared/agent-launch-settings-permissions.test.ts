@@ -53,6 +53,7 @@ describe('agent permission presets and new chats', () => {
       { type: 'arguments', agent: 'claude', value: '--permission-mode auto' },
       'linux'
     )
+    expect(updates.agentDefaultArgs?.claude).toBe('--permission-mode auto')
     expect(updates).not.toHaveProperty('nativeChatPermissionMode')
   })
 })

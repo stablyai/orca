@@ -46,13 +46,12 @@ export class RuntimeRepositoryRegistrationController {
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
-    // Why: git lists the main checkout at its resolved toplevel; storing a symlink alias or a
-    // subdirectory instead hides that checkout as external, so the project shows no workspaces.
+    // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
     const repoPath = gitInfo?.rootPath ?? path
     const sameHostRepos = store
       .getRepos()
       .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
-    // Why: git's toplevel is already resolved through symlinks, so an alias of a tracked checkout finds it.
+    // Resolved toplevel lets symlink aliases find existing registrations.
     const existing =
       sameHostRepos.find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
@@ -70,9 +69,7 @@ export class RuntimeRepositoryRegistrationController {
       }
       return existing
     }
-    // Local on purpose, whatever `executionHostId` stamps on the row: this controller already
-    // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
-    // addresses the row, not a second machine holding the files.
+    // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
     const detected = await detectRepoIconAndUpstream({
       repoPath,
       kind,
@@ -117,7 +114,7 @@ export class RuntimeRepositoryRegistrationController {
       return { error: 'Parent directory must be an absolute path' }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
-    // Why host-qualified: an SSH project at this path string is another machine's directory.
+    // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store
         .getRepos()

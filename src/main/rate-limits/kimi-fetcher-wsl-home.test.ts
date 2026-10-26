@@ -27,7 +27,7 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 
 setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
 
-// Built with `join` so the key matches the separator the fetcher emits on this runner's platform.
+// Match join's runner-native separators used by the fetcher.
 const HOST_CREDENTIALS = join('/home/neil', '.kimi-code', 'credentials', 'kimi-code.json')
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\neil\\.kimi-code'
 const WSL_CREDENTIALS = `${WSL_HOME}\\credentials\\kimi-code.json`
@@ -118,8 +118,7 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
     expect(result.status).toBe('unavailable')
   })
 
-  // Last: an unsettled UNC read stays shared for its path by design, so the stalled
-  // distro gets its own home to avoid poisoning the other cases.
+  // Hung UNC probes stay shared; isolate the stopped distro path so it cannot poison other cases.
   it('bounds a stalled UNC read instead of parking the poll cycle', async () => {
     const stalledHome = '\\\\wsl.localhost\\Stopped\\home\\neil\\.kimi-code'
     files.set(`${stalledHome}\\credentials\\kimi-code.json`, STALLED)

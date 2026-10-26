@@ -6,25 +6,18 @@ import type { MountAdapter, MountContext } from '../recording-scenario'
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'
 const CLIENT_ID = 'device-token-1'
-// Hoisted: the hook's load effect keys on this list's identity, so a fresh array each render loops.
+// Hoist list identities so the load effect cannot rerun on every render.
 const WORKTREES = [
   { worktreeId: WORKTREE_ID, path: '/repo/feature', repoId: 'repo-1' },
   { worktreeId: 'worktree-2', path: '/repo/sibling', repoId: 'repo-1' }
 ]
-/** Hoisted for the same reason, and empty because an unloaded list has nothing in it yet. */
 const UNLOADED_WORKTREES: typeof WORKTREES = []
 
-/**
- * The history hook reaches its client through the shared per-host context rather than a parameter,
- * so the context object is the mounting boundary. Exposing the provider is what lets the real hook
- * run against the scripted client; reimplementing `useHostClient` would put acquisition and
- * connection-state policy in the adapter, which is exactly what these recordings exist to observe.
- */
+// Expose the real context provider so recordings observe acquisition/reconnect policy rather than reimplementing useHostClient.
 export const agentHistoryMountExposures: readonly OperationExposure[] = [
   ['transport/client-context.tsx', '\nexports.RecordingHostClientContext = Ctx;']
 ]
 
-/** A connected single-host context: one client, one state, no acquisition or reconnect behaviour. */
 function hostClientContext(client: MountContext['client'], effect: MountContext['effect']) {
   return {
     acquire: () => client,
@@ -66,10 +59,8 @@ export function agentHistoryMountAdapters(
         RecordingHostClientContext: React.Context<unknown>
       }>('mobile/src/transport/client-context.tsx')
       const context = hostClientContext(client, effect)
-      // A holder rather than a bare binding: the harness is a component, and a component may not
-      // assign a variable declared outside it.
+      // Use a holder because the component cannot assign an external bare binding.
       const observed: { history?: ReturnType<typeof useHistory> } = {}
-      // The list and the flag move together, because the screen learns both from the same fetch.
       let worktrees = WORKTREES
       let worktreesLoaded = true
       let renderer: ReactTestRenderer | undefined

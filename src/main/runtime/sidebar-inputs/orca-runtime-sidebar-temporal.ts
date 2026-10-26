@@ -57,8 +57,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
-  // A streaming agent can flip its title many times a second; each notice makes every client
-  // re-list the repo, so a burst is announced once. The store is already written.
+  // Coalesce streaming-title bursts into one re-list notice; store writes already landed.
   private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
     (worktreeId) => this.notifySortStampsChanged(worktreeId),
     { flushMs: 50, maxWaitMs: 250 }
@@ -102,8 +101,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     this.terminalRunFacts.onInput((ptyId, now) => this.terminalUse.noteTerminalUse(ptyId, now))
     // Before any store attaches, so its rows reach the stamps as seeds; titles flow without one.
     this.sortStamps.attachAgentTransitions(this.agentTransitions)
-    // Why here: consuming side effects makes the host scan its bytes, which only this layer's
-    // stamps (and the switch) pay for; hookless titles then reach every detector reader.
+    // Only this layer's enabled stamps pay for byte scanning; hookless titles then reach all detector readers.
     this.onClientEvent(
       (event) => {
         if (event.type === 'terminalSideEffects') {
@@ -187,8 +185,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       worktreeId,
       sshHostId: hostId && parseExecutionHostId(hostId)?.kind === 'ssh' ? hostId : null
     }
-    // The phone names only an id. With same-id copies on two hosts it cannot say which one it
-    // shows, and a guessed host would clear the other copy's flag (a `runtime:` copy read as local).
+    // Phone ids cannot disambiguate same-id workspaces on two hosts; guessing would clear another host's unread flag.
     if (!this.isTwinRepoWorkspace(worktreeId) && writeUnreadFlag(this.store, workspace, false)) {
       this.sortStampNotices.cancel(worktreeId)
       this.notifySortStampsChanged(worktreeId)

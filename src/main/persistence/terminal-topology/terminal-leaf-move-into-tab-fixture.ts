@@ -3,7 +3,7 @@ import type { TerminalLeafIntoTabRequest } from '../../../shared/terminal-leaf-m
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { makeTerminalTab } from '../../persistence-session-fixtures'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import type { TerminalSessionPartition } from './terminal-topology-membership'
 
 /** Shared by the into-tab planner and commit tests; S = the dragged tab, T = the target tab. */

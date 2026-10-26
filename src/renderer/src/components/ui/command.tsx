@@ -67,20 +67,14 @@ function CommandDialog({
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
-          // Why: matches the DialogOverlay recipe — deeper scrim + 2px backdrop
-          // blur so the dark canvas lifts off the command palette. A flat
-          // bg-black/50 disappears in dark mode.
+          // Match DialogOverlay’s scrim/blur so it remains visible over the dark canvas.
           className={cn(
             'fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
             overlayClassName
           )}
         />
         <DialogPrimitive.Content
-          // Why: matches the DialogContent recipe — translucent surface, solid
-          // 14% border, dual shadow, and 2xl backdrop blur. bg-popover equals
-          // the canvas in dark mode (#171717 vs #0a0a0a) and the previous
-          // border-border + shadow-lg was barely visible against the dark
-          // canvas.
+          // Match DialogContent’s surface/border/shadow recipe so the palette remains distinct in dark mode.
           className={cn(
             'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             contentClassName
@@ -167,12 +161,7 @@ function CommandList({
 }) {
   const internalRef = React.useRef<HTMLDivElement>(null)
 
-  // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
-  // on wheel events for portaled elements (e.g. Popover) outside the Dialog's
-  // DOM tree. The scrollbar renders (CSS overflow works) but the browser never
-  // scrolls because the native event is cancelled. A non-passive wheel listener
-  // directly on the list takes over scrolling manually so it works regardless
-  // of whether a scroll-lock is active.
+  // Radix dialog scroll-lock cancels wheel defaults on external portals; a non-passive list listener restores scrolling.
   React.useEffect(() => {
     const el = internalRef.current
     if (!el) {

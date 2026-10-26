@@ -75,8 +75,7 @@ import Foundation
     precondition(!MobileWebShellOrigin.isValidSessionId("has space"))
     precondition(!MobileWebShellOrigin.isValidSessionId("dots.are.hosts.too"))
     precondition(!MobileWebShellOrigin.isValidSessionId("sl/ash"))
-    // Non-ASCII letters and digits satisfy Character.isLetter/isNumber, so the ASCII gate is load
-    // bearing: an IDNA-mapped host would not be the origin we minted.
+    // Reject non-ASCII letters/digits that Character accepts; IDNA must not remap the minted origin.
     precondition(!MobileWebShellOrigin.isValidSessionId("sessioñ"))
     precondition(!MobileWebShellOrigin.isValidSessionId("session٣"))
     precondition(MobileWebShellOrigin.documentUrl(sessionId: session)?.absoluteString ==
@@ -96,8 +95,7 @@ import Foundation
     precondition(resolve(parts(path: "/", hasRangeHeader: true)) == nil)
     precondition(resolve(parts(path: "/", scheme: "https")) == nil)
     precondition(resolve(parts(path: "/", scheme: nil)) == nil)
-    // The same ASCII-only fold as the bridge: a Kelvin-sign host is a host nobody minted, and a
-    // caseInsensitiveCompare here would serve it every asset.
+    // Unicode folding would serve assets to unminted Kelvin-sign hosts.
     precondition(MobileWebShellOrigin.resolveRequestPath(
       parts(path: "/", host: "\u{212A}ey"),
       sessionId: "key"
@@ -160,8 +158,7 @@ import Foundation
     precondition(built.entries.count == 4)
     precondition(built.entries["/"]?.file.path == "/tmp/generation/index.html")
     precondition(built.entries["/"]?.contentType == "text/html; charset=utf-8")
-    // Only "/" reaches the document: a second URL for the same bytes would answer without the CSP
-    // header, which rides the document response alone.
+    // Only / may serve document bytes with CSP; no entrypoint alias.
     precondition(built.entries["/index.html"] == nil)
     precondition(built.entries["/assets/aa.js"]?.contentType == "text/javascript; charset=utf-8")
     precondition(built.entries["/assets/bb.png"]?.file.path == "/tmp/generation/assets/bb.png")
@@ -192,8 +189,7 @@ import Foundation
       ["path": "assets/a\(index).js", "contentType": "text/javascript; charset=utf-8"]
     }
     precondition(generation(manifest(assets: tooMany)) == nil)
-    // A JSON string is not a JSON number, and true and 1.0 are not the integer 1, though NSNumber
-    // bridges all three to something `as? Int` accepts.
+    // NSNumber bridges JSON true and 1.0 to Int; neither satisfies the integer-1 contract.
     precondition(generation(Data(#"{"schemaVersion":true,"entrypoint":"index.html","assets":[{"path":"index.html","contentType":"text/html"}]}"#.utf8)) == nil)
     precondition(generation(Data(#"{"schemaVersion":1.0,"entrypoint":"index.html","assets":[{"path":"index.html","contentType":"text/html"}]}"#.utf8)) == nil)
     precondition(generation(Data(#"{"schemaVersion":1,"entrypoint":"index.html","assets":[{"path":"index.html","contentType":"text/html"}]}"#.utf8)) != nil)
@@ -209,8 +205,7 @@ import Foundation
     precondition(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
-    // page already renders, and the sealed preview frame. See MobileWebShellCsp.
+    // data: previews and https: icons/srcdoc images need image-only access; see MobileWebShellCsp.
     precondition(directives.contains("img-src 'self' data: blob: https:"))
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
@@ -218,15 +213,13 @@ import Foundation
     precondition(directives.contains("base-uri about:"))
     precondition(directives.contains("form-action 'none'"))
     precondition(directives.contains("frame-ancestors 'none'"))
-    // 'unsafe-inline' is granted to style-src and to nothing else: the page's code still has to
-    // arrive as a fetched same-origin script, which is the directive that matters.
+    // Inline styling must never grant inline script execution.
     precondition(directives.filter { $0.contains("unsafe-inline") } == ["style-src 'self' 'unsafe-inline'"])
     precondition(!header.contains("unsafe-eval"))
     // Only images and bundled fonts can use embedded data URLs.
     precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: blob: https:", "font-src 'self' data:"])
     precondition(directives.filter { $0.contains("blob:") } == ["img-src 'self' data: blob: https:", "media-src blob:"])
-    // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
-    // this still refuses a cleartext source anywhere in the header.
+    // Admit https: only for images; http: is not a substring and remains forbidden.
     precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: blob: https:"])
     precondition(!header.contains("http:"))
     precondition(!header.contains("\r") && !header.contains("\n"))
@@ -244,9 +237,7 @@ import Foundation
       precondition(machine.failed(reason) == MobileWebShellLoadEmission(state: "failed", reason: expected))
     }
 
-    // The own-load flag's whole lifetime, which is what decides whether a navigation to the document
-    // may be allowed. Raised only by the view's own `load`, and dropped by anything that ends the
-    // document -- a commit, a failure, a dead renderer, a prop update that never loaded.
+    // Only the view’s own load raises the flag; commit, failure, renderer death and failed prop application clear it.
     let ownLoad = MobileWebShellLoadStateMachine()
     precondition(!ownLoad.isShellLoad)
     ownLoad.shellLoadStarted()
@@ -268,9 +259,7 @@ import Foundation
     precondition(progress.finished()?.state == "ready")
     precondition(progress.finished() == nil)
 
-    // The document's path is not an input here, and that is the point: the page rewrites its own
-    // with history.replaceState before its first render, so `didFinish` arrives at a URL no policy
-    // would allow. What is asked instead is whether this load committed.
+    // replaceState rewrites the URL before finish; readiness must depend on commit state.
     let unseated = MobileWebShellLoadStateMachine()
     _ = unseated.started()
     precondition(unseated.finished() == nil)
@@ -329,8 +318,7 @@ import Foundation
     precondition(document["Content-Length"] == "12")
     precondition(document["Cache-Control"] == "no-store")
     precondition(document["X-Content-Type-Options"] == "nosniff")
-    // The document origin is the session id, and `img-src https:` gives the page somewhere to send
-    // it. See MobileWebShellResponseHeaders.
+    // HTTPS images must not receive session identity; see MobileWebShellResponseHeaders.
     precondition(document["Referrer-Policy"] == "no-referrer")
 
     // The policy rides the document alone; on a subresource response it is inert.
@@ -341,8 +329,7 @@ import Foundation
         byteCount: 0
       )
       precondition(headers["Content-Security-Policy"] == nil)
-      // Rides the document with the policy: the referrer of a request is decided by the document
-      // that made it, so on a subresource response this would govern nothing.
+      // Referrer policy governs requests only when set on the document.
       precondition(headers["Referrer-Policy"] == nil)
       precondition(headers["Cache-Control"] == "no-store")
       precondition(headers["X-Content-Type-Options"] == "nosniff")
@@ -405,8 +392,7 @@ import Foundation
 
   static func checkBridgeAcceptance() {
     precondition(acceptsBridge(bridgeSource()))
-    // Simulator-measured: WebKit reports the custom scheme's host ASCII-lowercased, so the session
-    // we minted never equals the host verbatim. Exact equality here refuses every message.
+    // Simulator: WebKit ASCII-lowercases custom-scheme hosts; exact session comparison refuses every message.
     precondition(acceptsBridge(bridgeSource(originHost: "sess-01jn_az9")))
     precondition(acceptsBridge(bridgeSource(originHost: "SESS-01JN_AZ9")))
 
@@ -414,8 +400,7 @@ import Foundation
     precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ8")))
     precondition(!acceptsBridge(bridgeSource(originHost: "")))
     precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ9.evil")))
-    // ASCII folding only: U+212A KELVIN SIGN lowercases to "k" under Unicode case folding, so a
-    // caseInsensitiveCompare would accept a host nobody minted.
+    // Unicode folding would accept unminted Kelvin-sign hosts.
     precondition(!MobileWebShellBridge.accepts(
       bridgeSource(originHost: "\u{212A}ey"),
       sessionId: "key"
@@ -431,8 +416,7 @@ import Foundation
     precondition(!acceptsBridge(bridgeSource(isMainFrame: false)))
     precondition(!acceptsBridge(bridgeSource(isOurWebView: false)))
 
-    // The document the current props replaced: same session, same origin, still alive between
-    // `stopLoading` and the next commit, speaking for a load already reported as `loading`.
+    // The replaced same-origin document remains alive until the new load commits.
     precondition(!acceptsBridge(bridgeSource(hasCommittedDocument: false)))
 
     // No applied session is not an empty one: nothing may be accepted before a load.
@@ -457,8 +441,7 @@ import Foundation
     // The same ASCII fold as acceptance: WebKit reports the host lowercased.
     precondition(canPost("sess-01jn_az9"))
 
-    // Nowhere to post, all four for the same reason: no frame has been accepted. A page that has
-    // never spoken, a document whose load failed, a renderer that died, a bridge not installed.
+    // Never post without an accepted frame: before first message, after failure/death, or with bridge disabled.
     precondition(!canPost(nil))
 
     // A frame from another document, and a frame under no session at all.
@@ -467,13 +450,11 @@ import Foundation
     precondition(!canPost(session, ""))
     precondition(!canPost("", ""))
 
-    // In flight: a navigation has started and not committed, so there is no document to post into
-    // even while a frame from the one being replaced is still held.
+    // Provisional navigation invalidates the held frame until commit.
     precondition(!canPost(session, committed: false))
   }
 
-  /// The target across one document replacing another, in the order the navigation delegate runs:
-  /// a frame armed by document A is never what a post to document B goes to.
+  // A frame armed by document A must never receive posts for document B.
   static func checkBridgeTargetLifecycle() {
     func canPost(_ target: MobileWebShellBridgeTarget<String>, committed: Bool) -> Bool {
       MobileWebShellBridge.canPost(
@@ -493,14 +474,12 @@ import Foundation
     precondition(target.frame == "frame-a")
     precondition(canPost(target, committed: true))
 
-    // didStartProvisionalNavigation for document B. Refused twice over: nothing armed, and nothing
-    // committed to post into.
+    // B’s provisional navigation clears arming and commit state.
     target.clear()
     precondition(target.frame == nil)
     precondition(!canPost(target, committed: false))
 
-    // didCommit for document B. Arming re-opens, so the clear has to happen here as well or A's
-    // frame becomes postable again as B's.
+    // B’s commit rearms acceptance; clear A’s frame so it cannot become postable again.
     target.clear()
     precondition(!canPost(target, committed: true))
 
@@ -527,10 +506,7 @@ import Foundation
     precondition(gate.refusedCount == 2)
   }
 
-  /// The whole navigation decision, which is one function so the allow half and the offer half
-  /// cannot drift. The rule is the frame and the gesture, not the scheme: TypeScript's
-  /// `readBridgeExternalLinkUrl` owns which URLs open, and a second scheme list here would be two
-  /// rules that drift.
+  // One allow/opener decision; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering.
   static func checkNavigationVerdict() {
     let foreign = "https://example.com/artifact-link"
     let document = "orca-mobile-web://\(session)/"
@@ -552,29 +528,22 @@ import Foundation
       )
     }
     precondition(verdict() == .cancelAndOffer(foreign))
-    // The shell's own load, which is the only navigation to the document this view ever performs.
-    // Measured on WebKit: `webView.load` arrives with target and source both the main frame.
+    // WebKit reports our own load with main-frame source and target.
     precondition(verdict(document, isDocumentUrl: true, isShellLoad: true, hasGesture: false) == .allow)
-    // Everything else that names the document is refused, whatever the host says about a gesture,
-    // and is never offered -- handing the shell's own URL to the opener would bounce the user out.
-    // The host is not trusted to report the gesture: measured on WebKit, a sandboxed subframe
-    // navigating the top frame to the document URL arrives with no gesture at all.
+    // Never offer/reload other document-URL navigations; sandboxed top navigation can report no gesture.
     precondition(verdict(document, isDocumentUrl: true, hasGesture: false) == .cancel)
     precondition(verdict(document, isDocumentUrl: true, hasGesture: true) == .cancel)
-    // A load the shell did not start is refused whichever frame initiated it: the page rewriting
-    // its own document away, or the sealed preview navigating the top frame.
+    // Refuse non-shell document loads from page or preview frames.
     precondition(verdict(document, isDocumentUrl: true, isShellLoad: false, hasGesture: false) == .cancel)
     // A top-page meta refresh or a redirect to somewhere else: refused, and never opened.
     precondition(verdict(hasGesture: false) == .cancel)
-    // A download is not a document load, so it is refused there rather than allowed; started by a
-    // tap it reaches the opener, which is what makes `<a download>` behave as it does natively.
+    // Gestured downloads reach the opener, never the document-load allowance.
     precondition(
       verdict(document, isDocumentUrl: true, isShellLoad: true, hasGesture: false, isDownload: true)
         == .cancel
     )
     precondition(verdict(isDownload: true) == .cancelAndOffer(foreign))
-    // `<a href="/" download>`: a download that still names the shell's own document, which is the
-    // one thing never handed to the opener. Refused, gesture or not.
+    // Document-URL downloads are never offered, regardless of gesture.
     precondition(verdict(document, isDocumentUrl: true, isDownload: true) == .cancel)
     // A subframe is the sealed preview loading itself, which is not the user leaving the app.
     precondition(verdict(isMainFrame: false) == .cancel)
@@ -593,11 +562,7 @@ import Foundation
     precondition(verdict("javascript:alert(1)") == .cancelAndOffer("javascript:alert(1)"))
   }
 
-  /// The own-load flag against the policy that reads it: one load allowed, and only one.
-  ///
-  /// The flag and the rule are separate types, and the gap between them is where a second main-frame
-  /// action to the same URL before the first commits would have been allowed too. So the seam is
-  /// checked rather than each half on its own.
+  // Check flag/policy together: only one main-frame action may spend the shell’s own-load allowance.
   static func checkOwnLoadIsSpentOnce() {
     let document = "orca-mobile-web://\(session)/"
     func decide(_ machine: MobileWebShellLoadStateMachine) -> MobileWebShellNavigationVerdict {
@@ -614,8 +579,7 @@ import Foundation
     machine.shellLoadStarted()
     let first = decide(machine)
     precondition(first == .allow)
-    // Spent by the allow itself, not by the commit that follows it: WebKit can decide a second action
-    // before the first one starts, and that one would have replaced the document.
+    // Spend at decision, before commit: WebKit may decide a second action first.
     machine.shellLoadConsumed()
     precondition(decide(machine) == .cancel)
     // And the endings still drop it, for a load that is allowed and then never commits.

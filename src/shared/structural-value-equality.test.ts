@@ -65,7 +65,7 @@ describe.each(comparators)('%s', (_name, valuesEqual) => {
 
 describe('structuralValuesEqual', () => {
   it('treats an absent key as different from a key holding undefined', () => {
-    // Why: repo/project merges branch on `'key' in project`, so key presence is load-bearing.
+    // Repo/project merges use key in project, so undefined and absence must differ.
     expect(structuralValuesEqual({ a: 1 }, { a: 1, b: undefined })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1 })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, c: undefined })).toBe(false)
@@ -80,7 +80,7 @@ describe('structuralValuesEqual', () => {
 
 describe('structuralValuesEqualIgnoringUndefined', () => {
   it('treats an absent key as equal to a key holding undefined', () => {
-    // Why: locally built worktree rows carry explicit undefined fields the host omits.
+    // Local rows include undefined fields that host rows omit.
     expect(structuralValuesEqualIgnoringUndefined({ a: 1 }, { a: 1, b: undefined })).toBe(true)
     expect(structuralValuesEqualIgnoringUndefined({ a: 1, b: undefined }, { a: 1 })).toBe(true)
     expect(

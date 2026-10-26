@@ -33,6 +33,23 @@ describe('stepCalmStatusReveal', () => {
 
   it('says an outage that outlasts the delay, and holds it long enough to read', () => {
     const shownAt = CALM_STATUS_REVEAL_DELAY_MS
+    const pending = stepCalmStatusReveal(CALM_STATUS_IDLE, {
+      down: true,
+      immediate: false,
+      now: 0
+    })
+    expect(pending.recheckInMs).toBe(CALM_STATUS_REVEAL_DELAY_MS)
+    const shown = stepCalmStatusReveal(pending.next, {
+      down: true,
+      immediate: false,
+      now: shownAt
+    })
+    const recovering = stepCalmStatusReveal(shown.next, {
+      down: false,
+      immediate: false,
+      now: shownAt + 100
+    })
+    expect(recovering.recheckInMs).toBe(CALM_STATUS_MIN_VISIBLE_MS - 100)
     expect(
       run([
         { at: 0, down: true },

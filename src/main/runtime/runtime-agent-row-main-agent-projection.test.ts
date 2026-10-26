@@ -21,8 +21,7 @@ function row(over: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
   }
 }
 
-// The mobile projection narrows a row through `pickParsedAgentStatusPayload`; this pins that
-// the main agent fact survives the narrowing. The `worktree ps` row keeps its own explicit shape.
+// Pin main-agent facts through mobile's pickParsedAgentStatusPayload narrowing; worktree ps builds its own shape.
 describe('the main agent fact through the runtime projections', () => {
   it('reaches the mobile live row', () => {
     const source = row()

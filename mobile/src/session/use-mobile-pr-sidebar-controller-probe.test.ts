@@ -5,7 +5,6 @@ import type { RpcClient } from '../transport/rpc-client'
 
 const fetchGithubRepoSlugMock = vi.fn()
 
-// Only the repo probe matters here; the load path never runs without a branch.
 vi.mock('./github-pr-rpc', () => ({
   fetchGithubRepoSlug: (...args: unknown[]) => fetchGithubRepoSlugMock(...args),
   fetchHostedReviewForBranch: vi.fn(),
@@ -30,7 +29,6 @@ function Harness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
 }
 
 async function flush(): Promise<void> {
-  // Two ticks: the probe's resolved promise (.then) plus its setState commit.
   await act(async () => {
     await Promise.resolve()
     await Promise.resolve()
@@ -53,10 +51,7 @@ describe('useMobilePrSidebarController repo probe', () => {
     renderer = null
   })
 
-  // Regression: repo eligibility must not be gated on a branch. A detached HEAD /
-  // mid-rebase worktree (branch === null) still has to resolve the probe, or the
-  // Pull Request segment gets stranded on a forever spinner instead of the
-  // "Current branch unavailable" state.
+  // Probe repo eligibility even without a branch so detached/rebasing worktrees reach unavailable state instead of spinning forever.
   it('resolves the probe when connected without a branch (detached HEAD)', async () => {
     fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
     await act(async () => {
@@ -75,7 +70,6 @@ describe('useMobilePrSidebarController repo probe', () => {
     expect(fetchGithubRepoSlugMock).toHaveBeenCalledWith(client, 'w')
     expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
     expect(captured?.prSidebarIsGithubRepo).toBe(true)
-    // No branch means no PR load ran — state stays hidden, never a spinner.
     expect(captured?.prSidebarState.kind).toBe('hidden')
   })
 

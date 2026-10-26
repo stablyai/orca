@@ -43,3 +43,14 @@ export function annotateWslHostFailure(error: unknown, command: ResolvedCommand)
   error.message = `wsl.exe host failure (distro "${distro}"): ${diagnostic}\n${error.message}`
   return Object.assign(error, { wslHostFailure: true, wslDistro: distro })
 }
+
+// The WSL service's answer while a distro it failed to start is unusable; no guest ran.
+const WSL_SERVICE_UNEXPECTED = /Wsl\/Service\/E_UNEXPECTED\b/
+
+/** wsl.exe failed in the WSL service itself, which says nothing about the guest's git setup. */
+export function isTransientWslFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('wslHostFailure' in error)) {
+    return false
+  }
+  return error instanceof Error && WSL_SERVICE_UNEXPECTED.test(error.message)
+}

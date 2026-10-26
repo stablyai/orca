@@ -11,9 +11,7 @@ import {
   type WorktreeCreateIdempotencySupport
 } from './worktree-create-idempotency-policy'
 
-// Why: older hosts strip worktree.create's clientMutationId, so mobile must not
-// replay an ambiguous create unless the host advertises idempotency support.
-// Mirrors WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY in the shared protocol.
+// Older hosts strip clientMutationId; never replay ambiguous creates without advertised idempotency.
 export const MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY = 'worktree.create-idempotency.v1'
 
 const STATUS_CUTOVER_MAX_RETRIES = 5
@@ -21,14 +19,11 @@ const STATUS_CUTOVER_MAX_RETRIES = 5
 export type NewWorktreeRuntimeCapabilities = {
   tasksSupported: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
-  /** Whether the host can route a create through `agent.launch`, and what that launch supports;
-   *  an older one only knows `worktree.create` + `startupAgent`, always a terminal agent. */
   agentLaunch: AgentLaunchSupport | false
   hostPlatform: NodeJS.Platform | null
 }
 
-// Why: status.get is safe to replay and must settle before create, independently
-// of slower provider probes, so ambiguous cutover retries are gated correctly.
+// Settle the replay-safe status probe before create, independently of slower provider probes.
 export async function readNewWorktreeRuntimeCapabilities(
   client: RpcClient
 ): Promise<NewWorktreeRuntimeCapabilities | null> {
@@ -103,7 +98,7 @@ export function useNewWorktreeRuntimeCapabilities(
       probe.generation !== generation ||
       probe.connectedAt !== connectedAt
     ) {
-      // A queued create can arrive before passive effects; share its status barrier.
+      // Queued creates can precede passive effects; share the same status barrier.
       probe = {
         client,
         generation,
@@ -121,7 +116,7 @@ export function useNewWorktreeRuntimeCapabilities(
       return null
     }
     if (!capabilities && capabilityProbeRef.current === probe) {
-      // A failed request says nothing about what the host supports.
+      // Probe failure does not establish missing host support.
       capabilityProbeRef.current = null
     }
     return capabilities

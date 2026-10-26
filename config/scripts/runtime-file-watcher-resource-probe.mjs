@@ -9,7 +9,9 @@ import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
 const POOL_SOURCE = resolve('src/main/ipc/runtime-watcher-process-pool.ts')
-const FAILURE_SOURCE = resolve('src/main/ipc/parcel-watcher-process-failure.ts')
+const FAILURE_SOURCE = resolve(
+  'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-failure.ts'
+)
 const REGISTRY_SOURCE = resolve(
   'src/main/ipc/filesystem/watcher-process/parcel-watcher-child-registry.ts'
 )
@@ -77,8 +79,7 @@ async function main() {
       maxTotalRssKiB: MAX_QUARANTINE_RSS_KIB,
       maxTotalCpuPercent: MAX_QUARANTINE_CPU_PERCENT
     })
-    // Four live quarantine children leave four reservations before the global
-    // eight-physical-child ceiling rejects the next launch.
+    // Four live quarantine children reserve slots before global eight-child ceiling rejects another launch.
     assertRegistryCapacity(reserveWatcherChild, 4)
 
     result = {

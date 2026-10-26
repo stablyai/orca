@@ -6,7 +6,6 @@ import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
 import { readTerminalSendAcknowledgment } from '../../../src/shared/terminal-send-acknowledgment'
 
-/** What a native-chat write takes, named from an operation so no module names the raw port. */
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
 type MobileTerminalClient = {
@@ -19,34 +18,23 @@ type MobileNativeChatSendArgs = {
   terminal: string
   text: string
   enter?: boolean
-  /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
-  /** Shared budget for a whole user action (heal → paste → text, or one selector's
-   *  keystroke sequence). Omit to give this write its own full budget. */
+  // Share this deadline across all heal/paste/text or selector writes in one user action.
   deadline?: number
   requireWriteSettlement?: true
 }
 
-/** 'unknown' = the RPC failed without proof the request never reached the
- *  desktop (ack loss after a write, or a cutover that cannot tell whether the
- *  frame was written) — callers must not present it as a definite send failure.
- *  'queued' = structured lane only: the host holds the message as a queued
- *  draft, so it shows as a card above the composer, never a transcript echo. */
+// Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
-/** What a terminal write can answer: the PTY lane has no draft queue. */
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
-/** Without an explicit timeout `sendRequest` waits for reconnect indefinitely, and
- *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
- *  pends. Chat writes are interactive: fail them so the user can retry. */
+// Bound reconnect wait so an interactive send cannot keep the composer locked indefinitely.
 export const MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS = 15_000
 export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 
-/** Opens a budget for one user action. Multi-write actions (heal → paste → text, a
- *  paced selector answer) must share one so the composer's `sending` window stays
- *  bounded by MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS instead of multiplying by it. */
+// One action gets one budget; multi-write sequences must not multiply the send timeout.
 export function openMobileNativeChatSendBudget(): number {
   return Date.now() + MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS
 }
@@ -71,9 +59,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})
       },
-      // The budget covers this whole write, reconnect wait included — a chat send
-      // that spends its ceiling waiting to connect and then starts a fresh clock
-      // pins the composer for twice as long.
+      // Spend reconnect and write time from one deadline so the composer cannot remain locked for twice its budget.
       { timeoutMs, budgetSpansConnect: true }
     )
     if (args.requireWriteSettlement && response.ok) {
@@ -91,11 +77,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
     reportWorkerTerminalUserInput(args.client, args.terminal)
     return 'accepted'
   } catch (error) {
-    // Why: a logical relay↔direct cutover rejects the in-flight send without
-    // knowing whether its frame reached the wire (the desktop may have delivered
-    // it), so treat it as delivery-ambiguous like physical ack-loss — never
-    // retry (double-send risk) and never a definite "not sent" that would hide
-    // a real delivery.
+    // Cutover cannot prove whether the desktop received the frame; report unknown and never retry automatically.
     return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
       ? 'unknown'
       : 'rejected'
@@ -139,15 +121,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   })
 }
 
-/**
- * Clear the agent's input line as its OWN write, before any body.
- *
- * Why not prefix it onto the body write: a multi-line clear burst bundled into
- * the same `terminal.send` as the text reached the agent as LITERAL Ctrl+U
- * characters — the draft survived and the burst landed in the middle of the
- * message (observed live: draft + 21 literal \x15 + body). A standalone write is
- * the shape the image paste has always used, and it clears as intended.
- */
+// Clear in a separate write: prefixing multiline Ctrl+U bursts onto body text was observed to submit literal control bytes and retain the draft.
 export async function clearMobileNativeChatInput(args: {
   client: RpcClient
   terminal: string

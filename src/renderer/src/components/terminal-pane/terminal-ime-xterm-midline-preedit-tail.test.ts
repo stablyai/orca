@@ -1,20 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * A mid-line composition must not visually swallow the character after the cursor.
- *
- * The preedit overlay (`.composition-view`) is an opaque box anchored to the cursor cell. Nothing
- * reaches the PTY while composing, so the covered cells still hold their characters — the box just
- * hides them for the whole composition (#12545). Composing `가` with the cursor before `하` in
- * `안녕하세요` blanks `하` until the syllable commits.
- *
- * The fix renders the rest of the row's committed text after the preedit inside the overlay, so the
- * composition reads as inserted text pushing the tail right. The overlay also follows xterm's live
- * theme service instead of the stock `#000`/`#FFF`, with any alpha dropped — a see-through mask
- * would re-expose the very cells the rendered tail stands in for.
- *
- * happy-dom performs no layout, so the cell size is supplied and geometry is not asserted; the
- * on-screen geometry arm lives in `tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts`.
- */
+/** Midline preedit must show the covered committed tail as inserted text (#12545); use opaque live-theme colors to avoid exposing underlying cells. happy-dom tests supplied metrics; native geometry lives in terminal-korean-midline-preedit-occlusion.spec.ts. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
@@ -98,10 +83,7 @@ function openTerminal(options: RigOptions = {}): Rig {
   const write = (data: string): Promise<void> =>
     new Promise((resolve) => terminal.write(data, resolve))
 
-  // Awaits the repaint the write triggers, so the tail refresh runs through the production
-  // terminal.onRender path rather than a test shortcut. The listener arms only after the write's
-  // parse callback, because a repaint scheduled by an earlier write can fire first and still show
-  // the old row.
+  // Subscribe after parsing before awaiting render so an earlier frame cannot supply stale tail text.
   const writeAwaitingRender = async (data: string): Promise<void> => {
     await write(data)
     await new Promise<void>((resolve) => {
@@ -199,8 +181,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
 
-    // One composition stays active while the preedit grows through updates,
-    // matching how an IME actually streams ㄱ → 가 → 강.
+    // Keep one composition active while updates stream ㄱ → 가 → 강.
     rig.composeStart()
     rig.composeUpdate('ㄱ')
     rig.composeUpdate('가')
@@ -212,10 +193,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(remainder!.textContent).toBe('하세요')
   })
 
-  // The view is `white-space: nowrap`, which collapses runs of spaces exactly like `normal`.
-  // Without `pre` on the tail, a TUI's padded input row — `> text …spaces… |` — renders its
-  // right border a cell after the preedit while the real border stays put. xterm sets `pre` on its
-  // grid rows for the same reason.
+  // Tail needs white-space: pre to preserve TUI padding; nowrap collapses spaces and pulls borders next to preedit.
   it('preserves the tail spacing of a padded row so its trailing glyph stays on the grid', async () => {
     const rig = openTerminal()
     // A TUI input row: text, padding, then a real border glyph the trim cannot drop.
@@ -280,14 +258,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect([THEME.cursor, 'rgb(221, 238, 255)']).toContain(caret!.style.backgroundColor)
   })
 
-  // Both writers of `textarea.style.left` run here on purpose. xterm's listener is on the
-  // textarea and the candidate anchor's is on `terminal.element`, so within one event the
-  // anchor writes last; a test that installs only one of them proves nothing about which
-  // position the OS actually reads at composition time.
-  //
-  // Neither writer may produce a different answer, because there is no stable "last" writer:
-  // CoreBrowserTerminal drives `updateCompositionElements` from `onRender` too, so a render can
-  // land after the last composition event this module hears. The render arm is the test below.
+  // Install both textarea-position writers: candidate events write last, but xterm onRender can later overwrite them, so both must agree.
   it('keeps the caret and IME candidate anchor visible over committed text in the final cell', async () => {
     const rig = openTerminal({ cursorWidth: 2, withCandidateAnchor: true })
     await rig.write('x'.repeat(80))
@@ -317,10 +288,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
   })
 
   it('keeps the candidate anchor inside the screen across a render, not just a composition event', async () => {
-    // The regression this pins: xterm re-runs updateCompositionElements from onRender, so a
-    // repaint with no composition event behind it re-asserts the textarea position on its own.
-    // A clamp that lived only in the composition-event listener is reverted here and stays
-    // reverted, which is what the OS then samples.
+    // Render-only position updates must preserve the clamp; no composition event will repair them before the OS samples it.
     const rig = openTerminal({ cursorWidth: 2, withCandidateAnchor: true })
     await rig.write('x'.repeat(80))
     stubCompositionLayout(() => CELL_WIDTH_PX * 2)
@@ -438,8 +406,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
   })
 
   it('drops the alpha of a translucent theme background so the mask stays opaque', async () => {
-    // terminalBackgroundOpacity composes theme.background down to rgba(); carried through as-is it
-    // would let the covered cells show straight through the tail this renders.
+    // Drop background alpha so covered cells cannot show through the replacement tail.
     const rig = openTerminal({
       theme: { background: 'rgba(17, 34, 51, 0.6)', foreground: '#aabbcc' }
     })

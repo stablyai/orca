@@ -1,6 +1,3 @@
-// Pure status-merge tests for native-chat-live-status.ts. Kept beside the module
-// they cover rather than in the hook's test file, which owns the IO harness.
-
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
@@ -230,10 +227,7 @@ describe('mergeNativeChatLiveSession', () => {
         loading: true
       }).status
     ).toBe('working')
-    // Regression: a non-null sessionId used to force 'loading' over live work,
-    // so the pane rendered idle mid-turn — Send instead of Stop, no working
-    // indicator, no streaming preview. The empty-transcript loading SURFACE is
-    // selectNativeChatViewState's job; the status must stay 'working'.
+    // Keep working authoritative for controls; selectNativeChatViewState owns the empty-transcript loading surface.
     expect(
       mergeNativeChatLiveSession({
         messages: [],
@@ -244,8 +238,7 @@ describe('mergeNativeChatLiveSession', () => {
       }).status
     ).toBe('working')
 
-    // With any message present (a pending send echo, launch-prompt bubble or
-    // slash-command marker) the pane is a live conversation, not a spinner.
+    // Pending echoes, launch bubbles and command markers already make the conversation renderable.
     expect(
       mergeNativeChatLiveSession({
         messages: [user('u-1', 'run it')],
@@ -277,9 +270,7 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('empty')
   })
 
-  // The whole chain the defect broke: a fresh Claude session reports its id
-  // before the transcript flushes, so the pane rendered Send (not Stop) with no
-  // working indicator while the agent was working.
+  // Session ids can arrive before transcript flush; live work must still retain Stop and its activity indicator.
   it('keeps the Stop affordance for a working known session mid-flush', () => {
     const session = mergeNativeChatLiveSession({
       messages: [user('u-1', 'run it')],

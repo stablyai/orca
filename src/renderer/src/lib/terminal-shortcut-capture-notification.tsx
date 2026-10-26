@@ -62,8 +62,7 @@ export function showTerminalShortcutCaptureNotification({
     getEffectiveKeybindingsForAction(actionId, platform, keybindings),
     platform
   )
-  // Why: this toast stays up longer than normal, so keep it compact while still
-  // exposing the captured shortcut and the edit path.
+  // Keep this longer-lived toast compact while showing shortcut and edit path.
   toast.message(
     translate(
       'auto.lib.terminal.shortcut.capture.notification.141ad6c004',
@@ -71,8 +70,7 @@ export function showTerminalShortcutCaptureNotification({
     ),
     {
       description: `${definition.title} (${bindingLabel})`,
-      // Why: this is the user's one-time rebind path for a captured shortcut; it
-      // needs enough reading time without becoming persistent chrome.
+      // Allow reading time for one-time shortcut rebinding without making the toast persistent.
       duration: NOTICE_DURATION_MS,
       dismissible: true,
       className: '!w-[420px] !max-w-[calc(100vw-2rem)] !gap-2 !py-2 !pl-3 !pr-2',

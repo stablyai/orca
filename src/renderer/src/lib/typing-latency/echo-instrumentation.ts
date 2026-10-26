@@ -1,11 +1,4 @@
-/**
- * Per-pane output instrumentation for the devtools typing-latency probe.
- *
- * An input signal stamps t0, xterm's onData marks PTY dispatch,
- * onWriteParsed marks the first subsequent output parse, and onRender marks
- * paint. Overlapping inputs are one ambiguous burst because terminal output is
- * opaque; the probe never apportions one output batch across those inputs.
- */
+/** Measure input → onData dispatch → first onWriteParsed → onRender paint per pane. Overlapping inputs remain an ambiguous burst; opaque terminal output cannot be apportioned across them. */
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
 import type { Terminal } from '@xterm/xterm'

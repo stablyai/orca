@@ -103,7 +103,6 @@ it('recomputes weights after a split is added and after one is closed', () => {
   equalizePaneSplitSizes(root)
   expect(left.style.flex).toBe('1 1 0%')
 
-  // Split the right pane on the same axis: the parent must re-weight it to 2.
   const nested = document.createElement('div')
   nested.className = 'pane-split'
   nested.append(makePane(), makeDivider(), makePane())
@@ -112,12 +111,10 @@ it('recomputes weights after a split is added and after one is closed', () => {
   expect(nested.style.flex).toBe('2 1 0%')
   expect(left.style.flex).toBe('1 1 0%')
 
-  // Close one of the nested panes: the weight must drop back to 1.
   nested.lastElementChild!.remove()
   expect(equalizePaneSplitSizes(root)).toBe(true)
   expect(nested.style.flex).toBe('1 1 0%')
 
-  // A resize sweep with no structural change writes nothing.
   expect(equalizePaneSplitSizes(root)).toBe(false)
 })
 

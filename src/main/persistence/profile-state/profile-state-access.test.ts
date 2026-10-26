@@ -29,7 +29,7 @@ function root(): string {
 }
 
 beforeEach(() => {
-  // Occupied owner fixtures need real rename retries, but no elapsed backoff.
+  // Exercise rename retries without real backoff delays.
   vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
 })
 

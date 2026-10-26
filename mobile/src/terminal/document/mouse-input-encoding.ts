@@ -76,7 +76,7 @@ export function buildMouseWheelSequence(
     return ESC + '[<' + eventCode + ';' + cell.x + ';' + cell.y + 'M'
   }
   if (scope.sgrMouseMode) {
-    // Why: xterm increments zero-based mouse cells before encoding reports.
+    // Match xterm’s one-based encoded mouse cells.
     const sgrCol = cell.col + 1
     const sgrRow = cell.row + 1
     if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) {
@@ -84,12 +84,11 @@ export function buildMouseWheelSequence(
     }
     return ESC + '[<' + eventCode + ';' + sgrCol + ';' + sgrRow + 'M'
   }
-  // Why: xterm increments zero-based mouse cells before encoding reports.
+  // Match xterm’s one-based encoded mouse cells.
   const button = eventCode + 32
   const col = cell.col + 1 + 32
   const row = cell.row + 1 + 32
-  // Why: non-SGR mouse bytes above ASCII are not preserved reliably through
-  // the mobile JSON/RPC string path. Fall back to keys for wide terminals.
+  // Legacy high bytes are unsafe through JSON/RPC; use keys on wide terminals.
   if (button > 126 || col > 126 || row > 126) {
     return ''
   }
@@ -116,7 +115,7 @@ export function buildMouseClickInput(
     return ''
   }
   if (scope.sgrMousePixelsMode) {
-    // Why: xterm 1016 keeps SGR syntax but reports raw zero-based pixel positions.
+    // Mode 1016 uses SGR syntax with zero-based pixel coordinates.
     const pixelX = cell.x
     const pixelY = cell.y
     if (!isSafeSgrMouseCoordinate(pixelX) || !isSafeSgrMouseCoordinate(pixelY)) {
@@ -129,7 +128,7 @@ export function buildMouseClickInput(
     return pixelPress + ESC + '[<0;' + pixelX + ';' + pixelY + 'm'
   }
   if (scope.sgrMouseMode) {
-    // Why: xterm increments zero-based mouse cells before encoding reports.
+    // Match xterm’s one-based encoded mouse cells.
     const sgrCol = cell.col + 1
     const sgrRow = cell.row + 1
     if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) {
@@ -141,8 +140,7 @@ export function buildMouseClickInput(
     }
     return sgrPress + ESC + '[<0;' + sgrCol + ';' + sgrRow + 'm'
   }
-  // Why: non-SGR click coordinates use printable ASCII bytes on the mobile
-  // bridge; unsafe wide-terminal cells must not turn into corrupted input.
+  // Legacy click bytes must stay printable ASCII so wide cells cannot corrupt bridge input.
   const col = cell.col + 1 + 32
   const row = cell.row + 1 + 32
   if (col > 126 || row > 126) {
@@ -171,8 +169,7 @@ export function isWheelMouseTrackingMode(mode: string) {
   return mode !== 'none' && mode !== 'x10'
 }
 
-// Why: a replay can carry tracking without its encoding (?1006h/?1016h); a guessed
-// legacy report would type `ESC[M` bytes into the program, so scroll locally instead.
+// Replay may omit encoding; guessed legacy reports could type escape bytes into the TUI, so scroll locally.
 export function isWheelEncodingUnproven(scope: TerminalDocumentScope, mode: string) {
   return isWheelMouseTrackingMode(mode) && !scope.mouseEncodingKnown
 }
@@ -239,16 +236,13 @@ export function routeScrollLines(
     return
   }
   if (isWheelMouseTrackingMode(mouseTrackingMode)) {
-    // Why: xterm sends wheel events to mouse-aware TUIs before considering
-    // scrollback, even if the app stays on the normal buffer.
+    // Mouse-aware TUIs receive wheel input before scrollback, including on the normal buffer.
     const mouseInput = buildMouseWheelScrollInput(scope, lines, clientX, clientY)
     if (mouseInput) {
       notify(scope, { type: 'terminal-input', bytes: mouseInput })
       return
     }
-    // Why: default mouse encoding can be unrepresentable in our ASCII-safe
-    // RPC path on wide terminals. Send bounded arrows instead of local
-    // scrollback/no-op while a mouse-aware app owns scroll gestures.
+    // Wide-cell legacy encoding may be unsafe; send bounded arrows while the TUI owns scrolling.
     const fallbackInput = buildTuiScrollInput(scope, lines, clientX, clientY)
     if (fallbackInput) {
       notify(scope, { type: 'terminal-input', bytes: fallbackInput })
@@ -256,8 +250,7 @@ export function routeScrollLines(
     return
   }
   if (alternateBufferActive) {
-    // Why: alternate-screen TUIs own their scroll state and xterm has no
-    // scrollback there, so mobile scroll gestures must become terminal input.
+    // Alternate-screen TUIs have no xterm scrollback; convert gestures into terminal input.
     const input = buildTuiScrollInput(scope, lines, clientX, clientY)
     if (input) {
       notify(scope, { type: 'terminal-input', bytes: input })

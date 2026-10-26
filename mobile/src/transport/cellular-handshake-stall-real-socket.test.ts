@@ -3,22 +3,8 @@ import { WebSocketServer, type WebSocket as ServerWebSocket } from 'ws'
 import { connect } from './rpc-client'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
 
-// Issue #10119 verification over a REAL socket, real timers, real WebSocket
-// upgrade — guards the fake-timer suite in
-// cellular-connecting-label-stall.test.ts against mock drift.
-//
-// The desktop is up and listening. The only thing wrong is that its E2EE
-// handshake reply lands later than HANDSHAKE_TIMEOUT_MS (5s) — the condition a
-// high-latency / lossy cellular link produces on a handshake that needs two
-// round trips (e2ee_hello → e2ee_ready → e2ee_auth → e2ee_authenticated).
-//
-// The client must escalate past "Connecting…" and stay escalated. On the parent
-// commit ws.onopen reset reconnectAttempt to 0 before the handshake succeeded,
-// so getReconnectAttempt() never passed the connection-health gates and the
-// label looped "Connecting…" forever.
-//
-// Opt-in like rpc-client-live-recovery.test.ts — needs ~22s wall-clock:
-//   ORCA_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/cellular-handshake-stall-real-socket.test.ts
+// Guard fake-timer mock drift with real WebSocket upgrades and delayed E2EE replies (#10119).
+// Opt in with ORCA_MOBILE_LIVE_REPRO=1; this needs real timers and roughly 22 seconds.
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
@@ -33,15 +19,14 @@ vi.mock('./e2ee', () => ({
 const RUN_LIVE =
   process.env.ORCA_MOBILE_LIVE_REPRO === '1' || !!process.env.ORCA_MOBILE_LIVE_REPRO_FULL
 
-// Long enough for three handshake-timeout cycles (≈17s) plus CI scheduling slack.
+// Allow three handshake timeout cycles plus CI scheduling slack.
 const OBSERVE_MS = 22_000
 const SAMPLE_MS = 200
 
 let server: WebSocketServer | null = null
 const serverSockets: ServerWebSocket[] = []
 
-// Completes the WebSocket upgrade, then answers e2ee_hello later than the
-// client's 5s handshake budget allows.
+// Upgrade succeeds but e2ee_ready arrives after the handshake budget.
 async function startSlowHandshakeDesktop(replyAfterMs: number): Promise<number> {
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   server = wss
@@ -113,17 +98,14 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
     }
     client.close()
 
-    // The dial loop really did run and really did keep failing.
     expect(serverSockets.length).toBeGreaterThanOrEqual(2)
     expect(states).toContain('handshaking')
     expect(states).not.toContain('connected')
 
-    // The failure counter survives ws.onopen, so the warning gate (>= 3) fires.
     expect(maxAttempts).toBeGreaterThanOrEqual(3)
     const firstEscalated = labels.findIndex((l) => l !== 'Connecting…' && l !== 'Reconnecting…')
     expect(firstEscalated).toBeGreaterThan(0)
 
-    // Once escalated, later redials never revert the label to "Connecting…".
     expect(labels.slice(firstEscalated).every((l) => l !== 'Connecting…')).toBe(true)
   }, 60_000)
 })

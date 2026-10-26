@@ -202,7 +202,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
   afterEach(cleanup)
 
-  // Each pick is its own request, so a chat starting, failing or retrying never blocks one.
   it('keeps every agent launchable while chats start, fail or retry', () => {
     registerLaunch('claude', 'pending')
     registerLaunch('codex', 'failed')
@@ -312,7 +311,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  // The notes keep their text, so they are the one place that says it did not go.
   it('tells the notes menu once why its notes did not reach the new agent', async () => {
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
@@ -342,7 +340,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  // Why: the pane's own spawn reports a real failure; a terminal still starting is not one.
   it("says nothing while a new tab's terminal is still starting", async () => {
     vi.useFakeTimers()
     try {

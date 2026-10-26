@@ -72,8 +72,7 @@ function deferredResumeRecord(
     capturedAt: now,
     updatedAt: now,
     ...(launchConfig ? { launchConfig } : {}),
-    // Why `quit`: like a quit capture it names a pane that still exists and is unfinished work,
-    // so a sweep never discards it as passive history (a `live` done note is).
+    // Quit origin preserves unfinished existing-pane records during sweeps; completed live bookmarks are passive history.
     origin: 'quit',
     restoreOnTabOpenOnly: true
   }
@@ -200,8 +199,7 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
       })
       return Promise.resolve(null)
     }
-    // Why keep the entry while in flight: until the PTY binds, the pane is still the session's
-    // owner, and a sweep in between must not start it in another tab.
+    // Retain session ownership until PTY binding so activation cannot resume it in another tab mid-spawn.
     const resuming = { reason: deferred.reason, resume: () => {}, resuming: true as const }
     setPaneSpawnDeferral(session.cacheKey, resuming)
     const settle = (): void => {

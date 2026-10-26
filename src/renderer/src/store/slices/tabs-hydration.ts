@@ -24,9 +24,7 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
-/** Drops leaves whose group is gone, and repeat leaves for a group already
- *  placed earlier in the tree — one column per group is the render invariant,
- *  and a repeated leaf paints the same tab strip in every one of its columns. */
+/** Keep one leaf per surviving group; repeats draw duplicate tab strips in separate columns. */
 export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
@@ -154,9 +152,7 @@ export function buildHydratedTabState(
       const slots = structuredLaunchSlotIds(worktreeId, g.id)
       const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
       const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
-      // Why: persisted tabOrder can contain duplicates from older buggy
-      // writes. Deduping during hydration restores the store invariant before
-      // later group operations branch on tab counts or neighbors.
+      // Repair persisted duplicate tabOrder IDs before neighbor/count-dependent operations.
       const tabOrder = dedupeTabOrder(
         g.tabOrder
           .map(canonicalTabId)
@@ -167,10 +163,7 @@ export function buildHydratedTabState(
         canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === g.id
           ? canonicalActiveTabId
           : null
-      // Why: persisted MRU may reference tabs that no longer exist. Sanitize
-      // against the live tabOrder, then ensure the current active tab sits at
-      // the tail so the first close after restore jumps back to the previous
-      // tab rather than falling through to neighbor selection.
+      // Sanitize stale MRU IDs and put active tab last so first close restores prior selection rather than a neighbor.
       const sanitizedRecent = sanitizeRecentTabIds(
         g.recentTabIds?.map(canonicalTabId),
         tabOrder.filter((id) => tabOwners.get(id) === g.id)

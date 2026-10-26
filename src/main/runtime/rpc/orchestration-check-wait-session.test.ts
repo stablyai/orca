@@ -1,7 +1,4 @@
-/**
- * A chat's blocking `check --wait` is a terminal's: the host waits the budget asked for. A provider
- * shell tool that outlives its own timeout backgrounds or yields the command rather than killing it.
- */
+/** Chat check --wait honors the requested budget; provider shell tools that time out background/yield it rather than killing it. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createSessionCallerHarness,

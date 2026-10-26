@@ -24,8 +24,7 @@ describe('file ownership reply schemas', () => {
   })
 
   it('passes the connection generation through and refuses a wrong-typed one', () => {
-    // The generation is echoed back to the host on the mutation, so a client-side fallback here
-    // would put a value on the wire the host then refuses.
+    // The mutation echoes this generation; a client fallback would send a value the host refuses.
     expect(
       fileOwnershipSshStateSchema.parse({ state: { targetId: 't', connectionGeneration: 3 } })
         ?.connectionGeneration

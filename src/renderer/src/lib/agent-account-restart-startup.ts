@@ -120,8 +120,7 @@ export function resolveAgentAccountRestartResumeStartup(
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
-    // Why it rides along: main only repins the launch home for a spawn that
-    // names the session it is resuming, so dropping this drops the account move.
+    // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
     resumeProviderSession: providerSession
   }
 }

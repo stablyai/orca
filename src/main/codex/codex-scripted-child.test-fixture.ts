@@ -1,9 +1,7 @@
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
-import type {
-  CodexAppServerConnection,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'

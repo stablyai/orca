@@ -140,8 +140,7 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('queues a PowerShell-valid command for the default Windows shell', () => {
-    // Why: the queued command is typed into the live tab shell (default
-    // PowerShell), which mis-parses the cmd `""`-doubled wrapper (#6152).
+    // Queued commands target the live shell: PowerShell misparses cmd’s doubled-quote wrapper (#6152).
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
@@ -216,8 +215,7 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
-    // Regression: local rebuilds must forward session.filePath so OMP resumes by
-    // path, and queued Windows commands must match the live tab shell.
+    // Rebuilds must retain OMP session.filePath and quote for the live Windows shell.
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     const command = buildQueuedAiVaultResumeCommand({
@@ -520,8 +518,7 @@ describe('ai vault resume command runtime', () => {
       session: await dropDeletedSshResumeCwd(session)
     })
 
-    // Why: typing `cd <deleted folder> && …` into the SSH shell stopped the agent, and Codex
-    // resumed at the root would still prompt with the deleted folder preselected (#17745).
+    // A deleted SSH cwd blocks startup, and Codex retains that missing folder even when resumed at root (#17745).
     expect(startup.command).not.toContain('feat-x')
     expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
     expect(startup.cwd).toBeUndefined()

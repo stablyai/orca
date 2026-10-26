@@ -187,7 +187,6 @@ describe('closed unsaved files toast', () => {
     notice().onDismiss()
     click()
     expect(mocks.create).not.toHaveBeenCalled()
-    // The removed tabs' kept records go with the notice.
     expect(mocks.state.releaseKeptEditorBuffers).toHaveBeenCalledWith(7)
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(

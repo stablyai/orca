@@ -22,8 +22,7 @@ export function tabFromWorktreeAttributedStatusEntry(
     customTitle: null,
     color: null,
     sortOrder: Number.MAX_SAFE_INTEGER,
-    // Why: missing-tab rows must keep their original clock through real state
-    // transitions; current stateStartedAt is a status timestamp, not tab order.
+    // Missing-tab rows retain their original ordering clock; stateStartedAt changes with status.
     createdAt: effectiveStartedAt
   }
 }

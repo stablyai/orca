@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 
-const openURL = vi.fn(() => Promise.resolve())
+const openURL = vi.fn((_url: string) => Promise.resolve())
 
 vi.mock('react-native', () => ({
   Linking: { openURL: (url: string) => openURL(url) },

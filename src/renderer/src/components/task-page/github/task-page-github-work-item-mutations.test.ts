@@ -123,7 +123,6 @@ describe('TaskPage GitHub work item mutations', () => {
       )
     ).toEqual(['alice'])
 
-    // bob still pending
     void bob
   })
 
@@ -166,7 +165,6 @@ describe('TaskPage GitHub work item mutations', () => {
       )
     ).toEqual(['bob', 'carol'])
 
-    // Separate batch rollback path
     resetTaskPageGitHubMutationRegistryForTests()
     const began2 = beginTaskPageGitHubWorkItemMutation({
       item: base,
@@ -200,7 +198,6 @@ describe('TaskPage GitHub work item mutations', () => {
 
   it('matching server list releases authority; next begin keeps server metadata', () => {
     const { patches, patchWorkItem } = createPatchRecorder()
-    // Seed confirmed snapshot [alice, carol] via sequential confirms.
     const empty = item({ assignees: [] })
     const addAlice = beginTaskPageGitHubWorkItemMutation({
       item: empty,
@@ -296,7 +293,6 @@ describe('TaskPage GitHub work item mutations', () => {
     const base = item({
       assignees: [{ login: 'alice', name: null, avatarUrl: '' }]
     })
-    // confirm alice already in snapshot path via begin+confirm bob on top of alice snapshot
     const addBob = beginTaskPageGitHubWorkItemMutation({
       item: base,
       intent: {
@@ -423,7 +419,7 @@ describe('TaskPage GitHub work item mutations', () => {
 
     const quiet = getOrCreateQuietRevalidateState('q')
     quiet.fetchStartedAtGeneration = quiet.dirtyGeneration
-    // Simulate budget exceeded — still no force-accept
+    // Exceeding the lag budget must never force-accept stale search.
     quiet.lastConfirmAt = Date.now() - 200_000
     for (let i = 0; i < 6; i++) {
       adoptQuietSearchFieldsForItem({
@@ -696,7 +692,6 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem
     })
     expect(settle.needTrailing).toBe(true)
-    // Snapshot should still reflect confirmed bob (carol may be pending-cleared with snapshot)
     const snap = getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')
     expect(snap?.map((u) => u.login.toLowerCase()).sort()).toEqual(['alice', 'bob', 'carol'])
   })

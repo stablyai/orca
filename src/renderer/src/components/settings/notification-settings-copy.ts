@@ -53,9 +53,7 @@ export function resolveNotificationVolumeDraftState(
 export type NotificationTestOutcome = 'delivered' | 'not-displayed' | 'not-sent'
 
 type SendTestNotificationOptions = {
-  /** Why: the onboarding step renders delivery state inline, so the ambiguous
-   *  darwin "check if a banner appeared" toasts would just duplicate (or
-   *  contradict) the card the user is already looking at. */
+  /** Inline delivery cards replace ambiguous macOS banner-check toasts that could contradict them. */
   suppressSystemPermissionToasts?: boolean
 }
 

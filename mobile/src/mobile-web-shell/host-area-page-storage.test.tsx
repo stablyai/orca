@@ -1,18 +1,9 @@
-/**
- * The per-workspace keys inside the host-area page, which reaches every workspace of its host
- * in-page rather than being opened for one.
- *
- * The page must read and write them exactly as a session page opened for that workspace does:
- * `orca:nativeChatTabs:<host>:<worktree>` (which tabs show the chat) and
- * `orca:terminalLiveInputDisabled:<host>:<worktree>` (the handles typing goes around). They are the
- * workspace-scoped keys exercised here; `init` carries none of them for this page,
- * which reads each from the shell when it opens that workspace.
- */
+// Host-area init omits workspace-scoped keys; on-demand reads/writes must match detail-page storage across this host’s workspaces.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => new Map<string, string>())
-// Writes wait here until a case lands them, as a native store's queue holds them.
+// Hold writes until the test settles them to model the native store queue.
 const queued = vi.hoisted((): (() => void)[] => [])
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -85,7 +76,6 @@ async function snapshotFor(routePathname: string, hostArea: boolean) {
   return held.view
 }
 
-/** The shell as `MobileWebShellScreen` wires it, and the page as the web entry publishes it. */
 async function hostAreaPage() {
   const view = await snapshotFor('/h/host-a', true)
   const pair = createFakeBridgePortPair({
@@ -93,7 +83,6 @@ async function hostAreaPage() {
     ownsHostArea: true,
     routeGrants: MOBILE_WEB_SHELL_GRANTS,
     storage: view.readStorage().storage,
-    // Applied as the screen's `onStorageWrite` applies it.
     onStorageWrite: view.writeStorage,
     serveNativeVerb: async (verb, params) =>
       verb === 'native.storage.read'
@@ -118,7 +107,6 @@ async function hostAreaPage() {
           ).value
       : null
   )
-  // Reads settle over the pair's lanes, which drain on a later tick.
   const settled = async <T,>(read: Promise<T>): Promise<T> => {
     await pair.flush()
     return read
@@ -132,7 +120,6 @@ beforeEach(async () => {
   store.set(CHAT_TABS, '["tab-1"]')
   store.set(LIVE_INPUT, '["handle-1"]')
   store.set(OTHER_HOST, '["tab-9"]')
-  // The mirror is the module's, so each case starts it from this store.
   await hydrateMirroredStorage([CHAT_TABS, LIVE_INPUT, NEVER_STORED, FRESH, OTHER_HOST])
 })
 
@@ -172,7 +159,6 @@ describe('the per-workspace keys of a host-area page', () => {
       pageAsyncStorage.getItem(CHAT_TABS)
     ])
     expect(await settled(read)).toEqual(['["new"]', null])
-    // The reads beat the store, which has not landed either write.
     expect(store.get(CHAT_TABS)).toBe('["tab-1"]')
     persisted()
     expect(store.get(NEVER_STORED)).toBe('["new"]')
@@ -180,7 +166,6 @@ describe('the per-workspace keys of a host-area page', () => {
   })
 
   it('reads a stored key the mirror never held, though another mirrored write lands meanwhile', async () => {
-    // A relaunch: the store has the key and the mirror has not seen it.
     const relaunched = 'orca:terminalLiveInputDisabled:host-a:alpha'
     store.set(relaunched, '["handle-1"]')
     const view = await snapshotFor('/h/host-a', true)
@@ -203,11 +188,10 @@ describe('the per-workspace keys of a host-area page', () => {
     expect(pair.storageWrites).toEqual([])
     expect(store.get(OTHER_HOST)).toBe('["tab-9"]')
     await expect(view.readWorkspaceKey(OTHER_HOST)).rejects.toThrow()
-    // Refused over the bridge as an error, never as an unset key the page might overwrite.
+    // Unreadable keys must reject rather than appear unset and invite destructive replacement.
     const asked = pair.client.callNativeVerb('native.storage.read', { key: OTHER_HOST })
     await pair.flush()
     await expect(asked).rejects.toThrow()
-    // The page reads it from its own `init` map, which never held it.
     expect(await settled(pageAsyncStorage.getItem(OTHER_HOST))).toBeNull()
   })
 

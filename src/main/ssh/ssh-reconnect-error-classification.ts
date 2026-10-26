@@ -70,18 +70,13 @@ export function isSystemSshFallbackError(err: Error): boolean {
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
-// Why: ssh2 has no gssapi-with-mic support. When the effective OpenSSH config
-// enables GSSAPIAuthentication (often a distro-wide /etc/ssh default), a
-// Kerberos ticket can still authenticate through the system ssh binary after
-// key/agent auth fails — but only auth-shaped failures qualify, so network
-// errors keep their existing retry semantics.
+// ssh2 lacks GSSAPI; use system SSH for config-enabled Kerberos only after auth-shaped failures, preserving network retry semantics.
 export function isGssapiSystemSshFallbackCandidate(
   err: Error,
   target: Pick<SshTarget, 'gssapiAuthentication'>,
   resolved: Pick<SshResolvedConfig, 'gssapiAuthentication'> | null
 ): boolean {
-  // Why: targets with an explicit per-host flag already tried system ssh
-  // proactively during this attempt; probing again cannot succeed.
+  // Explicit per-host GSSAPI already tried system SSH; repeating cannot help.
   if (target.gssapiAuthentication === true) {
     return false
   }
@@ -99,8 +94,7 @@ const DEFINITE_HOST_FAILURE_FRAGMENTS = [
   'could not resolve hostname'
 ]
 
-// Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
-// probe timeouts and connect failures never match isTransientError's code table.
+// OpenSSH reports network faults as prose, bypassing errno-only initial-retry classification.
 const NETWORK_LIKE_ERROR_FRAGMENTS = [
   ...DEFINITE_HOST_FAILURE_FRAGMENTS,
   'system ssh connection timed out',
@@ -114,12 +108,10 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   // Pre-7.x OpenSSH wording for the same banner-exchange failure.
   'ssh_exchange_identification',
   'lost connection',
-  // ssh2's wording when TCP connects but the socket closes before the server's banner, as it does
-  // while a port forwarder or NAT still accepts connections for a host it can no longer reach.
+  // A stale NAT/forwarder can accept TCP then drop before SSH banner; retain ssh2's wording.
   'connection lost before handshake',
   'remote end closed',
-  // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
-  // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
+  // Bare connection closed by includes permanent MaxStartups/DenyUsers refusal; require remote wording here.
   'connection closed by remote'
 ]
 
@@ -130,16 +122,9 @@ const OPENSSH_HOST_CONNECT_FAILURE =
 
 const EMPTY_SYSTEM_SSH_PROBE_EXIT_255 = /^system ssh probe failed \(exit 255\)\.$/
 
-/**
- * Why a second classifier: connect() spends isTransientError on INITIAL_RETRY_ATTEMPTS, so widening
- * it would turn one 30s system-SSH timeout into ~160s of silence and five security-key touch
- * prompts. The reconnect ladder has its own backoff and give-up bound, so it can afford to treat a
- * network-shaped failure as recoverable. Auth stays permanent on both paths.
- */
+/** Keep broad network recovery in the bounded ladder: widening initial retries multiplies timeouts/key touches. Authentication remains permanent on both paths. */
 export function isTransientReconnectError(err: Error): boolean {
-  // A denied host key is a decision, not a fault: retrying re-derives the same answer, so the ladder
-  // would back off forever against a host it has already refused. Checked by type rather than left
-  // to the fragment lists below, which would silently start retrying if the wording changed.
+  // Typed host-key denial stays final regardless of network-like reason text.
   if (isHostKeyVerificationError(err)) {
     return false
   }
@@ -156,7 +141,6 @@ export function isTransientReconnectError(err: Error): boolean {
   )
 }
 
-/** Definite host failures where a ControlMaster-free retry cannot help. */
 export function isDefiniteSystemSshHostFailure(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false

@@ -10,7 +10,7 @@ export function buildDiffEditorWordWrapOptions(
   const wrap = diffEditorWordWrapMode(diffWordWrap)
   return {
     wordWrap: wrap,
-    // Why: `wordWrap` alone reaches the modified pane; the original pane follows `diffWordWrap`.
+    // wordWrap affects the modified pane; the original also requires diffWordWrap.
     diffWordWrap: wrap
   }
 }
@@ -31,8 +31,7 @@ function diffEditorIsSideBySide(diffEditor: WordWrapDiffEditor): boolean {
   if (!host) {
     return true
   }
-  // Why: createDiffEditor's container never receives the class. Monaco appends
-  // `div.monaco-diff-editor` and toggles `side-by-side` on that child.
+  // Monaco places its side-by-side class on the nested diff widget, not necessarily the host container.
   const widget = host.classList.contains('monaco-diff-editor')
     ? host
     : host.querySelector?.('.monaco-diff-editor')
@@ -56,8 +55,7 @@ export function syncDiffEditorOriginalWordWrap(
       return
     }
     const wrap = diffEditorWordWrapMode(diffWordWrap)
-    // Why: inline layout hides the original editor and sets wordWrapOverride2 to off.
-    // Side-by-side only writes wordWrapOverride1, so the off value sticks after a widen (#24199).
+    // Inline mode pins wordWrapOverride2 off; side-by-side updates only override1, so widening must reset the stale override2.
     const showOriginal = diffEditorIsSideBySide(diffEditor)
     const override = wrap === 'on' && showOriginal ? 'inherit' : 'off'
     const originalOptions = originalEditor.getRawOptions()
@@ -69,8 +67,7 @@ export function syncDiffEditorOriginalWordWrap(
     }
   }
 
-  // Why: Monaco updates the inner editor and the side-by-side class in the same turn.
-  // Applying on the next microtask sees the class after that turn settles.
+  // Defer to a microtask so Monaco’s inner options and layout class settle before applying the override.
   const schedule = (): void => {
     if (disposed || scheduled) {
       return

@@ -25,8 +25,7 @@ function eventTargetElement(target: EventTarget | null): Element | null {
 
 export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): boolean {
   const element = eventTargetElement(target)
-  // Why: board-owned menus and confirmation dialogs portal to document.body,
-  // so DOM containment alone would treat their clicks/focus as board exits.
+  // Board menus and dialogs portal outside its DOM tree; their events still belong to the board.
   return Boolean(element?.closest(WORKSPACE_BOARD_KEEP_OPEN_SELECTOR))
 }
 

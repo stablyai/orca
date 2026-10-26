@@ -1,8 +1,4 @@
 import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
-// The structured composer's one send seam: a slash command dispatches as a
-// conversation command, and everything else goes out as an
-// `agentSession.send` — carrying `delivery: 'queue-if-active'` only when the
-// host advertises the queue and no pending prompt is one this build cannot answer.
 
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
@@ -21,14 +17,13 @@ import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-age
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
-import { nativeChatTextWithFileReferences } from './mobile-native-chat-file-attachment'
+import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
 } from './mobile-structured-actionable-prompt'
 
-/** Whether a send made now asks the host to queue it. The host's queue waits on any pending prompt;
- *  one this build cannot answer would hold the send forever, so it starts a turn instead. */
+// An unsupported pending prompt would hold queued sends forever; start a turn instead.
 export function mobileStructuredSendQueues(
   queueCapable: boolean,
   state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests'>
@@ -38,8 +33,6 @@ export function mobileStructuredSendQueues(
   )
 }
 
-/** What rides a send: an image the agent is shown, or a file it reads from a reference the send
- *  writes after the text, as desktop sends one. */
 export type StructuredMobileSendAttachment =
   | (StructuredAgentSessionAttachment & { kind?: 'image'; id?: string })
   | { kind: 'file'; id?: string; path: string }
@@ -50,10 +43,8 @@ export function useMobileStructuredSendWithOutcome(args: {
   sessionId: string | null
   enabled: boolean
   queueCapable: boolean
-  /** The host holds a /compact sent while the agent works as a card. */
   commandsWait: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
-  /** The chat reads Stopping: a send made now is drawn after the turn being stopped. */
   stopping: boolean
   accept: MobileStructuredSends['accept']
   hold: MobileStructuredSends['hold']
@@ -63,7 +54,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
   >
   onSendError: MobileNativeChatSendErrorReporter
-  /** The chat's own model and effort each send carries; absent for an older host, which takes neither. */
+  // Older hosts accept neither per-chat model nor effort.
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }): (
   text: string,
@@ -124,7 +115,6 @@ export function useMobileStructuredSendWithOutcome(args: {
             : runningStructuredAgentSessionTurnId(stateRef.current)
               ? 'working'
               : null,
-        // A card waiting on a prompt nothing here can answer would hold it forever.
         waitsInLine: (command) =>
           command === 'compact' &&
           commandsWait &&
@@ -149,14 +139,13 @@ export function useMobileStructuredSendWithOutcome(args: {
       if (body.blocks.length === 0) {
         return 'rejected'
       }
-      // The host records it under this id, which is what settles it.
       const send = {
         clientMessageId: structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       }
-      // A pick on its way holds the send, so the chat's values are what it holds.
+      // Wait for pending picks so the send carries this chat’s settled options.
       const options = sendOptions?.()
       const outcome = await sendMobileStructuredAgentSessionMessage({
         client,

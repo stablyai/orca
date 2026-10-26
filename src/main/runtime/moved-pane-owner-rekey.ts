@@ -12,10 +12,7 @@ type PaneOwnerRuntime =
   | undefined
 type PaneAddress = { tabId: string; leafId: string }
 
-/**
- * After a committed pane-key change: agent-status and orchestration keys follow the pane. A
- * failure is logged and the pane keeps that old key; returns false when either step failed.
- */
+/** Rekey after pane move; log failures and retain the failed owner's old key. False if either transfer fails. */
 function rekeyPaneOwners(
   runtime: PaneOwnerRuntime,
   worktreeId: string,
@@ -48,10 +45,8 @@ function rekeyPaneOwners(
   return moved
 }
 
-/** After a committed move of a pane into a new tab: agent-status and orchestration keys follow. */
 export function rekeyMovedPaneOwners(
   runtime: PaneOwnerRuntime,
-  /** `ptyId` is the terminal the committed move bound the pane to. */
   request: TerminalLeafMoveRequest
 ): void {
   rekeyPaneOwners(
@@ -91,7 +86,7 @@ function rekeyMovedPtyIdentity(
   }
 }
 
-/** Layout-owner builds: main's one load-time repair, once this runtime can move pane owners. */
+/** Repair duplicate panes once at startup, after this runtime can transfer ownership. */
 export async function repairDuplicatePtyPanesOnStart(
   store: Pick<Store, 'repairDuplicatePtyPanes'>,
   runtime: PaneOwnerRuntime
@@ -99,7 +94,7 @@ export async function repairDuplicatePtyPanesOnStart(
   try {
     await store.repairDuplicatePtyPanes((move) => {
       const from = { tabId: move.tabId, leafId: move.removedLeafId }
-      // The window's rule: a status owner that already moved to another tab stays there.
+      // Match the window: never move an owner already transferred elsewhere.
       const owner = parsePaneKey(
         agentHookServer.resolvePaneAuthorityOwner(makePaneKey(from.tabId, from.leafId))
       )

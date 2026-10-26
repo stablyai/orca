@@ -2,10 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on JSX drawn straight from a host collection (`hosts.map((h) => <Row …/>)`). A generated
-// ~/.ssh/config can import >10k SSH hosts, and drawing a row per host crashed the renderer. Host
-// lists go through src/renderer/src/components/host-picker (bounded, searchable). Counts per file
-// may only go down.
+// Ratchet direct host-row JSX downward: >10k imported SSH hosts once crashed renderer; use bounded searchable host-picker.
 
 const BASELINE_PATH = 'config/host-list-render-baseline.txt'
 const SCAN_ROOT = 'src/renderer/src'

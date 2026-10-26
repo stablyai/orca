@@ -76,14 +76,10 @@ async function listExactRemoteBaseRefs(
   remotes: readonly string[],
   options: ExactRefProbeExecOptions
 ): Promise<{ refs: string[]; probeUnknown: boolean }> {
-  // A base is qualified only when its first components name a configured
-  // remote. A slash-containing branch such as `feature/fix` still needs the
-  // conventional and configured-remote candidates below.
+  // Only configured remote prefixes qualify a base; slash-containing branch names still need remote candidate probes.
   const isConfiguredQualifiedBase =
     base.includes('/') && remotes.some((remote) => base.startsWith(`${remote}/`))
-  // A bare name is a branch suffix, not a complete remote-tracking ref. Only
-  // probe the complete spelling when the caller supplied a slash-qualified
-  // candidate; this avoids an extra process for refs/remotes/<branch>.
+  // Bare names are suffixes, not complete remote-tracking refs; probe exact spelling only for qualified candidates.
   const exactRefNames = new Set<string>([
     ...(base.includes('/') ? [base] : []),
     ...(isConfiguredQualifiedBase
@@ -115,21 +111,17 @@ function parseSuffixRemoteRefs(output: string, base: string, remotes: readonly s
       continue
     }
     const shortRef = fullRef.slice('refs/remotes/'.length)
-    // A remote-tracking ref has both a remote and branch component. Ignore a
-    // malformed bare `refs/remotes/<name>` entry from the suffix stream.
     if (
       !shortRef.includes('/') ||
       isRemoteHeadRef(shortRef, remotes) ||
-      // A bare `HEAD` denotes the remote's symbolic slot, not every branch
-      // whose final component happens to be `HEAD` (for example `feature/HEAD`).
+      // Bare HEAD denotes the remote symbolic slot, not feature/HEAD.
       (base === 'HEAD' && shortRef.endsWith('/HEAD')) ||
       (shortRef !== base && !shortRef.endsWith(`/${base}`))
     ) {
       continue
     }
     refs.add(shortRef)
-    // Resolution only distinguishes zero, one, and multiple candidates; cap
-    // retained state once ambiguity is proven.
+    // Retain at most two candidates because resolution only needs zero/one/ambiguous.
     if (refs.size >= 2) {
       break
     }
@@ -143,13 +135,11 @@ async function listSuffixRemoteBaseRefs(
   remotes: readonly string[],
   options: ExactRefProbeExecOptions
 ): Promise<string[]> {
-  // show-ref streams; maxBuffer bounds the captured suffix fallback.
   try {
     const { stdout } = await execGit(['show-ref', '--', base], options)
     return parseSuffixRemoteRefs(stdout, base, remotes)
   } catch {
-    // Output overflow or transport failure is an inconclusive suffix lookup;
-    // retain the bare candidate rather than blocking generation.
+    // Overflow/transport failure is inconclusive; preserve the bare candidate rather than block generation.
     return []
   }
 }

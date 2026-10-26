@@ -15,12 +15,7 @@ type TerminalTabPtyOwnershipOptions = {
   preferTabId?: string
 }
 
-/**
- * Resolve which tab owns a ptyId. Every binding below is an exact match on the
- * id, so any of them beats the caller's tab hint: that hint is written once when
- * the PTY spawns and goes stale as soon as a pane moves between tabs. A mounted
- * pane outranks a recorded one, and same-tier conflicts stay ambiguous.
- */
+/** Exact PTY bindings beat immutable spawn-time tab hints that go stale after moves. Mounted bindings beat recorded ones; same-tier conflicts remain ambiguous. */
 export function resolveTerminalTabPtyOwnership(
   state: TerminalTabPtyOwnershipState,
   worktreeId: string,
@@ -52,14 +47,12 @@ export function resolveTerminalTabPtyOwnership(
     return { kind: 'owned', tabId: owners[0]! }
   }
   if (owners.length > 1) {
-    // Why: stale duplicate ownership must not attach whichever hidden tab
-    // happens to appear first in persisted order.
+    // Ambiguous persisted ownership must not attach whichever hidden tab happens to come first.
     return preferredTabId !== undefined && owners.includes(preferredTabId)
       ? { kind: 'owned', tabId: preferredTabId }
       : { kind: 'ambiguous' }
   }
-  // Why: nothing records the PTY yet, so the tab it was minted against is the
-  // only thing left that keeps paneKey hook attribution intact (#10486).
+  // Before any binding exists, the minted tab hint alone preserves paneKey hook attribution (#10486).
   return preferredTabId !== undefined ? { kind: 'owned', tabId: preferredTabId } : { kind: 'none' }
 }
 

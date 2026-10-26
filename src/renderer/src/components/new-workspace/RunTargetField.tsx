@@ -8,11 +8,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { HostRowIcon } from './RunTargetComboboxRow'
 import { COMBOBOX_FIELD_SHELL } from './type-ahead-combobox-styles'
 
-/**
- * The run-target field: a text input that *is* the search box, painted over
- * with the committed selection so a long label and its path shrink at
- * different rates instead of truncating as one flat string.
- */
+/** Overlay committed label/path on the search input so they can shrink independently. */
 export default function RunTargetField({
   query,
   onQueryChange,

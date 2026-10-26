@@ -94,15 +94,13 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe('unknown')
-    // The boolean wrapper still treats unknown as not-accepted.
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
   })
 
   it('reports an unknown outcome when the request timeout expires', async () => {
-    // The request-timeout path: the frame was written and only the ack is missing,
-    // so calling it "Message not sent" would hide a message the desktop received.
+    // A written frame with missing acknowledgement is unknown delivery, never definite failure.
     const client = {
       sendRequest: vi
         .fn()
@@ -115,8 +113,7 @@ describe('sendMobileNativeChatMessage', () => {
   })
 
   it('reports a definite rejection when the connect wait times out', async () => {
-    // The same timeout budget also covers the pre-connect wait, which is deliberately
-    // NOT marked delivery-unknown — no frame was ever written.
+    // Pre-connect timeout spends the same budget but proves nondelivery because no frame was written.
     const client = {
       sendRequest: vi
         .fn()
@@ -136,7 +133,6 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe('unknown')
-    // The boolean wrapper still treats unknown as not-accepted (never retried here).
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
@@ -234,7 +230,6 @@ describe('sendMobileNativeChatMessage', () => {
       _meta: { runtimeId: 'runtime' }
     })
 
-    // Nothing reaches the wire, so this is a definite non-send rather than ambiguous.
     await expect(
       sendMobileNativeChatMessageWithOutcome({
         client,
@@ -316,8 +311,7 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
     await vi.runAllTimersAsync()
     await result
 
-    // Why the filter: an accepted send also fires the unawaited takeover report, which is not a
-    // terminal.send and carries no draft.
+    // Filter the unawaited takeover report out of terminal input assertions.
     const params = vi
       .mocked(client.sendRequest)
       .mock.calls.filter((call) => call[0] === 'terminal.send')
@@ -344,8 +338,7 @@ describe('clearMobileNativeChatInput', () => {
     vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
 
   it('writes the burst as its OWN non-submitting write', async () => {
-    // Bundling the burst into the body write reached the agent as LITERAL Ctrl+U
-    // text and the parked draft concatenated (observed live).
+    // A bundled multiline clear was observed as literal Ctrl+U inside the body; clear in a separate write.
     const client = clientWithResponse(accepted)
     const clearInput = buildAgentTuiClearInputForText('Linked Linear issue: ABC-123\nhttps://x')
     await expect(

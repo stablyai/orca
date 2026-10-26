@@ -21,8 +21,7 @@ const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 const editableRolePattern = /^\s*(\d+)\s+(document|edit|text|pane)(?:\s|$)/im
 const pasteMutationTimeoutMs = 5_000
 
-// Why: Notepad accessibility text can lag immediately after clipboard paste;
-// poll before failing so the smoke tests measure outcome, not snapshot timing.
+// Poll after clipboard paste because Notepad’s accessibility snapshot can lag the visible change.
 async function waitForNotepadText(app: string, marker: string): Promise<ComputerSnapshotResult> {
   const deadline = Date.now() + pasteMutationTimeoutMs
   let lastSnapshot: ComputerSnapshotResult | null = null

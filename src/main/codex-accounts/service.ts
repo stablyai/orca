@@ -127,6 +127,7 @@ export class CodexAccountService {
       configMirror: this.configMirror,
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
       discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
     })

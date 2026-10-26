@@ -35,8 +35,7 @@ describe('FontAutocomplete', () => {
   }
 
   function getOptionLabels(): string[] {
-    // Why: the dropdown portals to document.body so it can escape the settings
-    // section; options are intentionally not descendants of the container.
+    // Query body because dropdown options portal outside the Settings section.
     return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).map(
       (option) => option.textContent?.trim() ?? ''
     )
@@ -64,8 +63,7 @@ describe('FontAutocomplete', () => {
 
   async function typeIntoInput(input: HTMLInputElement, value: string): Promise<void> {
     await act(async () => {
-      // Why: React tracks controlled input values through the native setter, so
-      // direct assignment can be ignored by the synthetic input event.
+      // Use the native setter so React’s controlled-input tracker recognizes the synthetic event.
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
       setValue?.call(input, value)
       input.dispatchEvent(new Event('input', { bubbles: true }))

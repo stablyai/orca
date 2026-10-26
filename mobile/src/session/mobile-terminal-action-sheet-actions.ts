@@ -5,8 +5,6 @@ import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-ac
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 
-/** Builds the terminal long-press menu without adding another action block to the
- *  already dense session route. Native chat stays first as the view switch. */
 export function getMobileTerminalActionSheetActions<
   Target extends { handle: string },
   Tab extends TerminalTab
@@ -25,8 +23,6 @@ export function getMobileTerminalActionSheetActions<
   onClose: (target: Target) => void
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
-  /** Appended after Close; receives the pressed tab's id so the session route's
-   *  bulk-close builder can resolve the anchor itself. */
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args

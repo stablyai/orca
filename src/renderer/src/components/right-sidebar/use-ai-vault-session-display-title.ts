@@ -7,9 +7,7 @@ import { useAppStore } from '@/store'
 import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
 import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
 
-/** A Claude or Codex chat's row reads the same name as the chat's tab; the host's row title is the
- *  fallback for a chat its host has not published this run, such as one closed before a restart.
- *  Other agents' rows keep their CLI's own title. */
+/** Match Claude/Codex tab names, falling back to host titles for unpublished chats; other agents retain CLI titles. */
 export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {
   const owner = historyRowShowsChatName(session.agent) ? session.structuredSession : undefined
   const customLabel = useAppStore((state) => {

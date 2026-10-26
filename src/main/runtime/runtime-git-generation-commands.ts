@@ -99,8 +99,7 @@ export class RuntimeGitGenerationCommands {
   async cancelRuntimeGenerateCommitMessage(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const route = runtimeGitRouteForTarget(target)
-    // Why: an `ssh:` cancel is a no-op; the local registry is keyed by path and would abort an
-    // unrelated generation running here for the same path.
+    // SSH cancel must not touch the path-keyed local registry and abort unrelated same-path generation.
     if (route.kind === 'ssh') {
       return { ok: true }
     }

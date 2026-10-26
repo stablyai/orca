@@ -76,8 +76,7 @@ export function buildCapabilitySettingsSections({
       }),
       group: 'capabilities'
     },
-    // Why: only surfaced once Linear is connected — a capability that needs a
-    // linked provider before the agent skill has anything to act on.
+    // Expose only with connected Linear; its skill needs linked provider capability.
     ...(isLinearConnected
       ? [
           {

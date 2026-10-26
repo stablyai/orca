@@ -26,7 +26,7 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     } = {}
   ): LinearAgentAccessError {
     const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
-    // Why: the retry preserves id and target so duplicate recovery can prove intent without matching mutable content.
+    // Preserve id/target for retry proof; mutable content cannot identify the original intent.
     const pinned =
       verb === 'create'
         ? [

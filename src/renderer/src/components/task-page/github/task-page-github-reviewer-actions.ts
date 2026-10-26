@@ -76,8 +76,7 @@ export function createTaskPageGitHubReviewerActions({
       )
       return
     }
-    // Why: pre-network optimistic update via coordinator; local display follows
-    // item.reviewRequests once patchWorkItem + reconcile land.
+    // Use the coordinator’s optimistic cache patch so display follows the reconciled item.
     const optimistic = buildRequestedReviewUsers(logins, reviewerCandidates, localReviewRequests)
     const intent = {
       type: 'addReviewers' as const,
@@ -133,8 +132,7 @@ export function createTaskPageGitHubReviewerActions({
               })
         }
       })
-      // Why: only clear the typed reviewer on success — a failed request rolls
-      // back, so keep the user's input instead of forcing a retype.
+      // Keep typed input on rollback so failed requests do not force a retype.
       if (outcome === 'confirmed') {
         setReviewerInput('')
       }

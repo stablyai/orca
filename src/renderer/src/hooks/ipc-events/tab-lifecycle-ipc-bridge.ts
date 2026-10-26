@@ -68,9 +68,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onCloseFloatingItem(({ sourceId }) => {
-      // Main forwards the guest's browser *page* id; resolve it to the owning live floating
-      // browser workspace (the id space the panel closes by), then hand off to the mounted
-      // panel's own close closure (pin guard + reclaim intent). Stale id = no-op.
+      // Resolve main’s page ID to its floating browser workspace, then use the mounted panel’s pin/reclaim-aware close; stale IDs no-op.
       const workspaceId = resolveFloatingWorkspaceBrowserWorkspaceId(
         useAppStore.getState(),
         sourceId

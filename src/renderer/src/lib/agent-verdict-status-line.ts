@@ -11,9 +11,7 @@ type VerdictLineSource = AgentMainAgentVerdictSource &
     Pick<AgentStatusEntry, 'lastAssistantMessage' | 'agentType' | 'programStatus' | 'observation'>
   >
 
-/** The line an agent row shows in place of its preview once its verdict marks it. A user's Stop
- *  says so; a turn a newer request replaced reads plainly interrupted, since no one is named; a
- *  turn cut off by a crash reads failed, as a failure does. */
+/** Replace previews with the verdict: user Stop, interruption by a newer request, or crash failure. */
 export function agentVerdictStatusLine(entry: VerdictLineSource): string | null {
   switch (agentVerdictDisplayMark(entry)) {
     case 'failed':
@@ -27,8 +25,7 @@ export function agentVerdictStatusLine(entry: VerdictLineSource): string | null 
   }
 }
 
-// Why programs only: a program's error message is its own one-line account of what failed (e.g.
-// "rsync failed"), while an agent's last reply is prose that could be anything.
+// Only program errors are reliable one-line failure summaries; agent replies may be unrelated prose.
 function failedLine(entry: VerdictLineSource): string {
   if (!isProgramStatusRow(entry)) {
     return 'Failed'

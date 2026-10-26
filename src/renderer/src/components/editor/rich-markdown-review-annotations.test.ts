@@ -52,9 +52,7 @@ describe('getRichMarkdownAnnotationButtonLeft', () => {
   })
 })
 
-// Why count serializes: resolving a comment's block re-serializes the document,
-// so doing it per comment made these O(comments x document). A call count is
-// deterministic where a wall-clock threshold would be flaky.
+// Count serializations deterministically to catch per-comment document rebuilding without flaky wall-clock thresholds.
 describe('rich markdown annotation block reuse', () => {
   function makeEditor(nodeCount: number): { editor: Editor; serializeCalls: () => number } {
     let serializeCalls = 0
@@ -66,8 +64,7 @@ describe('rich markdown annotation block reuse', () => {
       forEach(callback: (node: unknown, offset: number, index: number) => void): void {
         content.forEach((node, index) => callback(node, index * 10, index))
       },
-      // The text-range search walks the doc to locate the selected text; these
-      // fixtures never match, so it only needs to be traversable.
+      // These fixtures never match selected text; traversal only needs to be supported.
       nodesBetween(): void {},
       content: { size: nodeCount * 10 }
     }
@@ -91,8 +88,7 @@ describe('rich markdown annotation block reuse', () => {
     )
   }
 
-  // One block build over NODE_COUNT nodes: each node serialized alone, plus each
-  // adjacent pair. Pinned absolutely so "both arms build twice" can't pass as equal.
+  // Pin one build’s node/pair calls absolutely so two equally duplicated builds cannot pass.
   const NODE_COUNT = 12
   const ONE_BUILD_SERIALIZE_CALLS = NODE_COUNT + (NODE_COUNT - 1)
 

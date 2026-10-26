@@ -17,7 +17,6 @@ type MobileSessionHeaderIconButtonProps = {
   onPress: () => void
 }
 
-// Why: every header and tab-strip button shares this one look and a 44pt touch area (36pt + 4pt slop each side).
 export function MobileSessionHeaderIconButton({
   active = false,
   disabled = false,

@@ -1,6 +1,4 @@
-// A layout-owner build's record of the chat pane the window picked for a tab: main keeps the same
-// pane, so the window's save changes none. Frames write the store directly, so every `setTabLayout`
-// that moves the chat pane is the window's own pick.
+// Record window-picked chat panes in main so saves cannot change them; frames bypass setTabLayout, so its chat moves are window choices.
 
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'

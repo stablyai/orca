@@ -1,30 +1,5 @@
-/**
- * E2E regression test for the Resource Usage popover warm-reattach bug.
- *
- * Why this suite exists:
- *   PR #1667 fixed a bug where workspaces with daemon-backed terminals that
- *   had been running before app launch were rendered as `· REMOTE` with `—`
- *   for CPU/Memory in the Resource Usage popover, even when no SSH targets
- *   were configured. The root cause was that the renderer's `pty-registry`
- *   was empty for warm-reattached sessions until the user clicked into each
- *   pane, so the chip predicate (which keyed on a "snapshot includes this
- *   worktree" flag) misread missing data as "remote." Two changes shipped:
- *   (1) boot-time hydration of `pty-registry` from the daemon, and (2) the
- *   chip predicate switched to `repo.connectionId != null`.
- *
- * What it covers:
- *   - On a second launch against the same userDataDir, the snapshot from
- *     the local memory collector includes the warm-reattached PTY with a
- *     real (non-null) pid before any pane mount in the second renderer.
- *     This is the boot-hydration coverage fix.
- *   - The merged view-model the popover consumes flags the warm worktree
- *     as `isRemote: false` and surfaces numeric CPU/memory.
- *
- * What it does NOT try to cover:
- *   - Multi-worktree warm-reattach. The hydrator iterates all repos ×
- *     worktrees; one is sufficient to lock down the regression path.
- *   - SSH worktrees. Covered by unit tests in `mergeSnapshotAndSessions.test.ts`.
- */
+// #1667: a warm daemon PTY must appear in the local memory snapshot with a real PID before second-launch pane mount.
+// Also check local connectionId/view-model inputs so missing registry hydration cannot mislabel the workspace as remote; SSH merge behavior is unit-tested.
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -38,10 +13,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
-// Why: this suite does a quit→relaunch cycle that depends on the daemon
-// surviving the first app close and the second launch reattaching to the
-// same daemon socket. Running tests in serial keeps the userDataDir from
-// competing with other concurrent Electron instances for the same lock.
+// Run serially so restart keeps the same profile/daemon socket without competing app locks.
 test.describe.configure({ mode: 'serial' })
 
 test.describe('Resource Usage warm-reattach', () => {
@@ -58,7 +30,6 @@ test.describe('Resource Usage warm-reattach', () => {
     let secondApp: ElectronApplication | null = null
 
     try {
-      // ── First launch: seed a daemon-backed PTY ─────────────────────────
       const firstLaunch = await session.launch()
       firstApp = firstLaunch.app
       const worktreeId = await attachRepoAndOpenTerminal(firstLaunch.page, repoPath)
@@ -76,31 +47,21 @@ test.describe('Resource Usage warm-reattach', () => {
       await waitForPaneCount(firstLaunch.page, 1, 30_000)
       const ptyId = await discoverActivePtyId(firstLaunch.page)
 
-      // Why: the daemon should already have this session listed before we
-      // close the app. If it doesn't, the second-launch assertion would
-      // fail for the wrong reason (no warm-reattach state to verify).
+      // Require the daemon session before quit so relaunch has real warm state.
       const firstLaunchSessions = await firstLaunch.page.evaluate(async () => {
         return window.api.pty.listSessions()
       })
       expect(firstLaunchSessions.some((s) => s.id === ptyId)).toBe(true)
 
-      // Why: app.close triggers the renderer's beforeunload but the daemon
-      // is a detached child fork (see daemon-init.ts:128) so the PTY
-      // process stays alive. This is the warm-reattach precondition the
-      // PR's bug requires.
+      // App close runs beforeunload but leaves the detached daemon alive, the warm-reattach precondition.
       await session.close(firstApp)
       firstApp = null
 
-      // ── Second launch: verify hydration restored coverage ──────────────
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
       await waitForSessionReady(secondLaunch.page)
 
-      // Why: poll the snapshot rather than reading once, because boot
-      // hydration is asynchronous and the first poll after launch could
-      // legitimately race the hydrator's `await provider.listSessions()`
-      // round-trip. The hydrator runs once at boot via attachMainWindowServices;
-      // the assertion just needs to converge before the timeout.
+      // Poll through async boot hydration and provider.listSessions before judging the snapshot.
       type WarmRow = { worktreeId: string; sessionId: string; pid: number | null }
       const warmRow: WarmRow | null = await expect
         .poll(
@@ -145,21 +106,11 @@ test.describe('Resource Usage warm-reattach', () => {
 
       expect(warmRow).not.toBeNull()
       expect(warmRow!.worktreeId).toBe(worktreeId)
-      // Why: the load-bearing assertion. Pre-fix, this row would not have
-      // existed at all; the renderer's merge fallback would have synthesized
-      // a row with no metrics. Post-fix, the daemon-published pid is what
-      // boot hydration writes into pty-registry, which the collector then
-      // walks.
+      // Require the real collector row/PID; merge fallback alone can synthesize a metric-less row.
       expect(warmRow!.pid).not.toBeNull()
       expect(warmRow!.pid! > 0).toBe(true)
 
-      // Why: confirm the chip predicate. The repo this test seeds is local
-      // (no connectionId), so the merged view-model must report
-      // `isRemote: false`. We assert against the worktree's connectionId
-      // through the store rather than rendering the popover, because the
-      // popover trigger is in the status bar and may be off-screen in a
-      // small e2e viewport. The merge predicate is exercised by unit tests;
-      // here we just confirm the inputs resolve correctly.
+      // Verify local connectionId and merged inputs without depending on an off-screen popover; unit tests pin its predicate.
       const isLocalRepo = await secondLaunch.page.evaluate((wid: string) => {
         const store = window.__store
         if (!store) {

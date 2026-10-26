@@ -9,9 +9,7 @@ describe('shouldShowLocalWorkspacePortSections', () => {
     expect(shouldShowLocalWorkspacePortSections({}, empty)).toBe(true)
   })
 
-  // Why: a failed scan keeps the host's last-good ports, and the status bar
-  // still counts and lists them — hiding the sections here would strip the
-  // stop and open actions for ports the user can still see elsewhere.
+  // Failed scans retain last-good ports; preserve their actions alongside the status bar's count/list.
   it.each([
     ['activePorts', { ...empty, activePorts: [{}] }],
     ['otherWorkspacePorts', { ...empty, otherWorkspacePorts: [{}] }],

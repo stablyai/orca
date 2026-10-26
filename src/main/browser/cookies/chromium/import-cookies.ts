@@ -1,14 +1,14 @@
 import { session } from 'electron'
 import { existsSync } from 'node:fs'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
-import { withCookieMutationLock } from '../../browser-cookie-import-clear'
+import { withCookieMutationLock } from '../browser-cookie-import-clear'
 import {
   diag,
   reasonWithDiagLog,
   summarizeCookieImportError
-} from '../../browser-cookie-import-diagnostics'
-import type { DetectedBrowser } from '../../browser-cookie-detection-types'
-import type { CookieImportOptions } from '../../browser-cookie-import-pipeline'
+} from '../browser-cookie-import-diagnostics'
+import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
+import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import { prepareChromiumCookieImport } from './prepare-import'
 import { scanChromiumCookieRows } from './scan-source-rows'
 import { finalizeChromiumCookieImport } from './finalize-import'

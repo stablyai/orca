@@ -322,8 +322,7 @@ describe('one action delivered twice while its chat is still starting', () => {
     expect(onRepeatDelivered).toHaveBeenCalledOnce()
   })
 
-  // "Fix with AI" builds its text from logs fetched at click time; a re-delivery of that one click
-  // can carry newer logs and is still the same request.
+  // Fix with AI re-delivery may fetch newer logs; it still belongs to the original click/request.
   it("makes one chat that sends the first delivery's text once when a re-delivery carries other text", async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     mocks.launch.mockImplementation(() => new Promise((resolve) => (resolveLaunch = resolve)))

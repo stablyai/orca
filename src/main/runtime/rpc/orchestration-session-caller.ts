@@ -1,20 +1,6 @@
-/**
- * Resolves an orchestration caller that names itself by the Orca agent session id in its injected
- * environment. Both dispatchers call this once, before params parse and the unary/streaming split,
- * so it runs ahead of legacy compatibility, receipt lookup and every method. Before parsing, so a
- * session caller need not name itself in a param that requires a caller.
- *
- * The id names the caller; nothing here is a credential. Every agent on this host runs as the same
- * user, so the checks are about getting the identity right, not about keeping anyone out:
- * - Same host only. A paired client, an SSH environment or a WSL shell is another host, where
- *   "same machine, same user" does not hold, so a session claim from one is refused.
- * - The Orca id, never the provider's: that one rotates on `/clear`.
- * - A live lease: released, mid owner change or unreconciled sessions cannot act.
- * - The session wins over any declared caller: a declared handle must name this same session, and
- *   a structured worker's session id maps to the handle and pane it was minted.
- * - A request with no session id that declares an `orca_session_id:` caller gets the party it names: a
- *   worker's handle, or a refusal for a chat, whose address alone identifies nobody.
- */
+/** Resolve session identity before params, compatibility, receipts and dispatch branching; ids identify same-user callers, not credentials.
+ * Refuse paired/SSH/WSL claims, provider ids that rotate on /clear, and non-live leases. Session identity overrides declarations and maps workers to minted handles/panes.
+ * Without session evidence, a declared orca_session_id: may resolve a worker handle; a chat address alone identifies no caller. */
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
@@ -41,12 +27,7 @@ import type { RpcRequest } from './core'
 
 type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
 
-/**
- * Every method that consults caller identity, and the param it names its caller in. This list is
- * the contract: a method that starts reading caller identity is added here with its own test.
- * Methods not listed carry no caller identity for any caller; a session claim on them is still
- * validated, then they run exactly as they do for a terminal caller.
- */
+/** Add each caller-reading method here with a test; unlisted methods still validate session claims but carry no caller identity. */
 export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> = {
   'orchestration.runCreate': 'from',
   'orchestration.runUse': 'from',
@@ -78,10 +59,7 @@ export type ResolvedOrchestrationRequest = {
 
 const NO_EFFECTS = { effectsApplied: false } as const
 
-/**
- * Whether this request names its caller by a session id, or declares an `orca_session_id:` address as its
- * caller. Synchronous, so every other request, terminal callers included, takes no extra async hop.
- */
+/** Detect session evidence or a declared session caller synchronously so terminal calls avoid another async hop. */
 export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
   if (!request.method.startsWith('orchestration.')) {
     return false
@@ -144,7 +122,7 @@ export async function resolveOrchestrationSessionCaller(
     request: {
       ...request,
       params: bindDeclaredCaller(request.method, request.params, caller, db),
-      // Why: the session wins, so any terminal evidence on the same request never attests.
+      // Session identity wins; discard terminal attestation on the same request.
       orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
     },
     caller
@@ -199,7 +177,7 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): voi
   const { lease } = record
   const reason =
     lease.claimStatus === 'released'
-      ? // Why not "ended": a released lease is evicted and wakeable; only a running process may act.
+      ? // Released means evicted and wakeable, not ended; only live processes may act.
         'is not running right now. A new message or user turn revives it; retry then.'
       : lease.handoffStage !== null
         ? 'is changing owners on this host. Retry when that finishes.'
@@ -258,7 +236,7 @@ function bindDeclaredCaller(
   if (declared !== undefined && !declaredNamesCaller(declared, caller, db)) {
     throw consumerFenced(caller, String(declared))
   }
-  // Why: check's restart fallback takes a pane key from the caller; a session has its own or none.
+  // Check restart fallback may use only the session's own pane key.
   if (values.terminalPaneKey !== undefined && values.terminalPaneKey !== caller.paneKey) {
     throw consumerFenced(caller, `pane ${String(values.terminalPaneKey)}`)
   }

@@ -22,7 +22,7 @@ describe('normalizeRightSidebarTab', () => {
     }
   )
 
-  it('preserves the folder-only pr-checks tab across restarts', () => {
+  it('preserves the folder-only pr-checks tab', () => {
     expect(normalizeRightSidebarTab('pr-checks')).toBe('pr-checks')
   })
 

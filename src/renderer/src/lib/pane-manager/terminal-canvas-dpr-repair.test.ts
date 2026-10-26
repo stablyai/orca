@@ -60,8 +60,7 @@ function makePane(args: {
 
 describe('repairPaneWebglCanvasDprMismatch', () => {
   it('repairs a stale dpr-2 backing composited on a dpr-1 display', () => {
-    // The reproduced field bug: hidden-time display change leaves a 2160px
-    // backing behind a 1080px css box at dpr 1 (half-size/smeared text).
+    // Hidden-time display changes left 2160px backing for 1080 CSS pixels at DPR 1, producing half-size/smeared text.
     const { pane, handleDevicePixelRatioChange, handleResize, refresh } = makePane({
       backingWidth: 2160,
       expectedWidth: 1080,

@@ -343,7 +343,6 @@ describe('structured session cold restoration', () => {
     })
 
     expect(closeSessionTab).toHaveBeenCalledWith('agent-session:restored-session', 'workspace-1')
-    // The user closed this chat, so a turn the close cuts short is their cancellation.
     expect(closeStructuredSession).toHaveBeenCalledWith('restored-session', 'user-close')
     expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false)
     expect(setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(

@@ -7,8 +7,8 @@ import {
   readDataFile,
   collectPropertyPaths,
   makeRepo
-} from '../../persistence-test-harness'
-import { makeTerminalTab } from '../../persistence-session-fixtures'
+} from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -98,7 +98,7 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
-  it('persists the agent skill sharing capability as an exact boolean', async () => {
+  it('normalizes the agent skill sharing capability to an exact boolean', async () => {
     const store = await createStore()
 
     expect(store.updateSettings({ agentSkillSharingEnabled: true }).agentSkillSharingEnabled).toBe(
@@ -615,16 +615,21 @@ describe('Store', () => {
 
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
-    const updated = store.updateSettings({
+    store.updateSettings({
       notifications: {
         ...store.getSettings().notifications,
-        customSoundVolume: -20
+        enabled: false,
+        customSoundPath: '/sounds/custom.wav'
       }
+    })
+    const updated = store.updateSettings({
+      // @ts-expect-error -- Partial notification patches can arrive from older clients.
+      notifications: { customSoundVolume: -20 }
     })
 
     expect(updated.notifications.customSoundVolume).toBe(0)
-    expect(updated.notifications.enabled).toBe(true)
-    expect(updated.notifications.customSoundPath).toBeNull()
+    expect(updated.notifications.enabled).toBe(false)
+    expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
   })
 
   it('updateSettings toggles editorAutoSave', async () => {

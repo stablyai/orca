@@ -1,12 +1,5 @@
-/**
- * Terminal journeys on an orcad-managed SSH host, read from what each pane actually shows:
- *
- * 1. Reconnect: a pane keeps its scrollback and a running full-screen app, and a tab opened after
- *    a reconnect gets a fresh shell that survives the next reconnect.
- * 2. Restore: tabs come back exactly once across relaunches and a renderer reload, and a tab
- *    closed while the host is disconnected stays closed.
- * 3. Faults: a pane outlives a dropped SSH link and a frozen host, and answers input after both.
- */
+// Require managed SSH pane content/input across reconnect, relaunch/reload, dropped links and host freeze.
+// Keep full-screen output live, restore tabs once, and honor closes made while disconnected.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { reconnect } from './helpers/orcad-convert-flow'
@@ -156,8 +149,7 @@ test('managed tabs restore exactly once, and a tab closed while disconnected sta
     // The lid-closed shape: close a tab while disconnected, then reconnect.
     const closed = opened[2]
     await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), seeded.targetId)
-    // Why the tab's own X: the user's close path holds a close the host cannot hear yet, and
-    // the store's bare closeTab only passed while the disconnected host was silently redialed.
+    // Use the real tab X to queue disconnected close; bare store close previously passed only by silently redialing.
     const closedTab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${closed}"]`).first()
     await closedTab.hover()
     await closedTab.getByRole('button', { name: /^Close tab /i }).click()

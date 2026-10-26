@@ -1,5 +1,4 @@
-// A browser tab's own record: its pages and its session profile. The pages' addresses and titles
-// are facts its host view reports, not layout.
+// Browser pages/session profile are records; host-reported addresses and titles are facts rather than layout.
 
 import { applied, refuse, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf } from './workspace-layout-command-types'
@@ -7,7 +6,7 @@ import { holdsBrowserPage } from './workspace-layout-content-commands'
 import type { LayoutBrowserTab, WorkspaceLayoutModel } from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
 
-/** Appends a page; the same page again changes nothing, one another tab holds is refused. */
+/** Repeated page opens are idempotent; refuse pages held by another tab. */
 export function openBrowserPage(
   model: WorkspaceLayoutModel,
   command: CommandOf<'openBrowserPage'>
@@ -21,7 +20,6 @@ export function openBrowserPage(
   )
 }
 
-/** Closing a page the record no longer lists is not an error. */
 export function closeBrowserPage(
   model: WorkspaceLayoutModel,
   command: CommandOf<'closeBrowserPage'>
@@ -29,7 +27,6 @@ export function closeBrowserPage(
   return withPageIds(model, command, (pageIds) => pageIds.filter((id) => id !== command.pageId))
 }
 
-/** The new page takes the old one's place; one already replaced changes nothing. */
 export function replaceBrowserPage(
   model: WorkspaceLayoutModel,
   command: CommandOf<'replaceBrowserPage'>

@@ -75,8 +75,7 @@ describe('plugin language-pack artifacts', () => {
     ).toBe(true)
   })
 
-  // Why: the chrome exemption must not leak into the copy that carries a claim
-  // about what plugins may do — that copy is the whole reason the prefix is broad.
+  // Chrome exemptions must never include claims about plugin permissions; those are the protected prefix’s purpose.
   it.each([
     ['description', 'Plugins are sandboxed and cannot read your files.'],
     ['systemDescription', 'Every plugin here has been reviewed by Orca.'],

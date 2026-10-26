@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcResponse } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 
 const push = vi.fn()
@@ -10,8 +12,8 @@ vi.mock('../platform/haptics', () => ({ triggerSelection: vi.fn() }))
 
 type Handlers = ReturnType<typeof useMobileFileTapHandlers>
 
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+function ok(result: unknown): RpcResponse {
+  return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 describe('useMobileFileTapHandlers', () => {
@@ -28,7 +30,7 @@ describe('useMobileFileTapHandlers', () => {
     handlers = null
   })
 
-  function createOptions(sendRequest: ReturnType<typeof vi.fn>) {
+  function createOptions(sendRequest: UnvalidatedRpcRequestPort['sendRequest']) {
     return {
       client: { sendRequest },
       hostId: 'host-1',

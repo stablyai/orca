@@ -3,7 +3,7 @@ import {
   getMatchingJiraSites,
   parseJiraIssueUrl,
   JIRA_ISSUE_KEY_PATTERN
-} from '../../../shared/jira-issue-url'
+} from '../../../shared/jira/jira-issue-url'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import type { WorkspaceAttachment, Worktree } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'

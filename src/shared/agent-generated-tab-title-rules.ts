@@ -1,5 +1,4 @@
-// When an agent's status gives its terminal tab a generated title: one rule for the window's
-// store and for main's layout, which derives the titles itself in a layout-owner build.
+// Store and layout-owner main derive generated tab titles by the same rule.
 
 import { deriveGeneratedTabTitle } from './agent-tab-title'
 import {
@@ -49,7 +48,6 @@ export function generatedTitleSourceText(entry: TitleStatus): string {
   return isOrcaDispatchPrompt(entry.prompt) ? getAgentRowGeneratedTitleText(entry) : entry.prompt
 }
 
-/** The generated title this status gives the tab, or null when the tab keeps what it shows. */
 export function generatedTabTitleForStatus(
   entry: TitleStatus,
   tab: GeneratedTitleTab

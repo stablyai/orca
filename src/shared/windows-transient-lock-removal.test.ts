@@ -94,7 +94,7 @@ describe('transient lock removal options', () => {
   })
 
   it('actually detects a file that states the policy', () => {
-    // Without this the scan below passes for any reason at all, including not scanning.
+    // Positive control: the source scan must actually detect a policy declaration.
     expect(POLICY_DECLARATION.test('const WINDOWS_RM_MAX_RETRIES = 8')).toBe(true)
     expect(POLICY_DECLARATION.test('  export const WINDOWS_RM_RETRY_DELAY_MS = 150')).toBe(true)
     // Importing the policy is the thing this rule is asking for, not a violation of it.
@@ -103,8 +103,7 @@ describe('transient lock removal options', () => {
   })
 
   it('is the only file that states the policy', () => {
-    // Why a ratchet: a second copy is how "8 attempts" becomes 8 in one file and 4 in another,
-    // and nothing fails until a Windows lane goes red for a reason nobody can place.
+    // Duplicate retry constants drift and fail Windows lanes inconsistently; keep one policy owner.
     expect(
       findPolicyDeclarations(),
       'declare the retry policy once, in src/shared/windows-transient-lock-removal.ts, and import it'

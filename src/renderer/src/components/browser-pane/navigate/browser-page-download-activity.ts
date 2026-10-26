@@ -1,9 +1,4 @@
-// Why module-level: download UI state is pane-local and BrowserPane unmounts
-// while its worktree is hidden, but guest-budget eviction must know which
-// hidden pages are still writing downloads — main treats a guest unregister as
-// a tab close and cancels their active downloads (browser-manager
-// unregisterGuest), so eviction has to skip those pages until they finish.
-// Main ends every download it tracks, so start and finish bound the veto.
+// Track beyond pane unmount: hidden-page eviction unregisters guests and cancels downloads, so active downloads veto it until main reports completion.
 const browserPageIdByDownloadId = new Map<string, string>()
 const activeDownloadCountByPageId = new Map<string, number>()
 
@@ -46,9 +41,7 @@ function trackDownloadFinished(downloadId: string, onEvictionVetoChange: () => v
   adjustActiveDownloadCount(browserPageId, -1, onEvictionVetoChange)
 }
 
-/** App-lifetime tracking; install once from the surface host (Terminal). The
- *  cleanup clears tracked state — a host unmount tears down every guest, so
- *  stale entries must not veto eviction after a remount. */
+/** Install once per surface host; clear on teardown because every guest is destroyed and stale entries would block eviction. */
 export function installBrowserPageDownloadActivityTracking(
   onEvictionVetoChange: () => void = () => {}
 ): () => void {

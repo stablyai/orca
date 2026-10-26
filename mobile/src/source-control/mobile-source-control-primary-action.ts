@@ -51,8 +51,7 @@ export function buildMobileSourceControlPrimaryAction(
     stagedCount: args.stagedCount,
     hasUnstagedChanges: args.unstagedCount > 0,
     hasStageableChanges: args.stageablePaths.length > 0,
-    // Why: the commit-area decision keeps the desktop input shape, but partial
-    // staging only matters to commit eligibility/dropdowns. Avoid an extra entry scan.
+    // Partial staging affects commit eligibility, not this area decision; avoid another entry scan.
     hasPartiallyStagedChanges: false,
     hasMessage: args.commitMessage.trim().length > 0,
     hasUnresolvedConflicts: args.hasUnresolvedConflicts,

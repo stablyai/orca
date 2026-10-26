@@ -1,18 +1,15 @@
-/** What the host-side runtime-store scripts print, shared by the POSIX and Windows installers. */
 import { parseMissingSharedLibrary } from '../orcad/native-host-abi'
 import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
 export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'
 export const REMOTE_NODE_RUNTIME_SELFTEST_FAILED = 'ORCA_NODE_RUNTIME_SELFTEST_FAILED'
-/** The store's filesystem refused to execute a file Orca wrote there; the shell's words follow. */
 export const REMOTE_NODE_RUNTIME_NOEXEC = 'ORCA_NODE_RUNTIME_NOEXEC'
-/** A file Orca wrote and verified changed or vanished afterwards; the rest of the line says which. */
 export const REMOTE_NODE_RUNTIME_SECURITY_MODIFIED = 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED'
 export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
 export const REMOTE_NODE_RUNTIME_VERIFIED_MARKER = '.verified'
 
-/** The pinned runtime ran on the host and did not report its version: a host verdict, with evidence. */
+/** A failed version self-test is positive host evidence, not an unanswered transport probe. */
 export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
   constructor(
     readonly exitStatus: number | null,
@@ -30,7 +27,6 @@ export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
   }
 }
 
-/** The host refuses to run programs from the runtime store, e.g. a home mounted `noexec`. */
 export class RemoteNodeRuntimeNoexecError extends RelayHostAnsweredError {
   constructor(
     readonly output: string,
@@ -41,18 +37,14 @@ export class RemoteNodeRuntimeNoexecError extends RelayHostAnsweredError {
   }
 }
 
-/**
- * Throws only for the shell's exec refusal; any other probe failure falls through to the upload,
- * whose self-test classifies it with the loader's own words.
- */
+/** Only exec refusal fails this probe; other uncertainty falls through to upload self-test for loader diagnostics. */
 export function assertRemoteNodeRuntimeStoreExecutable(probe: string, storeDir: string): void {
   const index = probe.indexOf(REMOTE_NODE_RUNTIME_NOEXEC)
   if (index === -1) {
     return
   }
   const report = parseRemoteRuntimeExitReport(probe.slice(index))
-  // Why the status alone: 126 is "found but not executable", and the probe is our own 0700 /bin/sh
-  // script, so only an exec refusal is left; the shell's words may be localized.
+  // Our own 0700 shell script makes exit 126 an exec refusal; diagnostic text may be localized.
   if (report.exitStatus === 126) {
     throw new RemoteNodeRuntimeNoexecError(report.output, storeDir)
   }
@@ -65,7 +57,6 @@ function installHint(library: string): string {
     : 'Install the package that provides it.'
 }
 
-/** The host answered, and what it answered is that something rewrote or removed our verified bytes. */
 export class RemoteNodeRuntimeSecurityModifiedError extends RelayHostAnsweredError {
   constructor(readonly detail: string) {
     super(`Security software on the host removed or modified the pinned Node runtime: ${detail}`)
@@ -73,7 +64,6 @@ export class RemoteNodeRuntimeSecurityModifiedError extends RelayHostAnsweredErr
   }
 }
 
-/** Splits `ORCA_RUNTIME_EXIT=<n>` from the output that follows it. */
 export function parseRemoteRuntimeExitReport(text: string): {
   exitStatus: number | null
   output: string
@@ -93,7 +83,6 @@ export function parseRemoteRuntimeExitReport(text: string): {
   }
 }
 
-/** Throws the host's verdict when a promote script reported one instead of READY. */
 export function assertRemoteNodeRuntimePromoted(promoted: string): void {
   const selfTestFailure = promoted.indexOf(REMOTE_NODE_RUNTIME_SELFTEST_FAILED)
   if (selfTestFailure !== -1) {

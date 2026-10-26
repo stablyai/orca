@@ -75,7 +75,12 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   writeFileSync(
     file,
     JSON.stringify({
-      claudeAiOauth: { accessToken: 'expired-fake', refreshToken: 'must-not-be-used', expiresAt: 1 }
+      claudeAiOauth: {
+        accessToken: 'expired-fake',
+        refreshToken: 'must-not-be-used',
+        expiresAt: 1,
+        refreshTokenExpiresAt: 4_102_444_800_000
+      }
     })
   )
   vi.stubGlobal('fetch', () => {
@@ -84,20 +89,39 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   calls.usage.mockRejectedValue(new OAuthUsageError('Invalid OAuth token.', 401, true, null))
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
     status: 'error',
-    error: 'Claude usage has expired. Start Claude in this account to refresh it.',
+    error: 'Claude usage updates the next time Claude runs.',
     usageMetadata: { failureKind: 'stale-token' }
   })
   expect(calls.usage.mock.calls.map(([token]) => token)).toEqual(['expired-fake'])
   const system = systemDefault()
   writeFileSync(
     join(system.home, '.credentials.json'),
-    JSON.stringify({ claudeAiOauth: { accessToken: 'expired-default', expiresAt: 1 } })
+    JSON.stringify({
+      claudeAiOauth: { accessToken: 'expired-default', refreshToken: 'unused', expiresAt: 1 }
+    })
   )
   calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({ status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({
     error: 'Claude usage updates the next time Claude runs.',
     usageMetadata: { failureKind: 'stale-token' }
+  })
+})
+it.each([
+  ['no refresh token', {}, 'Invalid OAuth token.'],
+  ['an expired refresh token', { refreshToken: 'fake', refreshTokenExpiresAt: 1 }, 'Invalid'],
+  ['a revoked refresh token', { refreshToken: 'fake' }, 'OAuth token has been revoked.']
+])('asks a login with %s to sign in again instead of waiting for Claude', async (_, oauth, msg) => {
+  const f = profile()
+  writeFileSync(
+    join(f.home, '.credentials.json'),
+    JSON.stringify({ claudeAiOauth: { accessToken: 'expired-fake', expiresAt: 1, ...oauth } })
+  )
+  calls.usage.mockRejectedValue(new OAuthUsageError(msg, 401, true, null))
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
+    status: 'error',
+    error: 'Sign in again to use this account.',
+    usageMetadata: { failureKind: 'missing-credentials' }
   })
 })
 it('reads only the requested scoped Keychain, with no unsuffixed fallback', async () => {

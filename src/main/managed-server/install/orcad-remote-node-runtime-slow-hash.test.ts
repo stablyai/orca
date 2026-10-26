@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
 import { runProcess } from '@orca/process-host'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
   posixNodeRuntimeExecutable,
@@ -19,6 +18,7 @@ import { RUNTIME_STORE_LOCK_NAME, withRuntimeStoreLock } from './remote-node-run
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -26,8 +26,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
 }))
 vi.mock('./remote-install-transfers', () => ({ uploadRemoteInstallDirectory: vi.fn() }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand, which runs it in a local shell.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const target = 'linux-x64-glibc'
 let root: string

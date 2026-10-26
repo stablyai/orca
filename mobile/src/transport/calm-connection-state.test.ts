@@ -36,6 +36,25 @@ describe('stepCalmConnectionState', () => {
         { at: 1_000 + CALM_STATUS_REVEAL_DELAY_MS, state: 'reconnecting' }
       ])
     ).toEqual(['connected', 'reconnecting'])
+
+    const waiting = stepCalmConnectionState(CALM_STATUS_IDLE, {
+      state: 'reconnecting',
+      lastConnectedAt: 0,
+      now: 1_000
+    })
+    expect(waiting.recheckInMs).toBe(5_000)
+    const almost = stepCalmConnectionState(waiting.next, {
+      state: 'reconnecting',
+      lastConnectedAt: 0,
+      now: 5_999
+    })
+    expect(almost).toMatchObject({ presented: 'connected', recheckInMs: 1 })
+    const revealed = stepCalmConnectionState(almost.next, {
+      state: 'reconnecting',
+      lastConnectedAt: 0,
+      now: 6_000
+    })
+    expect(revealed).toMatchObject({ presented: 'reconnecting', recheckInMs: null })
   })
 
   it('shows the first connect and a refused pairing at once', () => {

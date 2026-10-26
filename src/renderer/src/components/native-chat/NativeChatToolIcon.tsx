@@ -12,15 +12,14 @@ import {
   SquareTerminal,
   Wrench
 } from 'lucide-react'
-import type { NativeChatMcpIdentity } from '../../../../shared/native-chat-tool-identity'
+import type { NativeChatMcpIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   nativeChatToolIconName,
   type NativeChatToolIconName
-} from '../../../../shared/native-chat-tool-icon'
+} from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 
-/** Glyph name to component. */
 const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   eye: Eye,
   search: Search,
@@ -36,8 +35,7 @@ const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   brain: Brain
 }
 
-/** The fixed 16px slot with a 14px glyph, which keeps every row left-aligned
- *  including rows whose category this vocabulary doesn't model. */
+/** Use the same fixed glyph slot for known and unknown categories to align rows. */
 function NativeChatGlyphSlot({
   glyph: Glyph,
   className
@@ -52,14 +50,7 @@ function NativeChatGlyphSlot({
   )
 }
 
-/**
- * The category glyph on a tool row. Decorative — the word beside it is the
- * accessible name — so it is `aria-hidden` and must never render without that
- * word.
- *
- * A running run header names one call and so resolves its glyph through this
- * same component, and can never disagree with the row it names.
- */
+/** Resolve row and live-header categories together; decorative glyphs require adjacent accessible text. */
 export function NativeChatToolIcon({
   rowWord,
   mcpIdentity,
@@ -78,12 +69,7 @@ export function NativeChatToolIcon({
   )
 }
 
-/**
- * The glyph over a settled run, which speaks for every call in it rather than
- * for one row, so its caller resolves the category and no row word names it.
- * Same table and same slot as a row's glyph, so the two can never draw one
- * category differently.
- */
+/** Use the row glyph table and slot for a caller-resolved settled-run category. */
 export function NativeChatToolRunIcon({
   iconName,
   className

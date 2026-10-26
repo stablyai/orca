@@ -8,9 +8,7 @@ function subscribe(onStoreChange: () => void): () => void {
   return registerWebviewDragPassthroughSurface(onStoreChange)
 }
 
-/** Whether a renderer-owned drag currently holds guests click-through. Panes read it to keep
- *  their own effects off the guest mid-drag: focusing a guest hands focus to another WebContents,
- *  and the embedder blur that follows is what the drag's missed-end fallback treats as an abort. */
+/** Guest focus blurs the embedder and aborts renderer drags; panes use this state to defer guest effects. */
 export function useWebviewDragPassthroughActive(): boolean {
   return useSyncExternalStore(subscribe, isWebviewDragPassthroughActive, () => false)
 }

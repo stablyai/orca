@@ -57,7 +57,19 @@ describe('getWorktreeMetaGlyphPresence', () => {
     expect(Object.values(getWorktreeMetaGlyphPresence(row, ALL)).some(Boolean)).toBe(false)
     expect(
       Object.values(
-        getWorktreeMetaGlyphPresence({ ...row, automationCreated: true, cliCreated: true }, none)
+        getWorktreeMetaGlyphPresence(
+          {
+            ...row,
+            comment: 'note',
+            automationCreated: true,
+            cliCreated: true,
+            linkedIssue: 3,
+            linkedLinearIssue: 'ENG-1',
+            linkedGitLabMR: 4,
+            linkedItems: [{ provider: 'jira', type: 'issue', number: 1 }]
+          },
+          none
+        )
       ).some(Boolean)
     ).toBe(false)
   })

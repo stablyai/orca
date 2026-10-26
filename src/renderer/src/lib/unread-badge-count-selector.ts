@@ -89,15 +89,7 @@ function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCount
   )
 }
 
-/**
- * Why: the App root holds this subscription for a single integer. Returning the raw maps re-rendered
- * the whole shell on every agent title frame; selecting the count instead means the subscription
- * only notifies when the badge value can actually have moved.
- *
- * Why chaining against the immediately preceding state is enough: equality over the count's read
- * set is transitive, so a run of unchanged states is equivalent to comparing against the state
- * that produced the cached count.
- */
+/** Subscribe App to the badge integer, avoiding whole-shell rerenders on raw-map/title churn. Compare each state’s read set to its predecessor; transitive equality preserves the cached count across unchanged runs. */
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
   let unreadCount = 0

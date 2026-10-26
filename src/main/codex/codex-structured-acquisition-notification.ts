@@ -1,4 +1,4 @@
-import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection'
+import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'

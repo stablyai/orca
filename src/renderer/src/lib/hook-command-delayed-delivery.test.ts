@@ -60,8 +60,7 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
   })
 
   it('keeps every delivery queued for the same worktree', () => {
-    // A runtime-owned create can have setup/issue commands AND an agent-tab seed
-    // waiting on the same first mirrored tab; neither may evict the other.
+    // Setup/issue commands and agent seeds must coexist while awaiting the same mirrored terminal.
     markWorktreeKnown('wt-1')
     setStorePartial({ tabsByWorktree: {} })
     const deliverFirst = vi.fn()
@@ -86,8 +85,7 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
 
     queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-gone', deliver })
 
-    // A tab appearing later (e.g. an id reused by mirror churn) must not
-    // deliver commands for a worktree that was dropped while unknown.
+    // Removal before first mirror must discard pending commands even if the tab ID later reappears.
     markWorktreeKnown('wt-gone')
     setStorePartial({ tabsByWorktree: { 'wt-gone': [{ id: 'tab-1' }] } })
     expect(deliver).not.toHaveBeenCalled()

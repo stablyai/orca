@@ -7,23 +7,11 @@ import {
   type GitHubPrMutationStatus
 } from './github-pr-mutation-reply-schema'
 
-// Host-state changes on the `github.*` PR surface. A lost reply here is *unknown*, never failed:
-// none of these operations interprets a transport rejection, so the rejection object — and the
-// delivery-unknown mark the WeakSet holds on it — reaches the wrapper's own catch intact. The
-// wrappers still collapse it into their `{ ok: false }` outcome, exactly as main did; nothing here
-// retries, and no operation below treats a dropped reply as evidence the mutation did not happen.
+// Transport rejection preserves its delivery-unknown identity; never retry or infer that a dropped reply means no mutation occurred.
 
 export type { GitHubPrMutationStatus } from './github-pr-mutation-reply-schema'
 
-/**
- * One reader for ten methods, not ten readers.
- *
- * The `ok` test and the `error` read are a single host convention — GitHubProjectMutationResult
- * and GitHubCommentResult share it — so there is no input on which two of these methods would want
- * different answers. Which failure text a caller shows is the caller's, not the reader's:
- * `extractMutationError` still names the method in its fallback. Two variants rather than one
- * schema because the host's own result is a union whose arms require different members.
- */
+// Share the host’s status/void convention across methods; callers own fallback failure text.
 const mutationStatusReader = rpcResultVariants<
   'pr-mutation-status' | 'pr-mutation-void',
   GitHubPrMutationStatus
@@ -32,9 +20,6 @@ const mutationStatusReader = rpcResultVariants<
   rpcResultVariant('pr-mutation-void', githubPrMutationStatusSchemas[1])
 ])
 
-// Ten operations, one definition site: they share a method-independent acceptance, barrier and
-// reader, and writing the same five lines ten times would hide that rather than show it. Name and
-// method stay per operation, which is what a call site picks.
 function mutationStatusOperation<Method extends RpcMethodName>(name: string, method: Method) {
   return bindDeferredRpcOperation(
     defineRpcOperation({
@@ -94,9 +79,7 @@ export const githubPrIssueCommentDelete = mutationStatusOperation(
   'github.project.deleteIssueCommentBySlug'
 )
 
-// The two mutations whose host result is a bare boolean rather than a status envelope. `=== true`
-// is the caller's confirmation rule, so reading them as a status would turn a `false` into the
-// "no structured status" success the envelope methods get.
+// These two methods require explicit boolean confirmation; status-envelope void-success semantics would accept false.
 export const githubPrTitleSet = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.update-pr-title',

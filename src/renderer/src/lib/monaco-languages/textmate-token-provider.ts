@@ -14,6 +14,7 @@ export type TextMateGrammarLoader = () => Promise<LanguageRegistration>
 
 export type TextMateTokensProviderOptions = {
   loadGrammar: TextMateGrammarLoader
+  mapTokenScopes?: (scopes: readonly string[]) => string
 }
 
 let editorCorePromise: Promise<TextMateCore> | undefined
@@ -49,7 +50,8 @@ class TextMateTokenizerState implements Monaco.languages.IState {
 function createTokensProvider(
   { textmate }: TextMateCore,
   grammar: Grammar,
-  fallbackScopeName: string
+  fallbackScopeName: string,
+  mapTokenScopes?: (scopes: readonly string[]) => string
 ): TextMateTokensProvider {
   const plain = (state: TextMateTokenizerState): Monaco.languages.ILineTokens => ({
     endState: state,
@@ -76,9 +78,8 @@ function createTokensProvider(
         endState: new TextMateTokenizerState(result.ruleStack),
         tokens: result.tokens.map((token) => ({
           startIndex: token.startIndex,
-          // Why: Monaco themes match a single token scope; TextMate returns a
-          // scope stack, and the final entry is the most specific reusable one.
-          scopes: token.scopes.at(-1) ?? fallbackScopeName
+          // Use final TextMate scope: Monaco accepts one scope, while TextMate’s final stack entry is most specific.
+          scopes: mapTokenScopes?.(token.scopes) ?? token.scopes.at(-1) ?? fallbackScopeName
         }))
       }
     }
@@ -93,6 +94,7 @@ export async function createTextMateTokensProvider(
   return createTokensProvider(
     editorCore,
     editorCore.core.getLanguage(registration.name),
-    registration.scopeName
+    registration.scopeName,
+    options.mapTokenScopes
   )
 }

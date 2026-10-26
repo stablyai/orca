@@ -74,7 +74,6 @@ export function leaveReasonText(reason: string | null | undefined): string {
   }
 }
 
-/** "Shared folder", or the agents that read this folder. */
 export function locationPlaceLabel(location: BundledSkillLocation): string {
   if (location.place.kind === 'shared') {
     return translate('auto.components.skills.skillPlanOpCopy.sharedFolder', 'Shared folder')
@@ -82,7 +81,6 @@ export function locationPlaceLabel(location: BundledSkillLocation): string {
   return location.place.names.join(', ') || location.displayPath
 }
 
-/** The action or reason for one planned location. */
 export function locationStateText(location: BundledSkillLocation): string {
   const texts: Record<BundledSkillLocationState, () => string> = {
     update: () => translate('auto.components.skills.skillPlanOpCopy.update', 'Update'),

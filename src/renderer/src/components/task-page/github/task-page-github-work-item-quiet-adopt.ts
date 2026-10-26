@@ -43,9 +43,7 @@ function hasPendingForFamily(
   return false
 }
 
-/**
- * Non-regressive field-wise adopt from search (K21). Never force-accept.
- */
+/** Adopt search field by field without regressing confirmed values; never force-accept lagging data. */
 export function adoptQuietSearchFieldsForItem(args: {
   item: GitHubWorkItem
   serverItem: GitHubWorkItem

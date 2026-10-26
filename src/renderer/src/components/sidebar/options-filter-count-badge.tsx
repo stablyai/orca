@@ -1,8 +1,7 @@
 import React from 'react'
 import { formatActiveFilterBadge } from '../../../../shared/workspace-view/workspace-row-filters'
 
-/** Active-filter count on a sidebar options trigger (the trigger must be `relative`). Shared so
- *  the workspace and activity headers signal filtering identically. */
+/** The containing trigger must use relative positioning. */
 export function OptionsFilterCountBadge({ count }: { count: number }): React.JSX.Element | null {
   if (count === 0) {
     return null

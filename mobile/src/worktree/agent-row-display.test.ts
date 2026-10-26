@@ -5,10 +5,7 @@ import {
   agentVerdictDisplayMark
 } from '../../../src/shared/agent-main-agent-verdict'
 import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  isAgentStatusFresh
-} from '../../../src/shared/agent-status-freshness'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
   agentDisplayLabel,
   agentDotState,
@@ -31,6 +28,8 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
     state: 'working',
     agentType: 'claude',
     prompt: '',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -50,6 +49,7 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), 0)).toBe('blocked')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), 0)).toBe('waiting')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), 0)).toBe('done')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unparsed rows can carry a future host state.
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
@@ -60,7 +60,6 @@ describe('agentDotState', () => {
       agentDotState(row({ state: 'done', ...mainAgentDone('cancellation'), interrupted: true }), 0)
     ).toBe('interrupted')
     expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
-    // A turn a newer request replaced reads as a Stop does.
     expect(agentDotState(row({ state: 'done', ...mainAgentDone('superseded') }), 0)).toBe(
       'interrupted'
     )
@@ -81,7 +80,7 @@ describe('agentDotState', () => {
     )
   })
 
-  // Rows arrive unparsed, so an arm a newer host adds must read as the done it always did.
+  // Unparsed rows may carry a future outcome; keep the done fallback.
   it('reads a done row carrying an outcome it cannot name as done', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an arm from a newer host, which the unparsed wire row can carry.
     const future = mainAgentDone('from-a-newer-host' as Outcome)
@@ -94,7 +93,6 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'working', ...mainAgentDone('interruption') }), 0)).toBe(
       'failed'
     )
-    // Only a fault outranks live work; a success or a stop with live subagents reads working.
     expect(agentDotState(row({ state: 'working', ...mainAgentDone('success') }), 0)).toBe('working')
     expect(
       agentDotState(
@@ -104,7 +102,7 @@ describe('agentDotState', () => {
     ).toBe('working')
   })
 
-  // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
+  // App code cannot import the desktop accessor; pin the mirror against it.
   it('agrees with the desktop verdict accessor on every row', () => {
     const states = ['working', 'blocked', 'waiting', 'done'] as const
     const mainAgents = [
@@ -133,23 +131,18 @@ describe('agentDotState', () => {
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
-    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
-    // Active states past the staleness window read as idle…
+    const stale = 1_800_001
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), stale)).toBe('idle')
-    // …exactly at the threshold it is still fresh (decay is strictly past it).
-    expect(
-      agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
-    ).toBe('working')
-    // 'done' never decays, and neither does its verdict.
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 1_800_000)).toBe('working')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
     expect(
       agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
     ).toBe('failed')
   })
 
-  // The host advances updatedAt for a newer neutral title but keeps the evidence's own time.
+  // Title renewal updates the row timestamp without renewing status evidence.
   it('ages a status by its evidence, not by a later title renewal, as desktop does', () => {
     const now = 100 * 60 * 1000
     const renewed = {
@@ -211,12 +204,9 @@ describe('agentDisplayLabel', () => {
   })
 
   it('falls back to the decayed state label when stale', () => {
-    expect(
-      agentDisplayLabel(
-        row({ state: 'working', prompt: '', updatedAt: 0 }),
-        AGENT_STATUS_STALE_AFTER_MS + 1
-      )
-    ).toBe('Idle')
+    expect(agentDisplayLabel(row({ state: 'working', prompt: '', updatedAt: 0 }), 1_800_001)).toBe(
+      'Idle'
+    )
   })
 })
 

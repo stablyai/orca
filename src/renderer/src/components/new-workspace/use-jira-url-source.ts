@@ -7,8 +7,8 @@ import {
   isResolvedJiraIssueMatch,
   parseJiraIssueUrl,
   type ParsedJiraIssueUrl
-} from '../../../../shared/jira-issue-url'
-import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira-summary-lookup'
+} from '../../../../shared/jira/jira-issue-url'
+import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira/jira-summary-lookup'
 import {
   getTaskSourceCacheScope,
   normalizeTaskSourceContext,

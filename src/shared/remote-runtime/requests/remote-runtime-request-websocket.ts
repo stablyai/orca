@@ -25,8 +25,7 @@ export type RemoteRuntimeWebSocketCallbacks = {
   onTextFrame: (ws: WebSocket, frame: string) => void
   // Why optional: request sockets treat a binary frame as a protocol error; a relay forwards it.
   onBinaryFrame?: (ws: WebSocket, frame: Uint8Array<ArrayBufferLike>) => void
-  // Why: protocol-level pongs (and server heartbeat pings) are the liveness
-  // signal for detecting half-open tunnels that never deliver `close` (#7718).
+  // Pongs and heartbeat pings expose half-open tunnels that never emit close (#7718).
   onPong?: (ws: WebSocket) => void
   onPing?: (ws: WebSocket) => void
 }
@@ -34,8 +33,7 @@ export type RemoteRuntimeWebSocketCallbacks = {
 export function openRemoteRuntimeWebSocket(
   connection: PairedRuntimeConnection,
   callbacks: RemoteRuntimeWebSocketCallbacks,
-  // Why: overridable so the connect-bound regression test can pin the behaviour
-  // without spending the production budget of wall-clock time.
+  // Override for connect-bound tests without waiting the production timeout.
   connectTimeoutMs?: number
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
   const opened = createSocket(connection, connectTimeoutMs)
@@ -84,8 +82,7 @@ export function openRemoteRuntimeWebSocket(
     ws.off('message', onMessage)
     ws.off('pong', onPong)
     ws.off('ping', onPing)
-    // Why: a manually closed ws can still emit a late transport error; keep
-    // that from becoming an unhandled EventEmitter error after detaching Orca.
+    // Retain an error listener for late transport errors after manual close.
     if (ws.readyState !== WebSocket.CLOSED) {
       ws.on('error', ignoreLateSocketError)
     }

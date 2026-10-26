@@ -1,8 +1,4 @@
-/**
- * `connector.*`: the external-conversation seam (Slack and other threads) behind
- * `experimentalConnectors`. The host's setting is the only gate, so a call while it is off is
- * refused here whoever makes it.
- */
+/** Gate every connector.* conversation handler on this host's experimentalConnectors setting, regardless of caller. */
 
 import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
 import {
@@ -25,7 +21,6 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod } from '../core'
 import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
 
-/** Every `connector.*` handler's first step. */
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
 ): ExternalConversationSeam {

@@ -1,7 +1,4 @@
-/**
- * The client-side journal of a dormant migration from a relay-hosted SSH target into a managed
- * orcad. Kept outside the profile store so an older build rewriting the profile cannot strip it.
- */
+/** Keep the dormant-migration cutover journal outside the profile store so older builds cannot strip it when saving. */
 import { z } from 'zod'
 import {
   MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
@@ -26,7 +23,7 @@ export const ORCAD_MIGRATION_SOURCE_CUTOVER_PHASES = [
 export type OrcadMigrationSourceCutoverPhase =
   (typeof ORCAD_MIGRATION_SOURCE_CUTOVER_PHASES)[number]
 
-// Why not strict: a newer build's optional field must not make every journal unreadable here.
+// Accept newer optional journal fields instead of making the whole journal unreadable.
 const CutoverRecordSchema = z.object({
   version: z.literal(ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION),
   migrationId: z.string().min(1).max(128),
@@ -35,7 +32,7 @@ const CutoverRecordSchema = z.object({
   updatedAt: z.string().datetime(),
   destinationEnvironmentId: z.string().min(1).max(256),
   destinationName: z.string().min(1).max(1_024),
-  // What the fence binds to: the exact registration and the manifest the destination will see.
+  // Bind the fence to the exact registration and destination manifest.
   sshTargetId: z.string().min(1).max(1_024),
   sshTargetGeneration: z.number().int().positive(),
   manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -88,7 +85,6 @@ export function isRetainedOrcadMigrationSourceCutover(
   return cutover.phase === 'destination-committed' && cutover.sourceRetainedAt !== undefined
 }
 
-/** Throws on anything that is not exactly a cutover whose manifest matches its binding. */
 export function parseOrcadMigrationSourceCutover(value: unknown): OrcadMigrationSourceCutover {
   const record = CutoverRecordSchema.parse(value)
   const manifest = parseOrcadMigrationManifest(record.manifest)

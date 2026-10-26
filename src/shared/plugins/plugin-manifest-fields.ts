@@ -8,16 +8,14 @@ export const pluginIdSchema = z
   .string()
   .refine(isSafePluginId, 'must be kebab-case (a-z, 0-9, dashes) and not a reserved name')
 
-// Why: every declared artifact stays inside the immutable plugin root; realpath
-// containment separately rejects symlink escapes when the artifact is read.
+// Keep artifacts under immutable roots; reading separately checks realpath containment against symlink escapes.
 export const pluginRelativePathSchema = z
   .string()
   .min(1)
   .max(1024)
   .refine(isSafePluginRelativePath, 'must be a portable relative path inside the plugin directory')
 
-// Directory contributions accept the conventional trailing slash but store a
-// canonical path so hashing, materialization, and cleanup use one identity.
+// Canonicalize directory paths (allowing trailing slash) so hashing, materialization and cleanup share identity.
 export const pluginRelativeDirectorySchema = z
   .string()
   .min(1)

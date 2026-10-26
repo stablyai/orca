@@ -613,7 +613,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, `${'x'.repeat(4097)}omp\r`)
+      sendTerminalInputThroughPane(pane, `${' '.repeat(4097)}omp\r`)
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)

@@ -22,8 +22,7 @@ export async function sendFollowupPromptWhenAgentReady(args: {
   }
 }
 
-// Why: delayed follow-ups must not type into an arbitrary shell. Require a
-// positive readiness signal before writing user/task text to the PTY.
+// Require positive readiness before sending delayed user/task text, or it could land in an arbitrary shell.
 async function waitForAgentForeground(ptyId: string, expectedProcess: string): Promise<boolean> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
@@ -35,12 +34,7 @@ async function waitForAgentForeground(ptyId: string, expectedProcess: string): P
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return true
       }
-      // Why: interpreter-wrapped agents (aider, mistral-vibe are pip console
-      // scripts) surface a python/node foreground comm, so the exact-name check
-      // never matches — locally when the ps-table resolver can't pin the child,
-      // and over SSH when the relay falls back to the bare interpreter name. If
-      // the foreground is a known agent wrapper (not a shell) with a live
-      // non-shell child, the agent has taken over the PTY and can accept input.
+      // Wrapped agents may expose only python/node comm locally or over SSH; require a known wrapper plus a live non-shell child.
       if (
         attempt >= 4 &&
         isAgentForegroundWrapperProcess(foreground) &&

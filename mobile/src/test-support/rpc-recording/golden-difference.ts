@@ -8,7 +8,6 @@ import {
 import type { Recording } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
-/** What a golden says about behaviour, whatever else its file format carries alongside. */
 export type DecodedGolden = {
   operation: string
   family: string
@@ -16,7 +15,6 @@ export type DecodedGolden = {
   recording: Recording
 }
 
-/** One place a recording differs: a checkpoint, an observation field, and the JSON path inside it. */
 export type RecordingDifference = {
   checkpoint: string
   field: string
@@ -25,15 +23,11 @@ export type RecordingDifference = {
   actual: RecordedValue
 }
 
-/** The same difference seen at several checkpoints, which an append-only history repeats. */
 export type GroupedDifference = Omit<RecordingDifference, 'checkpoint'> & { checkpoints: string[] }
 
 export const IDENTITY_FIELDS = ['operation', 'family', 'namedDeltas'] as const
 
-/**
- * Resolves a pooled golden without judging its format version, so a diff can read both sides of a
- * format change. `readGolden` is the strict reader the recording suites use.
- */
+// Ignore format version for diffs across format changes; recording suites use the strict readGolden reader.
 export function decodeGoldenFile(file: unknown, id: string): DecodedGolden {
   if (file === null || typeof file !== 'object' || Array.isArray(file)) {
     throw new Error(`Golden ${id} is not a JSON object`)
@@ -105,10 +99,7 @@ export function excerpt(value: RecordedValue, limit = 600): string {
   return json === undefined ? 'absent' : json.length > limit ? `${json.slice(0, limit)}…` : json
 }
 
-/**
- * Checkpoint names keyed by occurrence, because an id may repeat within one golden
- * (`tk-list-linear` records `load-settled` twice). A repeat is shown as `id#2`.
- */
+// Key repeated checkpoint ids by occurrence so later instances remain distinguishable.
 function checkpointKeys(recording: Recording): string[] {
   const seen = new Map<string, number>()
   return recording.checkpoints.map((checkpoint) => {
@@ -118,7 +109,6 @@ function checkpointKeys(recording: Recording): string[] {
   })
 }
 
-/** Checkpoints only one side records, and whether the shared ones kept their order. */
 export function checkpointListDifference(
   expected: Recording,
   actual: Recording
@@ -136,7 +126,6 @@ export function checkpointListDifference(
   }
 }
 
-/** Every field that differs at every checkpoint both sides record, each at its first differing path. */
 export function recordingDifferences(
   expected: Recording,
   actual: Recording
@@ -171,7 +160,7 @@ export function recordingDifferences(
   return differences
 }
 
-/** Why grouped: a moved early entry re-appears in every later checkpoint of an append-only field. */
+// Group repeated differences from append-only histories across checkpoints.
 export function groupDifferences(differences: RecordingDifference[]): GroupedDifference[] {
   const groups = new Map<string, GroupedDifference>()
   for (const difference of differences) {
@@ -192,7 +181,6 @@ export function groupDifferences(differences: RecordingDifference[]): GroupedDif
   return [...groups.values()]
 }
 
-/** A golden's identity fields that differ, named so a failure says which one moved. */
 export function identityDifferences(
   expected: DecodedGolden,
   actual: DecodedGolden

@@ -1,4 +1,8 @@
-import { closeTestStores, createSqliteTestStore, testState } from './persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  testState
+} from './persistence/persistence-test-harness'
 import { Store as CanonicalStore } from './persistence/loading-store/store'
 import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
 import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'

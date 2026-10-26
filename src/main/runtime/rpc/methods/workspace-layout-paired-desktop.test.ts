@@ -1,6 +1,4 @@
-// A paired desktop and a layout-owner server: the server advertises that it takes layout
-// intents, serves the layout methods to the desktop but not to phones, and still serves an older
-// desktop every session.tabs mutation it sends today.
+// Layout-owner servers offer intents to desktops only, while retaining every legacy session.tabs mutation.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -30,7 +28,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-// Fresh modules, so the method registry is built under this switch.
+// Rebuild the registry under this environment switch.
 async function switchedBuild(layoutOwnerIsMain: boolean) {
   layoutOwner.isMain = layoutOwnerIsMain
   vi.resetModules()
@@ -83,7 +81,6 @@ describe('the layout intents capability', () => {
 })
 
 describe('layout methods on a layout-owner server', () => {
-  // Past the scope check: a stream asked for as a request, or bad params.
   it.each([
     ['layout.subscribe', 'method_not_supported'],
     ['layout.unsubscribe', 'invalid_argument'],
@@ -194,7 +191,7 @@ describe('layout.reportView', () => {
 describe('an older desktop on a layout-owner server', () => {
   const WT = 'wt-1'
   const SELECTOR = `id:${WT}`
-  // An older desktop: the capability is the server's, so it differs only in never sending intents.
+  // Older desktops never send intents; capability belongs to the server.
   const OLDER_DESKTOP = {
     callerScope: PAIRED_DESKTOP,
     clientKind: 'runtime' as const,
@@ -232,7 +229,6 @@ describe('an older desktop on a layout-owner server', () => {
   /** A windowless (serve) host: no notifier, its tabs already published. */
   async function headlessServer() {
     const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
-    // Seeding stands in for a prior publication.
     class HeadlessServer extends OrcaRuntimeService {
       seed(): void {
         this.storeMobileSessionSnapshot(WT, published())
@@ -249,7 +245,6 @@ describe('an older desktop on a layout-owner server', () => {
     return { runtime, send, current: () => runtime.current() }
   }
 
-  // Every session.tabs mutation a desktop sends, and the runtime method that serves it.
   const MUTATIONS = [
     ['session.tabs.activate', 'activateMobileSessionTab', { tabId: 'tab-b' }],
     [
@@ -279,7 +274,7 @@ describe('an older desktop on a layout-owner server', () => {
 
   it.each(MUTATIONS)('still serves %s', async (method, runtimeMethod, params) => {
     const { runtime, send } = await headlessServer()
-    // Its own refusal proves the request got past registration, scope and the client's projection.
+    // The method's own refusal proves registration, scope and projection admitted the request.
     const served = vi.spyOn(runtime, runtimeMethod).mockRejectedValue(new Error('reached'))
     const response = await send(method, { worktree: SELECTOR, ...params })
     expect(response.ok ? null : response.error.message).toBe('reached')

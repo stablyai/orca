@@ -10,7 +10,7 @@ import {
 } from '../../shared/closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { Store } from '../persistence/loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import { TERMINAL_LIFECYCLE_METHODS } from './rpc/methods/terminal/terminal-lifecycle-methods'
 

@@ -59,7 +59,6 @@ export function renderLinearIssueChipsLayout(
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-      {/* Status */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -113,7 +112,6 @@ export function renderLinearIssueChipsLayout(
         </PopoverContent>
       </Popover>
 
-      {/* Priority */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -147,7 +145,6 @@ export function renderLinearIssueChipsLayout(
         </PopoverContent>
       </Popover>
 
-      {/* Estimate */}
       <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
         <PopoverTrigger asChild>
           <button
@@ -216,7 +213,6 @@ export function renderLinearIssueChipsLayout(
         </PopoverContent>
       </Popover>
 
-      {/* Assignee */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -270,7 +266,6 @@ export function renderLinearIssueChipsLayout(
         </PopoverContent>
       </Popover>
 
-      {/* Labels */}
       <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
         <PopoverTrigger asChild>
           <button

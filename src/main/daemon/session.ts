@@ -27,6 +27,7 @@ export class Session {
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
+  readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -46,6 +47,7 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
+    this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
@@ -53,6 +55,7 @@ export class Session {
       scrollback: opts.scrollback,
       wslDistro: opts.wslDistro,
       historySeedChunks: opts.historySeedChunks,
+      ownerBackend: opts.ownerBackend,
       subprocess: this.subprocess,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
@@ -62,7 +65,6 @@ export class Session {
     this.termination = new SessionTerminationController({
       sessionId: this.sessionId,
       subprocess: this.subprocess,
-      launchAgent: this.launchAgent,
       isExited: () => this._state === 'exited',
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
@@ -167,10 +169,6 @@ export class Session {
 
   resumeProducer(source?: 'stream'): void {
     this.producerPause.resumeClient(source)
-  }
-
-  kill(): void {
-    this.termination.kill()
   }
 
   /** Signal the root only after its descendant snapshot has completed. */

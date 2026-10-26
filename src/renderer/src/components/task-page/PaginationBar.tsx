@@ -83,5 +83,3 @@ export function PaginationBar({
     </nav>
   )
 }
-
-// Why: hoisted to module scope so the type-guard predicate isn't re-allocated on every TaskPage render.

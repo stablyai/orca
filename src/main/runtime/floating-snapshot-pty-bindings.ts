@@ -6,7 +6,6 @@ import type {
 
 export type FloatingPtyBinding = { tabId: string; paneKey: string }
 
-/** PTY ids the host's own floating snapshot binds, with the pane each one fills. */
 export function indexFloatingSnapshotPtyBindings(
   snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
   paneKeyForTab: (tab: RuntimeMobileSessionTerminalTab) => string

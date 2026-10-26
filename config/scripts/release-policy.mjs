@@ -10,8 +10,7 @@ import {
 const BOT_LOGIN = 'github-actions[bot]'
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
 
-// Why agent state rules here: their publish workflow is a bot author, and as a prerelease the
-// release can never become Latest, which the app updater follows.
+// Bot-authored agent-state prereleases need separate policy because updater follows Latest, which prereleases cannot become.
 export function isPrereleaseTag(tag) {
   return RC_TAG.test(tag) || MOBILE_TAG.test(tag) || isAgentStateRulesTag(tag)
 }
@@ -26,8 +25,7 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Why: Cut Release creates the annotated tag and its `release: vX` commit, but the
-// release object keeps whoever created the draft first, which can be a person.
+// Authorize Cut Release via annotated tag/release commit: draft’s original creator may remain a person.
 export async function isCutByReleasePipeline(github, { owner, repo }, tag) {
   if (!STABLE_TAG.test(tag) && !RC_TAG.test(tag)) {
     return false
@@ -69,8 +67,7 @@ async function isAuthorizedRelease(github, repoRef, release) {
   return release.author?.login === BOT_LOGIN || isCutByReleasePipeline(github, repoRef, tag)
 }
 
-// Why: the highest authorized stable release must be Latest; GitHub's own pick
-// (and the old bot-author-only filter) can move it to an older version.
+// Force highest authorized stable release to Latest; GitHub’s choice/old bot filter can select an older version.
 export async function restoreLatestStable(github, repoRef) {
   const releases = await github.paginate(github.rest.repos.listReleases, {
     ...repoRef,
@@ -113,8 +110,7 @@ export async function enforceReleasePolicy({ github, context, core }) {
     return
   }
 
-  // Why: editing notes on a live release is not a publication; deleting on edit
-  // took down the v1.4.216 release and its tag.
+  // Notes edits are not publication; deleting on edit removed v1.4.216 and its tag.
   if (action !== 'published') {
     core.warning(
       `Release ${tag} by ${author || 'unknown'} is outside release policy; left as-is on "${action}".`

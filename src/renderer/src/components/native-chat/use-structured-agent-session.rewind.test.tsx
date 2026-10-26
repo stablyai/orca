@@ -82,7 +82,6 @@ import {
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
-// This build's host settles an in-doubt rewind on the next send; an older one is tested below.
 beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([RECOVERY])
   mocks.remoteCapabilities = new Set([RECOVERY])

@@ -32,7 +32,6 @@ describe('markupCanvasSize', () => {
     const maxPixels = 32 * 1024 * 1024
     const size = markupCanvasSize(4000, 3000, 2, maxPixels)
     expect(size.width * size.height).toBeLessThanOrEqual(maxPixels)
-    // Aspect ratio is preserved (one uniform scale).
     expect(size.width / size.height).toBeCloseTo(4000 / 3000, 3)
   })
 })
@@ -55,9 +54,7 @@ describe('effectiveMarkupScale', () => {
 
 describe('dataUrlByteLength', () => {
   it('decodes the base64 payload size', () => {
-    // "hi" -> base64 "aGk=" (1 pad char) -> 2 bytes
     expect(dataUrlByteLength('data:image/png;base64,aGk=')).toBe(2)
-    // "man" -> "bWFu" (no padding) -> 3 bytes
     expect(dataUrlByteLength('data:image/png;base64,bWFu')).toBe(3)
   })
 

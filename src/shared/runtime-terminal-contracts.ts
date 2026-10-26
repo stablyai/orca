@@ -21,11 +21,7 @@ export type RuntimeTerminalSummary = {
   ptyId: string | null
   incarnationId?: string | null
   orphaned?: boolean
-  /**
-   * Orphaned only: the pane the host last recorded for this PTY, which the renderer owning it can
-   * still hold even when its graph omitted that pane. Absent when none was recorded or the host
-   * predates the field.
-   */
+  /** Orphaned PTY’s last recorded pane may survive in its owning renderer despite graph omission; absent if unknown/old host. */
   recordedPaneKey?: string
   worktreeId: string
   worktreePath: string
@@ -45,10 +41,7 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
-  /**
-   * The execution host's word on the pane's terminal. Read this, not `connected`: `connected`
-   * keeps its old meaning, so an unreachable host reads connected. Absent from older hosts.
-   */
+  /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
   verdict?: PtyLivenessVerdict['status']
 }
 
@@ -333,17 +326,14 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
-  /** The host durably recorded a kill order it replays when the PTY's SSH host reconnects.
-   *  Older hosts never send it, so a client promises no retry without it. */
+  /** Durable host kill order replays on SSH reconnect; promise kill replay only when the host reports this field. */
   pendingKillRecorded?: true
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
-// Why both spellings: the codex-* members were published by every host before the agent-neutral
-// rename, so they are permanent — a client still has to read them off an older host. This build
-// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
-// that inspects no agent publishes the agent-* spelling.
+// Keep published codex-* reasons readable forever; emit them only for plausibly Codex-specific wording.
+// Agent-agnostic matchers use agent-* reasons.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'

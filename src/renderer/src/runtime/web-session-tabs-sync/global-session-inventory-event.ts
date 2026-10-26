@@ -37,7 +37,6 @@ export type GlobalSessionInventoryEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply a full-inventory frame from the all-worktrees stream, fencing visibility omissions. */
 export function handleGlobalSessionInventoryEvent({
   environmentId,
   expectedEnvironmentConnectionGeneration,

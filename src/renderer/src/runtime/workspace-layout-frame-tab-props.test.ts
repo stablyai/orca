@@ -1,5 +1,4 @@
-// Tab properties in a layout-owner build: main's pin, color or rename, drawn from its frame, must
-// look as the window's own action does today, and must restart the same.
+// Main’s frame-drawn pin/color/rename must match current window actions and survive restart in layout-owner builds.
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -78,10 +77,7 @@ afterEach(() => {
 
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-/**
- * What the user sees of the tabs: the startup view (order, groups, labels, titles, panes) plus each
- * tab's pin, preview and color. Record order in the slices and a row's own sortOrder are not shown.
- */
+/** Compare visible startup view plus pin/preview/color; slice order and row sortOrder are not visible. */
 function shownTabs(state: AppState): Record<string, unknown> {
   const view = projectStartupWindowView(state)
   for (const [key, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
@@ -281,8 +277,7 @@ describe('tab properties through main', () => {
       const mainCopy = { ...expected, ...entry.mainCopyLags }
       expect(shownTabs(drawn.getState())).toEqual(mainCopy)
 
-      // Main's answer then runs the window's action: its frame drew the change, so only what the
-      // window still owns (a preview's end) changes, which leaves what today's action shows.
+      // Frame already drew the command result; answer changes only window-owned preview state for parity with current actions.
       entry.windowAction(drawn.getState())
       await layoutApplyTestTransport.settle()
       // A preview's end goes to main as well; its frame draws it.

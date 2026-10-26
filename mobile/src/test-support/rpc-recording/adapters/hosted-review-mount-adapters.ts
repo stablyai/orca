@@ -10,7 +10,6 @@ const STATUS_WITH_STAGED_CHANGE = {
   upstreamStatus: { ahead: 1, behind: 0, hasUpstream: true }
 }
 
-/** Hosted-review create: the mutation chain (status, stage, commit, push, create, link). */
 export function hostedReviewMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

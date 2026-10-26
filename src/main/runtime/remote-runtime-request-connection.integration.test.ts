@@ -20,8 +20,7 @@ import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
-// worktree.create routes through the runtime's clientMutationId idempotency
-// wrapper; these stubs run the create straight through (no dedupe).
+// Bypass create idempotency here to test request connection behavior alone.
 const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
   run()
 

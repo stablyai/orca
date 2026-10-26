@@ -35,8 +35,7 @@ import {
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
-/** The user action this launch serves: minted where that action is handled, or carried by the
- *  route the caller already planned for it. */
+/** Mint per user action or preserve the request ID already carried by the caller’s plan. */
 type LaunchAgentInNewTabRequest =
   | { requestId: AgentLaunchRequestId; agentSessionLaunchPlan?: undefined }
   | {
@@ -71,11 +70,7 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
-  /**
-   * Called before `onPromptDelivered` when the paste was written without ever observing the
-   * agent's composer, so the launch cannot claim the prompt arrived. Fires only on the
-   * terminal route, whose readiness signal the client watches itself.
-   */
+  /** Report blind PTY writes before onPromptDelivered so terminal launches cannot claim observed composer delivery. */
   onPromptDeliveryUnconfirmed?: () => void
   /** Keep terminal launches in a floating workspace from taking global selection. */
   activate?: boolean
@@ -111,16 +106,7 @@ export function shouldQueueTerminalFocusAfterMenuClose(
   return result.surface.kind === 'host-published'
 }
 
-/**
- * Create a new terminal tab and queue the agent's launch command, optionally
- * with an initial prompt.
- *
- * Submission mode follows `promptInjectionMode`: argv/flag agents fold the
- * prompt into the launch command; followup-path agents launch empty and get a
- * post-ready draft paste. Callers can override via `promptDelivery`.
- *
- * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
- */
+/** Create the routed agent surface with optional prompt; terminal argv agents embed text and follow-up agents paste after readiness unless promptDelivery overrides. Return null when planning fails. */
 function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
     agent,
@@ -177,8 +163,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
-  // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
-  // server included, so only a non-structured route falls through to the host-published terminal.
+  // Resolve structured ownership first, including paired hosts; only terminal routes fall through to host-published PTYs.
   const route = routeNewTabLaunch(store, args, {
     agent,
     requestedSurface: args.requestedSurface,
@@ -237,8 +222,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
       agentArgs,
-      // Why: omission means terminal locally, but would let a paired host apply
-      // its own default; send the client's resolved terminal choice explicitly.
+      // Send the resolved terminal choice explicitly or a paired host could substitute its own chat default.
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered
@@ -268,7 +252,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       prompt: trimmedPrompt,
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
-      // The same source main's window stamps on its own launches.
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
       ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
@@ -312,11 +295,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
     store.queueTabInitialCwd(tab.id, initialCwd)
   }
-  // Why: fire-and-forget the paste-after-ready delivery so callers keep the synchronous { tabId, startupPlan } signature.
-  // Why: safe to call unconditionally — the helper short-circuits (no paste) for native-prefill agents already holding the draft.
+  // Safe for native-prefill agents: delivery skips paste when their draft already arrived at launch.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
-    // Why: the draft rode in on argv (Claude --prefill etc.), so no paste runs
-    // and deliverLaunchPromptToAgentTab never seeds. Mirror it into chat here.
+    // Native argv prefill skips the paste callback, so seed the chat composer here.
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
   if (pasteDraftAfterLaunch !== null) {
@@ -341,13 +322,12 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDelivered?.()
   }
 
-  // Why: without setActiveTabType('terminal') an activated launch can stay hidden behind an editor.
-  // Scoped to the launch's worktree so a floating launch leaves the main window's tab alone.
+  // Reveal Terminal within the launch workspace; otherwise an editor can hide it, while floating launches must leave main selection alone.
   if (activate !== false) {
     store.setActiveTabType('terminal', worktreeId)
   }
 
-  // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
+  // Persist tab order or terminals-first reconciliation would jump the new tab to index 0.
   persistAgentLaunchTabOrder(worktreeId, tab.id)
 
   return {

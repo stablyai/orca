@@ -154,9 +154,7 @@ function applyListing(
   })
 }
 
-// Why this suite exists: it pins what an authoritative listing that omits a known worktree does to
-// the client, which is exactly why the host re-runs a scan that a create overtook instead of
-// publishing it (see detected-provider-listing.ts). The client keeps no fence of its own.
+// An authoritative omission purges known client rows; host must rescan when create overtakes its scan (detected-provider-listing.ts).
 describe('an authoritative listing that omits a just-created worktree', () => {
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -206,11 +204,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
   })
 })
 
-// Why this suite exists: the host stamps every listing with the catalog version its scan began
-// at and every create reply with the version the create produced. A listing that predates an
-// applied create is not applied at all, whatever delayed it -- host post-scan work, a coalesced
-// joiner, or the pre-merge terminal teardown -- so it can neither purge the new worktree nor
-// replace the host's rows with a list that lacks it.
+// Catalog versions fence delayed listings before merge/teardown so scans predating applied create cannot purge new tabs or replace current rows.
 describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }

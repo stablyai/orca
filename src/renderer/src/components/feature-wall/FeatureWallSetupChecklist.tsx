@@ -165,7 +165,6 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   return null
 }
 
-// Full-width content below the caption/visual grid.
 function SelectedStepFooter(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
   // Why: Full Disk Access matters for projects in protected folders, so it sits with adding projects.
   if (props.stepId === 'add-two-repos') {
@@ -262,8 +261,7 @@ export function FeatureWallSetupChecklist(
   const { activeStep, progress, onSelectStep, layout = 'modal' } = props
   const isEmbedded = layout === 'embedded'
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
-  // Only steps with a visual constrain the caption to a narrow column so the
-  // illustration can sit beside it; captionless steps let the copy run full width.
+  // Constrain captions only when they share the row with a visual.
   const hasStepVisual =
     activeStep?.id === 'two-worktrees' ||
     activeStep?.id === 'browser' ||
@@ -276,8 +274,7 @@ export function FeatureWallSetupChecklist(
       ? 'gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-12'
       : 'gap-8 sm:grid-cols-[minmax(0,48ch)_auto] sm:gap-10'
 
-  // Why: in the modal, a stacked checklist can leave medium-width windows with
-  // only a tiny action pane; switch to the rail/content layout sooner.
+  // Switch to the rail sooner so medium-width modals retain usable action space.
   return (
     <div
       className={cn(
@@ -358,8 +355,7 @@ export function FeatureWallSetupChecklist(
                 >
                   {getLocalizedFeatureWallSetupChecklistCopy(activeStep).description}
                 </p>
-                {/* Action lives under the caption, not after the grid, so it sits just
-                    below the copy instead of being pushed down by the taller visual. */}
+                {/* Keep actions below the caption so a taller visual cannot push them down. */}
                 <div className={cn('min-w-0', isEmbedded ? 'mt-7' : 'mt-6')}>
                   <SelectedStepAction {...props} />
                 </div>

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 import { GIT_COMMON_NATIVE_UPGRADE_INTERVAL_MS } from './worktree-git-common-native-upgrade-poll'
 
 const { pollingMock, statMock, subscribeMock } = vi.hoisted(() => ({
@@ -9,7 +9,9 @@ const { pollingMock, statMock, subscribeMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
-vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscribeMock }))
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
+  subscribeViaWatcherProcess: subscribeMock
+}))
 vi.mock('./worktree-git-common-polling', () => ({ startGitCommonPolling: pollingMock }))
 
 import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'

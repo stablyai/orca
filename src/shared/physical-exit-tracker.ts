@@ -4,8 +4,7 @@ type ExitWaiter = {
   timer: ReturnType<typeof setTimeout>
 }
 
-// Why: Promise.then reactions cannot be detached after a deadline. Explicit
-// waiters let repeated retries time out without accumulating on a live child.
+// Promise reactions cannot detach on timeout; explicit waiters prevent retries accumulating on live children.
 export class PhysicalExitTracker {
   private exited = false
   private readonly waiters = new Set<ExitWaiter>()
