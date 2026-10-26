@@ -528,8 +528,8 @@ describe('shared agent-hook-listener', () => {
           ...event.payload,
           paneKey: PANE_KEY,
           connectionId: null,
-          receivedAt: Date.now(),
-          stateStartedAt: Date.now()
+          receivedAt: 1_000_000,
+          stateStartedAt: 1_000_000
         }
         const normalized = normalizeAgentStatusEvent(
           index ? { ...ipc, mainAgent: undefined } : ipc
