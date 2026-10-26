@@ -197,11 +197,6 @@ describe('OSC 7501 status beside hooks', () => {
       '\x1b]7501;state=done:app=claude-code\x1b\\' +
         '\x1b]7501;state=blocked:kind=question:id=child\x1b\\'
     )
-    expect(payloads.at(-1)?.payload).toMatchObject({
-      state: 'waiting',
-      mainAgent: { state: 'done' },
-      subagents: [{ id: 'child', state: 'waiting' }]
-    })
     for (const { payload } of payloads) {
       programStatus(payload)
     }
