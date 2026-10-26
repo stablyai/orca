@@ -411,7 +411,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
           if (result === 'new-session') {
             const opened = await openStructuredAgentSessionConversationJournal(
               host['deps'],
-              host['deps'].store.getRecord(SESSION)!
+              host['deps'].store.getConversation(SESSION)!
             )
             sessions.set(SESSION, opened.session)
             currentJournal = opened.session.journal

@@ -158,7 +158,9 @@ export type StructuredAgentSessionHostDeps = {
   idleSweep?: { intervalMs?: number; idleMs?: number }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
-  hasOpenDispatch?: (record: AgentSessionRecord) => boolean
+  hasOpenDispatch?: (
+    record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
+  ) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */

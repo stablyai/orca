@@ -1442,7 +1442,8 @@
       },
       "aiVaultResumeRefusal": {
         "openInChat": "This {{value0}} conversation is open in a chat. Refresh Session History to open it.",
-        "ownershipUnknown": "Orca could not confirm who owns this {{value0}} conversation. Refresh Session History and try again."
+        "ownershipUnknown": "Orca could not confirm who owns this {{value0}} conversation. Refresh Session History and try again.",
+        "preparationRefused": "Orca could not prepare this {{value0}} conversation. Start a new chat to continue."
       },
       "composerCreateHandoff": {
         "reopen": "Reopen",

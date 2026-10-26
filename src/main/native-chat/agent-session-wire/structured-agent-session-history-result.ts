@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import type {
@@ -16,7 +16,7 @@ import {
 } from './agent-session-published-work'
 
 export function structuredAgentSessionProviderSessionMetadata(
-  record: AgentSessionRecord | null
+  record: AgentSessionConversationView | null
 ): AgentProviderSessionMetadata | undefined {
   const head = record ? agentSessionProviderHandleChainHead(record.providerHandleChain) : null
   return head ? { key: 'session_id', id: head.handle.nativeId } : undefined
@@ -24,7 +24,7 @@ export function structuredAgentSessionProviderSessionMetadata(
 
 export function readStructuredAgentSessionHistoryResult(input: {
   journal: AgentSessionJournal
-  record: AgentSessionRecord | null
+  record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
   replaceNormalizedHistory?: boolean
@@ -38,7 +38,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
     }),
     input.work
   )
-  const fence = input.record?.lease.runtimeFence
+  const fence = input.record?.currentFence
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
   if (fence === undefined) {
     return providerSession ? { ...result, providerSession } : result

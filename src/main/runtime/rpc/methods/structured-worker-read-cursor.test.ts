@@ -1,3 +1,8 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,7 +56,12 @@ function approval(itemId: string, resolved: boolean, revision = 1): AgentJournal
 function installJournal(items: AgentJournalRenderItem[]): void {
   hostRef.current = {
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: IDENTITY.sessionId }))
+          )
+      }
     },
     hasSession: () => true,
     history: () => ({ page: { items, hasOlder: false } })

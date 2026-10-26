@@ -347,7 +347,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       now: () => IDLE_MS + 1,
       isDisposed: () => false,
       deliveryActive: () => false,
-      store: { getRecord: () => null, replacedRuntime: () => undefined },
+      store: { getConversation: () => null, replacedRuntime: () => undefined },
       childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,

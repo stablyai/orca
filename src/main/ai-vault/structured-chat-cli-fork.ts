@@ -77,7 +77,10 @@ export async function prepareStructuredChatCliFork(
   prepare: AiVaultSessionResumePreparation
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const host = getStructuredAgentSessionHost()
-  const record = host?.deps.store.getRecord(args.sourceChat.sessionId)
+  const record =
+    host && host.deps.store.selectWritableRecord(args.sourceChat.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(args.sourceChat.sessionId)
+      : undefined
   const registration = record && structuredAgentRuntimeRegistration(record.provider)
   const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)
   if (
@@ -102,6 +105,18 @@ export async function prepareStructuredChatCliFork(
   ) {
     throw new Error('Send a message after rewinding this chat, then open it in a terminal.')
   }
+  const requireCurrent = (): void => {
+    const current = host.deps.store.requireWritableRecord(record.sessionId)
+    const currentHead = agentSessionProviderHandleChainHead(current.providerHandleChain)
+    if (
+      current.location.workspaceId !== record.location.workspaceId ||
+      current.location.executionHostId !== record.location.executionHostId ||
+      current.location.wslDistro !== record.location.wslDistro ||
+      currentHead?.linkId !== head.linkId
+    ) {
+      throw new Error('This chat has no saved conversation available on this host.')
+    }
+  }
   const agent = record.provider
   const cwd =
     (await host.deps.resolveWorkspacePath?.(record.location.workspaceId)) || record.launchDirectory
@@ -114,6 +129,7 @@ export async function prepareStructuredChatCliFork(
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
   if (agentForksThroughChat(agent)) {
+    requireCurrent()
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
     const copy = result.forkedSession
     if (!copy || (agent === 'omp' && !copy.filePath)) {
@@ -164,6 +180,7 @@ export async function prepareStructuredChatCliFork(
     agent === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)
       ? record.accountHome.path
       : null
+  requireCurrent()
   const result = await prepare({
     agent,
     sessionId: providerSessionId,

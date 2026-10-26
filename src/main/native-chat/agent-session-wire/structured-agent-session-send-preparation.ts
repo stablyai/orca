@@ -174,7 +174,7 @@ export function sendPreparation(
 
 /** Name the recorded agent and any command a failed start leaves to retry. */
 export function structuredAgentSessionFailureWordsContext(
-  record: AgentSessionRecord | null,
+  record: Pick<AgentSessionRecord, 'provider'> | null,
   journal?: StructuredAgentSessionAwaitedCommandJournal
 ): AgentSessionFailureWordsContext {
   const command = journal && structuredAgentSessionAwaitedCommand(journal)

@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -230,9 +231,13 @@ describe('a server replaced mid-turn on the same execution host', () => {
       deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
       record: AgentSessionRecord
     ) => {
-      void openStructuredAgentSessionConversationJournal(deps, record, { acquisition: true })
+      void openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(record),
+        { acquisition: true }
+      )
       // @ts-expect-error a reader open settles, so without the store its turns would stay unverifiable
-      void openStructuredAgentSessionConversationJournal(deps, record)
+      void openStructuredAgentSessionConversationJournal(deps, agentSessionConversationView(record))
     }
     expect(open).toBeTypeOf('function')
   })

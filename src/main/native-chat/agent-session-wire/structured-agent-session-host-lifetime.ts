@@ -60,7 +60,7 @@ export type StructuredAgentSessionLifetimeContext = {
 }
 
 type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
-  store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
+  store: Pick<StructuredAgentSessionHostDeps['store'], 'getConversation'>
 }
 
 /** Keep personal unsent text as cards and mark reopen before close; quit leaves recovery to next open.
@@ -176,12 +176,12 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       )
     }
     if ('quit' in ending && ending.quit) {
-      const record = context.deps.store.getRecord(sessionId)
+      const record = context.deps.store.getConversation(sessionId)
       await recordStructuredAgentSessionShutdownCut({
         journal: session.journal,
         sessionId,
         fence: child.fence,
-        rowFence: Math.max(child.fence, record?.lease.runtimeFence ?? child.fence),
+        rowFence: Math.max(child.fence, record?.currentFence ?? child.fence),
         generation: child.generation ?? 'unknown',
         turnItemId: quitCuts,
         trigger: ending.quit,

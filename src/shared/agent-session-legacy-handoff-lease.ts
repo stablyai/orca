@@ -25,10 +25,22 @@ export type PersistedAgentSessionLease = Omit<AgentSessionLease, 'runtimeKind' |
 /** A record as a row stores it. Decode through `decodePersistedAgentSessionRecord`. */
 export type PersistedAgentSessionRecord = Omit<
   AgentSessionRecord,
-  'lease' | 'providerHandleChain'
+  'lease' | 'providerHandleChain' | 'sleptAt'
 > & {
   lease: PersistedAgentSessionLease
+  sleptAt?: unknown
   providerHandleChain: PersistedAgentSessionProviderHandleLink[]
+}
+
+/** Checked stored facts before the independent next-grant floor has been validated. */
+export type PersistedAgentSessionObservationLease = Omit<
+  PersistedAgentSessionLease,
+  'minimumNextFence'
+> & {
+  minimumNextFence?: unknown
+}
+export type PersistedAgentSessionObservationRecord = Omit<PersistedAgentSessionRecord, 'lease'> & {
+  lease: PersistedAgentSessionObservationLease
 }
 
 export function isPersistedAgentSessionRuntimeKind(
@@ -55,13 +67,18 @@ function isLegacyHandoffStage(
   return stage === 'preparing' || stage === 'old-owner-stopped' || stage === 'manual-recovery'
 }
 
-export function leaseCarriesLegacyHandoffValues(lease: PersistedAgentSessionLease): boolean {
+export function leaseCarriesLegacyHandoffValues(
+  lease: PersistedAgentSessionObservationLease
+): boolean {
   return lease.runtimeKind === 'tui' || isLegacyHandoffStage(lease.handoffStage)
 }
 
 /** Identity for every lease this build writes. */
-export function normalizeLegacyHandoffLease(lease: PersistedAgentSessionLease): AgentSessionLease {
-  const { runtimeKind, handoffStage } = lease
+export function normalizeLegacyHandoffLease<L extends PersistedAgentSessionObservationLease>(
+  lease: L
+): Omit<L, 'runtimeKind' | 'handoffStage' | 'claimStatus'> &
+  Pick<AgentSessionLease, 'runtimeKind' | 'handoffStage' | 'claimStatus'> {
+  const { runtimeKind, handoffStage }: PersistedAgentSessionObservationLease = lease
   // Why: every one of these awaited proof about an owner, which is what `recovering` resolves.
   const stage = isLegacyHandoffStage(handoffStage) ? 'recovering' : handoffStage
   if (runtimeKind === 'native') {

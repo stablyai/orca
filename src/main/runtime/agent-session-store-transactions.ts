@@ -5,7 +5,10 @@ import type { JournalHostDatabase } from '../native-chat/agent-session-journal/j
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
-import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 import {
   insertAgentSessionOperationRowsIfAbsent,
   writeAgentSessionStoreRows
@@ -149,7 +152,7 @@ export class AgentSessionStoreTransactions {
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
-          const record = admitted ? draft.records.get(admitted) : undefined
+          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
           if (record?.sleptAt !== undefined) {
             const { sleptAt: _sleptAt, ...awake } = record
             draft.records.set(record.sessionId, {

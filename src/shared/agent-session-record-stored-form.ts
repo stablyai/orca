@@ -3,7 +3,8 @@
 import {
   leaseCarriesLegacyHandoffValues,
   normalizeLegacyHandoffLease,
-  type PersistedAgentSessionRecord
+  type PersistedAgentSessionRecord,
+  type PersistedAgentSessionObservationLease
 } from './agent-session-legacy-handoff-lease'
 import {
   decodePersistedAgentSessionProviderHandleChain,
@@ -12,10 +13,9 @@ import {
 import type { AgentSessionRecord } from './agent-session-record'
 
 /** Report decode changes needing writeback; handle encoding alone is unchanged across builds and needs none. */
-export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionRecord): {
-  record: AgentSessionRecord
-  normalized: boolean
-} {
+export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessionObservationLease>(
+  record: Omit<PersistedAgentSessionRecord, 'lease'> & { lease: L }
+) {
   const providerHandleChain = decodePersistedAgentSessionProviderHandleChain(
     record.providerHandleChain
   )

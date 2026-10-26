@@ -15,7 +15,7 @@ import type { StructuredAgentSessionHostDeps } from './structured-agent-session-
 /** Use only the saved, folder-scoped catalog so startup never waits on a listing. */
 async function listedAutoModeSupport(
   catalog: StructuredAgentSessionHostDeps['modelCatalog'],
-  record: AgentSessionRecord
+  record: Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'options' | 'permissionMode'>
 ): Promise<boolean> {
   const listing = await catalog
     ?.read({
@@ -36,7 +36,7 @@ async function listedAutoModeSupport(
 /** null for unregistered agents or agents without permission modes. */
 export async function structuredAgentSessionLaunchPermission(
   deps: Pick<StructuredAgentSessionHostDeps, 'agents' | 'modelCatalog'>,
-  record: AgentSessionRecord
+  record: Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'options' | 'permissionMode'>
 ): Promise<AgentChatPermissionChoice | null> {
   const support = agentChatPermissionModes(record.provider)
   if (!support || !deps.agents.definition(record.provider)) {

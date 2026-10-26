@@ -1,6 +1,7 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
@@ -12,7 +13,7 @@ import {
 
 const HOME: AgentSessionAccountHome = { variable: 'GROK_HOME', path: '/homes/grok' }
 
-const RECORD = {
+const RECORD = agentSessionRecordFixture({
   sessionId: 'grok-session',
   provider: 'grok',
   accountHome: HOME,
@@ -22,7 +23,7 @@ const RECORD = {
     workspaceId: 'ws-1',
     workspaceKind: 'git-worktree'
   }
-} as const satisfies Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'accountHome' | 'location'>
+})
 
 const EFFORTS = [
   { value: 'low', label: 'Low' },
@@ -54,8 +55,8 @@ function harness(probe: () => Promise<AgentModelCatalogSuccess>) {
   const probes = vi.fn(probe)
   const catalog = createAgentModelCatalogService({
     store,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome and location.
-    getRecord: () => RECORD as unknown as AgentSessionRecord,
+    getConversation: () => agentSessionConversationView(RECORD),
+    getRecord: () => RECORD,
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
     probes: { grok: probes },

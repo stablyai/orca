@@ -21,7 +21,9 @@ import {
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
 import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
-import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
+import { conversationRecordReader } from '../orchestration/structured-session-lineage'
+import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 
@@ -133,10 +135,10 @@ async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string
 ): Promise<AgentSessionRecord> {
-  let store: ReturnType<typeof readAgentSessionRecordStore>
+  let store: AgentSessionRecordStore | null
   try {
     await runtime.ensureStructuredAgentSessionHost()
-    store = readAgentSessionRecordStore()
+    store = getStructuredAgentSessionHost()?.deps.store ?? null
   } catch {
     store = null
   }
@@ -147,9 +149,9 @@ async function readSessionRecord(
       NO_EFFECTS
     )
   }
-  const found = lookupOrcaAgentSession(store, sessionId)
+  const found = lookupOrcaAgentSession(conversationRecordReader(store), sessionId)
   if (found.kind === 'found') {
-    return found.record
+    return store.requireWritableRecord(found.record.sessionId)
   }
   if (found.kind === 'provider-id') {
     throw new OrchestrationError(

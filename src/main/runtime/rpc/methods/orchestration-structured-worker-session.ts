@@ -116,7 +116,7 @@ export async function createStructuredWorkerSession(args: {
       )
     }
     const host = requireInstalledHost()
-    const record = host.deps.store.getRecord(sessionId)
+    const record = host.deps.store.requireWritableRecord(sessionId)
     if (!record || !structuredWorkerHostScope(record.location)) {
       throw new OrchestrationError(
         'agent_unconfigured',
@@ -178,7 +178,12 @@ function reasonClause(reason: string | null | undefined): string {
 
 /** What a preamble send reads of the host. */
 type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
-  deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
+  deps: {
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'selectWritableRecord' | 'requireWritableRecord'
+    >
+  }
 }
 
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
@@ -199,10 +204,10 @@ export async function sendStructuredWorkerPreamble(args: {
     blocks: [{ type: 'text', text: args.preamble }],
     from: args.from
   }
-  const fence = args.host.deps.store.getRecord(args.sessionId)?.lease.runtimeFence
-  if (fence === undefined) {
+  if (args.host.deps.store.selectWritableRecord(args.sessionId).kind === 'missing') {
     throw new Error('The structured worker session has no durable record to dispatch into.')
   }
+  const fence = args.host.deps.store.requireWritableRecord(args.sessionId).lease.runtimeFence
   const outcome = await sendAgentTurn({
     kind: 'structured-session',
     host: args.host,
