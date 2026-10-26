@@ -146,12 +146,14 @@ export class TrustDialogStatusObserver {
       return
     }
     pane.readTimer = setTimeout(() => {
-      void this.read(ptyId, pane).then((again) => {
-        pane.readTimer = undefined
-        if (again && this.panes.get(ptyId) === pane) {
-          this.scheduleRead(ptyId, pane)
-        }
-      })
+      void this.read(ptyId, pane)
+        .catch(() => false)
+        .then((again) => {
+          pane.readTimer = undefined
+          if (again && this.panes.get(ptyId) === pane) {
+            this.scheduleRead(ptyId, pane)
+          }
+        })
     }, TRUST_DIALOG_READ_INTERVAL_MS)
     pane.readTimer.unref?.()
   }
