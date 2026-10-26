@@ -1,11 +1,13 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
 import {
   handlers,
   store,
   dirEntry,
   REPO_PATH,
   trashItemMock,
+  rmMock,
   readdirMock,
   readFileMock,
   writeFileMock,
@@ -454,6 +456,31 @@ describe('registerFilesystemHandlers', () => {
 
     expect(trashItemMock).toHaveBeenCalledWith(targetPath)
     expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: undefined })
+  })
+
+  it('tags a Trash failure so the renderer can offer permanent deletion', async () => {
+    registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/file.txt')
+    trashItemMock.mockRejectedValue(new Error('Failed to perform delete operation'))
+
+    await expect(handlers.get('fs:deletePath')!(null, { targetPath })).rejects.toThrow(
+      `${TRASH_DELETE_FAILED_MESSAGE}: Failed to perform delete operation`
+    )
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('hard-deletes without Trash only when permanent is exactly true', async () => {
+    registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/dir')
+
+    await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true, permanent: 'yes' })
+    expect(rmMock).not.toHaveBeenCalled()
+    expect(trashItemMock).toHaveBeenCalledWith(targetPath)
+
+    trashItemMock.mockClear()
+    await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true, permanent: true })
+    expect(rmMock).toHaveBeenCalledWith(targetPath, { recursive: true, force: true })
+    expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   // WSL UNC has no Recycle Bin; delete inside the distro instead (#6415).

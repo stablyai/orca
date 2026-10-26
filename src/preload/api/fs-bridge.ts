@@ -153,6 +153,7 @@ export const fsApi = {
       targetPath: string
       connectionId?: string
       recursive?: boolean
+      permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
   stat: (args: {
