@@ -25,7 +25,7 @@ export async function openQuickOpenFile(
   navigation: QuickOpenQueryTarget,
   rawQuery?: string,
   assertInteractionCurrent: () => void = () => {}
-): Promise<void> {
+): Promise<string> {
   const guard = captureFileExplorerOperationGuard(
     worktreeId,
     getFileExplorerOperationOwner(worktreeId)
@@ -121,17 +121,24 @@ export async function openQuickOpenFile(
   }
   assertCurrent()
   const store = useAppStore.getState()
-  const fileId = store.openFile({
-    filePath,
-    relativePath,
-    worktreeId,
-    runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
-    ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
-      ? { externalSshTargetId: route.connectionId }
-      : {}),
-    language: detectLanguage(filePath),
-    mode: 'edit'
-  })
+  const fileId = store.openFile(
+    {
+      filePath,
+      relativePath,
+      worktreeId,
+      runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
+      ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
+        ? { externalSshTargetId: route.connectionId }
+        : {}),
+      language: detectLanguage(filePath),
+      mode: 'edit'
+    },
+    {
+      // Why: Go to file must hand keyboard focus to the editor, or Cmd+F never
+      // reaches the in-file find widget (issue #29226).
+      focusEditor: true
+    }
+  )
   if (!literalSelected && navigation.line !== undefined) {
     if (detectLanguage(filePath) === 'markdown') {
       useAppStore.getState().setMarkdownViewMode(fileId, 'source')
@@ -144,4 +151,5 @@ export async function openQuickOpenFile(
       fileId
     )
   }
+  return fileId
 }
