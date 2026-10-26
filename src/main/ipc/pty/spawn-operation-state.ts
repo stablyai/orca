@@ -44,8 +44,13 @@ export type PtySpawnOperationState = Pick<
     | 'resolvePtySpawnStartupCwd'
     | 'options'
   >
-  args: Omit<RuntimePtySpawnArgs, 'spawnIntent' | 'terminalColorQueryReplies' | 'placement'> & {
+  args: Omit<
+    RuntimePtySpawnArgs,
+    'spawnIntent' | 'terminalColorQueryReplies' | 'placement' | 'launchToken' | 'resumeOrigin'
+  > & {
     attachOnlyView?: unknown
+    launchToken?: unknown
+    resumeOrigin?: unknown
   }
   replacedPaneOwner?: ReplacedPaneOwner | null
   paneSpawnOperation?: PaneSpawnOperation
