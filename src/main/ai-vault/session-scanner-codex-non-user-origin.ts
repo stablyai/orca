@@ -24,6 +24,8 @@ export type CodexNonUserOrigin = {
 }
 
 const NON_USER_SOURCE_TAGS = new Set(['subagent', 'internal'])
+// Other thread_source values are client feature labels (e.g. Codex Desktop `automation`) on top-level threads.
+const NON_USER_THREAD_SOURCES = new Set(['subagent', 'guardian_review', 'memory_consolidation'])
 
 /** Either structural source or thread_source can classify a thread; provider versions may omit either field. */
 export function readCodexNonUserOrigin(
@@ -32,12 +34,12 @@ export function readCodexNonUserOrigin(
   const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
   const outerTag = readCodexUnionTag(payload.source)
   const nonUserSource = outerTag && NON_USER_SOURCE_TAGS.has(outerTag.kind) ? outerTag : null
-  if (threadSource) {
-    // Explicit thread_source outranks structural source when they disagree.
-    if (threadSource.toLowerCase() === 'user') {
-      return null
-    }
-  } else if (!nonUserSource) {
+  const normalizedThreadSource = threadSource?.toLowerCase()
+  // Explicit thread_source outranks structural source when they disagree.
+  if (normalizedThreadSource === 'user') {
+    return null
+  }
+  if (!nonUserSource && !NON_USER_THREAD_SOURCES.has(normalizedThreadSource ?? '')) {
     return null
   }
   const innerTag = readCodexUnionTag(nonUserSource?.content)

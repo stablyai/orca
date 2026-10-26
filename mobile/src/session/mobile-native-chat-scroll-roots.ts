@@ -32,7 +32,7 @@ function disclosureOwns(key: string, address: string): boolean {
   return false
 }
 
-/** Mounted handles only; the chat's existing bounded memory owns positions across eviction. */
+// Track mounted handles only; bounded chat memory retains positions across eviction.
 export class MobileNativeChatScrollRoots {
   private roots = new Map<string, Root>()
   private observer: ResizeObserver | null = null

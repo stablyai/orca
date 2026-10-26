@@ -336,10 +336,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 
-  // The structured menu offers only what a pick can carry out: the host's own
-  // commands, plus the ones the agent itself runs from message text (Codex `/goal`).
-  // Listing the agent's whole TUI catalog here answered every pick with
-  // "not available in chat sessions".
+  // Offer only commands the structured transport or agent can execute; the full TUI catalog contains unsupported picks.
   it.each([
     ['claude', 'compact', ['model', 'effort', 'resume']],
     ['codex', 'vim', ['model', 'effort', 'goal', 'resume']]

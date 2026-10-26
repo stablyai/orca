@@ -1,6 +1,4 @@
-// CSS that lives in the i18n catalog. MT rewrote a selector to [データスラッシュメニュー] and a keyframe
-// name to ブラウザフラッシュ, breaking the view in that locale only. Removing these from en.json is
-// the real fix; until then the policy pins them to English.
+// Pin catalog CSS to English until removed from en.json; MT once translated selectors/keyframes and broke locale-specific UI.
 
 const STYLE_BLOCK =
   /@(keyframes|media|supports|font-face)\b|[.#][a-zA-Z][\w-]*[^{}]*\{[^{}]*[a-z-]+\s*:|\[[a-z-]+=["'][^"']*["']\]|\{[^{}]*[a-z-]+\s*:\s*[^{}]*[;}]/
@@ -8,8 +6,7 @@ const STYLE_BLOCK =
 // A selector with no declaration block has no braces for STYLE_BLOCK to key off.
 const SELECTOR_TOKEN = /^(?:[>+~]|[a-zA-Z.#[][\w.#:()[\]"'=^$|*-]*)$/
 const LONE_SELECTOR = /^#[a-zA-Z][\w-]*$|^\.[a-zA-Z][\w-]*-[\w-]+$/
-// One dotted, colon or bracketed token — button.primary, a:hover, wsl.exe, localhost:3000. It is
-// code whether it names a selector, a file or a host, and a translation breaks all three.
+// Single dotted/colon/bracket token is code (selector/file/host); translating any of them breaks it.
 const LONE_QUALIFIED = /^[a-zA-Z][\w-]*(?:[.#:][\w-]+|\[[^\]]+\])$/
 
 function isStandaloneSelector(enValue) {

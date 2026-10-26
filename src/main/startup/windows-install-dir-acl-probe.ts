@@ -13,35 +13,14 @@ import {
 } from '../../shared/windows-secure-dacl'
 import { RESTRICTED_APP_PACKAGES_SID } from './windows-install-dir-package-acl-grant'
 
-/**
- * Read-only DACL probe for the win32 install directory.
- *
- * Why: six 1.4.184 reports show the GPU and renderer children both dying at init
- * with 0x80000003 and nothing to distinguish them from any other CHECK. An install
- * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-1/-2 to satisfy
- * it reproduces exactly that signature (10/10 launches), and an additive grant of
- * S-1-15-2-2 clears it — see electron/electron#51761. This records whether a
- * machine is in that state so the next crash report answers the question itself.
- *
- * The verdict deliberately accepts EITHER well-known grant: a tree carrying the
- * orphan plus S-1-15-2-1 only (the Program Files default) launched clean on
- * win32 10.0.26200 / Electron 43.4.1, so it is not the reproduced state and must
- * not be treated as one. `hasRestrictedPackageGrant` is still reported, so a
- * report can tell the two shapes apart if that ever stops holding.
- *
- * Diagnostic only: it never writes an ACL and never changes behavior.
- */
+/** Read-only evidence for electron/electron#51761: orphan package ACEs without either well-known package grant reproduced child-init 0x80000003. Either grant launched clean on Windows 10.0.26200/Electron 43.4.1; report restricted-grant presence separately. */
 
 export const WINDOWS_INSTALL_DIR_ACL_BREADCRUMB = 'windows_install_dir_acl'
 
-// Why a shortlist rather than a readdir: the reproduced failure is a per-file
-// content read, so the directory's own DACL is not sufficient evidence — but any
-// one shipped module answers it, and existsSync costs nothing.
+// Probe a shipped module too: directory DACL cannot establish per-file read access.
 const MODULE_SHORTLIST = ['ffmpeg.dll', 'libGLESv2.dll', 'libEGL.dll', 'icudtl.dat']
 
-// Why raw SIDs rather than a display listing: displays localize the well-known package
-// names — and on zh/ja/ko even keep "NT AUTHORITY" English while doing so — so a
-// repaired tree read as poisoned. A SID reads the same on every locale.
+// Use raw SIDs: localized package display names previously misclassified repaired trees.
 const PACKAGE_SID = /^S-1-15-2-[0-9-]+$/i
 /** ALL APPLICATION PACKAGES and ALL RESTRICTED APPLICATION PACKAGES. */
 const WELL_KNOWN_PACKAGE_SIDS = new Set(['S-1-15-2-1', RESTRICTED_APP_PACKAGES_SID])
@@ -50,7 +29,6 @@ export type WindowsInstallDirAclProbeOptions = {
   platform?: NodeJS.Platform
   isServeMode?: boolean
   installDir?: string
-  /** Test seams. */
   fileExists?: (path: string) => boolean
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
   onDone?: (data: CrashReportBreadcrumbData) => void
@@ -62,7 +40,6 @@ type AclFacts = {
   hasRestrictedPackageGrant: boolean
 }
 
-/** The target's DACL, or null when it cannot be read (an unreadable target stays unreadable). */
 function readDacl(target: string): WindowsDacl | null {
   const security = loadWindowsSecurity()
   if ('error' in security) {
@@ -76,8 +53,7 @@ function readDacl(target: string): WindowsDacl | null {
 }
 
 function collectAclFacts(dacl: WindowsDacl | null): AclFacts | null {
-  // Fails closed: an unreadable target, a NULL DACL, or any ACE that is not a plain allow/deny
-  // gives no facts, since a skipped ACE could be the grant that satisfies an orphan.
+  // Unreadable/NULL/unsupported ACEs yield no facts; a skipped ACE might be the satisfying grant.
   if (
     !dacl ||
     dacl.aces.some(
@@ -97,13 +73,12 @@ function collectAclFacts(dacl: WindowsDacl | null): AclFacts | null {
       }
       continue
     }
-    // Why: an ACE that denies, or only propagates to children (IO), grants nothing
-    // on this object — so it cannot satisfy an orphan the way the reproduced fix did.
+    // Deny and inherit-only ACEs grant no access to this object.
     if (ace.type !== ACCESS_ALLOWED_ACE_TYPE || (ace.flags & INHERIT_ONLY_ACE) !== 0) {
       continue
     }
     hasWellKnownPackageGrant = true
-    // Reported, never the verdict: narrows which grant is present for triage.
+    // Restricted-grant presence narrows diagnostics but does not decide poison.
     if (sid === RESTRICTED_APP_PACKAGES_SID) {
       hasRestrictedPackageGrant = true
     }
@@ -127,9 +102,7 @@ function runProbe(options: WindowsInstallDirAclProbeOptions): void {
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
     const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
-    // Why per target: a grant on the directory does not grant on the module file,
-    // and the reproduced failure is a per-file content read. Merging would let a
-    // grant on one target mask its absence on the other.
+    // Judge each target separately or a directory grant could hide a poisoned module.
     const poisoned = facts.some(
       (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
@@ -140,12 +113,11 @@ function runProbe(options: WindowsInstallDirAclProbeOptions): void {
             status: 'ok',
             probedTargetCount: targets.length,
             orphanPackageSidCount: orphans.length,
-            // Capped: correlating the same orphan across reports is what would
-            // identify the tool that left it, which is the point of recording it.
+            // Cap orphan identity evidence while retaining cross-report correlation.
             orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
-            // The verdict rides on this one: either well-known grant satisfies the orphan.
+            // Either well-known grant satisfies the orphan for this verdict.
             hasWellKnownPackageGrant,
-            // Diagnostic only — the -1-only shape launches clean on real hardware.
+            // Diagnostic only: the -1-only shape launched clean on hardware.
             hasRestrictedPackageGrant,
             matchesPoisonSignature: poisoned
           }
@@ -156,22 +128,14 @@ function runProbe(options: WindowsInstallDirAclProbeOptions): void {
   options.onDone?.(data)
 }
 
-// Why once per process: the install DACL cannot usefully change mid-session, and
-// openMainWindow re-runs on re-activation.
+// Probe once per process despite window reopen; ordinary install DACL is stable within a session.
 let probeStarted = false
 
 export function resetWindowsInstallDirAclProbeForTest(): void {
   probeStarted = false
 }
 
-/**
- * Fire-and-forget; returns before any read. win32 only — no ACL read and no fs I/O
- * anywhere else. Called from openMainWindow, which runs after initObservability,
- * so the durable record also emits a span into the diagnostics bundle.
- *
- * Returns whether THIS call dispatched the probe: openMainWindow re-runs on every
- * reopen, and only a dispatch will ever produce an `onDone`.
- */
+/** Defer Windows-only reads until after window creation; observability is ready. Return whether dispatched so reopen callers cannot await an onDone the process latch prevents. */
 export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): boolean {
   if ((options.platform ?? process.platform) !== 'win32' || options.isServeMode === true) {
     return false
@@ -180,18 +144,17 @@ export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOpti
     return false
   }
   probeStarted = true
-  // Why the try: this runs inline in openMainWindow, so anything thrown here
-  // propagates into window creation. A diagnostic must never be able to do that.
+  // Probe scheduling runs inline with window creation; diagnostic failures must not escape.
   try {
     setImmediate(() => {
       try {
         runProbe(options)
       } catch {
-        // A diagnostic, and a throwing recorder or onDone has nowhere left to report.
+        // Fail quietly if the diagnostic recorder/callback itself throws.
       }
     })
   } catch {
-    // Nothing left to report to that would not throw again.
+    // No remaining recorder can safely report this failure.
   }
   return true
 }

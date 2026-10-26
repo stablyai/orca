@@ -23,8 +23,7 @@ export function resolveWindowsShiftEnterEncoding(
   if (signals.foreground?.shellForeground) {
     return 'alt-enter'
   }
-  // Why: a pending confirmation retains the last allowlisted byte capability;
-  // CSI-u is inert in a shell, while Esc+CR can submit in Pi.
+  // Retain allowlisted encoding during confirmation: CSI-u is inert in shells, while Esc+CR can submit in Pi.
   const agent =
     signals.foreground?.routingTrusted === true ||
     signals.foreground?.routingConfirmationPending === true

@@ -189,6 +189,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
     connectionId: connectionId ?? null,
+    codexHome: input.selectedCodexHomePath,
     spawnOptions
   })
   if (trustWrite) {

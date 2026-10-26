@@ -17,8 +17,7 @@ import {
 } from './runtime-environments'
 import { hardenExistingSecureFile } from './secure-file'
 
-// Why a sidecar: shipped builds parse orca-environments.json with key-stripping schemas and rewrite
-// it on routine use, so T5 state stored there would vanish across a downgrade. They never touch this.
+// Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
 const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
 
@@ -36,8 +35,7 @@ const SidecarEntrySchema = z.object({
   binding: SidecarBindingSchema,
   // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
   pendingBinding: SidecarBindingSchema.optional(),
-  // The runtime a link verified, used only until the store learns one. orcad mints a new id at
-  // every start, so a different stored id is a restart, not a different server (#32957).
+  // A verified link’s runtime ID until stored; differing IDs mean restart because orcad mints one each start (#32957).
   runtimeId: z.string().min(1).optional(),
   sshAccess: SidecarSshAccessSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
@@ -151,10 +149,7 @@ function currentEntry(
     : entry
 }
 
-/**
- * The environment callers see. An entry bound to a different pairing, or one whose overlay would be
- * inconsistent, is stale and ignored rather than trusted.
- */
+/** Ignore stale sidecars whose pairing binding or overlay validation no longer matches. */
 export function overlayRuntimeEnvironmentSidecar(
   environment: PersistedRuntimeEnvironment,
   entry: RuntimeEnvironmentSidecarEntry | undefined
@@ -195,10 +190,7 @@ export function overlayRuntimeEnvironmentSidecar(
   return overlaid.success ? overlaid.data : base
 }
 
-/**
- * Replaces one environment's sidecar entry and drops entries whose environment no longer exists.
- * `pendingEnvironment` also binds the entry to the store state about to be written.
- */
+/** Replace an entry/prune absent owners; pendingEnvironment binds both sides of a two-file store transition. */
 export function writeRuntimeEnvironmentSidecarEntry(
   userDataPath: string,
   environments: readonly PersistedRuntimeEnvironment[],

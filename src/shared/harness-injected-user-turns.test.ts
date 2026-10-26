@@ -106,16 +106,14 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
   })
 
   it('does not treat unknown kebab tags as machinery', () => {
-    // Only observed harness tags count — a real custom-element paste or a
-    // brand-new tag we have not catalogued stays a user turn.
+    // Only catalogued harness tags are noise; unknown/custom elements remain user input.
     expect(isKnownHarnessInjectedUserTurnText('<my-custom-element>pasted code')).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('<brand-new-harness-tag id="1">payload')).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('<queued-notice>\nlater')).toBe(false)
   })
 
   it('only treats the attributed <channel source=…> form as machinery', () => {
-    // The harness emits <channel source="…">; a bare <channel> is a real RSS/XML
-    // paste and must stay a user turn (channel is the only single-word tag).
+    // Only attributed channel source tags are machinery; bare channel is legitimate RSS/XML input.
     expect(isKnownHarnessInjectedUserTurnText('<channel source="general">new post')).toBe(true)
     expect(
       isKnownHarnessInjectedUserTurnText('<channel>general</channel> explain this feed element')

@@ -20,8 +20,7 @@ describe('suggestionPathBasename', () => {
 
 describe('selectSuggestedCreatureName', () => {
   it('returns a name absent from the used set', () => {
-    // Anchored on absence rather than pool position: asserting an index would keep passing
-    // against a filtered pool while testing nothing.
+    // Check exclusion rather than a pool index that could pass without validating collisions.
     const used = [lower(0), lower(1), lower(2)]
     const suggested = selectSuggestedCreatureName(used)
     expect(used).not.toContain(suggested)
@@ -55,8 +54,7 @@ describe('selectSuggestedCreatureName', () => {
   })
 
   it('starts above the exhausted-tier watermark instead of looking those names up', () => {
-    // The registry compacts a fully spent tier away, so its names are absent from the used set
-    // precisely because they are all taken. Starting at tier 1 would hand one straight back.
+    // Compacted tiers are absent from usedNames because all their names are spent.
     expect(selectSuggestedCreatureName([], pickFirst, 2)).toBe(`${lower(0)}-3`)
   })
 
@@ -69,7 +67,6 @@ describe('selectSuggestedCreatureName', () => {
   })
 
   it('returns a lowercase name to match branch convention', () => {
-    // Pool entries are capitalized; branch names are conventionally lowercase.
     const suggested = selectSuggestedCreatureName([], pickFirst)
     expect(suggested).toBe(suggested.toLowerCase())
     expect(MARINE_CREATURES).toContain(suggested.charAt(0).toUpperCase() + suggested.slice(1))

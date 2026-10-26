@@ -10,16 +10,7 @@ import {
 /** Long enough to name a feature, short enough that a picker row stays readable. */
 export const ADHOC_LABEL_MAX_LENGTH = 32
 
-/**
- * `1.4.160-adhoc.20260728140533` — UTC to the second, so tags sort
- * chronologically by semver and every build is uniquely versioned.
- *
- * Why seconds when hourly uses minutes: hourly runs under a concurrency group and
- * cannot overlap itself. Adhoc builds are dispatched on demand, so two people
- * cutting from different branches in the same minute is ordinary — and a
- * minute-resolution tag would collide and fail the second build after its whole
- * pack-and-notarize run.
- */
+// UTC seconds avoid tag collisions between concurrent branch builds; hourly runs serialize and can use minutes.
 export function createAdhocBuildVersion(baseVersion, date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
   if (!match) {
@@ -37,22 +28,11 @@ export function createAdhocBuildVersion(baseVersion, date) {
     pad(date.getUTCMinutes()),
     pad(date.getUTCSeconds())
   ].join('')
-  // Why: drop any -rc.N tail, same as hourly. Keeping it would make every adhoc
-  // build semver-NEWER than the RC it was cut from, letting an ordinary
-  // RC-channel check offer an unreviewed branch build to RC users. Stripping to
-  // the base parks adhoc below rc.N, hourly, and stable ('adhoc' sorts first
-  // alphabetically), reachable only by an explicit pinned jump.
+  // Strip RC tail so adhoc sorts below RC/hourly/stable; routine update checks must not offer unreviewed branch builds.
   return `${match[1]}-adhoc.${stamp}`
 }
 
-/**
- * Turns a dispatch input into a label safe to put in a release title.
- *
- * The input is free text from whoever ran the workflow, so it cannot be trusted
- * to stay inside the title's shape: a stray `•` would forge a field separator,
- * and a newline would break the `$GITHUB_OUTPUT` line the workflow parses. Both
- * collapse to `-` here, which is why this replaces rather than rejects.
- */
+// Replace title separators/newlines from dispatch labels to prevent forged fields and broken GITHUB_OUTPUT lines.
 export function normalizeAdhocLabel(label) {
   const cleaned = String(label ?? '')
     // `refs/heads/x` and `origin/x` are what a ref input tends to arrive as; the
@@ -70,14 +50,7 @@ export function normalizeAdhocLabel(label) {
   return cleaned
 }
 
-/**
- * `1.4.163 • wasm-terminal • Aug 1, 2:25PM • abc1234` — the human-facing release
- * title, shown verbatim in both the GitHub releases list and the build picker.
- *
- * Why the label sits where hourly puts its build number: several adhoc builds
- * from different branches coexist in the channel, so the picker needs the branch
- * to tell them apart. A counter would say nothing about which one to pick.
- */
+// Release title names the branch where hourly uses a counter, distinguishing simultaneous adhoc builds in the picker.
 export function formatAdhocReleaseName(version, label, commit, date) {
   return [
     version.split('-')[0],

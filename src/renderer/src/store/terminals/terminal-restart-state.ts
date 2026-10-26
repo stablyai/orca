@@ -56,16 +56,12 @@ export function createTerminalRestartActions(
         if (agent === 'claude') {
           return { pendingPaneAccountRestarts }
         }
-        // Why: the prompt is answered the moment the user asks for a restart. A
-        // pane whose tab isn't mounted can only restart when it next mounts, and
-        // leaving the prompt up re-showed a button that now does nothing.
+        // Restart request answers the prompt immediately; unmounted tabs wait for mount and must not show an inert restart button.
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         for (const ptyId of ptyIds) {
           const notice = nextCodexRestartNoticeByPtyId[ptyId]
           if (notice) {
-            // Why: mirror of the strip in dismissCodexRestartNotices. A queued
-            // restart leaves the pane on the old account until it relaunches, so
-            // it must re-block input that an earlier dismissal had freed.
+            // Queued restart must remove dismissal’s input exemption while the pane still runs on the old account.
             const { dismissed: _dismissed, ...kept } = notice
             nextCodexRestartNoticeByPtyId[ptyId] = { ...kept, restartRequested: true }
           }
@@ -100,9 +96,7 @@ export function createTerminalRestartActions(
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         for (const notice of notices) {
           const existing = next[notice.ptyId]
-          // Why one record rather than two lookups: the label and the id of the
-          // launch account have to come from the same source, or they can end up
-          // describing two different accounts.
+          // Read launch account ID/label from one source or they can describe different accounts.
           const launch = existing ?? notice
           const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
           // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
@@ -126,11 +120,7 @@ export function createTerminalRestartActions(
             // Why: a queued restart relaunches under whatever account is selected
             // when it runs, so a later switch does not reopen an answered prompt.
             ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
-            // Why: a dismissal answered one question — "keep the launch account
-            // instead of this one". Only a genuinely different target re-asks it,
-            // so a later C reopens the prompt while adding an account or
-            // reauthenticating the active one (both re-mark live panes with the
-            // selection unchanged) must not resurrect it and re-mute the pane.
+            // Dismissal covers one target account; re-ask only on target change, never same-account add/reauth that would reblock input.
             ...(existing?.dismissed &&
             isSameCodexRestartNoticeAccount(
               { id: existing.nextAccountId, label: existing.nextAccountLabel },
@@ -165,9 +155,7 @@ export function createTerminalRestartActions(
     },
     dismissCodexRestartNotices: (ptyIds) => {
       set((s) => {
-        // Why: keeping the old account is an answer, not a restart — the record
-        // stays so `previousAccountLabel` still names the pane's launch account,
-        // but every consumer treats it as answered (prompt hidden, input freed).
+        // Dismissal keeps launch-account provenance but answers prompt/frees input without scheduling restart.
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         let changed = false

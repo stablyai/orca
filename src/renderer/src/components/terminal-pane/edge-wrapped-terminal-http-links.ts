@@ -10,10 +10,7 @@ const EMPTY_LABEL_ROW_PATTERN = /^[^\s:][^:]*:$/
 const LABEL_WITH_SPACING_ROW_PATTERN = /^[^\s:][^:]*:\s/
 
 function maxEdgeWrappedHttpRows(lineLength: number, padding: number): number {
-  // Why: every continued row reaches the terminal edge, so even all-width-2
-  // cells carry at least floor(columns / 2) characters per row; the URL length
-  // limit then bounds the scan without truncating URLs on narrow terminals.
-  // The +2 covers the start and tail rows, which may hold only a fragment.
+  // Width-2 cells give at least floor(columns / 2) characters per continued row; add two fragment rows to bound scanning by URL length.
   const symmetricWidth = lineLength - padding * 2
   // A symmetric content area must fit at least "http://" to contain a start row.
   const contentWidth = symmetricWidth >= 7 ? symmetricWidth : lineLength - padding
@@ -96,8 +93,7 @@ function rowsCanContinueAtTerminalEdge(
   if (rightPadding > 0 && !row.hasWrittenRightPadding) {
     return false
   }
-  // Why: a cursor-positioned label is not URL continuation evidence even when
-  // the preceding URL happens to end at the terminal edge (#8832).
+  // A cursor-positioned label is not continuation evidence even after an edge-ending URL.
   const nextColumnAfterText = nextRow.columns.at(-1)
   const nextRowText = nextRow.text.slice(padding)
   const nextRowReachesEdge =
@@ -125,8 +121,7 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
   buffer: { getLine(y: number): IBufferLine | undefined },
   bufferLineNumber: number
 ): WrappedLogicalLine[] {
-  // Why: cursor-positioned output lacks xterm wrap metadata, but an HTTP URL
-  // may still continue when each earlier row reaches the terminal edge.
+  // Without xterm wrap metadata, accept cursor-positioned continuation only when preceding rows reach the edge.
   const currentY = bufferLineNumber - 1
   const currentLine = buffer.getLine(currentY)
   if (!currentLine) {

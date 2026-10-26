@@ -73,9 +73,7 @@ describe('terminal input activity coalescing', () => {
     type(store, PANE, 1_000)
     type(store, PANE, 1_100)
 
-    // The store itself still holds the leading-edge stamp...
     expect(store.stored[PANE]).toBe(1_000)
-    // ...but readers see the pending keystroke.
     expect(getPendingTerminalInputActivityCountForTests()).toBe(1)
     expect(readLastTerminalInputAt(store.stored, PANE)).toBe(1_100)
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBe(1_100)
@@ -106,7 +104,6 @@ describe('terminal input activity coalescing', () => {
     type(store, OTHER_PANE, 1_100)
     expect(getPendingTerminalInputActivityCountForTests()).toBe(2)
 
-    // Teardown (close pane / close tab / worktree purge) removes the key.
     delete store.stored[PANE]
 
     flushTerminalInputActivity()
@@ -114,7 +111,6 @@ describe('terminal input activity coalescing', () => {
     expect(PANE in store.stored).toBe(false)
     expect(readLastTerminalInputAt(store.stored, PANE)).toBeUndefined()
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBeUndefined()
-    // The surviving sibling still advances.
     expect(store.stored[OTHER_PANE]).toBe(1_100)
   })
 

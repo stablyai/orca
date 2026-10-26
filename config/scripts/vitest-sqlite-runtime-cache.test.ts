@@ -7,14 +7,17 @@ it('re-derives SQLite assignments from malformed disposable cache data', async (
   const version = createHash('sha256')
     .update(readFileSync(new URL('./vitest-sqlite-runtime-scan.mjs', import.meta.url)))
     .digest('hex')
-  for (const files of [null, { 'fixture.test.ts': [1, 2, 'false'] }]) {
+  for (const files of [null, { 'src/fixture.test.ts': [1, 2, 'false'] }]) {
     for (const [source, expected] of [
       ['export {}', []],
-      ["import './src/main/sqlite/sync-database'", ['fixture.test.ts']]
+      ["import './main/sqlite/sync-database'", ['src/fixture.test.ts']]
     ] as const) {
       vi.doMock('node:fs', async (original) => ({
         ...(await original<typeof FileSystem>()),
-        globSync: () => ['fixture.test.ts'],
+        readdirSync: (path: string) =>
+          String(path).endsWith('src')
+            ? [{ name: 'fixture.test.ts', isDirectory: () => false }]
+            : [],
         statSync: () => ({ mtimeMs: 1, size: 2 }),
         readFileSync: (path: Parameters<typeof readFileSync>[0]) =>
           String(path).endsWith('.json')

@@ -29,8 +29,7 @@ describe('verify-packaged-daemon-entry', () => {
     writeFileSync(join(entryDir, 'daemon-entry.js'), source)
   }
 
-  // Why: a silent skip on a missing entry false-passed exactly the packaged
-  // layout regression this gate exists to catch (rc.1 daemon-load incident).
+  // Missing entry must fail: silent skip hid packaged layout regression in rc.1 daemon-load incident.
   it('throws when the unpacked daemon entry is missing', () => {
     expect(() => assertPackagedDaemonEntryExists(resourcesDir)).toThrow(
       /missing unpacked daemon entry/

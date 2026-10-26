@@ -1,4 +1,3 @@
-/** The production WSL side of `WslHostService`: one holder, connection manager and supervisor. */
 import { createWslOrcadPairingRecovery } from './wsl-orcad-pairing-repair'
 import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { parsePairingCode } from '../../shared/pairing'
@@ -55,7 +54,7 @@ export function createWslHostConnector(options: {
     userDataPath: options.userDataPath,
     onHolderExit: (distro, exit) => supervisor?.noteHolderExit(distro, exit)
   })
-  // Why guard here: liveness recovery and deploy both reach these without the service.
+  // Guard here because liveness recovery and deploy can bypass the service.
   const holder: WslDistroHolder = {
     ...unguardedHolder,
     ensureHeld: (distro) =>
@@ -96,7 +95,7 @@ export function createWslHostConnector(options: {
     environmentId: string,
     connection: WslOrcadConnection | null
   ): Promise<Reachability> => {
-    // Dialing the bridge starts wsl.exe, so passive checks must first confirm the distro runs.
+    // Bridge dialing spawns wsl.exe; passive checks must first prove the distro runs.
     const running = await readConfirmedRunningWslDistros()
     if (running.status === 'unavailable') {
       return 'unavailable'

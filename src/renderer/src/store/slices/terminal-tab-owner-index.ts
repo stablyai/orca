@@ -83,8 +83,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
         removeBucketMembership(worktreeId, indexed.tabIds)
       }
 
-      // Why: tab arrays are the immutable topology buckets. Reading ids only for a
-      // replaced bucket keeps a one-worktree title update independent of fleet size.
+      // Immutable bucket replacement lets ownership scan only changed tab IDs, independent of fleet size.
       const tabIds = new Set(tabs.map((tab) => tab.id))
       for (const tabId of tabIds) {
         affectedTabIds.add(tabId)
@@ -138,15 +137,13 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       const previousTabs = previousTabsByWorktree[worktreeId]
       const nextTabs = nextTabsByWorktree[worktreeId]
       if (!indexed || indexed.source !== previousTabs || !nextTabs) {
-        // Why: this fast path is valid only for title-only bucket replacements.
-        // Falling back to the normal diff keeps an unexpected caller mismatch correct.
+        // Only title-only replacements preserve topology; unexpected callers must fall back to the normal diff.
         source = null
         return
       }
       indexed.source = nextTabs
     }
-    // Why: title writes preserve ids and outer key order, so ownership is unchanged.
-    // Adopting the exact produced map keeps the next hot lookup O(1).
+    // Titles preserve IDs/key order; adopt the produced map so the next owner lookup stays O(1).
     source = nextTabsByWorktree
   }
 

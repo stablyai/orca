@@ -28,7 +28,6 @@ export function TaskPageLinearIssueAttributes({
   } = model
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-4 mt-2">
-      {/* Status Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -90,7 +89,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Assignee Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -178,7 +176,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Priority Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -243,7 +240,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Project Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -303,7 +299,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Labels Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button

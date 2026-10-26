@@ -40,8 +40,7 @@ function CopyButton({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this row action unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start a reset timer then.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {

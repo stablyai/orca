@@ -144,6 +144,13 @@ export async function prepareRuntimePtySpawn(
     provider: ctx.provider,
     deps: ctx.deps
   })
+  ctx.agentResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
+  if (hostEnv.codexResumeLaunch.droppedResumeArgv && args.launchConfig) {
+    args.launchConfig = {
+      ...args.launchConfig,
+      agentCommand: hostEnv.launchCommand ?? args.launchConfig.agentCommand
+    }
+  }
   ctx.launchCommand = hostEnv.launchCommand
   ctx.codexResumeArgvDropped = hostEnv.codexResumeLaunch.droppedResumeArgv
   ctx.codexResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable

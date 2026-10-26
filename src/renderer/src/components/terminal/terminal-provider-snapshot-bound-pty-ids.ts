@@ -17,8 +17,7 @@ function sameBoundTab(previous: SnapshotCapabilityTab, next: SnapshotCapabilityT
   return previous.id === next.id && previous.ptyId === next.ptyId
 }
 
-/** Leaf pty bindings are the only layout field the collector reads; active-leaf moves, pane titles
- *  and buffer captures all replace the layout object without touching them. */
+/** Only leaf PTY bindings matter; titles, focus and buffers replace layout objects without changing them. */
 function sameLayoutLeafPtyIds(previous: LayoutsByTabId, next: LayoutsByTabId): boolean {
   if (previous === next) {
     return true
@@ -43,17 +42,7 @@ function sameLayoutLeafPtyIds(previous: LayoutsByTabId, next: LayoutsByTabId): b
   return true
 }
 
-/**
- * Why: the collector walks every tab and every layout leaf, and the maps it reads are rewritten by
- * agent title frames and active-leaf moves that cannot alter the pty set. Gating it on the fields it
- * actually reads — `tab.id`, `tab.ptyId`, `ptyIdsByTabId`, `pendingReconnectPtyIdByTabId`,
- * `layout.ptyIdsByLeafId` — keeps those frames free, and reusing the prior array when a real rebuild
- * lands on the same set keeps the synchronization effect asleep.
- *
- * Why chaining against the immediately preceding state is enough: equality over those fields is
- * transitive, so a run of unchanged states is equivalent to comparing against the state that
- * produced the cached array.
- */
+/** Gate scans on tab/PTY-binding fields, then reuse equal output arrays to avoid synchronization restarts. Adjacent-state equality is transitive across unchanged writes. */
 export function createTerminalProviderSnapshotBoundPtyIdsSelector(): (
   state: SnapshotCapabilityBindingState
 ) => string[] {

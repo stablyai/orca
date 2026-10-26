@@ -282,7 +282,6 @@ export function useMarkdownPreviewComponents({
           </h6>
         )
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the image override is a hook component; listed inputs preserve its identity.
   }, [
     filePath,
     activateMarkdownLink,

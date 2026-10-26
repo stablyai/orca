@@ -1,9 +1,4 @@
-// Argument parsing + usage for the daemon-relocation spike.
-//
-// The spike answers an empirical question (see README): what is the MINIMAL
-// set of files that must be copied out of a packaged win-unpacked build so a
-// COPIED Orca.exe (ELECTRON_RUN_AS_NODE=1) can host the terminal daemon and a
-// real ConPTY session while holding no open handles into the install dir.
+// Find the minimal copied run-as-node Orca host that serves real ConPTY without install-dir handles; see README.
 
 export const TIERS = ['full', 'no-gpu', 'minimal']
 
@@ -41,11 +36,7 @@ export function getUsage() {
   return USAGE
 }
 
-/**
- * Parse argv (already sliced past `node script`). Returns a discriminated
- * result: { help }, { selftest }, or { launch: {...} }. On a usage error
- * returns { error } so the caller can print USAGE and exit non-zero.
- */
+// Parse sliced argv into help/selftest/launch/error; return usage errors for caller reporting.
 export function parseArgs(argv) {
   if (argv.includes('-h') || argv.includes('--help')) {
     return { help: true }

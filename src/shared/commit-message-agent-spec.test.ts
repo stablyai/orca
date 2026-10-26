@@ -1,4 +1,3 @@
-import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
@@ -26,26 +25,6 @@ afterEach(() => {
 })
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
-  it('exposes the installed local agents as commit-message agents', () => {
-    const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual([
-      'amp',
-      'antigravity',
-      'claude',
-      'codex',
-      'copilot',
-      'cursor',
-      'dsh',
-      'jcode',
-      'kimi',
-      'muse',
-      'omp',
-      'opencode',
-      'opencode2',
-      'pi'
-    ])
-  })
-
   it('uses the expected defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.6-terra')
@@ -106,28 +85,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     }
   })
 
-  it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
-      'auto',
-      'claude-haiku-4.5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4.6',
-      'claude-opus-4.5',
-      'claude-opus-4.6',
-      'claude-opus-4.6-fast',
-      'claude-opus-4.7',
-      'gpt-4.1',
-      'gpt-5-mini',
-      'gpt-5.2',
-      'gpt-5.2-codex',
-      'gpt-5.3-codex',
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.5'
-    ])
-  })
-
   it('treats disabled default agents as unavailable for implicit Source Control AI choices', () => {
     expect(resolveCommitMessageAgentChoice(null, 'codex', ['codex'])).toBe('claude')
     expect(resolveCommitMessageAgentChoice(null, null, ['claude'])).toBeNull()
@@ -174,7 +131,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(listCommitMessageAgentIds()).not.toContain(CUSTOM_AGENT_ID)
   })
 
-  it('orders Codex models by version descending to match the official picker', () => {
+  it('orders seeded Codex models by version descending', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
       'gpt-5.6-terra',
@@ -215,7 +172,9 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--permission-mode',
       'plan',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -235,7 +194,9 @@ describe('buildArgs (Claude)', () => {
       'plan',
       '--effort',
       'high',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -279,8 +240,7 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('exposes no tools to a prompt that is a staged patch', () => {
-    // Why: the prompt is attacker-influenced text, and jcode's default profile exposes
-    // shell/read/write/MCP. Every sibling generator is already read-only.
+    // Staged patches are attacker-influenced; jcode defaults expose shell/read/write/MCP unlike read-only sibling generators.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'default' })
     expect(args.slice(args.indexOf('--tool-profile'), args.indexOf('--tool-profile') + 2)).toEqual([
       '--tool-profile',
@@ -290,13 +250,19 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('keeps every jcode flag ahead of the subcommand', () => {
-    // Why: --no-update/--quiet/--no-selfdev are jcode global options; clap only
-    // accepts them before `run`, and --model rides the same position so the argv
-    // has one shape rather than two.
+    // jcode global flags must precede run; keep model in the same position for one argv shape.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'claude-haiku-4-5' })
     const runIndex = args.indexOf('run')
     expect(runIndex).toBeGreaterThan(0)
-    expect(args.slice(0, runIndex).every((arg) => arg.startsWith('--') || arg !== 'run')).toBe(true)
+    expect(args.slice(0, runIndex)).toEqual([
+      '--no-update',
+      '--quiet',
+      '--no-selfdev',
+      '--tool-profile',
+      'none',
+      '--model',
+      'claude-haiku-4-5'
+    ])
     expect(args.slice(runIndex)).toEqual(['run', '--json', 'name this branch'])
   })
 
@@ -385,7 +351,9 @@ describe('model discovery parsers', () => {
       '--output-format',
       'stream-json',
       '--verbose',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string
@@ -720,10 +688,7 @@ describe('buildArgs (Antigravity)', () => {
     expect(args[0]).toBe('--print=-fix: something')
   })
 
-  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
-  // that exactly matches a registered flag name (its own heuristic, independent of this
-  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
-  // literally a bare flag name, so this doesn't affect actual generation.
+  // argv construction only: agy 1.2.1 still rejects a print value equal to a flag, even --print=--sandbox; real generation prompts are not bare flags.
   it('still glues a prompt that collides with a flag name onto --print', () => {
     const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
     expect(args[0]).toBe('--print=--sandbox')

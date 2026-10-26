@@ -54,7 +54,7 @@ describe('evaluatePtyBindingFastLane', () => {
     'requires the defaults guard that apply writes, for clean and dirty requests (%s)',
     (guard) => {
       const unguarded = session({ defaultTerminalTabsAppliedByWorktreeId: {} })
-      // Loaded data can contain false even though the typed guard only admits true.
+      // Disk JSON can contain false even though the declared map allows only true.
       Object.defineProperty(unguarded.defaultTerminalTabsAppliedByWorktreeId, WORKTREE, {
         value: guard,
         enumerable: true

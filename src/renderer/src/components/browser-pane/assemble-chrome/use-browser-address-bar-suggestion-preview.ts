@@ -47,8 +47,7 @@ export function useBrowserAddressBarSuggestionPreview({
         return
       }
       if (suggestion.isSearch) {
-        // Why: the search row is what Enter does with the typed query, so the bar keeps the
-        // typed text instead of the search URL.
+        // Keep the typed query for search rows; Enter must not substitute the search URL into the bar.
         prePreviewValueRef.current = null
         clearInline()
         setSelectedValueOverride(suggestion.url)
@@ -56,8 +55,7 @@ export function useBrowserAddressBarSuggestionPreview({
         return
       }
       if (suggestion.inlineText !== undefined) {
-        // Why: like Chrome, the completion comes back as typed text plus a selected tail, so
-        // Escape still restores what was typed.
+        // Restore the selected completion tail while retaining the typed query for Escape.
         setSelectedValueOverride(suggestion.url)
         showInline(autocompleteQuery, suggestion.inlineText)
         onChange(suggestion.inlineText)

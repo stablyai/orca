@@ -74,7 +74,6 @@ describe('orcad automations', () => {
     expect(orcadAutomationsKeepHostBusy(store)).toBe(false)
   })
 
-  // Booting orcad here would need its whole runtime; the wiring is pinned by the entry point's text.
   it('orcad starts the service with its runtime and feeds it to managed idle exit', () => {
     const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
     expect(entry).toContain('startOrcadAutomations(runtime, profileStore, registerCleanup)')

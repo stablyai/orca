@@ -90,8 +90,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   const [paste, setPaste] = useState<PasteResolved>(EMPTY_PASTE)
   const [loading, setLoading] = useState(false)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<SmartCrossRepoPrompt | null>(null)
-  // Why: preserve results across keystrokes (debounce) but drop them the moment
-  // the mode/repo changes so one provider's rows never render under another tab.
+  // Keep results during debounce, but clear on mode/repo switches before another provider’s rows can render.
   const scopeRef = useRef('')
   const dismissedPasteRef = useRef<string>('')
   const repoSlugCacheRef = useRef<
@@ -212,7 +211,6 @@ const EMPTY_PASTE_LOOKUP: PasteLookup = {
   crossRepoPrompt: null
 }
 
-// Resolves a pasted issue/PR/MR reference to the exact item it names.
 async function resolvePastedItem(args: {
   client: RpcClient
   intent: NonNullable<ReturnType<typeof resolvePasteIntent>>
@@ -287,13 +285,12 @@ async function runSmartSearch(args: {
   const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
   const paste: PasteResolved = { ...EMPTY_PASTE }
 
-  // A pasted Jira URL resolves to exactly one issue, so skip the fan-out entirely
-  // rather than paying for provider searches the row builder will discard.
+  // Exact Jira URL lookup needs no fan-out; other provider results would be discarded.
   if (args.jiraAvailable && isBlockingJiraUrlIntent(mode, query)) {
     try {
       paste.jira = await lookupJiraIssueByUrl(client, query, args.jiraSites)
     } catch {
-      // Best-effort: an unresolvable link renders the empty state.
+      // Unresolvable links may show the empty state.
     }
     return { fan: EMPTY_FAN, paste, crossRepoPrompt: null }
   }
@@ -302,14 +299,12 @@ async function runSmartSearch(args: {
     mode === 'branches' || dismissedPasteRef.current === query.trim()
       ? null
       : resolvePasteIntent(query)
-  // Why: the paste lookup and the provider fan-out hit different host endpoints,
-  // so awaiting the fan-out first stacked two full round trips on the one path a
-  // user is most likely to take — typing a PR/issue number. Run them together.
+  // Exact paste lookup and provider search use independent endpoints; run together to avoid a second round-trip delay.
   const [fan, pasteLookup] = await Promise.all([
     fanOutSmartSearch(args),
     intent && repoId
       ? resolvePastedItem({ client, intent, repoId, repos, repoSlugCache }).catch(
-          // Best-effort paste resolution; fall back to the fan-out results.
+          // Failed exact lookup can still use provider fan-out results.
           () => EMPTY_PASTE_LOOKUP
         )
       : Promise.resolve(EMPTY_PASTE_LOOKUP)

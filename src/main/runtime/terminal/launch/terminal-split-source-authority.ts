@@ -173,10 +173,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
   }
 
-  /**
-   * Resolves once the window binds the new pane's terminal. The first deadline is for the pane to
-   * appear; a pane that appeared is starting, so it gets the longer one before main gives up.
-   */
+  /** Give panes one deadline to appear and a longer deadline to bind once starting; never infer closure from absence. */
   protected waitForLeafInTab(
     tabId: string,
     leafId: string,

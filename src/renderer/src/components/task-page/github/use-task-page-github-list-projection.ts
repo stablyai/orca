@@ -44,8 +44,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
   )
-  // Why: soft-hide keeps membership-exit rows in pages for rollback/cursors but
-  // removes them from the visible table (sticky ∪ pending membership).
+  // Retain membership-exit rows for rollback/cursors while sticky and pending hides remove them from display.
   const filteredWorkItems = useMemo(
     () =>
       typeFilteredCurrentPageItems.filter(

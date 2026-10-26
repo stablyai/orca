@@ -9,7 +9,7 @@ export type ProviderProcessTree = {
   refresh?: () => Promise<void>
   reap(): Promise<DescendantTreeVerdict>
   readonly treeVerdict: DescendantTreeVerdict
-  /** A reap has reached the root while it lived: its exit since then is no longer its own. */
+  /** A live root targeted by a reap can no longer count as a voluntary exit. */
   readonly forcedReapAttempted?: boolean
 }
 
@@ -17,8 +17,7 @@ export type ProviderProcessClosePolicy = {
   gracefulExitMs: number
   forcedExitMs: number
   signalSupervisorOnClose?: boolean
-  /** A root that leaves on its own after its stdin ends, with no forced reap ever on its tree, is
-   *  the close: no claim is made about its descendants, and no post-exit reap runs. */
+  /** Accept voluntary stdin-end exit without post-exit reaping, only if no forced reap was attempted. */
   selfExitIsClose?: boolean
 }
 
@@ -36,14 +35,13 @@ export type ProviderProcessCloseResult = {
   root: DescendantTreeVerdict
   /** Null when this close made no observation of the descendants. */
   tree: DescendantTreeVerdict | null
-  /** Set when `selfExitIsClose` decided the close. */
   selfExit?: true
 }
 
 export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
 const ROOT_ONLY_FORCED_EXIT_MS = 1_000
 
-/** Default for providers without a descendant reaper: end stdin, wait, then the fallback teardown. */
+/** Providers without their own reaper must allow the supervisor its full stop before fallback. */
 export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProcessClosePolicy {
   return {
     gracefulExitMs: supervised ? PROVIDER_SUPERVISOR_MAX_STOP_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
@@ -51,7 +49,7 @@ export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProces
   }
 }
 
-/** A root-only close is done once the root is gone; an unproven tree is reported, not retried. */
+/** Root-only policy reports unproven descendants without retrying them. */
 export function acceptProviderRootExit(result: ProviderProcessCloseResult): boolean {
   return result.root === 'exited'
 }

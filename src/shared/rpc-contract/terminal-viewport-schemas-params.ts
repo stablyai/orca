@@ -30,17 +30,17 @@ export const TerminalSetDisplayMode = TerminalHandle.extend({
 
 export const TerminalUnsubscribe = z.object({
   subscriptionId: requiredString('Missing subscription ID'),
-  // Why: lets the server rebuild the composite `${terminal}:${clientId}` cleanup key when older clients pass a bare subscriptionId (docs/mobile-presence-lock.md).
+  // Rebuild terminal:clientId cleanup keys for older bare subscription IDs (docs/mobile-presence-lock.md).
   client: z
     .object({
       id: requiredString('Missing client ID')
     })
     .optional(),
-  // Why: the `terminal.subscribe` frame id; addresses that exact request, so a stale unsubscribe can't end a newer stream on the same slot.
+  // Address the exact subscribe frame so stale unsubscribe cannot end a replacement stream.
   requestId: z.string().min(1).optional()
 })
 
-// Why: in-place update avoids an unsubscribe→resubscribe that flashed the lock banner and stranded the PTY at phone dims (docs/mobile-presence-lock.md).
+// Update in place: resubscribe flashed lock banners and stranded phone dimensions (docs/mobile-presence-lock.md).
 export const TerminalUpdateViewport = TerminalHandle.extend({
   client: z.object({
     id: requiredString('Missing client ID'),

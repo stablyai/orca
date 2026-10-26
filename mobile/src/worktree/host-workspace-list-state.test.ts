@@ -15,8 +15,6 @@ function input(overrides: Partial<HostWorkspaceListStateInput>): HostWorkspaceLi
   }
 }
 
-// Regression guard for STA-3123: a remote host whose worktree.ps fails must render
-// as a catalog failure, never as a healthy host with zero workspaces.
 describe('selectHostWorkspaceListState', () => {
   it('reports catalog-error instead of empty when the fetch failed with no rows', () => {
     expect(selectHostWorkspaceListState(input({ catalogError: 'forbidden' }))).toBe('catalog-error')

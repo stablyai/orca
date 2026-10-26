@@ -10,8 +10,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 
-// A moved or restored agent tab: its first pane recorded an agent session, its split sibling is a
-// plain shell, and no pane has a live terminal. `launchAgent` is tab-wide (D1b-10 real-host run).
+// Model a moved/restored tab with an agent first pane, shell sibling and no live terminals; launchAgent applies tab-wide.
 function splitAgentTabSession(withRecord: boolean): WorkspaceSessionState {
   const base = makeWorkspaceSessionWithHeadlessTerminal()
   const tab = base.tabsByWorktree[TEST_WORKTREE_ID]?.[0]

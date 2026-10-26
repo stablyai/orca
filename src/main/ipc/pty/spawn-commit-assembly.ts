@@ -9,7 +9,7 @@ import { markNativeWindowsConptyPty } from '../../runtime/terminal-model-query-a
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import type { PtySpawnTiming } from '../pty-spawn-timing'
+import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {
   codexReattachedHomeRouteField,
@@ -71,6 +71,8 @@ export type PtySpawnCommitState = {
   codexSelectionTarget: CodexAccountSelectionTarget
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  /** Before the provider started anything, so no output of this spawn's process predates it. */
+  spawnRequestedAt?: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null
@@ -196,7 +198,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
       return resolvePaneSpawnReservation(
         state.paneSpawnReservationKey,
         state.paneSpawnReservation,
-        result
+        input.joinPayload.reply
       )
     }
   } else if (input.earlyExit === 'throw') {
@@ -223,7 +225,7 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
   input: PtySpawnCommitInput<Reply>,
   adopted: AgentSessionClaimedSpawnResult,
   providerReattachLaunchIdentity: ReturnType<typeof admitProviderReattachLaunchIdentity>
-): Pick<PtySpawnResult, 'id' | 'incarnationId' | 'agentSessionEnsure'> | Promise<never> {
+): PtySpawnResult | Promise<never> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -270,9 +272,5 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
     state.paneSpawnReservation,
     adoptedResult
   )
-  return {
-    id: result.id,
-    ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-    agentSessionEnsure: adopted
-  }
+  return adoptedResult
 }

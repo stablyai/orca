@@ -3,8 +3,7 @@ import type { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 
-// Frozen at module scope: every run row formats a date, and constructing a
-// DateTimeFormat per cell dominates the render of a long runs table.
+// Reuse one formatter across run cells; per-cell construction dominates large-history rendering.
 const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',

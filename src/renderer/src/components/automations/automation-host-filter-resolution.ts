@@ -11,14 +11,7 @@ import {
   type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 
-/**
- * Restores a persisted host selection against the live catalog.
- *
- * The rule that makes this non-trivial: missing catalog data is never evidence
- * of removal (required invariant 4). Until the relevant catalog settles the
- * selection is retained and reported as `loading`; only positive evidence —
- * a hydrated target list, a settled runtime catalog, or a tombstone — may drop it.
- */
+/** Retain persisted selection until positive removal evidence: hydrated targets, settled saved runtimes or tombstones. Missing/offline state alone never proves removal. */
 
 export type AutomationHostFilterStatus =
   | 'all'
@@ -49,10 +42,7 @@ export type AutomationHostFilterResolutionInput = {
   referencedStableKeys?: ReadonlySet<string>
 }
 
-/**
- * A selection saved under a desktop authority that is really a saved runtime names that
- * runtime's host: same machine, same targets, so it moves rather than being dropped.
- */
+/** Move desktop selections to their saved runtime alias; both identify the same machine/targets. */
 export function foldDesktopHostFilter(
   filter: AutomationHostFilter,
   desktopAliasEnvironmentId: string | null | undefined
@@ -141,8 +131,7 @@ function resolveAbsentEntry(
     }
   }
   if (host.selector.kind === 'self') {
-    // Desktop Self and every saved runtime's Self are always projected, so an
-    // absent one means the saved catalog has not produced it yet.
+    // Self entries always project for saved authorities; absence means the catalog has not produced one yet.
     return retain(filter, null, 'loading')
   }
   if (host.selector.kind === 'orphan') {

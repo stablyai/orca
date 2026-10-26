@@ -20,9 +20,7 @@ import {
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 
-// Reuse the canonical desktop quick-command logic (pure, no heavy deps) so
-// mobile behaves identically to desktop. Only genuinely mobile-specific pieces
-// — agent-branded labels, native row truncation, and the launch plan — live here.
+// Reuse the pure desktop command logic; renderer-only labels and native truncation stay here.
 export {
   isTerminalAgentQuickCommand as isAgentQuickCommand,
   getTerminalQuickCommandBody,
@@ -77,10 +75,7 @@ export function buildMobileQuickCommandLaunch(
         }
       }
     : {
-        // Why: raw commands that resemble bare agent launches can otherwise
-        // select the fast path and race slow native, WSL, or SSH shell startup.
-        // flattenTerminalQuickCommand joins multiline bodies exactly as desktop
-        // does so the same saved command runs identically on both.
+        // Raw agent-looking commands must not bypass slow native/WSL/SSH startup; flatten multiline commands identically to desktop.
         options: {
           startupCommand: flattenTerminalQuickCommand(command).command,
           startupCommandDelivery: 'shell-ready'
@@ -92,8 +87,6 @@ export function getQuickCommandAgentLabel(agent: TuiAgent): string {
   return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
 }
 
-// The subtitle desktop shows under each quick command: agent prompts read
-// "Codex: <prompt>", terminal commands show the raw command text.
 export function getQuickCommandPreview(command: TerminalQuickCommand): string {
   if (isTerminalAgentQuickCommand(command)) {
     return `${getQuickCommandAgentLabel(command.agent)}: ${command.prompt}`
@@ -106,7 +99,6 @@ export function getQuickCommandDisplayPreview(command: TerminalQuickCommand): st
   if (preview.length <= MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH) {
     return preview
   }
-  // Why: one-line rows should not send whole prompts through native text
-  // layout; full command bodies remain available to search, edit, and launch.
+  // Bound native row layout for long prompts while preserving full bodies for search, editing and launch.
   return `${preview.slice(0, MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH - 1)}…`
 }

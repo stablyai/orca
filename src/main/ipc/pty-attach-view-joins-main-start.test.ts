@@ -103,6 +103,7 @@ describe('a window view of a pane main is starting', () => {
         controller = value
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_main'),
+      getAgentProviderSessionRows: vi.fn(() => []),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       onPtySpawned: vi.fn(),

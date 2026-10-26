@@ -1,4 +1,4 @@
-// Why: split from source-control-primary-action — primary and dropdown are independent derivations with different priority ladders.
+// Primary and dropdown actions have independent priority ladders.
 
 import { translate } from '@/i18n/i18n'
 import type { DropdownActionInputs, DropdownEntry } from './source-control-dropdown-item-types'
@@ -7,10 +7,7 @@ import { buildCommitDropdownItems } from './source-control-dropdown-commit-items
 import { buildRemoteDropdownItems } from './source-control-dropdown-remote-items'
 import { buildHostedReviewDropdownItems } from './source-control-dropdown-review-items'
 
-/**
- * Resolve the chevron dropdown items. Every row is always rendered — disabled with a
- * tooltip reason rather than hidden — so the menu shape stays stable across states.
- */
+/** Keep menu shape stable across states: render every row, disabling blocked actions with tooltip reasons. */
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const ctx = deriveDropdownActionContext(inputs)
   const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx)

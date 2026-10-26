@@ -1,11 +1,4 @@
-/**
- * Pure summarization for the devtools typing-latency probe: percentiles over
- * per-keystroke samples, plus the scale census (agent rows, tabs, panes,
- * worktree nesting, suspect settings) that explains WHY a renderer is slow.
- *
- * Kept separate from the DOM/store wiring in diagnostic.ts so
- * the arithmetic is unit-testable without an xterm or a live store.
- */
+/** Summarize typing percentiles and scale/settings census independently of DOM/store/xterm so arithmetic stays testable. */
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
@@ -60,14 +53,7 @@ export type WorktreeNestingCensus = {
 
 type WorktreeLike = { path?: string | null; hostId?: string | null }
 
-/**
- * Case-only path twins are one directory on a case-insensitive filesystem, so the
- * census must fold them or the nesting they form goes uncounted. Windows drive/UNC
- * keys are already folded by `normalizeRuntimePathForComparison`; a POSIX key folds
- * only for the local host, where the client platform really does report the
- * filesystem (default macOS APFS is case-insensitive). Remote POSIX paths stay
- * byte-exact — the execution host owns that fact and we cannot see it from here.
- */
+/** Fold case only for Windows/UNC and local macOS POSIX paths; otherwise case twins hide nesting. Remote POSIX case rules belong to the execution host and remain byte-exact. */
 function worktreeNestingKey(rawPath: string, foldPosixCase: boolean): string {
   const normalized = normalizeRuntimePathForComparison(rawPath)
   return foldPosixCase && !isWindowsAbsolutePathLike(rawPath.normalize('NFC'))

@@ -6,8 +6,7 @@ import { gitExecFileAsync } from '../git/runner'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000
 
-/** Runs system Git with argv-only invocation so credential helpers and SSH
- * remotes work without exposing an executable remote-helper surface. */
+/** Use system Git credentials while retaining argv-only invocation and restricted remote protocols. */
 export async function runPluginGit(args: string[], cwd: string): Promise<string> {
   const { stdout } = await gitExecFileAsync(args, {
     cwd,
@@ -16,7 +15,6 @@ export async function runPluginGit(args: string[], cwd: string): Promise<string>
   return stdout.trim()
 }
 
-/** Checks out one Git ref into an empty destination and returns exact HEAD. */
 export async function checkoutPluginGitSource(input: {
   url: string
   ref: string

@@ -1,5 +1,4 @@
-// STA-7826: a CLI close of a terminal a paired runtime runs must reach that runtime, the only
-// machine that can stop its process, instead of "stopping" the remote id on this machine.
+// CLI close must route to the paired runtime that owns the process, not claim a local stop of its remote id (STA-7826).
 import { describe, expect, it, vi } from 'vitest'
 import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
 import { OrchestrationError } from './orchestration/orchestration-error'
@@ -97,7 +96,6 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect(closeTerminalTab).toHaveBeenCalledWith('tab-1', {
       localPtyTeardownOwnedExternally: true
     })
-    // This machine cannot stop the paired host's process, so it must not pretend to.
     expect(localStops).toEqual([])
   })
 
@@ -140,8 +138,7 @@ describe('closing a terminal that a paired runtime runs', () => {
   })
 
   it('retires the mirror of a terminal the owning host no longer knows, without claiming a stop', async () => {
-    // The owner is a real runtime that never issued this handle; the RPC layer passes its
-    // refusal code through, as `mapRuntimeError` does for `terminal_handle_stale`.
+    // Exercise a real owner that never issued the handle so its refusal survives RPC error mapping.
     const owner = new OrcaRuntimeService(store)
     owner.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { runtime, closeTerminalTab } = pairedHostLeafRuntime(async (_env, _method, params) => {
@@ -248,8 +245,7 @@ describe('closing a terminal that a paired runtime runs', () => {
     }))
     const handle = await listedHandle(runtime)
 
-    // This harness publishes no session snapshot, so the local tab commit after it answers
-    // tab_not_found; the host close must already have been sent.
+    // No local snapshot exists; host close must be sent before the later tab_not_found.
     await runtime.closeTerminalTab(handle).catch(() => undefined)
     expect(call).toHaveBeenCalledWith(
       'env-1',

@@ -5,9 +5,7 @@ import { createTestStore } from './store-test-helpers'
 
 export function registerAgentStatusToolAssistantFieldsTests(): void {
   describe('agent status tool + assistant fields', () => {
-    // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
-    // queueMicrotask. Without fake timers those handles leak into the test
-    // process and keep vitest alive past the run.
+    // Fake timers prevent queueMicrotask’s real 30-minute freshness handles keeping Vitest alive.
     afterEach(() => {
       vi.useRealTimers()
     })
@@ -43,9 +41,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         lastAssistantMessage: 'Edited config.ts',
         lastAssistantMessageIsToolOutput: true
       })
-      // Why: the main-process cache is the source of truth for tool/assistant
-      // fields — a fresh-turn reset surfaces as undefined on the payload, and
-      // the store must not fall back to the prior entry's values.
+      // Main owns tool/assistant fields; undefined on a fresh turn must clear rather than inherit prior values.
       store
         .getState()
         .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Next step', agentType: 'claude' })
@@ -67,10 +63,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
     })
 
     it('preserves prior agentType when payload sends the "unknown" sentinel', () => {
-      // Why: 'unknown' is the sentinel for "agent didn't identify itself". A
-      // later ping that loses the identity must not stomp a well-known prior
-      // identity (e.g. 'claude' learned from an earlier hook ping), or the UI
-      // label/icon would flicker from "Claude" to the neutral "Agent".
+      // Unknown means no identity evidence; retain known agents instead of flickering labels/icons on weak pings.
       vi.useFakeTimers()
       const store = createTestStore()
       store
@@ -245,10 +238,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(sameStateEntry.prompt).toBe('p2')
       expect(sameStateEntry.toolName).toBe('Edit')
       expect(sameStateEntry.updatedAt).toBe(2_000)
-      // Why: same-state hook pings are high-frequency and already update the
-      // owning row through agentStatusByPaneKey. The global epochs are reserved
-      // for state/freshness/final-done changes that can affect aggregate
-      // dashboard/sidebar calculations.
+      // High-frequency same-state content updates stay row-local; global epochs mark state/freshness/final-done aggregate changes.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch)
 
@@ -337,8 +327,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage).toBe(
         'final answer'
       )
-      // Why: retained rows need the final done snapshot, but done->done does not
-      // change smart-sort class, so only the status/retention epoch should tick.
+      // done→done refreshes retention snapshot without changing sort class; tick only status epoch.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch)
     })
@@ -394,8 +383,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
 
       const refreshedEntry = store.getState().agentStatusByPaneKey['tab-1:1']
       expect(refreshedEntry.prompt).toBe('fresh again')
-      // Why: a stale same-state refresh can promote the worktree back into a
-      // smart-sort attention class, so both freshness and sort epochs must tick.
+      // Stale refresh can restore attention sort class; tick freshness and sort epochs.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
       expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
@@ -478,9 +466,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         )
       const firstSortEpoch = store.getState().sortEpoch
 
-      // Main detected a new turn via interaction-key change and reset stateStartedAt,
-      // but the renderer can't see the key change (no key, identical prompt text).
-      // The authoritative stateStartedAt advance must still re-sort.
+      // Absent interaction key masks same-prompt new turns; authoritative stateStartedAt advance must still resort.
       store
         .getState()
         .setAgentStatus(

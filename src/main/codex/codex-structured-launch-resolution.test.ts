@@ -272,6 +272,15 @@ describe('codex structured launch resolution', () => {
     expect(launch.permissionPolicy).toEqual(policy)
   })
 
+  it('adds no policy overrides for the agent’s own settings', async () => {
+    const launch = await resolverFor(record())({
+      identity: IDENTITY,
+      spawnToken: TEST_SPAWN_TOKEN,
+      permissionMode: 'own'
+    })
+    expect(launch).not.toHaveProperty('permissionPolicy')
+  })
+
   it('ignores the bypass flag the agent Arguments carry', async () => {
     const launch = await resolverFor(record(), undefined, () => [
       '--dangerously-bypass-approvals-and-sandbox'
@@ -314,7 +323,6 @@ describe('codex structured launch resolution', () => {
   it('resumes the durable thread ID under its pinned account home', async () => {
     const launch = await resolverFor(
       record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [
           { handle: codexProviderHandle('thread-current') }

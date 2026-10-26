@@ -335,10 +335,7 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('counts every tab kind for SortableTab.tabCount', async () => {
-    // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
-    // terminal list. With one terminal + any number of editor/browser tabs, the
-    // menu item rendered as disabled even though closeOthers can close the
-    // non-terminal siblings.
+    // Count all tab kinds so Close Others stays enabled with non-terminal siblings.
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -376,10 +373,7 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {
-    // Why: TabBar wires the editor tab as () => onCloseToRight(item.id). The
-    // emitted id is the editor's unifiedTabId (item.id for editors), not the
-    // file entityId. TabGroupPanel must accept this id shape to close right-side
-    // tabs from an editor tab — see the matching id|entityId resolver there.
+    // Editor close-to-right emits its unified tab ID; downstream routing must accept that ID instead of only the file entity.
     const onCloseToRight = vi.fn()
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
@@ -409,7 +403,6 @@ describe('TabBar context menu wiring', () => {
 
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
-    // First tab in the strip: nothing to its left.
     expect(sortable[0].props.hasTabsToLeft).toBe(false)
 
     const editorTabs = findChildrenByType(element, 'EditorFileTab')
@@ -455,8 +448,7 @@ describe('TabBar context menu wiring', () => {
     ;(sortable[0].props.onTogglePin as () => void)()
     await layoutApplyTestTransport.settle()
 
-    // A layout-owner build has main unpin it (tab-bar-layout-owner-props.test.ts); main's frame
-    // draws the unpin, so the window does not unpin it itself.
+    // Main-owned layouts draw the host’s unpin response; the window must not duplicate the mutation.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(unpinTabMock).not.toHaveBeenCalled()
     } else {

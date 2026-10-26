@@ -68,8 +68,7 @@ describe('expandWindowsEnvironmentVariables', () => {
     )
   })
 
-  // Why: the fallback index keeps the first insertion-order key per lowercase name, so a later
-  // duplicate casing never wins even when the first one is the shadowed value.
+  // Case-insensitive fallback keeps the first insertion-order variant even if another casing shadows it.
   it('resolves an inexact name to the first case variant, not the last', () => {
     const env = { Path: 'first', PATH: 'second', pAtH: 'third' }
     expect(expandWindowsEnvironmentVariables('%PaTh%', env)).toBe('first')

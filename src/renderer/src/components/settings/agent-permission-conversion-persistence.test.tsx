@@ -94,7 +94,7 @@ function AgentsHarness() {
   )
 }
 
-function argumentsInput(label: string): HTMLInputElement {
+function argumentsInput(label: string): HTMLTextAreaElement {
   const row = screen.getByText(label, { selector: 'span' }).closest('div.py-3')
   if (!(row instanceof HTMLElement)) {
     throw new Error('Missing agent row')
@@ -104,7 +104,7 @@ function argumentsInput(label: string): HTMLInputElement {
     fireEvent.click(expand)
   }
   const input = within(row).getByPlaceholderText('No default arguments')
-  if (!(input instanceof HTMLInputElement)) {
+  if (!(input instanceof HTMLTextAreaElement)) {
     throw new Error('Missing Arguments input')
   }
   return input
@@ -168,6 +168,85 @@ it.each(
   expect(input.value).toBe(models)
   expect(persist).toHaveBeenCalledTimes(3)
 })
+
+it.each(['none', '×', 'Backspace'] as const)(
+  'keeps dirty Arguments and explicit %s permission removal in order',
+  async (removal) => {
+    savedArguments('--model sonnet', 'full-access')
+    const own = removal === 'Backspace' ? deferredSave() : null
+    render(<AgentsHarness />)
+    const user = userEvent.setup()
+    const input = argumentsInput('Claude')
+    const chip = screen.getByRole('button', { name: /Remove .* and use Claude's own settings/ })
+    await user.click(input)
+    await user.keyboard('{Home}{Shift>}{ArrowRight}{/Shift}{Backspace}')
+    expect(document.activeElement).toBe(input)
+    fireEvent.change(input, { target: { value: '--permission-mode auto --model opus' } })
+    input.setSelectionRange(0, 0)
+    for (const modifiers of [
+      { ctrlKey: true },
+      { altKey: true },
+      { metaKey: true },
+      { repeat: true }
+    ]) {
+      fireEvent.keyDown(input, { key: 'Backspace', ...modifiers })
+      expect(document.activeElement).toBe(input)
+    }
+    await user.keyboard('{Home}{Backspace}')
+    expect(document.activeElement).toBe(chip)
+    fireEvent.keyDown(chip, { key: 'Backspace', repeat: true })
+    expect(persist).not.toHaveBeenCalled()
+    expect(useAppStore.getState().settings?.agentPermissionDefault).toBe('full-access')
+    await user.tab()
+    expect(document.activeElement).toBe(input)
+    await user.tab({ shift: true })
+    expect(document.activeElement).toBe(chip)
+    expect(persist).not.toHaveBeenCalled()
+    if (removal === 'none') {
+      await user.tab({ shift: true })
+      await waitFor(() => expect(input.value).toBe('--model opus'))
+      expect(useAppStore.getState().settings?.agentPermissionOverrides?.claude).toBe('auto')
+      expect(toast.success).toHaveBeenCalledTimes(1)
+      return
+    }
+    await (removal === '×' ? user.click(chip) : user.keyboard('{Backspace}'))
+    expect(document.activeElement).toBe(input)
+    expect(input.value).toBe('--model opus')
+    await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
+    const raw = own ? deferredSave() : null
+    const reset = own ? deferredSave() : null
+    await user.tab()
+    if (own && raw && reset) {
+      expect(input.readOnly).toBe(true)
+      expect(chip).toHaveProperty('disabled', true)
+      const row = input.closest('div.py-3')
+      if (!(row instanceof HTMLElement)) {
+        throw new Error('Missing row')
+      }
+      await user.click(within(row).getByRole('button', { name: 'Reset' }))
+      await act(async () => own.resolve())
+      await waitFor(() => expect(persist).toHaveBeenCalledTimes(2))
+      expect(input.value).toBe('--model opus')
+      await act(async () => raw.resolve())
+      await waitFor(() => expect(persist).toHaveBeenCalledTimes(3))
+      await act(async () => reset.reject(new Error('unknown acknowledgement')))
+      await waitFor(() => expect(input.readOnly).toBe(false))
+      expect(input.value).toBe('--model opus')
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledTimes(1)
+      await user.click(within(row).getByRole('button', { name: 'Reset' }))
+      await waitFor(() => expect(input.value).toBe(''))
+    } else {
+      await waitFor(() => expect(persist).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(input.readOnly).toBe(false))
+      expect(useAppStore.getState().settings?.agentDefaultArgs?.claude).toBe('--model opus')
+    }
+    const settings = useAppStore.getState().settings
+    expect(settings?.agentPermissionOverrides?.claude).toBe('own')
+    expect(resolveTuiAgentLaunchArgs('claude', settings ?? {})).toBe(own ? '' : '--model opus')
+    expect(toast.success).not.toHaveBeenCalled()
+  }
+)
 
 it('retains failed conversion through the ordinary callback and announces only the saved retry', async () => {
   savedArguments('--model opus')
@@ -459,13 +538,16 @@ it.each([20, 200])('keeps Goose Environment editable after Reset/reopen (%i)', a
 it('reports one direct local permission action failure without changing saved intent', async () => {
   persist.mockRejectedValueOnce(new Error('private error'))
   render(<AgentsHarness />)
-  fireEvent.click(screen.getByRole('radio', { name: 'Full access' }))
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Permissions' }))
+  await user.click(await screen.findByRole('menuitemradio', { name: /Full access/ }))
   await waitFor(() =>
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
       'Agent settings could not be saved. Try again.'
     )
   )
   expect(useAppStore.getState().settings?.agentPermissionDefault).toBe('ask')
+  expect(toast.success).not.toHaveBeenCalled()
 })
 
 const uiWork = { entries: 0, bytes: 0 }

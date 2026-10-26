@@ -76,7 +76,8 @@ describe('mobile session tab activation', () => {
         worktree: 'id:worktree-1',
         tabId: 'tab-1',
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent: 'user'
       })
     ).rejects.toBeInstanceOf(LogicalClientCutoverError)
     expect(sendRequest).toHaveBeenCalledTimes(2)

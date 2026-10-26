@@ -168,17 +168,13 @@ export function resolveWorkspaceCreationTarget(
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
     if (actionableHostIds && !actionableHostIds.has(setup.hostId)) {
-      // Why: the caller named this exact setup. Silently creating the workspace on a
-      // sibling host would put files (and any agent run) somewhere the user never chose,
-      // so fail closed and let them re-pick a host.
+      // Exact setup selection must fail closed; a sibling host would run files/agents somewhere the user never chose.
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
     if (!isReadySetup(setup)) {
       return { status: 'unavailable', reason: 'setup-not-ready' }
     }
-    // Why: a project resolves to one setup per host, and the run-target picker shows only the first.
-    // A stale draft can still name a same-host duplicate from a legacy profile; canonicalize to the
-    // same setup the picker displays so the shown path is the path the workspace is created in.
+    // Canonicalize legacy same-host duplicate drafts to the picker’s first setup so displayed and created paths match.
     const canonical =
       findReadySetupTarget(
         setups,
@@ -238,8 +234,7 @@ export function resolveWorkspaceCreationTarget(
     if (target) {
       return { status: 'ready', target }
     }
-    // Why: the caller named this host. Falling through to the legacy repo (or any other
-    // actionable host) would create the workspace somewhere the user never selected.
+    // Explicit host selection must never fall through to another ready host or legacy repo.
     return { status: 'unavailable', reason: 'project-not-set-up-on-host' }
   }
 
@@ -265,16 +260,14 @@ export function resolveWorkspaceCreationTarget(
         : null)
     legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
   } else if (repoId) {
-    // Why: duplicate repo ids across hosts leave no single legacy repo. Stay on the resolved id's
-    // own setup instead of failing closed and letting the composer re-pick an arbitrary repo.
+    // Cross-host duplicate repo IDs are ambiguous; retain the resolved setup instead of letting the composer repick arbitrarily.
     legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
   }
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
   }
   if (input.draftRepoId && reposById.has(input.draftRepoId)) {
-    // Why: the draft named this repo. Swapping in any other ready project would create the
-    // workspace in a project, and on a host, the user never chose.
+    // An explicit repo must not fall back to a different ready project/host.
     return { status: 'unavailable', reason: 'setup-not-found' }
   }
   const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)

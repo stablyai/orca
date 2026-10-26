@@ -1,16 +1,19 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 import {
   buildWslBrowserNetworkGuestInstallScript,
-  buildWslBrowserNetworkGuestLaunchScript
+  buildWslBrowserNetworkGuestLaunchScript,
+  resolveWslBrowserNetworkRelayBundle
 } from './wsl-browser-network-relay-launch'
 
 const roots: string[] = []
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -27,6 +30,22 @@ describe('WSL browser network relay launch', () => {
     expect(() => buildWslBrowserNetworkGuestLaunchScript("bad'version")).toThrow(
       'browser_tunnel_execution_host_unavailable'
     )
+  })
+
+  it('falls back to orcad pinned runtimes after system node, under a launcher-stamped version', () => {
+    const forLine = buildWslBrowserNetworkGuestLaunchScript('0.1.0+abc')
+      .split('\n')
+      .find((line) => line.startsWith('for c in '))
+    const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
+    expect(forLine).toContain(`"$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`)
+
+    const relayRoot = mkdtempSync(join(tmpdir(), 'orca-wsl-browser-network-bundle-'))
+    roots.push(relayRoot)
+    vi.stubEnv('ORCA_RELAY_PATH', relayRoot)
+    mkdirSync(join(relayRoot, 'wsl'))
+    writeFileSync(join(relayRoot, 'wsl', 'wsl-browser-network-relay.js'), '')
+    writeFileSync(join(relayRoot, 'wsl', '.browser-network-version'), '0.1.0+abc\n')
+    expect(resolveWslBrowserNetworkRelayBundle()?.version).toMatch(/^0\.1\.0\+abc\.[0-9a-f]{8}$/)
   })
 
   it('installs exact bundle bytes and writes the version marker last', () => {

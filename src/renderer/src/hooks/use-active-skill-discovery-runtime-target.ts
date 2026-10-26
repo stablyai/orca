@@ -8,25 +8,11 @@ import { useAppStore } from '@/store'
  *  colliding with an environment id that happens to be named the same. */
 const UNRESOLVED = Symbol('skill-discovery-runtime-unresolved')
 
-/**
- * Runtime that owns skill discovery, or `null` while the store still cannot say.
- *
- * Resolved through `getSingleFocusedRuntimeEnvironmentId` rather than raw
- * `activeRuntimeEnvironmentId` on purpose: the skill *install* terminal routes
- * through that same resolver (`terminal-worktree-route.ts`), which declines to
- * guess an owner while several runtimes are saved. Scanning a host the install
- * cannot reach would leave the badge stuck on "Not installed" forever — #6789
- * again, just inverted. Scan and install must always name the same host.
- */
+/** Use install’s single-focused-runtime resolver so scan and install target the same proven host; ambiguous runtime ownership must not show misleading client-scan negatives (#6789). */
 export function useActiveSkillDiscoveryRuntimeTarget(): RuntimeClientTarget | null {
-  // Why: select the resolved id (a string) rather than its inputs. Selecting
-  // `runtimeEnvironments` would churn identity every time a status refresh
-  // restores an equal-but-new array, re-firing every consumer's scan.
+  // Select resolved ID rather than input arrays so equal host refreshes cannot restart discovery scans.
   const ownerKey = useAppStore((state) => {
-    // Why: resolving to "local" before the catalog settles caches a client scan
-    // under the local key and flashes "Not installed" at a user whose skills live
-    // remotely. Settled rather than hydrated, so a failed catalog read degrades to
-    // the local host instead of leaving every badge pending for the session.
+    // Wait for settled ownership before local caching; failed catalog reads may then degrade locally instead of leaving badges pending forever.
     if (!state.runtimeEnvironmentCatalogSettled) {
       return UNRESOLVED
     }
@@ -42,9 +28,7 @@ export function useActiveSkillDiscoveryRuntimeTarget(): RuntimeClientTarget | nu
   )
 }
 
-// Why: a same-id re-pair is a different peer with its own disk. Folding the
-// revision into the key hands consumers a new target, so their discovery
-// effects re-run instead of holding the retired peer's scan.
+// Include pairing revision: a same-ID new peer owns different disk and needs a fresh discovery target.
 function formatOwnerKey(environmentId: string, pairingRevision: number | undefined): string {
   return `${pairingRevision ?? ''}:${environmentId}`
 }

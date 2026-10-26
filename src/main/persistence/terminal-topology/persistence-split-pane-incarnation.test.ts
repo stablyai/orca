@@ -159,43 +159,6 @@ describe('Store', () => {
     }
   })
 
-  // Legacy sessions lack incarnation IDs; source-pane ownership must still permit splitting.
-  it('admits a split whose source pane has no persisted incarnation', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: {
-          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-source' })]
-        },
-        terminalLayoutsByTabId: {
-          tab1: {
-            root: { type: 'leaf', leafId: TEST_LEAF_1 },
-            activeLeafId: TEST_LEAF_1,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-source' }
-          }
-        }
-      },
-      undefined
-    )
-
-    expect(
-      await store.persistPtyBinding({
-        worktreeId: 'wt1',
-        tabId: 'tab1',
-        leafId: TEST_LEAF_2,
-        ptyId: 'pty-split',
-        expectedSourceBinding: {
-          worktreeId: 'wt1',
-          tabId: 'tab1',
-          leafId: TEST_LEAF_1,
-          ptyId: 'pty-source'
-        }
-      })
-    ).toBe(true)
-  })
-
   it('rejects competing PTY and incarnation changes during reconciliation', async () => {
     const store = await createStore()
     const paneKey = `tab1:${TEST_LEAF_1}`

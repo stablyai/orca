@@ -51,8 +51,7 @@ function MobileAgentSessionHistoryPanelContent({
   worktreeId,
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
-  // Not `useRouter`: inside the shell's page this screen is one document standing in for one
-  // screen, and the session it resumes into is a native route the shell has to push.
+  // Use handoff, not useRouter: resumed session is a native route outside this single-document page.
   const router = useWorkspaceRouteHandoff()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
@@ -73,8 +72,19 @@ function MobileAgentSessionHistoryPanelContent({
   )
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
-  // Why: the worktree list seeds the host-local scopePaths derivation and the
-  // active-worktree path for the "current worktree" badge.
+  const {
+    scope,
+    screenState,
+    refreshing,
+    hostStatusResult,
+    activeWorktreePath,
+    scopeFilterPaths,
+    onSelectScope,
+    onRefresh,
+    retry
+  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
+
+  // Worktree list seeds host-local scopePaths and current-worktree badge.
   useEffect(() => {
     if (!client || connState !== 'connected') {
       return
@@ -94,11 +104,9 @@ function MobileAgentSessionHistoryPanelContent({
           setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
         }
       } catch {
-        // Why: worktree list is best-effort context; the session scan still runs
-        // (without it, scoped tabs can't narrow and fall back to the full list).
+        // Best-effort context: failed worktree list leaves scoped tabs scanning full history.
       } finally {
-        // Why: mark loaded even on failure so a scoped tab proceeds with an
-        // unscoped fetch instead of holding a spinner forever.
+        // Mark loaded on failure too so scoped tabs fetch unscoped instead of spinning forever.
         if (!cancelled) {
           setWorktreesLoaded(true)
         }
@@ -108,18 +116,6 @@ function MobileAgentSessionHistoryPanelContent({
       cancelled = true
     }
   }, [client, connState])
-
-  const {
-    scope,
-    screenState,
-    refreshing,
-    hostStatusResult,
-    activeWorktreePath,
-    scopeFilterPaths,
-    onSelectScope,
-    onRefresh,
-    retry
-  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
@@ -185,9 +181,7 @@ function MobileAgentSessionHistoryPanelContent({
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
-          // Why: resolve against live worktrees so a workspace deleted or
-          // archived since panel mount can't be picked; the mount-time list is
-          // only a fallback when the fresh fetch fails.
+          // Prefer live worktrees so deleted/archived workspace cannot be selected; fall back to mount list only on fetch failure.
           worktrees: freshWorktrees ?? worktrees,
           repos,
           folderWorkspaces,

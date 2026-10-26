@@ -1,5 +1,4 @@
-// A held close that expires is dropped when the host's snapshot arrives. The tab it hid must come
-// back on that snapshot even when it is unchanged, not wait for the host to publish a change.
+// Expired held close must reveal its hidden tab on the arriving snapshot, even unchanged, without waiting for another host publication.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS } from '../../../shared/paired-terminal-tab-close-intent'
 import { useAppStore, type AppState } from '@/store'

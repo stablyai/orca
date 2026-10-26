@@ -31,10 +31,7 @@ export {
   type RuntimeEnvironmentStoreErrorCode
 } from './runtime-environment-store-records'
 
-/**
- * The orca-environments.json records this build can read. Unreadable ones (corrupt, or written by
- * a newer build) are left out here and carried through every write by writeEnvironmentStore.
- */
+/** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
   userDataPath: string,
   options: { requireStoreFile?: boolean } = {}
@@ -51,11 +48,7 @@ export function readPersistedEnvironmentStore(
   }
 }
 
-/** Persisted environments with their sidecar state overlaid; stale sidecar entries are ignored. */
-/**
- * Only an open internal gate fails closed on WSL state this build cannot read (a corrupt file, a
- * newer record). Closed, that state is ignored, so it can never hide an SSH or paired server.
- */
+/** Unreadable WSL state fails closed only when its internal gate is enabled; otherwise it cannot hide SSH/paired servers. */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
 ): ReturnType<typeof readWslHostDeployments> {
@@ -95,8 +88,7 @@ export function readEnvironmentStore(
     }
     throw error
   }
-  // Why hide rather than overlay nothing: the unreadable entry may hold this server's SSH pin or
-  // deployment ownership, and connecting or editing without it would silently drop that.
+  // Hide unreadable overlays: connecting/editing without them could silently discard SSH pins or deployment ownership.
   const isHidden = (id: string): boolean => Object.hasOwn(sidecar.unreadable, id)
   const hidden = store.environments.filter((environment) => isHidden(environment.id))
   if (hidden.length > 0) {
@@ -117,10 +109,7 @@ export function readEnvironmentStore(
   }
 }
 
-/**
- * Writes only persisted fields; sidecar state is written by the sidecar module. Records on disk
- * this build cannot read are appended verbatim, in their original order.
- */
+/** Write persisted fields only; preserve unreadable on-disk records verbatim/in order. Sidecar writes stay separate. */
 export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
   const path = getEnvironmentStorePath(userDataPath)
   const environments = RuntimeEnvironmentStoreSchema.parse(store).environments

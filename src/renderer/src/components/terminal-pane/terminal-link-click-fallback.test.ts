@@ -74,8 +74,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     await flushAsyncWork()
 
     expect(opened).toBe(true)
-    // Why: direct click fallback cannot wait for xterm's hover-time async
-    // existence probe; openDetectedFilePath still stats before routing.
+    // Click fallback cannot wait for async hover probes; opening still verifies the target.
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/package.json' }),

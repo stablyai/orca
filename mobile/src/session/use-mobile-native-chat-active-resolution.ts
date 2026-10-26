@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  resolveMobileNativeChat,
+  type MobileNativeChatTab
+} from './native-chat/mobile-native-chat-eligibility'
 import {
   useMobileSessionViewMode,
   type MobileSessionViewModeController

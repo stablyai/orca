@@ -130,8 +130,7 @@ describe('AgentDashboardDrawer', () => {
 
     revealFromBoard('runtime:env-1')
 
-    // Bare setActiveWorktree skips the terminal view switch, initial-terminal seeding and
-    // sleeping-session resume the shared dispatcher runs.
+    // Use the shared dispatcher to switch terminal view, seed initial terminals and resume sleeping workspaces.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
       executionHostId: 'runtime:env-1'
     })

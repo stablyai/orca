@@ -9,7 +9,7 @@ import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
-} from './mobile-native-chat-eligibility'
+} from './native-chat/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
@@ -84,8 +84,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
 
   const structuredNativeChat = activeSessionTab?.type === 'agent-session'
   const nativeChatSessionId = resolveMobileNativeChatSessionId(activeSessionTab)
-  // Terminal input pastes an attached image straight into the visible terminal;
-  // native chat instead holds it as a composer chip and rides it along on submit.
+  // Terminal attachments paste immediately; native chat defers composer chips until submit.
   const { attachImage, isAttaching, nativeChatImages, nativeChatFiles } =
     useMobileSessionImageAttachments({
       client,
@@ -121,7 +120,6 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     files: nativeChatFiles
   })
 
-  // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
     const refresh = () => {

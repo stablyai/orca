@@ -5,12 +5,13 @@ import type {
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   type CodexPromptRegistry,
   type CodexPendingPrompt
 } from './codex-structured-prompt-replies'
 
-export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
+export { CODEX_MCP_ELICITATION_METHOD }
 export const CODEX_PERMISSIONS_APPROVAL_METHOD = 'item/permissions/requestApproval'
 export const CODEX_DYNAMIC_TOOL_CALL_METHOD = 'item/tool/call'
 export const CODEX_AUTH_TOKEN_REFRESH_METHOD = 'account/chatgptAuthTokens/refresh'
@@ -46,6 +47,7 @@ export function disposeCodexServerRequest(
       )
       break
     case CODEX_MCP_ELICITATION_METHOD:
+      // Tool-call approvals become prompts above; Orca renders no other elicitation form.
       connection.respond(request.id, { action: 'decline', content: null, _meta: null })
       break
     case CODEX_PERMISSIONS_APPROVAL_METHOD:

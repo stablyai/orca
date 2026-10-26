@@ -1,10 +1,4 @@
-/**
- * Counts for the session-search status sentences.
- *
- * Sessions keep their grouping separators because a user recognises their own
- * transcript count; messages run to millions, where the exact figure carries
- * nothing the compact form does not.
- */
+/** Group recognizable session totals; compact potentially million-scale message counts. */
 const sessionFormatter = new Intl.NumberFormat(undefined, { useGrouping: true })
 const messageFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',

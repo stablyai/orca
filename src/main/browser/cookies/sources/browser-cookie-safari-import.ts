@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import { decodeSafariBinaryCookies } from './browser-cookie-safari-parser'
-import { importValidatedCookies, cookieImportTarget } from '../../browser-cookie-import-pipeline'
+import { importValidatedCookies, cookieImportTarget } from '../browser-cookie-import-pipeline'
 import type { DetectedBrowser } from './browser-cookie-detection-types'
-import { diag } from '../../browser-cookie-import-diagnostics'
+import { diag } from '../browser-cookie-import-diagnostics'
 
 export async function importCookiesFromSafari(
   browser: DetectedBrowser,

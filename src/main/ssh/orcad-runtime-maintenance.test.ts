@@ -189,6 +189,26 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(mocks.deploy.mock.calls[1]?.[0].admitRecord(newer, 'v3')).toBeNull()
   })
 
+  it('updates past live terminals only over the confirmed build, keeping the downgrade refusal', async () => {
+    const running = {
+      ...harness.context().activationRecord,
+      active: 'v1',
+      activeAppVersion: '0.0.0-test'
+    }
+    mocks.deploy.mockResolvedValue({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, {
+      selector: 'Managed',
+      pastLiveTerminals: { incumbentVersion: 'v1' }
+    })
+    const deployed = mocks.deploy.mock.calls[0]?.[0]
+    expect(deployed.force).toBe('live-terminals')
+    expect(deployed.admitRecord(running, 'v3')).toBeNull()
+    expect(deployed.admitRecord({ ...running, active: 'v2' }, 'v3')).toMatch(/changed since/)
+    expect(
+      deployed.admitRecord({ ...running, active: 'v1', activeAppVersion: '99.0.0' }, 'v3')
+    ).toMatch(/last ran/)
+  })
+
   it('offers Force when Update was refused by policy', async () => {
     mocks.deploy.mockResolvedValueOnce({
       outcome: 'installed-not-activated',
@@ -218,7 +238,7 @@ describe('updateManagedOrcadEnvironment', () => {
     const deployed = mocks.deploy.mock.calls[0]?.[0]
     expect(deployed?.recountCensus).toBeTypeOf('function')
     await expect(deployed!.recountCensus()).resolves.toEqual(opened)
-    // Only the last count closes the server's terminal admission; the first precedes the upload.
+    // Only final recount closes admission; initial counts can predate upload.
     expect(mocks.census.mock.calls.map((call) => call[4])).toEqual([
       { releaseFinishedAutomationTerminals: true },
       {
@@ -348,7 +368,6 @@ describe('rollbackManagedOrcadEnvironment', () => {
   })
 
   it('refuses a rollback to a snapshot older than the migrated catalog, not a newer one', async () => {
-    // The harness's active version activated 2026-01-01.
     recordManagedOrcadMigration(harness.userDataPath, 'environment-1', '2026-02-01T00:00:00.000Z')
     await expect(
       rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
@@ -363,7 +382,7 @@ describe('rollbackManagedOrcadEnvironment', () => {
   })
 
   it('refuses a rollback across a retained delta move that predates the mark', async () => {
-    // A delta finished by an earlier build left no mark; its retained journal still counts.
+    // Older deltas lack a durable mark; their retained journal must still block destructive rollback.
     writeOrcadMigrationSourceCutover(harness.userDataPath, {
       ...orcadMigrationCutoverFixture('delta-1', 'ssh-1', { environmentId: 'environment-1' }),
       startedAt: '2026-02-01T00:00:00.000Z',
@@ -410,7 +429,7 @@ describe('rollbackManagedOrcadEnvironment', () => {
     mocks.rollback.mockResolvedValueOnce({ outcome: 'refused', code: 'x', reason: 'y' })
     await rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     const options = mocks.rollback.mock.calls[0]?.[0]
-    // The count here is unfenced; rollbackOrcad recounts under the host lock.
+    // Initial census is unfenced; rollback must recount under lock.
     expect(mocks.census.mock.calls.map((call) => call[4]?.closeAdmissionForMs)).toEqual([undefined])
     await options.recountCensus()
     await options.releaseIncumbentAdmission()

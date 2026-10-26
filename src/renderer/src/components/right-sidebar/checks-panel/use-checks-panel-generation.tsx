@@ -5,6 +5,7 @@ import type { PullRequestGenerationOutcome } from '../create-pull-request-dialog
 import { settlePullRequestGenerationRequest } from '../pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   generateRuntimePullRequestFields,
   cancelRuntimeGeneratePullRequestFields
@@ -86,10 +87,13 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         return undefined
       }
       const requestId = allocatePullRequestGenerationRequestId()
+      // Why one resolution: the result must land on this copy, not a same-path twin.
+      const copy = activeWorktreeId ? resolveWorktreeGitCopyNow(activeWorktreeId) : null
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
-        connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
+        ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
           (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
           activeWorktreeId
@@ -102,13 +106,13 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         requestId,
         repoId: repo.id,
         branch,
-        runtimeTarget: ownerTarget
+        runtimeTarget: copy?.transport ?? ownerTarget
       }
       const seed = { ...fields }
       const previousRequiresPushBeforeCreate =
         useAppStore.getState().pullRequestGenerationRecords[generationKey]
           ?.requiresPushBeforeCreate === true
-      // Why: ChecksPanel unsets the composer on navigate-away; persist the request so generation can finish in the background.
+      // Persist generation through navigate-away, which unmounts the composer.
       const runningRecord = createRunningPullRequestGenerationRecord(
         context,
         seed,
@@ -126,7 +130,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         try {
           const result = await generateRuntimePullRequestFields(
             {
-              // Why: route generation by the worktree owner captured at click time.
+              // Route by the workspace owner captured at click time.
               target: context.runtimeTarget,
               prefs: useAppStore.getState().settings,
               worktreeId: context.worktreeId,
@@ -213,7 +217,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
-      // Why: Stop must target the request owner, not the currently focused worktree.
+      // Cancel on the request owner even if focus moved to another worktree.
       target: record.context.runtimeTarget,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,

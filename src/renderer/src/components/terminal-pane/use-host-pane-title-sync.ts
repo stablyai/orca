@@ -5,10 +5,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 import type { TerminalPaneLayoutController } from './use-terminal-pane-layout-persistence'
 
-/**
- * The pane titles a host- or main-owned layout holds that an open pane does not show yet, by pane id.
- * The layout already keeps a local rename the host has not echoed (pending-pane-title-renames).
- */
+/** Sync owner-published pane titles while retaining pending local renames until host echo. */
 export function hostPaneTitleUpdates(args: {
   layout: TerminalLayoutSnapshot
   panes: readonly { id: number; leafId: string }[]

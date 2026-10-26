@@ -33,7 +33,6 @@ describe('a windowless host’s chat tab saves', () => {
     const first = change(EMPTY, [open('chat-a')])
     const firstGroup = first.tabGroups?.[WT]?.[0]?.id
     const closed = change(first, [{ close: 'chat-a' }])
-    // The workspace keeps no group, but its saved view still names the closed chat's group.
     const remembering = {
       ...closed,
       activeGroupIdByWorktree: { ...closed.activeGroupIdByWorktree, [WT]: firstGroup! }
@@ -46,7 +45,6 @@ describe('a windowless host’s chat tab saves', () => {
     expect(groups[0]?.id).not.toBe(firstGroup)
   })
 
-  // L270: the placement rule is shared, so an open with no client place must save as before.
   it('save a chat opened with no client place at the end of the remembered active group', () => {
     const tab = (sessionId: string, groupId: string): Tab => ({
       id: `structured-agent-session-${sessionId}`,
@@ -93,7 +91,6 @@ describe('a windowless host’s chat tab saves', () => {
     ])
   })
 
-  // Preserved legacy behaviour: with the build switch off a duplicate chat tab id is still saved.
   it('save a chat whose tab id another tab already holds, as they always have', () => {
     const saved = change(EMPTY, [open('chat-a', 'structured-agent-session-shared')])
     const both = change(saved, [open('chat-b', 'structured-agent-session-shared')])

@@ -1,12 +1,10 @@
 import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
 import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-action'
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 
-/** Builds the terminal long-press menu without adding another action block to the
- *  already dense session route. Native chat stays first as the view switch. */
 export function getMobileTerminalActionSheetActions<
   Target extends { handle: string },
   Tab extends TerminalTab
@@ -25,8 +23,6 @@ export function getMobileTerminalActionSheetActions<
   onClose: (target: Target) => void
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
-  /** Appended after Close; receives the pressed tab's id so the session route's
-   *  bulk-close builder can resolve the anchor itself. */
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args

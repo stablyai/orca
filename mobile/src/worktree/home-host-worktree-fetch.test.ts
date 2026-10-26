@@ -105,7 +105,6 @@ describe('fetchHomeHostWorktreeInfo', () => {
       lastActiveWorktree: expect.objectContaining({ worktreeId: 'wt-0' }),
       catalogUnavailable: true,
       staleCounts: true,
-      // Age-stamped so the card can stop calling day-old counts "last known".
       countsProvenAt: expect.any(Number)
     })
   })
@@ -152,7 +151,6 @@ describe('fetchHomeHostWorktreeInfo', () => {
     }
 
     await connect(catalogResponse(12, 2))
-    // Socket dies mid-poll: counts survive, flagged stale.
     const dropped = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
     host.settle(new Error('socket closed mid-request'))
     await dropped
@@ -167,7 +165,7 @@ describe('fetchHomeHostWorktreeInfo', () => {
     })
     expect(store.current['host-1'].staleCounts).toBeUndefined()
     expect(store.current['host-1'].catalogUnavailable).toBeUndefined()
-    // Two connects + the dropped poll: the gate must not re-read while the link holds.
+    // Keep the gate closed while connected, including after a failed poll.
     expect(host.calls).toBe(3)
     await connect(catalogResponse(13, 3))
     expect(host.calls).toBe(3)
@@ -191,7 +189,6 @@ describe('fetchHomeHostWorktreeInfo', () => {
     relay.settle(catalogResponse(12, 2))
     await loaded
 
-    // The supervisor's direct probe migrates while a refresh is on the wire.
     const interrupted = fetchHomeHostWorktreeInfo(logical, 'host-1', store.setInfo, notDisposed)
     await logical.migrateTo(direct.client, 'lan')
     await flush()
@@ -200,7 +197,7 @@ describe('fetchHomeHostWorktreeInfo', () => {
     direct.settle(catalogResponse(13, 3))
     await interrupted
 
-    // The gate can't cover this: migrateTo republishes 'connected' from 'connected'.
+    // Migration republishes connected without an edge to re-arm the gate.
     expect(gateFires).toEqual([])
     expect(store.current['host-1']).toMatchObject({ totalWorktrees: 13, activeCount: 3 })
     expect(store.current['host-1'].staleCounts).toBeUndefined()
@@ -227,7 +224,6 @@ describe('fetchHomeHostWorktreeInfo', () => {
     }
     await cutoverStorm
 
-    // 1 original + CUTOVER_RETRY_LIMIT retries, then the failure is surfaced.
     expect(host.calls).toBe(4)
     expect(store.current['host-1'].staleCounts).toBe(true)
   })

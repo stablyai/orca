@@ -13,14 +13,7 @@ import {
 export class RuntimeGitSyncCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
-  /**
-   * Resolves the provider and mints the push target's remote on the worktree's host.
-   *
-   * Why (#17828 review follow-up): this class deliberately materializes with no store (see the
-   * `undefined` arg below) to avoid unrelated ownership-inheritance/refspec-migration side effects
-   * on the RPC path -- so persistence goes through the host callback instead, using
-   * `target.worktree.id` already resolved here rather than threading a store through.
-   */
+  /** Materialize on the worktree host without Store ownership/refspec side effects; persist new push remotes via the resolved worktree's host callback (#17828). */
   private async prepareRemoteSync(
     target: RuntimeGitTarget,
     pushTarget: GitPushTarget | undefined

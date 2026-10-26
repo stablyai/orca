@@ -72,8 +72,7 @@ describe('gitLabJobTraceToCheckRunDetails', () => {
 })
 
 describe('gitLabJobCanHaveTrace', () => {
-  // Why: GitLab answers 404 for a job that never ran, so skip the round trip. Jobs that
-  // may have run are still asked; main turns a missing log into an empty trace.
+  // Never-started jobs have no trace; skip those requests. Main maps other missing-log 404s to empty traces.
   const cases: { status: string; expected: boolean }[] = [
     { status: 'failed', expected: true },
     { status: 'success', expected: true },

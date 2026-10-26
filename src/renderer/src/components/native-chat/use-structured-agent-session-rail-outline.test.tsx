@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
@@ -91,7 +91,6 @@ describe('structured rail outline fetch', () => {
     mocks.read.mockResolvedValue(null)
     const { result, rerender } = renderOutline(VISIBLE)
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(1))
-    // A live stream keeps moving the window; that is not a reason to ask again.
     for (let oldest = 51; oldest < 80; oldest += 1) {
       rerender({ ...VISIBLE, oldest })
     }
@@ -103,11 +102,10 @@ describe('structured rail outline fetch', () => {
     mocks.read.mockResolvedValue(outline(60))
     const { result, rerender } = renderOutline(VISIBLE)
     await waitFor(() => expect(result.current).not.toBeNull())
-    // Still abutting the outline: fresh, no request.
     rerender({ ...VISIBLE, oldest: 61 })
     expect(mocks.read).toHaveBeenCalledTimes(1)
     expect(result.current).not.toBeNull()
-    // A gap opens at 61: stale, so the rail falls back and one new read goes out.
+    // The gap at 61 invalidates coverage: fall back to loaded rows and issue one fresh read.
     mocks.read.mockResolvedValue(outline(200))
     rerender({ ...VISIBLE, oldest: 62 })
     expect(result.current).toBeNull()
@@ -148,7 +146,6 @@ describe('structured rail outline fetch', () => {
 
       await act(async () => vi.advanceTimersByTimeAsync(RAIL_OUTLINE_READ_RETRY_BASE_MS))
       expect(mocks.read).toHaveBeenCalledTimes(2)
-      // Backing off: the second retry waits twice as long.
       await act(async () => vi.advanceTimersByTimeAsync(RAIL_OUTLINE_READ_RETRY_BASE_MS))
       expect(mocks.read).toHaveBeenCalledTimes(2)
       await act(async () => vi.advanceTimersByTimeAsync(RAIL_OUTLINE_READ_RETRY_BASE_MS))

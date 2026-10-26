@@ -6,23 +6,15 @@ import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale } from './fit-scale'
 import { fitDimensionsFromCell } from '../terminal-grid-fit'
 
-// Why: init() flips ready false on every re-init (live width reflow included)
-// while the old surface stays visible; a document-scoped latch drives the
-// fatal/non-fatal decision so a transient reflow cannot blank a live terminal.
+// Re-init temporarily clears ready; latch prior readiness so width reflow cannot turn a transient error fatal.
 
-// Why: userScale is transient pinch zoom (CSS) for smooth feedback DURING a
-// gesture only; it resets to 1 on release. The persistent "text size" is the
-// real xterm fontSize (currentTextScale × BASE_FONT_PX), so changing it
-// reflows the grid: a bigger cell means fewer columns fit, and RN re-measures
-// and resizes the PTY (terminal.updateViewport) so the shell rewraps to the
-// new width. A finished pinch snaps to the nearest preset and reports it to RN.
+// Pinch zoom is transient CSS; release commits a real font preset so the grid reflows and native resizes the PTY.
 
 const BASE_FONT_PX = 13
 const MIN_FONT_PX = 6
 
 const TEXT_SCALE_PRESETS: readonly number[] = TERMINAL_TEXT_SCALES
 
-/** The ends of the preset range, which a pinch is clamped to. */
 export const MIN_TEXT_SCALE = TEXT_SCALE_PRESETS[0]
 export const MAX_TEXT_SCALE = TEXT_SCALE_PRESETS[TEXT_SCALE_PRESETS.length - 1]
 
@@ -47,16 +39,11 @@ export function isIOSWebView() {
   }
   return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
 }
-// Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
-// fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
+// Lead with ui-monospace because iOS WebKit may resolve SF Mono to a proportional fallback.
 const TERMINAL_FONT_FALLBACKS =
   '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
-// Why: change the real font size, then resize the grid to fit the viewport at
-// the new cell metrics so the text shows at its true size immediately. RN's
-// refit (measure → updateViewport) then makes the server reflow the PTY to the
-// same column count so the shell rewraps. cell metrics update on the frame
-// after fontSize changes, so the resize/fit is deferred one rAF.
+// Wait one frame after changing fontSize for cell metrics, then fit the new grid before native PTY reflow.
 export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   scope.currentTextScale = scale
   if (!scope.term) {
@@ -64,13 +51,12 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   }
   const px = fontPxForScale(scale)
   if (scope.term.options.fontSize === px) {
-    // Why: a pinch moved the drawn pitch; the fit commit is the one site that reports it.
+    // Fit commits report the drawn row pitch changed by pinch.
     applyFitScale(scope, 'text-scale')
     return
   }
   scope.term.options.fontSize = px
-  // Ruling 21: the generation this frame was scheduled under. `scope.term` alone is not enough —
-  // a mount that came and went leaves a live terminal here, and this would resize that one.
+  // Fence by generation; scope.term can already refer to a replacement engine.
   const gen = scope.terminalGeneration
   scheduleDocumentFrame(scope, function () {
     if (!scope.term || gen !== scope.terminalGeneration) {
@@ -78,8 +64,7 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     }
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
-    // Why: fit the frame React Native laid out, by the same formula; init and measure give it. Before
-    // either, the pre-ready terminal stays hidden until the first init, which applies the font and resizes.
+    // Fit the native frame with the shared formula; pre-ready engines stay hidden until init supplies it.
     const frame = scope.hostFrame
     if (!frame) {
       return
@@ -91,7 +76,7 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
         frame.height
       )
       if (!fit) {
-        // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
+        // Even below minimum grid width, update fit for the new cells; hidden hosts defer it.
         applyFitScale(scope, 'text-scale')
         return
       }

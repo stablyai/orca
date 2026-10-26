@@ -18,12 +18,10 @@ describe('scrapeScrollbackToMessages', () => {
     for (const message of messages) {
       for (const block of message.blocks) {
         if (block.type === 'text') {
-          // ANSI is gone — no raw escape character survives.
           expect(block.text).not.toContain(ESC)
         }
       }
     }
-    // Order is preserved from the scrollback.
     expect(messages[0].id).toBe('scrape-0')
     expect(messages[1].id).toBe('scrape-1')
   })
@@ -54,9 +52,7 @@ describe('scrapeScrollbackToMessages', () => {
 
     const messages = scrapeScrollbackToMessages(raw)
 
-    // First segment starts with a shell prompt marker -> user.
     expect(messages[0].role).toBe('user')
-    // Plain output -> assistant.
     expect(messages[1].role).toBe('assistant')
   })
 })

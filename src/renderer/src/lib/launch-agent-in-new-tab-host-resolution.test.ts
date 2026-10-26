@@ -1,10 +1,6 @@
-// Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
-// keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-/** Startup commands published with the created tabs, in creation order. */
 function queuedStartups() {
   return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
 }
@@ -136,8 +132,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
   })
 
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {
-    // `store.repos.find` is host-blind, so a worktree that names its own host could be shaped by
-    // an `ssh:openclaw` row it has nothing to do with (#11163).
+    // Host-blind repos.find could shape this worktree using another SSH host’s same-ID repo (#11163).
     store.repos = [
       { id: 'repo-1', connectionId: 'openclaw', path: '/srv/openclaw' },
       { id: 'repo-1', connectionId: null, executionHostId: 'local', path: '/repo' }

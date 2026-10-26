@@ -1,5 +1,4 @@
-/** What the fetch refused about the bytes that arrived. The message names asset paths and hashes;
- *  this code is the part a caller may keep. */
+// Expose stable refusal codes; messages also contain asset paths/hashes.
 export const MOBILE_WEB_BUNDLE_FETCH_REFUSALS = [
   'chunk-oversize',
   'asset-overlong',

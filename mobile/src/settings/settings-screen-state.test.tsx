@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import NotificationsScreen from './notification-settings-screen'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -99,7 +100,7 @@ describe('shared settings screen state', () => {
       )
     })
     expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
-    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(1)
+    expect(findAllByHostType(renderer.root, 'ActivityIndicator')).toHaveLength(1)
   })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {

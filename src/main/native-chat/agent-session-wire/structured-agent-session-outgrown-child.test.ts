@@ -16,7 +16,7 @@ import {
 } from './structured-agent-session-outgrown-child'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type {
@@ -188,7 +188,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     input: Parameters<typeof conversation>[0],
     work: Partial<typeof idle> = {},
     stopAgent = vi.fn(async () => undefined),
-    launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
   ) => {
     const warn = vi.fn()
     await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
@@ -250,7 +250,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   describe('a child launched with another permission mode', () => {
-    const now = (mode: AgentChatPermissionMode) => vi.fn(async () => mode)
+    const now = (mode: AgentChatPermissionChoice) => vi.fn(async () => mode)
     const askChild = { child: childAt({ permissionMode: 'ask' }) }
 
     it('is stopped once, and one launched with the current mode is kept', async () => {
@@ -313,8 +313,8 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           )
       }
       const stoppedAfterLaunch = async (
-        launched: AgentChatPermissionMode,
-        current: () => Promise<AgentChatPermissionMode | null>
+        launched: AgentChatPermissionChoice,
+        current: () => Promise<AgentChatPermissionChoice | null>
       ) =>
         (await retire({ child: childAt({ permissionMode: launched }) }, {}, undefined, current))
           .stopAgent.mock.calls.length > 0

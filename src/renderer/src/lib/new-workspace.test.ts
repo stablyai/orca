@@ -184,9 +184,7 @@ describe('getWorkspaceSeedName', () => {
   })
 
   it('does not leave internal ".." in the slug (git refuses such branches)', () => {
-    // Why: the original composer bug — a prompt containing "../../" in
-    // relative path references slugified to a name with internal `..`,
-    // which git rejects with "is not a valid branch name".
+    // ../../ references can slugify to internal .., which git rejects as a branch name.
     const seed = getWorkspaceSeedName({
       explicitName: '',
       prompt: 'For ../../ the sibling worktree from another repo',
@@ -326,8 +324,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
   })
 
   it('surfaces the not-sent toast when a follow-up prompt is dropped', async () => {
-    // Foreground never becomes a recognized agent and there is no live child,
-    // so the readiness wait times out and the prompt is not delivered.
+    // No recognized agent or live child means readiness times out without delivering text.
     mockInspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'zsh',
       hasChildProcesses: false

@@ -10,8 +10,7 @@ function normalizeApostrophes(input: string): string {
   return input.replace(/[\u2018\u2019]/g, "'")
 }
 
-// Why: contractions and possessives should not become stray `t` / `s` tokens
-// in display names or extra hyphen segments in branch-safe workspace seeds.
+// Keep contractions/possessives from creating stray t/s words or branch segments.
 function removeIntraWordApostrophes(input: string): string {
   return normalizeApostrophes(input).replace(/([\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
 }
@@ -31,8 +30,7 @@ export function slugifyForWorkspaceName(input: string): string {
     foldWorkspaceNameWhitespaceToHyphen(normalized)
       .replace(/[^a-z0-9._-]+/g, '-')
       .replace(/-+/g, '-')
-      // Why: git check-ref-format rejects any ref containing `..`, so previews
-      // must match the main-process sanitizer before workspace creation.
+      // Match main’s sanitizer: git check-ref-format rejects repeated dots.
       .replace(/\.{2,}/g, '.')
       .replace(/^[.-]+|[.-]+$/g, '')
       .slice(0, 48)
@@ -73,7 +71,7 @@ export function applyJiraIssueKeyCasing(
   if (casing !== 'preserve' || !key || !JIRA_ISSUE_KEY_PATTERN.test(key)) {
     return seedName
   }
-  // Why: slugify only lowercases a key (its characters survive the strip), so re-uppercasing the leading segment is lossless.
+  // Slugification preserves key characters, so restoring leading-key casing is lossless.
   const lowerKey = key.toLowerCase()
   return seedName === lowerKey || seedName.startsWith(`${lowerKey}-`)
     ? `${key}${seedName.slice(key.length)}`
@@ -90,8 +88,7 @@ function getLinkedWorkItemTitleSubject(item: { title: string }): string {
     .trim()
 }
 
-// Why: generated workspace seeds are hyphenated; `issue-123-fix-title`
-// must not be reinterpreted as the user explicitly asking to fix a new issue.
+// Hyphenated generated seeds such as issue-123-fix-title do not express a new fix request.
 const ACTION_LABELS: [RegExp, string][] = [
   [/(?:^|[^a-z0-9_-])(?:fix(?:e[sd])?|resolve|repair)(?:$|[^a-z0-9_-])/i, 'Fix'],
   [/(?:^|[^a-z0-9_-])(?:debug|diagnose)(?:$|[^a-z0-9_-])/i, 'Debug'],
@@ -149,8 +146,7 @@ function titleCaseWord(word: string): string {
 }
 
 function compactWords(input: string, maxWords = 4): string {
-  // Why: workspace names can be derived from pasted prompts/URLs; collect only
-  // the visible words we need instead of splitting the full text.
+  // Bound word collection for names derived from pasted prompts or URLs.
   const words = collectCompactWorkspaceWords(
     stripDanglingDisplayApostrophes(input),
     maxWords,
@@ -223,11 +219,7 @@ function defaultActionForWorkItem(item: WorkspaceIntentWorkItem): string | null 
   return item.type === 'pr' || item.type === 'mr' ? 'Review' : null
 }
 
-/**
- * Resolve the one human intent label that should drive first-create workspace
- * identity. The display label and git-safe seed are derived together so the
- * folder, branch, and sidebar name do not drift before work has started.
- */
+/** Derive display label and branch-safe seed from one first-create intent so folder, branch and sidebar names agree. */
 export function getWorkspaceIntentName(args: {
   sourceText?: string
   workItem?: WorkspaceIntentWorkItem | null

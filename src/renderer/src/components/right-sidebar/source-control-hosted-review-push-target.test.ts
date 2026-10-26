@@ -153,9 +153,7 @@ describe('hasPositiveHostedReviewNumberLink', () => {
   })
 
   it('blocks resolver-less providers without treating them as resolvable', () => {
-    // Bitbucket/Azure/Gitea have no push-target resolver yet, so they must block
-    // unsafe pushes but stay out of the resolvable subset. Locks the intended
-    // relationship: resolvable ⊂ positive, so the two helpers cannot drift.
+    // Providers without resolvers still block unsafe pushes; keep resolvable links a strict subset of positive links.
     for (const provider of ['linkedBitbucketPR', 'linkedAzureDevOpsPR', 'linkedGiteaPR'] as const) {
       const args = { [provider]: 42 }
       expect(hasPositiveHostedReviewNumberLink(args)).toBe(true)
@@ -248,8 +246,7 @@ describe('hasUsableHostedReviewPushTarget', () => {
   })
 
   it('treats a same-repo review upstream that already tracks the branch as usable', () => {
-    // Why: a same-repo review must not stay blocked while its push target is
-    // unhydrated — the real upstream already targets the review head.
+    // Matching real upstream already names the review head; do not block while its target hydrates.
     expect(
       hasUsableHostedReviewPushTarget({
         hasResolvableHostedReviewPushTargetLink: true,
@@ -287,10 +284,7 @@ describe('hasUsableHostedReviewPushTarget', () => {
 
 describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', () => {
   it('does not block push for a queue-discovered open PR whose upstream tracks the branch', () => {
-    // Why: a child worktree with no persisted linkedPR discovers its open PR via
-    // the queue (fallbackGitHubPR). Before the fix, that PR counted as a hosted
-    // review link but not a resolvable target, so the real matching upstream was
-    // ignored and Push was wrongly disabled as "target unavailable".
+    // Queue-discovered PRs lack persisted links but still resolve matching upstream targets; missing that wrongly disabled Push.
     const realUpstream = {
       hasUpstream: true,
       upstreamName: 'origin/fix-f1-codex-wsl-path-trust',

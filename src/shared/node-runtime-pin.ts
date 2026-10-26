@@ -1,9 +1,5 @@
-/**
- * The one Node runtime Orca runs outside Electron (docs/reference/node-runtime-design.html, D1).
- *
- * Keep this file erasable-only TypeScript — build scripts import it directly under Node's
- * type stripping, which rejects enums, namespaces and parameter properties.
- */
+/** Pinned external Node runtime (docs/reference/node-runtime-design.html D1). Keep erasable TypeScript only:
+ * Node build scripts import via type stripping, which rejects enums/namespaces/parameter properties. */
 
 export const SERVER_TARGETS = [
   'darwin-arm64',
@@ -30,8 +26,7 @@ export const COMPAT_SERVER_TARGET_BASES: Record<CompatServerTarget, ServerTarget
   'linux-x64-glibc217': 'linux-x64-glibc'
 }
 
-// Every target: Windows SSH relays take their node-pty/ConPTY slot from here (design D5), even
-// though managed orcad launch stays POSIX-only (orcad-remote-host-support.ts).
+// Include every target for Windows SSH node-pty/ConPTY slots (D5), although managed orcad launch remains POSIX-only (orcad-remote-host-support.ts).
 export const ORCAD_TEMPLATE_TARGETS: readonly ServerTarget[] = SERVER_TARGETS
 
 export type NodeRuntimePin = {
@@ -149,10 +144,7 @@ export const NODE_RUNTIME_COMPAT_ASSETS: Record<CompatServerTarget, NodeRuntimeA
 }
 // @generated-end
 
-/**
- * The pinned darwin Node's `LC_BUILD_VERSION minos`, and so the floor of the macOS terminal host.
- * Packaging fails when a pin bump changes it; below it the desktop forks the daemon instead.
- */
+/** Pinned darwin Node LC_BUILD_VERSION minos sets terminal-host floor. Packaging catches pin drift; older macOS uses desktop-forked daemons. */
 export const NODE_RUNTIME_DARWIN_MINIMUM_OS = '13.5'
 
 export function isCompatServerTarget(target: string): target is CompatServerTarget {

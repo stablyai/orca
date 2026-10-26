@@ -126,8 +126,7 @@ describe('AutoRenameFailedDialog full output', () => {
   })
 })
 
-// Why: happy-dom does no intrinsic sizing, so assert the two declarations that
-// keep an unbroken token from widening DialogContent's grid column instead.
+// happy-dom has no intrinsic sizing; verify the declarations that contain unbroken output.
 describe('AutoRenameFailedDialog unbroken output containment', () => {
   it('keeps the output surface shrinkable and breakable mid-token', async () => {
     getBranchRenameFailureOutput.mockResolvedValueOnce(`{"error":"${'A'.repeat(1000)}"}`)
@@ -138,12 +137,11 @@ describe('AutoRenameFailedDialog unbroken output containment', () => {
     expect(output).toBeTruthy()
     expect(output?.textContent).toContain('A'.repeat(1000))
 
-    // `break-words` (overflow-wrap: break-word) wraps painted text but leaves
-    // min-content at the full token width; only `anywhere` shrinks it.
+    // break-word preserves token min-content width; anywhere shrinks it.
     expect(output?.className).toContain('[overflow-wrap:anywhere]')
     expect(output?.className).not.toContain('break-words')
 
-    // DialogContent is a grid, so its child needs min-w-0 to shrink below min-content.
+    // Grid children need min-w-0 to shrink below min-content.
     const gridChild = Array.from(dialog?.children ?? []).find((child) =>
       child.contains(output ?? null)
     )

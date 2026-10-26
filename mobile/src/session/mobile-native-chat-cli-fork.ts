@@ -4,7 +4,6 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { agentForksConversations } from '../../../src/shared/agent-resume-argv'
 import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../src/shared/session-tabs-runtime-capabilities'
 
-/** The whole host fork-and-create contract must be present before the phone offers its action. */
 export function canOfferMobileNativeChatCliFork(args: {
   agent: string
   hostCapabilities: readonly string[] | undefined
@@ -17,7 +16,6 @@ export function canOfferMobileNativeChatCliFork(args: {
   )
 }
 
-/** The chat stays open; the existing terminal creator owns admission and selection. */
 export function getMobileNativeChatCliForkActions(args: {
   controller: Pick<MobileSessionController, 'client' | 'hostCapabilities' | 'handleCreateTerminal'>
   tab: { sessionId: string; agent: string } | null

@@ -3,10 +3,13 @@ import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem-path-containment'
-import { assertNotExists, rethrowWithUserMessage } from '../ipc/filesystem-create-path-guards'
-import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import {
+  assertNotExists,
+  rethrowWithUserMessage
+} from '../ipc/filesystem/filesystem-create-path-guards'
+import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -26,10 +29,7 @@ export type LocalFilesystemProviderOptions = {
   resolveAuthorizedPath: typeof ResolveAuthorizedPath
 }
 
-/**
- * Contract methods with a runtime-command local twin. Reads, listing and watching keep
- * their existing local call sites: their local limits and result shapes differ from the contract.
- */
+/** Local twins for runtime commands; reads/listing/watching retain call sites with different limits/shapes. */
 export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>> &
   Pick<
     IFilesystemProvider,
@@ -48,7 +48,6 @@ export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMa
     | 'copy'
     | 'search'
   > & {
-    /** `writeFile` that first refuses when disk no longer matches the caller's baseline. */
     writeFileWithDiskPrecondition(
       filePath: string,
       content: string,
@@ -56,13 +55,13 @@ export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMa
     ): Promise<FileWriteResult>
   }
 
-/** This machine's file operations behind the store's path authorization; build one per call. */
+/** Build per call so path authorization uses the current store. */
 export function createLocalFilesystemProvider(
   options: LocalFilesystemProviderOptions
 ): LocalFilesystemProvider {
   const { resolveAuthorizedPath } = options
   const authorize = (path: string) => resolveAuthorizedPath(path, options.requireStore())
-  // Why: rename, copy and delete act on a symlink itself, never on what it points to.
+  // Rename/copy/delete must authorize the symlink itself, preserving its target.
   const authorizeLink = (path: string) =>
     resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
   const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
@@ -143,7 +142,7 @@ export function createLocalFilesystemProvider(
       const authorizedSource = await authorizeLink(source)
       const authorizedDestination = await authorizeLink(destination)
       await mkdir(dirname(authorizedDestination), { recursive: true })
-      // Why: COPYFILE_EXCL keeps the no-clobber invariant; callers already deconflict names.
+      // Callers deconflict names; COPYFILE_EXCL preserves no-clobber if a destination appears meanwhile.
       await copyFile(authorizedSource, authorizedDestination, constants.COPYFILE_EXCL)
     },
     search: async (searchOptions, { signal } = {}) => {
@@ -165,7 +164,7 @@ export function createLocalFilesystemProvider(
         wslDistro,
         wslDistroForOutput,
         signal,
-        // Why: request abort owns cancellation; only the renderer IPC search keeps a by-id registry.
+        // Request abort owns cancellation; only renderer IPC needs a by-id registry.
         onSpawn: () => () => undefined
       })
     },

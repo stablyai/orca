@@ -1,8 +1,4 @@
-/**
- * Each paused pane's last working directory, read from the daemon's own checkpoint after quiesce
- * (mover design, section 3.3). It lives nowhere else: without it a pane would reopen on the host
- * at its worktree root, which is a silent loss.
- */
+// Restore the last checkpointed cwd after Sleep instead of silently reopening at the worktree root.
 import type { ColdRestoreDetection } from '../../daemon/history-reader'
 import { wslUncPathToLinux } from './wsl-move-path-rewriter'
 
@@ -11,17 +7,17 @@ export type WslMoveRestoreHint = { paneKey: string; cwd: string }
 export type WslMoveRestoreHintPane = {
   paneKey: string
   sessionId: string
-  /** The distro the pane's session ran in, as the daemon reported it; null for a native shell. */
+  /** Daemon-reported distro; null means a native shell. */
   wslDistro?: string | null
 }
 
 export type WslMoveRestoreHintCapture = {
   hints: WslMoveRestoreHint[]
-  /** Panes whose checkpoint could not be read; the preview names them, the move still runs. */
+  /** Preview warns, but unreadable checkpoints do not block the move. */
   unreadablePaneKeys: string[]
-  /** Panes with no folder inside the moved distro to restore; they reopen at the workspace root. */
+  /** No usable cwd in the moved distro; restore at workspace root. */
   noCwdPaneKeys: string[]
-  /** Panes whose folder may be older than the last one the shell was in. */
+  /** Checkpoint may predate the shell's last cwd. */
   staleCwdPaneKeys: string[]
 }
 
@@ -46,7 +42,7 @@ export async function captureWslMoveRestoreHints(
   for (const pane of panes) {
     let detection: ColdRestoreDetection
     try {
-      // A sleep ends the session cleanly; its checkpoint is exactly what a cold restore would read.
+      // Clean Sleep exits still need their cold-restore checkpoints.
       detection = await reader.detectColdRestoreState(pane.sessionId, {
         ignoreCleanEnd: true,
         wslDistro: distro
@@ -69,7 +65,7 @@ export async function captureWslMoveRestoreHints(
       continue
     }
     capture.hints.push({ paneKey: pane.paneKey, cwd: linux })
-    // A spawn-folder fallback is as stale as a checkpoint behind an unreadable log.
+    // Spawn-folder fallbacks are stale too.
     if (detection.hasUnreadableRecovery || detection.cwdFromSpawn) {
       capture.staleCwdPaneKeys.push(pane.paneKey)
     }
@@ -77,7 +73,7 @@ export async function captureWslMoveRestoreHints(
   return capture
 }
 
-// The bridge's UNC spelling, or a Linux path from a session known to run in the moved distro.
+// Accept Linux spelling only with evidence the session ran in this distro.
 function hostLinuxCwd(cwd: string, pane: WslMoveRestoreHintPane, distro: string): string | null {
   const fromUnc = wslUncPathToLinux(cwd, distro)
   if (fromUnc) {

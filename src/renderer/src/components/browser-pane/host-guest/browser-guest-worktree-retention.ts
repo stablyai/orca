@@ -1,23 +1,9 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 
-// Why 4: every hidden worktree that retains browser guests keeps one Electron
-// guest process per page alive purely for instant revisits, so guest memory
-// grew linearly with worktrees visited (#12137). Four hidden worktrees covers
-// the common switch-back working set; older ones are destroyed and rebuild
-// from persisted tab state on the next visit.
+// Limit idle retained guest processes across hidden worktrees; four covers common revisits while older pages rebuild from persisted state.
 export const BROWSER_GUEST_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 
-/**
- * Hidden worktrees whose retained guests fall beyond the budget, LRU-first.
- *
- * orderedWorktreeIds must be most-recently-activated first (LRU order =
- * worktree activation order). Only worktrees that actually hold live guests
- * count toward the limit. The active worktree never counts and is never
- * evicted. isEvictable is consulted lazily, only for worktrees beyond the
- * limit — a non-evictable one (a guest an automation/mobile controller is
- * actively driving, or one still writing a download) stays retained over
- * budget.
- */
+/** Evict LRU-first beyond the hidden live-guest budget. Input is most-recent-first; active worktrees never count, and lazy vetoes may retain protected pages over budget. */
 export function selectBrowserGuestEvictionWorktreeIds(args: {
   orderedWorktreeIds: readonly string[]
   activeWorktreeId: string | null
@@ -52,8 +38,7 @@ export function selectBrowserGuestEvictionWorktreeIds(args: {
   return evictedIds
 }
 
-// Why the fallback: webviews key by page id, but legacy sessions persisted
-// before pages existed key by the workspace tab id (see collectBrowserWebviewIds).
+// Support legacy sessions whose guests use the workspace tab ID instead of page IDs.
 export function worktreeHoldsLiveBrowserGuests(
   browserTabs: readonly BrowserWorkspace[],
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
@@ -68,8 +53,7 @@ export function worktreeHoldsLiveBrowserGuests(
   })
 }
 
-// Mirrors BrowserOverlaySlot's page-id derivation so visibility pinning
-// (automation-visible / mobile-driven) protects exactly the slots it paints.
+// Match painted slot IDs so automation, mobile and paired-viewer retention protect the same guests.
 export function browserTabVisibilityPageIds(tab: BrowserWorkspace): readonly string[] {
   return tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
 }

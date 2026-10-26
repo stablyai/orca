@@ -57,12 +57,7 @@ describe('pr-e2e-native-only-routing', () => {
 })
 
 describe('pr-e2e-pane-close-routing', () => {
-  /**
-   * The product paths of #21005, "retire captured remote handles when pending panes close". It
-   * changed the pane close and retirement lifecycle across three transports and matched no route
-   * at all, so it merged with E2E skipped outright. The routes named every module that BINDS a
-   * pane and none that unbinds one.
-   */
+  // #21005 changed pane close/retirement across three transports with E2E skipped: routes covered binders but missed unbinders.
   const PENDING_PANE_CLOSE_CHANGE = [
     'src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts',
     'src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts',
@@ -88,8 +83,7 @@ describe('pr-e2e-pane-close-routing', () => {
 
     it('routes each unbind authority on its own, not just as a group', () => {
       expect(CLOSE_ROUTE, 'the close route was renamed or removed').toBeDefined()
-      // A single-file change is the shape that slipped through; assert per path rather than only
-      // on the union, where one matching path would hide five that do not.
+      // Assert each single path; union could hide missed routes behind one match.
       for (const file of PENDING_PANE_CLOSE_CHANGE) {
         expect(selectPrE2eSpecs([file]), file).toEqual(CLOSE_ROUTE.specs.toSorted())
       }

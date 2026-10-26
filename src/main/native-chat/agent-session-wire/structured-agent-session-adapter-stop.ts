@@ -1,9 +1,9 @@
+// Chat Stop ends the captured child for every provider; default prompt Cancel interrupts its turn.
+
 import type {
   AgentChildWorkStopAcknowledgement,
   AgentSessionBackgroundTaskStops
 } from '../../../shared/agent-child-work-stop-targets'
-// Chat Stop ends the captured child for every provider; default prompt Cancel interrupts its turn.
-
 import type {
   AgentJournalApprovalItem,
   AgentJournalDispatchState,

@@ -31,25 +31,25 @@ function makeEngine(mutations: Partial<PrActionMutations>) {
 describe('PrActionsEngine — scoped busy clear (overlapping actions)', () => {
   it('a late-resolving action does not clear a newer action busy state', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
+    const newer = deferred<GitHubPrMutationOutcome>()
     const engine = makeEngine({
-      // merge resolves slowly; state resolves immediately.
       mergePR: () => slow.promise,
-      updatePRState: async () => ({ ok: true })
+      updatePRState: () => newer.promise
     })
 
-    // Start merge (sets busy = merge) but don't let it resolve yet.
     const mergePromise = engine.merge()
     expect(engine.isBusy({ kind: 'merge' })).toBe(true)
 
-    // While merge is in-flight, run state to completion (sets then clears busy=state).
-    await engine.updateState('closed')
-    // State began after merge, so it overwrote busy to 'state', then cleared its own.
-    expect(engine.isBusy({ kind: 'state' })).toBe(false)
+    const statePromise = engine.updateState('closed')
+    expect(engine.isBusy({ kind: 'state' })).toBe(true)
 
-    // Now let the slow merge finish. Its finally must NOT clear a busy it no longer owns.
+    // Late merge completion must not clear a newer action’s busy state.
     slow.resolve({ ok: true })
     await mergePromise
-    // busy stays null (state already cleared); the key point is merge didn't clobber.
+    expect(engine.isBusy({ kind: 'state' })).toBe(true)
+
+    newer.resolve({ ok: true })
+    await statePromise
     expect(engine.busy).toBeNull()
   })
 
@@ -117,11 +117,9 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       refetch: () => {},
       onChange
     })
-    // Idle: error is already null. Action start must only notify for busy, not a
-    // redundant clearError path.
+    // Already-clear error state must not add a redundant action-start notification.
     onChange.mockClear()
     const p = engine.merge()
-    // First notify is setBusy only (setError(null) no-ops).
     expect(onChange).toHaveBeenCalledTimes(1)
     await p
   })

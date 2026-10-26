@@ -70,8 +70,7 @@ describe('retiredNamesAfterRefresh', () => {
     ).toEqual(loadOf('repo-1', ['nautilus-2'], 1))
   })
 
-  // The divergence this module exists to close: mobile used to reset to [] here, which un-retires
-  // every name in the window where the create form is asking for a suggestion.
+  // A failed refresh must not un-retire names while the create form requests suggestions.
   it('holds the previous registry when the refresh fails', () => {
     expect(retiredNamesAfterRefresh(loadOf('repo-1', ['nautilus'], 2), 'repo-1', null)).toEqual(
       loadOf('repo-1', ['nautilus'], 2)

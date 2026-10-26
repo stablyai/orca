@@ -1,12 +1,10 @@
-// The native-chat row that stands in for a question tool call. Both platform
-// UIs read this copy (desktop as its i18n fallbacks, mobile directly) so the two
-// can never describe the same pending question differently.
+// Shared desktop i18n fallbacks and direct mobile copy keep pending-question rows consistent.
 
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import { CODEX_ASYNC_QUESTION_TOOL } from './codex-async-question-input'
 import { parseAskFromToolInput } from './native-chat-ask'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
-import { pairToolBlocks } from './native-chat-tool-fold'
+import { pairToolBlocks } from './native-chat/tools/native-chat-tool-pairs'
 
 export const NATIVE_CHAT_ASK_ROW_COPY = {
   awaiting: 'Awaiting user input:',
@@ -15,15 +13,11 @@ export const NATIVE_CHAT_ASK_ROW_COPY = {
   questionCount: '{{value0}} questions'
 } as const
 
-/** What was asked: the one question, or every question of a grouped prompt. One
- *  row stands for the whole prompt, so a grouped prompt names its count on the
- *  line rather than quoting its first question as though it were the only one. */
+/** One subject per whole prompt; grouped prompts show their count rather than only the first question. */
 export type NativeChatAskRowSubject =
   | { kind: 'question'; text: string }
   | { kind: 'questions'; questions: string[] }
 
-/** Whether this block is a question tool call, and so is drawn as the awaiting
- *  row rather than as an ordinary tool line. */
 export function isNativeChatAskCall(block: NativeChatBlock): boolean {
   return (
     isToolCallBlock(block) &&
@@ -64,14 +58,11 @@ export function nativeChatAskRunBlocks(blocks: NativeChatBlock[]): {
   }
 }
 
-/** Whether this run asks the reader anything. Decided by the tool name alone,
- *  because that already says the agent is blocked on an answer — a payload this
- *  cannot parse must not put the raw call back on screen as the row it replaced. */
+/** Tool identity alone signals a pending question; unreadable input must not restore the raw tool row. */
 export function hasNativeChatAskCall(blocks: readonly NativeChatBlock[]): boolean {
   return blocks.some(isNativeChatAskCall)
 }
 
-/** The questions one call names, dropping any it states blankly. */
 function askCallQuestions(block: NativeChatBlock): string[] {
   if (!isToolCallBlock(block)) {
     return []
@@ -82,15 +73,7 @@ function askCallQuestions(block: NativeChatBlock): string[] {
     : []
 }
 
-/**
- * The subject for the whole run's question activity, or null when nothing in it
- * names a question — the row then stands on its label alone, which still tells
- * the reader the turn is theirs to unblock.
- *
- * Aggregated across calls, not taken from one: Codex journals a separate call
- * per question of the same prompt, so a per-call row would stack three pulsing
- * lines for what the reader was asked once.
- */
+/** Aggregate question activity across calls (Codex emits one per question). Null means use the row label alone. */
 export function nativeChatAskRunSubject(
   blocks: readonly NativeChatBlock[]
 ): NativeChatAskRowSubject | null {

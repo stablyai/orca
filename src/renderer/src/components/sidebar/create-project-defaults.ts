@@ -4,9 +4,7 @@ function pathSeparatorFor(pathValue: string): '/' | '\\' {
   return pathValue.includes('\\') ? '\\' : '/'
 }
 
-/** True only for `{home}/orca/projects` on the usual OS home layouts. A configured
- *  directory that merely ends in `orca/projects` (e.g. `/data/orca/projects`) must
- *  stay verbatim — the `~` shorthand would otherwise lie. */
+/** Use ~ only for recognized OS home layouts; suffix-matching arbitrary orca/projects paths would mislabel them. */
 function isHomeProjectsFallback(pathValue: string): boolean {
   return /^(?:\/(?:Users|home)\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)[\\/]orca[\\/]projects$/.test(
     pathValue

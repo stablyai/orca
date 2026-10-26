@@ -1,14 +1,14 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue,
   SessionOptionsSurface
 } from '../../../src/shared/native-chat-session-options'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,

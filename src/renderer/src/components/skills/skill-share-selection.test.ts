@@ -20,8 +20,6 @@ function skill(name: string, overrides: Partial<DiscoveredSkill> = {}): Discover
 }
 
 describe('eligibleShareSkillCount', () => {
-  // Why: the count labels the "Select all" button, so it has to predict what
-  // that click actually produces — duplicates collapse, ineligible rows drop.
   it('matches what selecting all results would hold', () => {
     const results = [
       skill('alpha'),

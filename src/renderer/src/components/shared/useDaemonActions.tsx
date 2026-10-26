@@ -21,10 +21,7 @@ import {
 export type DaemonActionKind = 'restart' | 'killAll'
 
 export type DaemonActionCallbacks = {
-  // Why: ManageSessionsSection owns an optimistic setSessions([]) + rollback
-  // pattern. Exposing lifecycle hooks lets each caller keep the state that
-  // belongs to it (the settings pane's list; the status bar's badge) instead
-  // of pulling unrelated concerns into this module.
+  // Keep optimistic list/badge ownership with callers by exposing mutation lifecycle callbacks.
   onKillAllStart?: () => void
   onKillAllError?: () => void
   onKillAllSettled?: () => void
@@ -172,8 +169,7 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
   }, [callbacks, clearPendingAction, mountedRef])
 
   const runKillAll = useCallback(async () => {
-    // Why: confirmation covers the surface identities visible now; taking this
-    // before callbacks or awaits keeps later-created terminal tabs out of scope.
+    // Snapshot confirmed surfaces before callbacks/awaits so newly created tabs stay outside the destructive scope.
     const targetSurfaceIds = snapshotKillAllTerminalSurfaceIds()
     setBusyKind('killAll')
     callbacks?.onKillAllStart?.()
@@ -269,8 +265,7 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
 
 export function DaemonActionDialog({
   api,
-  // Why: when mounted under a Popover, we need the confirm to stay open while
-  // the mutation runs. The caller wires `onOpenChange` here to gate dismissal.
+  // Popover callers gate dismissal so confirmation remains mounted during mutation.
   extraDescription
 }: {
   api: DaemonActionsApi

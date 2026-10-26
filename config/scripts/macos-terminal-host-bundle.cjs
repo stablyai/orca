@@ -294,10 +294,10 @@ async function loadNodeRuntimePin() {
 }
 
 async function pinnedDarwinNode(arch) {
-  const { ensurePinnedNodeExecutable } = await import(
-    pathToFileURL(resolve(__dirname, 'pinned-node-downloads.mjs')).href
+  const { ensureDarwinTerminalNode } = await import(
+    pathToFileURL(resolve(__dirname, 'build-darwin-terminal-node.mjs')).href
   )
-  return ensurePinnedNodeExecutable({ target: `darwin-${arch}` })
+  return ensureDarwinTerminalNode({ arch })
 }
 
 /**

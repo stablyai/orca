@@ -218,7 +218,6 @@ describe('Pi host launch resolution', () => {
       link: { ...h.prior(file), mintedAtFence: fence },
       now: 1_800_000_000_002
     })
-    // A restart: the store is closed and a fresh one reads the record back from disk.
     closeTestJournalHostDatabase(root)
     const reopened = await openTestAgentSessionRecordStore(root)
     const launch = await createPiRpcLaunchResolver({

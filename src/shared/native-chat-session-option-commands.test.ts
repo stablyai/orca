@@ -155,9 +155,7 @@ describe('recordNativeChatSessionOptionCommand', () => {
   })
 
   it('rejects prose that merely starts with a command template', () => {
-    // The `/model ` prefix matches this, so an unvalidated parse tracked
-    // "is a weird word" as the current model — which then rendered as the pill
-    // label and, matching no catalog model, dropped every per-model option.
+    // Unchecked /model template prefixes treated prose as an unknown model, replacing the pill and dropping its options.
     const record = claudeRecord('sonnet')
     expect(
       recordNativeChatSessionOptionCommand({
@@ -210,8 +208,7 @@ describe('recordNativeChatSessionOptionCommand', () => {
   })
 
   it('still tracks an alias the active model list no longer carries', () => {
-    // Per-host discovery can drop the `opus` alias; typing it is still valid and
-    // callers reconcile the row back, so rejecting it would lose the selection.
+    // Host discovery can omit valid CLI aliases; retain and reconcile typed selections.
     const record = claudeRecord('sonnet')
     const discovered = CLAUDE_SESSION_OPTION_CATALOG.models.filter((model) => model.id !== 'opus')
     recordNativeChatSessionOptionCommand({
@@ -327,9 +324,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
   })
 
   it('tracks a typed effort under the CLI default when no model was picked', () => {
-    // Regression: the picker draws the effort row under grok's own default, so reading
-    // the tracked model alone dropped the very command that row's pill reports on —
-    // leaving it `unknown` right after the user set it.
+    // Typed effort under the CLI default must persist even without a tracked model, or its pill stays unknown.
     const record = grokRecord()
     const persist = vi.fn()
     expect(
@@ -349,8 +344,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
   })
 
   it('does not reset tracked state when the typed model is the CLI default already shown', () => {
-    // Regression: an untracked record read as `null`, so re-typing the model the picker
-    // already displays looked like a switch and deleted that model's options.
+    // Retyping the displayed CLI default is no model switch and must not erase its tracked options.
     const record = grokRecord()
     recordGrok(record, '/effort low')
     recordGrok(record, '/model grok-4.7')

@@ -13,9 +13,7 @@ let providerMonaco: MonacoApi = null
 let documentsByModel = new WeakMap<editor.ITextModel, MarkdownDocument[]>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
-  // Why: if Monaco was torn down and re-created (e.g. window reload), the old
-  // provider reference is stale. Detect this by checking whether the Monaco
-  // instance changed and re-register.
+  // Re-register when Monaco is recreated; the old provider belongs to the previous instance.
   if (provider && providerMonaco === monaco) {
     return
   }

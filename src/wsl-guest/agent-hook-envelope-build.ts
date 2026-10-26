@@ -1,6 +1,4 @@
-// Pure mapping from a parsed hook event plus its raw body onto the `agent.hook` envelope that goes
-// over the SSH channel. Sits beside agent-hook-envelope-publication.ts, which owns shedding and
-// redelivery of the same envelope.
+// Build SSH hook envelopes from parsed events/raw bodies; publication owns shedding and redelivery.
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
 import { pickHostTurnEnd } from '../shared/agent-status-types'

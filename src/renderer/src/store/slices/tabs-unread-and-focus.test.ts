@@ -7,10 +7,8 @@ import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -19,7 +17,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -41,8 +38,6 @@ describe('TabsSlice', () => {
   beforeEach(() => {
     store = createTestStore()
   })
-
-  // ─── activateTab ──────────────────────────────────────────────────
 
   describe('activateTab', () => {
     it('sets the active tab on the group', () => {
@@ -75,7 +70,6 @@ describe('TabsSlice', () => {
         }
         await main.settle()
 
-        // Main stores no false preview flag.
         expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(
           ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
         )
@@ -84,7 +78,7 @@ describe('TabsSlice', () => {
       }
     })
 
-    // Why (regression): activateTab gets a *unified* tabId but the bell is keyed by entityId, so the on-screen read must name the entityId.
+    // Unified activation IDs differ from entity-keyed bell markers; on-screen read must use entityId.
     it('puts the terminal tab on screen by entityId and leaves its marker to the on-screen read', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
       const t2 = store.getState().createUnifiedTab(WT, 'terminal')
@@ -144,11 +138,10 @@ describe('TabsSlice', () => {
 
   describe('markTerminalBell tab marker', () => {
     it('marks the tab even when it is active in a visible split group of the active worktree', () => {
-      // Group A: the worktree's root group (implicit from createUnifiedTab), populated with tabA.
       const tabA = store.getState().createUnifiedTab(WT, 'terminal')
       const groupAId = store.getState().groupsByWorktree[WT][0].id
 
-      // Group B: split right of A, populate + focus it so tabA is visible-but-not-focused.
+      // Split/focus group B so group A’s tab is visible but unfocused.
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
@@ -175,7 +168,7 @@ describe('TabsSlice', () => {
         }
       })
 
-      // Fire a bell on Group A's visible tab: under ghostty semantics the indicator still appears — only pane input dismisses it.
+      // Visible unfocused tabs still get BEL markers; only pane input dismisses them.
       store
         .getState()
         .markTerminalBell({ worktreeId: WT, tabId: tabA.entityId, paneKey: `${tabA.entityId}:0` })
@@ -184,13 +177,12 @@ describe('TabsSlice', () => {
     })
 
     it('does mark a tab that is not the active tab of any visible group', () => {
-      // Group A with two terminal tabs. Activate tabA1, leaving tabA2 inactive.
       const tabA1 = store.getState().createUnifiedTab(WT, 'terminal')
       const tabA2 = store.getState().createUnifiedTab(WT, 'terminal')
       const groupAId = store.getState().groupsByWorktree[WT][0].id
       store.getState().activateTab(tabA1.id)
 
-      // Split Group B to the right with its own tab (two visible groups, matching the split-group condition); focus it.
+      // Create/focus group B to exercise bells with two visible groups.
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
@@ -198,7 +190,7 @@ describe('TabsSlice', () => {
       store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
       store.getState().focusGroup(WT, groupBId)
       store.setState({ activeWorktreeId: WT })
-      // Why: the bell's tab marker skips tabs missing from tabsByWorktree, so seed the backing legacy tab that every terminal unified tab has in production.
+      // Bell marking requires backing legacy terminal rows, as every production terminal has.
       store.setState({
         tabsByWorktree: {
           [WT]: [
@@ -216,7 +208,6 @@ describe('TabsSlice', () => {
         }
       })
 
-      // tabA2 is NOT the active tab of any group — a bell on it is legitimate.
       store
         .getState()
         .markTerminalBell({ worktreeId: WT, tabId: tabA2.entityId, paneKey: `${tabA2.entityId}:0` })
@@ -349,12 +340,11 @@ describe('TabsSlice', () => {
           { screenArrived: false }
         )
 
-      // Same reference => no-op. Downstream selectors must not re-render.
       expect(store.getState().unreadTerminalTabs).toBe(initial)
     })
   })
 
-  // Regression guard: clicking a group whose tab is already active (no activateTab) must still dismiss the bell, else it lingers until a second click.
+  // Already-active group clicks skip activateTab; focusGroup must still expose its tab to the attention scan.
   describe('focusGroup', () => {
     it('does not broadcast active-surface writes when the focused group is already current', () => {
       const editorFileId = '/tmp/feature/src/main.ts'
@@ -407,7 +397,6 @@ describe('TabsSlice', () => {
         throw new Error('createEmptySplitGroup returned null')
       }
       const tabB = store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
-      // Focus Group B first so the active group is not A.
       store.getState().focusGroup(WT, groupBId)
 
       store.setState({

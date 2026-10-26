@@ -8,7 +8,7 @@ import {
   RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
 } from './raster-image-preview-limits'
 
-/** The pre-change verdict: one full-payload decode, then one dimension read. */
+/** Frozen full-payload decode/dimension baseline for comparison with the prefix probe. */
 function unprobedExceeds(content: string, mimeType: string | undefined): boolean {
   if (!isKnownRasterImageMimeType(mimeType)) {
     return false
@@ -21,9 +21,7 @@ function unprobedExceeds(content: string, mimeType: string | undefined): boolean
   return dimensions !== null && !isRasterImagePreviewDimensions(dimensions)
 }
 
-// Why a module mock: the byte length handed to the dimension reader is the direct measure of how
-// much of the payload the preview check decoded, and it is the only observable difference between
-// the early-stopping probe and the full-payload decode it replaces.
+// Observe decoded bytes handed to dimension reading; output equivalence alone cannot detect wasted full-payload decoding.
 const { dimensionReadLengths } = vi.hoisted(() => ({ dimensionReadLengths: [] as number[] }))
 
 vi.mock('./raster-image-dimensions', async (importOriginal) => {
@@ -154,7 +152,6 @@ function referenceDecodeBase64Prefix(content: string, maxBytes: number): Uint8Ar
   return output.subarray(0, outputLength)
 }
 
-// ── Fixtures ───────────────────────────────────────────────────────────────────────────────────
 function pngBytes(totalBytes: number, width: number, height: number): Buffer {
   const bytes = Buffer.alloc(Math.max(totalBytes, 24))
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
@@ -306,9 +303,7 @@ describe('exceedsRasterImagePreviewLimits', () => {
   it('re-reads the whole payload before suppressing an over-limit image', () => {
     const content = pngBytes(70_000, 32_769, 1).toString('base64')
     expect(exceedsRasterImagePreviewLimits(content, 'image/png')).toBe(true)
-    // The header answers at 64 bytes, but a suppression verdict is only taken from the same
-    // full-payload decode the unprobed implementation used, so invalid base64 past the header
-    // still demotes the answer to "could not measure".
+    // Before suppression, validate the full payload: later invalid base64 must still mean unmeasurable, not oversized.
     expect(dimensionReadLengths).toEqual([64, 70_000])
   })
 

@@ -13,8 +13,7 @@ vi.mock('../store', () => ({
 
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 
-// Why (#25804): the paired server's SSH workspace lists its agents under the server, not under
-// the server's SSH connection id, which this client has no connection for.
+// A paired server’s SSH workspace lists agents under that server, not under its client-unknown SSH connection.
 describe('resolveTerminalAgentTabShortcut', () => {
   it("picks the default agent from a paired server's SSH workspace inventory", () => {
     store.current = createTestStore()

@@ -6,27 +6,16 @@ import {
 } from '../../shared/plugins/plugin-host-protocol'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 
-/**
- * Message-loop core of the out-of-process plugin worker. Electron-free and
- * side-effect-free (send/import/exit are injected) so it unit-tests without
- * forking a real child process; `plugin-host-entry.ts` wires it to the fork
- * IPC channel.
- */
-
 export type PluginHostCallError = Error & { code?: string }
 
-/** API surface handed to a plugin's `activate(orca)` export. Everything is
- *  EXPERIMENTAL until pluginApi v1 freezes. */
+/** Experimental activate(orca) surface; host capability checks remain authoritative. */
 export type PluginWorkerOrcaApi = {
-  /** Register the handler for a command declared in the manifest. */
   commands: {
     register(commandId: string, handler: (args: unknown) => unknown): void
   }
-  /** Handle an event the manifest subscribed to (`contributes.events`). */
   events: {
     on(event: PluginEventName, handler: (payload: unknown) => void | Promise<void>): void
   }
-  /** Call a host API method (capability-gated host-side). */
   host: {
     call(method: string, params?: unknown): Promise<unknown>
   }
@@ -76,9 +65,7 @@ export function createPluginWorkerRuntime(
       return
     }
     initialized = true
-    // Why: file URL import keeps ESM plugin entries working on Windows paths.
-    // Why: manifest paths accept either portable separator; split explicitly
-    // so a Windows-authored plugin also imports on macOS/Linux and vice versa.
+    // File URLs support Windows ESM imports; split either separator for cross-platform manifests.
     const entryUrl = pathToFileURL(join(input.pluginRoot, ...input.mainEntry.split(/[\\/]/))).href
     const module = (await importModule(entryUrl)) as { default?: unknown; deactivate?: unknown }
     const activate = module?.default
@@ -199,9 +186,7 @@ export function createPluginWorkerRuntime(
           }
         }
       } catch (error) {
-        // Why: an init/activation failure leaves the worker useless; report
-        // and die so the parent surfaces the error instead of hanging on
-        // the ready timeout.
+        // Failed activation cannot become ready; report and exit without waiting for the parent timeout.
         send({ type: 'fatal', error: toErrorMessage(error) })
         exit(1)
       }

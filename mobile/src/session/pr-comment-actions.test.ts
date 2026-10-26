@@ -116,6 +116,8 @@ describe('isMutablePRConversationComment', () => {
   it('requires a positive integer id', () => {
     expect(isMutablePRConversationComment(comment({ id: 0 }))).toBe(false)
     expect(isMutablePRConversationComment(comment({ id: -1 }))).toBe(false)
+    expect(isMutablePRConversationComment(comment({ id: 1.5 }))).toBe(false)
+    expect(isMutablePRConversationComment(comment({ id: Number.MAX_SAFE_INTEGER + 1 }))).toBe(false)
   })
 })
 

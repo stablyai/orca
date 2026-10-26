@@ -406,8 +406,7 @@ describe('createMainWindow', () => {
 
     const isDarwin = process.platform === 'darwin'
 
-    // Cmd+Shift+B is not in the policy allowlist, so no action resolves and no
-    // preventDefault fires — but the carve-out must not be what lets it through.
+    // Cmd+Shift+B must reach policy rejection, not the carve-out.
     const shiftPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: shiftPreventDefault } as never,
@@ -423,9 +422,7 @@ describe('createMainWindow', () => {
     )
     expect(shiftPreventDefault).not.toHaveBeenCalled()
 
-    // Cmd+Alt+B is not a modifier chord in the policy (alt excluded), so the
-    // policy returns null and no preventDefault fires. Assert the carve-out
-    // is not what's short-circuiting this — it requires !alt.
+    // Cmd+Alt+B must reach policy rejection; the carve-out excludes alt.
     const altPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: altPreventDefault } as never,
@@ -480,8 +477,7 @@ describe('createMainWindow', () => {
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
 
-    // Seed to true with a legitimate payload, then send a non-boolean and
-    // assert the flag returns to false by checking Cmd+B resumes interception.
+    // Seed focus true, reject a non-boolean update, then verify Cmd+B is intercepted again.
     setFocusedListener?.({ sender: webContents } as never, true)
     setFocusedListener?.({ sender: webContents } as never, { malicious: true } as never)
 

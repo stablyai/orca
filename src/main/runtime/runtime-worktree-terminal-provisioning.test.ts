@@ -28,19 +28,15 @@ function fakeHost() {
 }
 
 function provision(host: ReturnType<typeof fakeHost>, startup: boolean) {
-  return provisionWorktreeTerminals(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every host member provisioning reaches for default tabs with no setup.
-    host as unknown as WorktreeTerminalProvisioningHost,
-    {
-      worktreeSelector: 'id:wt-1',
-      worktreeId: 'wt-1',
-      worktreePath: '/worktrees/wt-1',
-      defaultTabs: DEFAULT_TABS,
-      primaryTerminalHandle: startup ? 'term_agent' : null,
-      hasStartupTerminal: startup,
-      setupCommandPlatform: 'posix'
-    }
-  )
+  return provisionWorktreeTerminals(host, {
+    worktreeSelector: 'id:wt-1',
+    worktreeId: 'wt-1',
+    worktreePath: '/worktrees/wt-1',
+    defaultTabs: DEFAULT_TABS,
+    primaryTerminalHandle: startup ? 'term_agent' : null,
+    hasStartupTerminal: startup,
+    setupCommandPlatform: 'posix'
+  })
 }
 
 describe('default tabs beside the agent a create started', () => {

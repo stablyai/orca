@@ -25,7 +25,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     defaultTaskSource,
     visibleTaskProviders
   } = model
-  // Why: seed preset + query synchronously so the first fetch issues one request; a prior post-mount re-seed caused a throwaway empty-query fetch, doubling time-to-first-paint.
+  // Seed preset/query synchronously to avoid a throwaway initial empty-query request.
   const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource

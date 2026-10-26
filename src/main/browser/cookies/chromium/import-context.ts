@@ -5,15 +5,15 @@ import type {
   BrowserCookieImportSummary
 } from '../../../../shared/browser-workspace-types'
 import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
-import type { CookieImportOptions } from '../../browser-cookie-import-pipeline'
+import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import type {
   ImportedCookieFields,
   ImportWritePhase,
   ImportWritePlanResult,
   SourceCookieToWrite
-} from '../../browser-cookie-import-write'
+} from '../browser-cookie-import-write'
 import type { SourcePartitionRead } from '../sources/browser-cookie-source-partition'
-import type { ImportedDomainScope } from '../../browser-cookie-import-policy'
+import type { ImportedDomainScope } from '../browser-cookie-import-policy'
 import type { ChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
 import type {
   ChromiumCookieColumnInfo,

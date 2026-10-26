@@ -1,9 +1,4 @@
-// A paired server whose main takes layout intents (`layout.intents.v1`) draws its workspaces in
-// this window from its layout stream instead of the session.tabs mirror (design H5). One source per
-// workspace at a time: the mirror stops writing a workspace's layout as the stream's snapshot comes
-// in, and gets it back, with a fresh snapshot, when the stream stops. session.tabs keeps flowing for
-// terminal handles and statuses either way. A workspace with editor tabs only this desktop shows
-// gates once the server's main took them (server-layout-editor-handover.ts).
+// Capable paired main draws workspace layout from frames, with exactly one writer at a time (H5). Gate mirror on snapshot; stream loss returns ownership with a fresh snapshot. session.tabs still supplies handles/status. Hand desktop-only editors over before gating.
 
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -182,8 +177,7 @@ function openServerFrames(
       live ||= frame.type === 'snapshot'
       if (frame.type === 'snapshot') {
         viewReport.reset()
-        // Two hops, past the flush the sync queues after this returns: if applying the snapshot
-        // changed nothing in the store, nothing has re-sent the view yet.
+        // Two microtasks outlive queued flush; an unchanged snapshot otherwise never resends the view.
         queueMicrotask(() => queueMicrotask(reportCurrent))
       }
       // Before the frame shows: the mirror must not write a workspace the frames now draw.
@@ -206,8 +200,7 @@ function openServerFrames(
       sync.redraw(added)
     }
   }
-  // A workspace can turn out to be this server's after its snapshot (pairing just finished): it is
-  // gated, then drawn, as the routing that names it arrives.
+  // Late pairing can establish ownership after snapshot; gate then redraw when routing arrives.
   let routing: unknown[] = []
   const stopRouting = store.subscribe((state) => {
     if (live) {

@@ -1,3 +1,4 @@
+import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
 import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
@@ -59,7 +60,7 @@ export type StructuredAgentSessionDeadGenerationInput = {
   exitFailure?: SubmissionRejectionFact
   failureTextContext?: AgentSessionFailureWordsContext
   /** Share generation-keyed startup failure rows with delivery-loop settlement. */
-  exitedDuringStartup?: { generation: string | null }
+  exitedDuringStartup?: { generation: string | null; flightOwned?: boolean }
   /** Refine translator-unverifiable rows after observed exit proof. */
   exit?: StructuredAgentSessionWatchedExit
   unrunRejection?: SubmissionRejectionFact
@@ -94,7 +95,7 @@ export function planStructuredAgentSessionDeadGeneration(
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
     )
   ]
-  const allItems = input.journal.snapshot().items
+  const allItems = providerTimelineExecutionItems(input.journal.snapshot().items)
   const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
   const proven = watchedExitRevisions(items, input.exit, input.journal)
   const mutations: JournalLifecycleMutationInput[] = []
@@ -103,6 +104,7 @@ export function planStructuredAgentSessionDeadGeneration(
     // Delivery owns failure rows for sends; other startup effects need their own row.
     // Existing rejection wording is terminal and must remain unchanged.
     const recordedByDeliveryLoop =
+      input.exitedDuringStartup.flightOwned ||
       input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
       hasStructuredAgentSessionStartFailureRow(allItems, startKey)
     if (!recordedByDeliveryLoop) {

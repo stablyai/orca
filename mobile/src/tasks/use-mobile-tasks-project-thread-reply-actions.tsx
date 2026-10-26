@@ -151,8 +151,6 @@ export function useMobileTasksProjectThreadReplyActions(
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        // The same predicate as before, but as the anchor it selects: `commentId` and `line` are
-        // numbers only inside it, which the boolean it used to be could not carry to the send.
         const reviewAnchor =
           row.itemType === 'PULL_REQUEST' &&
           comment.path &&
@@ -160,8 +158,6 @@ export function useMobileTasksProjectThreadReplyActions(
           typeof comment.id === 'number'
             ? { path: comment.path, line: comment.line, commentId: comment.id }
             : null
-        // A review reply and a plain issue comment are different methods, so each arm sends its
-        // own operation rather than one call picking a method string.
         const written = reviewAnchor
           ? githubReviewCommentReplyWrite.interpret(
               await githubReviewCommentReplyWrite.request(

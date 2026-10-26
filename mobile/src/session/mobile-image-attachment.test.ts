@@ -95,7 +95,6 @@ describe('attachMobileImageToTerminal', () => {
   })
 
   it('uploads the picked image and pastes its bracketed path into the terminal', async () => {
-    // startImageUpload (method_not_found) falls back to single-frame saveImageAsTempFile.
     const client = clientWithResponses([
       {
         id: 'start',
@@ -120,8 +119,7 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).toEqual({
       terminal: 'term-1',
-      // Trailing space: the user types on this same line next, so a bare
-      // `…\x1b[201~` would arrive as `…pngadd` (STA-4847).
+      // A separator prevents the next keystroke gluing to the pasted image path.
       text: '\x1b[200~/tmp/orca-attach.png\x1b[201~ ',
       enter: false,
       client: { id: 'device-9', type: 'mobile' }

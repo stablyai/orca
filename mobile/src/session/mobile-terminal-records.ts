@@ -134,8 +134,6 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
-        // A frame whose only delta is the launch draft appearing or retracting
-        // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
@@ -180,10 +178,7 @@ function mobileSessionTabEqual(
   }
 }
 
-// Reconcile a partial session snapshot against the last known record for the
-// same terminal. The snapshot owns live fields (title, activity); the known
-// theme only survives when the snapshot omits it, since lightweight snapshots
-// can drop it. The host pane identity survives the same way.
+// Partial snapshots own live fields; omitted theme and host pane identity retain the known values.
 function mergeTerminalSnapshotWithKnownRecord(
   snapshot: TerminalRecord,
   known: TerminalRecord
@@ -215,10 +210,7 @@ export function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
-// Why: tab snapshots are partial and can transiently omit a live terminal, so absence
-// here is only a hint to schedule the `terminal.list` sweep -- never a reason to prune.
-// Restricted to connected, non-orphaned handles: parked leaves and orphaned PTYs are
-// legitimately absent from tabs forever and would pin the caller to the fast cadence.
+// Partial tabs only justify an inventory sweep, never pruning; parked/orphaned handles legitimately lack tabs and must not force fast polling.
 export function hasConnectedTerminalAbsentFromSessionTabs(
   currentTerminals: readonly TerminalRecord[],
   tabs: readonly MobileSessionTabLike[]
@@ -268,8 +260,7 @@ export function mergeTerminalListWithKnownRecords(
   return terminalList.map((terminal) => {
     const sessionTerminal = sessionTerminalsByHandle.get(terminal.handle)
     const currentTerminal = currentTerminalsByHandle.get(terminal.handle)
-    // Why: terminal.list summaries can omit the mobile theme; keep the richer
-    // session-tab/current record so polling cannot reset TerminalWebView.
+    // Keep richer themes absent from terminal.list so polling cannot reset the WebView.
     return {
       ...terminal,
       terminalTheme:

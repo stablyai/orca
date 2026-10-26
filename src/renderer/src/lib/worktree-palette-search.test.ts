@@ -117,8 +117,7 @@ describe('worktree-palette-search', () => {
   })
 
   it('drops oversized pasted queries instead of matching their text', () => {
-    // Documents are built per worktree set, not per keystroke, so the byte guard
-    // now lives in query preparation rather than in a pre-scan bail-out.
+    // Documents are reused across keystrokes; query preparation owns the byte guard.
     const oversizedQuery = 'a'.repeat(2049)
     expect(isWorktreePaletteQueryTooLarge('a'.repeat(2048))).toBe(false)
 
@@ -184,8 +183,7 @@ describe('worktree-palette-search', () => {
   })
 
   it('still lists a branch-less row on the empty query, which renders every row', () => {
-    // Why: the empty query short-circuits before any branch read, so the row reaches the
-    // render loop untouched — the label resolution there has to be guarded too.
+    // Empty queries bypass branch reads; render label resolution must guard missing branches too.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: undefined as unknown as string

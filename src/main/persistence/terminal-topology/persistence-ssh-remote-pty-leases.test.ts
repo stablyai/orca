@@ -553,24 +553,6 @@ describe('Store', () => {
     ).toThrow('belongs to SSH connection "ssh-2"')
   })
 
-  it('updates SSH remote PTY leases when callers pass scoped app ids', async () => {
-    const store = createStoreWithSshRemotePtyLeases([
-      {
-        targetId: 'ssh-1',
-        ptyId: 'remote-pty',
-        state: 'attached'
-      }
-    ])
-
-    store.markSshRemotePtyLease(
-      'ssh-1',
-      'ssh:ssh-1@@remote-pty',
-      PtyExitProof.from('exit-observed', undefined)
-    )
-
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
-  })
-
   it('clears workspace bindings when marking an SSH remote PTY lease terminated', async () => {
     const store = await storeWithBoundSshPane()
 

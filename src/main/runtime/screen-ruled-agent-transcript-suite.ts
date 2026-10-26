@@ -26,7 +26,7 @@ export type ScreenRuledAgentSuite = {
   readyWithoutScreen: readonly string[]
 }
 
-// Why these: grids out of step with the recording garble cursor-addressed chrome (#23475 review).
+// Mismatched grids garble cursor-addressed chrome (#23475 review).
 const MISMATCHED_GRIDS = [
   [80, 24],
   [100, 30],
@@ -34,11 +34,10 @@ const MISMATCHED_GRIDS = [
   [150, 50]
 ] as const
 
-// Why 8s: quiescence (3s) plus the 2s poll re-reading the grid. Why 5s: past both, so a refusal
-// has been through the quiet lane and at least one poll tick.
+// 8s covers 3s quiescence and the 2s poll; 5s refusal allows both plus at least one poll tick.
 const READY_TIMEOUT_MS = 8_000
 const REFUSAL_TIMEOUT_MS = 5_000
-// Why the slack: onPtyData takes seconds over a multi-MB animated recording.
+// Allow for multi-MB animated recordings taking seconds in onPtyData.
 const PANE_SETUP_SLACK_MS = 30_000
 
 function chunkCount(name: string): number {
@@ -95,8 +94,7 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
         data: readRuntimeFixture(fixture.name),
         size: { cols: fixture.cols, rows: fixture.rows }
       })
-      // Why: a screen read awaits the emulator's queue. One multi-MB chunk leaves it parsing
-      // after the output clock has gone quiet, which a live PTY's 3s of silence never does.
+      // Drain emulator parsing: one multi-MB chunk can outlive the output quiet clock unlike a live PTY's silence.
       await created.runtime.readTerminal(created.handle, { screen: true })
       return created
     }
@@ -149,7 +147,7 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       READY_TIMEOUT_MS + PANE_SETUP_SLACK_MS
     )
 
-    // Why: a re-attach reflows a grid built before the real size was known; the TUI never repaints.
+    // Reattach reflows without a TUI repaint.
     it(
       'on a grid reflowed to the PTY size without a repaint, the lanes the screen would shut decide',
       async () => {
@@ -167,7 +165,7 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
           firstReady.cols,
           firstReady.rows
         )
-        // Why: an echo of the reflowed size sends no SIGWINCH, so nothing repaints.
+        // Echoing the already-reflowed size sends no SIGWINCH, so the TUI never repaints.
         runtime.onExternalPtyResize(TRANSCRIPT_PANE_PTY_ID, firstReady.cols, firstReady.rows)
         await runtime.readTerminal(handle, { screen: true })
         const result = await waitForTranscriptIdle({ runtime, handle }, READY_TIMEOUT_MS).catch(

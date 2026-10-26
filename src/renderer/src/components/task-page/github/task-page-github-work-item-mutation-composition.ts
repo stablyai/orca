@@ -42,8 +42,7 @@ export function pendingListOpsForFamily(
   ops: readonly PendingOp[],
   family: TaskPageGitHubListFamily
 ): PendingListOp[] {
-  // Why: same login may appear in multiple pending ops after rapid toggles;
-  // keep only the latest op per login so composition matches last intent.
+  // Keep the latest op per login so rapid toggles compose to the last intent.
   return [...ops]
     .filter((pending) => pending.listOp?.family === family)
     .sort((a, b) => a.startedAt - b.startedAt)
@@ -76,7 +75,7 @@ export function stripFamilyPendingFromList(
   )
   let list = current
   const familyOps = pendingListOpsForFamily(ops, family)
-  // Why: strip by reversing adds/removes so lazy snapshot ignores in-flight intent.
+  // Reverse pending adds/removes so lazy snapshots exclude in-flight intent.
   for (let i = familyOps.length - 1; i >= 0; i--) {
     const op = familyOps[i]
     for (let j = 0; j < op.logins.length; j++) {
@@ -99,8 +98,7 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
   const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope)
   let merged: GitHubWorkItem = { ...item }
 
-  // Why: after confirm, pending is cleared but search may still lag — hold the
-  // last confirmed whole-field values until a matching adopt or newer pending.
+  // Hold confirmed whole-field values after pending clears until matching search adoption or newer intent.
   const lastState = getLastConfirmedClientValue(
     sourceScope,
     item.repoId,

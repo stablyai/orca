@@ -1,15 +1,5 @@
-/**
- * The clipboard image's downscale, run in a real browser under the shipped policy against a real
- * raster.
- *
- * The resize draws into a `<canvas>` and reads the PNG back out. A fake
- * canvas cannot answer the question the loop above it asks — how many bytes a raster weighs once
- * re-encoded — so this measures it rather than asserting about it.
- *
- * The fixture is noise, for the reason the browser pane's budget uses noise: it is the image PNG
- * compresses least, so a run that converges here converges on the picture a screenshot is at worst.
- * The budget the run is held to is the upload path's own chunk, passed to the real downscale loop.
- */
+// Measure real canvas/PNG downscaling under shipped CSP; fake encoders cannot prove output byte size.
+// PNG noise resists compression, exercising worst-case screenshots against upload path’s own chunk cap.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,10 +16,7 @@ import {
 
 const mobileDir = fileURLToPath(new URL('../../../mobile', import.meta.url))
 
-/**
- * The budget the run is held to: the chunk the upload path already sends, in base64 characters,
- * read from the module that defines it rather than written down a second time.
- */
+// Read upload chunk’s base64 cap from production or a duplicated budget could drift.
 let uploadChunkBase64Chars = null
 
 /** Noise at this size encodes to more base64 than the chunk above, so the loop has work to do. */
@@ -110,8 +97,7 @@ beforeAll(async () => {
   }
   const cspHeader = await readShellCsp()
   uploadChunkBase64Chars = await readClipboardImageUploadChunkBase64Chars()
-  // Inside mobile/ rather than the system temp dir: the entry resolves the session modules beside
-  // it, and esbuild resolves a bare specifier from the importer upward.
+  // Keep entry under mobile/ so esbuild’s upward bare-import resolution finds session dependencies.
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'clipboard-resize-render-'))
   const outDir = join(scratch, 'bundle')
@@ -132,8 +118,7 @@ beforeAll(async () => {
     logLevel: 'silent',
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
-    // The web sibling is what the page runs; naming the native file would measure the module that
-    // needs a native picker to exist.
+    // Resolve web sibling; native file requires a picker the browser lacks.
     resolveExtensions: ['.web.ts', '.web.js', '.ts', '.js'],
     define: { __DEV__: 'false', 'process.env.NODE_ENV': '"production"' }
   })
@@ -156,13 +141,11 @@ afterAll(async () => {
   await browser?.close()
   server?.close()
   if (scratch) {
-    // This run's directory only: `mobile/.tmp` is a shared ignored root and another suite may hold
-    // one of its own.
+    // Remove this run’s scratch only; other suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })
 
-/** One page, with its console, its page errors and its policy violations watched. */
 async function openPage() {
   const context = await browser.newContext()
   const page = await context.newPage()
@@ -180,8 +163,7 @@ async function openPage() {
     })
   })
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
-  // A function rather than a selector: an empty body is never "visible", and the flag is what
-  // says the bundle evaluated.
+  // Check evaluation flag: empty body is never visible to a selector wait.
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   return { page, context, consoleErrors }
 }
@@ -197,21 +179,17 @@ describeResize(
           maxBase64Length: uploadChunkBase64Chars
         })
 
-        // The fixture is over the budget, so the loop had something to do: a run that started
-        // under it would pass this file with the resizer removed.
+        // Require over-cap input or removing resizer could pass vacuously.
 
         expect(measured.sourceBase64Length).toBeGreaterThan(uploadChunkBase64Chars)
         expect(measured.resultBase64Length).toBeLessThanOrEqual(uploadChunkBase64Chars)
-        // Still a PNG a browser can read, at the size the last resize reported: a canvas that
-        // encoded nothing, or reported a size it had not drawn, would be caught here.
+        // Decode PNG and check dimensions against reported final resize; empty/mismatched encoding must fail.
         const last = measured.resizes.at(-1)
         expect(last).toBeDefined()
         expect(measured.decoded).toEqual(last.answered)
         expect(last.answered).toEqual(last.asked)
         expect(measured.decoded.width).toBeLessThan(FIXTURE.width)
-        // The policy admits the source: the `data:` of `img-src 'self' data: https:` is what the
-        // decode rests on, and a page that violated it would still resolve `decode()` on some
-        // browsers.
+        // Assert CSP explicitly: some browsers resolve decode() despite a policy violation; data: admission is required.
         expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
         expect(consoleErrors).toEqual([])
       } finally {
@@ -222,8 +200,7 @@ describeResize(
     it('rejects a source the browser cannot decode rather than waiting on a load', async () => {
       const { page, context } = await openPage()
       try {
-        // `onload` never fires for this; `decode()` is what makes it a rejection the paste's own
-        // catch can put on screen.
+        // decode() rejects invalid images for paste’s catch; onload never fires here.
         const message = await page.evaluate(
           (source) => globalThis.__orcaResizeRefusal(source),
           'bm90LWFuLWltYWdl'

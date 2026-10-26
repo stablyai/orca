@@ -1,7 +1,4 @@
-// Where a send a Stop took back is drawn: after the turn it waited on, never above that turn's own
-// rows, and never below a later exchange, a restart included. Codex's resume rewrites every
-// finished turn's start time to its own whole seconds, so the order is decided by the journal alone.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// Codex resume rounds turn starts to seconds; only journal order can place withdrawn sends between exchanges, including after restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -97,7 +94,7 @@ let turns: ReturnType<typeof codexTurnLifecycleFake>
 let interruptEndHeld: boolean
 let operations = 0
 
-/** The durable ledger stamps its own clock and refuses an id far from it. */
+/** Use the ledger clock; far-future operation ids are refused. */
 const operationId = (): string => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 
 function envelope(method: string, fields: Record<string, unknown>) {
@@ -363,8 +360,7 @@ describe('a send a Stop took back before Codex echoed it', () => {
     await stop('turn-1')
     await vi.waitFor(async () => expect(verdictOf(await submissions(), sent)).toBe('withdrawn'))
 
-    // Codex opened its turn before echoing it, so that turn, ended interrupted, is the send's: it
-    // carries the stop, and no row of its own follows the send.
+    // The opened turn belongs to this send and carries its Stop; none of its rows may follow the withdrawn send.
     const snapshot = await host.journalSnapshot(SESSION)
     const turnRecord = snapshot.items.find(
       (item) => readAgentJournalTurn(item.body)?.turnId === 'turn-1'

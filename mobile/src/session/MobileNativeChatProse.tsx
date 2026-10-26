@@ -47,7 +47,6 @@ export function Prose({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
-    // A host line standing in for a message too large to send, on the person's own row.
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
         <Text
@@ -92,8 +91,7 @@ export function Prose({
   return null
 }
 
-/** A local preview (composer echo) or real URL draws as a thumbnail that opens full size; a bare
- *  host path (not loadable on the device) falls back to a text placeholder. */
+// Host paths cannot load on the phone; show a placeholder unless a preview or real URL exists.
 function ImageAttachment({
   block,
   fontScale,

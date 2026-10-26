@@ -5,8 +5,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 type Props = {
   entries: ConnectionLogEntry[]
-  // Tag printed before the first entry so it's clear what's being logged
-  // (e.g. 'Pairing' vs 'Reconnect').
+  // Label log scope before first entry (Pairing vs Reconnect).
   title?: string
   fillAvailableHeight?: boolean
 }
@@ -26,8 +25,7 @@ const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
 }
 
 function formatTime(ts: number, baseTs: number): string {
-  // Why: show elapsed seconds since the first entry — absolute wall-clock
-  // time isn't actionable when debugging "why is connecting stuck".
+  // Elapsed seconds expose connection stalls better than wall-clock time.
   const elapsed = Math.max(0, ts - baseTs) / 1000
   if (elapsed < 10) {
     return `+${elapsed.toFixed(2)}s`

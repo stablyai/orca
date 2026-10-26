@@ -10,14 +10,9 @@ import { dispatchPlainEnter } from './terminal-ime-cdp-composition'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
 import { applyImePlatformPolicy } from './terminal-ime-platform-policy'
 
-/**
- * Sogou on fcitx4 keeps its preedit and candidate list in its own window and opens no Chromium
- * composition session (#22442, #28213). The recorded shape
- * (src/renderer/src/components/terminal-pane/__fixtures__/fcitx4-sogou-gtk-im-module-trace.json):
- * the IME swallows the letter keydowns so only their keyups reach the page, and a single-character
- * pick is a plain Space/digit keydown whose keypress and `insertText` carry the candidate instead
- * of the selector. CDP's `keyDown` with `text` set to the candidate produces exactly that sequence.
- */
+// #22442/#28213: fcitx4/Sogou owns its preedit/candidate window and sends no Chromium composition session.
+// Recorded letter keydowns are swallowed (only keyups arrive); candidate Space/digit keydown carries candidate text in keypress/insertText.
+// CDP keyDown with candidate text reproduces the sequence; see the fcitx4-sogou-gtk-im-module trace fixture.
 
 async function dispatchLetterKeyupOnly(
   session: CDPSession,

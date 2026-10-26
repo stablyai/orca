@@ -15,11 +15,9 @@ import {
   buildWindowsGrokReplayGuardLines
 } from '../agent-hooks/grok-replay-guard'
 import {
-  WINDOWS_HOOK_STDIN_DRAIN_LABEL,
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 
 // Daemon workers inherit stale pane keys; exit before draining their potentially abandoned stdin.
@@ -45,7 +43,7 @@ export function getManagedScript(
       ...buildWindowsScrubSafeEnvRestoreLines(),
       // Refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      // Guard abandoned stdin before any skip path can drain it.
+      // Outside an Orca pane the caller may abandon stdin; exit before owning it (#11549).
       ...buildWindowsHookEnvironmentGuardLines(),
       WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
@@ -53,13 +51,12 @@ export function getManagedScript(
       ...(options.skipWhenDevinImportsClaude
         ? [
             // Devin imports Claude hooks; skip duplicate posts to preserve Devin attribution.
-            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
+            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
           ]
         : []),
       // Avoid a PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

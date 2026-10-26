@@ -8,6 +8,7 @@ import {
   createMockWebContents,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -42,10 +43,8 @@ describe('CdpWsProxy under a host command', () => {
   beforeEach(async () => {
     mock = createMockWebContents()
     guardFocus = async () => () => {}
-    const page = { ...mock.webContents, id: PAGE_ID }
     proxy = new CdpWsProxy(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-      page as never,
+      mockAsWebContents(mock, PAGE_ID),
       () => () => {},
       () => guardFocus()
     )
@@ -118,8 +117,7 @@ describe('CdpWsProxy under a host command', () => {
   })
 
   function holdPage(): { revoke: () => void; release: () => Promise<void> } {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the release path calls.
-    const page = { ...mock.webContents, id: PAGE_ID } as never
+    const page = mockAsWebContents(mock, PAGE_ID)
     let revoked = false
     let finish = (): void => {}
     const held = runWithRemoteCliPageAdmission(

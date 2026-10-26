@@ -21,7 +21,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'

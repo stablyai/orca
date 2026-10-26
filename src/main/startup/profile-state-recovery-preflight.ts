@@ -43,7 +43,6 @@ export function runProfileStateRecoveryPreflight(argv: readonly string[] = proce
   return true
 }
 
-/** Build the relaunch argv that applies a startup-dialog choice before ordinary startup. */
 export function profileStateDesktopRecoveryArgs(
   argv: readonly string[],
   request: ProfileStateRecoveryRequest

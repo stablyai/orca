@@ -23,8 +23,7 @@ function makeEditor(state: FakeEditorState = {}) {
   let focused = hasTextFocus
   const trigger = vi.fn()
   const model = hasModel ? ({} as object) : null
-  // Why: the chunked inserter snapshots the container/model and re-checks identity
-  // each chunk, so these must be stable across calls.
+  // Chunked paste rechecks model/container identity, so fixture instances must remain stable.
   const container = document.createElement('div')
   document.body.appendChild(container)
   const editor = {
@@ -40,7 +39,6 @@ function makeEditor(state: FakeEditorState = {}) {
       return undefined
     },
     trigger,
-    // Surface used only by the large-paste chunked inserter.
     getContainerDomNode: () => container,
     getSelection: () => ({
       startLineNumber: 1,

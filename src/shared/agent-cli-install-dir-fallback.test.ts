@@ -12,16 +12,7 @@ import {
 } from './node-cli-command-resolution'
 import { buildPosixFallbackPathPrelude } from './posix-version-manager-bin-dirs'
 
-/**
- * The install-dir fallback answers "is this agent CLI installed?" whenever the
- * login-shell PATH probe does not land. Homebrew, npm's default global prefix
- * and opencode's own installer are absolute paths, so they cannot be staged
- * under a temp home -- hence a synthetic fs rather than a fixture tree.
- *
- * Every staged path goes through `join`, because the lookup builds candidates
- * with the host's `join`: a literal `/opt/homebrew/bin/codex` would never match
- * on a Windows dev machine.
- */
+/** Use synthetic fs for absolute install prefixes that cannot fit a temp home. Build every path with host join so Windows fixtures match production candidates. */
 const fsFixture = vi.hoisted(() => ({ executables: new Set<string>() }))
 
 const MOCK_HOME = '/home/tester'
@@ -72,8 +63,7 @@ function resolveAll(
 
 beforeEach(() => {
   fsFixture.executables.clear()
-  // Why: the no-options entry point reads the ambient PATH, where a dev box's
-  // real /usr/local/bin would answer before the fallback ever runs.
+  // Stub ambient PATH or real developer binaries can answer before fallback.
   vi.stubEnv('PATH', GUI_LAUNCH_PATH)
 })
 
@@ -120,7 +110,7 @@ describe('agent CLI install-dir fallback', () => {
       codex: join('/home/linuxbrew/.linuxbrew/bin', 'codex'),
       'cursor-agent': join('/snap/bin', 'cursor-agent'),
       opencode: join(home, '.nix-profile', 'bin', 'opencode'),
-      // Why unresolved: /opt/homebrew is an Apple Silicon prefix; Linuxbrew uses another.
+      // Homebrew's macOS prefix is not Linuxbrew's.
       claude: 'claude'
     })
   })
@@ -134,9 +124,7 @@ describe('agent CLI install-dir fallback', () => {
     })
   })
 
-  // Why pinned: patchPackagedProcessPath seeds these onto PATH in this order and
-  // the POSIX guest prelude appends them in it, so a divergence here would spawn
-  // a different binary than the packaged PATH scan for the same install.
+  // Match packaged PATH seeding and guest prelude order so all resolvers select the same binary.
   it('ranks system install dirs in the same order as the PATH seed', () => {
     const home = '/home/tester'
     const dirs = [
@@ -157,10 +145,7 @@ describe('agent CLI install-dir fallback', () => {
     }
   })
 
-  // Why both resolvers and both platforms: resolveCliCommand is what every
-  // spawn site (codex login, app-server, session-index heal) calls, and its
-  // list was once spelled separately from resolveCliCommands'. A same-named
-  // binary in /usr/local/bin must never shadow the one a version manager owns.
+  // Both resolver entrypoints must prefer version-manager binaries over same-named system installs.
   describe.each([
     { platform: 'darwin' as const, home: '/Users/tester', systemDir: '/opt/homebrew/bin' },
     {
@@ -194,16 +179,12 @@ describe('agent CLI install-dir fallback', () => {
     })
   })
 
-  // Why this guard: getVersionManagerBinPaths is PREPENDED onto PATH by
-  // patchPackagedProcessPath and the CLI's addAgentNodePaths, so a system dir
-  // leaking into it would re-rank binaries the user already has (#18234).
+  // System dirs must not leak into the prepended version-manager seed and reorder user binaries (#18234).
   it('keeps system install dirs out of the PATH seed list', () => {
     for (const platform of ['darwin', 'linux'] as const) {
       const home = platform === 'darwin' ? '/Users/tester' : '/home/tester'
       const seeded = getVersionManagerBinPaths({ platform, homePath: home })
-      // Spelled out, not derived from the list under test: a guard that iterates
-      // getSystemCliInstallDirectories passes vacuously if that list is emptied
-      // into getBaseVersionManagerDirectories, which is the leak it guards.
+      // List system paths independently; deriving them from production would hide accidental removal.
       for (const directory of [
         '/opt/homebrew/bin',
         '/usr/local/bin',
@@ -219,17 +200,14 @@ describe('agent CLI install-dir fallback', () => {
     }
   })
 
-  // Why through this entry point: it is what the `orca` CLI's agent detection
-  // calls, and the "absolute path means installed" contract lives here.
+  // Verify the orca CLI detection entrypoint's absolute-path installation contract.
   it.skipIf(process.platform === 'win32')(
     'reports a system-installed CLI as detected, not just resolved',
     () => {
       stage(
         join('/usr/local/bin', 'codex'),
         join(MOCK_HOME, '.opencode', 'bin', 'opencode'),
-        // Why pi: it is a probed detect command on every runtime (tui-agent-config.ts,
-        // no detectUnsupportedRuntimes) and its installer defaults to ~/.vite-plus/bin,
-        // the second dir #829 named and seeded alongside ~/.opencode/bin.
+        // Pi defaults to ~/.vite-plus/bin and is probed on every runtime (#829).
         join(MOCK_HOME, '.vite-plus', 'bin', 'pi')
       )
       // All three come from the fallback: the stubbed PATH holds no system dir.
@@ -239,8 +217,7 @@ describe('agent CLI install-dir fallback', () => {
     }
   )
 
-  // Real host (WSL 2.7.10): the guest's ambient PATH reached a /mnt/c npm shim after the
-  // filtered walk had already rejected it, reporting a Windows codex as installed.
+  // WSL 2.7.10 repro: ambient PATH found a /mnt/c npm shim after filtered lookup rejected it.
   it.skipIf(process.platform === 'win32')(
     'searches the PATH detection searched, not the ambient one',
     () => {

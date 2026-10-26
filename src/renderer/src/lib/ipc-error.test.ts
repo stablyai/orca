@@ -24,8 +24,7 @@ describe('readIpcErrorMessage', () => {
   })
 
   it('keeps only the first line, because callers render this as a sonner title', () => {
-    // Why pinned: git and SSH stderr arrive multi-line, and every caller of THIS function renders
-    // it in a toast — a title or a compact description, both single rows.
+    // Multiline git/SSH errors reach single-row toast titles/descriptions; keep the compact contract.
     expect(
       readIpcErrorMessage(
         new Error(
@@ -71,8 +70,7 @@ describe('extractIpcErrorMessage', () => {
   })
 
   it('matches main exactly: clamps a WRAPPED multi-line message', () => {
-    // Why: main's regex `(.+)` had no `s` flag, so the wrapped branch stopped at the first newline.
-    // Nine pre-existing callers render this as a sonner title, a single emphasised row.
+    // Wrapped multiline bodies must not stop at their first newline before compaction.
     expect(
       extractIpcErrorMessage(
         new Error("Error invoking remote method 'git:stage': Error: first\nsecond"),
@@ -82,8 +80,7 @@ describe('extractIpcErrorMessage', () => {
   })
 
   it('matches main exactly: leaves an UNWRAPPED multi-line message whole', () => {
-    // Why: main fell through to `err.message` when the regex did not match, so it returned the
-    // whole body. Six callers feed inline error bands where clamping would drop lines 2+.
+    // Plain errors feed inline bands and must retain later lines rather than inherit wrapped-error clamping.
     expect(extractIpcErrorMessage(new Error('summary\ndetail'), 'fallback')).toBe('summary\ndetail')
   })
 
@@ -106,7 +103,7 @@ describe('readIpcErrorDetail', () => {
 
   it('is the unclamped half of the pair the toast slots use', () => {
     expect(readIpcErrorMessage(MULTILINE)).toBe("error: unable to unlink 'a': Permission denied")
-    // Why pinned: nine of the pre-existing callers render this as a sonner title, a single row.
+    // Compact output must remain suitable for single-row toast titles.
     expect(extractIpcErrorMessage(MULTILINE, 'Failed.')).toBe(
       "error: unable to unlink 'a': Permission denied"
     )
@@ -118,9 +115,7 @@ describe('readIpcErrorDetail', () => {
   })
 
   it('strips a wrapper the caller embedded mid-message, keeping the caller’s own prefix', () => {
-    // Why: `pty-connection/deferred-session-attach.ts` composes `SSH connection failed: ${err}`
-    // around an already-wrapped message. `main` discarded the prefix; keeping it is strictly better
-    // than either that or leaving the transport noise on screen.
+    // Preserve caller context such as SSH connection failed while removing nested transport wrappers.
     expect(
       extractIpcErrorMessage(
         new Error(
@@ -132,8 +127,7 @@ describe('readIpcErrorDetail', () => {
   })
 })
 
-// Why (#19334): a typed main-process error keeps its class name after the wrapper comes off, and
-// the worktree-removal refusal is rendered to a user who does not care what the class was called.
+// Typed main-process class names must not obscure actionable worktree-removal refusal copy (#19334).
 describe('typed main-process errors', () => {
   const wrapped = new Error(
     "Error invoking remote method 'worktrees:remove': WorktreeArchiveHookFailedError: " +
@@ -147,8 +141,7 @@ describe('typed main-process errors', () => {
   })
 
   it('keeps the detail lines a refusal needs, unlike the clamped read', () => {
-    // The hook's own output is the actionable part of an archive refusal, so the unclamped read
-    // has to survive the newline that `readIpcErrorMessage` deliberately cuts at.
+    // Unclamped archive refusals must retain hook output beyond the first line.
     expect(readIpcErrorMessage(wrapped)).toBe(
       'Archive hook failed for worktree: /w/feature — exited 23.'
     )

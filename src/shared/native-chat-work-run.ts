@@ -1,21 +1,16 @@
-// An unbroken stretch of tool calls and thoughts between what the agent says reads as one
-// collapsible row. Thoughts sit inside it rather than splitting it, so a model that thinks
-// before every call still shows one "Ran 5 commands" row, not ten alternating rows.
+// Group tool calls and finished thoughts into one collapsible run between prose rows; thinking before each call must not double the visible rows.
 
 import { isNativeChatAskCall } from './native-chat-ask-row'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
-import { pairToolBlocks } from './native-chat-tool-fold'
+import { pairToolBlocks } from './native-chat/tools/native-chat-tool-pairs'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** `lead`: the agent's words with calls already folded under them, which may head a run but
  *  never join one. */
 export type NativeChatWorkRunMember = 'lead' | 'tool' | 'thought'
 
-/** What a drawn row contributes to a work run, or null when it ends one. Rows that carry
- *  anything besides words and plain tool activity (a roster, a background task, a question,
- *  an approval's receipt) keep their own row. `scopeIsWorking`: the row's turn or subagent is
- *  still running. */
+/** Only prose/plain tool activity joins runs; rosters, tasks, questions and approval receipts keep separate rows. scopeIsWorking names the owning turn/subagent’s liveness. */
 export function nativeChatWorkRunMember(
   message: NativeChatMessage,
   hasReceipt: boolean,
@@ -25,8 +20,7 @@ export function nativeChatWorkRunMember(
     return null
   }
   if (message.role === 'reasoning') {
-    // A thought still being thought stays in view on its own row; it joins once it ends. Any
-    // other drawn thought joins, and one with no visible text draws nothing inside the run.
+    // Live thinking stays separate; ended thoughts join runs, including textless thoughts that render nothing.
     return scopeIsWorking && message.state === 'running' ? null : 'thought'
   }
   const content = deriveNativeChatRowContent(message.blocks)
@@ -55,8 +49,7 @@ export type NativeChatWorkRunRow = {
   scope: string | undefined
 }
 
-/** Each work run's member indexes, ascending. A run has at least two members and at least one
- *  call; a lead may head one but never join one. Derived per call, so nothing is stored. */
+/** Derive ascending run-member indexes: at least two members and one call. A lead can head but never join another run. */
 export function nativeChatWorkRunSpans(rows: readonly NativeChatWorkRunRow[]): number[][] {
   const spans: number[][] = []
   let open: number[] = []
@@ -125,8 +118,7 @@ export function nativeChatWorkRunEntries(
   return { blocks, thoughtsBefore, thoughtsAfter: waiting }
 }
 
-/** A diff target names an edit by its index within one message; the run counts across
- *  all of them. Re-keys the target's edit to the run's own numbering. */
+/** Map message-local diff target indexes into the run’s combined edit numbering. */
 export function nativeChatWorkRunEditKey(
   members: readonly NativeChatMessage[],
   runBlocks: readonly NativeChatBlock[],

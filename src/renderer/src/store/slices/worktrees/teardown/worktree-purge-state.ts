@@ -149,26 +149,20 @@ export function buildFullWorktreePurgeState(
       activeFileCleared
     }),
     ...buildWorktreePurgeSurfacePatch(s, omitters, doomed.doomedTabIds, nextSleeping),
-    // Worktree-scoped terminal/tab state
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
-    // Delete state
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       worktreeIdSet
     ),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
     remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
-    // File search
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
-    // Editor state
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
-    // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (upstream-status entry).
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
@@ -181,22 +175,18 @@ export function buildFullWorktreePurgeState(
     gitBranchCompareRequestStatusHeadByWorktree: omitByWorktree(
       s.gitBranchCompareRequestStatusHeadByWorktree
     ),
-    // Why: keyed by worktreeId; without this it leaks a huge-status marker per removed worktree.
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (editor-undo / Cmd+Shift+T snapshots).
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
     recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
-    // Top-level actives
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
       s.lastVisitedAtByWorktreeId,
       normalizedTargets
     ),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (write-once default-terminal guard).
     defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
       s.defaultTerminalTabsAppliedByWorktreeId
     ),

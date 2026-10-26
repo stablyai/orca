@@ -201,20 +201,23 @@ describe('Store', () => {
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
   })
 
-  it('preserves explicit "left" / "right" terminalMacOptionAsAlt through migration', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { terminalMacOptionAsAlt: 'left' },
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-    expect(store.getSettings().terminalMacOptionAsAlt).toBe('left')
-    expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
-  })
+  it.each(['left', 'right'] as const)(
+    'preserves explicit "%s" terminalMacOptionAsAlt through migration',
+    async (side) => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { terminalMacOptionAsAlt: side },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalMacOptionAsAlt).toBe(side)
+      expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
+    }
+  )
 
   it('respects already-migrated settings with explicit "true"', async () => {
     writeDataFile({

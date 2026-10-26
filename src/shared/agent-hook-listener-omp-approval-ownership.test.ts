@@ -7,16 +7,7 @@ import {
 import { normalizeHookPayload } from './agent-hook-listener'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
-/**
- * omp is the inverse of Codex: it emits `tool_approval_requested` only after its own policy engine
- * resolved to "prompt", and then parks on a human Approve/Deny select. Auto-approved calls emit
- * nothing at all, so the event always means a human is blocked.
- *
- * The emitter forwards omp's `approval_mode`, which is the ambient mode (`always-ask` | `write` |
- * `yolo`) rather than the verdict. A per-tool `tools.approval.<tool>: prompt` prompts under every
- * mode, so a genuinely blocked human arrives carrying `yolo`. These pin that no value of that
- * field — recognised or not — can downgrade the wait to working (STA-7698).
- */
+/** OMP emits approval only after policy decides to prompt, so every request means a blocked human. Ambient approval_mode (even yolo) cannot override per-tool prompts or downgrade waiting (STA-7698). */
 describe('OMP approval ownership', () => {
   let state: HookListenerState
 

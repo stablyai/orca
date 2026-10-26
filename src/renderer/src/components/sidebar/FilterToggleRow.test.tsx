@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Guards the sub-option indent: Tailwind v4 emits `px-*` as `padding-inline`,
- * which outranks a physical `pl-*` override and silently flattens the nesting.
- */
+/** Tailwind v4 padding-inline from px-* outranks physical pl-* and can erase sub-option indentation. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

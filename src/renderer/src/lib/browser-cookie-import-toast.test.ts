@@ -110,8 +110,7 @@ describe('emitBrowserCookieImportToast', () => {
     )
   })
 
-  // Why: a client-hosted import stores cookies on this desktop for the named workspace; the
-  // guidance must not read as "go sign in on the other machine".
+  // Client-hosted imports populate this desktop’s workspace jar; guidance must not send users to another machine.
   it('says the workspace tab opens on this device for a client-hosted import', () => {
     emitBrowserCookieImportToast(
       { ...summary, importedCookies: 2, skippedCookies: 1, googleCookiesSkipped: 1 },
@@ -142,8 +141,7 @@ describe('emitBrowserCookieImportToast', () => {
     )
   })
 
-  // Why (STA-4300): these cookies were skipped rather than written unpartitioned, so the success
-  // count alone would report a lossy import as clean.
+  // Skipped partitioned cookies make import lossy; success counts alone hide it (STA-4300).
   it('warns separately about cookies skipped for an unreadable partition', () => {
     emitBrowserCookieImportToast(
       { ...summary, importedCookies: 2, skippedCookies: 1, partitionSkippedCookies: 1 },
@@ -228,8 +226,7 @@ describe('emitBrowserCookieImportToast', () => {
     expect(warningToastMock).not.toHaveBeenCalled()
   })
 
-  // Why: the summary crosses the runtime RPC wire and is cast, not decoded, so a newer host can
-  // publish a reason/code this client build has never heard of (#14683 follow-up).
+  // RPC summaries are cast rather than decoded; newer hosts can send unknown reason/code values (#14683).
   it('still warns when a newer host sends an undeclared undecryptable reason', () => {
     emitBrowserCookieImportToast(
       {
@@ -268,8 +265,7 @@ describe('emitBrowserCookieImportToast', () => {
     expect(message).not.toBe('')
   })
 
-  // Why: hasOwn coerces its key, so a host that widened `reason` to an array sends ['unknown'],
-  // which a hasOwn-only guard admits before the switch drops it back out.
+  // hasOwn coerces arrays to keys; reject [unknown] before it reaches the switch.
   it('still warns when a newer host sends the reason as an array', () => {
     emitBrowserCookieImportToast(
       {

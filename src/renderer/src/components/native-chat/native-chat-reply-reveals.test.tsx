@@ -69,12 +69,11 @@ describe('transcript reply reveal retention', () => {
       initialProps: { rows: windowAt(0) }
     })
     view.rerender({ rows: windowAt(300) })
-    // A retired row returning at the tail is new to this transcript, so it begins.
     view.rerender({ rows: [...windowAt(300), 'row-0'] })
     expect(view.result.current.begun.has('row-0')).toBe(true)
     view.rerender({ rows: [...windowAt(300), 'row-299'] })
     expect(view.result.current.begun.has('row-299')).toBe(true)
-    // With nothing loaded nothing is remembered, so what loads next is history, not a new reply.
+    // After an empty window, loaded rows are history and must not begin new replies.
     view.rerender({ rows: [] })
     view.rerender({ rows: ['row-600', 'row-601'] })
     expect(view.result.current.begun.size).toBe(0)

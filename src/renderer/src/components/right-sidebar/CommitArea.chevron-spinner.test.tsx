@@ -6,11 +6,6 @@ import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control
 import { resolveDropdownItems } from './source-control-dropdown-items'
 import type { DropdownActionKind } from './source-control-dropdown-item-types'
 
-// Why: split out from CommitArea.test.tsx so each file stays under the
-// project's max-lines budget. These tests cover the chevron spinner
-// behaviour for dropdown-only ops (Fetch) and the no-double-spin guard
-// when the primary button already hosts the in-flight indicator.
-
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 1,

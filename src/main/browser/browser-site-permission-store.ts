@@ -48,7 +48,12 @@ export function setBrowserSitePermissionDecisions(
   permissions: readonly BrowserSitePermission[],
   decision: BrowserSitePermissionDecision | null
 ): void {
-  const decisions = { ...store.get(profileId, origin) }
+  const current = store.get(profileId, origin)
+  // Coalesced prompts settle once per waiting request; skip the durable write when nothing changes.
+  if (permissions.every((permission) => (current?.[permission] ?? null) === decision)) {
+    return
+  }
+  const decisions = { ...current }
   for (const permission of permissions) {
     if (decision) {
       decisions[permission] = decision

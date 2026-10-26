@@ -48,7 +48,6 @@ describe('PluginCommandRegistry', () => {
       (_, index) =>
         `Mod+${Math.floor(index / 26) & 1 ? 'Alt+' : ''}${Math.floor(index / 26) & 2 ? 'Shift+' : ''}${String.fromCharCode(65 + (index % 26))}`
     )
-    // Distinct physical chords, with two bindings belonging to the same command.
     const uniqueKeys = [...new Set(keys)]
     const plugin = commandPlugin('many-commands', {
       commands,

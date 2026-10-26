@@ -51,7 +51,6 @@ export type PendingSidebarRevealArgs = {
   cancelPendingRevealFrames: () => void
 }
 
-// Expand whatever collapsed section hides the reveal target, then scroll to it.
 export function expandGroupsForWorktreeReveal(
   args: PendingSidebarRevealArgs,
   worktreeId: string,

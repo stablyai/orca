@@ -8,9 +8,7 @@ import { SettingsSwitch } from './SettingsFormControls'
 import type { EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
-// Why: mirror the composer's "Advanced" disclosure (ghost button + rotating chevron) so the
-// add-host dialog reads the same, while reusing the exact field labels/help text from the
-// Settings SSH form (proxy, jump host, connection reuse, terminal persistence).
+// Match composer disclosure styling while reusing the Settings SSH labels and help.
 export function SshHostAdvancedFields({
   open,
   onOpenChange,
@@ -30,8 +28,7 @@ export function SshHostAdvancedFields({
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
       <CollapsibleTrigger asChild>
-        {/* Why: no negative margin — the button's highlight would overhang and get clipped by the
-            dialog/settings containers. A small left padding keeps it flush without overflow. */}
+        {/* Avoid negative margins that clip button highlights in dialog/Settings containers. */}
         <Button type="button" variant="ghost" size="sm" className="px-2 text-xs">
           {translate('auto.components.sidebar.AddRemoteHostDialog.advanced', 'Advanced')}
           <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />

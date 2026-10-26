@@ -3,14 +3,7 @@ import type { EditorBufferRecord } from './editor-buffer-record'
 /** One side of a join: a record and the draft its views hold. */
 export type EditorBufferJoinSide = { record: EditorBufferRecord; draft: string | undefined }
 
-/**
- * How a view joins the record that already holds its file identity.
- * - `rekey`: no record holds it yet, so the view's record takes the key.
- * - `attach`: the target stands (both clean, or only the target dirty).
- * - `adopt`: only the joining side is dirty, so its draft, baseline and conflict state win.
- * - `merge`: both dirty with the same draft, baseline and pause state.
- * - `detach`: divergent dirty drafts; the joining view keeps its own record and model.
- */
+/** No target: rekey. Clean joiner: attach. Dirty joiner/clean target: adopt. Matching dirty draft/baseline/pause: merge; divergent dirty state: detach with own model. */
 export type EditorBufferJoin = 'rekey' | 'attach' | 'adopt' | 'merge' | 'detach'
 
 export type EditorBufferJoinOnto = Exclude<EditorBufferJoin, 'rekey'>
@@ -30,8 +23,7 @@ function joinOnto(
   if (!isDirtyEditorBufferSide(target)) {
     return 'adopt'
   }
-  // Why every field: a merge must not drop either side's conflict or owner-migration pause, and an
-  // undefined draft (a rich view's edit still pending) is unknown text, not equal text.
+  // Compare all conflict/pause state; undefined pending draft is unknown text, never equal text.
   const identical =
     joining.draft !== undefined &&
     target.draft === joining.draft &&
@@ -48,10 +40,7 @@ export function decideEditorBufferJoin(
   return target ? joinOnto(target, joining) : 'rekey'
 }
 
-/**
- * Whether a detached record and its partner join again: only once one side is clean, which then
- * joins as a clean view. Two dirty sides never merge, even with identical text.
- */
+/** Detached partners rejoin only when one side is clean; two dirty sides remain separate even with equal text. */
 export function decideEditorBufferRejoin(
   detached: EditorBufferJoinSide,
   partner: EditorBufferJoinSide

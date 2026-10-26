@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -43,7 +45,7 @@ function makeRecord(
   }
 }
 
-function makeTerminalTab(id: string): Record<string, unknown> {
+function makeTerminalTab(id: string): TerminalTab {
   return {
     id,
     ptyId: null,
@@ -60,7 +62,7 @@ function makeWorkingStatus(
   paneKey: string,
   tabId: string,
   record: SleepingAgentSessionRecord
-): Record<string, unknown> {
+): AgentStatusEntry {
   return {
     paneKey,
     tabId,
@@ -75,7 +77,7 @@ function makeWorkingStatus(
   }
 }
 
-function makePreservedPaneState(record: SleepingAgentSessionRecord): Record<string, unknown> {
+function makePreservedPaneState(record: SleepingAgentSessionRecord): Partial<AppState> {
   return {
     activeWorktreeId: 'wt-1',
     activeTabType: 'terminal',
@@ -101,7 +103,7 @@ describe('resume sleeping agent provider claims', () => {
       ...makePreservedPaneState(record),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -122,7 +124,7 @@ describe('resume sleeping agent provider claims', () => {
       agentStatusByPaneKey: {
         [otherPaneKey]: makeWorkingStatus(otherPaneKey, 'tab-2', record)
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -141,7 +143,7 @@ describe('resume sleeping agent provider claims', () => {
       activeTabIdByWorktree: {},
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -150,18 +152,11 @@ describe('resume sleeping agent provider claims', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // Why a peer in another workspace is reachable at all: adopting an orphaned terminal re-keys
-  // `tabsByWorktree` onto the canonical worktree id and leaves the sleeping records that named the
-  // old one untouched (workspace-session-worktree-id.ts). A provider session id names one
-  // transcript, so the live pane owns it wherever it sits; resuming here forks the agent the user
-  // is watching. `done` is the cell that had no cover: a finished turn on a still-live pane.
-  // The same-workspace half of the same rule, pinned here so this file covers both cells whether or
-  // not #19736 (which fixes this one in `activeOrQueuedResumeClaimsProviderSession` too) has landed.
+  // Orphan adoption rekeys tabs without sleeping records; a live PTY owns its transcript across workspace IDs, including done turns. Cover both same/cross-workspace claims so the sweep never forks that session.
   it('does not fork a provider session a live pane in this workspace already finished a turn on', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -179,24 +174,20 @@ describe('resume sleeping agent provider claims', () => {
       agentStatusByPaneKey: {
         [peerPaneKey]: { ...makeWorkingStatus(peerPaneKey, 'tab-peer', record), state: 'done' }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // The load-bearing half of the pair: this is the only case that proves the live arm carries no
-  // workspace scope. The peer is `done` here too — a finished turn on a pane whose shell is still
-  // up — so "live" means the PTY, not the agent.
+  // Only cross-workspace live+done proves ownership ignores workspace scope; live means PTY, not unfinished agent turn.
   it('does not fork a provider session a live pane in another workspace already finished a turn on', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
-      // The record's own pane is gone, so nothing local can own its recovery.
       tabsByWorktree: { 'wt-1': [], 'wt-2': [makeTerminalTab('tab-peer')] },
       terminalLayoutsByTabId: {
         'tab-peer': {
@@ -215,7 +206,7 @@ describe('resume sleeping agent provider claims', () => {
           state: 'done'
         }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -224,12 +215,11 @@ describe('resume sleeping agent provider claims', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // The same peer without a live PTY is history, not a claim: the session must still come back.
+  // Without a live PTY the peer is history, not a claim; resume must remain possible.
   it('still resumes when the other workspace peer finished and holds no live PTY', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -251,7 +241,7 @@ describe('resume sleeping agent provider claims', () => {
           state: 'done'
         }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })

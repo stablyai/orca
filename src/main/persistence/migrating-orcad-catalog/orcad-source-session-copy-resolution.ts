@@ -18,8 +18,6 @@ import {
 } from './orcad-source-scope'
 import { unsavedDraftItems, worktreeLabel } from './orcad-source-workspace-session-eligibility'
 
-// What "Move anyway" does with the desktop's own copy of a moving host's saved session.
-
 export type SessionFragment = {
   session: WorkspaceSessionState
   snapshots: OrcadMigrationTerminalScrollbackSnapshot[]
@@ -27,7 +25,6 @@ export type SessionFragment = {
   sourceHost: boolean
 }
 
-/** Unsaved drafts in this desktop's own session for the source's worktrees. */
 export function desktopDrafts(
   state: PersistedState,
   source: OrcadMigrationManifestSource,
@@ -43,10 +40,7 @@ export function desktopDrafts(
   )
 }
 
-/**
- * The desktop's copy of each conflicting worktree gives way to the host's, keeping its unsaved
- * drafts. Two different drafts of one file can't both move, so those still refuse.
- */
+/** Prefer the host copy while retaining desktop drafts; conflicting drafts of one file still block. */
 export function resolveCopiesForHost(
   fragments: readonly SessionFragment[],
   conflicting: ReadonlySet<string>

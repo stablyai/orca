@@ -11,7 +11,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} />
-        {/* Content-row host (KTD2): on wide, content shares this row with the docked panel as the flex-1 left child. */}
+        {}
         <MobileSessionContentRow controller={controller} />
       </View>
       <MobileSessionSheets controller={controller} />

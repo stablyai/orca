@@ -8,12 +8,8 @@ import {
   readUtf8CodePointAt
 } from './utf8-byte-limits'
 
-// Once V8 optimizes the calling function, `String.prototype.codePointAt` on a sliced string
-// pairs a trailing high surrogate with the code unit that follows the SLICE inside its parent
-// (reproduced on Node 24 and 26). A prefix slice cut mid-pair then reads a code point the
-// string does not contain, so a scan reports one byte too many — but only after tier-up, which
-// is why it surfaced as an intermittent CI failure rather than a deterministic one.
-// Build a rope, cut it mid-pair, and hammer the scan so the optimizing tier is under test.
+// Node 24/26 V8 optimization can pair a slice’s trailing high surrogate with a parent unit outside the slice.
+// Force tier-up on a rope cut mid-pair to expose the intermittent one-byte overcount.
 const SLICE_BOUNDARY_PARENT_UNITS = [
   0x72, 0x2e6, 0x7b, 0x54, 0xda9b, 0x568, 0x52, 0x26, 0x46, 0xc15b, 0x7, 0x768, 0xd9f6, 0xdcde
 ]
@@ -132,8 +128,7 @@ describe('isUtf8ByteLengthWithinLimit', () => {
 })
 
 describe('isUtf8ByteLengthWithinLimit native fast path', () => {
-  // The bounded check runs through TextEncoder.encodeInto; it must agree with the scan it replaced
-  // for every boundary shape, lone surrogates included.
+  // Compare native bounded encoding against the prior scan at boundaries, including lone surrogates.
   const samples = [
     '',
     'a',

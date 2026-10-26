@@ -19,28 +19,11 @@ export function isCodexForegroundProcess(processName: string | null): boolean {
   if (!normalized) {
     return false
   }
-  // Why: node-pty exposes the OS foreground process name, which can be the
-  // shipped Codex binary name (for example "codex-aarch64-ap" on macOS)
-  // instead of the shell command the user typed. Match on a Codex prefix so
-  // account-switch restart prompts still appear for real Codex sessions.
+  // Native node-pty names may include shipped Codex platform suffixes; match the Codex prefix.
   return normalized === 'codex' || normalized.startsWith('codex-')
 }
 
-/**
- * Decides whether a pane may be shown a Codex account-restart prompt.
- *
- * Why this is not just a foreground-name match: Windows reports the DEEPEST
- * process in the PTY tree, so an Orca "Codex" pane running a subagent reads as
- * `pwsh -> node -> codex.exe -> claude.exe` => "claude" and was filtered out
- * before the stale-account registry was ever consulted. `launchAgent` is
- * recorded metadata (Orca started Codex in this tab), not a repaintable label,
- * so it survives that. A restart notice makes the pane drop every keystroke, so
- * the fallback is deliberately paired with a foreground that can only be a
- * deeper *agent* (or the node/python wrapper that has not resolved to one yet):
- * both the Windows descendant scan and the POSIX `ps` walk only ever surface a
- * recognized agent or the shell/tty foreground, so `less`, `vim` or `ssh` in
- * that pane means the user exited Codex and is typing at their own program.
- */
+/** Windows may report a deeper subagent instead of Codex. Use recorded launchAgent only with another agent/wrapper foreground; shell/pager/editor evidence must keep restart notices from swallowing unrelated keystrokes. */
 export function isCodexRestartEligiblePane(args: {
   inspection: RuntimeTerminalProcessInspection
   launchAgent: TuiAgent | undefined

@@ -6,10 +6,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
 import type { WebRuntimeSplitSource } from './web-runtime-split-focus'
 
-/**
- * The terminal the workspace's server published for a pane of one of its tabs, before this pane's
- * own attach lands. A binding naming any other server is not this pane's terminal.
- */
+/** Use published pane coordinates before attach only when the binding names this workspace’s server. */
 export function readHostPublishedSplitSourcePtyId(source: WebRuntimeSplitSource): string | null {
   if (!isWebTerminalSurfaceTabId(source.tabId)) {
     return null
@@ -30,10 +27,7 @@ export function isHostTabPane(source: WebRuntimeSplitSource): boolean {
   )
 }
 
-/**
- * Why a server-tab pane did not split. Only the server starts terminals in its tabs, so splitting
- * here instead would leave a blank pane.
- */
+/** Only the owning server starts panes in its tabs; local fallback would leave a blank split. */
 export function notifyHostTabSplitRefused(source: WebRuntimeSplitSource): void {
   const state = useAppStore.getState()
   const environmentId = runtimeEnvironmentIdUnlessTwin(state, source.worktreeId)

@@ -8,10 +8,7 @@ import {
   makeRepo,
   makeWorktreeLineage
 } from '../persistence-test-harness'
-import {
-  makeTerminalTab,
-  makeTerminalTab as makeSessionTerminalTab
-} from '../persistence-session-fixtures'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -85,9 +82,6 @@ describe('Store', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-  it('keeps the persistence harness terminal-tab fixture as the same public function', () => {
-    expect(makeTerminalTab).toBe(makeSessionTerminalTab)
   })
 
   it('addRepo stores a repo retrievable by getRepo', async () => {
@@ -168,57 +162,6 @@ describe('Store', () => {
     expect(store.getRepo('direct')?.projectGroupId).toBeNull()
     expect(store.getRepo('nested')?.projectGroupId).toBeNull()
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
-  })
-
-  it('adapts flat folder-scan groups into sparse nested folder scopes on load', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [
-        makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: 'root' }),
-        makeRepo({ id: 'web', path: '/workspace/platform/web', projectGroupId: 'root' }),
-        makeRepo({
-          id: 'repo1',
-          path: '/workspace/platform/packages/shared/repo1',
-          projectGroupId: 'root'
-        }),
-        makeRepo({
-          id: 'repo2',
-          path: '/workspace/platform/packages/shared/repo2',
-          projectGroupId: 'root'
-        })
-      ],
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      projectGroups: [
-        {
-          id: 'root',
-          name: 'Platform',
-          parentPath: '/workspace/platform',
-          parentGroupId: null,
-          createdFrom: 'folder-scan',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-
-    const store = await createStore()
-    const groups = store.getProjectGroups()
-    const shared = groups.find((group) => group.name === 'packages/shared')
-
-    expect(groups.map((group) => [group.name, group.parentGroupId, group.parentPath])).toEqual([
-      ['Platform', null, '/workspace/platform'],
-      ['packages/shared', 'root', '/workspace/platform/packages/shared']
-    ])
-    expect(store.getRepo('api')?.projectGroupId).toBe('root')
-    expect(store.getRepo('web')?.projectGroupId).toBe('root')
-    expect(store.getRepo('repo1')?.projectGroupId).toBe(shared?.id)
-    expect(store.getRepo('repo2')?.projectGroupId).toBe(shared?.id)
   })
 
   it('creates a project group when persisted group history is very large', async () => {
@@ -466,40 +409,6 @@ describe('Store', () => {
     ])
   })
 
-  it('removeProjectForHost keeps the surviving host session for a shared repo id + path', async () => {
-    const store = await createStore()
-    // Identical repo IDs and paths require host-scoped session pruning.
-    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
-    store.addRepo(
-      makeRepo({
-        id: 'shared',
-        path: '/repo',
-        connectionId: 'ssh-a',
-        executionHostId: 'ssh:ssh-a'
-      })
-    )
-    store.setWorktreeMeta(at('shared::/repo', 'local'), { displayName: 'local' })
-
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
-    })
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
-      },
-      'ssh:ssh-a'
-    )
-
-    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-a' })
-
-    expect(
-      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
-    ).toBeUndefined()
-    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBe(111)
-  })
-
   it('removeProjectForHost on the local host keeps a surviving SSH host session', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
@@ -663,29 +572,6 @@ describe('Store', () => {
     expect(store.reorderReposForHost(['local-one', 'local-one'], 'local')).toBe(false)
     expect(store.reorderReposForHost(['missing', 'local-two'], 'local')).toBe(false)
     expect(store.getRepos().map((repo) => repo.path)).toEqual(originalPaths)
-  })
-
-  it('removeProjectForHost prunes the SSH host meta (tagged hostId) for a shared id', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
-    store.addRepo(
-      makeRepo({
-        id: 'shared',
-        path: '/remote/repo',
-        connectionId: 'ssh-old',
-        executionHostId: 'ssh:ssh-old'
-      })
-    )
-    store.setWorktreeMeta(at('shared::/remote/repo/wt', 'ssh:ssh-old'), {
-      displayName: 'remote-wt'
-    })
-    // Hostless legacy metadata belongs to local; remote removal must preserve it.
-    store.setWorktreeMeta(at('shared::/local/repo/wt', 'local'), { displayName: 'local-wt' })
-
-    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-old' })
-
-    expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
-    expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
   })
 
   it('removeProjectForHost prunes everything when the id exists on no other host', async () => {

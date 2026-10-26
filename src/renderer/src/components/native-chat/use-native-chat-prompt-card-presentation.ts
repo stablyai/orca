@@ -20,11 +20,7 @@ export type NativeChatPromptCardPresentation = {
   expand: () => void
 }
 
-/**
- * Which prompt card the pane shows, derived in render so the card and the composer never share a
- * commit. Dismissal is presentation only: it hides or collapses one occurrence and never says the
- * agent moved on. A lingering live status must not reshow it, including after the view remounts.
- */
+/** Derive card/composer ownership in render; persist occurrence-only dismissal across remounts without asserting agent progress. */
 export function useNativeChatPromptCardPresentation({
   paneKey,
   targetPtyId = null,
@@ -40,7 +36,7 @@ export function useNativeChatPromptCardPresentation({
   /** While the transcript loads, an absent transcript card is unknown, not cleared. */
   transcriptSettled?: boolean
 }): NativeChatPromptCardPresentation {
-  // Why the wait's start: two prompts with the same text are separate occurrences.
+  // Identical prompt text may belong to separate wait occurrences.
   const startedAt = useAppStore((s) => {
     const entry = s.agentStatusByPaneKey[paneKey]
     return card && entry?.interactivePrompt ? (entry.stateStartedAt ?? null) : null
@@ -64,13 +60,13 @@ export function useNativeChatPromptCardPresentation({
     dismissal !== undefined &&
     dismissal.content === content &&
     (startedAt === null || dismissal.startedAt === startedAt)
-  // Why retire on a cleared or changed prompt: a later, identical question must show again.
+  // Retire cleared/changed dismissals so later identical prompts can appear.
   useLayoutEffect(() => {
     if (dismissal !== undefined && !matches && (content !== null || transcriptSettled)) {
       dismissals.forget(paneKey)
     }
   }, [dismissal, matches, content, transcriptSettled, paneKey])
-  // Why: with no wait start to tell occurrences apart, an unobserved stretch may hide a new one.
+  // Without a wait-start stamp, an unobserved interval could contain a new occurrence.
   useLayoutEffect(
     () => () => {
       if (dismissals.read(paneKey)?.startedAt === null) {

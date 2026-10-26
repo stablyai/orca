@@ -1,8 +1,3 @@
-/**
- * E2E tests for editing a pane title through Set Title: opening the editor,
- * committing it, and keeping it pane-local while tab titles churn.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { splitActiveTerminalPane, waitForPaneCount } from './helpers/terminal'
@@ -83,8 +78,7 @@ async function expectSavedLayoutNotToContainTitle(
     .toBe(false)
 }
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
@@ -245,9 +239,7 @@ test.describe('Terminal Panes', () => {
       { targetTabId: tabId, title: runtimeTitle }
     )
 
-    // Why: active agents continuously write OSC titles. Set Title is Orca's
-    // pane-local overlay and must remain visible while the tab runtime title
-    // continues to follow the active PTY.
+    // OSC titles may churn continuously; pane-local Set Title must remain visible while tab runtime title follows the active PTY.
     await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeVisible()
     await expect(
       orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)

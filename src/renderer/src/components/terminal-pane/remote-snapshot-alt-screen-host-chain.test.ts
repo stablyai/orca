@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
@@ -23,12 +23,9 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
-// Why this suite: remote-snapshot-alt-screen-replay.test.ts hand-writes the replay meta, and
-// once fed a shape the host never sends. Here every input is produced by the real code:
-// the host runtime's headless model and shell-ownership proof, its ack-recovery publisher,
-// the wire codec, the client multiplexer, and the remote transport. Only the hand-off from
-// the transport's onReplayData into the pane's callback is wired by the test.
+// Drive host model/ownership, ACK recovery, codec, multiplexer and transport together; only the final pane callback is test-wired so impossible handcrafted metadata cannot pass.
 
 const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo } = vi.hoisted(
   () => ({
@@ -175,10 +172,6 @@ type HostModules = {
   installMultiplexFlowControl: (build: HostConnection) => void
 }
 
-let hostModules: HostModules | null = null
-
-// Why a hook: the first load of the main runtime graph takes ~19s cold, and charged to the first
-// test it crossed the 30s test limit whenever the directory ran in parallel.
 async function loadHostModules(): Promise<HostModules> {
   const [runtime, publication, flowControl] = await Promise.all([
     vi.importActual<Pick<HostModules, 'OrcaRuntimeService'>>(
@@ -199,13 +192,13 @@ async function loadHostModules(): Promise<HostModules> {
   }
 }
 
+// Why module scope: collection has no per-hook timer for the main graph's slow cold load.
+const hostModules = await loadHostModules()
+
 /** Real host + client chain: returns what the remote transport hands the pane for the push. */
 async function publishHostRecovery(
   missed: string
 ): Promise<{ data: string; meta: PtyReplayDataMeta; published: HostSnapshot }> {
-  if (!hostModules) {
-    throw new Error('host modules are loaded in beforeAll')
-  }
   const {
     OrcaRuntimeService,
     sendSnapshotFrames,
@@ -336,10 +329,6 @@ async function publishHostRecovery(
 }
 
 describe('host-published recovery snapshot onto a live alt screen', () => {
-  beforeAll(async () => {
-    hostModules = await loadHostModules()
-  })
-
   beforeEach(async () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
@@ -383,8 +372,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS
@@ -402,8 +390,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     return [...events, { cols: COLS, rows: ROWS }]
   }
 
-  // Why: while the TUI lives, the host publishes no owner, so the alt flag never reaches
-  // the client; the pane must keep the setup history the TUI's alt screen covers.
+  // Live TUIs may lack host owner metadata; retain their pre-TUI setup history beneath alt-screen paint.
   it('keeps the covered history for a live TUI exactly as the host holds it', async () => {
     const { data, meta, published } = await publishHostRecovery(AGENT_FRAME)
     expect(published.alternateScreen).toBe(true)
@@ -421,8 +408,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     }
   })
 
-  // Why: once the host's TUI exits, its image no longer enters alt; the pane must leave
-  // alt and show the host's normal screen.
+  // Host TUI exit requires leaving alt and painting authoritative normal content.
   it('repaints from the normal buffer once the host TUI has exited', async () => {
     const { data, meta } = await publishHostRecovery(AGENT_EXIT)
     // The ACK-overflow recovery replaces the pane's history with the host's.
@@ -442,8 +428,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     }
   })
 
-  // Why: inside the gap the TUI exited, the shell printed past the pane's history and a
-  // second TUI started; both ends are on alt, but the pane's normal buffer is stale.
+  // A TUI may exit and another start inside the gap; matching alt endpoints do not prove the pane’s normal history is current.
   it('replaces the normal history that changed between two alt-screen sessions', async () => {
     const missed = `\x1b[?1049l\r\n${Array.from({ length: 300 }, (_, i) => `MISSED-${i}`).join('\r\n')}\r\n$ next-agent${COMMAND_START}\x1b[?1049h\x1b[2J\x1b[HNEW-AGENT-FRAME`
     const { data, meta } = await publishHostRecovery(missed)

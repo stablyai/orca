@@ -14,7 +14,6 @@ import {
 } from './mobile-existing-agent-launch'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
-// A connected client whose only behaviour is the scripted `sendRequest`.
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
   return {
     sendRequest,
@@ -93,8 +92,7 @@ function launch(
 }
 
 describe('reserveMobileAgentLaunch', () => {
-  // The host's schema accepting these, and an older one dropping them, is pinned host-side
-  // (agent-launch-params.test.ts) and through the real dispatcher (agent-launch-mobile-replay).
+  // Host dispatcher tests cover accepting these reserved ids and older hosts stripping them.
   it('sends the pane and chat it reserved as the launch params', async () => {
     const { client, sendRequest } = scriptedClient(launched({}))
     const reservation = reserveMobileAgentLaunch('claude')
@@ -105,7 +103,6 @@ describe('reserveMobileAgentLaunch', () => {
       paneKey: `${reservation.pane.tabId}:${reservation.pane.leafId}`,
       sessionId: reservation.sessionId
     })
-    // The chat it reserved is one this phone created, so its picker names the listed default.
     expect(mobileCreatedStructuredSession(reservation.sessionId!)).toMatchObject({
       worktree: expect.stringMatching(/^id:/)
     })
@@ -130,7 +127,6 @@ describe('reserveMobileAgentLaunch', () => {
       const { pane } = reserveMobileAgentLaunch('aider')
       expect(isTerminalLeafId(pane.leafId)).toBe(true)
       expect(isValidHostTerminalTabId(pane.tabId)).toBe(true)
-      // The same fallback still yields a durable operation id.
       expect(structuredSessionOperationId(1790000000000)).toMatch(/^1790000000000-[0-9a-f]{32}$/)
     } finally {
       if (native) {
@@ -226,7 +222,6 @@ describe('launchAgentInExistingWorkspace', () => {
       kind: 'unknown',
       message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE
     })
-    // The replay reuses the same operation id.
     expect(sendRequest.mock.calls.map(([, params]) => requestParam(params, 'operationId'))).toEqual(
       ['op-1', 'op-1']
     )
@@ -275,8 +270,7 @@ describe('launchAgentInExistingWorkspace', () => {
   })
 
   it('works against a v1.4.206-shaped host', async () => {
-    // v1.4.206 (the first release with these capabilities) parses a plain object that knows only
-    // these keys and strips the rest; its terminal arm starts the agent without the prompt.
+    // The first capable release strips unknown fields and starts its terminal arm without a prompt; preserve that compatibility fixture.
     const v1_4_206Keys = new Set([
       'agent',
       'operationId',
@@ -296,7 +290,6 @@ describe('launchAgentInExistingWorkspace', () => {
       prompt: { text: 'Fix it', delivery: 'submit' },
       launchSource: 'task_page'
     })
-    // Only telemetry is lost; the launch itself carries nothing that host would drop.
     expect(parsed).toEqual({
       agent: 'claude',
       operationId: 'op-1',

@@ -7,7 +7,6 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 
-/** Builds the mutable PTY dependency bag shared by every pane in one mount. */
 export function createTerminalPanePtyDeps(args: {
   deps: UseTerminalPaneLifecycleDeps
   refs: TerminalPaneLifecycleRefs
@@ -17,9 +16,7 @@ export function createTerminalPanePtyDeps(args: {
   deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
 }): PtyConnectionDeps {
   const { deps, refs, startupCwd, mountFollowsTerminalPark, deferredSplitHandoffs } = args
-  // A concrete PTY owns the input queue and settles the split admission fence,
-  // so the deferred lookup stops being reusable. Both layout-binding variants
-  // must run this: main routes live binds through the leaf-keyed one.
+  // Concrete binding consumes deferred lookup and input ownership; both layout bind variants must settle the split fence.
   const settleDeferredSplitOnBind = (paneId: number, ptyId: string | null): void => {
     if (!ptyId) {
       return

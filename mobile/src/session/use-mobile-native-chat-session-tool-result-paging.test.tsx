@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import { nativeChatTurnMembership } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'

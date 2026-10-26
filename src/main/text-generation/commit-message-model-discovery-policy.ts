@@ -64,8 +64,7 @@ export function finalizeModelDiscoveryOutput(
       models = [configuredDefault, ...models]
     }
   }
-  // A sentinel model in the static spec (for example `default`) means the CLI
-  // should keep its configured provider even when discovery lists concrete models.
+  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
       ? spec.defaultModelId

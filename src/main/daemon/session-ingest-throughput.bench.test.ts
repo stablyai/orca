@@ -113,7 +113,6 @@ describe.skipIf(!benchEnabled)('daemon session ingest throughput', () => {
         `${name}: ${rate.toFixed(1)} MB/s (${ms.toFixed(0)}ms for ${(bytes / 1024 / 1024).toFixed(1)}MB)`
       )
     }
-    // eslint-disable-next-line no-console -- bench harness output
     console.log(`\n[session-ingest] ${COLS}x${ROWS}\n  ${rows.join('\n  ')}`)
     expect(rows.length).toBe(2)
   })

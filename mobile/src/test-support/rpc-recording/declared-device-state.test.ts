@@ -79,10 +79,6 @@ describe('a scenario that declares its device', () => {
     await expect(module.getItem!('orca:other')).resolves.toBeNull()
   })
 
-  /**
-   * A write that fed back into a read would let a later read return a byte nothing declared, which
-   * is the device back inside the recording. The write is an effect instead, where it is observed.
-   */
   it('records a write as an effect without letting a read see it', async () => {
     const { module, effects } = store({})
     await module.setItem!('orca:key', 'written')

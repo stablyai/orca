@@ -8,10 +8,10 @@ import {
   importValidatedCookies,
   cookieImportTarget,
   type CookieImportOptions
-} from '../../browser-cookie-import-pipeline'
+} from '../browser-cookie-import-pipeline'
 import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
 import type { DetectedBrowser } from './browser-cookie-detection-types'
-import { diag } from '../../browser-cookie-import-diagnostics'
+import { diag } from '../browser-cookie-import-diagnostics'
 
 export async function importCookiesFromFirefox(
   browser: DetectedBrowser,

@@ -120,9 +120,7 @@ function seed(settings: Partial<GlobalSettings> | null): void {
   })
 }
 
-// Why: the in-window drawer derives its own snapshot instead of receiving the
-// relayed one, so anything the builder reads has to be threaded in by hand —
-// a dropped slice silently blanks the field rather than failing loudly.
+// The drawer feeds builder slices directly; omission silently loses fields instead of failing validation.
 describe('useLiveDashboardSnapshot', () => {
   it('feeds the builder the settings that gate generated conversation names', () => {
     seed({ tabAutoGenerateTitle: true })
@@ -142,9 +140,7 @@ describe('useLiveDashboardSnapshot', () => {
     })
   })
 
-  // Why: the profile resolves from connection/runtime slices this hook does not
-  // subscribe to. Dropping one degrades the drawer's preview terminal to
-  // client-OS byte routing while the pop-out keeps encoding correctly.
+  // Seed host-profile input slices explicitly so missing plumbing cannot degrade drawer previews to client-OS routing.
   it("resolves each card's host-input profile from the slices it does not subscribe to", () => {
     seed({ tabAutoGenerateTitle: false })
     const { result: localResult } = renderHook(() => useLiveDashboardSnapshot())
@@ -160,9 +156,7 @@ describe('useLiveDashboardSnapshot', () => {
     expect(sshResult.current.cards[0].terminalInput?.hostPlatform).toBe('win32')
   })
 
-  // Why: a fresh renderHook always recomputes, so only re-rendering the SAME
-  // hook proves the memo watches the slice. An idle board publishes nothing
-  // else, so a missed subscription never heals.
+  // Re-render the same hook to prove host-only changes invalidate it; a fresh mount would conceal missing subscriptions.
   it('re-derives the host-input profile when only a host slice changes', () => {
     seed({ tabAutoGenerateTitle: false })
     useAppStore.setState({

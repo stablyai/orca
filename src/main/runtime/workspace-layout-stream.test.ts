@@ -39,17 +39,14 @@ function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
       onWorkspaceSessionWritten
     },
     listeners,
-    /** A save that names the partition it wrote. */
     write(hostId: ExecutionHostId, session: WorkspaceSessionState) {
       partitions.set(hostId, session)
       listeners.forEach((listener) => listener(hostId))
     },
-    /** A save that names no partition, so every partition may have changed. */
     writeUnnamed(hostId: ExecutionHostId, session: WorkspaceSessionState) {
       partitions.set(hostId, session)
       listeners.forEach((listener) => listener(null))
     },
-    /** A removed host's partition, named by the save that drops it. */
     removePartition(hostId: ExecutionHostId) {
       partitions.delete(hostId)
       listeners.forEach((listener) => listener(hostId))
@@ -57,7 +54,7 @@ function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
   }
 }
 
-/** Today's projection: every partition loaded with its save-and-diff report, then filtered by home. */
+/** Full uncached projection is the reference for partition-scoped updates. */
 function fullProjection(
   partitions: Map<ExecutionHostId, WorkspaceSessionState>,
   homeHostId: (key: string) => ExecutionHostId | null
@@ -85,7 +82,6 @@ function setup() {
     [FOLDER_KEY]: LOCAL_EXECUTION_HOST_ID,
     [SSH_KEY]: SSH_HOST
   }
-  /** Each terminal's live title; none until a test sets one. */
   const liveTitles = new Map<string, string>()
   const liveTitle = vi.fn((ptyId: string) => liveTitles.get(ptyId) ?? null)
   const stream = new WorkspaceLayoutStream({
@@ -98,7 +94,6 @@ function setup() {
 
 const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve))
 
-/** A subscriber reading each change per workspace, in either build. */
 function subscribeEvents(stream: WorkspaceLayoutStream) {
   const collector = collectLayoutEvents()
   const subscription = stream.subscribe(collector.listener)
@@ -122,14 +117,13 @@ describe('WorkspaceLayoutStream', () => {
   it('snapshots each workspace from its owning partition only', () => {
     const { stream, homes } = setup()
     const { snapshot } = stream.subscribe(() => {})
-    // Each workspace's tabs run on the partition that published it.
     const hostOf = (entry: (typeof snapshot)[number]) => entry.layout.tabs[0]?.executionHostId
     expect(snapshot.map((entry) => [entry.key, hostOf(entry)])).toEqual([
       [GIT_KEY, LOCAL_EXECUTION_HOST_ID],
       [FOLDER_KEY, LOCAL_EXECUTION_HOST_ID],
       [SSH_KEY, SSH_HOST]
     ])
-    // A copy in a partition that does not own the workspace is a stray and is not shown.
+    // A non-owning partition's stray copy must not publish.
     homes[SSH_KEY] = LOCAL_EXECUTION_HOST_ID
     const strayless = new WorkspaceLayoutStream({
       store: () => setup().store,
@@ -149,7 +143,6 @@ describe('WorkspaceLayoutStream', () => {
 
     session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
     write(LOCAL_EXECUTION_HOST_ID, session)
-    // A burst of writes in one task is one projection.
     write(LOCAL_EXECUTION_HOST_ID, session)
     await flush()
     expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
@@ -197,7 +190,6 @@ describe('WorkspaceLayoutStream', () => {
     await flush()
     expect(events).toHaveLength(1)
 
-    // A later subscriber starts where the stream is; positions never restart.
     first.unsubscribe()
     const second = stream.subscribe(() => {})
     expect(second.seq).toBeGreaterThanOrEqual(replySeq)
@@ -240,7 +232,7 @@ describe('WorkspaceLayoutStream', () => {
   })
 
   it('keeps every invented id when an earlier workspace or tab goes away', async () => {
-    // Rows a headless host saved with no tab bar or pane layout: their groups and panes are invented.
+    // Headless rows without tab-bar or pane layout require synthesized groups and panes.
     const rowsOnly = (keys: string[], tabs: string[]): WorkspaceSessionState => {
       const session = emptySession()
       for (const key of keys) {
@@ -309,7 +301,6 @@ describe('WorkspaceLayoutStream', () => {
       await flush()
       const expected = fullProjection(partitions, homeHostId)
       expect(Object.fromEntries(collector.layouts)).toEqual(Object.fromEntries(expected))
-      // A late subscriber's snapshot keeps today's order too.
       const late = stream.subscribe(() => {})
       expect(late.snapshot.map((entry) => [entry.key, entry.layout])).toEqual(expected)
       late.unsubscribe()
@@ -353,7 +344,7 @@ describe('WorkspaceLayoutStream', () => {
     write(LOCAL_EXECUTION_HOST_ID, local)
     await flush()
     expect(events).toEqual([])
-    // The local edit the failed projection missed is published by a write elsewhere.
+    // A later write elsewhere must recover the local edit missed by the failed projection.
     write(SSH_HOST, relaySshSession('target-1'))
     await flush()
     expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
@@ -381,7 +372,6 @@ describe('WorkspaceLayoutStream', () => {
       const byPty = new Map(panesOf(git).map((pane) => [pane.ptyId, pane.liveTitle]))
       expect(byPty.get(first)).toBe('claude: working')
       expect(byPty.get(second)).toBe('vim')
-      // Removing the live titles leaves exactly the layout published without them.
       const stripped = titled.map((entry) => ({
         key: entry.key,
         layout: JSON.parse(
@@ -425,7 +415,6 @@ describe('WorkspaceLayoutStream', () => {
         rewritten.type === 'workspace' && panesOf(rewritten.layout).find((p) => p.ptyId === ptyId)
       ).toMatchObject({ liveTitle: 'build 49' })
 
-      // A title that goes away is dropped from the pane.
       liveTitles.delete(ptyId)
       stream.markLiveTitlesDirty()
       await flush()

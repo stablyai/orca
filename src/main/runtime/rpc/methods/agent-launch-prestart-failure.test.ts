@@ -1,10 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A terminal launch that fails before its spawn is requested — no launch command, runtime
- * unavailable — created nothing, so a named operation settles as failed with its real cause.
- * Once the request has left, a failure proves nothing and the outcome stays unknown. An explicit
- * chat the host can prove it cannot open is refused the same way, before anything is created.
- */
+/** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

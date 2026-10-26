@@ -29,10 +29,7 @@ function pick<T>(
   )
 }
 
-/**
- * Everything the fixture attributes to `owner`, plus the unattributable shared entries that must
- * survive while a twin does. An action on the other twin must leave this unchanged.
- */
+/** Project owner-attributed plus unattributable shared state; acting on another twin must preserve both. */
 export function projectHostTwinState(fixture: HostTwinFixture, owner: HostTwinSide) {
   const state: AppState = fixture.store.getState()
   const key = fixture.workspaceKey
@@ -60,10 +57,7 @@ export function projectHostTwinState(fixture: HostTwinFixture, owner: HostTwinSi
   }
 }
 
-/**
- * Module-level stores the purge reaches outside the zustand state. Registered by hand: a store
- * added to `buildWorktreePurgeState`'s forgetters belongs here too.
- */
+/** Manually include module stores in buildWorktreePurgeState forgetters, outside Zustand. */
 const HOST_TWIN_MODULE_STORES: readonly {
   name: string
   read: (fixture: HostTwinFixture, owner: HostTwinSide) => unknown

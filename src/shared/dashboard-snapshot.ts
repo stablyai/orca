@@ -3,12 +3,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
 
-/**
- * Serializable contract for the pop-out agent dashboard. The main renderer owns
- * the live store, derives this snapshot, and relays it (through the main
- * process) to the separate pop-out renderer, which renders it presentationally.
- * Every field must be structured-clone-safe (no functions / class instances).
- */
+/** Main renderer owns live state and relays structured-clone-safe snapshots through main to the presentation-only pop-out; no functions/class instances. */
 
 /** Agent lifecycle columns; idle is optional while completed agents remain visible. */
 export type DashboardBucket = 'attention' | 'working' | 'done' | 'idle'
@@ -21,13 +16,10 @@ export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = [
   'idle'
 ]
 
-/** Max length of a card's display labels. The producer truncates to this and
- *  the main-process validator enforces it, so an unbounded name (a long
- *  `terminal rename`, an OSC title) cannot cost the card its place on the board. */
+/** Producer truncation must match validation so oversized names/OSC titles cannot drop cards from the board. */
 export const DASHBOARD_MAX_LABEL_LENGTH = 1_024
 
-/** The validator drops a whole snapshot that exceeds this, so the builder caps
- *  the launcher's entries rather than letting a huge fleet blank the pop-out. */
+/** Builder caps launch choices; exceeding validator limits would drop the entire fleet snapshot. */
 export const DASHBOARD_MAX_LAUNCH_WORKTREES = 500
 
 /** Keeps optional map-only workspace metadata bounded across the renderer bridge. */
@@ -82,19 +74,15 @@ export type DashboardWorkspace = {
 export type DashboardCard = {
   /** Stable identity for React keys. */
   paneKey: string
-  /** Resolved live PTY id for the terminal preview, or null when the agent has
-   *  no live pane (e.g. a retained/done row whose pane is gone). */
+  /** Null when retained/done cards have no live pane; otherwise resolve the live preview PTY. */
   ptyId: string | null
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
-  /** One-line task/prompt text shown on the card. */
   task: string
-  /** The most recent message the user sent this agent (its current prompt). */
   lastUserMessage?: string
-  /** The most recent message the agent sent back. */
   lastAgentMessage?: string
   /** Routing target for click-to-focus. leafId is null when unresolved. */
   repoId: string
@@ -103,7 +91,6 @@ export type DashboardCard = {
   leafId: string | null
   /** Agent pane that spawned this agent, when both are visible. */
   parentPaneKey?: string
-  /** Direct workspace parent. */
   parentWorktreeId?: string
   repoName: string
   worktreeName: string
@@ -122,39 +109,24 @@ export type DashboardCard = {
   hasReview?: boolean
   review?: DashboardCardReview
   subagents?: DashboardCardSubagent[]
-  /** "Started … ago" display. */
   startedAt: number
-  /** When the agent last entered `done`, or null if it never finished. Drives
-   *  the card's time column: finished cards read time-since-finish (parity with
-   *  the left worktree sidebar), active cards fall back to startedAt. */
+  /** Finish time matches sidebar time-since-finish; active/uncompleted cards fall back to startedAt. */
   finishedAt: number | null
-  /** When the agent entered its current state — column ordering key (cards
-   *  that moved into a bucket most recently sort first). 0 when unknown. */
+  /** Bucket-entry time sorts newest first; zero means unknown. */
   stateChangedAt: number
-  /** Last accepted hook update. Optional for mixed-version snapshots; the
-   *  pop-out uses it to request one refresh when a live state becomes stale. */
+  /** Optional on mixed-version snapshots; pop-out requests one refresh when live status becomes stale. */
   statusUpdatedAt?: number
-  /** Mirrors the sidebar's unvisited signal: the agent changed state since the
-   *  user last acknowledged it (visited its tab / opened its dashboard dialog).
-   *  Derived from the app-wide ack map so both surfaces mute in lockstep. */
+  /** Derive from the app-wide acknowledgment map so sidebar/tab visits and dashboard dialogs mute unseen state together. */
   unseen: boolean
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
-  /** The tab's conversation name, resolved exactly as the sidebar's agent rows
-   *  resolve it. Undefined when no usable name exists (status-only titles). */
+  /** Resolve conversation names like sidebar rows; omit unusable status-only titles. */
   conversationName?: string
-  /** Host-dependent input facts the preview terminal needs to encode keys the
-   *  way this agent's real pane does. Null when the card has no live pty. Only
-   *  the main renderer owns the store these derive from, so they ride the
-   *  snapshot to reach the pop-out. */
+  /** Carry main-renderer-owned host input facts to the pop-out; null when no live PTY exists. */
   terminalInput?: DashboardCardTerminalInput
 }
 
-/**
- * Per-pty input contract shared by a pane and its dashboard preview. Byte
- * protocols follow the PTY's execution host, not the client OS — they differ
- * for a macOS client driving a Windows runtime.
- */
+/** Preview input bytes follow the PTY’s execution host, never the client OS (e.g. macOS driving Windows). */
 export type DashboardCardTerminalInput = {
   /** Platform executing the pty; picks the host-side byte encodings. */
   hostPlatform: NodeJS.Platform
@@ -188,19 +160,14 @@ export type DashboardFilterOptions = {
 export type DashboardSnapshot = {
   generatedAt: number
   cards: DashboardCard[]
-  /** Active workspaces, including those without an agent card. Map-only and
-   *  optional for preload compatibility with older snapshot producers. */
+  /** Include active map workspaces without cards; optional for older preload producers. */
   workspaces?: DashboardWorkspace[]
   showIdle?: boolean
-  /** Available filter dimensions are store-derived so zero-card projects and
-   *  statuses remain selectable. Optional for preload-version compatibility. */
+  /** Store-derived filters keep zero-card projects/statuses selectable; optional for older preloads. */
   filterOptions?: DashboardFilterOptions
   /** Launch choices resolved on each workspace's execution host. */
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
-  /** Icons for the repos the cards belong to. Keyed by repoId rather than
-   *  carried per card: image icons are data URLs up to 400KB, and the snapshot
-   *  is republished several times a second. Optional so a pop-out running
-   *  pre-upgrade code still accepts the payload. */
+  /** Share repo icons by ID: repeated per-card 400KB data URLs would bloat several snapshots per second. Optional for older pop-outs. */
   repoIconsByRepoId?: Record<string, RepoIcon | null>
 }
 
@@ -213,9 +180,7 @@ export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
   repoIconsByRepoId: {}
 }
 
-/** Routing payload for click-to-focus: reveal this agent's pane in the main
- *  window. leafId is null when the pane could not be resolved (best-effort:
- *  the worktree is still activated). */
+/** Reveal in main; unresolved leafId still activates the workspace as best effort. */
 export type DashboardRevealAgentArgs = {
   repoId: string
   worktreeId: string

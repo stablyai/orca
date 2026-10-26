@@ -7,8 +7,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
 
-// Why: the emitters are plain module listener Sets, so N mounted subscribers
-// under a real React render reproduce the fan-out exactly — no mocking needed.
+// Real listener sets reproduce N-subscriber fanout without emitter mocks.
 const SUBSCRIBER_COUNT = 10
 const FOREIGN_EVENT_COUNT = 20
 
@@ -58,9 +57,7 @@ function mountSubscribers(): { renders: number[]; resetCounts: () => void } {
   }
 }
 
-// Why: each emitter callback arrives from its own IPC/network task in the app,
-// so one act() per event models real commit boundaries; batching them all into
-// a single act() would collapse the storm React actually pays for.
+// Use one act per event to preserve independent IPC/network commit boundaries instead of hiding the render storm through batching.
 function emitInOwnTask(emit: () => void): void {
   act(() => {
     emit()
@@ -115,8 +112,7 @@ describe('useMobileOverlayTicks pty-affinity gate', () => {
     const { renders, resetCounts } = mountSubscribers()
     resetCounts()
 
-    // Why: mirrors replaceFitOverridePtyId/replaceDriverPtyId — every reconnecting
-    // pane republishes state under a new handle and retires the old one.
+    // Model reconnect handle rotation republishing overlay state and retiring the prior binding.
     for (let index = 0; index < SUBSCRIBER_COUNT; index++) {
       emitInOwnTask(() => {
         setFitOverride(ownedPtyId(index), 'mobile-fit', 40, 20)

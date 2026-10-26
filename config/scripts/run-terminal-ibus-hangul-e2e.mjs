@@ -346,8 +346,7 @@ async function runInsideSession(evidenceDir) {
     )
   }
 
-  // Why unconditionally, and not only when Playwright failed: a skipped test reports as a pass,
-  // so exit code 0 is exactly the state this check exists to distrust.
+  // Always require engagement evidence: skipped Playwright tests also exit 0, so successful exit alone proves nothing.
   const receiptText = existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : ''
   if (nestedWayland) {
     verifyPlaywrightParticipation(

@@ -65,6 +65,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.nonFinalAdmissionDeniedSessionIds.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
+    this.wslPaneKeysBySessionId.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.auditObservationListeners.length = 0
@@ -203,6 +204,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
+    this.wslPaneKeysBySessionId.clear()
     // Daemon PTYs survive disconnect; resume producers so warm reattach does not wait for a pause failsafe.
     for (const id of this.pausedProducerSessionIds) {
       this.client.notify('resumePty', { sessionId: id })

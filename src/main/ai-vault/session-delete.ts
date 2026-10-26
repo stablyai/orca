@@ -10,7 +10,7 @@ import {
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
 import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 
 // Remove companions first so partial failure leaves the transcript visible for retry.
 export async function deleteAiVaultSessionFile(

@@ -3,10 +3,7 @@ import type { ProviderCheckSummary } from '../../../shared/github/pull-request-t
 
 type ChecksPillItem = { checksSummary?: ProviderCheckSummary }
 
-/**
- * The Tasks-grid checks pill. Label and tone both read the one shared summary so the pill can never
- * contradict its own colour — a green pill used to read "1 unresolved" whenever neutral > 0.
- */
+/** Derive label and tone from the same summary so neutral checks cannot contradict a successful state. */
 export function getChecksLabel(item: ChecksPillItem): string {
   return getProviderChecksLabel(item.checksSummary)
 }

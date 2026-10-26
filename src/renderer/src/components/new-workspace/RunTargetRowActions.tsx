@@ -25,7 +25,6 @@ export function NeedsSetupHostIcon({
   return <HostRowIcon hostId={hostId} />
 }
 
-/** Inline Connect action on a disconnected host row. */
 export function ConnectHostButton({
   connecting,
   onConnect
@@ -38,8 +37,6 @@ export function ConnectHostButton({
       type="button"
       variant="ghost"
       size="xs"
-      // Why: only the row being connected is disabled, so one slow connect
-      // can't lock out connecting to the others.
       disabled={connecting}
       className="ml-1 shrink-0 gap-1 self-center text-muted-foreground/70 hover:text-foreground"
       onMouseDown={(event) => {
@@ -49,8 +46,7 @@ export function ConnectHostButton({
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        // Why: keep the picker open so the connecting state stays visible; the
-        // row updates in place once store SSH state resolves.
+        // Keep the picker open so connection progress and resolved host state remain visible.
         onConnect()
       }}
     >
@@ -66,7 +62,6 @@ export function ConnectHostButton({
   )
 }
 
-/** Inline Set project location action on a host that still needs a project path. */
 export function SetLocationButton({
   hostLabel,
   onSetLocation

@@ -24,8 +24,7 @@ export type OnboardingFolderAgentLaunch = {
   startup?: OnboardingFolderAgentStartup
 }
 
-/** Why: lives beside the launch, not the startup builder, because the store root imports that
- *  builder eagerly and the planner's launch graph reaches back to the store root. */
+/** Keep planning beside launch: the eagerly imported startup builder cannot reach the launch graph without cycling through store root. */
 export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   store: ReturnType<typeof useAppStore.getState>
   onboarding: OnboardingState | null
@@ -65,9 +64,7 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   return { agent, plan, startup }
 }
 
-/** Reveal a folder just added after dismissed onboarding and start its default agent on the
- *  planned route. Both add-folder paths (local store action, SSH dialog) share this; the store
- *  path must import it lazily because the launch graph reaches the store root. */
+/** Share post-onboarding folder reveal/default-agent launch across local and SSH adds; store callers import lazily to avoid the launch/store cycle. */
 export async function revealOnboardingFolderWithAgentLaunch(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined

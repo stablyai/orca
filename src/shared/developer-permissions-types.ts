@@ -4,8 +4,7 @@ export type DeveloperPermissionId =
   | 'screen'
   | 'accessibility'
   | 'full-disk-access'
-  // Not in DEVELOPER_PERMISSION_IDS: macOS exposes no API to read this grant, so it is
-  // open-the-pane only (STA-7948).
+  // macOS exposes no grant-reading API, so exclude this from DEVELOPER_PERMISSION_IDS and offer pane opening only (STA-7948).
   | 'files-and-folders'
   | 'automation'
   | 'local-network'

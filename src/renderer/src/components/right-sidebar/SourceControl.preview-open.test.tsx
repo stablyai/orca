@@ -407,7 +407,7 @@ describe('SourceControl preview row opens', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
-    // Why: the owner stamp routes the discard; a different focused server must not.
+    // Route discard by owner stamp even when another server is focused.
     Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
     onTestFinished(() => {
       Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')

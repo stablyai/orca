@@ -21,11 +21,7 @@ function toastId(suggestion: LocalBaseRefUpdateSuggestion): string {
 
 const inspectSettingsDismissals = new Set<string>()
 
-// Why: sonner crams its built-in `action`/`cancel` buttons into the same
-// center-aligned flex row as the title + multi-line description, which pinches
-// the actions into a squished column. Rendering the body as a custom node lets
-// the buttons sit in a full-width footer below the text while still reusing
-// sonner's native frame (info icon, title, close X, swipe-to-dismiss).
+// Use a custom body/footer so long text does not squeeze Sonner’s native action row.
 function SuggestionToastBody({
   suggestion,
   deps
@@ -80,8 +76,7 @@ function SuggestionToastBody({
       repoId: null,
       sectionId: KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID
     })
-    // Why: opening Settings is informational, not a decline; Sonner still calls
-    // onDismiss for this programmatic close, so skip the one-time decline flag.
+    // Opening Settings is informational; suppress Sonner’s decline recording for this dismissal.
     inspectSettingsDismissals.add(id)
     toast.dismiss(id)
   }
@@ -111,8 +106,7 @@ function SuggestionToastBody({
         </button>
       </p>
       <div className="flex justify-end">
-        {/* No explicit Dismiss: the toast is persistent and sonner's close (X)
-            already backs the user out and persists the decline. */}
+        {/* Sonner’s close button already persists decline; no additional dismiss action is needed. */}
         <Button size="sm" onClick={turnOn}>
           {translate(
             'auto.components.sidebar.local.base.ref.suggestion.toast.34a03a6565',
@@ -133,8 +127,7 @@ export function showLocalBaseRefUpdateSuggestionToast(
     return
   }
 
-  // Why (matches the sticky "Session restore failed" toast): stay on screen until
-  // the user acts, so a ~4s auto-expire can't bury this one-time, opt-in nudge.
+  // Keep this one-time opt-in prompt visible until the user acts.
   toast.info(
     translate(
       'auto.components.sidebar.local.base.ref.suggestion.toast.4a18052018',
@@ -146,8 +139,7 @@ export function showLocalBaseRefUpdateSuggestionToast(
       description: <SuggestionToastBody suggestion={suggestion} deps={deps} />,
       duration: Infinity,
       dismissible: true,
-      // Fires for the close (X) button and swipe; the in-body buttons handle their
-      // own dismissal since they are not sonner's native action/cancel controls.
+      // Close/swipe uses onDismiss; custom body actions handle their own dismissal.
       onDismiss: () => {
         if (inspectSettingsDismissals.delete(toastId(suggestion))) {
           return

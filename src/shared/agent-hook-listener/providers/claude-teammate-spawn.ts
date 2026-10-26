@@ -6,8 +6,7 @@ import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
 import { getOrCreateClaudeSubagentRoster } from './claude-roster-state'
 
-/** A lead Agent call that spawned a teammate (captured on 2.1.308) names the description Claude
- *  lists the teammate's `background_tasks` entry under. */
+// Captured Claude 2.1.308 names background_tasks entries by the lead Agent call’s spawn description.
 export function recordClaudeTeammateSpawn(
   state: HookListenerState,
   paneKey: string,

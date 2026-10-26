@@ -67,7 +67,6 @@ type NativeChatContextMenuState = {
 
 type UseNativeChatContextMenuArgs = {
   rootRef: RefObject<HTMLElement | null>
-  /** Where a selection from an agent's reply is quoted. */
   composerRef: RefObject<NativeChatComposerHandle | null>
   enabled?: boolean
   /** Bridge-only escape hatch; structured sessions have no terminal view. */
@@ -80,12 +79,9 @@ type UseNativeChatContextMenuArgs = {
   resolveOrcaSessionId?: () => Promise<string | null>
 } & NativeChatContextMenuTargetArgs
 
-/** What the menu needs to offer the rows for a right-clicked target. */
 export type NativeChatContextMenuTargetArgs = {
-  /** Answers which text a right-clicked message row copies. */
   messageListRef?: RefObject<Pick<NativeChatMessageListHandle, 'messageCopyText'> | null>
   fileLinkContext?: NativeChatFileLinkContext | null
-  /** Where the transcript offers rewind; absent where it never does. */
   rewind?: NativeChatRewindSurface
   onFind?: (returnFocusTo: Element | null) => void
 }
@@ -114,7 +110,6 @@ export type NativeChatContextMenuActions = {
   onClosePane: () => void
 }
 
-/** No-op defaults for when the view has no pane-management actions wired. */
 export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
   onSplitRight: () => {},
   onSplitDown: () => {},
@@ -168,7 +163,6 @@ export function useNativeChatContextMenu({
   })
   const shortcutLabel = nativeChatToggleShortcutLabel(isMacPlatform())
   const { image, target } = state
-  // Copy, Copy image, Paste and the target rows each show only when they apply to what was right-clicked.
   const hasSelection = state.selectedText.trim().length > 0
   const hasEditItems =
     image !== undefined ||
@@ -386,7 +380,7 @@ function StructuredChatPaneMenuItems({
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
-  // Why: left alone, the press that opens the menu collapses the selection before contextmenu fires.
+  // Preserve selection on menu-opening presses; otherwise it collapses before contextmenu fires.
   if (
     (event.button === 2 || (isMacPlatform() && event.ctrlKey)) &&
     !opensNativeEditableMenu(event.target)

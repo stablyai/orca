@@ -12,8 +12,7 @@ const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtim
 const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
 const packageJson = JSON.parse(readProject('package.json'))
 const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
-// Why not process.platform: the win32 plan resolves wherever its os-gated npm addon is
-// installed; @orca/windows-registry is a workspace link and present everywhere.
+// Resolve the win32 plan wherever its OS-gated addon is installed; windows-registry is a workspace link on every platform.
 const windowsAddonsInstalled = existsSync(
   join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
@@ -27,8 +26,7 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
     expect(packageJson.optionalDependencies['@orca/windows-registry']).toBe('workspace:*')
-    // Why: allowBuilds stops pnpm running node-gyp at install time -- the root
-    // Windows-only rebuild owns this addon so it is built against the right runtime ABI.
+    // allowBuilds suppresses install-time node-gyp; the Windows rebuild owns the addon’s runtime ABI.
     expect(pnpmWorkspace.allowBuilds['@orca/windows-registry']).toBe(false)
     if (windowsAddonsInstalled) {
       expect(packageTargets.win32).toEqual(
@@ -69,13 +67,9 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows process-table addon optional and platform-gated', () => {
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
-    // Why: same rule as the registry addon -- allowBuilds stops pnpm running node-gyp at
-    // install time so the Windows-only rebuild owns it with the right runtime ABI.
+    // As with registry, suppress install-time node-gyp so the Windows rebuild selects the runtime ABI.
     expect(pnpmWorkspace.allowBuilds['@vscode/windows-process-tree']).toBe(false)
-    // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
-    // libraries our build agents do not carry, and the enumeration stops after
-    // 1024 processes -- on a busy host that silently hides the very descendants
-    // teardown is looking for.
+    // Patch removes unavailable Spectre-library requirement and 1024-process enumeration cap that hides descendants on busy hosts.
     expect(pnpmWorkspace.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
       'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     )
@@ -147,7 +141,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('verify-mac-build')
     const macVerification = releaseWorkflow.jobs['verify-mac-build']
-    expect(macVerification.needs).toEqual(['cut', 'build-mac', 'build'])
+    expect(macVerification.needs).toEqual(['cut', 'build-mac'])
     expect(macVerification.if).toContain('!cancelled()')
     expect(macVerification.if).not.toContain('needs.build.result')
     expect(macVerification.permissions).toEqual({ actions: 'read', contents: 'read' })

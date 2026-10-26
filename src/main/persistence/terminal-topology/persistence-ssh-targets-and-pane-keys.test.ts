@@ -427,12 +427,26 @@ describe('Store', () => {
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {},
-      migrationUnsupportedPtyEntries: {}
+      migrationUnsupportedPtyEntries: {
+        'stale-pty': {
+          ptyId: 'stale-pty',
+          tabId: 'tab-stale',
+          paneKey: makePaneKey('tab-stale', TEST_LEAF_1),
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 123
+        }
+      }
     })
 
     const store = await createStore()
 
     expect(store.getRepos()).toHaveLength(1)
+    store.flush()
+    expect(readDataFile()).toMatchObject({
+      migrationUnsupportedPtyEntries: [],
+      legacyPaneKeyAliasEntries: []
+    })
   })
 
   it('remaps persisted agent acknowledgement pane keys when terminal leaves migrate to UUIDs', async () => {

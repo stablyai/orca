@@ -199,8 +199,7 @@ export async function startLocalWorker(args: {
         failedStage = stage
       }
     })
-    // A created worktree settles its mode only once the host can be asked about it, so the
-    // receipt the caller decided is not always the one that ran.
+    // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
     resolvedWorktree = placed.worktree
     terminalHandle = placed.terminalHandle
@@ -223,8 +222,7 @@ export async function startLocalWorker(args: {
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
-    // A structured session has no boot-to-idle gap or terminal title to read: its agent's start is
-    // waited out by the preamble's send. Only the repo's wait-for-setup policy is waited on here.
+    // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
           runtime,

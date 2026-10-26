@@ -84,9 +84,7 @@ describe('deriveNativeChatStreamingText', () => {
   })
 
   it('drops a preview flagged as tool output even when it leads the transcript', () => {
-    // Regression: providers publish a tool's stdout as `lastAssistantMessage` for status
-    // cards. It leads every transcript assistant turn and never appears in one, so without
-    // this gate it rendered as the reply and no catch-up rule could ever retire it.
+    // Status previews may contain tool stdout that never enters assistant blocks; catch-up cannot retire it, so gate tool output explicitly.
     expect(
       deriveNativeChatStreamingText({
         messages: [assistant('Partial')],

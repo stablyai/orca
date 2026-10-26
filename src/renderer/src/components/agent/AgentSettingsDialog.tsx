@@ -62,10 +62,7 @@ export default function AgentSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Why: widen past the default sm:max-w-lg so the agent rows have room
-          for the name + pills + action cluster without wrapping, while a
-          bounded max-h plus overflow-y keeps the list scrollable when many
-          agents are detected. */}
+      {/* Allow name/pills/actions to fit; the agent list owns bounded height and scrolling. */}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">

@@ -44,7 +44,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
 }))
-vi.mock('../../browser-cookie-clear-store', () => ({
+vi.mock('../browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
       get: (filter: CookiesGetFilter) => Promise<unknown>
@@ -62,9 +62,9 @@ vi.mock('../../browser-cookie-clear-store', () => ({
   })
 }))
 
-import { importCookiesFromBrowser } from '../../browser-cookie-import'
+import { importCookiesFromBrowser } from '../browser-cookie-import'
 import type { DetectedBrowser } from './browser-cookie-detection-types'
-import { createChromiumCookieTestDatabase } from '../../browser-cookie-import-test-database'
+import { createChromiumCookieTestDatabase } from '../browser-cookie-import-test-database'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

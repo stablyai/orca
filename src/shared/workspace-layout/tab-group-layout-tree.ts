@@ -150,10 +150,7 @@ function holdsGroup(node: TabGroupLayoutNode, groupId: string): boolean {
     : holdsGroup(node.first, groupId) || holdsGroup(node.second, groupId)
 }
 
-/**
- * Moves a group's leaf to `side` of the smallest branch holding both `fromGroupId` and
- * `toGroupId` (one group's leaf when they are the same); null when no branch holds both.
- */
+/** Move beside the smallest branch containing both groups (or the single matching group); null if none contains both. */
 export function moveGroupLeafBesideBranch(
   root: TabGroupLayoutNode,
   groupId: string,

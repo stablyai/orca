@@ -45,8 +45,7 @@ export function MobileSettingsPane(): React.JSX.Element {
             {' · '}
             <button
               type="button"
-              // Why: Android is moving to Google Play soon, but until then
-              // link directly to the pinned APK asset for the current mobile release.
+              // Link the pinned release APK until Android distribution moves to Google Play.
               onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_APK_URL)}
               className="cursor-pointer underline underline-offset-2 hover:text-foreground"
             >

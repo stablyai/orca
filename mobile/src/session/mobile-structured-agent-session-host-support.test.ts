@@ -33,6 +33,7 @@ describe('structuredAgentSessionHostSupport', () => {
       sendOptions: false,
       conversationStop: false,
       permissionModes: false,
+      permissionOwn: false,
       itemDetail: false,
       phoneAttachments: false
     }

@@ -19,7 +19,7 @@ function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
 }
 
 describe('the five writes that answer with a comment', () => {
-  it('reads the recorded GitHub, GitLab and review-reply envelopes unchanged', () => {
+  it('reads the representative GitHub, GitLab and review-reply envelopes unchanged', () => {
     for (const comment of [
       { id: 902, author: 'You', body: 'a comment', createdAt: '2020-01-01T00:00:00.000Z' },
       {
@@ -49,7 +49,7 @@ describe('the five writes that answer with a comment', () => {
 })
 
 describe('the Linear comment write', () => {
-  it('reads the recorded reply and leaves a missing id to the local echo', () => {
+  it('reads the representative reply and leaves a missing id to the local echo', () => {
     expect(reads(linearCommentWrittenSchema, { ok: true, id: 'comment-9' }).id).toBe('comment-9')
     expect(reads(linearCommentWrittenSchema, { ok: true }).id).toBeUndefined()
     expect(refuses(linearCommentWrittenSchema, null)).toBe(true)

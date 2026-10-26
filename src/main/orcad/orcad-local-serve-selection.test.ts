@@ -37,7 +37,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-/** A materialized slot as the template would leave it: no runtime of its own yet. */
 function slotFixture(): string {
   const slot = join(root, 'orcad-artifacts', TARGET, '0.1.0+abc')
   mkdirSync(slot, { recursive: true })
@@ -49,7 +48,6 @@ function slotFixture(): string {
   return slot
 }
 
-/** A valid schema-1 profile, as an Orca from before the normalized run tables left it. */
 function seedSchemaV1Profile(dbPath: string, state: Record<string, unknown>): void {
   const db = new Database(dbPath)
   db.exec(`
@@ -164,7 +162,6 @@ describe('orca serve runtime selection', () => {
         reason: expect.stringContaining('could not tell whether this profile has SSH targets')
       })
       expect(schemaVersion(dbPath)).toBe(1)
-      // The serve host's own open migrates it; selection then reads the same targets.
       openProfileStateDatabase(dbPath, DEFAULT_LOCAL_ORCA_PROFILE_ID).db.close()
       expect(await selectServeRuntime(input())).toMatchObject({ kind: afterMigration })
     }

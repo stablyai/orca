@@ -1,12 +1,6 @@
 import { useMemo } from 'react'
 
-/**
- * The ready promise the terminal handle hands out, and the notify that settles it.
- *
- * `awaitReady` waits for the document's `init` rAF chain — `term.open`, renderService population,
- * first paint, and the cell box that init reports — so a fit after it reads the init's own box. It
- * has a timeout for a document that never answers, and is the same on either host.
- */
+// Wait for init’s ready after render/layout so follow-up fitting reads that init’s measured box; bound silence with a timeout.
 
 const READY_TIMEOUT_MS = 3000
 
@@ -14,13 +8,7 @@ export function createTerminalWebViewReadyPromises() {
   let readyPromise: Promise<void> | null = null
   let readyResolve: (() => void) | null = null
 
-  /**
-   * Arms a fresh ready promise, resolving any prior one first.
-   *
-   * Why: an awaiter from the previous generation would otherwise sit on the timeout below — each
-   * leaked timer and closure pinned an awaiting fit caller for the full 3s under rapid
-   * re-init (orientation change, multiple resubscribes), delaying cold-start fit chains.
-   */
+  // Resolve superseded waiters before rearming so rapid re-init cannot pin fit chains until their old timeout.
   function armReady() {
     const priorResolve = readyResolve
     readyResolve = null

@@ -87,10 +87,7 @@ export function addManagedOrcadEnvironment(
   return registered
 }
 
-/**
- * Unlinks a managed server once its orcad is proven to have exited: drops the persisted entry
- * and the sidecar record that held its deployment link.
- */
+/** Remove the persisted server and deployment sidecar only once orcad is proven exited. */
 export function removeManagedOrcadEnvironment(userDataPath: string, environmentId: string): void {
   const store = readPersistedEnvironmentStore(userDataPath)
   const persisted = resolveEnvironmentFromStore(store, environmentId)
@@ -156,8 +153,7 @@ function rebindManagedOrcadPairing(
   }
   const offer = nextOffer(current)
   const nextDeployment = { ...deployment, localPort: localPort ?? deployment.localPort }
-  // Why skip: orcad keeps its device registry across versions and callers pass the enrolled grant,
-  // so an unchanged offer needs no rewrite, and every rewrite re-binds the sidecar entry.
+  // Unchanged enrolled offers need no rewrite; each rewrite rebinds the sidecar.
   if (samePairing(getPreferredPairingOffer(current), offer)) {
     return current
   }
@@ -187,9 +183,7 @@ function rebindManagedOrcadPairing(
     candidate.id === existing.id ? next : candidate
   )
   const { binding: _binding, ...rest } = entry ?? {}
-  // Why three writes: the entry stays current for both store states, so a failed or interrupted
-  // store write can never strand the deployment link. In between, a moved port is read from the
-  // stored endpoint.
+  // Bind both store states around the write so interruptions preserve the deployment link; read moved ports from the stored endpoint between writes.
   writeRuntimeEnvironmentSidecarEntry(
     userDataPath,
     store.environments,
@@ -214,10 +208,7 @@ function samePairing(left: PairingOffer, right: PairingOffer): boolean {
   )
 }
 
-/**
- * Marks a managed server as holding migrated state from `at` on. Written before a commit is
- * attempted, so a crash after the commit can never leave a rollback across it unblocked.
- */
+/** Mark migration before attempting commit so a crash cannot leave rollback to a premigration snapshot enabled. */
 export function recordManagedOrcadMigration(
   userDataPath: string,
   environmentId: string,
@@ -230,8 +221,7 @@ export function recordManagedOrcadMigration(
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not managed.')
   }
   const { binding: _binding, ...state } = entry
-  // The latest mark wins and never moves back: a snapshot older than any migration, including a
-  // later delta move, must stay out of reach.
+  // Keep the latest migration mark, including delta moves, so older snapshots remain blocked.
   const latest =
     state.orcadMigratedAt && Date.parse(state.orcadMigratedAt) >= Date.parse(at)
       ? state.orcadMigratedAt

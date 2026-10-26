@@ -1,15 +1,6 @@
-// The one grammar for a native-chat visual: an assistant reply line naming an HTML file in that
-// chat's scratch folder. Desktop/web (a markdown syntax extension) and mobile both parse with it.
-//
-//   ::orca-visual{file="usage-chart-3f2a.html" title="Usage by day"}
-//
-// - The line may carry up to 3 leading spaces and any trailing spaces/tabs; a trailing CR is
-//   ignored. Nothing else may share the line.
-// - Attributes are `key="value"`, separated by spaces/tabs. Values have no escapes: they cannot
-//   contain `"`, `\`, or control characters. Keys are lowercase ASCII letters.
-// - `file` is required. `title` is optional. A repeated key refuses the line. Other keys are
-//   ignored, so a newer agent's extra attribute still renders on this viewer.
-// - The name is case-sensitive.
+// Shared desktop/web/mobile visual grammar: ::orca-visual{file="chart.html" title="Usage"}. Must occupy a whole case-sensitive line,
+// with up to three leading spaces/trailing horizontal whitespace or CR. Attributes use lowercase keys and unescaped quoted values
+// (no quote/backslash/control characters). file is required; title optional; reject duplicate keys, ignore unknown keys for newer agents.
 
 export const NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER = '::orca-visual{'
 
@@ -18,11 +9,7 @@ export const NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH = 512
 export const NATIVE_CHAT_VISUAL_FILE_MAX_LENGTH = 128
 export const NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH = 120
 
-/**
- * Directives one reply may mount; later ones show as text. Each visual runs author script in its
- * own frame (lazily mounted, at most 512 KiB), so this bounds one reply's live frames and memory
- * while leaving room for a reply that compares a few charts.
- */
+/** Cap reply-mounted visuals: each author-script frame can hold 512 KiB, so bound live frames/memory while allowing a few comparisons. */
 export const NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE = 8
 
 /** Largest visual file, in UTF-8 bytes. The execution host enforces it in a bounded read. */
@@ -40,10 +27,7 @@ const WINDOWS_DEVICE_BASE_NAME =
 const ATTRIBUTE_PATTERN = /^([a-z]+)="([^"]*)"/
 const LINE_SPACE = /^[ \t]*/
 
-/**
- * A single file name inside the chat's scratch folder: no directories, separators, `..`, drive,
- * UNC, device or stream forms, ending in `.html`.
- */
+/** One scratch-folder .html basename; reject directories, traversal, drive/UNC/device/stream forms. */
 export function isNativeChatVisualFileName(name: string): boolean {
   if (
     name.length === 0 ||
@@ -134,11 +118,7 @@ export function parseNativeChatVisualDirectiveLine(
   return { file, title: title.length > 0 ? title : null }
 }
 
-/**
- * Whether the final, still-growing line of a streaming reply may yet become a directive, so the
- * viewer holds it back instead of flashing raw syntax. A complete-looking line counts too: the
- * agent may still append to it. Only a streaming tail may be held; a finished reply shows it.
- */
+/** Hold possible directive tails only while streaming to avoid raw-syntax flashes; even complete-looking tails can grow. Finished replies show them. */
 export function isPendingNativeChatVisualDirectiveTail(lastLine: string): boolean {
   const line = stripLineEnding(lastLine)
   if (line.length === 0 || line.length > NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH) {
@@ -167,11 +147,7 @@ export function withoutPendingNativeChatVisualDirectiveTail(text: string): strin
 const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 
-/**
- * Reply text for plain-text surfaces (a sidebar row, a notification, a copy): the visual lines are
- * dropped, since only the transcript can show them. Lines inside fenced code stay, as the transcript
- * shows them too, and everything else keeps its spacing and indentation.
- */
+/** Remove visual directives for plain-text previews/copy/notifications. Preserve fenced code and surrounding indentation/spacing. */
 export function withoutNativeChatVisualDirectiveLines(text: string): string {
   if (!text.includes(NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER)) {
     return text

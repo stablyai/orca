@@ -21,9 +21,7 @@ const activeReconciliationByRuntime = new WeakMap<
   ActiveReconciliation
 >()
 
-// Finishes ONLY previously requested releases after startup/reconnect terminal discovery.
-// It never invents release intent: resources outside requested/releasing are untouched, and
-// unresolved identity defers (release_pending) rather than settling or broadening the close.
+// Reconcile only requested/releasing resources; discovery must neither invent release intent nor widen an unresolved close.
 export function reconcileRequestedWorkerTerminalReleases(
   runtime: WorkerTerminalReleaseRuntime
 ): Promise<WorkerTerminalReleaseReconciliationResult> {

@@ -38,7 +38,6 @@ function harness(options: {
   caret?: number
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
   imageAttachments?: NativeChatComposerImageAttachment[]
-  /** The PTY lane has no structured transport at all. */
   lane?: 'pty'
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
@@ -71,7 +70,6 @@ function harness(options: {
       }),
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
   )
-  /** The user's typing: the draft store and the rendered draft move together. */
   const type = (draft: string, caret: number): void => {
     writeNativeChatDraftCache(SCOPE, draft)
     hook.rerender({ draft, caret })
@@ -155,7 +153,6 @@ describe('composer goal mode', () => {
     await act(async () => hook.result.current.send())
 
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
-    // The pane brings the latest into view for a goal it set, as for a sent message.
     expect(onSubmitted).toHaveBeenCalledOnce()
     expect(calls.sendStructured).not.toHaveBeenCalled()
     expect(readNativeChatDraftCache(SCOPE)).toBe('')

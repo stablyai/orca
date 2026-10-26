@@ -1,13 +1,9 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
-// Why this spec exists: the floating panel once rendered the shared group tree in a block
-// container, so every group body — and every pane anchored to one — measured 0px tall while
-// the whole unit suite stayed green (jsdom computes no layout). Only a real renderer can
-// assert that a pane owns actual pixels, so the pin lives here.
+// Assert real pane geometry: jsdom cannot detect group bodies and anchored panes collapsing to zero height.
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// E2E specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 const OPEN_PANEL_SELECTOR = `${PANEL_SELECTOR}[aria-hidden="false"]`
@@ -111,8 +107,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   expect(soleBox!.height, 'single group body height').toBeGreaterThan(MIN_PANE_EDGE_PX)
   expect(soleBox!.width, 'single group body width').toBeGreaterThan(MIN_PANE_EDGE_PX)
 
-  // The emulator pane overlay anchors to the group body; it must cover the same rect,
-  // not sit at 0px like the regression this spec pins.
+  // The anchored emulator overlay must own the group body’s real pixels.
   const paneBox = await openPanel.locator('[data-emulator-pane]:visible').first().boundingBox()
   expect(paneBox, 'anchored pane must have a box').not.toBeNull()
   expect(paneBox!.height).toBeGreaterThan(MIN_PANE_EDGE_PX)
@@ -140,14 +135,12 @@ test('floating panel group bodies and panes own real pixels, single group and sp
     expect(box!.width, 'split group body width').toBeGreaterThan(MIN_PANE_EDGE_PX)
   }
 
-  // Both tabs stay reachable: the moved tab's pane is on screen, and focusing the other
-  // pane brings the original group's tab back into the titlebar strip.
+  // Focusing either group must keep its tab reachable in the titlebar.
   await expect(openPanel.locator(`[data-tab-id="${second.id}"]`)).toBeVisible()
   const firstBody = openPanel.locator(`[data-tab-group-body-id="${first.groupId}"]`)
   const firstBodyBox = await firstBody.boundingBox()
   expect(firstBodyBox).not.toBeNull()
-  // Raw mouse click: the anchored pane overlay covers the body and owns the same
-  // focus-the-group pointerdown, so click whatever is topmost at the body's coords.
+  // Click body coordinates because its anchored overlay owns the same focus-group pointer handler.
   await orcaPage.mouse.click(firstBodyBox!.x + 20, firstBodyBox!.y + 20)
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })

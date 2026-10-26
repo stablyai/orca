@@ -10,7 +10,6 @@ import {
 } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ManagedOrcadPairingRepairs,
   MAX_PAIRING_REPAIRS_PER_WINDOW,
@@ -24,6 +23,7 @@ import {
   OrcadManagedPairingRejectedError
 } from './orcad-managed-tunnel-identity'
 import { buildWithPairingRepair } from './orcad-managed-tunnel-pairing-recovery'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 const KEY = 'pinned-host-key'
 
@@ -85,8 +85,7 @@ function setup(published: () => ServeReadiness | null) {
     connect: vi.fn(async () => ({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only handed to readReadiness, a double here.
       target: {} as SshTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only handed to readReadiness, a double here.
-      connection: {} as OrcadHostTransport
+      connection: unusedOrcadHostTransport()
     })),
     readReadiness: vi.fn(async () => published()),
     refresh: vi.fn((_id: string, _code: string) => {

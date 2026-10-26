@@ -1,6 +1,6 @@
 import { constants, type Stats } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from './filesystem-path-containment'
 
 export const NOT_A_REGULAR_FILE_MESSAGE = 'Not a regular file'
 

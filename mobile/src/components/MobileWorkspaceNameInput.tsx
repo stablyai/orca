@@ -20,8 +20,7 @@ export function MobileWorkspaceNameInput({
       return
     }
 
-    // Why: bottom drawers animate in before the field is visually settled;
-    // focusing after the animation makes mobile soft keyboards appear reliably.
+    // Focus after drawer animation settles so soft keyboard appears reliably.
     const timeout = setTimeout(() => {
       inputRef.current?.focus()
     }, MOBILE_WORKSPACE_NAME_FOCUS_DELAY_MS)

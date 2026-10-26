@@ -13,6 +13,7 @@ vi.mock('../activation/orcad-activation-record-store', () => ({
 }))
 
 import { provenLiveDaemonVersion, pruneManagedOrcadVersions } from './orcad-managed-version-gc'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 function readiness(terminalDaemon: unknown): ServeReadiness {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only health.terminalDaemon is read.
@@ -20,8 +21,7 @@ function readiness(terminalDaemon: unknown): ServeReadiness {
 }
 
 const slot = {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: GC is mocked and never touches the connection.
-  conn: {} as never,
+  conn: unusedOrcadHostTransport(),
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: GC is mocked; the slot's host is only passed through.
   host: { os: 'linux', pathFlavor: 'posix', commandDialect: 'posix' } as never,
   remoteHome: '/home/u',

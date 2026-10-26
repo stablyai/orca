@@ -81,7 +81,6 @@ describe('a new phone send after an acknowledgement was lost', () => {
         attachments: [],
         onError
       }
-      // Each Send makes its own id, as the session's send seam does.
       const send = () =>
         sendMobileStructuredAgentSessionMessage({
           ...message,

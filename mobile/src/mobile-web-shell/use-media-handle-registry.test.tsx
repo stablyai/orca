@@ -1,4 +1,3 @@
-/** The registry's lifetime on a mount: one per session, and swept when either one ends. */
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -83,8 +82,7 @@ describe('the registry a mounted page session holds', () => {
   })
 
   it('releases the old session’s files when a new session takes the mount', () => {
-    // A remount is a new session id, and the document behind the old one is gone: nothing will
-    // ever call `release` for what it staged.
+    // The retired document can no longer release its staged files; changing session must sweep them.
     const probe = harness()
     probe.render('session-a')
     probe.seen[0]?.mint([STAGED])

@@ -7,8 +7,7 @@ import type { RpcContext } from '../core'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 
 function context(runtime: OrcaRuntimeService): RpcContext {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only `runtime` from the dispatch context.
-  return { runtime } as unknown as RpcContext
+  return { runtime }
 }
 
 function method(name: string) {

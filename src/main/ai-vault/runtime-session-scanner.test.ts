@@ -72,13 +72,20 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
-  it('surfaces project scope truncation from the runtime transport bound', async () => {
+  it('caps forwarded project paths and reports scope truncation', async () => {
     const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
 
     const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
       scopePaths
     })
 
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.listSessions',
+      expect.objectContaining({ scopePaths: scopePaths.slice(0, 64) }),
+      undefined
+    )
     expect(scanResult.issues).toContainEqual(
       expect.objectContaining({
         kind: 'scope',

@@ -177,7 +177,7 @@ export function buildComposerCardProps(state: ComposerModel) {
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
-    // Why: "create multiple" applies only to worktree (git) targets; folder-workspace keeps create-and-close.
+    // Create multiple applies to Git worktrees; folder creation still closes afterward.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,
     onCreateMultipleChange: setCreateMultiple,

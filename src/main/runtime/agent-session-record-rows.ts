@@ -1,8 +1,5 @@
-// The agent-session store's rows in the host's chat journal database: every row loaded once at open,
-// and exactly the rows a transaction changed written back.
-//
-// A record row this build cannot read is derived as unreadable at each load and never rewritten: a
-// write only touches changed rows, and every mutation of an unreadable id is refused.
+// Load session/ledger rows once and persist only changed rows inside the journal transaction.
+// Unreadable records remain present and immutable; every mutation of their ids is refused.
 
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
@@ -26,11 +23,10 @@ import {
   type PersistedAgentSessionTab
 } from './agent-session/agent-session-tab-table'
 
-/** "Never recorded" and "recorded, now empty" differ, and #17439's legacy fallback needs the first;
- *  no row count can say which. */
+/** Never-recorded differs from recorded-empty; legacy fallback cannot infer this from row count (#17439). */
 const SESSION_TABS_RECORDED = 'session_tabs_recorded'
 
-/** Lease fields older builds wrote and nothing reads, dropped at load so no write carries them on. */
+/** Drop retired lease fields during load so later writes cannot carry them forward. */
 type RetiredAgentSessionLeaseFields = {
   processlessAt?: unknown
   settlementRetryRequired?: unknown
@@ -78,11 +74,8 @@ function unreadableRecordReason(value: unknown): string {
     : 'unsupported_schema'
 }
 
-/**
- * The whole store, read once. Every lease loads unreconciled: the process that wrote it may still
- * be alive, so nothing persisted grants a writer until this host adjudicates it. Operation, key and
- * tab rows this build cannot read are skipped, as a record row it cannot read is set aside.
- */
+/** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
+ * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
 export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
     records: new Map(),
@@ -91,7 +84,7 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     unreadableRecords: new Map(),
     sessionTabs: null
   }
-  // Only a read-only database a newer build wrote can lack them; its chats then list as none here.
+  // Read-only newer databases may lack tables; report no chats without creating them.
   if (
     !db
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")

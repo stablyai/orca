@@ -1,12 +1,8 @@
-// Why: Claude Code (>=2.1.80) pipes `rate_limits` to the statusLine command on every
-// turn — piggybacked on Messages API responses, so reading it costs no usage-endpoint
-// budget (the endpoint 429s under Orca's polling; see rate-limits/service.ts).
+// Claude >=2.1.80 supplies rate_limits via statusLine from API responses, avoiding usage-endpoint polling that 429s under Orca.
 
 export const CLAUDE_STATUSLINE_PATHNAME = '/statusline/claude'
 
-// Why: the statusline ticks ~3x/sec while streaming and the service drops same-value posts
-// inside LIVE_CLAUDE_INGEST_DEDUPE_MS (30s) anyway; a per-pane client floor below that bound
-// keeps the usage bar live while capping curl spawns at one per pane per interval.
+// Statusline ticks ~3Hz; a 15s client floor bounds curl spawns while staying below the service’s 30s same-value dedupe window.
 export const CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS = 15
 
 export type ClaudeStatusLineWindow = {
@@ -34,12 +30,12 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   }
   const raw = value as { used_percentage?: unknown; utilization?: unknown; resets_at?: unknown }
   const usedPercentage = finiteNumber(raw.used_percentage)
-  // Why: mirror mapClaudeUsageWindow's OAuth-shape tolerance (utilization, 0-100) so a statusline field rename degrades instead of silently darkening the feed.
+  // Accept OAuth-shaped utilization (0–100) so schema renames degrade without losing the feed.
   const utilization = usedPercentage === undefined ? finiteNumber(raw.utilization) : undefined
   if (usedPercentage === undefined && utilization === undefined) {
     return null
   }
-  // Why: resets_at is epoch seconds today, but pass a string/ISO value through so schema drift degrades to a parseable timestamp (see parseClaudeUsageResetTimestamp) instead of silently dropping it.
+  // Accept ISO/string reset values on schema drift instead of dropping parseable timestamps.
   const resetsAt =
     typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at)
       ? raw.resets_at
@@ -53,10 +49,7 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   }
 }
 
-/**
- * Parses the form-encoded body posted by the managed Claude statusline script.
- * Returns null when the payload carries no usable rate-limit windows.
- */
+/** Parse managed statusline form data; null means no usable rate-limit windows. */
 export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLimits | null {
   if (typeof body !== 'object' || body === null) {
     return null

@@ -46,7 +46,7 @@ function makeRepo(index: number, overrides: Partial<Repo> = {}): Repo {
     badgeColor: '#000000',
     addedAt: index,
     ...overrides
-  } as Repo
+  }
 }
 
 function makeStore(repos: Repo[]) {

@@ -57,10 +57,7 @@ export function hasPendingEditorBufferChange(
   )
 }
 
-/**
- * Before tabs close: commits pending text from every pane of these files and the views sharing
- * their records. Idle panes no-op; panes of other files are left alone, so their edits continue.
- */
+/** Before closing, flush all panes and shared-record views of these files only; idle panes no-op and unrelated edits continue. */
 export function flushClosingEditorBuffers(
   state: EditorBufferViewIndex,
   fileIds: Iterable<string>
@@ -75,7 +72,7 @@ export function flushClosingEditorBuffers(
     try {
       entry.flush()
     } catch (error) {
-      // Why: one pane failing to flush must not block the close, nor lose the pane's input.
+      // A failed flush must preserve input without blocking other panes from closing.
       console.error('[editor] flushing pending edits before tabs close failed', error)
       try {
         entry.preserve?.()

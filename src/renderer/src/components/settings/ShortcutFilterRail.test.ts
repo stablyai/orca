@@ -74,8 +74,7 @@ describe('ShortcutFilterRail search helpers', () => {
   it('keeps every row visible on a pane-title-only global query', () => {
     const rows = [createShortcutRow()]
 
-    // Mirrors sidebar search selecting the pane with a query that matches only
-    // pane-level metadata (e.g. a localized pane title) and no row metadata.
+    // Model pane-title-only search with no matching row metadata.
     const matcher = buildShortcutGlobalSearchMatcher(rows, '단축키')
 
     expect(matcher(rows[0])).toBe(true)

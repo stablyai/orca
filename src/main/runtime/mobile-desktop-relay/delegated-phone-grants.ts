@@ -15,16 +15,16 @@ const StatusCapabilitiesSchema = z.object({ capabilities: z.array(z.string()).op
 
 export type DelegatedPhoneGrant = { deviceId: string; token: string }
 
-/** One sync's outcome for a host; held in memory only, so the next sync is the only recovery. */
+/** Memory-only sync outcome; recovery requires another sync. */
 export type DelegatedPhoneGrants =
   | { kind: 'update-needed'; fence: string }
   | {
       kind: 'ready'
       fence: string
       grants: ReadonlyMap<string, DelegatedPhoneGrant>
-      // Every phone this sync asked for; one asked for but not granted waits for the next sync.
+      // Asked but ungranted phones wait for the next sync.
       asked: ReadonlySet<string>
-      // Phones whose host token was refused (revoked on the host); not retried until the next sync.
+      // Host-revoked tokens remain refused until the next sync.
       refused: Set<string>
     }
 

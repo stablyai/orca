@@ -83,7 +83,9 @@ Read-only Electron package directories are retained and reported as skipped. Cac
 or copying failures are also reported as skipped rather than silently omitted.
 
 `pnpm dev` and `pnpm dev-stable-name` start an automatic repository-wide cleanup worker for
-Electron, Vite caches, and old dependency installs and generated output
+Electron, Vite caches, old dependency installs and generated output, and per-worktree dev
+profiles whose worktree was removed (a profile is kept while its app, runtime, or terminal daemon
+is still running),
 in the background after the dev process starts. It never prompts or waits before launching the app.
 The worktree being launched is excluded from every cleanup pass. Existing bundle checks protect
 active sibling Electron bundles and recent unfinished bundles from the bundle-specific pass;

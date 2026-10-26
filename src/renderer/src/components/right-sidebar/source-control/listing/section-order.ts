@@ -87,8 +87,7 @@ export function splitPinnedSourceControlConflicts(
   const pinnedConflicts = SOURCE_CONTROL_AREAS.flatMap((area) =>
     groups[area].filter(isPinnedConflictEntry)
   )
-  // Why: preserve referential identity of `groups` when nothing is pinned so
-  // downstream memos (tree rebuilds, etc.) don't fire on every status refresh.
+  // Preserve groups identity without pinned conflicts so status polls do not rebuild downstream trees.
   if (pinnedConflicts.length === 0) {
     return { pinnedConflicts, normalGroups: groups }
   }

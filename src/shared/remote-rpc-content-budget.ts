@@ -4,8 +4,7 @@ import {
   stringifyJsonWithinByteLimit
 } from './node-bounded-json-stringify'
 
-// Why: reserve fixed reply fields and future additive metadata; the echoed request id is charged
-// separately because the wire contract permits arbitrary strings.
+// Reserve fixed/future reply metadata; separately charge arbitrary echoed request IDs.
 const OUTBOUND_ENVELOPE_RESERVE_BYTES = 4 * 1024
 const MAX_JSON_STRING_ESCAPE_EXPANSION = 6
 type CachedResultBytes = {

@@ -1,10 +1,5 @@
-import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import {
-  resolveAgentStatusIdentity,
-  shouldSuppressInheritedTerminalStatus
-} from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
@@ -18,6 +13,7 @@ import {
   applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,
   isAgentStatusForRecentlyClosedTab,
+  isInheritedFromActivePane,
   isSeenHostReplay,
   resolveHookPayloadAgentType,
   shouldApplyResolvedAgentTerminalTitleToTab
@@ -199,31 +195,11 @@ export function createAgentStatusEventApplicator(args: {
       : statusPayloadWithProvenance
     // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
     const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
-    const identity = resolveAgentStatusIdentity({
-      existing:
-        existingStatus &&
-        sameAgentStatusTerminalOwner(
-          {
-            connectionId: existingStatus.connectionId ?? null,
-            worktreeId: existingStatus.worktreeId
-          },
-          {
-            connectionId:
-              (ownershipConnectionId === undefined
-                ? existingStatus.connectionId
-                : ownershipConnectionId) ?? null,
-            worktreeId: data.worktreeId ?? owningWorktreeId ?? existingStatus.worktreeId
-          }
-        )
-          ? existingStatus
-          : undefined,
-      incoming: statusPayload.agentType,
-      now: data.receivedAt
-    })
     if (
       existingStatus &&
-      shouldSuppressInheritedTerminalStatus({
-        inheritedFromActivePane: identity.inheritedFromActivePane
+      isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
+        connectionId: ownershipConnectionId,
+        worktreeId: owningWorktreeId
       })
     ) {
       return 'dropped'

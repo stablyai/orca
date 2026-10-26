@@ -152,6 +152,7 @@ export type CodexSession = {
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
   reportedOptions: {
+    reportedPermissionMode?: string | null
     model?: string
     effort?: string
     serviceTier?: string | null

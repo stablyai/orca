@@ -2,10 +2,7 @@ import { performance } from 'node:perf_hooks'
 import { describe, it, expect } from 'vitest'
 import { extractTerminalFileLinks, extractTerminalFileLinkCandidates } from './terminal-links'
 
-// Regression guard for #5970: a full-screen TUI (e.g. ngrok run through Windows
-// ConPTY) emits its dashboard as one newline-free line that is mostly alignment
-// spaces with a few separators. Keep these non-matching inputs large enough to
-// catch overlapping whitespace backtracking without making normal CI noisy.
+// Large space-padded newline-free ConPTY dashboards once caused overlapping-whitespace backtracking (#5970); bound fixture size without hiding the regression.
 describe('terminal-links ReDoS guard (#5970)', () => {
   const cases: [string, string][] = [
     ['unclosed Markdown destinations', '[/tmp/a.pdf]('.repeat(2500)],

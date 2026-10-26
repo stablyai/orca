@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RpcResponse } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
 
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+function ok(result: unknown): RpcResponse {
+  return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function activationState(activated: boolean) {
@@ -16,7 +18,7 @@ function activationState(activated: boolean) {
   }
 }
 
-function baseOptions(client: { sendRequest: ReturnType<typeof vi.fn> }) {
+function baseOptions(client: UnvalidatedRpcRequestPort) {
   return {
     client,
     hostId: 'host-1',
@@ -173,8 +175,14 @@ describe('openMobileNativeChatFileTap', () => {
   })
 
   it('opens a plain path through files.open with tab activation', async () => {
-    const responses: unknown[] = [worktreeFileResolution('src/app.ts'), ok({ opened: true })]
-    const sendRequest = vi.fn(async () => responses.shift())
+    const responses = [worktreeFileResolution('src/app.ts'), ok({ opened: true })]
+    const sendRequest = vi.fn(async (method: string) => {
+      const response = responses.shift()
+      if (!response) {
+        throw new Error(`no scripted response for ${method}`)
+      }
+      return response
+    })
     const openedTab = { id: 'tab-2', relativePath: 'src/app.ts' }
     const switchSessionTab = vi.fn()
     const options = {

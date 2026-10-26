@@ -24,7 +24,7 @@ export type ManagedServerCatalog = {
   resume: (row: OrcadManagedPendingMigrationRow) => Promise<void>
 }
 
-/** The managed-server API, or undefined where it can't work: the web client's fallback API stubs it. */
+/** Web fallback stubs cannot manage SSH hosts. */
 export function getManagedOrcadApi(): ManagedOrcadPreloadApi | undefined {
   return isWebClientLocation() ? undefined : window.api.runtimeEnvironments.managedOrcad
 }
@@ -59,7 +59,7 @@ export function useManagedServerCatalog(
     void reload().catch(() => mountedRef.current && setLoadFailed(true))
   }, [mountedRef, reload])
 
-  // Why: a host that already runs, or is moving to, a managed server can't take another.
+  // Running or migrating servers already occupy the host.
   const busyTargetIds = new Set([
     ...environments.map((environment) => getOrcadSshDeployment(environment)?.sshTargetId),
     ...pending.map((row) => row.sshTargetId)

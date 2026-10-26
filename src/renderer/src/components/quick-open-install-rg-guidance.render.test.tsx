@@ -6,8 +6,7 @@ import { QuickOpenInstallRgGuidance } from './quick-open-install-rg-guidance'
 afterEach(cleanup)
 
 describe('QuickOpenInstallRgGuidance', () => {
-  // Why only the remote wording: the local side always has Orca's bundled rg, so this guidance
-  // can only ever describe a remote host that never received the upload.
+  // Local Orca has bundled rg; installation guidance applies only to remote hosts missing the upload.
   it('names the remote as the host to install ripgrep on', () => {
     render(
       <QuickOpenInstallRgGuidance

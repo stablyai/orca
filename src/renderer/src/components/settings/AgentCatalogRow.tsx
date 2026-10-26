@@ -10,6 +10,7 @@ import type { AgentSessionSourceHomeControl } from './codex-session-source-home-
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { liftAgentPermissionArgs } from '../../../../shared/tui-agent-permission-lift'
 import {
   AgentPermissionExceptionBadge,
   AgentRowPermissionControl,
@@ -21,7 +22,6 @@ import {
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
 import {
-  AgentPermissionArgsChip,
   agentPermissionChoiceLabel,
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
@@ -192,7 +192,6 @@ export function AgentCatalogRow({
             </div>
           )}
           {permission && permission.mode !== permission.expectedMode && (
-            // Right-aligned against the controls so badges line up without reserving width on every row.
             <div className="mr-3 flex h-7 items-center">
               <AgentPermissionExceptionBadge
                 label={label}
@@ -300,13 +299,17 @@ export function AgentCatalogRow({
                   argsOverride={argsOverride}
                   onSaveArgs={onSaveArgs}
                   permissionChip={
-                    permissionChoice?.flag && !permissionChoice.argsSetPermission ? (
-                      <AgentPermissionArgsChip
-                        label={label}
-                        flag={permissionChoice.flag}
-                        onRemove={() => permissionChoice.onSelect('own')}
-                      />
-                    ) : undefined
+                    permissionChoice?.flag && !permissionChoice.argsSetPermission
+                      ? {
+                          label,
+                          flag: permissionChoice.flag,
+                          removeRecipe: (text) => {
+                            const lifted = liftAgentPermissionArgs(agentId, text)
+                            return lifted.choice !== null ? lifted.args : null
+                          },
+                          onRemove: () => permissionChoice.onSelect('own')
+                        }
+                      : undefined
                   }
                   note={
                     permissionChoice?.argsSetPermission

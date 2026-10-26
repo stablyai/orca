@@ -31,8 +31,7 @@ function contributionSummary(
   preview: PluginMarketplaceHostInstallPreview
 ): { key: string; label: string }[] {
   const { contributes } = preview.manifest
-  // Why: two static keys per kind (not one dynamic key) so the localization
-  // catalog sync can extract them, and "1 language packs" never renders.
+  // Use literal singular/plural keys so catalog extraction works and counts retain correct grammar.
   const entries: { key: string; count: number; one: string; many: string }[] = [
     {
       key: 'languagePacks',

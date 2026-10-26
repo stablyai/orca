@@ -215,8 +215,7 @@ const VIRTUAL_CARD_HEIGHT = 36
 // Scrolled past the head of the lane, so the mounted window starts mid-list.
 const VIRTUAL_SPACER_TOP = -350
 
-// A virtualized lane: only `windowRange` of the view is mounted, and the layout
-// registration carries the whole view — exactly what the virtualizer publishes.
+// Mount only the virtual window while publishing the complete view layout, as the virtualizer does.
 function appendVirtualBoard(args: {
   fullLaneIds: readonly string[]
   viewIds: readonly string[]
@@ -436,8 +435,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
     // Rendered index 1 means "before doing-b", which is index 3 in the full lane.
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 1)).toBe(3)
-    // Why: a tracked target can be committed after the pointer left the lane,
-    // so the translation must not depend on the current pointer position.
+    // Commit may happen after the pointer leaves the lane; translation cannot depend on pointer position.
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 2)).toBe(4)
   })
 
@@ -451,8 +449,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     })
 
     const target = getWorkspaceKanbanSidebarDropTarget(24, 210)
-    // The indicator sits between the mounted cards for view items 12 and 13,
-    // whose full-lane neighbours are doing-24 and doing-26.
+    // View items 12 and 13 map to full-lane neighbors doing-24 and doing-26.
     expect(target).toMatchObject({ status: 'doing', dropIndex: 13, dropIndicatorY: 218 })
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', target.dropIndex)).toBe(26)
 

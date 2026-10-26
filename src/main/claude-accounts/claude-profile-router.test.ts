@@ -547,4 +547,12 @@ describe('ClaudeProfileRouter', () => {
       expect(claudeProfileHistoryDirs('projects')).toEqual([join(f.home('a'), 'projects')])
     }
   )
+
+  it('lists history under the CLAUDE_CONFIG_DIR only the login shell exports', () => {
+    const configDir = join(tmpdir(), `claude-router-own-${process.pid}`)
+    roots.push(configDir)
+    mkdirSync(join(configDir, 'projects'), { recursive: true })
+    installClaudeProfileRouter(fixture({ CLAUDE_CONFIG_DIR: configDir }).router)
+    expect(claudeProfileHistoryDirs('projects')).toEqual([join(configDir, 'projects')])
+  })
 })

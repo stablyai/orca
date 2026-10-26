@@ -244,8 +244,7 @@ describe('useNativeChatSkills', () => {
     })
     await waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
 
-    // Why: Retry is the user saying "I changed something" — without `refresh` it
-    // would be answered from the scan it is trying to get past.
+    // Explicit Retry must bypass the scan cache the user is trying to refresh.
     expect(mocks.callRuntimeRpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
       'skills.discover',

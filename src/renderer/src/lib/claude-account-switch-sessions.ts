@@ -1,4 +1,3 @@
-/** What a Claude account switch does to running Claude terminal sessions: ask, or apply the setting. */
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -15,7 +14,6 @@ import {
 } from './claude-session-account-move'
 
 export type ClaudeAccountSwitchPrompt = {
-  /** Distinguishes one switch's question from the next. */
   id: number
   sessions: ClaudeSessionMoveCandidate[]
   previousAccountLabel: string
@@ -82,16 +80,12 @@ export function answerClaudeAccountSwitchPrompt(
   }
 }
 
-/** A selected account row and the roster it was selected from. */
 export type ClaudeAccountSnapshot = {
   state: Pick<ClaudeRateLimitAccountsState, 'accounts'>
   accountId: string | null
 }
 
-/**
- * Runs after a Claude account switch has already applied: asks, restarts, or keeps Claude
- * sessions still on the outgoing account. 'show-confirmation' leaves the caller's own toast.
- */
+/** After account selection applies, ask/restart/retain sessions on the outgoing account; show-confirmation leaves the caller’s toast. */
 export async function handleRunningClaudeSessionsAfterSwitch(args: {
   owner: RuntimeClientTarget
   target: CodexAccountSelectionTarget
@@ -118,10 +112,18 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   if (readPolicy() === 'keep') {
     return 'show-confirmation'
   }
+  let uncheckedCount = 0
   const found = await findMovableClaudeSessions({
     owner: args.owner,
     target: args.target,
-    fromAccountId
+    fromAccountId,
+    onUnchecked: (sessions) => {
+      uncheckedCount = sessions.length
+      console.warn(
+        '[claude-account-switch] could not read the foreground of',
+        sessions.map((session) => session.ptyId)
+      )
+    }
   }).catch((error: unknown) => {
     console.warn('[claude-account-switch] session scan failed:', error)
     return []
@@ -131,7 +133,16 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   }
   // Why re-read: the setting may change while the scan runs.
   const policy = readPolicy()
-  if (found.length === 0 || policy === 'keep') {
+  if (policy === 'keep') {
+    return 'show-confirmation'
+  }
+  if (uncheckedCount > 0) {
+    warnUncheckedSessions(
+      uncheckedCount,
+      getClaudeAccountLabel(args.before.state, args.before.accountId)
+    )
+  }
+  if (found.length === 0) {
     return 'show-confirmation'
   }
   const nextAccountLabel = getClaudeAccountLabel(args.after.state, args.after.accountId)
@@ -159,6 +170,23 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     nextAccountLabel
   })
   return 'handled'
+}
+
+/** Why a toast: these sessions keep the previous account, and only a manual restart moves them. */
+function warnUncheckedSessions(count: number, previous: string): void {
+  toast.warning(
+    count === 1
+      ? translate(
+          'accounts.claude.switchSessions.uncheckedOne',
+          "Couldn't check 1 terminal for Claude. If Claude is running there, it stays on {{previous}} until restarted.",
+          { previous }
+        )
+      : translate(
+          'accounts.claude.switchSessions.uncheckedOther',
+          "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted.",
+          { count, previous }
+        )
+  )
 }
 
 function readPolicy(): ClaudeAccountSwitchRunningSessions {

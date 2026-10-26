@@ -88,8 +88,7 @@ async function readSession(
 
 describe('native chat for an agent whose transcript lives on an SSH host (#26057)', () => {
   let localDir: string
-  // The path the remote hook reported. A same-named file exists on this machine too, so a read
-  // that answers locally shows the wrong conversation instead of failing quietly.
+  // A same-named local transcript must not override the remote hook's conversation.
   let transcriptPath: string
 
   beforeEach(() => {

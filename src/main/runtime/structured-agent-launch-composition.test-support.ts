@@ -1,8 +1,7 @@
-// Each agent's composed launch resolver over test doubles, built the way its registration builds
-// it, so resolver tests exercise the shared launch path rather than a copy of it.
+// Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
@@ -82,7 +81,7 @@ function withTestSpawnToken<L>(
   return (input: {
     identity: AgentSessionJournalIdentity
     spawnToken?: string | null
-    permissionMode?: AgentChatPermissionMode
+    permissionMode?: AgentChatPermissionChoice
   }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null
@@ -129,9 +128,7 @@ export function createPiRpcLaunchResolver(deps: LaunchTestSources & PiRpcLaunchP
     resolve({ identity, spawnToken })
 }
 
-/** Sealed with `TEST_SPAWN_TOKEN` unless the test passes another: Claude's launch env has always
- *  carried the session's identity. `resolveEnv` is Claude's overlay; `resolveInheritedEnv`, its
- *  base, defaults to this process's env as a launch without one inherits it. */
+/** Seal Claude with TEST_SPAWN_TOKEN unless overridden; resolveEnv overlays resolveInheritedEnv, which defaults to process.env. */
 export function createClaudeStructuredLaunchResolver(
   deps: Omit<LaunchTestSources, 'resolveEnvironment' | 'resolveLaunchEnv'> &
     Pick<ClaudeEnvDeps, 'resolveInheritedEnv'> & {

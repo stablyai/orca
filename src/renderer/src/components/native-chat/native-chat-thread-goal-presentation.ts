@@ -1,8 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session-journal-types'
 
-/** The banner's lead label, or null for a status the banner does not show. An active goal reads
- *  as pursued only while a turn runs; between turns (after a Stop) it is just set. */
+/** Active goals read as pursued only during a running turn; between turns they remain set. */
 export function nativeChatThreadGoalStatusLabel(
   status: AgentJournalThreadGoalStatus,
   working: boolean
@@ -24,7 +23,6 @@ export function nativeChatThreadGoalStatusLabel(
   }
 }
 
-/** Compact elapsed time: `25s`, `1m 7s`, `2h 3m`. */
 export function formatNativeChatThreadGoalElapsed(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds))
   const hours = Math.floor(seconds / 3600)

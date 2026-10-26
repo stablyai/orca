@@ -58,13 +58,11 @@ export function ProjectGroupDeleteDialog({
         )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: deleting can resolve after the dialog closes; the content ref keeps
-    // late completions from mutating stale dialog state without an Effect.
+    // Track content attachment so late deletions cannot update closed dialog state.
     mountedRef.current = node !== null
   }, [])
 
-  // Why: opening the dialog must clear a stale in-flight state before the
-  // destructive button renders; an Effect would leave one disabled frame.
+  // Reset on open before paint so the destructive button cannot inherit a disabled frame.
   if (open !== wasOpen) {
     setWasOpen(open)
     if (open && deleting) {

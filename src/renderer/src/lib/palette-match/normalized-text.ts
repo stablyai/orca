@@ -1,10 +1,6 @@
 export type MatchRange = { start: number; end: number }
 
-/**
- * Case/Unicode-folded text plus enough offset data to map matches back onto the
- * original string. `starts`/`ends` are null when folding preserved code-unit
- * offsets, which is the common ASCII case.
- */
+/** Fold case/Unicode with reverse offsets; omit tables when code-unit positions stay unchanged, as for ASCII. */
 export type NormalizedText = {
   original: string
   normalized: string
@@ -13,8 +9,7 @@ export type NormalizedText = {
 }
 
 const ASCII_FAST_PATH = /^[\t\n\v\f\r -~]*$/
-// Why a single-character class: tabs and newlines must fold to U+0020 like every
-// other space, and a fixed-width class keeps the fast path offset-preserving.
+// Fold tabs/newlines to space using a fixed-width class so the fast path preserves offsets.
 const ASCII_CONTROL_SPACE = /[\t\n\v\f\r]/g
 const COMBINING_MARK = /\p{M}/u
 const UNICODE_SPACE = /\s/u
@@ -30,10 +25,7 @@ function foldChunk(chunk: string): string {
   return chunk.normalize('NFC').toLowerCase()
 }
 
-/**
- * Folds case and Unicode whitespace once. Combining marks stay attached to their
- * base so NFC composition never splits a range across grapheme boundaries.
- */
+/** Fold once; retain combining marks with their base so NFC ranges cannot split graphemes. */
 export function normalizePaletteText(original: string): NormalizedText {
   if (ASCII_FAST_PATH.test(original)) {
     return {
@@ -79,7 +71,6 @@ export function normalizePaletteText(original: string): NormalizedText {
   return { original, normalized, starts: Int32Array.from(starts), ends: Int32Array.from(ends) }
 }
 
-/** Maps a half-open range on `normalized` back to a range on `original`. */
 export function mapNormalizedRange(text: NormalizedText, start: number, end: number): MatchRange {
   if (end <= start) {
     return { start: 0, end: 0 }

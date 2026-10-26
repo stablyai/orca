@@ -118,6 +118,14 @@ describe('agent child-work admission', () => {
     ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
     expect(store.getChildren(parent)).toMatchObject([{ childWorkId: 'child-1', kind: 'agent' }])
     expect(store.getSnapshot().aliases.every((alias) => alias.kind === 'agent')).toBe(true)
+    expect(
+      admission.announce(
+        announce(parent, {
+          aliases: [{ segmentId: 'segment-1', aliasKind: 'tool_use_id', alias: 'tool-1' }],
+          observedAt: 13
+        })
+      )
+    ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
   })
 
   it('preserves the logical id and prior outcome across an explicit resume fence', () => {

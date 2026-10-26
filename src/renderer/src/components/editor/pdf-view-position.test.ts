@@ -57,8 +57,7 @@ describe('readPdfViewPosition', () => {
   })
 
   it('preserves a top-of-page-1 position verbatim', () => {
-    // Why: `top` is a bottom-origin PDF coordinate, so the top of a Letter page
-    // is ~792, not 0. Nothing may treat this as a "document start" sentinel.
+    // PDF top is bottom-origin: page 1 top near 792 is a real position, never a document-start sentinel.
     expect(readPdfViewPosition({ pageNumber: 1, top: 792, left: 0 })).toEqual({
       pageNumber: 1,
       top: 792,
@@ -164,9 +163,7 @@ describe('createPdfViewPositionRecorder', () => {
     expect(writes).toEqual([['a.pdf:pdf', { pageNumber: 4, top: 400, left: 20 }]])
   })
 
-  // Why: the timer is deliberately trailing-from-first-record, not a restarting
-  // debounce — a restarting one would starve the LRU refresh under continuous
-  // scrolling, which is exactly when the entry most needs to stay warm.
+  // Restarting the timer would starve LRU refresh during continuous scrolling, when the entry most needs to stay warm.
   it('does not restart the pending timer when a later record arrives', () => {
     const recorder = makeRecorder()
     recorder.arm()

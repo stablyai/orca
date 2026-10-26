@@ -50,12 +50,7 @@ const SYNTHETIC_BASE_PROMPTS: Record<SourceControlTextActionId, string> = {
   branchName: 'Generate a git branch name for a synthetic task.'
 }
 
-/**
- * Validates a recipe, so it always renders against the synthetic context above.
- * Workspace values must not leak in here: the recipe is saved repo- or globally
- * scoped, and gating it on the active workspace's `{linkedIssue}` would disable
- * Save/Generate for a template that is not actually empty.
- */
+/** Validate saved repo/global recipes against synthetic context; active linkedIssue must not disable Save/Generate for otherwise valid templates. */
 export function planSourceControlTextGeneration(
   actionId: SourceControlTextActionId,
   params: ResolvedSourceControlAiGenerationParams

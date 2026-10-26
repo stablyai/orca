@@ -1,16 +1,4 @@
-// PrivacyPane tests. The contract pinned here:
-//
-//   1. Toggle wiring — the rendered toggle reflects `settings.telemetry.optedIn`.
-//   2. Blocked-state predicates:
-//      - `isEnvBlocked` — the env-only detector, used by `computeBlockedReason`.
-//      - `computeBlockedReason` — the full gate, including first-launch-
-//        pending reasons. Env-var wins over first-launch so the user sees
-//        the hard constraint named first.
-//   3. Env-var naming — `envVarNameForReason` names the specific variable.
-//
-// Keeping these as pure helpers lets tests cover them without a DOM
-// harness (this repo's vitest runs in node-env, so `useEffect` does not
-// fire under `renderToStaticMarkup`).
+// Use pure predicates for consent gates because static SSR never runs the consent-loading effect.
 
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -70,10 +58,7 @@ describe('PrivacyPane — toggle markup reflects stored preference', () => {
   })
 
   it('renders the toggle unchecked when optedIn is null (existing user pre-banner)', () => {
-    // `optedIn === null` is the existing-user cohort awaiting the banner.
-    // No events transmit in that state; the Settings toggle should visibly
-    // read "off" so flipping it on routes through the 'settings' `via`
-    // path (not 'first_launch_banner', which is reserved for the banner).
+    // Banner-pending users transmit nothing; Settings opt-in uses its own attribution and resolves the notice.
     const markup = renderToStaticMarkup(
       React.createElement(PrivacyPane, {
         settings: buildSettings({
@@ -100,9 +85,7 @@ describe('PrivacyPane — isEnvBlocked', () => {
   })
 
   it('returns false for user_opt_out (not env-blocked — the toggle remains actionable)', () => {
-    // `user_opt_out` is a stored-preference state, not an env override.
-    // The toggle MUST stay enabled so the user can flip back on; getting
-    // this wrong would trap a user who opted out once inside an inert UI.
+    // User opt-out is reversible preference, so it must not disable the toggle like an environment constraint.
     expect(isEnvBlocked({ effective: 'disabled', reason: 'user_opt_out' })).toBe(false)
   })
 
@@ -139,13 +122,11 @@ describe('PrivacyPane — computeBlockedReason', () => {
   })
 
   it('returns null for a user_opt_out state (the toggle must remain actionable)', () => {
-    // A user who opted out must be able to flip back on from Settings.
     expect(computeBlockedReason({ effective: 'disabled', reason: 'user_opt_out' })).toBeNull()
   })
 
   it('returns null for pending_banner (banner-pending does NOT gate the toggle)', () => {
-    // Flipping the Settings toggle is a valid way to resolve the notice:
-    // it moves `optedIn` off `null`, which un-mounts the banner on its own.
+    // Settings opt-in clears optedIn=null and dismisses the first-launch notice.
     expect(computeBlockedReason({ effective: 'pending_banner' })).toBeNull()
   })
 
@@ -169,12 +150,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
   const switchTag = (markup: string): string =>
     markup.match(/<button[^>]*role="switch"[^>]*>/)?.[0] ?? ''
 
-  // The useEffect that fetches consent does not run in renderToStaticMarkup
-  // (no DOM, no state flushes), so the rendered toggle always reads the
-  // `consent === null` branch of the effect. Env-var blocked-state markup
-  // is covered by the computeBlockedReason unit tests above; here we just
-  // confirm the toggle is live for the cohorts that should be able to flip
-  // it.
+  // Static SSR keeps consent null; predicate tests cover blocked reasons, while these cases verify actionable cohorts.
   beforeEach(() => {
     getConsentStateMock.mockReset()
     getConsentStateMock.mockResolvedValue({ effective: 'enabled' })
@@ -196,9 +172,6 @@ describe('PrivacyPane — markup respects blocked state', () => {
   })
 
   it('leaves the toggle enabled for an existing user awaiting the banner (flip dismisses the banner)', () => {
-    // Flipping the toggle moves `optedIn` off `null`, which un-mounts the
-    // notice via TelemetryFirstLaunchSurface's cohort check. The Settings
-    // toggle is one of the valid ways to resolve the notice.
     const markup = renderToStaticMarkup(
       React.createElement(PrivacyPane, {
         settings: buildSettings({

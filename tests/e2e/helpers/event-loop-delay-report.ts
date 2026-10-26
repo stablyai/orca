@@ -1,7 +1,4 @@
-/**
- * Reads the event-loop delay windows main or orcad append to their userData during e2e runs
- * (src/main/diagnostics/event-loop-delay-probe.ts) and summarizes a time range of them.
- */
+// Summarize main/orcad event-loop delay windows from the E2E profile’s diagnostic log.
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -60,7 +57,6 @@ function readWindows(userDataDir: string): ReadWindow[] {
     : []
 }
 
-/** `processKind`'s windows overlapping [from, to] (epoch ms). */
 export function summarizeEventLoopDelay(
   userDataDir: string,
   processKind: EventLoopDelayWindow['process'],

@@ -58,9 +58,7 @@ export function terminalHostConnectionMatches(
   if (expectedConnectionId === undefined || entryConnectionId === expectedConnectionId) {
     return true
   }
-  // WSL hook relays stamp their distro on the event, while the host PTY stays
-  // local (connectionId null). Require the PTY's known distro to avoid mixing
-  // same-pane events from another WSL transport.
+  // WSL PTYs stay local; require their attested distro to avoid same-pane events from another guest.
   return (
     expectedConnectionId === null &&
     typeof wslDistro === 'string' &&

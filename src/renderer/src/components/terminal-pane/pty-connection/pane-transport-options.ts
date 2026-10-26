@@ -1,19 +1,55 @@
 import { useAppStore } from '@/store'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
+import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
+import { mainStartsPane } from './main-starts-pane'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { IpcPtyTransportOptions } from '../pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** The spawn/attach options a pane hands its PTY transport. */
+/** A split waiting on its inherited cwd, or remounted with handed-off keys; it holds keys as before. */
+export function isDeferredSplitInputHold(session: ConnectPanePtySession): boolean {
+  return Boolean(session.deps.cwdPromise || session.deps.preconnectInput?.length)
+}
+
+/** Startup command, agent resume, or main-owned launch that runs after PTY binding. */
+export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
+  return paneHasKnownStartupWork(session) || mainStartsPane(session)
+}
+
+function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
+  const state = useAppStore.getState()
+  return Boolean(
+    session.paneStartup ||
+    session.getSleepingRecordForPane(state) ||
+    findColdRestoreResumeSource(session, state)
+  )
+}
+
+/** Hold pre-bind keys only for plain/deferred shells. Flushing ahead of startup work could run a prompt
+ * as a shell command or corrupt the launch; agent panes retain a draft (agent-pre-ready-typed-draft.ts). */
+function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
+  if (isDeferredSplitInputHold(session)) {
+    // Why not mainStartsPane: a deferred split keeps holding under the layout-owner build, as before.
+    return !paneHasKnownStartupWork(session)
+  }
+  return !paneHasStartupWork(session)
+}
+
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
+  const holdsInput = holdsInputUntilConnect(session)
   return {
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
-      ? { bufferInputUntilConnect: true }
+    ...(holdsInput
+      ? {
+          bufferInputUntilConnect: true,
+          // Why: a resume source can land between mount and bind; keys must not flush ahead of it.
+          releasePreconnectInput: () => holdsInputUntilConnect(session)
+        }
       : {}),
-    ...(session.deps.preconnectInput?.length
+    // Why gated: a seed alone arms the transport hold, which would flush ahead of startup work.
+    ...(holdsInput && session.deps.preconnectInput?.length
       ? { preconnectInput: session.deps.preconnectInput }
       : {}),
     ...(session.deps.onPreconnectInput
@@ -29,9 +65,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
-    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns.
+    // Flush pane↔PTY binding before spawn reply so a SIGKILL cannot lose it.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
     ...(session.deps.placement ? { placement: session.deps.placement } : {}),
@@ -46,6 +80,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.paneStartup?.resumeProviderSession
       ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
+      : {}),
+    ...(session.paneStartup?.resumeOrigin
+      ? { resumeOrigin: session.paneStartup.resumeOrigin }
       : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
@@ -99,10 +136,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           onAgentBecameWorking: session.onAgentBecameWorking,
           onAgentExited: session.onAgentExited
         }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server with local/SSH identity. Remote-runtime streams do not pass through
-    // local main, so the renderer remains their status owner for now.
+    // Local main owns OSC 9999 and forwards hook identity; remote-runtime streams bypass main and retain renderer ownership.
     ...(session.shouldOwnAgentStatusInRenderer
       ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
       : {})

@@ -65,7 +65,7 @@ describe('captureWslMoveRestoreHints', () => {
       noCwdPaneKeys: ['t:c', 't:d', 't:e'],
       staleCwdPaneKeys: ['t:h']
     })
-    // A sleep ends sessions cleanly; the read must not skip them for it.
+    // Clean Sleep exits must still expose checkpoints.
     expect(seen[0]).toEqual({ ignoreCleanEnd: true, wslDistro: 'Ubuntu' })
   })
 

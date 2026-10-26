@@ -170,7 +170,10 @@ describe('browserManager grab operations', () => {
       )
 
       expect(preventDefault).toHaveBeenCalledTimes(1)
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+      expect(rendererSendMock).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining({ code: 'KeyB', shift: true })
+      )
     })
 
     const annotateChord =
@@ -196,6 +199,8 @@ describe('browserManager grab operations', () => {
         webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
         rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
       })
+      // Registration also reports audio state; this test is about the chord.
+      rendererSendMock.mockClear()
 
       const preventDefault = pressAnnotateChord()
 

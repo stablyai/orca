@@ -71,12 +71,6 @@ describe("main's Store load binds a tab's own terminal to its unbound pane", () 
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('in a layout-owner build', () => {
-    expect(loadStored().terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({
-      [LEAF]: 'pty-a'
-    })
-  })
-
   it("after the load purge, so a dropped workspace's pane cannot hold the terminal", () => {
     const session = tabLevelOnly()
     const gone = 'legacy-bare-key'

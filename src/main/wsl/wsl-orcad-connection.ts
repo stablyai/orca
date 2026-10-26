@@ -1,9 +1,4 @@
-/**
- * The desktop's connection to one WSL distro's orcad: deploy and launch (C4), the `wsl.exe` stdio
- * bridge listener, and orcad's pairing offer rewritten to that listener's loopback port. One per
- * distro; a relaunch that moved orcad's port moves the bridge with it. In memory only: the
- * deployment record (C7) persists what `onChange` reports.
- */
+/** One in-memory connection per distro: C4 launch, C5 stdio bridge and loopback-rewritten pairing. Rebind when orcad moves ports; C7 persists onChange results. */
 import type { WslOrcadConnection } from './wsl-orcad-connection-types'
 import {
   WslOrcadConnectionSupersededError,
@@ -99,7 +94,7 @@ export class WslOrcadConnectionManager {
       if (!options.intent) {
         return pending
       }
-      // An Update or Force needs its own deploy; joining a plain connect would silently drop it.
+      // Update/Force needs a separate deploy; joining plain connect would discard intent.
       const generation = this.generation(key)
       return pending
         .catch(() => {})
@@ -111,12 +106,12 @@ export class WslOrcadConnectionManager {
         })
     }
     const status = options.status ?? { pending: CONNECTING, ready: READY }
-    // A refresh of a live connection stays quiet; liveness recovery always reports.
+    // Unchanged live refresh stays quiet; liveness recovery must publish.
     if (options.status || !this.active.has(key)) {
       this.dependencies.onChange?.(name, this.get(name), status.pending)
     }
     const operation = this.connect(name, key, options, status).catch((error: unknown) => {
-      // Liveness owns the status of its own reconnects; a superseded connect was closed.
+      // Liveness owns reconnect status; superseded connects are already closed.
       if (!options.status && !(error instanceof WslOrcadConnectionSupersededError)) {
         const deferral = error instanceof WslOrcadLaunchDeferredError ? error.launch : null
         const failed = wslConnectFailedStatus(errorMessage(error), deferral)
@@ -133,7 +128,7 @@ export class WslOrcadConnectionManager {
     return tracked
   }
 
-  /** The persisted enrolled pairing, else the live connection's (a host not yet recorded). */
+  /** Prefer persisted enrollment; only unrecorded hosts fall back to their live connection offer. */
   private enrolledOffer(key: string, environmentId: string): PairingOffer | null {
     const current = this.active.get(key)?.connection
     return (
@@ -199,7 +194,7 @@ export class WslOrcadConnectionManager {
       distro,
       label
     })
-    // Every call relaunches a stopped orcad, so a distro restart is recovered here.
+    // Relaunch stopped orcad on each connect so distro restarts recover.
     const launch = await (this.dependencies.deployAndLaunch ?? deployAndLaunchWslOrcad)(distro, {
       environmentId,
       label,
@@ -218,8 +213,7 @@ export class WslOrcadConnectionManager {
     const current = this.active.get(key)
     const persisted = this.dependencies.getPairingOffer?.(environmentId) ?? null
     const paired = persisted ?? this.enrolledOffer(key, environmentId)
-    // Why only a persisted pairing: the gate re-pairs the stored record, which a host still being
-    // added has not written yet.
+    // Repair only persisted enrollment; an in-progress Add has no stored record to repair.
     const recovery =
       persisted && this.dependencies.pairingRecovery
         ? { ...this.dependencies.pairingRecovery, environmentId }
@@ -236,8 +230,7 @@ export class WslOrcadConnectionManager {
         this.dependencies.verifyIdentity,
         recovery
       ).catch(async (error: unknown) => {
-        // Why retire: this bridge holds a token the host refused, and a failure published with it
-        // would store that token over a repair the gate already saved.
+        // Retire the rejected bridge or publishing its stale token would overwrite pairing repaired by the gate.
         await this.drop(key, current)
         throw error
       })
@@ -252,7 +245,7 @@ export class WslOrcadConnectionManager {
         options.status ? status.ready : null
       )
     }
-    // orcad moved ports (or this is the first connect): the old bridge dials a dead port.
+    // Port changes invalidate the old bridge; reuse its local port when possible.
     const preferredLocalPort = current?.connection.localPort ?? options.localPort ?? 0
     if (current) {
       await this.drop(key, current)

@@ -3,10 +3,7 @@ import { getAgentLabel } from './agent-title-identity'
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 import { GEMINI_IDLE, GEMINI_WORKING } from './agent-title-core'
 
-// Why: Antigravity's models are named "Gemini <n.n> <Name>" (see the real `agy models`
-// output parsed in commit-message-agent-spec.test.ts), so an agy pane's own title carries a
-// whole `gemini` token. Gemini CLI is checked before Antigravity in getAgentLabel, so the
-// model name used to win and an agy pane read as Gemini CLI.
+// agy model names include Gemini; the earlier Gemini token detector once mistook model metadata for pane identity.
 describe('agy titles carrying a Gemini model name', () => {
   const AGY_TITLES = [
     '⠋ agy · Gemini 3.7 Flash · high',
@@ -18,18 +15,14 @@ describe('agy titles carrying a Gemini model name', () => {
     expect(getAgentLabel(title)).toBe('Antigravity')
   })
 
-  // Why: the two chain copies are reached by different surfaces — the sidebar goes through
-  // getAgentLabel, the tab through resolveExplicitTerminalTitleAgentType. A fix in one only
-  // moves the disagreement rather than removing it.
+  // Exercise both sidebar and tab detector chains so fixing one cannot leave the surfaces disagreeing.
   it.each(AGY_TITLES)('resolves %s as antigravity on the tab path too', (title) => {
     expect(resolveExplicitTerminalTitleAgentType(title)).toBe('antigravity')
   })
 })
 
 describe('titles that must keep their existing label', () => {
-  // Why: a real recorded pane title from terminal history. A Grok pane whose TASK TEXT
-  // contains the token "Antigravity" — it resolves correctly only because grok is checked
-  // before antigravity, which is why this fix narrows a token instead of reordering.
+  // Recorded Grok task text mentions Antigravity; narrowing the Gemini token avoids changing this ordered-chain result.
   it('keeps a grok pane whose task text names Antigravity', () => {
     expect(getAgentLabel('STA-4011 Linux Antigravity Commit Messages - grok')).toBe('Grok')
   })

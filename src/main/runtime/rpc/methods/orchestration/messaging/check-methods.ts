@@ -95,15 +95,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
         })
       }
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
-      // Why: an empty consuming check is the worker contract's "checkpoint, not a failure", so a
-      // caller whose Attempt moved on has to be told rather than handed an empty direct mailbox.
-      // This outranks the pane guard: a paneless loser cannot run-use anyway, it has to stop.
+      // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
       if (settledDispatch && isSupersededDispatch(settledDispatch)) {
         throw dispatchFenced()
       }
-      // Why: a consuming check on a handle with no live pane and no Dispatch can never see
-      // Run mail, so an empty inbox would read as "nothing yet" instead of a stale caller.
+      // Without a live pane or Dispatch, an empty consuming inbox would disguise a stale caller as still waiting.
       if (!hasRunBindingKey(caller) && consumingCheck) {
         throw new OrchestrationError(
           'stable_pane_required',

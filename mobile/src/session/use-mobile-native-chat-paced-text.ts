@@ -23,7 +23,6 @@ const FRAMES: NativeChatTextRevealFrames = {
 
 export type MobileNativeChatPacedText = { text: string; revealing: boolean }
 
-/** How much of a reply to draw now: all of it unless `paced` in a chat with motion allowed. */
 export function useMobileNativeChatPacedText(
   rowKey: string,
   text: string,

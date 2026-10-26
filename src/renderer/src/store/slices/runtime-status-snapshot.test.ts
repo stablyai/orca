@@ -83,9 +83,7 @@ it('represents failed verification honestly without manufacturing a session rest
     generation
   )
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
-  // Regaining contact on the same runtime is neither a new connection nor a new session: the
-  // generation holds so the session mirror is not rebuilt (#19647), and only the contact epoch
-  // — the mirror's resubscribe trigger — moves. Hosting is re-claimed, but no toast.
+  // Same-runtime recovery advances only resubscribe epoch, preserving mirror cache (#19647); reclaim hosting without a toast.
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
     generation
   )

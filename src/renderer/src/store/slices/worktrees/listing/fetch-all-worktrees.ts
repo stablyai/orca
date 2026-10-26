@@ -88,8 +88,7 @@ export function createFetchAllWorktrees(
       return
     }
 
-    // Why: a pre-fix upgrade can persist tabsByWorktree entries for worktrees deleted last session; without this hydration purge they leave zombie PTYs misclassified as "bound" (design §2c) until a second restart.
-    // Safety gate: fetchWorktrees swallows IPC errors and short-circuits on empty-replace, so probe the IPC directly for the per-repo success signal instead of re-listing.
+    // Purge pre-fix persisted zombie tab keys only after direct per-repo detection succeeds; fetchWorktrees swallows errors/empty replacements (design §2c).
     const results = await mapReposForWorktreeRefresh(
       repos,
       async (
@@ -173,8 +172,7 @@ export function createFetchAllWorktrees(
       // Why: startup refreshes local repos first; defer the one-shot purge to the later all-host refresh, once remote worktree ids are known.
       return
     }
-    // Why defer: a create or remove applied after a repo's listing leaves that listing's rows short
-    // of live worktrees (a new workspace's tabs would be purged), exactly like a refused listing.
+    // Defer purge if create/remove overtook any listing; those scanned rows are no longer evidence for the live union.
     const listingSuperseded = results.some(
       (result) =>
         'detected' in result &&

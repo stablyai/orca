@@ -1,6 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  readPersistedState,
   readPersistedStateJson,
   writePersistedStateJson,
   createStore,
@@ -23,7 +24,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Store as PersistenceStore } from './loading-store/store'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -223,8 +223,7 @@ describe('loading Store extraction seams', () => {
     expect(store.getWorkspaceSession('  ').activeRepoId).toBe('from-blank-patch')
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
+    const persisted = readPersistedState(dataFile())
     expect(persisted.workspaceSession?.activeRepoId).toBe('from-blank-patch')
     expect(persisted.workspaceSessionsByHostId).toEqual({})
   })
@@ -246,10 +245,8 @@ describe('loading Store extraction seams', () => {
     first.flushOrThrow()
     second.flushOrThrow()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const firstState = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const secondState = JSON.parse(readPersistedStateJson(secondDataFile)) as PersistedState
+    const firstState = readPersistedState(dataFile())
+    const secondState = readPersistedState(secondDataFile)
     expect(
       firstState.migrationUnsupportedPtyEntries?.some(
         (entry) => entry.ptyId === 'listener-owner-pty'
@@ -270,8 +267,7 @@ describe('loading Store extraction seams', () => {
 
     store.updateUI({ sidebarWidth: 732 })
     expect(store.flushAsync()).toBe(finalFlush)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
+    const persisted = readPersistedState(dataFile())
     expect(persisted.ui.sidebarWidth).toBe(731)
     expect(store.getUI().sidebarWidth).toBe(732)
   })
@@ -284,8 +280,7 @@ describe('loading Store extraction seams', () => {
     store.updateUI({ sidebarWidth: 742 })
     await finalFlush
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
+    const persisted = readPersistedState(dataFile())
     expect(persisted.ui.sidebarWidth).toBe(742)
   })
 

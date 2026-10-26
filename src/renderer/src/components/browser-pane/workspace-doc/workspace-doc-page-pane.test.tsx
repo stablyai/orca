@@ -83,8 +83,6 @@ describe('the surface a document pane will hand its guest the keyboard from', ()
     return mocks.handedFocus.at(-1)
   }
 
-  // The presence half: with the reader in this very preview the answer has to be yes, so a pane
-  // that had stopped offering focus at all would fail here rather than pass every refusal below.
   it('hands focus on when the reader is in this preview', () => {
     expect(renderPane(true)).toBe(true)
   })
@@ -95,8 +93,6 @@ describe('the surface a document pane will hand its guest the keyboard from', ()
     expect(renderPane(true)).toBe(false)
   })
 
-  // Why this is separate from the terminal case: the reader can be in the browser and still be
-  // looking at another tab of it, which is a different half of the check.
   it('refuses while the reader is in a different browser tab', () => {
     mocks.storeState.activeBrowserTabIdByWorktree = { [WORKTREE_ID]: OTHER_WORKSPACE_ID }
 

@@ -17,7 +17,6 @@ describe('useResetCountdownClock', () => {
   })
 
   it('advances `now` just after the next label boundary', () => {
-    // 90m 30s away -> the minute label flips in 30s.
     const resetAt = START + 90 * MIN + 30_000
     const { result } = renderHook(() => useResetCountdownClock([resetAt]))
     expect(result.current).toBe(START)
@@ -25,7 +24,6 @@ describe('useResetCountdownClock', () => {
     act(() => {
       vi.advanceTimersByTime(30_000 + 1)
     })
-    // Woke exactly once, at the boundary — not every second.
     expect(result.current).toBe(START + 30_000 + 1)
   })
 
@@ -36,7 +34,6 @@ describe('useResetCountdownClock', () => {
     act(() => {
       vi.advanceTimersByTime(10 * MIN)
     })
-    // Nothing to count down -> `now` stays put (no wasted wakeups).
     expect(result.current).toBe(START)
   })
 })

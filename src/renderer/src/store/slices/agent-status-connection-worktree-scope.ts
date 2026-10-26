@@ -5,11 +5,7 @@ import {
 } from '../../../../shared/execution-host'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
-// Why: relay/daemon teardown drops main's rows, but renderer entries whose connectionId stamp never
-// matched (unstamped over SSH) survive and stay "fresh" 30 min (#9030). Resolve each worktree's host
-// via the canonical hostId-first precedence and keep only ids UNAMBIGUOUSLY on this connection — a
-// worktree id is `${repoId}::${path}` (no host component), so the same project mirrored at the same
-// path on two hosts yields one shared id that must not clear another host's live rows.
+// Resolve unstamped SSH rows via canonical hostId-first worktree ownership (#9030). Clear only unambiguous connection IDs: repoId::path collides across hosts, and teardown must not hide sibling status.
 export function collectWorktreeIdsForConnection(
   state: AppState,
   connectionId: string

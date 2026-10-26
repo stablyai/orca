@@ -1,4 +1,4 @@
-import { AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-permission-modes-capability'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
 // @vitest-environment happy-dom
 
@@ -21,7 +21,6 @@ const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
 
 function renderSetting(overrides: Partial<GlobalSettings>, updateSettings = vi.fn()) {
-  // The wrapper also covers rerender: the permission picker's tooltip needs the app's provider.
   return render(
     <ChatBehaviorSetting
       settings={{ ...getDefaultSettings('/tmp'), ...overrides }}
@@ -228,7 +227,8 @@ describe('ChatBehaviorSetting resume after restart', () => {
 })
 
 describe('ChatBehaviorSetting permissions', () => {
-  it('shows the new-chat permission picker as the first Behavior row', () => {
+  it('keeps the legacy new-chat permission picker as the first Behavior row on older hosts', () => {
+    setLocalRuntimeCapabilitiesForTests([])
     const { container } = renderSetting({ nativeChatPermissionMode: 'full-access' })
     const rows = container.querySelectorAll('.divide-y > *')
     expect(rows[0]?.id).toBe('chat-permissions')
@@ -242,16 +242,26 @@ describe('ChatBehaviorSetting permissions', () => {
 })
 
 it.each([false, true])(
-  'matches Chat copy and search to its API owner typed capability %s',
-  (typed) => {
-    setLocalRuntimeCapabilitiesForTests(typed ? [AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY] : [])
+  'matches Chat copy and search to its API owner own-settings capability %s',
+  (ownSupported) => {
+    setLocalRuntimeCapabilitiesForTests(
+      ownSupported ? [AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY] : []
+    )
     const { container } = renderSetting({
       nativeChatPermissionMode: 'ask',
       agentPermissionDefault: 'full-access',
       activeRuntimeEnvironmentId: 'unrelated-agents-host'
     })
-    const description = getChatPermissionSearchEntry(typed).description
+    const description = getChatPermissionSearchEntry(ownSupported).description
     expect(container.querySelector('#chat-permissions')?.textContent).toContain(description)
-    expect(description?.includes('own settings')).toBe(typed)
+    expect(description?.includes('New chats follow each agent’s permission')).toBe(ownSupported)
+    if (ownSupported) {
+      expect(container.querySelector('button[aria-label^="Permissions "]')).toBeNull()
+      expect(
+        Array.from(container.querySelectorAll('button')).find(
+          (button) => button.textContent === 'Settings → Agents'
+        )
+      ).toBeDefined()
+    }
   }
 )

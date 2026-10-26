@@ -9,9 +9,6 @@ const NOTHING_ELSE = {
 
 describe('Clear Filters empty state', () => {
   it('does not replace a folder-only sidebar when a filter is active', () => {
-    // The reported symptom reached by a second path: with any filter active
-    // (host scope counts), a folder-only account saw Clear Filters instead of
-    // its workspaces — under every Group by mode, including Project.
     expect(
       shouldFiltersHideAllRows({
         ...NOTHING_ELSE,

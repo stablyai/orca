@@ -24,7 +24,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   const jiraSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
-  // Why: useState only inits once, so sync taskSource from the store when a sidebar source-icon click changes pageData.taskSource.
+  // Sidebar source clicks change pageData after mount; synchronize beyond useState’s initial value.
   useEffect(() => {
     const pageTaskSourceChanged = lastPageTaskSourceRef.current !== pageData.taskSource
     lastPageTaskSourceRef.current = pageData.taskSource
@@ -52,21 +52,18 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     }
   }, [settings?.defaultTaskSource, taskSource, visibleTaskProviders, setTaskSource])
 
-  // Why: Project mode is a GitHub sub-tab — visible on the GitHub source, but actual entry is gated on a non-null activeProject.
   const projectModeVisible = taskSource === 'github'
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
 
-  // ── GitLab task-source state ──────────────────────────────────────
-  // Why: parallel to Linear's slim per-source state — skips workItemsCache and cross-repo aggregation; fetches directly via window.api.gl for the primary repo.
+  // Like Linear, fetch GitLab directly for the primary repo without GitHub’s workItemsCache/aggregation path.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
-  // Why: separate from gitlabItems so the dialog target survives a list refresh that removes the item from the visible filter (e.g. closing an MR).
+  // Keep dialog targets outside the list so filtering/refresh cannot remove their context.
   const [gitlabDialogItem, setGitlabDialogItem] = useState<GitLabWorkItem | null>(null)
 
-  // Why: GitLab tab has two sub-views — the project MR/issue list and the user's cross-project Todos (a separate stream).
   const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)

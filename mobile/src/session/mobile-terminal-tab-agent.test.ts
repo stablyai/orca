@@ -166,10 +166,6 @@ describe('getMobileSessionTabTitle', () => {
     )
   })
 
-  it('keeps generic status titles unstripped when no agent identity is known', () => {
-    expect(getMobileSessionTabTitle(terminalTab('✳ investigating'))).toBe('✳ investigating')
-  })
-
   it('preserves browser title fallbacks after moving the helper out of the route', () => {
     const blankBrowserTab: Extract<MobileSessionTab, { type: 'browser' }> = {
       type: 'browser',

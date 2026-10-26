@@ -12,7 +12,7 @@ const jiti = createJiti(import.meta.url, {
   alias: { '@': fileURLToPath(new URL('../../src/renderer/src', import.meta.url)) }
 })
 const { compareBaseSensitivityLocaleText } = await jiti.import(
-  '../../src/renderer/src/lib/locale-text-collators.ts'
+  '../../src/shared/locale-text-collators.ts'
 )
 const { sortJiraIssues } = await jiti.import(
   '../../src/renderer/src/components/jira-issue-sorter.ts'
@@ -20,7 +20,7 @@ const { sortJiraIssues } = await jiti.import(
 const { sortAutomationListViewItems } = await jiti.import(
   '../../src/renderer/src/components/automations/automation-list-view.ts'
 )
-const { getIntlLocale } = await jiti.import('../../src/renderer/src/i18n/i18n.ts')
+const automationLocale = 'en-US'
 
 let randomState = 0x9e3779b9
 function random() {
@@ -129,7 +129,7 @@ for (const count of [36, 50, 250]) {
   const issues = makeJiraIssues(count)
   const before = () =>
     [...issues]
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
+      // ast-grep-ignore: no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
       .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }))
       .map((issue) => issue.key)
   const after = () => sortJiraIssues(issues, 'key', 'asc').map((issue) => issue.key)
@@ -143,7 +143,7 @@ for (const count of [36, 50, 250]) {
 for (const count of [10, 50, 250]) {
   const values = makeBaseSensitivityValues(count)
   const before = () =>
-    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
+    // ast-grep-ignore: no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
     [...values].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   const after = () => [...values].sort(compareBaseSensitivityLocaleText)
   assertSameOrder(before, after, `base ${count}`)
@@ -164,17 +164,18 @@ for (const count of [10, 100, 1000]) {
     lastRunAt: null
   }))
   const before = () => {
-    const locale = getIntlLocale()
     function compare(left, right) {
       return (
-        left.name.localeCompare(right.name, locale, { sensitivity: 'base' }) ||
+        left.name.localeCompare(right.name, automationLocale, { sensitivity: 'base' }) ||
         left.id.localeCompare(right.id)
       )
     }
     return [...items].sort(compare).map((item) => item.id)
   }
   const after = () =>
-    sortAutomationListViewItems(items, { field: 'name', direction: 'asc' }).map((item) => item.id)
+    sortAutomationListViewItems(items, { field: 'name', direction: 'asc' }, automationLocale).map(
+      (item) => item.id
+    )
   assertSameOrder(before, after, `automation ${count}`)
   const { beforeMs, afterMs } = measurePair(before, after)
   console.log(

@@ -45,9 +45,7 @@ export function createOpenFileMutations(
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
         const worktreeId = file?.worktreeId
-        // Why the scope guard: an overlay workspace (the floating panel) activates files while a
-        // different workspace owns global selection; moving activeFileId would break the
-        // agent-auto-ack invariant that the floating active tab never becomes global selection.
+        // Floating/background activation stays workspace-local or violates agent-auto-ack’s global-selection invariant.
         const scopeWorktreeId = targetWorktreeId ?? worktreeId ?? s.activeWorktreeId
         return {
           ...(scopeWorktreeId === s.activeWorktreeId ? { activeFileId: fileId } : {}),
@@ -81,7 +79,7 @@ export function createOpenFileMutations(
     markFileDirty: (fileId, dirty, opts) => {
       const promoted: Tab[] = []
       set((s) => {
-        // Why: this fires on every keystroke; rebuilding openFiles unconditionally thrashes subscribers and caused typing lag, so bail when nothing changes.
+        // Per-keystroke openFiles rebuilds caused typing lag; preserve no-op identity.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (!file) {
           return s
@@ -95,9 +93,7 @@ export function createOpenFileMutations(
         }
         const buffer = editorBufferOf(s, file)
         const needsPreviewClear = dirty && file.isPreview
-        // Why: a clean tab holds no draft of the disk text; a kept one could later restore stale
-        // text into a shared model. A draft that differs from disk (whitespace a Markdown view
-        // does not count as an edit) is a real unsaved edit and stays.
+        // Clear disk-equal drafts from clean tabs or shared models can restore stale text; keep differing Markdown whitespace as real unsaved edits.
         const draft = s.editorDrafts[fileId]
         const dropDraft =
           !dirty &&

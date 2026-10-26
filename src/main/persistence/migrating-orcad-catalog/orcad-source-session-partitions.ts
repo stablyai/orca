@@ -16,10 +16,7 @@ import {
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
 
-/**
- * The partitions as the app itself reads them: the shared adoption rule decides where the host's
- * copy supersedes an older local one (#12723). Everywhere else both copies export and must agree.
- */
+/** Match app adoption (#12723); other duplicate partition copies must agree before export. */
 export function orcadMigrationSessionPartitions(
   state: PersistedState,
   scope: OrcadMigrationSourceScope
@@ -57,7 +54,7 @@ export function orcadMigrationSessionPartitions(
   })
 }
 
-/** Workspaces the local copy must keep: a worker fence, or a close record for a tab the host lists. */
+/** Retain local copies with worker fences or closes contradicting the host's tabs. */
 function copiesThatStillDisagree(
   local: WorkspaceSessionState,
   host: WorkspaceSessionState

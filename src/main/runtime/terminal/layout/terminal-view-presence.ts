@@ -48,19 +48,12 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     }
   }
 
-  /** Registered by terminal-RPC subscribe/multiplex streams: while a remote
-   *  view subscriber is attached its xterm answers queries with view
-   *  authority and the model responder must stay silent. A stream that can
-   *  pause passes its pause read, since a paused stream drops what it would
-   *  answer. Returns an idempotent release. */
+  /** Remote views own delivered query replies; pause readers return dropped output to main. Release is idempotent. */
   registerRemoteTerminalViewSubscriber(ptyId: string, isOutputPaused?: () => boolean): () => void {
     return this.terminalViewSubscribers.registerRemote(ptyId, isOutputPaused)
   }
 
-  /** A local daemon session main knows is live but has never ingested a byte
-   *  from — i.e. no pane ever attached it, so the daemon is not emitting.
-   *  Headless state exists only after the first ingested byte; a snapshot
-   *  reconcile in flight implies a spawn-path attach already happened. */
+  /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
     return this.terminalViewSubscribers.isKnownUnattachedLocal(ptyId)
   }
