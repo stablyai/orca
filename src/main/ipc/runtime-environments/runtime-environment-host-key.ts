@@ -6,11 +6,7 @@ import {
   type PublicKnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 
-/**
- * The redacted record plus a digest of the host's E2EE public key. The host keeps that key in its
- * own profile across updates and proves it in every pairing handshake; a reinstalled or different
- * host has another. The renderer cannot see the key itself, so it compares this digest.
- */
+/** Compare a digest of the persistent E2EE host key without exposing the key to the renderer. */
 export function publicRuntimeEnvironmentWithHostKey(
   environment: KnownRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {

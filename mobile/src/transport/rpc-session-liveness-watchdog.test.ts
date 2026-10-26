@@ -112,43 +112,56 @@ describe('RpcSessionLivenessWatchdog', () => {
 
   it('does not charge a scheduler-stalled probe window', () => {
     let now = 0
-    let callback: (() => void) | null = null
+    let callback: (() => void) | undefined
     const terminate = vi.fn()
+    const sendProbe = vi.fn(() => true)
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',
       idleProbeMs: null,
       probeTimeoutMs: 4_000,
       missedProbeLimit: 2,
-      sendProbe: () => true,
+      sendProbe,
       terminate,
       now: () => now,
       setTimer: (next) => {
         callback = next
-        return 1 as unknown as ReturnType<typeof setTimeout>
+        return setTimeout(() => {}, 0)
       },
       clearTimer: () => {}
     })
     const identity = {}
     watchdog.start(identity)
     watchdog.probeNow(identity)
+    expect(sendProbe).toHaveBeenCalledOnce()
+    if (!callback) {
+      throw new Error('Expected a scheduled probe deadline')
+    }
     now = 8_000
-    callback?.()
+    callback()
+    expect(sendProbe).toHaveBeenCalledTimes(2)
     now += 4_000
-    callback?.()
+    callback()
+    expect(sendProbe).toHaveBeenCalledTimes(3)
     expect(terminate).not.toHaveBeenCalled()
+    now += 4_000
+    callback()
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(terminate).toHaveBeenCalledWith(identity)
   })
 
   it('invalidates late callbacks after identity replacement', () => {
     const callbacks: (() => void)[] = []
     const terminate = vi.fn()
+    const sendProbe = vi.fn(() => true)
+    let now = 0
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
-      sendProbe: () => true,
+      sendProbe,
       terminate,
-      now: () => 0,
+      now: () => now,
       setTimer: (callback) => {
         callbacks.push(callback)
-        return callbacks.length as unknown as ReturnType<typeof setTimeout>
+        return setTimeout(() => {}, 0)
       },
       clearTimer: () => {}
     })
@@ -156,8 +169,14 @@ describe('RpcSessionLivenessWatchdog', () => {
     const replacement = {}
     watchdog.start(first)
     watchdog.probeNow(first)
+    expect(callbacks).toHaveLength(2)
+    const staleCallbacks = [...callbacks]
     watchdog.start(replacement)
-    callbacks.forEach((callback) => callback())
+    expect(callbacks).toHaveLength(3)
+    now = 20_000
+    staleCallbacks.forEach((callback) => callback())
+    expect(sendProbe).toHaveBeenCalledOnce()
+    expect(callbacks).toHaveLength(3)
     expect(terminate).not.toHaveBeenCalled()
   })
 

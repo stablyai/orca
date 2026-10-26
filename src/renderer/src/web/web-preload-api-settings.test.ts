@@ -128,8 +128,7 @@ describe('web settings preload API', () => {
   })
 
   it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
-    // Why: the web store is a second, independent settings store — the constants-level
-    // default flip only reaches profiles that never persisted the old `false` (#10567).
+    // Web has an independent settings store; flipping constants cannot migrate persisted false (#10567).
     const globals = installBrowserGlobals('Linux')
     globals.storage.setItem(
       'orca.web.settings.v1',
@@ -182,11 +181,7 @@ describe('web settings preload API', () => {
   })
 
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
-    // Why seed after install: readLocalWebUIState must run the settings migration before it
-    // snapshots the UI blob, and only a ui.get that is itself the first settings read can
-    // show that. Reading first returns a pre-arm state every caller then writes back — and
-    // the stamp means nothing can raise the arm again. Another tab populating localStorage
-    // after this one loaded is the shape that reaches it.
+    // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()

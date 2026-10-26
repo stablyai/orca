@@ -63,7 +63,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
-      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      // No SSH Git provider is installed, so the fixture uses stored rows.
       getAllWorktreeMeta: () => ({
         [`${TEST_REPO_ID}::C:/remote/repo`]: makeWorktreeMeta()
       }),
@@ -321,14 +321,13 @@ describe('OrcaRuntimeService', () => {
           worktreeId?: string
         }
       | undefined
-    // Why the configured folder: host-launched floating terminals start where the panel's own do.
+    // Host-launched floating terminals must use the panel's configured directory.
     expect(spawnCall).toMatchObject({
       cwd: floatingDir,
       connectionId: null,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
     expect(spawnedPtyEnv(spawnCall).ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
-    // The window's floating panes carry the sentinel as their workspace id too.
     expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(spawnCall?.env?.ORCA_PROJECT_GROUP_ID).toBeUndefined()
     expect(spawnCall?.env?.ORCA_WORKSPACE_ROOT).toBeUndefined()
@@ -450,7 +449,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

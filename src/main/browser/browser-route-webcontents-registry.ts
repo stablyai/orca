@@ -279,7 +279,6 @@ export class BrowserRouteWebContentsRegistry {
 
   private revokeGuest(state: GuestState): void {
     state.navigationGranted = false
-    // Popups are client-local transients of this page: revoking the page fences them too.
     state.popups?.closeAll()
     closeRouteGuest(state.guest)
     if (isRouteGuestDestroyed(state.guest)) {
@@ -293,7 +292,7 @@ export class BrowserRouteWebContentsRegistry {
     }
     state.retirementRequested = true
     state.navigationGranted = false
-    // Fence before the logical retirement round trip; a retiring page must not keep a live popup.
+    // Fence popups before the logical retirement round trip.
     state.popups?.closeAll()
     const registration = state.registration
     const pageAuthority = state.pageAuthority

@@ -137,7 +137,7 @@ describe('Store.applyLayoutCommand: a window’s terminal tab create', () => {
   it('keeps records the create did not touch exactly as stored', async () => {
     const { store } = await openStore((window) => {
       withOneTab(window)
-      // Leftovers a full load-and-save rewrite would drop or renumber.
+      // Verify record patches preserve residue that full load/save normalization would drop.
       window.session.terminalPtyIncarnationsByPaneKey = { [`${TAB}:${LEAF}`]: 'incarnation-1' }
       window.session.tabsByWorktree[WORKTREE]![0]!.sortOrder = 7
     })

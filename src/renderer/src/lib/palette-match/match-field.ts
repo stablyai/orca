@@ -170,7 +170,6 @@ function matchTypo(
   return null
 }
 
-/** Best allowed match of one token against one field, or null when unmatched. */
 export function matchPaletteField(
   field: PaletteIndexedField,
   token: PaletteQueryToken

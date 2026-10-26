@@ -5,30 +5,25 @@ import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-r
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import { atRestCommandContextReady } from './at-rest-command-context'
 
-/** How long one scan answers for a folder and account before the next read scans again. The list
- *  changes only when commands, skills or plugins do, and a running chat reports its own. */
+/** Running chats supply their own lists; rescan resting folders/accounts after this TTL. */
 export const AT_REST_COMMANDS_TTL_MS = 5 * 60_000
-/** A failed scan is due again this soon, so one failure doesn't hide the list for the whole TTL. */
+/** Retry failures before the full TTL can hide commands. */
 const FAILED_SCAN_RETRY_MS = 10_000
-/** A scan still unanswered this long no longer holds the next one off, so a hung folder can't
- *  freeze the menu. At most two run at once, so a folder that stays hung holds no more. */
+/** Overdue scans cannot freeze the menu; cap concurrent hung scans at two. */
 const SCAN_OVERDUE_MS = 30_000
 const MAX_SCANS_IN_FLIGHT = 2
-/** How long a client's own `/` read waits for a running scan. Phones ask once per menu and never
- *  hear a later change; well inside their request timeout. */
+/** Phones read once per menu; finish within their request timeout. */
 export const AT_REST_COMMANDS_READ_BUDGET_MS = 10_000
 
-/** One scan's answer. `fromAgent` is the agent's own list, which a fallback never replaces;
- *  `commands` undefined means the agent has no list to give here. */
+/** Fallbacks never replace agent-provided lists; undefined means no provider list. */
 export type AtRestCommandScan = {
   commands: AgentSessionSlashCommand[] | undefined
   fromAgent: boolean
 }
 
 export type AtRestCommandSource = {
-  /** Only records this host can scan for: another host's folders are only readable there. */
+  /** Other hosts must scan their own folders. */
   accepts: (record: AgentSessionRecord) => boolean
-  /** The folder the agent will launch in, and what it lists there. */
   scan: (
     record: AgentSessionRecord,
     cwd: string,
@@ -44,21 +39,17 @@ type Entry = {
   workspaceId: string
   commands?: AgentSessionSlashCommand[]
   fromAgent?: boolean
-  /** When the kept answer, or the last failure, landed; a failure lands as an older answer. */
+  /** Failures age the retained answer for earlier retry. */
   scannedAt: number
   lastStartedAt: number
   inFlight: number
-  /** Numbers each scan, so only an answer newer than the one kept replaces it. */
+  /** Only newer scan results replace retained answers. */
   started: number
   kept: number
   settled: Set<() => void>
 }
 
-/**
- * The `/` surface of a chat whose agent is not running, as its source lists it on the host that
- * runs it, in the folder the chat launches in. Nothing until the first scan lands; `onChange`
- * fires when a scan finds something different.
- */
+/** Cache commands from each resting chat’s launch folder; publish changed scan results. */
 export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommands {
   private readonly entries = new Map<string, Entry>()
   private readonly listeners = new Set<() => void>()
@@ -90,7 +81,6 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
   read = (record: AgentSessionRecord): AgentSessionSlashCommand[] | undefined =>
     this.readEntry(record)?.commands
 
-  /** Captures the current owner's answer within one deadline, following retired owners. */
   settled = async (record: AgentSessionRecord, budgetMs: number) => {
     const deadline = Date.now() + budgetMs
     for (;;) {
@@ -124,8 +114,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     return () => this.listeners.delete(listener)
   }
 
-  // Why the pin and the account: two floating chats pinned to different folders, or one folder
-  // under two accounts, list different skills.
+  // Folder pins and accounts can expose different skills.
   private readEntry(record: AgentSessionRecord): Entry | undefined {
     if (this.disposed || !this.source.accepts(record)) {
       return undefined
@@ -171,7 +160,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
         return false
       }
       entry.scannedAt = this.now()
-      // A rejected fallback still settles the refresh, but cannot supersede the agent's list.
+      // Refresh settles even when fallback cannot supersede an agent-provided list.
       if (entry.fromAgent && !fromAgent) {
         return false
       }
@@ -205,7 +194,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
           if (!isCurrent()) {
             return
           }
-          // Due again after the retry delay, leaving room for an older scan's answer meanwhile.
+          // Retry soon while allowing older in-flight results to arrive.
           entry.scannedAt = this.now() - AT_REST_COMMANDS_TTL_MS + FAILED_SCAN_RETRY_MS
           console.warn(`[${this.source.label}] reading the at-rest \`/\` commands failed:`, error)
         }

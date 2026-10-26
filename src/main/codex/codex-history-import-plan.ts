@@ -24,7 +24,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-/** Invocation-local shared translation: nothing reaches the live sink until this plan is whole. */
+/** Build the entire import before anything reaches the live sink. */
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string

@@ -51,11 +51,11 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
-  // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
+  // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
   }
-  // Why: the sidecar's throwaway profile must never become the user's window.
+  // The sidecar’s throwaway profile must never become the user’s window.
   if (isOrcadSidecarLaunch()) {
     requestDesktopHandoff()
     return
@@ -63,19 +63,13 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.desktopActivationGate?.requestActivation()
 }
 
-/**
- * Hands buffered OS-opened document paths to a renderer that has proven it is listening.
- *
- * Until that proof arrives the paths stay buffered, because `webContents.send` to a renderer
- * with no listener attached is dropped silently and the queue would be gone.
- */
+/** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
 function publishOsOpenedDocuments(): void {
   const targetWindow = state.mainWindow
   if (!state.osDocumentOpenListenerReady || !targetWindow || targetWindow.isDestroyed()) {
     return
   }
-  // Why consumed before the await: a renderer pull racing this resolve must not take the same
-  // batch again. The restore() calls hand it back if delivery turns out to be impossible.
+  // Consume before awaiting to prevent duplicate renderer pulls; restore if delivery fails.
   const filePaths = state.osOpenedDocuments.consume()
   if (filePaths.length === 0) {
     return
@@ -106,7 +100,7 @@ const preflightReady = runMainProcessPreflight({
   requestDesktopActivation
 })
 
-// Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
+// Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
   void leaseAppImageGenerationForCurrentProcess()
   app.on('open-url', (event, url) => {
@@ -116,21 +110,19 @@ if (preflightReady) {
     event.preventDefault()
     requestDesktopActivation([url])
   })
-  // Why: macOS delivers "Open With" as open-file, often before `ready`, and only to a handler
-  // that claims the event. Unsupported paths stay unclaimed.
+  // macOS can deliver Open With before ready; claim only supported paths.
   app.on('open-file', (event, filePath) => {
     if (!state.osOpenedDocuments.captureFilePaths([filePath], publishOsOpenedDocuments)) {
       return
     }
     event.preventDefault()
-    // Why gated on isReady: pre-ready the cold-start window is already on its way, and
-    // activating the gate here would try to open one before Electron can. The sidecar has none.
+    // Cold-start activation must wait for Electron readiness; sidecars have no pending window.
     if (app.isReady() || isOrcadSidecarLaunch()) {
       requestDesktopActivation()
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
-  // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
+  // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()

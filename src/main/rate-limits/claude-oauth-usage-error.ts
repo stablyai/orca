@@ -26,8 +26,7 @@ export async function createOAuthUsageError(res: Response): Promise<OAuthUsageEr
   return new OAuthUsageError(
     await describeOAuthUsageError(res),
     res.status,
-    // Why: auth/rate-limit responses are already the user-visible usage API
-    // answer. Falling through to /usage can spawn Claude Code needlessly.
+    // Auth/rate-limit responses are authoritative; falling back to /usage would needlessly spawn Claude.
     res.status === 401 || res.status === 403 || res.status === 429,
     res.status === 429 ? parseUsageRetryAfterMs(res.headers.get('retry-after')) : null
   )

@@ -29,10 +29,7 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalProcessTreeMock,
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
-// Why: the real FETCH_HEAD key derivation walks the filesystem (realpath/stat/readFile), so
-// concurrent same-repo callers join the lock lane in libuv threadpool completion order rather
-// than call order. Keep the real FIFO lock and drop only the key walk, which owns its coverage
-// in `src/shared/git-fetch-head-lock.test.ts`.
+// Mock only filesystem key derivation so libuv completion order cannot reorder the real FIFO lock.
 vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
   const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')
@@ -49,6 +46,7 @@ vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
 import { RuntimeRemoteFetchController } from '../../runtime/runtime-remote-fetch-controller'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { execFileCapture } from './exec-file-capture'
+import { isGitWorktreeMutationInFlight } from '../git-worktree-mutation-state'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
@@ -144,22 +142,40 @@ describe('git exec admission lifetime', () => {
     }
   )
 
-  it('retains the string-exec permit after timeout settlement until close', async () => {
-    const child = mockChild()
-    execFileMock.mockReturnValue(child)
-    const pending = gitExecFileAsync(['status'], { cwd: '/repo', timeout: 10 })
-    const rejection = expect(pending).rejects.toThrow('timed out')
-    await settleAdmissionGrant()
-    expect(execFileMock).toHaveBeenCalledOnce()
+  it.each(['timeout', 'abort'] as const)(
+    'retains the string-exec permit and mutation after %s until close',
+    async (reason) => {
+      const child = mockChild()
+      execFileMock.mockReturnValue(child)
+      const controller = new AbortController()
+      const pending = gitExecFileAsync(['rebase', '--continue'], {
+        cwd: '/repo',
+        timeout: 10,
+        signal: controller.signal
+      })
+      const rejection = expect(pending).rejects.toThrow(
+        reason === 'timeout' ? 'timed out' : 'aborted'
+      )
+      await settleAdmissionGrant()
+      expect(execFileMock).toHaveBeenCalledOnce()
+      await expect(isGitWorktreeMutationInFlight('/repo', {})).resolves.toBe(true)
 
-    await vi.advanceTimersByTimeAsync(10)
-    await rejection
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
+      if (reason === 'timeout') {
+        await vi.advanceTimersByTimeAsync(10)
+      } else {
+        controller.abort()
+      }
+      await rejection
+      expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
+      const mutationBeforeClose = await isGitWorktreeMutationInFlight('/repo', {})
 
-    child.emit('close', null, 'SIGKILL')
-    await Promise.resolve()
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
-  })
+      child.emit('close', null, 'SIGKILL')
+      await Promise.resolve()
+      expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
+      expect(mutationBeforeClose).toBe(true)
+      await expect(isGitWorktreeMutationInFlight('/repo', {})).resolves.toBe(false)
+    }
+  )
 
   it('retains the buffer-exec permit after maxBuffer settlement until close', async () => {
     const child = mockChild()
@@ -251,7 +267,7 @@ describe('git exec admission lifetime', () => {
   it('retains barrier admission past bounded settlement until termination is observed', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)
-    const pending = gitExecFileAsync(['status'], {
+    const pending = gitExecFileAsync(['rebase', '--continue'], {
       cwd: '/repo',
       terminationBarrier: true,
       timeout: 10
@@ -265,10 +281,13 @@ describe('git exec admission lifetime', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     await rejection
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
+    const mutationBeforeClose = await isGitWorktreeMutationInFlight('/repo', {})
 
     child.emit('close', null, 'SIGKILL')
     await Promise.resolve()
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
+    expect(mutationBeforeClose).toBe(true)
+    await expect(isGitWorktreeMutationInFlight('/repo', {})).resolves.toBe(false)
   })
 
   it.each([false, true])(
@@ -318,16 +337,18 @@ describe('git exec admission lifetime', () => {
     await vi.waitFor(() => expect(finishBlocker).toBeTypeOf('function'))
 
     const controller = new AbortController()
-    const queued = gitExecFileAsync(['status'], {
+    const queued = gitExecFileAsync(['rebase', '--continue'], {
       cwd: '/repo',
       timeout: 60_000,
       signal: controller.signal
     })
     await vi.waitFor(() => expect(_gitAdmissionSnapshotForTests().queued).toBe(1))
+    await expect(isGitWorktreeMutationInFlight('/repo', {})).resolves.toBe(true)
     controller.abort()
 
     await expect(queued).rejects.toMatchObject({ name: 'AbortError' })
     expect(execFileMock).toHaveBeenCalledOnce()
+    await expect(isGitWorktreeMutationInFlight('/repo', {})).resolves.toBe(false)
 
     finishBlocker?.(null, '', '')
     blocker.emit('close', 0, null)

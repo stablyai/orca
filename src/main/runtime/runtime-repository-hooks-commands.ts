@@ -7,7 +7,7 @@ import {
   getDefaultTabCommandTrustContent,
   getEffectiveSetupRunPolicy
 } from '../effective-hook-config'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'

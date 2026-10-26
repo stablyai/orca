@@ -71,8 +71,7 @@ describe('getSpawnArgsForWindows', () => {
           '--foo'
         ])
         expect(spawnCmd).toBe('C:\\Windows\\System32\\cmd.exe')
-        // Why: /d disables AutoRun; /c runs the batch command and exits.
-        // Separate argv entries avoid cmd.exe seeing Node-escaped quotes.
+        // Separate /d and /c arguments avoid Node-escaped quotes reaching cmd.exe.
         expect(spawnArgs).toEqual(['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--foo'])
       })
     } finally {
@@ -92,9 +91,8 @@ describe('getSpawnArgsForWindows', () => {
         { detachedGui: true }
       )
       expect(spawnCmd).toBe(getCmdExePath())
-      // Why: `start` runs a batch target under a nested `cmd /K` that never
-      // exits; the inner `cmd /d /c` is what keeps the hidden shell from leaking.
-      // Title is empty string so libuv emits `""` — not the two-char `'""'`.
+      // The inner /d /c prevents start's default cmd /K from leaking a hidden shell.
+      // An empty title lets libuv supply the quotes.
       expect(spawnArgs).toEqual([
         '/d',
         '/c',
@@ -235,8 +233,7 @@ describe('getSpawnArgsForWindows', () => {
     })
   })
 
-  // Why: parentheses only group commands and cannot chain one without a separator
-  // the guard already rejects, so paren-bearing paths must stay spawnable.
+  // Parentheses cannot chain a command without a separator the guard already rejects.
   it('spawns .cmd shims under Program Files (x86) and paren-bearing worktrees', () => {
     withPlatform('win32', () => {
       const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
@@ -267,7 +264,6 @@ describe('getSpawnArgsForWindows', () => {
           'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
         )
       }
-      // Why: anything not advertised must pass, or the message misleads the user.
       for (const character of ['(', ')', ',', ';', '@', '#', '$', "'", '~', '=']) {
         expect(advertised).not.toContain(character)
         expect(() =>

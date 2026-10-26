@@ -18,6 +18,7 @@ import {
 import { makePendingAgentTabActivationRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { trackRunningAgentLaunchPane } from '../../agent-launch/agent-launch-pane-attachment'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
   it('briefly preserves abnormal SSH exits for paired pane recovery', async () => {
@@ -424,14 +425,22 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })
       ])
 
+      // Leases bound only renderer-omitted rows; main-owned tabs remain listed regardless of lease.
+      const afterLease = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })]
+        : []
       vi.advanceTimersByTime(30_001)
       publishEmpty(2)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
 
       leaseState = 'terminated'
       leaseUpdatedAt = Date.now()
       publishEmpty(3)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -531,7 +540,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -603,7 +611,7 @@ describe('OrcaRuntimeService', () => {
       status: 'pending-handle'
     })
 
-    // Why notifyClients false: mirrors the phone tapping the tab, the path that materializes pending tabs headlessly (#7587).
+    // #7587: notifyClients false models phone activation materializing a pending tab headlessly.
     const activated = await runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
       `host-tab::${HEADLESS_LEAF_ID}`,
@@ -626,7 +634,7 @@ describe('OrcaRuntimeService', () => {
       status: 'ready'
     })
   })
-  // The launch's early tab is listed before its agent spawns; a phone landing on it must not race it.
+  // Early launch tabs precede agent spawn; phone activation must not race the owning launch.
   it('leaves a pending agent tab to the launch still starting in it', async () => {
     const { runtime, spawn } = makePendingAgentTabActivationRuntime()
     const running = trackRunningAgentLaunchPane({

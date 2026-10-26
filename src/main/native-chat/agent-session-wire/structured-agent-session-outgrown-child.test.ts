@@ -1,7 +1,3 @@
-// A child the chat outgrew is replaced before the next send: one that reported it is not signed in,
-// so a sign-in made since reaches a new child, and one launched with a permission mode the chat no
-// longer has, so the new mode reaches a new child.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -20,7 +16,7 @@ import {
 } from './structured-agent-session-outgrown-child'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type {
@@ -61,7 +57,6 @@ describe('a send after the agent said it is not signed in', () => {
     expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
 
-    // The earlier child's report does not follow the new one.
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
@@ -193,7 +188,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     input: Parameters<typeof conversation>[0],
     work: Partial<typeof idle> = {},
     stopAgent = vi.fn(async () => undefined),
-    launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
   ) => {
     const warn = vi.fn()
     await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
@@ -210,7 +205,6 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   it('keeps it while it owes work the idle sweep also protects', async () => {
-    // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
       await retire(signedOut, owing('turn-1', false)),
       await retire(signedOut, { childWorkOpen: () => true }),
@@ -256,7 +250,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   describe('a child launched with another permission mode', () => {
-    const now = (mode: AgentChatPermissionMode) => vi.fn(async () => mode)
+    const now = (mode: AgentChatPermissionChoice) => vi.fn(async () => mode)
     const askChild = { child: childAt({ permissionMode: 'ask' }) }
 
     it('is stopped once, and one launched with the current mode is kept', async () => {
@@ -284,10 +278,8 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       ).not.toHaveBeenCalled()
     })
 
-    // The check reads the same mode a start launches with, so each start ends the restarts.
     describe('against the mode a start launches with', () => {
-      // The saved catalog the probe keeps from `claude` 2.1.280: the default row folded into the
-      // row it resolves to, every row but haiku listed as running auto.
+      // Model Claude’s saved catalog: resolved default alias, auto on every model except haiku.
       const listed = [
         { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
         { id: 'sonnet', isDefault: false, supportsAutoMode: true },
@@ -321,8 +313,8 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           )
       }
       const stoppedAfterLaunch = async (
-        launched: AgentChatPermissionMode,
-        current: () => Promise<AgentChatPermissionMode | null>
+        launched: AgentChatPermissionChoice,
+        current: () => Promise<AgentChatPermissionChoice | null>
       ) =>
         (await retire({ child: childAt({ permissionMode: launched }) }, {}, undefined, current))
           .stopAgent.mock.calls.length > 0
@@ -358,7 +350,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
         }
       })
 
-      // A resolved id launches Ask; the start reports the listed alias, so one restart reaches auto.
+      // A resolved ID initially launches Ask; the reported catalog alias enables auto after one restart.
       it('settles after one restart once a resolved id is reported as its alias', async () => {
         const first = await launch({ model: 'claude-opus-5-5[1m]', permissionMode: 'auto' })()
         const reported = launch({ model: 'opus[1m]', permissionMode: 'auto' })

@@ -1,6 +1,3 @@
-// The restart continuation as a message: its body, which depends on the marker alone, and its
-// identity, which is one per resume action.
-
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
@@ -8,7 +5,6 @@ import { restartContinuationMessage } from '../../../shared/agent-session-restar
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 
-/** The message body, built once so both the send and any test read the same text. */
 export function restartContinuationBody(
   marker: Pick<AgentSessionResumeMarker, 'activity'>
 ): AgentJournalMessageItem {
@@ -22,14 +18,12 @@ export function restartContinuationBody(
 const hex16 = (parts: readonly unknown[]): string =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16)
 
-/** Names the offer: every continuation any of its actions sends carries it, and nothing else does. */
+/** Shared offer tag across all of its continuation actions. */
 function restartOfferTag(marker: AgentSessionResumeMarker): string {
   return hex16([marker.teardownId, marker.sessionId])
 }
 
-/** One resume action's continuation: the offer's tag, then the action's own part, so a retry is a
- *  new message, never a replay of the one that failed. Dated by the action, not the quit: the
- *  ledger refuses a new id dated more than a day back, and an offer has no expiry. */
+/** Fresh action IDs avoid failed-send replay; date by action because offers outlive ledger admission windows. */
 export function restartContinuationId(
   marker: AgentSessionResumeMarker,
   operationId: string,
@@ -45,7 +39,6 @@ export function restartContinuationId(
   ])}`
 }
 
-/** Whether a message is a continuation one of this offer's resume actions sent, read off its id. */
 export function isRestartContinuationOf(
   marker: AgentSessionResumeMarker,
   clientMessageId: string
@@ -55,7 +48,7 @@ export function isRestartContinuationOf(
     : false
 }
 
-/** The fence only fills the envelope: admission names this send by its operation id, not a fence. */
+/** Fence fills the envelope; operation ID defines send identity. */
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,

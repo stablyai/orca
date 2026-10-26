@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  resolveMobileNativeChat,
+  type MobileNativeChatTab
+} from './native-chat/mobile-native-chat-eligibility'
 import {
   useMobileSessionViewMode,
   type MobileSessionViewModeController
@@ -21,6 +24,8 @@ export function useMobileNativeChatActiveResolution(args: {
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   activeChatAgent: string | null
+  /** False when only memory names the agent; chat writes stay locked. */
+  activeChatAgentConfirmed: boolean
   activeChatAgentRef: MutableRefObject<string | null>
   activeChatSessionId: string | null
   activeChatStructured: boolean
@@ -85,6 +90,7 @@ export function useMobileNativeChatActiveResolution(args: {
     showNativeChat,
     showNativeChatRef,
     activeChatAgent,
+    activeChatAgentConfirmed: activeChatResolution?.agentConfirmed !== false,
     activeChatAgentRef,
     activeChatSessionId,
     activeChatStructured,

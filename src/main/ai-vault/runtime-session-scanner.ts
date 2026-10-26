@@ -27,8 +27,7 @@ export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
 }
 
-// Why: zod strips unknown keys, so the repin home must be declared or the
-// parent would silently drop it and resume under the wrong account's home.
+// Zod strips undeclared keys; keep the repinned home so resume uses the correct account.
 const aiVaultPrepareSessionResumeResultSchema = z.object({
   useRealCodexHome: z.boolean(),
   cliForkSource: AiVaultChatForkSourceSchema.optional(),
@@ -73,10 +72,7 @@ export async function scanRuntimeAiVaultSessions(
       unlimited: args.unlimited,
       force: args.force,
       ...(args.afterFingerprint !== undefined ? { afterFingerprint: args.afterFingerprint } : {}),
-      // Why: cap here so the set of scanned paths is explicit on this side —
-      // the RPC schema CLAMPS to the same bound anyway (older hosts had no
-      // cap). Dropped paths only lose the older-than-recency-cap guarantee,
-      // never the recent sessions themselves.
+      // Cap paths for older hosts too; omitted scope paths lose deep-history coverage, not recent sessions.
       scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
       executionHostId
     },
@@ -162,7 +158,7 @@ export async function prepareRuntimeAiVaultSessionResume(
       response.error.code === 'method_not_found' &&
       response.error.message === 'Unknown method: aiVault.prepareSessionResume'
     ) {
-      // Why: Electron drops custom error fields; this exact message preserves the host's verdict.
+      // Electron drops custom error fields; preserve this compatibility verdict in the message.
       throw new Error('aiVault.prepareSessionResume: method_not_found')
     }
     throw new Error(response.error.message)
@@ -192,8 +188,7 @@ function retagRuntimeSession(
   session: AiVaultSession,
   executionHostId: `runtime:${string}`
 ): AiVaultSession {
-  // The paired server is the transport, but the parent owns which concrete
-  // runtime host was scanned; never trust returned host ids across the boundary.
+  // The caller selects the scanned host; a transport peer cannot supply trusted execution IDs.
   return {
     ...session,
     executionHostId,

@@ -76,8 +76,7 @@ describe('file explorer row projection', () => {
     expect(projection.getParentIndex(3)).toBe(2)
     expect(projection.getParentIndex(2)).toBe(1)
     expect(projection.getParentIndex(1)).toBe(0)
-    // Why: the root directory itself is never a row, so its children have
-    // no visible parent to walk up to.
+    // Root directories are not rows, so their children have no visible parent.
     expect(projection.getParentIndex(0)).toBeNull()
     expect(projection.getParentIndex(4)).toBeNull()
     expect(projection.getParentIndex(99)).toBeNull()
@@ -94,8 +93,7 @@ describe('file explorer row projection', () => {
 
     expect(projection.getFirstChildIndex(0)).toBe(1)
     expect(projection.getFirstChildIndex(2)).toBe(3)
-    // Why: files have no children; collapsed folders are not in the visible
-    // list at all, so neither surface a first child.
+    // Files and collapsed folders expose no visible child.
     expect(projection.getFirstChildIndex(1)).toBeNull()
     expect(projection.getFirstChildIndex(4)).toBeNull()
     expect(projection.getFirstChildIndex(99)).toBeNull()

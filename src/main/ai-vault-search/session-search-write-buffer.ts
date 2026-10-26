@@ -29,14 +29,16 @@ export class SessionSearchWriteBuffer {
       // An empty filename is a private temporary database deleted when its connection closes.
       this.spilled = new SyncDatabase('')
       this.spilled.exec(`PRAGMA temp_store = FILE;
-        CREATE TABLE messages(role TEXT NOT NULL, text TEXT NOT NULL, ts TEXT)`)
+        CREATE TABLE messages(role TEXT NOT NULL, text TEXT NOT NULL, ts TEXT, text_truncated INTEGER NOT NULL)`)
     }
     const db = this.spilled
     db.exec('BEGIN')
     try {
-      const insert = db.prepare('INSERT INTO messages(role, text, ts) VALUES (?, ?, ?)')
+      const insert = db.prepare(
+        'INSERT INTO messages(role, text, ts, text_truncated) VALUES (?, ?, ?, ?)'
+      )
       for (const row of this.pending) {
-        insert.run(row.role, row.text, row.timestamp)
+        insert.run(row.role, row.text, row.timestamp, row.textTruncated ? 1 : 0)
       }
       db.exec('COMMIT')
     } catch (error) {
@@ -50,16 +52,22 @@ export class SessionSearchWriteBuffer {
   *rows(): Generator<TranscriptMessage> {
     if (this.spilled) {
       for (const row of this.spilled
-        .prepare('SELECT role, text, ts FROM messages ORDER BY rowid')
+        .prepare('SELECT role, text, ts, text_truncated FROM messages ORDER BY rowid')
         .iterate()) {
         if (
           (row.role !== 'user' && row.role !== 'assistant' && row.role !== 'tool') ||
           typeof row.text !== 'string' ||
-          (row.ts !== null && typeof row.ts !== 'string')
+          (row.ts !== null && typeof row.ts !== 'string') ||
+          (row.text_truncated !== 0 && row.text_truncated !== 1)
         ) {
           throw new Error('Invalid staged transcript message')
         }
-        yield { role: row.role, text: row.text, timestamp: row.ts }
+        yield {
+          role: row.role,
+          text: row.text,
+          timestamp: row.ts,
+          ...(row.text_truncated === 1 ? { textTruncated: true as const } : {})
+        }
       }
     }
     yield* this.pending

@@ -29,7 +29,7 @@ export function SourceControlBranchSection({
   worktreePath,
   revealInExplorer,
   activeConnectionId,
-  openBranchFile,
+  openCommittedDiff,
   openBranchAllDiffs,
   diffCommentCountByPath
 }: {
@@ -47,7 +47,7 @@ export function SourceControlBranchSection({
   worktreePath: string
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openBranchFile: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
+  openCommittedDiff: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -57,10 +57,7 @@ export function SourceControlBranchSection({
 }): React.JSX.Element {
   const baseRef = branchSummary.baseRef?.trim()
   const fileCount = filteredBranchEntries.length
-  // Why: the heading counts files that differ from the compare base, not every
-  // file the branch ever touched — a rebased branch makes the two read alike.
-  // A narrowing filter changes what the number means, so the label goes silent
-  // rather than claim the filtered count is the branch total.
+  // Counts measure current base differences, not historical touches; omit the total label when filters narrow the list.
   const countTitle =
     baseRef && fileCount === totalBranchEntryCount
       ? fileCount === 1
@@ -130,7 +127,7 @@ export function SourceControlBranchSection({
                   depth={node.depth}
                   onRevealInExplorer={revealInExplorer}
                   connectionId={activeConnectionId}
-                  onOpen={(event) => openBranchFile(node.entry, event)}
+                  onOpen={(event) => openCommittedDiff(node.entry, event)}
                   commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                   showPathHint={false}
                 />
@@ -150,7 +147,7 @@ export function SourceControlBranchSection({
                 worktreePath={worktreePath}
                 onRevealInExplorer={revealInExplorer}
                 connectionId={activeConnectionId}
-                onOpen={(event) => openBranchFile(entry, event)}
+                onOpen={(event) => openCommittedDiff(entry, event)}
                 commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
               />
             )}

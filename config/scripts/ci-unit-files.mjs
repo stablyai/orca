@@ -13,6 +13,14 @@ export const UNIT_INCLUDE = [
   'tests/e2e/**/*.unit.test.ts'
 ]
 
+export const UNIT_SETUP_FILES = [
+  'config/scripts/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/vitest-bun-node-builtins.ts',
+  'config/scripts/vitest-dom-setup.ts',
+  'config/scripts/vitest-host-ports-setup.ts',
+  'config/scripts/vitest-caller-identity-env-setup.ts'
+]
+
 export const UNIT_EXCLUDE = [
   ...defaultExclude,
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',

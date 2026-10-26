@@ -34,7 +34,7 @@ function keyedWindows(
   })
 }
 
-/** Model-group pools as "Gemini 0% 5h · 4% wk │ Claude/GPT …"; children are flex items of the segment row. */
+/** Render named model pools with their window percentages as flex children of the usage segment. */
 export function GroupedPoolUsage({
   visibleBuckets,
   allBuckets,

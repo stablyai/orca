@@ -105,7 +105,6 @@ export function VaultSessionRow({
   const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
-  // Computed once so the dropdown menu and the context menu never disagree.
   const deleteBlockedReason = onRequestDelete
     ? aiVaultSessionDeleteBlockedReason(session)
     : translate(
@@ -135,8 +134,7 @@ export function VaultSessionRow({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         codexHome: session.codexHome,
-        // Why: always sent (null when absent) so drop targets can tell "no cwd"
-        // from "payload predates the repin field".
+        // Send null for missing cwd so consumers can distinguish absence from older payloads without repinning support.
         sessionCwd: session.cwd ?? null,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
@@ -155,9 +153,7 @@ export function VaultSessionRow({
         !detailsExpanded && 'min-h-[98px]'
       )}
       onClick={(event) => {
-        // Radix portals this row's menus out of its DOM, but React still
-        // bubbles their clicks here — without this, choosing Delete expands
-        // the row behind the dialog.
+        // Ignore portaled React clicks outside the row DOM so menu actions cannot expand the row.
         const target = event.target
         if (target instanceof Node && !event.currentTarget.contains(target)) {
           return
@@ -173,8 +169,7 @@ export function VaultSessionRow({
         <div
           className={cn(
             'min-w-0 text-[13px] font-medium leading-5 text-foreground',
-            // Why: only the title is the resume drag handle — expanded
-            // details/preview need text selection and a normal pointer.
+            // Only the title drags; previews/details retain normal text selection.
             draggable && 'cursor-grab active:cursor-grabbing',
             detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
           )}

@@ -94,7 +94,7 @@ describe('orcad activation record', () => {
     expect(pinned).toEqual(['orcad-0.3.0+cc01', 'orcad-0.2.0+bb01', 'orcad-0.1.0+aa01'])
   })
 
-  // Design D7.1 R4; the real two-slot swap is orcad-cross-runtime-daemon-adoption.integration.test.ts.
+  // Real cross-runtime handoff is covered by orcad-cross-runtime-daemon-adoption.integration.test.ts.
   it('pins a Bun-era slot whose live daemon a Node orcad adopted, rollback target or not', () => {
     const bunSlotVersion = '0.1.0+ea9eae1d1d6a'
     const nodeRecord = { ...emptyOrcadActivationRecord(), active: '0.1.0+a97ad77bf77c' }
@@ -130,7 +130,6 @@ describe('orcad activation record', () => {
       activeAppVersion: '1.4.0',
       rolledBackFrom: '0.2.0+bb01'
     })
-    // A later activation is an explicit choice, so it lifts the hold.
     expect(withActivatedVersion(rolledBack, '0.3.0+cc01', null, NOW, '1.6.0')).not.toHaveProperty(
       'rolledBackFrom'
     )

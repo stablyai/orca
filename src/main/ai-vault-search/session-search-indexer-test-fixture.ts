@@ -9,24 +9,15 @@ import { assistantRecord, userRecord } from './session-search-transcript-fixture
 
 const CLOCK_EPOCH_MS = 1_740_000_000_000
 
-/** Wall time the indexer's guarantee is stated in, under the test's control. */
 export class FakeSessionSearchClock implements SessionSearchClock {
   private time = CLOCK_EPOCH_MS
   private nextId = 1
   private nowCalls = 0
   private readonly timers = new Map<number, { at: number; callback: () => void }>()
 
-  /**
-   * What each `now()` reading costs. A pass reads the clock once per file it is
-   * about to read, so this is how a test spends a pass's deadline without
-   * waiting: it is the wall time the reads themselves take.
-   */
+  /** Simulate elapsed work at each now() call without waiting. */
   costPerNowMs = 0
 
-  /**
-   * Runs on every `now()`, with the call number. The only synchronous seam into
-   * a running pass: the deadline check is what a pass consults between files.
-   */
   onNow: ((call: number) => void) | null = null
 
   now(): number {
@@ -46,7 +37,6 @@ export class FakeSessionSearchClock implements SessionSearchClock {
     this.timers.delete(handle as number)
   }
 
-  /** Moves time forward and fires every timer that came due, in order. */
   advance(ms: number): void {
     this.time += ms
     for (const [id, timer] of [...this.timers].sort((left, right) => left[1].at - right[1].at)) {
@@ -67,9 +57,7 @@ export type SessionSearchIndexerHarness = {
   databasePath: string
   roots: SessionSearchScanRoots
   claudeProjectDir: string
-  /** A second connection: the store keeps its own private. */
   read: <T>(query: (db: SyncDatabase) => T) => T
-  /** Plants what a killed writer would have left; nothing in the app writes here. */
   write: <T>(query: (db: SyncDatabase) => T) => T
   cleanup: () => Promise<void>
 }
@@ -104,7 +92,6 @@ function withConnection<T>(
   }
 }
 
-/** A native-chat-shaped Claude transcript: the same records the app itself writes. */
 export async function writeClaudeTranscript(
   path: string,
   turns: readonly string[],
@@ -125,11 +112,7 @@ export function claudeLines(
   ])
 }
 
-/**
- * Replaces a transcript the way an editor or a sync client does: a new inode
- * renamed over the old name. Same byte length on purpose, so the only thing
- * that can tell the two files apart is their filesystem identity.
- */
+/** Replace by rename with equal byte length to require filesystem-identity detection. */
 export async function renameReplaceTranscript(
   path: string,
   turns: readonly string[],
@@ -143,10 +126,6 @@ export async function renameReplaceTranscript(
   await utimes(path, later, later)
 }
 
-/**
- * A message-graph transcript, the shape OpenClaw, Pi, OMP and Prime Agent
- * write. The session id comes from the file name, so callers name the file.
- */
 export async function writeMessageGraphTranscript(
   path: string,
   turns: readonly string[]

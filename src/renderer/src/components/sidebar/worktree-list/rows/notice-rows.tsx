@@ -22,7 +22,7 @@ type NoticeRowFrameProps = {
   children: React.ReactNode
 }
 
-// Every non-card sidebar row shares the same absolutely-positioned virtual frame.
+// Share the absolute virtual frame across non-card rows.
 function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,

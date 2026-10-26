@@ -7,8 +7,7 @@ import {
 
 describe('agentLaunchCreateParams', () => {
   it('carries the create payload verbatim minus the reserved agent fields', () => {
-    // Why: the launch owns placement. A `startupAgent` left in the payload would create the
-    // worktree agent-first again, which is exactly the path this method exists to replace.
+    // Strip startupAgent: it forces agent-first PTY creation and bypasses the host’s surface choice.
     expect(
       agentLaunchCreateParams('codex', {
         repo: 'id:repo-1',
@@ -62,9 +61,7 @@ describe('readAgentLaunchCreateOutcome', () => {
   )
 
   it('carries the launch warning, so a workspace that is incomplete says why', () => {
-    // A launch can seat the workspace and still fail to finish it — an unspawned pty, untracked
-    // files left behind. Dropping the reason is what leaves the phone on a workspace that is
-    // quietly wrong. The host reports it at the top level, the same place worktree.create does.
+    // A seated workspace may still be incomplete; retain the host’s top-level failure reason.
     expect(
       readAgentLaunchCreateOutcome({
         worktreeId: 'wt-1',

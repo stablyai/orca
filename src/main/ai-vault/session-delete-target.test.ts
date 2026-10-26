@@ -2,8 +2,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { validateAiVaultSessionDeleteTarget } from './session-delete-target'
 
-// All roots are supplied via rootOptions so these tests never touch the real
-// home directory or filesystem — validation is pure string-path judgement.
+// Inject roots so validation never depends on the user's home.
 const HOME = join('/tmp', 'orca-ai-vault-delete-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
 const CURSOR_ROOT = join(HOME, '.cursor', 'projects')
@@ -19,7 +18,7 @@ const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 const GROK_ROOT = join(HOME, '.grok', 'sessions')
 
 describe('validateAiVaultSessionDeleteTarget', () => {
-  it('allows a canonical Cline manifest and removes its whole session directory', () => {
+  it('plans whole session-directory removal for a canonical Cline manifest', () => {
     const root = join('/tmp', 'cline-sessions')
     const sessionId = '1786466194549_xrzrl'
     const sessionDir = join(root, sessionId)
@@ -190,9 +189,6 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'non-local-host' })
   })
 
-  // A real OpenCode SQLite-row session (the `<dbPath>#<sessionId>` identity)
-  // reaches the validator as agent 'opencode', which is stopped at the agent
-  // gate — so this is how such a session actually enters judgement.
   it('rejects a real opencode session as an unsupported agent', () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'opencode',
@@ -202,8 +198,6 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     expect(result).toEqual({ allowed: false, agent: 'opencode', reason: 'unsupported-agent' })
   })
 
-  // Defense-in-depth: even for a deletable agent, any '#'-bearing path is
-  // treated as a synthetic SQLite identity rather than a real file to delete.
   it('rejects a deletable-agent path bearing a synthetic # marker', () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'gemini',
@@ -283,8 +277,6 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     expect(result.allowed).toBe(true)
   })
 
-  // Discovery matches extensions case-insensitively (walkSessionFiles folds via
-  // toLowerCase); the validator must accept the same uppercase-extension file.
   it('allows an uppercase extension since discovery folds extension case', () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'gemini',
@@ -307,8 +299,6 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     expect(result.allowed).toBe(true)
   })
 
-  // A stateDir that already ends in `agents` must not be doubled to
-  // `agents/agents`; openClawAgentsRootDir uses it as-is.
   it('allows an openclaw path whose stateDir already ends in agents', () => {
     const agentsRoot = join(OPENCLAW_ROOT, 'agents')
     const result = validateAiVaultSessionDeleteTarget({
@@ -321,10 +311,8 @@ describe('validateAiVaultSessionDeleteTarget', () => {
   })
 })
 
-// The directory-shaped agents. Their delete unit is a path set derived from the
-// one file discovery surfaced, not that file alone.
 describe('directory-shaped agents', () => {
-  it('plans claude companions before the transcript, so a failure keeps the row', () => {
+  it('plans claude companions before the transcript', () => {
     const filePath = join(CLAUDE_ROOT, '-proj', 'sess-1.jsonl')
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'claude',
@@ -415,7 +403,7 @@ describe('directory-shaped agents', () => {
     })
   })
 
-  it("removes rovo's session directory, not just the metadata.json inside it", () => {
+  it("plans removal of rovo's whole session directory", () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'rovo',
       filePath: join(ROVO_ROOT, 'sess-1', 'metadata.json'),
@@ -431,7 +419,7 @@ describe('directory-shaped agents', () => {
     })
   })
 
-  it("removes grok's session directory under its encoded-cwd group", () => {
+  it("plans removal of grok's session directory under its encoded-cwd group", () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'grok',
       filePath: join(GROK_ROOT, '-Users-me-proj', 'sess-1', 'summary.json'),

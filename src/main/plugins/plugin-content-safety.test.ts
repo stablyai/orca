@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { disposeWatcherProcess } from '../ipc/parcel-watcher-process'
+import { disposeWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
 import {
@@ -44,8 +44,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  // Why: PluginService may still be releasing in-process Parcel watches; drop
-  // the shared vitest watcher state before deleting roots those watches own.
+  // Release shared Parcel watches before deleting roots they may still own.
   disposeWatcherProcess()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })

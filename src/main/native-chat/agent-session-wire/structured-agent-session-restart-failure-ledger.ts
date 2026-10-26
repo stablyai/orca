@@ -1,11 +1,4 @@
-// What became of the offers an action spent, kept for the surfaces that must still name them.
-//
-// The reattach spends the offer, so this record is what the status bar and the resume dialog list,
-// with a retry, for a chat Orca could not carry on. The capsule holds the record; this decides what
-// goes in and when it leaves.
-//
-// A record ends when the chat's agent is started again outside a resume action — the host retires
-// it at that start, with the offer — or by a successful retry, or a dismissal.
+// Keep actionable failures after offers are spent; retire on independent startup, successful retry or dismissal.
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type {
@@ -38,28 +31,22 @@ type FailureCapsule = Pick<
 >
 
 export type StructuredAgentSessionRestartFailureLedger = {
-  /** The stored records, current or not. */
   read: () => Promise<AgentSessionResumeFailureRecord[]>
-  /** The records as rows a surface can show; sessions this build cannot run are left out. */
   list: () => Promise<StructuredAgentSessionResumeFailure[]>
-  /** Settles one operation's reservations: the agent carried on, or the failure is filed. Rows the
-   *  operation still owns after that are reopened. */
+  /** File failures or complete reservations, then reopen only rows still owned by this action. */
   settle: (
     operationId: string,
     outcomes: readonly StructuredAgentSessionResumeOutcome[],
     action: {
       candidates: readonly StructuredAgentSessionResumeCandidate[]
-      /** The reserved markers; a failure carries its marker's message id for older readers. */
+      /** Retain marker message IDs for older readers. */
       markers: ReadonlyMap<string, AgentSessionResumeMarker>
-      /** How a reattached session's action ended; null when the agent carried on. Reattaching alone
-       *  is not the whole action, so the runner's own outcome cannot decide this. */
+      /** Continuation outcome decides failure; reattachment alone proves no delivery. */
       failureAfterResume: (sessionId: string) => AgentSessionResumeFailureOutcome | null
       failureReason: (sessionId: string) => string
     }
   ) => Promise<void>
-  /** Named sessions forget their offer or failure; unnamed, every record this host lists goes (a
-   *  newer Orca's stay). With an audience, only records of agents it sees go, and an unnamed
-   *  dismissal is no fence. */
+  /** Dismiss only visible agents/records; unnamed dismissal preserves newer chats and adds no fence. */
   dismiss: (
     sessionIds: readonly string[] | undefined,
     beforeClearAll: (audience?: StructuredAgentSessionRestartAudience) => void | Promise<void>,
@@ -67,7 +54,6 @@ export type StructuredAgentSessionRestartFailureLedger = {
   ) => Promise<number>
 }
 
-/** Which continuation outcomes count as the agent not carrying on, and how each is filed. */
 export function continuationFailureOutcome(
   outcome: StructuredAgentSessionContinuationOutcome['outcome']
 ): AgentSessionResumeFailureOutcome | null {
@@ -77,23 +63,20 @@ export function continuationFailureOutcome(
 export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
   getRecord: (sessionId: string) => AgentSessionRecord | null
-  /** The predicate a retry applies to the failure's marker. */
   retryable: (marker: AgentSessionResumeMarker) => boolean
-  /** Whether a newer Orca saved the chat: its failure is kept for that Orca but not shown here,
-   *  where no retry can land. */
+  /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
-  /** Makes the failed chats readable here, so `retryable` reads each one's journal. */
   reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
   logger: StructuredAgentSessionLogger
   now: () => number
-  /** The capsule's single mutation lane, shared with the offer's own operations. */
+  /** Share the capsule mutation lane with offer operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
 }): StructuredAgentSessionRestartFailureLedger {
   const read = async (): Promise<AgentSessionResumeFailureRecord[]> => {
     try {
       return (await deps.capsule?.listFailed(deps.now())) ?? []
     } catch {
-      // Recovery is advisory; a malformed capsule must not make ordinary chat actions unusable.
+      // Advisory recovery failures must not block ordinary chat.
       deps.logger.warn('reading restart failures from the recovery capsule failed', {
         scope: 'recovery-capsule-read'
       })
@@ -147,8 +130,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     }
     const completed: string[] = []
     const failures: AgentSessionResumeFailureInput[] = []
-    // A retry keeps the prompt its first failure named: the chat's newest user message since then
-    // is the rejected continuation, and a message of the user's own would have ended the offer.
+    // Retry retains the original prompt; its rejected continuation may now be the newest message.
     const promptBySession = new Map([
       ...action.candidates.map(
         (candidate) => [candidate.sessionId, candidate.latestPrompt] as const
@@ -157,8 +139,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     ])
     for (const outcome of outcomes) {
       const resumed = outcome.outcome === 'resumed'
-      // A newer Orca's refusal spends nothing: the rollback below reopens the offer for the Orca
-      // that can continue it, and nothing is filed for a chat no retry here could continue.
+      // Newer-chat refusal files nothing; rollback retains the offer for a compatible build.
       if (
         !resumed &&
         outcome.reason === 'agent_session_journal_unreadable' &&
@@ -166,8 +147,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       ) {
         continue
       }
-      // Ineligible means the offer no longer applies (record gone, conversation forked), and
-      // superseded means the user's own message came first: nothing to retry, and the offer is spent.
+      // Ineligible/superseded offers are spent without retryable failure.
       const failure = resumed
         ? action.failureAfterResume(outcome.sessionId)
         : outcome.reason === STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE ||
@@ -198,8 +178,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
           operationId
         })
       })
-    // Filed before the rollback so a failure the user must act on is never reopened as an offer
-    // that would silently re-run it.
+    // File failure before rollback so it cannot reopen as an automatically rerunnable offer.
     await deps
       .enqueue(() => capsule.failResume(operationId, failures, deps.now()))
       .catch(() => {
@@ -208,8 +187,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
           operationId
         })
       })
-    // This only reopens rows still owned by this operation. Rows removed by completeResume stay
-    // removed, even when the write of a later bookkeeping step fails.
+    // Rollback reopens only still-owned rows, preserving already completed removals.
     await deps
       .enqueue(() => capsule.rollbackResume(operationId, deps.now()))
       .catch(() => {
@@ -227,9 +205,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     dismiss: (sessionIds, beforeClearAll, audience) =>
       deps.enqueue(async () => {
         if (audience) {
-          // Decided under the capsule lock. A record whose chat this host cannot read names no
-          // agent the audience was shown, so it stays.
-          // An unnamed dismissal keeps a newer Orca's records too: they were never listed here.
+          // Under capsule lock, keep unreadable/unshown agents and newer chats outside this audience.
           const hidden = (marker: AgentSessionResumeMarker) => {
             const record = deps.getRecord(marker.sessionId)
             return (
@@ -241,15 +217,14 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
           if (sessionIds === undefined) {
             await beforeClearAll(audience)
           }
-          // No fence: no client reaches this today (the local desktop gets no audience), and a
-          // late write from this process is serialized behind the dismissal.
+          // Process-local late writes serialize after dismissal, so this path needs no fence.
           return (await deps.capsule?.dismiss(sessionIds ?? 'all', deps.now(), hidden)) ?? 0
         }
         if (sessionIds !== undefined) {
           return (await deps.capsule?.dismiss(sessionIds, deps.now())) ?? 0
         }
         await beforeClearAll()
-        // A newer Orca's offers and failures were never shown here, so "dismiss all" keeps them.
+        // Dismiss only shown records; newer chats belong to compatible builds.
         const keep = (marker: AgentSessionResumeMarker) => deps.savedByNewerOrca(marker.sessionId)
         return (await deps.capsule?.clearAll(deps.now(), keep)) ?? 0
       })

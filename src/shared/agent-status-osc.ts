@@ -47,9 +47,7 @@ function findAgentStatusTerminator(
   searchFrom: number,
   next: { belIndex: number; stIndex: number }
 ): { index: number; length: 1 | 2 } | null {
-  // Reuse forward matches, including absence, for this chunk's remaining frames.
-  // Requires `searchFrom` to increase on every call for one `data`; a rewind would
-  // reuse a match that is no longer the earliest.
+  // Cache forward matches (including absence) per chunk; searchFrom must increase or the cached match may no longer be earliest.
   if (next.belIndex !== -1 && next.belIndex < searchFrom) {
     next.belIndex = data.indexOf('\x07', searchFrom)
   }
@@ -65,22 +63,15 @@ function findAgentStatusTerminator(
   return { index: next.stIndex, length: 2 }
 }
 
-/**
- * Stateful OSC 9999 parser for PTY streams.
- * Why: hidden/model-owned terminal output needs the same agent-status parsing
- * as mounted terminal panes, even when no terminal view is rendered.
- */
+/** Parse OSC 9999 for hidden/model-owned terminals as well as mounted views. */
 export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
   const MAX_PENDING = 64 * 1024
   let pending = ''
-  // How much of `pending` already failed a terminator search, so a frame split across
-  // many chunks re-scans only the new bytes instead of the whole accumulation.
+  // Track searched pending bytes so split frames scan new bytes instead of the whole accumulation.
   let pendingSearched = 0
 
   return (data: string): ProcessedAgentStatusChunk => {
-    // Ordinary terminal output is by far the common case. Keep it on the
-    // identity path unless the chunk ends with a split OSC marker; this avoids
-    // rebuilding a clean-data string for every PTY frame.
+    // Keep ordinary output on the identity path unless it ends in a split marker, avoiding clean-string rebuilds per PTY chunk.
     if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
       const carry = findAgentStatusPrefixCarry(data)
       if (carry.length === 0) {

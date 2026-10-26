@@ -237,5 +237,5 @@ function publicExecutionRouteError(error: unknown): Error {
   return new Error('browser_tunnel_execution_host_unavailable', { cause: error })
 }
 
-// Why: tests inject this until a live lease and server-owned route generation authorize TCP opens.
+// Tests inject this until a live lease and server-owned route generation authorize TCP opens.
 export const BROWSER_NETWORK_TUNNEL_METHODS = createBrowserNetworkTunnelMethods()

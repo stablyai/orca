@@ -1,4 +1,3 @@
-// Every way a Codex reasoning row opens and ends.
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
@@ -18,7 +17,6 @@ const ROW = 'orca:codex-item%3Athread-abc%3Ar-1'
 
 function recorder() {
   const rows = new Map<string, AgentJournalItemBody>()
-  /** The host time each row's first write asked to be stamped with. */
   const firstObservedAt = new Map<string, number | undefined>()
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body, options) => {
@@ -59,7 +57,6 @@ function streamingTurn() {
     sink,
     primaryThreadId: () => THREAD_ID,
     sessionId: SESSION_ID,
-    // Deltas are written as they arrive, so the open row is visible without a timer.
     schedule: (run) => {
       run()
       return () => {}
@@ -67,14 +64,13 @@ function streamingTurn() {
   })
   translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
   translator.handle(notification('item/started', reasoning('r-1'), 2_000))
-  // Production times only turn and item boundaries at receipt; a delta carries no time.
+  // Production timestamps boundaries, not deltas.
   translator.handle(
     notification('item/reasoning/summaryTextDelta', { itemId: 'r-1', delta: 'Planning' })
   )
   return { rows, translator, firstObservedAt }
 }
 
-/** A turn whose deltas wait out the coalescing window, as they do in production. */
 function coalescedTurn(now?: () => number) {
   const { rows, sink, firstObservedAt } = recorder()
   const translator = createCodexJournalTranslator({
@@ -185,7 +181,7 @@ describe('a Codex reasoning row', () => {
       () => TURN_ID,
       () => {}
     )
-    // As captured: a started reasoning item carries an empty summary; its text only streams.
+    // Captured reasoning starts with an empty summary and streams its text later.
     items.handle({ threadId: THREAD_ID, method: 'item/started', params: reasoning('r-1') })
     items.streams.handle(THREAD_ID, 'item/reasoning/summaryTextDelta', {
       itemId: 'r-1',

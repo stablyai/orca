@@ -119,11 +119,15 @@ it('launches the recording runner with a mobile-only dependency link and no comp
   )
   const result = rpcCommand(mobile, 'rpc:record', [scenarios[0].id])
   expect(result.code, result.stderr).toBe(0)
-  expect(JSON.parse(result.stdout)).toEqual([
+  const args = JSON.parse(result.stdout)
+  expect(args).toEqual([
     'run',
     'src/test-support/rpc-recording/pilot-recordings.test.ts',
     'src/test-support/rpc-recording/family-recordings.test.ts',
     '-t',
     expect.any(String)
   ])
+  const selected = new RegExp(args[4])
+  expect(selected.test(`${scenarios[0].id}: replays its recording deterministically`)).toBe(true)
+  expect(selected.test(`${scenarios[1].id}: replays its recording deterministically`)).toBe(false)
 })

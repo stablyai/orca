@@ -39,7 +39,6 @@ describe('SSH registration on a headless `orca serve`', () => {
 
   beforeEach(async () => {
     await harness.reset()
-    // Why: a headless serve never attached a window, so nothing registered the SSH layer.
     await resetSshHandlerStateForTests()
     mainProcessState.mainWindow = null
   })

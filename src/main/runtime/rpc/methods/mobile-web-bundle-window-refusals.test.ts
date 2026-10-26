@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
@@ -50,10 +49,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Both read methods run the same checks in the same order; only the grid differs.
 describe.each([
   { method: MOBILE_WEB_BUNDLE_CHUNK_METHOD, grid: MOBILE_WEB_BUNDLE_CHUNK_BYTES },
-  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_RANGE_BYTES }
+  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
 ])('$method refusals', ({ method, grid }) => {
   let bundle: SyntheticMobileWebBundle
   let script: SyntheticMobileWebBundle['assets'][number]
@@ -91,7 +89,7 @@ describe.each([
     expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
   })
 
-  // One budget per connection across both methods, so a phone mixing them cannot hold eight.
+  // Both methods share one per-connection budget; mixing them must not double the cap.
   it('charges the shared read slots and refuses one past the cap', async () => {
     const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
       acquireMobileWebBundleReadSlot('conn-a')
@@ -102,7 +100,6 @@ describe.each([
     expect(errorMessage(await read(params, { connectionId: 'conn-a' }))).toBe(
       'mobile_web_bundle_read_limited'
     )
-    // One phone at its cap must not cost another phone a thing.
     expect((await read(params, { connectionId: 'conn-b' })).ok).toBe(true)
     held[0]!()
     expect((await read(params, { connectionId: 'conn-a' })).ok).toBe(true)

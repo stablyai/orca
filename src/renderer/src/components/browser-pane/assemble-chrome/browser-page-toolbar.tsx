@@ -140,9 +140,7 @@ export function BrowserPageToolbar({
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
-        // so once it runs out Back returns across the conversion — and Forward re-crosses it —
-        // instead of going dead.
+        // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
         goBack: () => {
           if (canGoBack) {
             webviewRef.current?.goBack()
@@ -224,24 +222,13 @@ export function BrowserPageToolbar({
             }
           : undefined
       }
-      viewSource={
-        openSourceFile
-          ? {
-              onSelect: openSourceFile,
-              label: translate(
-                'auto.components.editor.HtmlDocPreview.openSourceControl',
-                'Open source file'
-              ),
-              alreadyInOverflowMenu: true
-            }
-          : {
-              onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-              label: translate(
-                'auto.components.browser.pane.BrowserPane.ec75d0c412',
-                'Open browser devtools'
-              )
-            }
-      }
+      viewSource={{
+        onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
+        label: translate(
+          'auto.components.browser.pane.BrowserPane.ec75d0c412',
+          'Open browser devtools'
+        )
+      }}
       openExternal={{
         onSelect: () => {
           if (!externalUrl) {

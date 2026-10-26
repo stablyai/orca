@@ -1,15 +1,4 @@
-/**
- * Issue #8832 — Cmd-click URL must not glue the next logical line.
- *
- * Root cause: path hard-wrap reconstruction (from #8339) still joins a URL
- * suffix ending in `/` with the next row's path-like prefix. HTTP hit-testing
- * must not consume those candidates; it uses soft-wrap, framed hard-wrap HTTP,
- * and edge-wrap reconstruction only.
- *
- * Re-run:
- *   pnpm exec vitest run --config config/vitest.config.ts \
- *     src/renderer/src/components/terminal-pane/repro-8832-url-next-line.test.ts
- */
+/** HTTP hit-testing must not reuse path hard-wrap candidates that join a trailing-slash URL to a new logical line; file links retain existence checks (#8832). */
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -102,8 +91,7 @@ describe('#8832 hard-wrapped path candidates glue next-line text into URLs', () 
   })
 
   it('still builds a multi-row path candidate that concatenates Description onto the URL', () => {
-    // Why: documents the path-reconstruction poison that HTTP hit-testing must
-    // not consume. File links remain protected by existence checks.
+    // Path reconstruction can join unrelated rows; HTTP detection must not consume its candidates.
     const buffer = issueBuffer()
     const candidates = buildHardWrappedPathLogicalLineCandidates(buffer, 1)
     const multiRow = candidates.filter((candidate) => candidate.rows.length > 1)

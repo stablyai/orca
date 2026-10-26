@@ -50,7 +50,6 @@ export type TerminalPaneNewTabRow = z.infer<typeof NewTabRow>
 /** Which tab and leaf a new PTY joins; a binding reads it only for a leaf it does not know yet. */
 export type TerminalPanePlacement = z.infer<typeof TerminalPanePlacementSchema>
 
-/** Null for anything malformed, including a kind this build does not know. */
 export function parseTerminalPanePlacement(value: unknown): TerminalPanePlacement | null {
   const parsed = TerminalPanePlacementSchema.safeParse(value)
   return parsed.success ? parsed.data : null

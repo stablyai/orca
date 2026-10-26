@@ -14,7 +14,7 @@ export type BrowserRouteWebContentsRegistryDependencies = {
   ): BrowserRouteSessionRekey | null
   retirePreparedPage(input: BrowserRoutePageAuthority): boolean
   retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number
-  /** Surfaces a denied route-guest popup on the owning page; without it denials are silent. */
+  /** Route-guest popup denials need an explicit notice on the owning page. */
   reportBlockedPopup?(input: { openerWebContentsId: number; url: string }): void
   maxGuests?: number
 }

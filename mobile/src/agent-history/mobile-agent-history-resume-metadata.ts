@@ -25,10 +25,7 @@ export async function loadMobileResumeMetadata(client: RpcClient): Promise<{
   settings: MobileAiVaultResumeSettings | null
   worktrees: Worktree[] | null
 }> {
-  // Why: repo.list can enrich repo remote identities, so fetch resume-only
-  // metadata after explicit user intent instead of delaying history browsing.
-  // timeoutMs: without it a socket drop parks these on the reconnect waiter
-  // for minutes, pinning the resume spinner (see RESUME_RPC_TIMEOUT_MS).
+  // Fetch repo-enriching metadata only on resume intent; RESUME_RPC_TIMEOUT_MS prevents dropped sockets parking spinner on multi-minute reconnect waiter.
   const [repoReply, folderWorkspaceReply, projectGroupReply, settingsReply, worktreeReply] =
     await Promise.all([
       resumeRepoListRead.request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),

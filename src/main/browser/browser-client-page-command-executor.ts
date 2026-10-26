@@ -272,7 +272,6 @@ export class BrowserClientPageCommandExecutor {
     )
   }
 
-  // Why: the download relay only knows the guest WebContents, and staging is keyed by page identity.
   findPageByWebContentsId(webContentsId: number): BrowserClientHostedPageInventory | undefined {
     // A staged profile-switch guest already owns its downloads while it loads the page.
     return findBrowserClientPageByWebContentsId(

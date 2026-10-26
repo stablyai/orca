@@ -2,10 +2,8 @@ import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-versio
 import { runProcess } from '@orca/process-host'
 import path from 'node:path'
 
-// Why: Claude 1.0.23 through 2.1.100 validate `hooks` against a closed event enum and discard the
-// WHOLE settings.json (env, permissions, every user hook) on one unknown name, so an event may only
-// be written for a Claude that knows it. Values come from each release's packed enum, pinned by
-// __fixtures__/claude-hook-event-enums.json.
+// Unknown hook events make older CLIs reject all settings, including user hooks.
+// Floors come from packed enums in __fixtures__/claude-hook-event-enums.json.
 export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PreToolUse: '1.0.23',
   PostToolUse: '1.0.23',
@@ -18,16 +16,19 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PermissionRequest: '2.0.45',
   PostToolUseFailure: '2.0.56',
   TeammateIdle: '2.1.33',
+  Elicitation: '2.1.63',
+  ElicitationResult: '2.1.63',
   PostCompact: '2.1.76',
   StopFailure: '2.1.78'
 } as const
 
-// Why: 1.0.49 through 1.0.66 also discard the whole file over an unknown top-level key, and
-// `statusLine` joined their schema only in 1.0.64. Pinned by the same fixture's topLevelSettings.
+// Older CLIs reject the whole settings file on an unknown top-level key.
 export const CLAUDE_STATUS_LINE_FIRST_VERSION = '1.0.64'
 
-// Why: an unresolved version gets what the first release accepting Orca's core lifecycle events and
-// statusLine knows, and nothing newer; a Claude older than that is gated only once its version resolves.
+// Exec-form hooks (`args`) spawn without a shell, so a spaced path needs no quoting.
+const CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION = '2.1.139'
+
+// Unknown versions get the core lifecycle/statusLine floor until a probe resolves their actual version.
 export const UNRESOLVED_CLAUDE_VERSION = CLAUDE_STATUS_LINE_FIRST_VERSION
 
 export type ClaudeHookEventName = keyof typeof CLAUDE_HOOK_EVENT_FIRST_VERSIONS
@@ -60,8 +61,12 @@ export function claudeKnowsStatusLine(version: string | null | undefined): boole
   return claudeKnowsSince(version, CLAUDE_STATUS_LINE_FIRST_VERSION)
 }
 
-/** `launch` runs the probe with the cwd and env a launch will spawn the CLI with, so a version
- *  manager's shim picks the same CLI the launch will. */
+// Unknown versions keep the shell form because an older CLI ignores `args`.
+export function claudeAcceptsExecFormHooks(version: string | null | undefined): boolean {
+  return claudeVersionReaches(version, CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION)
+}
+
+/** Probe with the launch cwd and env so version-manager shims select the same CLI. */
 export async function probeClaudeCliVersion(
   executablePath: string,
   launch?: { cwd: string; env: Record<string, string>; timeoutMs?: number }
@@ -73,8 +78,7 @@ export async function probeClaudeCliVersion(
     const result = await runProcess({
       program: executablePath,
       args: ['--version'],
-      // Why: version-manager launchers often use `#!/usr/bin/env node`; the resolved CLI's sibling
-      // runtime must remain reachable even when Electron started with a thinner PATH.
+      // Keep the sibling runtime on PATH for version-manager shims using /usr/bin/env node.
       env: launch?.env ?? {
         ...process.env,
         [pathKey]: inheritedPath
@@ -94,7 +98,7 @@ export async function probeClaudeCliVersion(
 const RECENT_VERSION_MS = 5 * 60_000
 const recentVersions = new Map<string, { at: number; value: Promise<string | null> }>()
 
-/** Why remembered: account folders refresh before every launch, and a hook plan needs only a recent version. */
+/** Account folders refresh on each launch; hook plans need only a recent version. */
 export function probeRecentClaudeCliVersion(executablePath: string): Promise<string | null> {
   const recent = recentVersions.get(executablePath)
   if (recent && Date.now() - recent.at <= RECENT_VERSION_MS) {

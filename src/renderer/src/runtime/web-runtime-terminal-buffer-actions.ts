@@ -2,12 +2,12 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
-// Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.
+// Clear host buffer or snapshot replay undoes local terminal.clear().
 export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
   return callWebRuntimeTerminalAction(ptyId, 'terminal.clearBuffer', 'clear terminal buffer')
 }
 
-// Why: same as clear; the host's snapshot would re-arm the modes on the next replay.
+// Reset host modes or its next snapshot rearms them.
 export function resetWebRuntimeTerminalInputModes(ptyId: string | null | undefined): boolean {
   return callWebRuntimeTerminalAction(
     ptyId,

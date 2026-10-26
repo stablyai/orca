@@ -7,7 +7,11 @@ import type {
   AgentSessionStatusSummary
 } from '../../shared/agent-session-wire'
 import { STRUCTURED_CHAT_NAME_PROMPT_LIMIT } from '../../shared/structured-agent-session-first-prompt'
-import { setAgentSessionRecordConversationName } from '../runtime/agent-session-record-conversation-name'
+import {
+  type AgentSessionUserNameWrite,
+  compareAndSetAgentSessionRecordName,
+  setAgentSessionRecordUserName
+} from '../runtime/agent-session-record-conversation-name'
 import {
   createStructuredChatNamingHandler,
   type StructuredChatNameGeneration,
@@ -44,20 +48,34 @@ async function settle() {
 function rig(provider: 'claude' | 'codex') {
   let record: AgentSessionRecord | null = { ...agentSessionRecordFixture(), provider }
   const getRecord = vi.fn(() => record)
-  const setConversationName = vi.fn(
-    async (_id: string, name: string | null, expected: string | null) => {
-      if (!record) {
-        throw new Error('Missing record')
-      }
-      if ((record.conversationName ?? null) !== expected) {
-        return null
-      }
-      record = setAgentSessionRecordConversationName(record, name, Date.now())
-      return record
+  // The store's own rules, over this rig's one record.
+  const mutate = async (apply: (current: AgentSessionRecord) => AgentSessionRecord) => {
+    if (!record) {
+      throw new Error('Missing record')
+    }
+    record = apply(record)
+    return record
+  }
+  const setConversationName = vi.fn((_id: string, name: string | null, expected: string | null) =>
+    compareAndSetAgentSessionRecordName(mutate, name, expected)
+  )
+  const setUserConversationName = vi.fn(
+    async (_id: string, name: string, write: AgentSessionUserNameWrite) => {
+      let applied = false
+      const next = await mutate((current) => {
+        const result = setAgentSessionRecordUserName(current, name, write, Date.now())
+        applied = result.applied
+        return result.record
+      })
+      return { record: next, applied }
     }
   )
   const deps: StructuredChatNamingDeps = {
-    getStore: () => ({ getRecord, compareAndSetConversationName: setConversationName }),
+    getStore: () => ({
+      getRecord,
+      compareAndSetConversationName: setConversationName,
+      setUserConversationName
+    }),
     getSettings: () => ({}),
     now: () => 100,
     workerTaskTitle: vi.fn(() => null),
@@ -81,6 +99,7 @@ function rig(provider: 'claude' | 'codex') {
     summary,
     getRecord,
     setConversationName,
+    setUserConversationName,
     handle: createStructuredChatNamingHandler(deps),
     read: () => record,
     replace: (next: AgentSessionRecord | null) => {
@@ -90,6 +109,24 @@ function rig(provider: 'claude' | 'codex') {
 }
 
 describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provider) => {
+  it('still names the first message after a manual rename fails to save', async () => {
+    const state = rig(provider)
+    state.setUserConversationName.mockRejectedValueOnce(new Error('Save failed'))
+    await expect(
+      state.handle.setUserName(state.summary.sessionId, 'Manual name', 'rename')
+    ).rejects.toThrow('Save failed')
+    expect(state.read()?.conversationName).toBeUndefined()
+    state.handle(state.summary, { replay: false, firstInputSubmissionKey: 'first-message' })
+    await settle()
+    expect(state.setConversationName).toHaveBeenCalledWith(
+      state.summary.sessionId,
+      'Please repair the login flow',
+      null
+    )
+    expect(state.deps.generate).toHaveBeenCalledTimes(1)
+    expect(state.read()?.conversationName).toBe('auth/login')
+  })
+
   it('names the chat from its first prompt at once, then takes the generated name', async () => {
     const state = rig(provider)
     const generation = deferred<StructuredChatNameGeneration>()
@@ -285,7 +322,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       state.deps.generate = vi.fn(async () => ({ name: 'New name' }))
       state.handle.regenerate(id)
       state.handle.regenerate(id)
-      expect(events.at(-1)).toEqual({
+      expect(events.at(-1)).toMatchObject({
         type: 'snapshot',
         sessions: [],
         namingActiveSessionIds: [id]
@@ -293,7 +330,11 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       prompt.resolve('Repair login')
       await settle()
       expect(state.deps.readJournalFirstPrompt).toHaveBeenCalledTimes(1)
-      expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
+      expect(events.at(-1)).toMatchObject({
+        type: 'snapshot',
+        sessions: [],
+        namingActiveSessionIds: []
+      })
       expect(state.handle.failure(id)).toBe(failure)
       state.deps.readJournalFirstPrompt = async () => ''
       state.handle.regenerate(id)
@@ -346,6 +387,42 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     await settle()
     expect(state.read()?.conversationName).toBe('User name')
     expect(state.deps.generate).not.toHaveBeenCalled()
+  })
+
+  it.each([{ name: 'Late agent name' }, { error: 'Generation failed' }])(
+    'keeps a same-text user rename after generation settles with %j',
+    async (outcome) => {
+      const state = rig(provider)
+      const generation = deferred<StructuredChatNameGeneration>()
+      state.deps.generate = vi.fn(() => generation.promise)
+      state.handle(state.summary, { replay: false })
+      await settle()
+      const id = state.summary.sessionId
+      const seed = 'Please repair the login flow'
+      await state.handle.setUserName(id, 'Login work', 'rename')
+      await state.handle.setUserName(id, seed, 'rename')
+      generation.resolve(outcome)
+      await settle()
+      expect(state.read()).toMatchObject({ conversationName: seed, conversationNameSource: 'user' })
+      expect(state.handle.failure(id)).toBeUndefined()
+    }
+  )
+
+  it("takes a window's pre-upgrade tab name only over a name Orca chose", async () => {
+    const state = rig(provider)
+    const id = state.summary.sessionId
+    await state.handle(state.summary, { replay: false })
+    await settle()
+    expect(await state.handle.setUserName(id, 'Old tab name', 'legacy-alias')).toEqual({
+      name: 'Old tab name',
+      applied: true
+    })
+    await state.handle.setUserName(id, 'Newer rename', 'rename')
+    // A second window's, or a replayed, upload of an older name never replaces the newer rename.
+    expect(await state.handle.setUserName(id, 'Old tab name', 'legacy-alias')).toEqual({
+      name: 'Newer rename',
+      applied: false
+    })
   })
 
   it('coalesces concurrent edges before the first journal read completes', async () => {

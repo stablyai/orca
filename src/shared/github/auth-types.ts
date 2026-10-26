@@ -1,7 +1,3 @@
-/**
- * Shared types for `gh auth status` diagnostics surfaced to the renderer.
- */
-
 import type { GhAccountBinding } from './account-binding'
 
 export type GhAuthAccount = {
@@ -9,11 +5,7 @@ export type GhAuthAccount = {
   user: string
   /** True when this is the account gh would use for the next call. */
   active: boolean
-  /**
-   * If gh reports the credential came from an environment variable, the
-   * variable's name. Null when the credential came from the keyring/file
-   * config. Env-token accounts can't be refreshed by `gh auth refresh`.
-   */
+  /** Credential environment variable, or null for keyring/file auth. Env-token accounts cannot use gh auth refresh. */
   envToken: 'GITHUB_TOKEN' | 'GH_TOKEN' | null
   source: 'env' | 'keyring'
   scopes: string[]
@@ -24,24 +16,13 @@ export type GhAuthDiagnostic = {
   ghAvailable: boolean
   activeAccount: GhAuthAccount | null
   accounts: GhAuthAccount[]
-  /**
-   * Whether the Electron main process itself sees GITHUB_TOKEN/GH_TOKEN in
-   * its environment. Distinct from `activeAccount.envToken` because gh may
-   * report an env source even when the variable was set in a parent shell
-   * that didn't propagate to Electron, and vice versa.
-   */
+  /** Token visible to Electron itself; gh may report a different environment source inherited through its shell. */
   envTokenInProcess: 'GITHUB_TOKEN' | 'GH_TOKEN' | null
   missingScopes: string[]
   requiredScopes: string[]
-  /**
-   * True when there's a non-env keyring account on the same/another host
-   * that the user could fall back to by unsetting the env var.
-   */
+  /** A non-env keyring account on this or another host is available after unsetting the token variable. */
   hasKeyringFallback: boolean
-  /**
-   * The GitHub host the caller needs credentials for (e.g. a GHES origin).
-   * Null when the probe ran without host context.
-   */
+  /** Host needing credentials (e.g. GHES); null when probing without host context. */
   requiredHost: string | null
   /** Whether gh has any account for `requiredHost`; null without host context. */
   requiredHostAuthenticated: boolean | null
@@ -50,10 +31,7 @@ export type GhAuthDiagnostic = {
 /** Per-runtime support for `gh auth token --user` (gh ≥ 2.40). */
 export type GhMultiAccountCapability = 'supported' | 'unsupported' | 'unknown'
 
-/**
- * Repo-scoped inventory for Settings binding UI.
- * Env-token accounts are listed but not bindable; keyring accounts are.
- */
+/** Repo binding inventory: list env-token accounts but allow binding only keyring accounts. */
 export type GhAccountBindingInventory = {
   capability: GhMultiAccountCapability
   accounts: GhAuthAccount[]

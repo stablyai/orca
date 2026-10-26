@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * `collectBrowserWebviewIds` walks every browser page and tab across every worktree. It used to sit
- * in a `useRef(...)` argument, so `Terminal` paid for the whole walk on every render and threw the
- * result away. Pin the invocation count to the mount count, not the render count.
- */
+/** Collect browser webview IDs once per mount; eager useRef arguments previously walked every page/tab on every render. */
 import { useState } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -1,17 +1,4 @@
-/**
- * Memory-leak regression: pane-scoped agent-status, unread, and terminal-input
- * maps must be purged when a worktree is removed via the BULK path.
- *
- * These maps are keyed by `${tabId}:${leafId}` (or by tabId for
- * `unreadTerminalTabs`). The single `removeWorktree` path clears them via
- * `shutdownWorktreeTerminals` / `dropAgentStatusByWorktree` /
- * `clearPaneForegroundAgentByWorktree`, but the bulk `purgeWorktreeTerminalState`
- * reducer (used by the authoritative-scan reconcile, remove-project, and the
- * hydration stale-purge) never ran terminal teardown — so an externally-removed
- * worktree (CLI `git worktree remove`, another Orca window, SSH, or a removed
- * project) orphaned one entry per agent pane for the lifetime of the renderer
- * session, plus a phantom unread dock badge.
- */
+/** Bulk worktree purge must clear pane status/unread/input maps like single removal. External scans/project removal/hydration run no terminal teardown; missed entries otherwise leak for renderer lifetime and leave unread dock badges. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
@@ -34,7 +21,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -211,8 +197,7 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
 
     store.getState().purgeWorktreeTerminalState([WT])
 
-    // Why: the alias registry outlives the store maps, so a purged tab must not
-    // keep routing status posts to a pane that no longer exists.
+    // Purge authority aliases too or module registry keeps routing posts to removed panes.
     expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(sourcePaneKey)
     expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
     resetAgentPaneAuthorityAliasesForTests()

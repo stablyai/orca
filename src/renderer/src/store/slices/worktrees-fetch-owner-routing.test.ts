@@ -93,10 +93,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('pins the list fetch to the local host when forceLocalOwner is set', async () => {
-    // Regression: a local `worktrees:changed` event for an unbound
-    // repo while a remote runtime is active must refresh against the local
-    // host, not the runtime — otherwise CLI-created local worktrees stay
-    // invisible in the sidebar until an app restart.
+    // Local change events for unbound repos must stay local despite runtime focus or CLI-created worktrees remain invisible until restart.
     const store = createTestStore()
     const local = makeWorktree({
       id: 'repo1::/local/wt1',

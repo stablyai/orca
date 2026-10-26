@@ -1,16 +1,4 @@
-/**
- * Starting a candidate orcad on a Windows SSH host.
- *
- * Win32-OpenSSH kills the session's job when the session ends, so orcad must leave that job.
- * The server entry's `--windows-breakaway-launch` mode does it the way the relay does: one CreateProcessW with
- * CREATE_BREAKAWAY_FROM_JOB through the slot's staged process-tree addon. Unlike the relay there
- * is no WMI fallback: Win32_Process.Create is EDR-scored remote execution and refused to a
- * standard user's network logon, so a host that cannot break away refuses the launch.
- *
- * Two execs, neither through PowerShell: the host script resolves the runtime the slot's marker
- * names (and drops a stale stop request), then that node.exe runs the launcher with plain argv.
- * The launcher records the PID with its creation time; a PID alone is not an identity on Windows.
- */
+// Win32-OpenSSH kills session jobs; require native breakaway without WMI/PowerShell, then record PID plus creation time.
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   parseWindowsBreakawayLaunchReport,
@@ -51,7 +39,7 @@ export class OrcadWindowsLaunchRefusedError extends Error {
   }
 }
 
-/** Resolves the slot's node.exe and clears a stop request the previous process never consumed. */
+/** Resolve pinned slot runtime and remove stale instance-stop intent before launch. */
 export function windowsOrcadLaunchRuntimeCommand(
   host: RemoteHostPlatform,
   slotDir: string
@@ -67,7 +55,7 @@ export function readWindowsOrcadSlotRuntime(output: string): string {
   return runtime
 }
 
-/** Older host-script answers omit the entry; those slots used the single-file launcher. */
+/** Older host scripts omit entry, implying the legacy single-file launcher. */
 export function readWindowsOrcadSlotEntry(
   output: string,
   host: RemoteHostPlatform,
@@ -89,13 +77,12 @@ export function windowsOrcadLaunchCommand(
   return orcadWindowsNodeCommandLine(slotRuntime, [
     slotEntry,
     WINDOWS_BREAKAWAY_LAUNCH_FLAG,
-    // The addon creates both with CREATE_ALWAYS, so a previous run's readiness line is gone
-    // before the launcher returns.
+    // CREATE_ALWAYS removes stale readiness before the launcher returns.
     WINDOWS_BREAKAWAY_STDOUT_FLAG,
     joinRemotePath(host, dir, ORCAD_READINESS_FILENAME),
     WINDOWS_BREAKAWAY_STDERR_FLAG,
     joinRemotePath(host, dir, ORCAD_LOG_FILENAME),
-    // POSIX appends orcad.log; keep the last run's (a crash cause) across a restart here too.
+    // Preserve previous stderr for crash diagnosis across restart.
     WINDOWS_BREAKAWAY_STDERR_KEEP_PREVIOUS_FLAG,
     WINDOWS_BREAKAWAY_PROCESS_FILE_FLAG,
     joinRemotePath(host, dir, ORCAD_WINDOWS_PROCESS_FILENAME),
@@ -116,7 +103,7 @@ export function windowsOrcadLaunchCommand(
   ])
 }
 
-/** The launched PID, or a refusal (no breakaway route) or failure the deploy must surface. */
+/** Return launched PID or surface native-breakaway refusal/failure. */
 export function readWindowsOrcadLaunchReport(output: string): number {
   const report = parseWindowsBreakawayLaunchReport(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, output)
   if (report?.method === 'breakaway') {

@@ -71,7 +71,6 @@ async function update(next: NativeChatBlock[]): Promise<ReactTestRenderer> {
     throw new Error('Tool run did not mount.')
   }
   if (mounting) {
-    // A run starts closed; open it as the reader would.
     await act(async () => tree?.root.findAllByType('button')[0]?.props.onPress())
   }
   return tree

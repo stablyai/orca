@@ -73,8 +73,6 @@ describe('agent-browser orphan sweep', () => {
     expect(closedArgs()).toEqual([['--session', 'orca-tab-orphan', 'close']])
   })
 
-  // Why: without a socket dir Orca derived itself, `session list` can reach daemons another Orca
-  // profile owns (Windows named pipes, or an inherited AGENT_BROWSER_SOCKET_DIR). Idle timeout bounds those.
   it.each([
     ['no socket directory at all', { PATH: 'C:\\Windows' }],
     ['a socket directory Orca inherited', { AGENT_BROWSER_SOCKET_DIR: '/tmp/shared-ab' }]
@@ -158,8 +156,6 @@ describe('sweep kill switch', () => {
     }
   })
 
-  // Why: the idle bound is an env passthrough an operator can raise and the quit close is
-  // self-bounded, so the sweep is the only new behaviour whose failure would need a revert.
   it('enumerates nothing when disabled, even when Orca owns the socket directory', async () => {
     process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '1'
     runProcessMock.mockClear()

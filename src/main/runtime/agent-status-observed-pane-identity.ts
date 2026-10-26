@@ -6,7 +6,6 @@ import {
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 
-/** The runtime also links each conversation to the PTY execution that reported it. */
 type ObservedStatusRuntime = AgentStatusRuntimeEnrichment &
   Partial<Pick<OrcaRuntimeService, 'recordCliWriterConversation'>>
 
@@ -15,25 +14,15 @@ const MAX_OBSERVED_PANES = 1024
 
 const UNOBSERVED: ObservedAgentStatusPaneIdentity = { kind: 'unobserved' }
 
-/**
- * The identity each pane was running under when a status row arrived.
- *
- * Why a record and not another lookup: the fleet snapshot remints every cached hook row on
- * every read, so a row observed under one process silently acquired whatever process, dispatch
- * and terminal the pane owns NOW. Incarnation equality in the matcher then agreed perfectly
- * while the evidence described a process that had already exited. Identity is a property of
- * the observation, so it has to be captured when the observation happens.
- */
+/** Capture identity at observation: later fleet snapshots must not reattribute old rows to a new process/dispatch. */
 export class AgentStatusObservedPaneIdentities {
   private readonly byPaneKey = new Map<string, ObservedAgentStatusPaneIdentity>()
 
-  /** An unresolvable pane records nothing: not knowing the identity now is not evidence
-   *  against the last identity this runtime did observe for the pane. */
+  /** Unknown identity cannot invalidate the last observed identity. */
   record(paneKey: string, identity: ObservedAgentStatusPaneIdentity): void {
     if (identity.kind === 'unobserved') {
       return
     }
-    // Delete-then-set keeps insertion order most-recent, so eviction sheds the oldest pane.
     this.byPaneKey.delete(paneKey)
     this.byPaneKey.set(paneKey, identity)
     while (this.byPaneKey.size > MAX_OBSERVED_PANES) {
@@ -74,7 +63,6 @@ export class AgentStatusObservedPaneIdentityCapture {
   }
 }
 
-/** Ingest-time capture: resolve the pane once, as the status arrives, and keep that answer. */
 export function recordObservedAgentStatusPaneIdentity(
   identities: AgentStatusObservedPaneIdentities,
   event: EnrichedAgentHookEventPayload,

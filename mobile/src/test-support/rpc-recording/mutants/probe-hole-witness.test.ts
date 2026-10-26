@@ -14,18 +14,8 @@ const input = readScenarios(
 )
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
-/**
- * Each probe exists because a real mutation survived the whole pre-probe suite. Hole and closure
- * are asserted together: if a pre-probe scenario of the same operation also caught the mutation,
- * the probe is redundant and this test says so instead of letting it accumulate.
- *
- * The six session entries are the same shape one step later: each names a guard whose false arm
- * no session recording reached, because every scenario of its family declared the cell filled. The
- * closing scenario declares it empty, so the member the guard drops is absent from the wire and the
- * mutant that always sends it has somewhere to diverge. Two of them close a cell an adapter
- * constant used to fill: while the worktree and the active tab were fixtures rather than
- * arguments, no scenario could describe a session that has neither.
- */
+// Prove each probe closes a surviving mutation and that earlier scenarios stayed blind.
+// Empty session inputs exercise omission guards that always-filled fixtures could not reach.
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
   {
     mutation: 'new-tab-refusal-order',
@@ -80,13 +70,7 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
 /** What the scripted transport raises when a send no longer carries the params the step asserts. */
 const PARAMS_MISMATCH = 'Request params mismatch:'
 
-/**
- * A mutation that changes a param the scenario completes is caught before a recording exists to
- * compare: the transport asserts the sender's params at every `complete`, so the sequence aborts
- * where a state or effect mutation would have diverged. The scenario detected it, which is what
- * `killed` means here — narrowed to that one message, and only once the anchor is proved applied,
- * so a mutant that failed to apply or a scenario that broke some other way still fails loudly.
- */
+// Count only params-mismatch aborts after proving the anchor applied; unrelated scenario/loader failures must stay loud.
 async function verdict(id: string, mutation: Mutation): Promise<string> {
   const scenario = input.scenarios.find((candidate) => candidate.id === id)!
   const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
@@ -112,11 +96,7 @@ async function verdict(id: string, mutation: Mutation): Promise<string> {
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {
-  // What makes the classification above sound, held over the whole manifest rather than argued
-  // about: every `complete` is followed by a checkpoint, so a send whose params stopped matching
-  // always suppressed an observation the golden holds. A scenario that completed a request after
-  // its last checkpoint could abort with nothing left to record, and a params-only mutant would
-  // read as killed by a recording that never looked.
+  // Every completion needs a later checkpoint so a params-mismatch abort always suppresses an observation the golden actually holds.
   it('never completes a request after the last checkpoint of a scenario', () => {
     const trailing = input.scenarios
       .filter((scenario) => {

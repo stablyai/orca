@@ -212,8 +212,7 @@ export class MacOSNativeProviderClient {
     return socket
   }
   private handleSocketData(socket: net.Socket, chunk: string): void {
-    // Why: a timed-out helper socket can emit after a replacement starts.
-    // Stale data must not corrupt the replacement socket's line buffer.
+    // Ignore stale socket data so it cannot corrupt a replacement's line buffer.
     if (this.socket !== socket) {
       return
     }
@@ -239,7 +238,7 @@ export class MacOSNativeProviderClient {
     pending.reject(new RuntimeClientError(response.error.code, response.error.message))
   }
   private handleSocketClose(socket: net.Socket): void {
-    // Why: late close from a prior helper socket must not tear down the active replacement.
+    // Ignore a previous socket's late close after a replacement starts.
     if (this.socket !== socket) {
       return
     }
@@ -258,13 +257,11 @@ export class MacOSNativeProviderClient {
     )
   }
   private invalidateActiveSocket(socket: net.Socket, error: RuntimeClientError): void {
-    // Why: stale socket errors and late write failures can arrive after
-    // shutdown/restart; only the active socket may tear down this generation.
+    // Late socket/write failures must not tear down a replacement generation.
     if (this.socket !== socket) {
       return
     }
     this.cleanupActiveSocketListeners()
-    // Why: a failed transport makes the helper socket unreliable for the next request.
     this.socket = null
     this.socketBuffer.clear()
     if (!socket.destroyed) {
@@ -274,8 +271,7 @@ export class MacOSNativeProviderClient {
     this.rejectPending(error)
   }
   private releaseHelperGeneration(): void {
-    // Why: `terminate` only lands if the helper is still reading its socket, and
-    // the wedged helpers this reaps are exactly the ones that are not.
+    // A wedged helper may never read terminate; also reap its process.
     this.providerProcess.reap()
     if (!this.socketDirectory) {
       return

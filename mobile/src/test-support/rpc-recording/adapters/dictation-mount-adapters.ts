@@ -5,14 +5,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const DICTATION_ID = 'dictation-1'
 const MODEL_ID = 'whisper-small'
 
-/**
- * The dictation setup sheet's four senders, the desktop session handshake, one audio chunk, and
- * the session hook that owns finish and cancel.
- *
- * The chunk is enqueued directly rather than through a microphone event so the recording carries
- * the base64 the real encoder produced for known bytes: the substitute audio module never fires an
- * event, so a driven emitter would be the adapter's payload rather than the product's.
- */
+// Enqueue known encoded audio directly; inert substitute microphone events would otherwise make payloads adapter inventions.
 export function dictationMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

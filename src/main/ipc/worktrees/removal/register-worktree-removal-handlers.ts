@@ -49,9 +49,8 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       throw new Error(`Repo not found: ${repoId}`)
     }
     assertWslMoveRepoWritable(store, repo)
-    // The resolved repo supplies host ownership when legacy callers omit args.hostId.
+    // Legacy callers omit hostId; the resolved repo supplies removal ownership.
     const removalHostId = getRepoExecutionHostId(repo)
-    // Why: a retry or a second window asking while Git still deletes joins that removal.
     const pending = waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
     if (pending) {
       return { ...(await pending), catalogVersion: getLocalWorktreeCatalogVersion(repoId) }
@@ -66,7 +65,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
     }
 
-    // Why: concurrent stale-toast/double-click/sidebar races can hit the same worktree; share the op so only one path touches Git and disk.
+    // Coalesce concurrent UI requests so only one operation touches Git and disk.
     const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
       const nestedPreservedBranches = args.approvedNestedWorktrees
         ? await removeApprovedNestedWorktrees({
@@ -83,7 +82,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       )
       const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
       const accept = async (): Promise<RemoveWorktreeResult> =>
-        // Why: another client's removal of this worktree may have been accepted during the wait.
+        // Another client may acquire removal while this request waits for acceptance.
         waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
           ? { removing: true }
           : executeWorktreeRemoval(
@@ -110,7 +109,6 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
         }
         throw error
       }
-      // A background job reports its own lifecycle when Git finishes.
       if (!accepted.removing) {
         options?.onWorktreeLifecycle?.({
           kind: 'removed',
@@ -118,8 +116,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
           path: worktreePath
         })
       }
-      // Why stamped inside the shared promise: a coalesced second caller gets the same reply,
-      // naming the catalog this removal produced.
+      // Stamp inside the shared promise so coalesced callers receive the same resulting catalog.
       return {
         ...result,
         ...(nestedPreservedBranches.length > 0 ? { nestedPreservedBranches } : {}),
@@ -141,7 +138,6 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       parseWorktreeId(args.worktreeId).repoId,
       args.hostId
     )
-    // Without its repo the removal refuses as before; there is no workspace to queue under.
     return repo
       ? runWorkspaceLifecycleCommand(
           context.runtime.workspaceLifecycle,

@@ -1,13 +1,4 @@
-/**
- * The two answers to "how does this agent take its prompt" must stay one answer.
- *
- * `buildAgentStartupPlan` decides by building a command and leaving `followupPrompt` null when the
- * text went into it. `agentPromptRidesLaunchCommand` has to give the same verdict BEFORE a command
- * exists, because `agent.launch` picks a delivery while it is still choosing what to create. Two
- * readings of one table is exactly the shape that drifts, so this pins them together across every
- * agent: add an agent, or change its injection mode, and the disagreement fails here rather than
- * silently dropping that agent's launch prompt.
- */
+/** Pin the pre-launch transport predicate to buildAgentStartupPlan’s followupPrompt verdict for every agent so table drift cannot lose prompts. */
 
 import { describe, expect, it } from 'vitest'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
@@ -29,7 +20,7 @@ function planFor(agent: TuiAgent) {
 }
 
 describe('the prompt-transport predicate against the plan it predicts', () => {
-  // A positive control: an empty list would make every assertion below vacuously true.
+  // An empty agent list would make the contract vacuously pass.
   it('covers every configured agent', () => {
     expect(ALL_AGENTS.length).toBeGreaterThan(30)
     expect(ALL_AGENTS).toContain('claude')
@@ -39,8 +30,7 @@ describe('the prompt-transport predicate against the plan it predicts', () => {
   it.each(ALL_AGENTS)('agrees with the built plan for %s', (agent) => {
     const plan = planFor(agent)
     expect(plan).not.toBeNull()
-    // `followupPrompt` is the plan saying "the command does NOT carry this"; the predicate must
-    // say the same thing, and it is read before any plan is built.
+    // The pre-launch predicate must agree with the built plan’s null followupPrompt.
     expect(plan!.followupPrompt === null).toBe(agentPromptRidesLaunchCommand(agent))
   })
 

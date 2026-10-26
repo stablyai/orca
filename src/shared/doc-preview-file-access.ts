@@ -37,8 +37,7 @@ const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024
 const DOC_PREVIEW_MAX_BINARY_BYTES = 50 * 1024 * 1024
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: opening a writer-less FIFO blocks before the regular-file check can refuse it, pinning a
-// threadpool slot for good; non-blocking open returns at once and does not change regular-file reads.
+// Nonblocking open prevents writer-less FIFOs pinning a threadpool slot before regular-file checks; regular reads are unaffected.
 const OPEN_NONBLOCK = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0
 
 function authorizationError(): Error {

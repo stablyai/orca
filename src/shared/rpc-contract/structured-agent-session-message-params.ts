@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measureUtf8ByteLength } from '../utf8-byte-limits'
 
 export const MAX_PROMPT_BYTES = 256 * 1024
 export const MAX_BLOCKS = 64
@@ -14,9 +15,7 @@ export const SendImageRefBlock = z
   .strict()
   .refine((value) => Boolean(value.path) !== Boolean(value.url), 'Provide exactly one of path/url')
 
-/** Clients may only author user turns. Accepting an assistant or tool role here
- *  would let one client write words into the agent's mouth in another's
- *  timeline, and the provider — not the client — owns those. */
+/** Clients may author only user turns; provider-owned assistant/tool content must never be forged into another client’s timeline. */
 export const SendBlock = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }).strict(),
   SendImageRefBlock
@@ -37,6 +36,16 @@ export const SendBodyStructure = z
     skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
   })
   .strict()
+
+/** Match SendBody’s host UTF-8 byte count where Buffer is unavailable, so clients refuse oversized sends before submission. */
+export function structuredAgentSessionBlocksByteLength(blocks: readonly unknown[]): number {
+  return measureUtf8ByteLength(JSON.stringify(blocks)).byteLength
+}
+
+export function structuredAgentSessionBlocksTooLarge(blocks: readonly unknown[]): boolean {
+  return measureUtf8ByteLength(JSON.stringify(blocks), { stopAfterBytes: MAX_PROMPT_BYTES })
+    .exceededLimit
+}
 
 export const SendBody = SendBodyStructure.refine(
   (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,

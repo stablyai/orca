@@ -1,4 +1,3 @@
-// Beat timings — slow enough to read at a glance.
 export const BUBBLE_FLIGHT_MS = 1600
 export const BUBBLE_LAND_MS = BUBBLE_FLIGHT_MS + 360
 export const BUBBLE_GAP_MS = 3400
@@ -12,9 +11,7 @@ export type Beat = {
   to: AgentKey
   recipientMsg?: string
   coordMsg?: string
-  // The "send" *is* the "finish" — flipping the spinner to a check the
-  // moment the bubble departs reads as the agent wrapping up and reporting
-  // back to the orchestrator.
+  // Mark the sender done on departure, when it reports back to the orchestrator.
   senderFinishes?: boolean
 }
 

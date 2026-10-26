@@ -8,21 +8,7 @@ import { flog } from './viewport-transform'
 import { attachWebglAddon } from './webgl-recovery'
 import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
 
-/**
- * The host seams the page sets, and the window reads and writes they default to.
- *
- * The document reached its host through `window.ReactNativeWebView` and built its engine from
- * `window.Terminal` and the two addon globals the engine bundle installs. On the page neither is
- * available the way the document assumes: `window.ReactNativeWebView` is the *shell's* bridge, so
- * a terminal notify posted through it would put raw terminal JSON into the bridge's own channel,
- * and there is no engine bundle at all because the page imports xterm as a module.
- *
- * So each is a scope field. The default is the window read the document already did,
- * unchanged and still performed at call time rather than captured when the scope is built; the
- * page assigns the field instead. Both halves are asserted here, because a seam whose default
- * quietly stopped reading the window would leave the native document mute with every other
- * terminal test still green — they stub those globals and would be stubbing nothing.
- */
+// Check native defaults and mount overrides: embedded terminals must not use the shell’s bridge or rely on engine globals.
 
 const SURFACE_MARKUP =
   '<div id="terminal-container"><div id="terminal-surface"></div></div>' +
@@ -31,28 +17,12 @@ const SURFACE_MARKUP =
   '<button id="sel-menu-copy"></button><button id="sel-menu-all"></button></div></div>' +
   '<div id="scroll-indicator"><div id="scroll-thumb"></div></div>'
 
-/**
- * Every document a case started, so `afterEach` can stop them.
- *
- * A start installs six listeners on `document` and `window` — the dispatcher's four capture-phase
- * touch handlers, the fit's resize and the recovery's visibilitychange — and they are page-wide by
- * nature, so a document nobody stopped keeps answering events in the next case with a scope that
- * case knows nothing about, and calls that case's host hooks.
- */
+// Stop all started documents; their page-wide listeners would otherwise act on later tests.
 const startedScopes: TerminalDocumentScope[] = []
 
-/**
- * A started document over a scope the case owns, with the hooks it wants as the host argument.
- *
- * The whole sequence, not a hand-picked subset: the elements `surface-swap`, `text-scaling` and
- * `selection-state-and-eviction` read are read in the one order both hosts run them in, and a
- * module added to that sequence is covered here without this file being edited.
- */
+// Use the real lifecycle sequence so new modules participate without this test restating startup order.
 function startedScope(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   document.body.innerHTML = SURFACE_MARKUP
-  // The two the sequence itself would otherwise answer with the window: a transport that installs
-  // nothing, because these cases are not the shell's, and an engine that is here, because a case
-  // that has not stubbed `window.Terminal` is not testing readiness.
   const scope = createTerminalDocumentScope({
     installHostTransport: () => () => {},
     hasEngine: () => true,
@@ -113,8 +83,7 @@ function terminalDouble() {
 }
 
 afterEach(() => {
-  // Before the globals go back: a stop reads the scope's own seams, and one of them is a window
-  // read a case may have stubbed.
+  // Stop before restoring globals because seam cleanup can still read stubbed window state.
   while (startedScopes.length > 0) {
     stopTerminalDocument(startedScopes.pop()!)
   }
@@ -124,8 +93,7 @@ afterEach(() => {
 describe('the document host seams, by default', () => {
   it('posts to the React Native bridge, reading it at call time', () => {
     const postMessage = vi.fn<(data: string) => void>()
-    // Built before the global exists: the default must read the window when it posts, not when
-    // the scope was created, because the document's scope is built as its script is parsed.
+    // Read the bridge at post time; scope construction may precede global installation.
     const built = createTerminalDocumentScope()
     vi.stubGlobal('ReactNativeWebView', { postMessage })
     built.postToHost({ type: 'ready', cols: 80, rows: 24 })
@@ -153,7 +121,6 @@ describe('the document host seams, by default', () => {
       const report = () => {}
       const uninstall = createTerminalDocumentScope().installErrorReporter(report)
       expect(window.onerror).toBe(report)
-      // Ruling 20 made the install a per-mount act, so the seam owes the caller a way back.
       uninstall()
       expect(window.onerror).toBe(null)
     } finally {
@@ -162,9 +129,7 @@ describe('the document host seams, by default', () => {
   })
 
   it('paints the document roots, which is what owning the page means', () => {
-    // Inside the WebView the terminal's theme is the page's own background, so the document sets
-    // it on `html` and `body`. On the page those belong to the application, which is why this is
-    // a field: the render check holds that neither root moves while a terminal is mounted.
+    // Native terminal themes may paint document roots; embedded mounts must leave the app’s roots unchanged.
     const roots = [document.documentElement, document.body]
     const previous = roots.map((element) => element.style.background)
     try {
@@ -205,8 +170,6 @@ describe('the document host seams, by default', () => {
 
 describe('the document host seams, once the page sets them', () => {
   it('keeps the frame React Native laid out from each grid, not the viewport CSS rounded', () => {
-    // 1080 device px at a 2.75 pixel ratio: React Native lays the frame out at 392.73 and the
-    // document's viewport reads 393. A grid without a whole frame leaves the last one in place.
     const frame = { width: 1080 / 2.75, height: 600 }
     const scope = startedScope({
       createTerminal: () => terminalDouble(),
@@ -227,8 +190,6 @@ describe('the document host seams, once the page sets them', () => {
     vi.stubGlobal('ReactNativeWebView', { postMessage })
     const posted: Record<string, unknown>[] = []
     const scope = startedScope({ postToHost: (message) => posted.push(message) })
-    // The sequence's own `web-ready` is the document reporting itself started; what this case reads
-    // is what the two notify paths send afterwards.
     expect(posted).toEqual([expect.objectContaining({ type: 'web-ready' })])
     posted.length = 0
     notify(scope, { type: 'pong', pingId: 7 })
@@ -237,7 +198,6 @@ describe('the document host seams, once the page sets them', () => {
       { type: 'pong', pingId: 7 },
       { type: 'log', tag: '[fit]probe', payload: { n: 1 } }
     ])
-    // The whole reason the seam exists: on the page this object belongs to the shell.
     expect(postMessage).not.toHaveBeenCalled()
   })
 
@@ -262,31 +222,8 @@ describe('the document host seams, once the page sets them', () => {
     expect(terminal.loaded).toContain(webglAddon)
     expect(terminal.loaded).toContain(unicodeAddon)
     expect(terminal.unicode.activeVersion).toBe('11')
-    // The other direction: a document-side report reaches the page's sink, not the bridge.
     handleMsg(scope, { type: 'ping', id: 3 })
     expect(posted).toContainEqual({ type: 'pong', pingId: 3 })
-  })
-
-  it('leaves window.onerror alone when the host installs the reporter its own way', () => {
-    // The page's case, which is the whole reason this one is a field: on a page that object is
-    // not the terminal's to take. A host that installs its reporter elsewhere must leave it null.
-    const previous = window.onerror
-    window.onerror = null
-    const installed: unknown[] = []
-    try {
-      const built = createTerminalDocumentScope()
-      const undos: unknown[] = []
-      built.installErrorReporter = (report) => {
-        installed.push(report)
-        return () => undos.push(report)
-      }
-      built.installErrorReporter(() => {})()
-      expect(installed).toHaveLength(1)
-      expect(undos).toHaveLength(1)
-      expect(window.onerror).toBe(null)
-    } finally {
-      window.onerror = previous
-    }
   })
 
   it('reports no webgl addon as a DOM-renderer fallback rather than as a failure', () => {
@@ -309,7 +246,6 @@ describe("the document's viewport", () => {
     window.dispatchEvent(new Event('resize'))
     expect(scope.panX).toBe(50)
     expect(changes).toHaveLength(1)
-    // The same box shown again with no fit held is not a resize: the pan stays.
     changes[0]!('shown')
     expect(scope.panX).toBe(50)
     changes[0]!('resized')

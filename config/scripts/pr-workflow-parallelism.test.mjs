@@ -28,9 +28,7 @@ describe('PR workflow parallelism', () => {
   })
 
   it('keeps advisory unit-selection evidence off the gate', () => {
-    // It is continue-on-error, so it can never fail a PR. Living inside unit-tests.yml made a
-    // caller's `needs: test` wait for it anyway, holding verify ~36s past the last shard. Pinned
-    // here so it cannot drift back onto the critical path.
+    // Keep advisory continue-on-error work off unit-tests.yml’s critical path: caller needs:test otherwise waits ~36s beyond last shard.
     const evidence = workflow.jobs.unit_selection_evidence
     expect(evidence.uses).toBe('./.github/workflows/unit-selection-evidence.yml')
     expect(evidence.needs).toEqual(['test'])

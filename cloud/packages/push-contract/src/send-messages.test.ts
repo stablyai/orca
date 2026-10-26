@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PUSH_LIMITS } from './push-limits.js'
-import {
-  PushSendRequestSchema,
-  PushSendStatusSchema
-} from './send-messages.js'
+import { PushSendRequestSchema } from './send-messages.js'
 
 function notification(): Record<string, unknown> {
   return {
@@ -107,9 +104,5 @@ describe('send schemas', () => {
       PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
         .success
     ).toBe(false)
-  })
-
-  it('locks the send result statuses', () => {
-    expect(PushSendStatusSchema.options).toEqual(['queued', 'dead', 'rate_limited', 'error'])
   })
 })

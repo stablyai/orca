@@ -19,14 +19,11 @@ export function claudeChildClosePolicy(
     gracefulExitMs: supervised ? SUPERVISED_GRACEFUL_EXIT_MS : GRACEFUL_EXIT_MS,
     forcedExitMs: FORCED_EXIT_MS,
     signalSupervisorOnClose: true,
-    // On Windows, as with the Codex close, Claude leaving on its own after its stdin ends is the
-    // close: Orca makes no claim about processes Claude started. An exit after any forced reap on
-    // this tree, in this close or an earlier one, keeps taskkill's verdict.
+    // Windows accepts voluntary exit after stdin ends; any forced reap retains taskkill's verdict.
     selfExitIsClose: platform === 'win32'
   }
 }
 
-/** The root exited, and its tree was seen gone or, on Windows, it left on its own. */
 export function claudeChildCloseProven(result: ProviderProcessCloseResult): boolean {
   return result.root === 'exited' && (result.tree === 'exited' || result.selfExit === true)
 }

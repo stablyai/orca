@@ -44,7 +44,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     shellOverride: ctx.effectiveShellOverride,
     paneKey: ctx.reservationPaneKey,
     sessionId: ctx.effectiveSessionId,
-    // Why: the window admits only restore intents; other intents are host-declared.
+    // Window callers may declare restore intents only; other intents belong to the host.
     spawnIntent: isRestoreSpawnIntent(args.spawnIntent) ? args.spawnIntent : undefined,
     getSettings: ctx.deps.getSettings,
     store: ctx.deps.store,
@@ -77,8 +77,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
   ctx.finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, ctx.cwd, args.connectionId)
   ctx.initiallyHidden = args.initiallyHidden === true
-  // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
-  // TEMPORARY (C5e): absent-owner cleanup clears the early mark before replacement spawn.
+  // Mark daemon PTYs hidden before early output; renderer reset can still clear this attachment-owned mark after preflight.
   ctx.preSpawnHiddenMarkId =
     ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
       ? ctx.effectiveSessionAppId

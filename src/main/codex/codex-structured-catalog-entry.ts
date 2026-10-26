@@ -32,7 +32,6 @@ export function codexAcquireCatalogListing(
   return entry ? listingFromEntry(entry) : null
 }
 
-/** Installed inventory supplies every session's capability choices. */
 export function codexSessionCapabilities(
   session: Pick<CodexSession, 'catalogAccess' | 'options'> &
     Partial<Pick<CodexSession, 'reportedOptions'>>,

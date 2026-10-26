@@ -1,5 +1,3 @@
-// Invoking the fake connection's canUseTool permission callback, as the CLI would.
-
 import type { ClaudeStreamJsonConnectionHandlers } from './claude-stream-json-connection'
 import type { FakeConnection } from './claude-structured-session-test-support'
 

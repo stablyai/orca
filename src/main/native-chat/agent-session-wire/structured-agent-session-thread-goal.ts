@@ -1,6 +1,3 @@
-// `agentSession.threadGoal`: change the provider thread's goal through the same
-// admission, ledger and journal path every other session mutation takes.
-
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -36,7 +33,6 @@ function refused(
 const goalsUnsupported = () =>
   refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
 
-/** The refusal for an agent with no goals; null when it has them. Needs no running agent. */
 export function refuseThreadGoalUnsupported(
   adapter: Pick<StructuredAgentSessionAdapter, 'changeThreadGoal'>,
   agents: Pick<StructuredAgentRegistry, 'capabilities'>,
@@ -47,26 +43,9 @@ export function refuseThreadGoalUnsupported(
     : goalsUnsupported()
 }
 
-/** Keyed by the operation, so a replayed set upserts its one objective row. */
+/** Operation identity makes replay upsert the same objective row. */
 function objectiveIdentity(clientOperationId: string): AgentJournalItemIdentity {
   return { provider: 'orca', clientMessageId: `thread-goal:${clientOperationId}` }
-}
-
-/** Whether the journal's latest goal already shows this change applied. The
- *  provider reports every goal transition, so this is the durable answer to an
- *  operation whose response was lost. */
-export function journalRecordsThreadGoalChange(
-  goal: AgentJournalThreadGoal | null,
-  change: AgentSessionThreadGoalChange
-): boolean {
-  switch (change.kind) {
-    case 'clear':
-      return goal === null
-    case 'status':
-      return goal !== null && goal.status === change.status
-    case 'set':
-      return goal !== null && goal.status === 'active' && goal.objective === change.objective
-  }
 }
 
 export async function performThreadGoalChange(
@@ -83,12 +62,10 @@ export async function performThreadGoalChange(
   const identity = objectiveIdentity(input.clientOperationId)
   let replacesGoal = false
   if (change.kind === 'set') {
-    // Read before the objective row lands: that row is a message, not a goal transition. A goal
-    // transition the host accepted is already in the fold: it landed at its call.
+    // Read before the objective message lands; it is not a goal transition.
     replacesGoal = ctx.journal.threadGoal() !== null
   }
-  // Journal first: an active goal starts provider work at once, and the objective
-  // must land ahead of that work in the transcript.
+  // Journal first: active goals start work immediately, which must follow the objective in the transcript.
   throwIfSignalAborted(input.signal)
   if (change.kind === 'set') {
     await ctx.journal.appendItem(
@@ -99,30 +76,28 @@ export async function performThreadGoalChange(
         blocks: [{ type: 'text', text: change.objective }],
         sentAs: 'goal'
       },
-      // Accepting a goal is delivering it, so it joins whatever turn runs now.
       { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
     )
   }
   const withdrawObjective = async (): Promise<void> => {
     if (change.kind === 'set') {
-      // Nothing was sent as a goal.
       await ctx.journal.appendTombstone(identity, { fence: ctx.fence })
     }
   }
-  let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>
   try {
     throwIfSignalAborted(input.signal)
-    result = await ctx.adapter.changeThreadGoal({
-      sessionId: ctx.sessionId,
-      fence: ctx.fence,
-      change,
-      replacesGoal,
-      signal: input.signal
-    })
   } catch (error) {
     await withdrawObjective()
     throw error
   }
+  // A lost response cannot prove non-application; retain the objective for provider reconciliation.
+  const result = await ctx.adapter.changeThreadGoal({
+    sessionId: ctx.sessionId,
+    fence: ctx.fence,
+    change,
+    replacesGoal,
+    signal: input.signal
+  })
   if (!result.ok) {
     await withdrawObjective()
     return refused('providerRejected', result.rejected)
@@ -145,20 +120,12 @@ export function threadGoalPlan(params: {
         change: params.change,
         signal: params.signal
       }),
-    // A lost response is answered from the journal, which the provider keeps
-    // current; otherwise the change runs again, which is safe for every kind.
-    recoverUnknownFromDurableState: true,
-    replay: (ctx, outcome) =>
-      outcome.status === 'succeeded' ||
-      (outcome.status === 'unknown' &&
-        journalRecordsThreadGoalChange(ctx.journal.threadGoal(), params.change))
-        ? value
-        : null,
-    rerunWhenReplayMissing: () => true
+    // Current state cannot identify an old operation after a later user action changed the goal.
+    replay: (_ctx, outcome) => (outcome.status === 'succeeded' ? value : null)
   }
 }
 
-/** A goal the host can change, or one only the agent's own `/goal` changes, reported apart. */
+/** Report host-changeable goals separately from goals only the agent’s /goal can change. */
 export function structuredAgentSessionThreadGoalReport(
   hostChangesGoal: boolean,
   current: AgentJournalThreadGoal | null,

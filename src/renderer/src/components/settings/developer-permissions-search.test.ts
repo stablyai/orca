@@ -4,8 +4,7 @@ import { i18n } from '@/i18n/i18n'
 import { getDeveloperPermissionsPaneSearchEntries } from './developer-permissions-search'
 import { matchesSettingsSearch } from './settings-search'
 
-// Strings macOS 26 System Settings itself shows for the Local Network privacy
-// toggle (SecurityPrivacyExtension.appex Localizable.loctable, key LOCAL_NETWORK).
+// Use macOS 26’s actual Local Network translations (SecurityPrivacyExtension LOCAL_NETWORK).
 const MACOS_LOCAL_NETWORK_LABEL = {
   en: 'local network',
   es: 'red local',

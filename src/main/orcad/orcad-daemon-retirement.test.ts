@@ -84,7 +84,6 @@ describe('best-effort daemon retirement', () => {
     const late = ports(() => new Promise((resolve) => (answer = resolve)))
     const outcome = await retireOrcadDaemonIfIdle(late)
     answer({ state: 'retiring' })
-    // Callers that must not keep a retiring daemon learn the late verdict.
     expect(await outcome.lateRetirement).toBe(true)
     expect(late.releaseFence).toHaveBeenCalledOnce()
   })

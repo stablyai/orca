@@ -10,8 +10,7 @@ import {
 } from '../../worktree-removal-listing'
 import type { RpcContext } from './core'
 
-// Why no in-process default: callers without negotiation (the CLI, host-side readers) print or act
-// on rows, and a checkout mid-delete is not a workspace they can use.
+// Without negotiation, CLI/host readers act on rows; omit deleting checkouts they cannot use.
 export function readsWorktreeRemovalMarker(
   context: Pick<RpcContext, 'clientCapabilities'>
 ): boolean {

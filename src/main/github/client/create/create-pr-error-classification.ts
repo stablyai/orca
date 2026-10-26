@@ -65,7 +65,7 @@ export function parseCreatePRPayload(stdout: string): { number: number; url: str
   } catch {
     // Fall through to URL parsing for older gh versions without --json support.
   }
-  // Why: match any host (not just github.com) so a GHES PR URL still parses (#8312).
+  // Enterprise PR URLs use the same path shape on custom hosts.
   const urlMatch = trimmed.match(/https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/)
   if (!urlMatch) {
     return null

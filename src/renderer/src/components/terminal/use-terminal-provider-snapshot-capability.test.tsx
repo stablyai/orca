@@ -50,10 +50,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
     delete storeState.terminalLayoutsByTabId
   })
 
-  // Why: synchronization PRUNES cached verdicts outside its collected set, so
-  // the ongoing collector must gather the same fields startup does
-  // (pending-reconnect and split-leaf layout ptys) or their startup answers
-  // decay back into exempt-by-default unknown.
+  // Synchronization prunes absent PTYs; match startup’s split-leaf/pending-reconnect set or valid answers revert to unknown.
   it('keeps startup verdicts for split-leaf and pending-reconnect ptys alive', async () => {
     storeState.pendingReconnectPtyIdByTabId = { 'tab-2': 'ssh:target@@restored' }
     storeState.terminalLayoutsByTabId = {
@@ -78,9 +75,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
-  // Why: the collect key is memoized on the four store maps; a missing memo
-  // dep would freeze the key and silently drop new split-leaf ptys from the
-  // sync — a stale-collector correctness bug, not a perf one.
+  // Missing map dependencies freeze the memoized collect key and silently omit new split PTYs.
   it('re-collects when a split leaf pty appears in the layouts map', async () => {
     resolveCapabilities.mockImplementation(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
@@ -113,9 +108,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
-  // Why per-map: every dep of the collect-key memo is individually
-  // load-bearing, and exhaustive-deps is only a warn in this repo — a dropped
-  // dep silently freezes the key for exactly that map's changes.
+  // Exercise every map dependency: dropping one silently freezes collection for that map’s updates.
   it('re-collects when each remaining collected store map changes', async () => {
     resolveCapabilities.mockImplementation(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
@@ -172,9 +165,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
-  // Why: the timer chain is the sole recovery vehicle for unknown verdicts,
-  // and its refire reuses the same memoized id array — this pins the backoff
-  // return, the rescheduled timer, and the same-identity re-ask end to end.
+  // Unknown recovery relies on this timer chain re-asking with the same memoized ID array.
   it('polls an unknown pty again on the retry timer without any id churn', async () => {
     vi.useFakeTimers()
     resolveCapabilities

@@ -73,7 +73,6 @@ describe('captureScreenshot', () => {
   it('sends the capture once and probes until the held page produces a frame', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
-    // Undrawn: the capture hangs until a later request makes the page draw a frame.
     let drawFrame: (() => void) | null = null
     webContents.debugger.sendCommand
       .mockImplementationOnce(
@@ -390,7 +389,6 @@ describe('captureFullPageScreenshot', () => {
 })
 
 describe('an SSH host’s capture', () => {
-  // The host may read only a page that browses through it; a desktop file it may never see.
   let url = 'https://example.com/'
   const asHost = <T>(run: () => Promise<T>): Promise<T> =>
     runInRemoteCliBrowserScope('wt-1', run, undefined, () => url.startsWith('https:'))
@@ -433,7 +431,7 @@ describe('an SSH host’s capture', () => {
   })
 
   it('stops at the next probe once the page moved to a desktop file, never falling back', async () => {
-    // Real timers: a probe runs in the host's command context, which fake timers do not carry.
+    // Fake timers do not carry the host command context into probes.
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
     const capture = asHost(() => captureScreenshot(webContents.guest, { format: 'png' }, noHold))

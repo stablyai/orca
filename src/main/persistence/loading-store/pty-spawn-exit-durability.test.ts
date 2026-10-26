@@ -7,6 +7,7 @@ import { bindProviderListeners } from '../../ipc/pty/provider/bind-listeners'
 import { createPtyIpcSession } from '../../ipc/pty/session'
 import { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
 import { expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
@@ -338,12 +339,13 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
           ]
         )
         .toBeUndefined()
-      expect
-        .soft(
-          runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
-            .connected
-        )
-        .toBe(false)
+      const resolve = () =>
+        runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect.soft(resolve).toThrow('terminal_not_found')
+      } else {
+        expect.soft(resolve().connected).toBe(false)
+      }
     } else {
       expect(result.error).toBeNull()
       expect(result.value?.result).toMatchObject({

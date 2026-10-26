@@ -3,13 +3,7 @@ import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapsho
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
-/**
- * A missing buffer snapshot only proves the pane exited when the client could have
- * observed it. This client holds no SSH PTY provider and the host exposes no snapshot RPC to
- * it, so for a remote pty the absence is loss of contact —
- * `unverifiable`, never `exited`. A paired server's pane is likewise held by that server, not by
- * this client. See docs/reference/ssh-execution-boundary.md.
- */
+/** Remote snapshot absence cannot prove pane exit because the client does not own the PTY; see docs/reference/ssh-execution-boundary.md. */
 export function terminalPreviewUnavailableMessage(source: {
   ptyId?: string | null
   hostKind?: DashboardCardHostKind

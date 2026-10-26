@@ -3,7 +3,6 @@ import { getSystemCodexHomePath } from './codex-home-paths'
 import { readBashStartupEnvVar, readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { readPowerShellProfileEnvValues } from '../pty/powershell-profile-env'
 
-/** True when the user points Codex outside its standard native home. */
 export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
@@ -11,8 +10,7 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
   const normalizedOrcaCodexHome = orcaCodexHome
     ? normalizePathForComparison(orcaCodexHome)
     : undefined
-  // Why: phase 1 owns only ~/.codex and can clean that path on downgrade. A
-  // custom home needs cross-home ownership tracking before Orca may mutate it.
+  // Custom native homes need ownership tracking before Orca can safely mutate and clean them.
   return Boolean(
     normalizedCodexHome &&
     normalizedCodexHome !== normalizedOrcaCodexHome &&
@@ -20,7 +18,6 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
   )
 }
 
-/** True when the launch env, or a shell startup file it reads, points Codex at a custom home. */
 export function hasCustomCodexHomeOverrideForLaunch(launchEnv?: NodeJS.ProcessEnv): boolean {
   if (
     hasCustomCodexHomeOverride({
@@ -30,13 +27,12 @@ export function hasCustomCodexHomeOverrideForLaunch(launchEnv?: NodeJS.ProcessEn
   ) {
     return true
   }
-  // Why USERPROFILE: Windows has no HOME, and PowerShell profiles hang off it.
+  // PowerShell profiles use USERPROFILE, which Windows supplies even without HOME.
   const home = getLaunchEnvValue(launchEnv, process.platform === 'win32' ? 'USERPROFILE' : 'HOME')
   if (!home) {
     return false
   }
-  // Why: a Windows pane may run either PowerShell edition or Git Bash, so any of their
-  // startup files counts.
+  // Windows panes may use either PowerShell edition or Git Bash.
   const shellCodexHomes =
     process.platform === 'win32'
       ? [

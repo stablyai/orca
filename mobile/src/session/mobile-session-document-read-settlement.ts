@@ -20,7 +20,7 @@ export function documentReadIsCurrent(
   return sequences.get(tabId) === seq
 }
 
-/** A dirty ready doc is a discard and must reload. A clean one stays up and refreshes behind it. */
+// Keep clean documents visible during refresh; dirty documents reload only after discard.
 export function keepMarkdownVisibleDuringRead(current: MarkdownDocState | undefined): boolean {
   return current?.status === 'ready' && !current.isDirty
 }

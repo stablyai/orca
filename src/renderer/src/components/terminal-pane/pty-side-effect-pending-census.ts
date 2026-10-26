@@ -8,9 +8,7 @@ export type PtySideEffectGauge = {
   retained: () => number
 }
 
-// Why weak: a diagnostic for leaks must not be able to cause one. The owning processor holds
-// the only strong reference, so a teardown path that forgets to dispose strands an empty
-// WeakRef here instead of pinning the processor's whole closure (callbacks, tracker, terminal).
+// Weak gauges cannot pin leaked processor closures; only the owning processor retains its gauge strongly.
 const gaugeRefs = new Set<WeakRef<PtySideEffectGauge>>()
 
 // Why: bounds this module even if registrations outrun both disposal and collection.
@@ -32,8 +30,7 @@ export function registerPtySideEffectPendingGauge(gauge: PtySideEffectGauge): ()
     return () => undefined
   }
   gaugeRefs.add(new WeakRef(gauge))
-  // Why delete by identity: this closure is handed to the processor, so closing over `gauge`
-  // is what makes the processor — never this module — the gauge's strong owner.
+  // Capture gauge in the processor’s release closure so this registry remains a weak owner.
   return () => {
     for (const ref of gaugeRefs) {
       if (ref.deref() === gauge) {
@@ -44,9 +41,7 @@ export function registerPtySideEffectPendingGauge(gauge: PtySideEffectGauge): ()
   }
 }
 
-// Why processor count is the signal: each queue is capped at MAX_PENDING_PTY_SIDE_EFFECTS and
-// evicts oldest-first, so one processor can never grow without bound. Aggregate growth means
-// processors outliving their panes; queues parked at the cap mean a drain starved by throttling.
+// Individual queues are capped; rising processor count means leaked owners, while capped queues imply throttled drains.
 registerRendererMemoryProfileContributor('ptySideEffects', () => {
   let pending = 0
   let retained = 0

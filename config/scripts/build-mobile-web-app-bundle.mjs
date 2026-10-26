@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { readRouteSnapshot } from './mobile-web-app-route-snapshot.mjs'
+import { readRouteSnapshot } from './mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -21,27 +21,21 @@ import {
   collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest,
   routePathnameFromKey
-} from './mobile-web-app-route-manifest.mjs'
+} from './mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
 const defaultAppDir = join(mobileDir, 'app')
 const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
-// The one definition of where the packaged bundle lives, taken from the guard that enforces it:
-// a second constant here could drift and leave electron-builder's beforePack looking at an empty
-// directory while the builder reported a tree it had written somewhere else.
+// Use packager guard’s output directory or independent constants can drift into missing packaged bundles.
 const { MOBILE_WEB_BUNDLE_DIR: defaultOutDir } = createRequire(import.meta.url)(
   './verify-packaged-mobile-web-bundle.cjs'
 )
 // The desktop serves this page, so a dark switch the desktop was built with reaches it too.
 const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
-/**
- * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the
- * esbuild option that implements the shim, so the list cannot claim a shim the build does not
- * apply and a dropped option fails the named shim rather than the whole build.
- */
+// Tie each Metro/RN-Web shim to the option implementing it so missing options fail with the shim’s name.
 export const MOBILE_WEB_APP_SHIMS = [
   {
     // react-native has no browser build; react-native-web is the whole point of Route A.
@@ -64,40 +58,29 @@ export const MOBILE_WEB_APP_SHIMS = [
     appliesTo: (options) => options.banner?.js?.includes('globalThis.process ??=') === true
   },
   {
-    // Zod probes for a usable JIT with `new Function('')`, which the shell's CSP reports even
-    // though Zod catches the throw and runs interpreted. Turned off before any module, because a
-    // schema constructed at module scope reaches the probe before our own code can run.
+    // Set jitless before module-scope schemas probe new Function, which otherwise emits CSP violations even when caught.
     name: 'zod-jitless-banner',
     appliesTo: (options) => options.banner?.js?.includes('__zod_globalConfig') === true
   },
   {
-    // Four modules under src/shared resolve `zod` upward to the root's copy, so the page bundled
-    // two Zods and built salvage combinators with one instance to nest inside schemas built by the
-    // other. mobile/tsconfig.json already maps `zod` to mobile's for the whole mobile program,
-    // those shared modules included; this is the bundler catching up to that contract.
+    // Alias all shared/mobile modules to mobile’s Zod, matching tsconfig and keeping salvage leaves in the container’s instance.
     name: 'one-zod',
     appliesTo: (options) => options.alias?.zod === MOBILE_ZOD_PACKAGE
   },
   {
-    // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does
-    // not export it. Metro's loose CJS interop tolerates it; esbuild's strict ESM does not.
-    // Web-build only: patching the package would change what the shipped native app consumes.
+    // lucide-react-native@1.14.0 reexports missing LucideProvider; esbuild rejects what Metro tolerates. Patch only web build, preserving native package.
     name: 'lucide-barrel-provider',
     appliesTo: (options) =>
       options.plugins?.some((plugin) => plugin.name === LUCIDE_PLUGIN_NAME) === true
   },
   {
-    // AsyncStorage's web build is window.localStorage, which the shell's page does not have:
-    // Android turns DOM storage off and on iOS the origin host is the session id, so anything
-    // written there is gone on the next remount. The page module holds the app's own values,
-    // primed by `init` and written back over the `storage` grant.
+    // Shell has no durable localStorage (Android disabled, iOS session origin changes); bridge init/storage grant persists page-owned values.
     name: 'async-storage-over-the-bridge',
     appliesTo: (options) =>
       options.alias?.['@react-native-async-storage/async-storage'] === PAGE_ASYNC_STORAGE_MODULE
   },
   {
-    // react-native-web pins StyleSheet.hairlineWidth to 1 CSS px, three device px on a phone.
-    // Native's value is one device px, so the page paints native's count at that assignment.
+    // RN-Web hairline is 1 CSS px; native paints one device pixel.
     name: 'hairline-device-pixel',
     appliesTo: (options) =>
       options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
@@ -110,43 +93,14 @@ export const MOBILE_WEB_APP_SHIMS = [
   }
 ]
 
-/**
- * react-native-web's own root reset: the same declaration set and `id="expo-reset"` as Expo's web
- * template (`@expo/cli/static/template/index.html`), minified — the template's own block is
- * pretty-printed with comments, so this is 112 bytes against its 410. Nothing generates it for a
- * document built here.
- *
- * Every box below the mount is `flex: 1` against its parent, so with no definite height on all
- * three the root measures 0 and the collapse is silent: the screen still lays out, still reaches
- * the accessibility tree at the right offsets, and never paints or hit-tests below the header.
- * A phone showed the header over a blank list with every row readable to VoiceOver and no row
- * tappable (lane C1.7, both platforms).
- *
- * Inline, because the shell's CSP already allows `style-src 'unsafe-inline'` for the sheet
- * react-native-web injects at runtime; a linked asset would need a second round trip before the
- * first frame and would paint the collapsed layout until it landed.
- *
- * Height, `overflow` and the root's flex box and nothing else, which is what the template carries:
- * react-native-web emits `body{margin:0}` in that runtime sheet, so a copy here would only cover
- * the frames before it lands and would make this string something to keep in step with two sources.
- */
+// Match Expo root reset/id: definite html/body/root heights prevent silent zero-height lists with accessible but untappable rows.
+// Inline under existing unsafe-inline style CSP to avoid a collapsed first frame; RN-Web owns body margin reset.
 export const MOBILE_WEB_APP_ROOT_RESET =
   '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
   '#root{display:flex;height:100%;flex:1}</style>'
 
-/**
- * Rules that make the page paint what the native app paints where the browser's defaults differ.
- * Native is the reference. Zero specificity (`:where`), so a component's own style still wins.
- *
- * Inputs and textareas: Chromium rings a focused one (`:focus-visible` matches every focused
- * text field); no native TextInput paints one, and the caret and the IME already mark focus.
- * Those only: a button reached by a hardware keyboard keeps the browser's ring.
- *
- * Text: native `Text` is unselectable unless `selectable`; react-native-web's is selectable. On
- * iOS a hold on it raises WebKit's selection over the page's own long press; on Android the
- * selection's `selectionchange` and `touchcancel` end a held press. `body`, not `#root`: modals
- * portal to `document.body`. Fields opt back in, callout too, since WebKit inherits it.
- */
+// Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
+// Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
@@ -161,42 +115,10 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'page-async-storage.ts'
 )
 
-/**
- * The one Zod the page runs.
- *
- * `nodePaths` is a fallback, consulted only where normal resolution fails, so it never reached
- * `src/shared/zod-salvage.ts`: that file sits above `mobile/`, its bare `zod` resolves upward to
- * the root's 4.5.4, and the 58 mobile modules beside it resolved to mobile's 4.4.3. Both shipped.
- *
- * Mobile's copy and not the root's, because the mobile app already says so: `mobile/tsconfig.json`
- * maps `zod` to `./node_modules/zod`, and a shared module joins that program as an imported file,
- * so tsc holds `zod-salvage.ts` to 4.4.3 today. The composition says the same thing from the other
- * side — `salvagingArray` and friends are leaves nested inside `z.object(...)` built by mobile's
- * Zod, so the leaves belong to the container's instance.
- *
- * The package directory rather than a file: nothing imports a `zod/...` subpath, and esbuild reads
- * the `module` field here, which is the same ESM entry the package's `import` condition names.
- */
+// nodePaths cannot override shared modules’ root Zod resolution. Alias mobile’s package to match tsconfig and salvage/container instances; esbuild picks its ESM module entry.
 const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
 
-/**
- * Zod's compiled path, off before any module runs.
- *
- * Zod decides whether it may compile by constructing `new Function('')` and reading the throw as
- * "no JIT here". Under the shell's `script-src 'self'` that throw is exactly what happens, Zod
- * catches it and takes the interpreted path — but the browser files a `securitypolicyviolation`
- * report first, and it does so on every page load. Zod's own source gates the probe on `jitless`
- * for this case, so nothing here is a workaround.
- *
- * In the banner rather than a module that calls `z.config`, because a module cannot win the race.
- * `$ZodObject` reads `allowsEval` when a schema is *constructed*, not parsed, so the first
- * module-scope `z.object(...)` in the bundle fires the probe — and esbuild evaluates the chunk
- * holding zod and its callers before the chunk holding any module of ours that imports zod. An
- * entry import placed first was measured losing that race; the banner runs before every module.
- *
- * `globalConfig` is `globalThis.__zod_globalConfig`, which zod adopts with `??=` rather than
- * replacing, so setting the flag on it here is what zod itself reads.
- */
+// Set __zod_globalConfig.jitless in banner: module-scope schema construction probes eval before our imports can configure it, generating caught-but-reported CSP violations.
 const ZOD_JITLESS_BANNER =
   'globalThis.__zod_globalConfig ??= {}; globalThis.__zod_globalConfig.jitless = true;'
 
@@ -204,11 +126,9 @@ const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
 const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 
-/** The entry output's name, so classifying the outputs never has to guess which one it is. */
 const ENTRY_CHUNK_NAME = 'entry'
 
-// mobile/web-entry/route-manifest.ts is a real typed file rather than a virtual specifier, so the
-// entry typechecks and Metro can still resolve it; only its body is replaced here.
+// Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
 function routeManifestPlugin(manifestSource) {
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
@@ -222,10 +142,7 @@ function routeManifestPlugin(manifestSource) {
   }
 }
 
-/**
- * Exported so a component-level render check builds the icons the same way the page does, rather
- * than carrying a second copy of this shim that could drift from it.
- */
+// Reuse this shim in component render checks so icon builds match the page.
 export const lucideBarrelPlugin = {
   name: LUCIDE_PLUGIN_NAME,
   setup(build) {
@@ -238,10 +155,7 @@ export const lucideBarrelPlugin = {
 
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
-// React Native's device-pixel count (roundToNearestPixel(0.4), else one) over the ratio, rounded up
-// to the 1/64 CSS px both engines lay out in. WebKit stores an exact 1/3 as 21/64, under one device
-// pixel at 3, and paints nothing; 22/64 is the smallest step that paints. Any width above 1/ratio
-// can still straddle two rows at some offsets; the smallest such step does so least.
+// Round native hairline upward to 1/64 CSS px: WebKit floors exact 1/3 to 21/64 and paints nothing at 3×; 22/64 minimizes spill across rows.
 const DEVICE_PIXEL_HAIRLINE_ASSIGNMENT =
   'StyleSheet.hairlineWidth = (function (ratio) {' +
   ' return Math.ceil((64 * (Math.round(0.4 * ratio) || 1)) / ratio) / 64; })' +
@@ -278,30 +192,22 @@ export function mobileWebAppBuildOptions(routes) {
     // Virtual: write is false, so outdir only names the emitted files esbuild hands back.
     outdir: 'dist',
     write: false,
-    // esm, because `splitting` requires it and a per-route chunk is the point: with iife and
-    // static imports esbuild emitted one 8.16 MB script for all 14 routes.
+    // ESM splitting defers routes; IIFE/static imports emitted one 8.16MB script for 14 routes.
     format: 'esm',
     splitting: true,
-    // esbuild's `[hash]` is over the metafile's input keys, which are paths relative to
-    // absWorkingDir, so this name is not a function of the bytes and differs between two
-    // checkouts of one commit. It is a placeholder: renameOutputsByContent replaces it below.
+    // esbuild hashes path-keyed inputs, not output bytes; renameOutputsByContent replaces checkout-dependent placeholders.
     chunkNames: '[hash]',
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
     charset: 'utf8',
     legalComments: 'none',
-    // No sourcemap: it is an emitted file and would carry this checkout's absolute paths into the
-    // bundle. The metafile carries them too but is never written and never hashed; it is the only
-    // thing that says which output is the entry, which of its imports are static, and which
-    // outputs each one names.
+    // Omit maps carrying absolute checkout paths; keep unhashed/unwritten metafile for output/import classification.
     sourcemap: false,
     metafile: true,
     logLevel: 'silent',
     jsx: 'automatic',
-    // One React: resolve everything from mobile/node_modules, which is where the entry lives.
-    // A fallback only, so it settles nothing for a module that resolves on its own — see
-    // MOBILE_ZOD_PACKAGE, which is a repo-root import this never reached.
+    // Fallback mobile nodePaths shares React but cannot override already-resolved shared imports; Zod needs its own alias.
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: {
       'react-native': 'react-native-web',
@@ -324,10 +230,7 @@ export function mobileWebAppBuildOptions(routes) {
       '.js',
       '.json'
     ],
-    // Images are emitted as same-origin assets, not data: URLs, so their content-hashed names keep
-    // the buildId reproducible and the bytes out of every chunk that imports one. The policy now
-    // admits data: for images, but that is for a preview the page composes at runtime, not for a
-    // bundled asset. The terminal font also uses its own hashed asset to avoid base64 overhead.
+    // Emit hashed same-origin images/font for reproducible IDs without base64 overhead in chunks; runtime previews may still use data URLs.
     loader: {
       ...ROUTE_SOURCE_LOADERS,
       '.png': 'file',
@@ -339,8 +242,7 @@ export function mobileWebAppBuildOptions(routes) {
       '.woff2': 'file'
     },
     assetNames: '[hash]',
-    // Absolute, because the document is served at every route depth and a path relative to the
-    // script would resolve against the route instead.
+    // Root-absolute asset URLs remain correct at nested page routes.
     publicPath: '/assets',
     banner: {
       js: `globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };${ZOD_JITLESS_BANNER}`
@@ -357,15 +259,7 @@ export function mobileWebAppBuildOptions(routes) {
   }
 }
 
-/**
- * What the browser must have before the first route can paint: the entry plus every chunk it
- * reaches by static import, transitively. A dynamic import is what the split exists to defer, so
- * it is where this stops.
- *
- * The bound the verifier holds is this number and not the entry file alone, because esbuild puts
- * the code shared by entry and routes in a chunk the entry imports statically: budgeting the entry
- * file on its own would fall as the shared chunk grew.
- */
+// Budget entry plus transitive static imports, stopping at dynamic imports; entry-only limits let shared initial chunks grow unseen.
 export function entryStaticClosure(metafile, entryOutputPath) {
   const reached = new Set([entryOutputPath])
   for (const current of reached) {
@@ -379,22 +273,8 @@ export function entryStaticClosure(metafile, entryOutputPath) {
   return reached
 }
 
-/**
- * Every emitted output, renamed to the sha256 of its own final bytes.
- *
- * esbuild's `[hash]` is computed over the metafile's input keys, and those keys are paths
- * relative to absWorkingDir. A tree whose mobile/node_modules is a symlink keys most of its
- * inputs as `../../<somewhere>/...`, a tree that holds a real directory keys them as
- * `node_modules/...`, and a byte-identical chunk comes out under a different name in each. The
- * name is embedded in every importer, so the difference cascades into a different buildId for one
- * commit -- and every phone re-downloads a bundle whose bytes never changed.
- *
- * Renaming here is what removes the path from the output. Leaves first, so an importer is hashed
- * only once the names written inside it are final: an image before the chunk that loads it, a
- * chunk before the chunk that imports it, the entry last. The result is what `hashedAsset` would
- * name each of these anyway, which is how the name inside the bytes and the manifest's own sha256
- * stay the same string.
- */
+// Hash final output bytes leaf-first, rewriting dependency names before hashing importers.
+// esbuild hashes checkout-dependent input paths; renaming makes manifest hashes/import URLs agree and avoids redownloading identical bundles across checkouts.
 export function renameOutputsByContent(metafile, outputFiles) {
   const emitted = new Map(
     outputFiles.map((file) => [basename(file.path), Buffer.from(file.contents)])
@@ -413,8 +293,7 @@ export function renameOutputsByContent(metafile, outputFiles) {
       return done
     }
     if (open.has(name)) {
-      // Two outputs naming each other have no content hash at all, so this is a hard stop rather
-      // than a fallback. esbuild's splitting emits a DAG; nothing in the tree has produced one.
+      // Cyclic import names have no final content hash; fail rather than fallback (esbuild currently emits a DAG).
       throw new Error(
         `[build-mobile-web-app-bundle] ${name} is in an output cycle and cannot be content-named`
       )
@@ -441,18 +320,12 @@ export function renameOutputsByContent(metafile, outputFiles) {
   return renamed
 }
 
-/**
- * Which emitted chunk each route key's `import()` lands in. esbuild puts a route module in exactly
- * one output, so the metafile's own inputs answer it; nothing downstream can, because by then
- * every name is a hash of bytes and the route's source path is gone from the bundle.
- */
+// Resolve route imports through metafile inputs before content hashes erase source paths.
 export function routeChunkNames(metafile, routes, renamed) {
   const owner = new Map()
   for (const [output, { inputs }] of Object.entries(metafile.outputs)) {
     for (const input of Object.keys(inputs ?? {})) {
-      // Absolute, and through realpath on the lookup side below: esbuild writes its input keys
-      // relative to absWorkingDir after resolving symlinks, so a route reached through one (every
-      // scratch tree under /var on macOS) is keyed by a path the caller never spelled.
+      // realpath lookup matches esbuild’s symlink-resolved input keys (including macOS /var scratch paths).
       owner.set(resolve(mobileDir, input), basename(output))
     }
   }
@@ -470,12 +343,7 @@ export function routeChunkNames(metafile, routes, renamed) {
 const isScriptOutput = (path) => path.endsWith('.js')
 
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
-/**
- * Every source module one page route reaches, as the builder itself resolves them.
- *
- * Every layout above the route is an entry: `app/_layout` (its web sibling) and `app/h/_layout.tsx`
- * wrap every route, and their imports are part of the page as surely as the route module's.
- */
+// Page closure includes ancestor layouts as entry modules, not just route imports.
 export async function mobileWebAppRouteClosure(routeModule) {
   return (
     readRouteSnapshot(routeModule) ??
@@ -483,34 +351,16 @@ export async function mobileWebAppRouteClosure(routeModule) {
   )
 }
 
-/**
- * The same closure for any entry modules, which a route plus the layout is one case of.
- *
- * One definition of "what a page contains", read from `metafile.inputs` — the modules the entries
- * pull in — rather than from `entryStaticClosure`, which walks emitted chunks and answers what a
- * browser must download.
- *
- * A component a route mounts rather than one the router registers — `MobileBrowserPane` is the
- * first with a pin of its own — has a closure to certify and no route to name it by. Pass it alone
- * to read what it reaches on its own, or beside `app/h/_layout` to read what it adds to a page.
- *
- * `splitting: false` and a per-path output are required for a multi-entry build; with the defaults
- * esbuild fails on two outputs claiming `dist/entry.js`.
- *
- * Note for anyone comparing this with a parity pin: `c1-page-closure.ts`, and the closures C2.6,
- * C5.2 and C3.2 generate, derive theirs by the C1.6 method inside the mobile suite. The two are
- * not the same computation, and a divergence between them is a finding rather than noise.
- */
+// Measure source-module closure via metafile.inputs, distinct from browser static download closure.
+// Support standalone components or layout+component; multi-entry builds need splitting:false and per-path output names.
+// Parity pins use the C1.6 method, so divergence from this closure is a finding to investigate.
 export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } = {}) {
   const base = mobileWebAppBuildOptions(MOBILE_WEB_PAGE_ROUTES)
   const result = await esbuild.build({
     ...base,
-    // A census that plants a module to show the walk would report it needs a tree of its own; the
-    // real ones never pass this and keep measuring `mobile/`.
+    // Census mutation needs its own source tree; production measures mobile/.
     ...(absWorkingDir ? { absWorkingDir } : {}),
-    // Extensionless, so `resolveExtensions` picks the same file the bundle ships: a route with a
-    // `.web.tsx` sibling resolves to that one, and naming the `.tsx` path explicitly would measure
-    // the native route file no browser ever loads.
+    // Resolve extensionless routes so web siblings win; explicit .tsx would measure native-only code.
     entryPoints: entryModules.map((entry) =>
       resolve(absWorkingDir ?? base.absWorkingDir, entry.replace(/\.tsx?$/, ''))
     ),
@@ -555,9 +405,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
     script: entry.bytes,
     chunks,
     images,
-    // Counted off the renamed bytes rather than the metafile's own sizes, which are from before
-    // the names inside each output grew. Only the metafile knows which import is static; see
-    // entryStaticClosure.
+    // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
@@ -567,13 +415,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   }
 }
 
-/**
- * The declared page routes, checked against the tree that was actually bundled.
- *
- * A declaration naming a screen this bundle has no module for would reach a phone as a route the
- * shell opens the page for and the page then paints as Unmatched. Failing the build is the only
- * place that mismatch is visible to whoever wrote the declaration.
- */
+// Reject declared screens missing from bundled tree or phones silently paint Unmatched routes.
 export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE_ROUTES) {
   const bundled = new Set(routeKeys.map(routePathnameFromKey).filter((path) => path !== null))
   for (const route of declared) {
@@ -583,11 +425,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
       )
     }
   }
-  // Mapped member by member rather than spread: the manifest is `.strict()`, so a field this
-  // declaration grows and this map does not name is dropped in silence -- which is how
-  // `optionalGrants` would have reached a phone as a route that declared nothing optional.
-  // `optionalGrants` is omitted when the route declares none, because absent and empty are the same
-  // answer to a shell and a key written empty would be a manifest field with no reader.
+  // Update this explicit mapping when declarations gain fields or the strict manifest silently drops them (e.g. optionalGrants).
+  // Omit empty optionalGrants since shell treats absent/empty identically.
   return declared.map((route) => ({
     pathname: route.pathname,
     grants: [...route.grants],
@@ -598,10 +437,7 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
   }))
 }
 
-/**
- * `pageRoutes` rides with `appDir`: the declarations name screens in the real route tree, so a
- * caller bundling some other tree has none to check against and says so by passing its own.
- */
+// Alternate appDir needs matching pageRoutes because real declarations name only the production tree.
 export async function buildMobileWebAppBundle({
   appDir,
   outDir = defaultOutDir,
@@ -621,28 +457,19 @@ export async function buildMobileWebAppBundle({
       style.replace(/\r\n/g, '\n')
     )
   ])
-  // Every output is already named by its own bytes, and a name is written inside whatever imports
-  // it, so hashedAsset here reproduces the name rather than choosing one.
+  // Names already hash final bytes, so hashedAsset must reproduce them.
   const scriptAsset = hashedAsset(script, 'js')
   const written = [
     scriptAsset,
     ...[...chunks, ...images].map(({ name, bytes }) => hashedAsset(bytes, extname(name).slice(1)))
   ]
 
-  // Root-absolute, unlike the Phase A bootstrap's bare relative src: this document is served at
-  // every route depth (/h/<hostId>/tasks), where a relative href resolves against the route and
-  // 404s. A <base> tag would be the other fix, but the shell's CSP admits only an about: base.
-  // type="module", because the entry is esm and reaches its routes through import(). Same-origin
-  // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
+  // Root-absolute URLs survive nested routes; CSP allows only about: base. ESM entry/chunks load under existing self policy.
   const html =
     '<!doctype html>\n<html lang="en" data-orca-scrollbars="sleek">\n<head>\n<meta charset="utf-8" />\n' +
-    // No viewport-fit=cover: the page never asks to extend under the system bars. The shell owns
-    // the safe area: it pads the WebView and, on Android, zeroes the insets the WebView would
-    // report via env(); on iOS the padded WKWebView reports none.
+    // Shell owns safe-area padding/insets; viewport-fit=cover would invite page-side double padding.
     '<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
-    // Undeclared, a browser asks the origin for /favicon.ico itself and the shell's asset server
-    // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
-    // has no tab for an icon, and the bundle's images are route assets named by their own bytes.
+    // Empty favicon prevents repeated unmanifested /favicon.ico requests/403s; WebView needs no tab icon asset.
     '<link rel="icon" href="data:," />\n' +
     `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n<style id="orca-scrollbars">${scrollbarStyle}</style>\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`

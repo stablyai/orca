@@ -137,7 +137,7 @@ describe('BrowserClientDownloadRelay', () => {
   it('leaves nothing on disk under the real staging root once transfers settle', async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-download-relay-')))
     const stagingRoot = path.join(root, 'downloads')
-    // Why: a leftover from an earlier run only proves the sweep if it exists before construction.
+    // Seed crash leftovers before construction to exercise the startup sweep.
     await mkdir(path.join(stagingRoot, 'crashed-transfer'), { recursive: true })
     await writeFile(path.join(stagingRoot, 'crashed-transfer', 'download'), 'stale')
     try {
@@ -211,7 +211,6 @@ describe('BrowserClientDownloadRelay', () => {
         return { released: true }
       }
       writes.push(params as { final: boolean })
-      // The user cancels while this chunk is in flight.
       void route?.abort()
       return { accepted: true }
     })

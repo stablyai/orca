@@ -1,5 +1,4 @@
-// Boots a test store through the window's startup session hydration and reduces the result to
-// what the window shows, so two stored sessions can be compared by what a user would see.
+// Boot stored partitions through real startup hydration, then compare user-visible state.
 
 import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -24,10 +23,7 @@ import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-worksp
 /** One stored session partition and the host it is stored under. */
 export type StoredPartition = { hostId: ExecutionHostId; session: WorkspaceSessionState }
 
-/**
- * The local catalog at first paint: a repo for each git workspace the partitions name, with no
- * worktree listing yet. Remote-server repos are absent, as startup skips remote catalogs.
- */
+/** First-paint local repos for referenced Git workspaces, without listings. Remote-server catalogs are skipped at startup. */
 function firstPaintRepos(partitions: readonly StoredPartition[]): AppState['repos'] {
   const repos = new Map<string, AppState['repos'][number]>()
   for (const { hostId, session } of partitions) {
@@ -54,10 +50,7 @@ function firstPaintRepos(partitions: readonly StoredPartition[]): AppState['repo
   return [...repos.values()]
 }
 
-/**
- * Runs the same hydration calls, in the same order, as `use-app-startup-hydration.ts`, on a fresh
- * test store the caller creates.
- */
+/** Match use-app-startup-hydration’s call order on a fresh test store. */
 export async function bootWindowFromPartitions(
   store: ReturnType<typeof createTestStore>,
   partitions: readonly StoredPartition[]
@@ -146,10 +139,7 @@ function groupLayoutView(node: TabGroupLayoutNode, groupIds: string[]): GroupLay
   }
 }
 
-/**
- * What the window shows after startup, as `path -> value`. Groups are named by position, since
- * a group id is never shown; tab ids stay, since a tab keeps its id across restarts.
- */
+/** Project visible path/value pairs. Name groups by position (IDs are invisible); retain tab IDs because they must survive restarts. */
 export function projectStartupWindowView(state: AppState): Record<string, unknown> {
   const view: Record<string, unknown> = {
     'active.workspace': state.activeWorktreeId,

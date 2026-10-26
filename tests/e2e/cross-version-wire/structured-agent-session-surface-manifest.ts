@@ -1,12 +1,4 @@
-// What the structured `agentSession.*` surface IS, and how to call each method.
-//
-// Split from the skew scenarios so the manifest stays readable as it grows: this file answers
-// "which methods exist, what each must reach and return, and what params it takes"; the suite
-// next to it answers "what happens when the two builds disagree".
-//
-// Adding a method here is the deliberate act the cross-version gate exists to force. A new entry
-// makes the suite call it in both skew directions, so an addition cannot land without someone
-// stating what an older peer does with it.
+// Adding a manifest entry exercises both skew directions and requires declaring the older peer’s behavior.
 
 import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
@@ -42,8 +34,7 @@ export {
 
 let operations = 0
 
-/** Each test starts the ledger's operation ids from zero, so one test's envelopes cannot be
- *  mistaken for a replay of another's. */
+// Reset ids so one test’s envelopes cannot look like another test’s replays.
 export function resetOperationIds(): void {
   operations = 0
 }
@@ -71,9 +62,14 @@ export function envelope(args: {
   }
 }
 
-export function attachParams(fence: number | null): Record<string, unknown> {
-  const params = {
-    envelope: { sessionId: SESSION, clientOperationId: operationId(), expectedRuntimeFence: fence },
+export function attachParams(fence: number | null): AgentSessionAttachParams {
+  const params: AgentSessionAttachParams = {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: operationId(),
+      expectedRuntimeFence: fence,
+      payloadFingerprint: ''
+    },
     location: {
       executionHostId: 'local',
       wslDistro: null,
@@ -93,7 +89,7 @@ export function attachParams(fence: number | null): Record<string, unknown> {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.attach',
         sessionId: SESSION,
-        fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
+        fields: attachFingerprintFields(params)
       })
     }
   }
@@ -105,8 +101,7 @@ export function createIntentParams(): Record<string, unknown> {
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
-/** Built by the sender clients use, so an older host is handed exactly what a current client puts
- *  on the wire, fingerprint included. */
+// Use the production sender so old hosts receive the exact current fingerprinted wire shape.
 export function sendParams(
   text: string,
   fence: number,
@@ -194,6 +189,8 @@ export function paramsFor(method: string): unknown {
       return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.readVisual':
       return { sessionId: SESSION, file: 'usage-chart.html' }
+    case 'agentSession.rename':
+      return { sessionId: SESSION, name: 'Release notes' }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

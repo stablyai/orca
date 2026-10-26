@@ -1,7 +1,4 @@
-// Why: slice 3 of terminal-side-effect-authority.md adds OSC 133;D
-// command-finished and GitHub pr-link scanning to the shared tracker so main
-// emits those facts for local/SSH PTYs. These tests pin the chunk-boundary
-// carry, exit-code best-effort, dedupe, and synthetic-frame isolation rules.
+// Pin shared OSC 133/PR-link carry, best-effort exit codes, dedupe and isolation from synthetic frames.
 import { describe, expect, it } from 'vitest'
 import {
   createTerminalTitleTracker,
@@ -118,8 +115,7 @@ describe('createTerminalTitleTracker pr-link facts', () => {
   })
 
   it('skips the 133/URL scans entirely when no consumer is registered', () => {
-    // Mirrors headless serve: no pty:sideEffect consumer means no callbacks,
-    // so the scanners must not be created (no carry state, no scan cost).
+    // Headless serve has no side-effect consumer; it must not allocate scanners or pay their per-chunk cost.
     const titles: string[] = []
     const tracker = createTerminalTitleTracker({
       onTitle: (normalized) => titles.push(normalized)
@@ -150,8 +146,7 @@ describe('createTerminalTitleTracker 2031-subscribe facts', () => {
   })
 
   it('emits an unsubscribe fact so gated views can retire the subscription', () => {
-    // Gated views never see these bytes; without the fact their registry goes stale
-    // and a later theme flip pushes CSI 997 at a shell that already withdrew (#9993).
+    // Gated views miss withdrawal bytes; this fact prevents unsolicited theme replies after unsubscribe (#9993).
     const { events, tracker } = createRecordingTracker()
 
     tracker.handleChunk(`${ESC}[?2031l`)
@@ -231,13 +226,11 @@ describe('createTerminalTitleTracker transient-fact scanning suppression', () =>
   it('resets cross-chunk carry on un-suppress so a pre-gap half-open OSC cannot swallow bells', () => {
     const { events, tracker } = createRecordingTracker()
 
-    // The OSC terminator (and everything after) is lost in a delivery gap
-    // while scanning is suppressed.
+    // A suppressed delivery gap loses the title terminator.
     tracker.handleChunk(`${ESC}]0;my long title without terminator`)
     tracker.setTransientFactScanningSuppressed(true)
     tracker.setTransientFactScanningSuppressed(false)
-    // Post-gap: a real standalone bell. A stale "inside OSC" state would
-    // swallow it.
+    // Reset OSC state or this real bell would be swallowed.
     tracker.handleChunk(`done${BEL}`)
 
     expect(events).toEqual([['bell']])
@@ -246,10 +239,7 @@ describe('createTerminalTitleTracker transient-fact scanning suppression', () =>
   it('a handoff scan seed re-primes a split sequence so its fact fires once, without a phantom bell', () => {
     const { events, tracker } = createRecordingTracker()
 
-    // The 133 intro was consumed before scan authority moved away; the carry
-    // is reset on un-suppress. The transport hands back the emulator's
-    // partial escape tail as a seed, so the continuation completes normally:
-    // one command-finished, and its terminator BEL is NOT a standalone bell.
+    // Authority returns with the emulator’s partial tail after carry reset; complete one command without ringing its terminator BEL.
     tracker.handleChunk(`out${ESC}]133;D;`)
     tracker.setTransientFactScanningSuppressed(true)
     tracker.setTransientFactScanningSuppressed(false)

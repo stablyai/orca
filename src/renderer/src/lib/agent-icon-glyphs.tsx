@@ -1,9 +1,7 @@
 import React from 'react'
 
 export function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // SVG sourced from pi.dev/favicon.svg — the π shape rendered in currentColor.
-  // Why: className="text-current" opts out of shadcn's Select rule that forces
-  // text-muted-foreground on any <svg> that lacks a text-* class.
+  // SVG from pi.dev/favicon.svg; text-current prevents Select from forcing muted color on the π glyph.
   return (
     <svg
       height={size}
@@ -25,8 +23,7 @@ export function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 export function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   const gradientId = `${React.useId().replace(/:/g, '')}-omp-gradient`
 
-  // SVG sourced from omp.sh's homepage mark. Why: omp.sh/favicon.svg includes
-  // a dark square background, while the homepage mark is transparent.
+  // SVG from omp.sh’s transparent homepage mark; its favicon includes a dark square.
   return (
     <svg
       width={size}
@@ -48,11 +45,7 @@ export function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 export function KiloIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // SVG sourced from Kilo-Org/kilocode:packages/kilo-vscode/assets/icons/kilo-light.svg.
-  // Why: the Google favicon for kilo.ai is black-on-black at small sizes and
-  // is illegible. Inlining the brand mark (yellow on black) keeps it readable
-  // on both light and dark app themes without using currentColor — this logo
-  // is intentionally brand-colored, not theme-colored.
+  // SVG from Kilo-Org/kilocode:packages/kilo-vscode/assets/icons/kilo-light.svg; retain brand yellow/black for legibility in both themes.
   return (
     <svg
       width={size}
@@ -73,9 +66,7 @@ export function KiloIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 export function AiderIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // SVG sourced from aider.chat/assets/icons/safari-pinned-tab.svg.
-  // Why: className="text-current" opts out of shadcn's Select rule that forces
-  // text-muted-foreground on any <svg> that lacks a text-* class.
+  // SVG from aider.chat/assets/icons/safari-pinned-tab.svg; text-current prevents Select from forcing muted color.
   return (
     <svg
       width={size}
@@ -94,8 +85,7 @@ export function AiderIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 export function CopilotIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // SVG sourced from Primer Octicons' copilot-16 icon. GitHub's 2025 brand
-  // guidance deprecated the old standalone Copilot mascot logo.
+  // SVG from Primer Octicons copilot-16; GitHub’s 2025 guidance deprecated the standalone mascot.
   return (
     <svg
       width={size}
@@ -113,9 +103,7 @@ export function CopilotIcon({ size = 14 }: { size?: number }): React.JSX.Element
 }
 
 export function OpenCodeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // SVG geometry sourced from opencode.ai/favicon.svg's official 512 canvas.
-  // Why: the branded fills are adapted to currentColor so the mark is visible
-  // in both Orca themes, and keeping the square viewBox matches sibling glyphs.
+  // SVG geometry from opencode.ai/favicon.svg’s 512 canvas; currentColor supports both themes and a square viewBox matches siblings.
   return (
     <svg
       width={size}

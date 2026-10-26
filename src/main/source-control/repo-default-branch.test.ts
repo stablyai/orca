@@ -35,8 +35,7 @@ describe('getRepoDefaultBranchName', () => {
     await expect(getRepoDefaultBranchName('/repo')).resolves.toBe('master')
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      // Why: the timeout keeps a dead filesystem from wedging the serial PR
-      // refresh drain — assert it stays armed on the local path.
+      // Bound local probes so dead filesystems cannot wedge the serial refresh drain.
       { cwd: '/repo', timeout: expect.any(Number) }
     )
   })
@@ -64,8 +63,7 @@ describe('getRepoDefaultBranchName', () => {
     try {
       await expect(getRepoDefaultBranchName('/repo')).resolves.toBeNull()
 
-      // Once the first probe consumes the budget, fallback refs fail open
-      // without spawning four more equally slow git processes.
+      // Share one deadline so fallback refs cannot multiply an exhausted host's delay.
       expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
       expect(gitExecFileAsyncMock.mock.calls[0]?.[1]).toEqual({
         cwd: '/repo',
@@ -127,7 +125,6 @@ describe('getRepoDefaultBranchName', () => {
     await expect(getRepoDefaultBranchName('/repo')).resolves.toBe('master')
 
     primeLocalGitExec('refs/remotes/origin/main')
-    // Same repoPath, different runtime key → fresh resolution, not the host's.
     await expect(getRepoDefaultBranchName('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toBe(
       'main'
     )

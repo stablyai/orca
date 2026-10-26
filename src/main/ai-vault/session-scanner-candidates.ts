@@ -15,7 +15,6 @@ import type {
   SessionFileDiscovery
 } from './session-scanner-types'
 
-/** One discovery's files as parse candidates, attributed to their Codex home. */
 export function discoveryFileCandidates(
   discovery: SessionFileDiscovery,
   files: readonly FileWithMtime[],
@@ -55,7 +54,6 @@ export function dropCodexHardlinkAliases(
   return dedupeCodexRolloutFileAliases(candidates, CODEX_ALIAS_ACCESSORS)
 }
 
-/** Newest-first parse candidates for a discovery set, with Codex hardlink aliases collapsed. */
 export async function sessionCandidatesFromDiscoveries(
   discoveries: SessionFileDiscovery[],
   options: AiVaultScanOptions

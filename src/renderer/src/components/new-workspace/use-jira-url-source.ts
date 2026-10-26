@@ -7,8 +7,8 @@ import {
   isResolvedJiraIssueMatch,
   parseJiraIssueUrl,
   type ParsedJiraIssueUrl
-} from '../../../../shared/jira-issue-url'
-import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira-summary-lookup'
+} from '../../../../shared/jira/jira-issue-url'
+import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira/jira-summary-lookup'
 import {
   getTaskSourceCacheScope,
   normalizeTaskSourceContext,
@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import { canReuseLoadedJiraStatus, type JiraSourceConnection } from './use-jira-source-connection'
 
 const LOOKUP_DEBOUNCE_MS = 200

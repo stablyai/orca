@@ -49,8 +49,6 @@ function createIpc() {
 }
 
 function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): void {
-  // A single shared channel listener is registered for the ipc instance; route
-  // through it the same way the real ipcRenderer would deliver the frame.
   ipc.emitSubscriptionEvent(event)
 }
 
@@ -125,8 +123,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     )
     expect(ipc.listenerCount()).toBe(0)
 
-    // After unsubscribe, frames for the released id must no longer reach the
-    // consumer (the dispatcher dropped its closure).
     onResponse.mockClear()
     dispatch(ipc, {
       subscriptionId: 'sub-1',
@@ -160,7 +156,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       )
     )
 
-    // O(1) attached listeners regardless of subscription count - the leak guard.
     expect(ipc.on).toHaveBeenCalledTimes(1)
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(handles).toHaveLength(25)
@@ -205,9 +200,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       () => 'sub-err'
     )
 
-    // Error frames are non-terminal: shared-control subscriptions survive
-    // reconnects, so repeated errors must NOT detach the dispatcher and must keep
-    // delivering to the live consumer rather than leaking a zombie listener.
     for (let i = 0; i < 50; i++) {
       dispatch(ipc, {
         subscriptionId: 'sub-err',
@@ -220,8 +212,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(ipc.listenerCount()).toBe(1)
 
-    // The consumer's unsubscribe is the single release path. After it, error
-    // frames for the same id no longer reach the consumer - no retained closure.
     cleanup.unsubscribe()
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
       subscriptionId: 'sub-err'
@@ -261,7 +251,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
-    // A rejected subscribe must not leave a routable entry behind.
     dispatch(ipc, {
       subscriptionId: 'sub-2',
       type: 'response',
@@ -322,7 +311,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
-    // The entry is already gone. A redundant unsubscribe is still safe.
     onClose.mockClear()
     cleanup.unsubscribe()
     dispatch(ipc, { subscriptionId: 'sub-closed', type: 'close' })

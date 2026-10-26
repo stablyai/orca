@@ -12,10 +12,7 @@ export function getWorkspaceDeleteLineage(
   worktrees: readonly Worktree[],
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
-  // Why (STA-4343): lineage is recorded against the bare `repoId::path` id, so a
-  // colliding id resolves to one of two hosts here. A lineage child of a workspace
-  // on host X is on host X, so prefer the parent's host — otherwise "delete all"
-  // could route a descendant's removal at the other machine's checkout.
+  // Lineage IDs omit hosts; prefer the parent’s host so descendant deletion cannot reach another machine.
   const worktreeById = new Map<string, Worktree>()
   for (const worktree of worktrees) {
     const claimed = worktreeById.get(worktree.id)
@@ -67,9 +64,7 @@ export function getWorkspaceDeleteLineage(
 
   return {
     descendants,
-    // Why: if a child workspace physically lives inside the parent directory,
-    // deleting descendants first prevents Git's force-delete path from removing
-    // the child as untracked content under the parent.
+    // Delete nested children first so Git cannot remove them as untracked content under the parent.
     deleteAllTargets: [...childFirstTargets, parent]
   }
 }

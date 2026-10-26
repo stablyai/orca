@@ -8,7 +8,7 @@ import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
 
 describe('PowerShell OSC 133 bootstrap', () => {
-  // Why: the bootstrap shares the -EncodedCommand budget with the startup command riding along.
+  // Bootstrap and startup commands share the EncodedCommand size limit.
   it('leaves room for a long startup command to ride in the shell args', () => {
     const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
     const result = resolveWindowsShellLaunchArgs(
@@ -62,9 +62,7 @@ describe('PowerShell OSC 133 bootstrap', () => {
     )
   })
 
-  // Why pinned: the MDE review (see powershell-osc133-bootstrap.ts) declined a
-  // switch to -Command. Any future delivery shape must still hand PowerShell this
-  // payload byte for byte -- quotes, `$` and newlines included.
+  // Every launcher must deliver quotes, variables, and newlines byte for byte.
   describe.each([
     [
       'daemon shell-ready',

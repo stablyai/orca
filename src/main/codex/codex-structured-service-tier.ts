@@ -9,14 +9,12 @@ import type { CodexSession } from './codex-structured-session-state'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
 import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
 
-/** Codex's request value for a model's standard tier. */
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** The tiers one `model/list` row advertises, valued by the id Codex takes back on `turn/start`. */
 export function readCodexServiceTiers(
   row: Record<string, unknown>
 ): AgentSessionOptionChoice[] | undefined {
@@ -40,7 +38,6 @@ export function readCodexServiceTiers(
   return Array.isArray(row.serviceTiers) || Array.isArray(row.additionalSpeedTiers) ? [] : undefined
 }
 
-/** The tier an older client's Fast toggle stands for. */
 export function codexFastServiceTier(
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
 ): string | undefined {
@@ -49,7 +46,7 @@ export function codexFastServiceTier(
   )?.value
 }
 
-/** What an older client's Fast toggle shows for a tier; any other tier is neither on nor off. */
+/** Nonstandard tiers other than Fast have no legacy toggle value. */
 export function codexFastModeOfServiceTier(
   tier: string | undefined,
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
@@ -78,6 +75,7 @@ export function reportedCodexThreadOptions(
   opened: CodexOpenedThread
 ): CodexSession['reportedOptions'] {
   return {
+    reportedPermissionMode: opened.reportedPermissionMode,
     ...(opened.model ? { model: opened.model } : {}),
     ...(opened.effort ? { effort: opened.effort } : {}),
     ...('serviceTier' in opened
@@ -89,7 +87,7 @@ export function reportedCodexThreadOptions(
 const tierValues = (model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined) =>
   model?.serviceTiers?.map((choice) => choice.value) ?? []
 
-/** Codex also takes the thread's reported tier when no model lists it, such as a configured `flex`. */
+/** Allow unlisted tiers the thread itself reports, such as configured flex. */
 export function codexOffersServiceTier(
   session: Pick<CodexSession, 'reportedOptions'>,
   model: AgentSessionModelOption | undefined,
@@ -108,7 +106,7 @@ export function codexOffersServiceTier(
   )
 }
 
-/** A turn's options: an unoffered tier runs as standard; the chat's saved tier is kept. */
+/** Fall back to standard for unoffered tiers without changing saved intent. */
 export function codexTurnRequestOptions(
   session: Parameters<typeof codexSessionCapabilities>[0]
 ): Record<string, string> {

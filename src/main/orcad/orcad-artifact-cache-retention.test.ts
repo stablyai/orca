@@ -23,7 +23,6 @@ function cacheRoot(): string {
   return root
 }
 
-/** A slot dir last used `ageMinutes` ago. */
 function slot(root: string, target: string, name: string, ageMinutes: number): string {
   const path = join(root, target, name)
   mkdirSync(path, { recursive: true })

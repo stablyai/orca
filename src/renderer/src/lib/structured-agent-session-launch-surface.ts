@@ -8,21 +8,25 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-work
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import {
   readStructuredAgentLaunchRecord,
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
-import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import {
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
+import { holdFrameDrawnProvisionalChatTab } from './frame-drawn-chat-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   openAgentSessionTabThroughLayoutOwner,
@@ -182,6 +186,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       activate: args.activate !== false
     })
+    const target = structuredAgentSessionTargetForHost(args.executionHostId)
+    holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
     if (args.activate !== false) {
       state.setActiveTabType('agent-session', args.worktreeId)
     }

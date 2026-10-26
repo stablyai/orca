@@ -1,16 +1,4 @@
-/**
- * Stress test for dead-terminal reproduction (manual-split flow).
- *
- * Why @headful: the dead-terminal bug is a WebGL canvas staleness issue — after
- * wrapInSplit() reparents the existing pane's container, the WebGL canvas can
- * fail to repaint. In headless mode WebGL is NEVER active, so the DOM fallback
- * renderer is used and the bug cannot manifest. Running headful ensures real
- * WebGL contexts matching production.
- *
- * See helpers/dead-terminal.ts for the shared worktree-creation helper that
- * replicates the exact activateAndRevealWorktree + ensureWorktreeHasInitialTerminal
- * production flow.
- */
+// Require @headful WebGL: DOM fallback cannot reproduce canvas staleness after split reparenting.
 
 import { test, expect } from './helpers/orca-app'
 import {

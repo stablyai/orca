@@ -15,9 +15,7 @@ import {
 import type { Worktree as DesktopWorktree } from '../../../src/shared/worktree/types'
 import { filterWorktrees, type Worktree } from './workspace-list-sections'
 
-// The phone's list against the desktop sidebar's for the same workspaces, under every filter
-// combination. The desktop side mirrors desktop-workspace-row-facts.ts, which mobile tests cannot
-// import (renderer aliases); the phone side reads only what a host stamps on worktree.ps rows.
+// Compare all filter combinations with desktop facts mirrored here because mobile cannot resolve renderer aliases.
 
 const repos: Repo[] = [
   { id: 'git', path: '/git', displayName: 'Git', badgeColor: '#000', addedAt: 0 },

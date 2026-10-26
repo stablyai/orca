@@ -6,7 +6,6 @@ import {
 } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
 
-/** The delete dialog's confirmed rows, resolved on the host each identity names. */
 export function useDeleteWorktreeDialogTargets(args: {
   allWorktrees: readonly Worktree[]
   worktreeDeleteIdentities: readonly WorktreeDeleteIdentity[]

@@ -1,22 +1,4 @@
-// IPC surface for the error-tracking lane (telemetry-error-tracking.md
-// §User controls). Six renderer-facing channels:
-//
-//   diagnostics:getStatus            — read-only snapshot for the Privacy pane.
-//   diagnostics:collectBundle        — assemble and retain a redacted payload.
-//   diagnostics:openBundlePreview    — open the retained payload in the OS.
-//   diagnostics:discardBundlePreview — delete a retained, unuploaded payload.
-//   diagnostics:uploadBundle         — POST the main-retained payload.
-//   diagnostics:deleteBundle         — delete an uploaded bundle by ticket ID.
-//
-// Same threat model as the product-telemetry IPC (`ipc/telemetry.ts`):
-// renderer can pass anything over the wire, type-narrow here. Everything
-// that touches the network or filesystem stays in main — the renderer
-// only sees the resulting status / preview / ticket-id.
-//
-// Hardening item §Endpoint contract #10 ("No renderer access to any of
-// these endpoints"): the upload endpoint URL never crosses IPC. The
-// renderer triggers the flow; main reads the URL from a build-time
-// constant or env var and does the POST itself.
+// Main owns redacted payloads and upload endpoints; validate renderer requests and enforce consent here (telemetry-error-tracking.md).
 
 import { app, dialog, ipcMain, shell } from 'electron'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -74,8 +56,7 @@ function rememberBundle(bundle: CollectedBundle): void {
     bundle,
     createdAtMs: Date.now(),
     previewFilePath,
-    // Why: diagnostics previews retain redacted payload bytes in main; the
-    // documented TTL must expire even if the renderer never makes another call.
+    // Expire retained payloads even if no further renderer call arrives.
     ttlTimer: schedulePendingBundleExpiry(bundle.bundleSubmissionId),
     previewOpened: false
   })
@@ -118,8 +99,7 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   if (!pending.previewOpened) {
     throw new Error('open the review file before sending')
   }
-  // Why: the preview file is user-editable once opened in the OS. Upload only
-  // the redacted bytes main collected and retained before preview.
+  // Preview files are editable; upload only main's retained redacted bytes.
   return { bundle: pending.bundle, payload: pending.bundle.payload }
 }
 
@@ -212,17 +192,12 @@ export function registerDiagnosticsHandlers(): void {
   ipcMain.handle(
     'diagnostics:collectBundle',
     (_event, lookbackMinutesIn: unknown): DiagnosticsBundlePreview => {
-      // Consent gate: main is the consent enforcement boundary; the
-      // renderer-side button-hide is UX, not security. A compromised or
-      // malicious renderer must not be able to assemble a bundle when the
-      // user has disabled diagnostic-bundle collection in Settings → Privacy.
+      // Enforce consent in main; hiding renderer controls is insufficient.
       const status = getDiagnosticsStatus()
       if (!status.bundleEnabled) {
         throw new Error('creating review files is disabled')
       }
-      // Renderer-controlled input → narrow at the boundary. The default
-      // (DEFAULT_LOOKBACK_MINUTES in bundle.ts) is fine for the common
-      // "last 30 minutes" case the Privacy pane button triggers.
+      // Validate untyped IPC input before applying the default lookback.
       const lookbackMinutes =
         typeof lookbackMinutesIn === 'number' && Number.isFinite(lookbackMinutesIn)
           ? Math.max(1, Math.min(30 * 24 * 60, Math.floor(lookbackMinutesIn)))
@@ -243,12 +218,9 @@ export function registerDiagnosticsHandlers(): void {
   ipcMain.handle(
     'diagnostics:uploadBundle',
     async (_event, bundleSubmissionId: unknown): Promise<UploadBundleIpcResult> => {
-      // Why: the renderer is in the threat model. Upload only a payload main
-      // collected and retained for preview, never renderer-supplied bytes.
+      // Accept only main-retained payload IDs, never renderer-supplied bytes.
       const pendingForConfirmation = getPendingBundleForUpload(bundleSubmissionId)
-      // Consent gate: main is the consent enforcement boundary; the
-      // renderer-side button-hide is UX, not security. Re-check here in case
-      // the user toggled the setting off between collect and upload.
+      // Recheck consent in case it changed after collection.
       if (!getDiagnosticsStatus().bundleEnabled) {
         throw new Error('sending diagnostics is disabled')
       }
@@ -256,8 +228,7 @@ export function registerDiagnosticsHandlers(): void {
       if (!confirmed) {
         return { canceled: true }
       }
-      // Why: the preview can be discarded or diagnostics can be disabled
-      // while the native confirmation dialog is open.
+      // Revalidate after the dialog: payloads can be discarded or consent revoked while it is open.
       const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
       if (!getDiagnosticsStatus().bundleEnabled) {
         throw new Error('sending diagnostics is disabled')

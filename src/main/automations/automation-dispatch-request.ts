@@ -126,7 +126,7 @@ export async function requestAutomationDispatch(
     return returnDurable(run)
   }
   target = resolveCurrentTarget()
-  // A WSL move may have started during the claim; refuse before the worktree create would throw.
+  // A WSL move can start while the durable claim is pending.
   const lateRefusal = describeScheduledRefusal({ target, canDispatch: true })
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? NO_DISPATCH_HOST)
@@ -161,7 +161,7 @@ export async function requestAutomationDispatch(
       if (!latestTarget.ok) {
         throw new AutomationDispatchCancelledError(latestTarget.error)
       }
-      // The precheck can run for minutes; a WSL move starting meanwhile is a skip, not a failure.
+      // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
       const latestRefusal = describeScheduledRefusal({
         target: latestTarget,
         canDispatch: true

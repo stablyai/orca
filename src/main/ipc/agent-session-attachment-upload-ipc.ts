@@ -15,7 +15,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ): Promise<AgentSessionAttachmentPathUploadResult> => {
       const userDataPath = app.getPath('userData')
-      // Why: a reload or close must stop the transfer; the server sweeps the part file it leaves.
+      // Abort on reload/close; the server sweeps abandoned part files.
       const lifetime = abortWhenRendererGone(event.sender)
       try {
         return await uploadExternalPathsToAgentSessionAttachments(

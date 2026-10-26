@@ -22,10 +22,7 @@ function catalogRepo(repo: SidebarCatalogRepo): Repo {
   }
 }
 
-/**
- * The builder's catalog from a served one (every host, paired servers included), or from a
- * host that serves none, its own repos and project groups.
- */
+/** Use served all-host catalogs when available, otherwise the host’s own repos/groups. */
 export function buildSidebarFeedCatalog(
   served: ServedProjectSections | null,
   hostRepos: readonly SidebarCatalogRepo[],

@@ -88,7 +88,6 @@ describe('executeBrowserClientUploadCommand', () => {
     expect(path.basename(rewritten.files[0])).toBe('report.pdf')
     expect(rewritten.files[0]).not.toBe('docs/report.pdf')
     expect(calls).toHaveLength(1)
-    // Why: Chromium opens the recorded path at submit time, long after browser.upload resolved.
     expect(await readFile(rewritten.files[0], 'utf8')).toBe('hello')
     expect(staging.activeStagingCount()).toBe(1)
 
@@ -111,7 +110,6 @@ describe('executeBrowserClientUploadCommand', () => {
       })
     ).rejects.toThrow('browser_client_file_channel_unsupported')
     expect(run).not.toHaveBeenCalled()
-    // Why: staging sweeps the root on construction, so an untouched root is one that never existed.
     expect(staging.activeStagingCount()).toBe(0)
     expect(existsSync(stagingRoot)).toBe(false)
   })
@@ -161,7 +159,7 @@ describe('executeBrowserClientUploadCommand', () => {
         }
       })
     ).rejects.toThrow('element not found')
-    // Why: the retained record is the only handle a later page release has on the directory.
+    // A later page release needs the retained directory record to retry cleanup.
     expect(staging.activeStagingCount()).toBe(1)
   })
 })

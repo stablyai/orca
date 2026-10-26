@@ -78,7 +78,6 @@ import { installDocPreviewGuestPolicy, isWorkspaceDocPageId } from './doc-previe
 import { mintDocPreviewGrant } from './doc-preview-grant-registry'
 import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
 
-/** The real door's answer, so the backend is tested against the refusal it will actually get. */
 function registerOffscreenGuestLikeBrowserManager({
   browserPageId
 }: {
@@ -87,10 +86,7 @@ function registerOffscreenGuestLikeBrowserManager({
   return !isWorkspaceDocPageId(browserPageId)
 }
 
-/**
- * A page the document half of the registry really owns. Built rather than named, because the door
- * refuses on registry membership now — a made-up id would be admitted and prove nothing.
- */
+// Register a real document page: membership, not the id string, triggers refusal.
 function registerWorkspaceDocPage(browserPageId: string): void {
   const grant = mintDocPreviewGrant({
     owner: { kind: 'ssh', connectionId: 'ssh-1' },
@@ -175,8 +171,6 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     ])
   })
 
-  // Why the unregister assertion and not just the destroy: a refused id is one the document half
-  // of the registry owns, and the teardown hook would cancel that preview's work on the way out.
   it('destroys a window whose registration was refused without unregistering the id', async () => {
     const browserManager = {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
@@ -196,8 +190,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     expect(mocks.windows[0].isDestroyed()).toBe(true)
     expect(browserManager.unregisterGuest).not.toHaveBeenCalled()
 
-    // Why shutdown and not the map: a refused id left behind is invisible until teardown walks it
-    // and hands that id to the other authority after all.
+    // Shutdown must not discover and unregister the refused id later.
     await backend.destroyAll()
     expect(browserManager.unregisterGuest).not.toHaveBeenCalled()
   })
@@ -407,7 +400,6 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
     await backend.closeTab('page-1')
 
-    // A screencast reacts to 'detach' synchronously; it must see a page that is still whole.
     expect(destroyedWhenDetached).toEqual([false])
     expect(window.isDestroyed()).toBe(true)
   })

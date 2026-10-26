@@ -3,7 +3,7 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
+import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
@@ -18,9 +18,9 @@ const sockets = vi.hoisted(() => {
   const opened: FakeSocket[] = []
   return opened
 })
-// Holds every socket open until released, so a test can act while one is still connecting.
+// Hold sockets open so tests can act during connection.
 const openGate = vi.hoisted(() => ({ wait: Promise.resolve() }))
-vi.mock('../../../shared/remote-runtime-passthrough-socket', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () => ({
   openRemoteRuntimePassthroughSocket: async (
     _pairing: unknown,
     capabilities: readonly string[],
@@ -120,7 +120,7 @@ describe('MobileDesktopRelay', () => {
     const frame = (id: string, method: string, params: Record<string, unknown>) =>
       JSON.stringify({ id, deviceToken: 'desktop-token', method, params })
     const target = { kind: 'existing', worktree: 'id:wt-1' }
-    // A phone-supplied value never wins over the desktop's own setting.
+    // Phone-supplied settings must never override the desktop default.
     relay.forward(
       phone,
       'env-1',
@@ -192,7 +192,6 @@ describe('MobileDesktopRelay', () => {
       })
       expect(mirrored.id).not.toBe('caps')
       expect(mirrored.deviceToken).toBeUndefined()
-      // The host's answer to the mirror is the relay's, not the phone's.
       socket.callbacks.onText(JSON.stringify({ id: mirrored.id, ok: true, result: {}, _meta: {} }))
     }
     expect(replies).toEqual([])
@@ -204,7 +203,6 @@ describe('MobileDesktopRelay', () => {
     relay.forward(phone, 'env-1', { id: 'a', method: 'terminal.list' }, '{"id":"a"}')
     relay.forward(phone, 'env-1', { id: 'b', method: 'terminal.list' }, '{"id":"b"}')
     await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
-    // One socket per (phone connection, server) carries both requests.
     expect(sockets).toHaveLength(1)
     sockets[0]!.callbacks.onText('{"id":"a","ok":true,"result":{},"_meta":{"runtimeId":"h"}}')
     sockets[0]!.callbacks.onClose(

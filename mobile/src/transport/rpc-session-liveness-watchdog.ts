@@ -66,9 +66,7 @@ export class RpcSessionLivenessWatchdog {
     this.armIdle(identity)
   }
 
-  // Wall-clock stamp of the last frame that actually arrived; 0 before the first
-  // start(). Unlike a timer deadline this survives a JS suspension, so callers can
-  // tell how stale their knowledge of the peer really is.
+  // Wall-clock evidence survives JS suspension; initialized at start and refreshed only by authenticated frames.
   getLastInboundAt(): number {
     return this.lastInboundAt
   }
@@ -92,8 +90,7 @@ export class RpcSessionLivenessWatchdog {
     this.armIdle(identity)
   }
 
-  // decisiveTimeoutMs: one short probe whose first miss ends the session, for a
-  // link the OS may have killed while the app was suspended.
+  // A decisive probe ends the session on its first miss when suspension may have killed the link.
   probeNow(identity: RpcSessionIdentity, decisiveTimeoutMs: number | null = null): void {
     if (this.identity !== identity || this.probing) {
       return

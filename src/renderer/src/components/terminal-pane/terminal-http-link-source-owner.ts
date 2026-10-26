@@ -65,8 +65,7 @@ export function resolveTerminalLinkRuntimeEnvironmentId(
     return owner.runtimeEnvironmentId
   }
   const ptyId = transport?.getPtyId() ?? null
-  // Why: the legacy relay bridge reports no server for a relay-era pane, yet the pane runs on the
-  // host whose server now owns its workspace, so its paths exist there and not on this computer.
+  // Relay-era panes may lack a server mapping but still print paths on the workspace’s current server, not this computer.
   return ptyId && legacyRelayBridgedPane(ptyId)
     ? runtimeEnvironmentIdUnlessTwin(state, worktreeId)
     : null

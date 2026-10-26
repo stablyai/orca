@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** What a workspace's terminals hold right now, as its host counts them; idle ones are absent. */
+/** Host-counted terminal content; idle workspaces are absent. */
 export const WorkspaceLiveContentSchema = z.object({
   liveTerminalCount: z.number().int().nonnegative(),
   hasAttachedPty: z.boolean()

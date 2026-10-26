@@ -7,8 +7,6 @@ import { join } from 'node:path'
 import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ── Electron mocks ──
-
 const { webContentsFromIdMock } = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn()
 }))
@@ -31,8 +29,6 @@ import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-
-// ── CDP response builders ──
 
 type AXNode = {
   nodeId: string
@@ -73,8 +69,6 @@ const SEARCH_PAGE_TREE: AXNode[] = [
   axNode('4', 'textbox', 'Search query', { backendDOMNodeId: 400 }),
   axNode('5', 'button', 'Search', { backendDOMNodeId: 500 })
 ]
-
-// ── Mock WebContents factory ──
 
 function createMockGuest(
   id: number,
@@ -190,6 +184,8 @@ function createMockGuest(
   const guest = {
     id,
     isDestroyed: vi.fn(() => false),
+    isCurrentlyAudible: vi.fn(() => false),
+    setIgnoreMenuShortcuts: vi.fn(),
     getType: vi.fn(() => 'webview'),
     getURL: vi.fn(() => currentUrl),
     getTitle: vi.fn(() => currentTitle),
@@ -245,8 +241,6 @@ function createMockGuest(
   }
 }
 
-// ── RPC helper ──
-
 async function sendRequest(
   endpoint: string,
   request: Record<string, unknown>
@@ -272,8 +266,6 @@ async function sendRequest(
   })
 }
 
-// ── Tests ──
-
 describe('Browser automation pipeline (integration)', () => {
   let server: OrcaRuntimeRpcServer
   let endpoint: string
@@ -286,9 +278,7 @@ describe('Browser automation pipeline (integration)', () => {
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
-    // Why: constructing the browser commands is what pulls the Chromium cluster in, so
-    // production installs this at the Electron entry. Suites that exercise browser
-    // automation install it too; a Node host installs none and the RPCs reject.
+    // The Electron entry installs this factory; Node hosts omit browser commands.
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
     const { guest } = activeGuestHarness
@@ -301,7 +291,7 @@ describe('Browser automation pipeline (integration)', () => {
     })
 
     const browserManager = new BrowserManager()
-    // Simulate the attach-time policy (normally done in will-attach-webview)
+    // Production applies these policies in will-attach-webview.
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
       browserPageId: 'page-1',
@@ -338,8 +328,6 @@ describe('Browser automation pipeline (integration)', () => {
     })
     return response
   }
-
-  // ── Snapshot ──
 
   it('takes a snapshot and returns refs for interactive elements', async () => {
     const res = await rpc('browser.snapshot')
@@ -381,8 +369,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect(activeGuest.debugger.removeAllListeners).not.toHaveBeenCalled()
   })
 
-  // ── Click ──
-
   it('returns error when clicking without a prior snapshot', async () => {
     const res = await rpc('browser.click', { element: '@e1' })
     expect(res.ok).toBe(false)
@@ -397,8 +383,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect((res.error as { code: string }).code).toBe('browser_ref_not_found')
   })
 
-  // ── Navigation ──
-
   it('navigates to a URL and invalidates refs', async () => {
     await rpc('browser.snapshot')
 
@@ -408,12 +392,10 @@ describe('Browser automation pipeline (integration)', () => {
     expect(gotoResult.url).toBe('https://search.example.com')
     expect(gotoResult.title).toBe('Search')
 
-    // Old refs should be stale after navigation
     const clickRes = await rpc('browser.click', { element: '@e1' })
     expect(clickRes.ok).toBe(false)
     expect((clickRes.error as { code: string }).code).toBe('browser_stale_ref')
 
-    // Re-snapshot should work and show new page
     const snapRes = await rpc('browser.snapshot')
     expect(snapRes.ok).toBe(true)
     const snapResult = snapRes.result as { snapshot: string; refs: { name: string }[] }
@@ -465,8 +447,6 @@ describe('Browser automation pipeline (integration)', () => {
     }
   })
 
-  // ── Fill ──
-
   it('chunks large browser fill text before CDP insertText', async () => {
     activeGuestHarness.setTree(SEARCH_PAGE_TREE)
     await rpc('browser.snapshot')
@@ -485,8 +465,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect((insertCalls[1]![1] as { text: string }).text).toBe('xxxxx')
   })
 
-  // ── Type ──
-
   it('chunks large browser type text before CDP insertText', async () => {
     const text = 'y'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 2)
     const res = await rpc('browser.type', { input: text })
@@ -501,8 +479,6 @@ describe('Browser automation pipeline (integration)', () => {
     )
     expect((insertCalls[1]![1] as { text: string }).text).toBe('yy')
   })
-
-  // ── Screenshot ──
 
   it('bounds capture request bookkeeping when network entries are evicted or fail', async () => {
     const startRes = await rpc('browser.capture.start')
@@ -545,8 +521,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect(state?.networkRequestMap.size).toBe(0)
   })
 
-  // ── Tab management ──
-
   it('lists open tabs', async () => {
     const res = await rpc('browser.tabList')
     expect(res.ok).toBe(true)
@@ -565,10 +539,7 @@ describe('Browser automation pipeline (integration)', () => {
     expect((res.error as { code: string }).code).toBe('browser_tab_not_found')
   })
 
-  // ── No tab errors ──
-
   it('returns browser_no_tab when no tabs are registered', async () => {
-    // Create a fresh setup with no registered tabs
     const emptyManager = new BrowserManager()
     const emptyBridge = new CdpBridge(emptyManager)
 

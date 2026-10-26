@@ -10,18 +10,7 @@ import { gitHistoryResultSchema } from './git-history-reply-schema'
 import { gitStatusHostPayloadSchema, gitStatusProjectionSchema } from './git-status-reply-schema'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
-// Source-control reads. Every reply below is validated against the members its consumer actually
-// reads; the schema module beside each one records which consumer line justifies each requirement.
-
-/**
- * git.status, first of two readers. The Changes screen publishes the host payload verbatim.
- *
- * Justification for a second reader on one method: hosted-review preparation has always read the
- * normalized projection instead, and the projection is not a superset — it returns null when
- * `entries` is not an array and drops entries missing a path or area. Those are replies the
- * Changes screen renders today, so sharing the projecting reader would change what it shows.
- * Unifying the two is a product decision with its own expectation, not part of this migration.
- */
+// Changes keeps the host payload; the normalized reader drops rows/nulls malformed status and would alter its display.
 export const gitStatusHostPayloadRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.status-host-payload',
@@ -32,19 +21,13 @@ export const gitStatusHostPayloadRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Shared with the session's branch-context read, which wants the same projection under a skip.
- *
- * Still always compatible: the projection's own contract is that an unreadable payload is a null
- * status, which three screens route on.
- */
+// Unreadable projected status remains null for callers’ fallback paths.
 export const gitStatusProjectionReader: RpcCompatibleReader<
   unknown,
   'normalized-status',
   MobileGitStatusResult | null
 > = rpcResultVariant('normalized-status', gitStatusProjectionSchema)
 
-/** git.status, second reader: the normalized projection hosted-review preparation reads. */
 export const gitStatusProjectionRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.status-normalized',

@@ -8,13 +8,12 @@ import {
 } from './browser-network-proxy-settings-source'
 
 let proxyPolicyGeneration = 0
-// Why: removed partitions must stop stale readiness loops before their queued system release.
+// Stop stale readiness loops before a removed partition's queued proxy release.
 const browserSessionProxyApplicationGenerations = new WeakMap<Session, number>()
 
 export function setBrowserNetworkProxySettingsResolver(
   resolver: (() => NetworkProxySettings) | null
 ): void {
-  // Why: browser modules hold no store handle, so main injects a reader the way rate-limits does.
   setNetworkProxySettingsSource(resolver)
   if (!resolver) {
     proxyPolicyGeneration = 0
@@ -42,7 +41,6 @@ export function invalidateBrowserSessionProxyApplication(sess: Session): void {
   browserSessionProxyApplicationGenerations.set(sess, generation + 1)
 }
 
-/** Re-apply the app-wide proxy across every browser partition. */
 export async function applyBrowserSessionProxies(
   profiles: BrowserSessionProfile[],
   settings?: NetworkProxySettings

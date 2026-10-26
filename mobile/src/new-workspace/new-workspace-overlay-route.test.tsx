@@ -72,7 +72,6 @@ describe("Home's New Workspace overlay", () => {
       ['desk', 'laptop']
     )
 
-    // PickerModal closes itself after a select.
     act(() => {
       overlay.picker().props.onSelect('laptop')
       overlay.picker().props.onClose()

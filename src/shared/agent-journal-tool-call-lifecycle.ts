@@ -1,6 +1,4 @@
-// A tool call's lifecycle as readers show it. A call cut short keeps `state: 'failed'`, which every
-// build reads, and carries the finer fact beside it: persisted rows outlive the build that wrote
-// them, and a new state value would read as a success to a build that only knows these three.
+// Persist interrupted calls as failed plus endedAs; older readers would misread a new state as success.
 
 import type {
   AgentJournalToolCallEnding,
@@ -26,18 +24,14 @@ export function agentJournalToolCallLifecycle(
   return call.state === 'failed' && call.endedAs === 'interrupted' ? 'interrupted' : call.state
 }
 
-/** A call that stopped because its turn or session was proven to end, or the provider cancelled
- *  it: it neither finished nor failed on its own. */
+/** Proven owner/provider interruption, rather than the call's own failure or completion. */
 export function interruptedAgentJournalToolCall(
   call: AgentJournalToolCallItem
 ): AgentJournalToolCallItem {
   return { ...call, state: 'failed', endedAs: 'interrupted' }
 }
 
-/** What a call still running when its turn or session ended becomes. Only a proven interruption
- *  cuts it short: a turn the provider completed around it, or an end the host could not verify,
- *  proves none, so it reads failed as it always has. An unverified end is kept beside that, so a
- *  proof written later can still find the call. */
+/** Only proven interruption changes failed to interrupted; retain unverified owner ends so later proof can find the call. */
 export function endedRunningAgentJournalToolCall(
   call: AgentJournalToolCallItem,
   end: AgentJournalRunningCallEnd

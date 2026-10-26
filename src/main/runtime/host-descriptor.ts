@@ -30,7 +30,7 @@ function readInstallation(filePath: string): InstallationRead {
     if (errorCode(error) === 'ENOENT') {
       return { kind: 'missing' }
     }
-    // Why throw: regenerating over a file we merely cannot read would silently fork this host's identity.
+    // Unreadable identity is not absence; regeneration would silently fork this host.
     throw error
   }
   if (raw.length > MAX_INSTALLATION_FILE_BYTES) {
@@ -46,14 +46,13 @@ function readInstallation(filePath: string): InstallationRead {
   }
 }
 
-/** Reads this profile's installation id, creating it once; concurrent creators converge on one. */
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
   const current = readInstallation(filePath)
   if (current.kind === 'valid') {
     return current.installationId
   }
-  // Why the lock and a re-read: a creator or repairer decides only after any racing one has published.
+  // Decide only after any racing creator/repairer publishes.
   return await withFileTransactionLock(filePath, async () => {
     const locked = readInstallation(filePath)
     if (locked.kind === 'valid') {
@@ -82,7 +81,6 @@ export function computeHostMachineBinding(
     .digest('base64url')
 }
 
-/** Null when the profile cannot hold an installation id; the binding is dropped when no machine id is readable. */
 export async function loadHostDescriptor(
   userDataPath: string,
   readMachineIdentity: () => string | null = profileStateAccessMachineIdentity
@@ -103,7 +101,7 @@ export async function loadHostDescriptor(
     : { installationId }
 }
 
-// Keyed by runtime id because the RPC server that owns the profile loads it, while status.get only sees the runtime.
+// The RPC profile owner publishes by runtime id for status.get readers.
 const publishedByRuntimeId = new Map<string, RuntimeHostDescriptor>()
 
 export function publishHostDescriptor(

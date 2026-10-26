@@ -2,9 +2,7 @@ import { getClipboardTextByteLength, isClipboardTextByteLengthOverLimit } from '
 import { clampUtf8TextPrefix } from './utf8-byte-limits'
 
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024
-/** Markdown preview budget; the file preview keeps its own. Above it a mobile read returns a
- *  UTF-8-boundary prefix marked `truncated`, never a refusal. Sized like the 2 MiB terminal
- *  snapshot; the relay splice frame cap is 8 MiB. */
+/** Over-budget mobile reads return a UTF-8-boundary prefix marked truncated. Matches the 2 MiB terminal snapshot; relay splice cap is 8 MiB. */
 export const MOBILE_MARKDOWN_READ_MAX_BYTES = 2 * 1024 * 1024
 
 export type RuntimeMarkdownReadOnlyReason =

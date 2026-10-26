@@ -1,12 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * The Resource Manager tooltip and the SSH segment's host count were built from
- * bare English literals inside helper functions, so they stayed English while
- * every label around them translated. The coverage audit cannot see values
- * returned from helpers, so only a runtime assertion against the real catalog
- * keeps them honest — same reasoning as
- * `src/renderer/src/i18n/settings-status-label-localization.test.ts`.
- */
+/** Helper-returned copy escapes extraction coverage, so verify real Resource Manager/SSH translations at runtime. */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -60,7 +53,10 @@ function setSshTargets(
 }
 
 function triggerText(): string {
-  return screen.getByRole('button').textContent ?? ''
+  const content = document.createElement('div')
+  content.innerHTML = screen.getByRole('button').innerHTML
+  content.querySelectorAll('[aria-hidden="true"]').forEach((element) => element.remove())
+  return content.textContent ?? ''
 }
 
 describe('status-bar copy under a non-English UI language', () => {
@@ -103,8 +99,7 @@ describe('status-bar copy under a non-English UI language', () => {
     ])
   })
 
-  // Why: the tint used to be selected by `line === 'Space scan ready'`, so it
-  // silently vanished for every non-English locale once the copy translated.
+  // Locale changes must not erase emphasis by breaking English text comparisons.
   it('keeps the space-scan row flagged when its copy is no longer English', () => {
     const lines = getResourceManagerTooltipLines({
       memoryLabel: '512 MB',
@@ -158,9 +153,10 @@ describe('status-bar copy under a non-English UI language', () => {
     expect(triggerText()).toContain('1 台のホスト')
   })
 
-  it('translates the connecting state', () => {
+  it('keeps the translated connected count while a host is connecting', () => {
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connecting' }])
     render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(triggerText()).toContain('接続中…')
+    expect(triggerText()).toContain('0 台のホスト')
+    expect(triggerText()).not.toContain('接続中…')
   })
 })

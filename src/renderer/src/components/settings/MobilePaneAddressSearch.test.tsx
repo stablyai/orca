@@ -24,8 +24,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
 vi.mock('../../store', () => ({ useAppStore: mocks.useAppStore }))
-// `i18n` is read by the localized search catalogs the pane consults to decide
-// whether a query targets the address picker.
+// Search catalogs read i18n when deciding whether to reveal the address picker.
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,
   i18n: { language: 'en' }
@@ -71,8 +70,7 @@ describe('MobilePane address disclosure search wiring', () => {
 
   afterEach(() => cleanup())
 
-  // Why: an empty query matches every catalog entry, so a missing blank guard
-  // would spring the disclosure open the moment Settings mounts.
+  // Blank queries match every catalog entry; guard them to keep the disclosure closed initially.
   it.each([
     ['', 'false'],
     ['revoke', 'false'],

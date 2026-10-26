@@ -137,7 +137,7 @@ describe('registerNotificationHandlers', () => {
       })
     } as never)
 
-    // The real minting, so the synthetic leaf this asserts against is the one the chat uses.
+    // Use real pane-key minting to cover the chat's actual synthetic leaf.
     const paneKey = structuredAgentSessionPaneKey('chat-tab', 'session-abc')
     const handler = getDispatchHandler()
     expect(
@@ -301,8 +301,7 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
-    // Why: the darwin authorization gate resolves before the notification is
-    // created, so flush microtasks before grabbing its event listeners.
+    // Resolve async authorization before reading notification listeners.
     await vi.advanceTimersByTimeAsync(0)
     const showHandler = getNotificationOnceEventHandler('show')
     const failedHandler = getNotificationOnceEventHandler('failed')

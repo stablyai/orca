@@ -1,5 +1,4 @@
-// The pane-owner swap harness: a real binding store over a fake session, a fake provider, and the
-// real IPC spawn pipeline. The caller's test file declares the module mocks (see the restart test).
+// Exercise the real binding store and IPC spawn pipeline over a fake session/provider; suites declare module mocks.
 import { vi, type Mock } from 'vitest'
 import { PtyBindingPersistenceOperations } from '../persistence/loading-store/pty-binding-persistence'
 import { ptyBindingGenerationOf } from '../persistence/loading-store/pty-binding-generations'
@@ -12,7 +11,7 @@ import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
 import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 
-/** A named type, so the exported harness's inferred type stays portable. */
+// An explicit Mock return type keeps the exported fixture type portable.
 function stub(): Mock<(...args: unknown[]) => unknown> {
   return vi.fn()
 }

@@ -1,13 +1,5 @@
-// When a stored attachment may go, re-derived on every sweep from the disk and the claim table.
-//
-// - A part file nobody is writing (the uploader crashed or vanished) goes after an hour.
-// - An upload no message ever claimed goes after 30 days: its chip was removed or its draft
-//   abandoned. A draft names its image by this path, so the window is how long an unsent draft
-//   keeps it. The sweep first marks it in the same database the claims live in, and only if no
-//   claim exists; a send that names it afterwards is refused instead of losing its file.
-// - A claimed upload stays while any chat holding it has a record. The host never deletes a chat
-//   today, so that is as long as its transcript.
-// - A mark left by a sweep that died mid-delete is finished by the next one.
+// Claim checks and deletion marks arbitrate with sends in the same journal database.
+// Retain claimed uploads while any recorded chat holds them; resume interrupted deletions on later sweeps.
 
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,13 +18,10 @@ export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
 export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
-  /** The host's journal connection, or null when it cannot take writes (closed, or written by a
-   *  newer Orca): without it nothing claimed can be told apart, so only part files go. */
+  /** Without a writable journal, only unfinished part files may be removed. */
   database: () => Database.Database | null
-  /** Every chat this host holds a record for; null while that list is incomplete (records still
-   *  owed their import), when no chat's claims can be judged orphaned. */
+  /** null means imports are incomplete; no chat claims can yet be judged orphaned. */
   recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
-  /** After each removal attempt, before the database work that may throw. */
   onUploadRemoved?: (uploadDir: string) => void
 }
 
@@ -44,7 +33,7 @@ export async function sweepAgentSessionAttachments(
   now = Date.now()
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
-  // Read again at every statement: the host may close the connection while the sweep awaits disk.
+  // Disk awaits can outlive journal closure; resolve the database again for each statement.
   const { database } = facts
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
@@ -70,7 +59,7 @@ export async function sweepAgentSessionAttachments(
       }
       continue
     }
-    // A claim landing first keeps the upload; this mark landing first refuses that claim.
+    // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
     if (
       ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS ||
       withDatabase(database, (db) => markUnclaimedUploadForSweep(db, uploadId, now)) !== true
@@ -120,10 +109,7 @@ async function modifiedAt(path: string): Promise<number> {
 
 export type AgentSessionAttachmentSweeper = { stop: () => void }
 
-/**
- * Sweeps shortly after the host comes up and then periodically. Best effort: a failed sweep is
- * logged and the next one tries again; nothing waits on it.
- */
+/** Retry failed background sweeps without blocking host work. */
 export function startAgentSessionAttachmentSweeps(
   store: AgentSessionAttachmentStore,
   facts: AgentSessionAttachmentSweepFacts,

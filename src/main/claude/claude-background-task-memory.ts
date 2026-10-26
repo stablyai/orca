@@ -6,8 +6,7 @@ const MAX_FOREIGN_TASK_ROWS = 512
 const MAX_TERMINAL_TASK_IDS = 512
 const MAX_FALLBACK_TASK_IDS = 512
 
-/** Bounded run identity ledger. Once old ids fall out, a monotonic sequence
- * keeps a reused id from colliding with a durable row already in the journal. */
+// Monotonic generations prevent reused, evicted IDs from overwriting durable rows.
 class ClaudeBackgroundTaskGenerationLedger {
   private readonly entries = new Map<string, number>()
   private nextUniqueGeneration = 1
@@ -108,16 +107,9 @@ function rememberClaudeBackgroundTaskTerminal(
   }
 }
 
-/** Who renders a task this owner deliberately declined.
- *
- *  `sidechain` is a Task spawned inside a subagent's own run: its spawning tool
- *  never reached the top-level transcript, so no top-level row may claim it.
- *  `terminal` is a capacity-refused task whose settled typed row was already
- *  written without taking a live slot; its redeliveries must not print again. */
+/** sidechain belongs to a nested run; terminal already emitted its outcome without a live slot. */
 export type ForeignOwner = 'roster' | 'ambient' | 'foreground' | 'sidechain' | 'terminal'
 
-/** How much each ledger is holding. Named and readonly so a caller can prove
- *  eviction still bounds them without reaching into the collections. */
 export type ClaudeBackgroundTaskLedgerSizes = {
   readonly generations: number
   readonly foreign: number
@@ -125,21 +117,14 @@ export type ClaudeBackgroundTaskLedgerSizes = {
   readonly terminalTaskIds: number
 }
 
-/** Every bounded ledger a session keeps beside its rows, with the caps that
- *  bound them. One owner, so a sweep clears them together and no cap is
- *  applied at only some of the call sites that write to a ledger. */
 export class ClaudeBackgroundTaskLedgers {
-  /** Runs seen per task id, so a reused id opens a new row instead of
-   *  overwriting the finished one. Survives the row being evicted. */
+  /** Run identity survives row eviction so restarts cannot overwrite history. */
   readonly generations = new ClaudeBackgroundTaskGenerationLedger()
   readonly foreign = new Map<string, ForeignOwner>()
-  /** Tasks that were declined because every typed row slot was live. Their
-   *  later frames must remain visible through the generic fallback. */
+  /** Capacity-refused tasks retain generic fallback coverage. */
   readonly fallbackTaskIds = new Set<string>()
   readonly terminalTaskIds = new Set<string>()
-  /** The parent alias for the terminal run, when one was reported. Keeping it
-   *  lets an evicted row distinguish a late duplicate start from a genuine
-   *  restart under a fresh tool invocation. */
+  /** Retain the terminal parent alias after eviction to distinguish redelivery from a restart. */
   readonly terminalToolUseIds = new Map<string, string | undefined>()
 
   rememberForeign(id: string, owner: ForeignOwner): void {

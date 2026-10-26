@@ -195,7 +195,6 @@ describe('artifact create intent store', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      // Each intent is created already carrying the protected file DACL, then renamed into place.
       const creates = fake.callsFor('create')
       expect(creates).toHaveLength(2)
       for (const create of creates) {
@@ -205,7 +204,6 @@ describe('artifact create intent store', () => {
           sddl: `D:P(A;;FA;;;S-1-5-18)(A;;FA;;;S-1-5-32-544)(A;;FA;;;${FAKE_USER_SID})`
         })
       }
-      // The directory is relocked once, on the thread pool; nothing is rewritten synchronously.
       expect(fake.callsFor('setAsync')).toMatchObject([
         {
           op: 'setAsync',

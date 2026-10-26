@@ -11,11 +11,7 @@ import {
 
 const tempRoots: string[] = []
 
-// Why the maintenance suppression: `git commit` detaches `git maintenance run --auto`, and its
-// commit-graph task arms once a fixture crosses 100 new commits — which the cap-sized histories
-// below always do. That detached process keeps writing `.git/objects/info/commit-graphs` after the
-// synchronous exec has returned, so it re-creates entries under a `.git/objects` the temp-root
-// teardown is midway through deleting, and the recursive remove dies with ENOTEMPTY.
+// Disable detached maintenance so commit-graph writes cannot race fixture teardown.
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', [...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS, ...args], {
     cwd,
@@ -38,11 +34,7 @@ async function createRepo(): Promise<string> {
   return repoPath
 }
 
-// Why unique across calls: an empty commit's hash covers only parent, tree, message and a
-// one-second-granularity timestamp. On a fast runner the whole 100-commit build finishes inside
-// one second, so a post-reset `commit 0` off the same fork point hashed identically to the first
-// `commit 0` of the chain and Git handed back that same object — leaving the branch 99/0 apart
-// instead of 100/1.
+// Unique messages prevent same-second empty commits from reusing the same hash after reset.
 let emptyCommitSequence = 0
 
 function commitEmpty(repoPath: string, count: number): void {
@@ -77,7 +69,6 @@ describe('measureRetargetDivergence with real Git', () => {
     git(repoPath, ['reset', '--hard', '--quiet', forkPoint])
     commitEmpty(repoPath, 1)
 
-    // 100 ahead + 1 behind is over the cap even though neither side alone exceeds it.
     await expect(
       measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main')
     ).resolves.toBe('exceeded')

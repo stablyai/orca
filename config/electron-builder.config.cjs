@@ -71,17 +71,11 @@ const {
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
 
-// Why: dev-channel builds must carry the *release* identity — same bundle id,
-// Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
-// swap them over an installed Orca and macOS treats each build as a new app.
+// Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
-// Why a second set of variables rather than making the mac ones platform-neutral:
-// the mac ones gate `isMacRelease` below, which turns on hardened runtime,
-// notarization, and root-level `forceCodeSigning`. A Windows dev build that
-// reused them would fail packaging outright for want of a cert it is
-// deliberately not using.
+// Keep Windows dev flags separate: mac flags enable hardened runtime/notarization/global signing, which would demand an unavailable Windows cert.
 const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
 const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
 const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
@@ -100,12 +94,7 @@ const devChannelBuildVersion = isHourlyChannel
     : isAdhocChannel
       ? process.env.ORCA_ADHOC_BUILD_VERSION
       : undefined
-// Why each dev channel gets its own repo rather than tagging into the main one:
-// the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
-// day would evict every stable/RC entry and strand users on a feed with nothing
-// to install. Keeping adhoc/daily separate from hourly too means a branch build
-// or a once-a-day cut cannot be picked up by someone who only meant to ride
-// main's hourlies.
+// Separate dev-channel repos: 24 hourly tags/day would evict stable/RC from the ten-entry release feed; isolate adhoc/daily from hourly subscribers too.
 const devChannelRepo = isHourlyChannel
   ? 'orca-hourly'
   : isDailyChannel
@@ -118,38 +107,28 @@ const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
 }
-// Why: freshness detection needs immutable identity metadata from this exact
-// app build, but never needs the skill package bytes or a runtime network read.
+// Freshness checks need immutable build identity, not skill bytes or runtime network access.
 const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
-// Why a real directory: native-chat agents load this skill plugin by path (Claude --plugin-dir,
-// Codex skill roots), and neither can read inside app.asar.
+// Native agents load plugins by path and cannot read inside app.asar.
 const nativeChatVisualsResource = {
   from: 'resources/native-chat-visuals',
   to: 'native-chat-visuals'
 }
-// Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
-// apps. Keeping relay assets as extraResources makes them real directories
-// instead of paths hidden inside app.asar.
+// SSH deploy resolves process.resourcesPath/relay; extraResources keeps bundles on real disk.
 const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
-// Why: bundled plugins are immutable install inputs and must remain ordinary
-// directories so the startup bootstrap can verify and publish exact bytes.
+// Bootstrap verifies/publishes immutable plugin bytes from ordinary directories.
 const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
-// Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
-// from package directories where pnpm's symlink farm is absent. Copy the exact
-// runtime dependency closure to Resources/node_modules so bare require() calls
-// do not fall through to a developer checkout's node_modules.
-// Why the single file rather than the package root: app.asar carries no node_modules, so main's
-// lazy require in deferred-emoji-shortcode-dataset.ts resolves only out of Resources/node_modules,
-// but emojibase-data is 49 MB of locale datasets and worktree naming reads exactly this 166 KB file.
+// Packaged main/CLI/SSH/speech paths lack pnpm links; copy runtime closure so bare requires cannot fall through to checkout dependencies.
+// Ship only the 166KB emoji dataset used by worktree naming, not all 49MB of emojibase-data.
 const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
@@ -164,8 +143,7 @@ const commonExtraResources = [
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
-// Why: native speech addons must be real files outside app.asar; copy only the
-// package matching the artifact target instead of every optional variant.
+// Native speech addons need real disk paths; copy only the artifact target’s variant.
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -202,16 +180,11 @@ const rpmElectronRuntimeDependencies = [
   '(libuuid or libuuid1)'
 ]
 
-// Why mirrored, not imported: this config is CJS loaded by electron-builder outside the TS build.
-// Keep in sync with isOsOpenedDocumentName() in src/main/startup/os-opened-documents.ts and with
-// config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
+// Mirror OS document extensions: CJS packager cannot import TS; keep startup/os-opened-documents.ts and NSIS hooks aligned.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
 const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
 
-// Why: the config must load on a host-only install without resolving unused Windows addons.
-// This is load-time tolerance only; beforePack enforces that the target's natives are installed.
-// Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
-// the @orca/windows-* addons are workspace links present on every host, so their presence proves nothing.
+// Config loads without unused Windows addons; beforePack enforces target natives. Only @vscode/windows-process-tree has os:win32; workspace links prove no binary exists.
 const windowsRuntimeResources = existsSync(
   join(__dirname, '..', 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
@@ -256,8 +229,7 @@ module.exports = {
   },
   files: [
     '!**/.vscode/*',
-    // Why: these repo-only inputs are either bundled into out/ or copied via
-    // extraResources. Shipping them in app.asar bloats the desktop bundle.
+    // Repo inputs already bundled/copied through extraResources would bloat app.asar.
     '!src{,/**/*}',
     '!out/orcad{,/**/*}',
     // Never in app.asar: the template ships via orcadTemplateExtraResource; prebuilds are build inputs.
@@ -277,24 +249,17 @@ module.exports = {
     '!mobile{,/**/*}',
     '!native{,/**/*}',
     '!skills{,/**/*}',
-    // Why: guide/stub authoring sources are compiled into runtime artifacts; shipping
-    // either source tree would duplicate content without a runtime consumer.
+    // Authoring guides/stubs compile into runtime artifacts; source trees only duplicate content.
     '!skill-guides{,/**/*}',
     '!skill-stubs{,/**/*}',
     '!tests{,/**/*}',
-    // Why: examples/ is plugin authoring documentation with no runtime consumer —
-    // bundled plugins ship via extraResources from resources/plugins/launch/. It also
-    // carries hostile-panel, the adversarial fixture the containment tests point at,
-    // which must never reach a user's install.
+    // Examples have no runtime consumer and include adversarial hostile-panel; ship only resources/plugins/launch.
     '!examples{,/**/*}',
-    // Why: pr-evidence/ is a local e2e screenshot output (ORCA_CAPTURE_EVIDENCE);
-    // it is gitignored, but exclude it defensively so a stray local capture at
-    // package time never bloats app.asar.
+    // Exclude gitignored local screenshot evidence defensively so packaging cannot pick up stray captures.
     '!pr-evidence{,/**/*}',
     // Local build logs and rollback copies are never application resources.
     '!notes{,/**/*}',
-    // Why: local agent/tooling directories may contain worktree symlink loops;
-    // they are never runtime inputs and must not be traversed by electron-builder.
+    // Local tooling directories are not runtime inputs and may contain symlink loops.
     '!{.claude,.grok,.agents,.codex}{,/**/*}',
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
@@ -307,62 +272,29 @@ module.exports = {
     '!out/renderer/.vite{,/**/*}',
     // The installed browser serves its allowlisted assets from the unpacked renderer.
     '!out/web{,/**/*}',
-    // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
-    // CI never creates it, but packaging on a machine that has run dev would pack them all.
+    // Local dev Electron.app caches (~270MB/branch) must not enter packaged builds.
     '!out/electron-dev{,/**/*}',
-    // Why: relayExtraResource already ships out/relay to resources/relay, which is
-    // the only path a packaged build resolves. Packing it again added 14MB and put
-    // relay.js inside app.asar, so a script-heuristic verdict on relay.js took the
-    // whole asar with it as a compound object and gutted the install (#20966, #20972).
+    // extraResources already ships relay; duplicating it in asar added 14MB and let script-heuristic quarantine gut the whole archive (#20966/#20972).
     '!out/relay{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
+    '!{.oxlintrc.json,.oxfmtrc.json,components.json,opencode.json,orca.yaml,pnpm-workspace.yaml,vite.web.config.ts}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
-    // Why: feature-wall media is copied via extraResources so runtime can read
-    // it from process.resourcesPath; exclude the source copy from app.asar.
+    // Feature media is read from process.resourcesPath via extraResources; exclude duplicate sources.
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
     '!resources/native-chat-visuals/**',
-    // Why: bundled plugins ship via extraResources to resources/plugins/launch;
-    // packing the source tree into app.asar would duplicate those exact bytes.
+    // extraResources already ships plugin bytes; exclude source duplicates.
     '!resources/plugins/launch/**',
-    // Why: speech packages are copied selectively through the platform
-    // extraResources entry below; keeping them in app.asar would ship every
-    // native variant (and duplicate the selected one).
+    // Platform extraResources selects speech natives; asar would duplicate it and ship other variants.
     '!node_modules/sherpa-onnx*{,/**/*}',
-    // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
-    // (beside the native resources/bin/orca.exe). Packing the source tree into
-    // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
-    // app.asar.unpacked/resources/win32/bin/orca.cmd with no adjacent orca.exe,
-    // which fails to launch the CLI (#7351).
+    // CLI shim belongs beside resources/bin/orca.exe; unpacking source creates a second .cmd without its executable (#7351).
     '!resources/win32{,/**/*}'
   ],
-  // Why: the CLI entry-point lives in out/cli/ but imports shared modules
-  // from out/shared/ and local hook mutators from out/main/. These paths must be
-  // unpacked so that Node's require() can resolve the cross-directory imports
-  // when the CLI runs outside the asar archive.
-  // Why: daemon-entry.js is forked as a separate Node.js process and must be
-  // accessible on disk (not inside the asar archive) for child_process.fork().
-  // Why: the CLI is compiled by tsc (not bundled), so its runtime imports
-  // resolve at runtime via Node's normal module lookup. The shim launches
-  // the CLI with ELECTRON_RUN_AS_NODE, which bypasses Electron's asar
-  // integration — dependencies inside the asar archive are invisible to
-  // require(). Unpack CLI runtime deps so they resolve from
-  // app.asar.unpacked/node_modules/.
-  // Why: remote runtime connections use WebSocket + E2EE from the packaged CLI
-  // before the GUI process starts, so those deps need the same treatment.
-  // Why: out/package.json pins compiled output to CommonJS so parent
-  // package.json files with type=module cannot change the packaged CLI loader.
-  // Why: the foreign SQLite reader entry is also spawned by the scanner
-  // service, which runs under ELECTRON_RUN_AS_NODE and so cannot see into
-  // app.asar. Left packed, that spawn fails closed and every OpenCode session
-  // disappears from Agent Session History in packaged builds only. Worker
-  // entries reached solely from the Electron main process stay packed, since
-  // asar redirects their app.asar paths.
-  // Why: `orca serve` runs the orcad selection entry under ELECTRON_RUN_AS_NODE too (#27307).
-  // Why out/renderer and out/mobile-web: their assets are opened by path, and opening a packed file
-  // reads a /tmp extract Electron makes once and never remakes, so a /tmp sweep broke them (#27976).
+  // Node-mode CLI/daemon/foreign SQLite reader/serve entries cannot read asar; unpack their shared/main dependencies too.
+  // Keep out/package.json’s CommonJS boundary and remote CLI WebSocket/E2EE deps. Electron-only workers may stay packed.
+  // Renderer/mobile-web assets need real paths: swept temporary asar extracts are not recreated (#27976).
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -382,6 +314,7 @@ module.exports = {
     'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
+    'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
@@ -391,6 +324,7 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
+    'out/main/orcad/orcad-stale-lock-reclaim.js',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',
@@ -465,12 +399,7 @@ module.exports = {
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
-    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
-    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
-    // Fail packaging if any bundled native binary exceeds the supported floor.
-    // Why after the prune: `pnpm install:release` widens the CPU set for cross-builds,
-    // so an arm64 slice can still carry the x64 @parcel/watcher until
-    // prunePackagedRuntimeNodeModules drops it.
+    // Gate native glibc floor after pruning foreign CPU variants; GLIBC_2.34 once broke Ubuntu 20.04 startup (#9902).
     let appImageNodeRuntime = null
     if (context.electronPlatformName === 'linux') {
       const targetArch = { 1: 'x64', 3: 'arm64' }[context.arch]
@@ -482,11 +411,7 @@ module.exports = {
       verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
-    // Why: boot the packaged daemon-entry under plain Node, but only for the
-    // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
-    // require()s the native (N-API) node-pty for the TARGET arch, which the host
-    // Node cannot load cross-arch. `Arch` enum: ia32=0, x64=1, armv7l=2,
-    // arm64=3, universal=4 (universal contains the host slice, so run it).
+    // Smoke only host-runnable slices: daemon JS loads target-arch node-pty. Arch enum ia32=0, x64=1, armv7l=2, arm64=3, universal=4.
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
@@ -508,16 +433,13 @@ module.exports = {
         await verifyAppImageNodeRuntimeServesPty(resourcesDir, appImageNodeRuntime)
       }
     } else {
-      // Why: a cross-arch slice can't be booted by the host Node, but the
-      // unpacked entry must still exist — its absence is a layout regression
-      // regardless of arch, so only the boot is skipped, not the check.
+      // Cross-arch smoke cannot run, but missing unpacked entry is always a packaging error.
       assertPackagedDaemonEntryExists(resourcesDir)
       console.log(
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
-    // Why: inspect electron-builder's real output so a broken extraResources
-    // mapping fails packaging before bundled content reaches users.
+    // Validate real electron-builder output so broken extraResources mappings fail before shipping.
     verifyPackagedPluginResources(resourcesDir)
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
@@ -532,9 +454,7 @@ module.exports = {
       if (!filename.startsWith('agent-browser-')) {
         continue
       }
-      // Why: the upstream package has inconsistent executable bits across
-      // platform binaries (notably darwin-x64). child_process.execFile needs
-      // the copied binary to be executable in packaged apps.
+      // Upstream executable bits vary (notably darwin-x64); restore them so packaged execFile works.
       chmodSync(join(resourcesDir, filename), 0o755)
     }
     if (context.electronPlatformName === 'darwin') {
@@ -554,23 +474,9 @@ module.exports = {
   },
   win: {
     executableName: 'Orca',
-    // Why: Windows installers are signed after electron-builder packaging by
-    // SignPath, so the packager cannot infer the updater publisherName.
-    //
-    // Why dev channels drop it instead: they ship unsigned, because SignPath's
-    // approval waits are budgeted in hours and cannot fit an hourly cadence.
-    // electron-updater Authenticode-verifies every installer it downloads
-    // against the publisherName baked into the *installed* app's app-update.yml
-    // (NsisUpdater.verifySignature), and skips verification entirely when that
-    // name is absent. An unsigned build that still claimed 'SignPath Foundation'
-    // would therefore reject its own channel's next build — and its way back to
-    // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    // Why a sign hook on a build that does not sign: it is the only moment
-    // electron-builder exposes the NSIS uninstaller (built in its own makensis
-    // pass, embedded, then deleted). The hook signs nothing — it relays the file
-    // to and from the CI SignPath request, and is inert when the relay env vars
-    // are unset, so local and dev builds are unaffected. publisherName stays on
-    // its existing channel split above.
+    // SignPath signs Windows installers after packaging, so set release publisherName explicitly.
+    // Unsigned dev channels omit it or updater signature checks reject dev updates and return to stable.
+    // Sign hook signs nothing: it relays transient NSIS uninstaller files to CI SignPath; unset relay env leaves local/dev builds inert.
     signtoolOptions: {
       sign: signWindowsUninstallerViaSignPath,
       ...(isWinDevChannel ? {} : { publisherName: 'SignPath Foundation' })
@@ -614,17 +520,12 @@ module.exports = {
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
-    // Why: electron-builder allows one include, so both Windows installer hooks live in it -
-    // the relocated-daemon uninstall sweep (guarded by ${isUpdated} so it never runs during an
-    // update's uninstallOldVersion) and the additive markdown "Open with" registration.
-    // Windows markdown association is deliberately NOT done via `fileAssociations`; see the
-    // header comment in that file for why that would steal the user's default .md handler.
+    // One NSIS include hosts update-guarded daemon cleanup and additive markdown Open With registration.
+    // Avoid fileAssociations: it would steal default .md ownership; see the include’s header.
     include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
-    // Why rank Alternate: Orca joins Finder's "Open With" list without claiming
-    // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
-    // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.
+    // Alternate rank preserves Finder’s default; one entry per extension because app-builder globs the value as a string.
     fileAssociations: [
       ...MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
         ext,
@@ -651,18 +552,9 @@ module.exports = {
       ...macTerminalHostSignIgnore
     ],
     extendInfo: macUsageDescriptions,
-    // Why: local macOS validation builds should launch without Apple release
-    // credentials. Hardened runtime + notarization stay enabled only on the
-    // explicit release path so production artifacts remain strict while dev
-    // artifacts do not fail with broken ad-hoc launch behavior.
+    // Local macOS builds need no release credentials; hardening/notarization stay on explicit release paths.
     hardenedRuntime: isMacRelease,
-    // Why dev builds notarize too, despite the ~10min notary round trip: TCC
-    // anchors a notarized Developer ID app's permission grants on identifier +
-    // team, which is cdhash-independent and so survives an update. Without a
-    // ticket there is no such stable identity, so every build reads as a
-    // different client — the grant row stays but stops matching, and file access
-    // under Documents/Desktop/Downloads fails with EPERM and no re-prompt. At 24
-    // builds a day that revokes the user's grants faster than they can re-grant.
+    // Dev notarization preserves TCC identifier/team identity across cdhash changes; unticketed hourly updates otherwise lose folder grants with EPERM and no prompt.
     notarize: isMacRelease,
     extraResources: [
       ...commonExtraResources,
@@ -682,9 +574,7 @@ module.exports = {
       },
       featureWallResources
     ],
-    // Why: the notification-status helper must execute from Contents/MacOS —
-    // on macOS 26 UNUserNotificationCenter aborts (bundleProxyForCurrentProcess
-    // is nil) for executables launched out of Contents/Resources (#7929).
+    // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; execute from Contents/MacOS (#7929).
     extraFiles: [
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
@@ -713,17 +603,12 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // Why mimeTypes and not fileAssociations: shared-mime-info already maps *.md/*.markdown to
-    // text/markdown, so reusing that type puts Orca in the Open With list without shipping a glob
-    // override. A desktop entry's MimeType only adds a handler - mimeapps.list still owns the
-    // default. .mdx is deliberately absent: Ubuntu 24.04's mime database maps it to
-    // application/x-genesis-32x-rom, so claiming it here would need a glob override.
+    // shared-mime-info already maps md/markdown: advertise handler only, leaving mimeapps.list defaults intact.
+    // Omit mdx because Ubuntu 24.04 maps it to application/x-genesis-32x-rom; claiming it would need a glob override.
     mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
-    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
-    // The Linux installer should not claim those system package/file names.
+    // Avoid GNOME Orca’s orca package and /usr/bin/orca names.
     executableName: 'orca-ide',
-    // Why: the icns source lets electron-builder emit standard hicolor PNG
-    // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
+    // Use icns to generate hicolor sizes; some Linux docks ignore a lone 1024px PNG.
     icon: 'resources/build/icon.icns',
     desktop: {
       entry: {
@@ -765,9 +650,7 @@ module.exports = {
   deb: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
-    // Linux host — Chromium needs a display server even for offscreen rendering,
-    // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
+    // Headless Chromium still needs display service; orca serve starts packaged Xvfb when available (ensure-virtual-display.ts).
     depends: [
       ...debElectronRuntimeDependencies,
       'python3',
@@ -778,10 +661,7 @@ module.exports = {
       'xclip',
       'xvfb'
     ],
-    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
-    // works on a headless host. The in-app CLI registration (CliInstaller) is
-    // GUI-triggered and can never run on a server, so without this the CLI is
-    // unreachable from the shell on exactly the hosts that need it.
+    // Install CLI onto PATH for headless hosts where GUI-triggered CliInstaller can never run.
     afterInstall: 'resources/linux/packaging/after-install.sh',
     afterRemove: 'resources/linux/packaging/after-remove.sh',
     // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
@@ -807,21 +687,14 @@ module.exports = {
     fpm: appImageNodeRuntimeFpmArgs
   },
   beforeBuild: electronBuilderNativeRebuild,
-  // Why: must be true so that electron-builder rebuilds native modules
-  // (node-pty) for each target architecture when producing dual-arch macOS
-  // builds (x64 + arm64). With npmRebuild disabled, CI on an arm64 runner
-  // packages arm64 binaries into the x64 DMG, causing "posix_spawnp failed"
-  // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
-  // returns false so electron-builder does not rebuild optional cpu-features.
+  // Dual-arch builds need target node-pty rebuilds or Intel Macs get arm64 binaries and posix_spawnp failure.
+  // beforeBuild performs targeted rebuild then returns false to skip optional cpu-features.
   npmRebuild: true,
   publish: {
     provider: 'github',
     owner: 'stablyai',
     repo: devChannelRepo ?? 'orca',
-    // Why draft on the main repo: `--publish always` otherwise creates a
-    // public GitHub release as soon as the first platform uploads, and
-    // /releases/latest serves a missing Windows exe. release-cut undrafts
-    // only after every required asset exists.
+    // Keep main-repo releases draft until release-cut verifies all assets; early --publish always would expose missing Windows installers.
     releaseType: devChannelRepo ? 'prerelease' : 'draft'
   }
 }
@@ -845,8 +718,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     if (!existsSync(launcherPath)) {
       continue
     }
-    // Why: packaged Unix installs expose these extraResources as public shell
-    // commands, and source/packager mode drift must not ship a non-executable CLI.
+    // Public shell commands need executable extraResources modes despite source/packager drift.
     chmodSync(launcherPath, 0o755)
   }
 }

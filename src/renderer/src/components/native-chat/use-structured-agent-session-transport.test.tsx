@@ -1,5 +1,4 @@
-// A hidden chat pane reads nothing: a message sent from it is settled by its own reply, not by the
-// journal read.
+// Hidden panes do no journal reads; their send replies must settle messages independently.
 
 // @vitest-environment happy-dom
 

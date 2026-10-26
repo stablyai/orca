@@ -56,10 +56,7 @@ export type AddEnvironmentOutcome = {
   updatedExisting: boolean
 }
 
-/**
- * Saves a pairing, refusing one for a server already saved. Why never a second entry: two entries
- * for one server publish the same workspaces, which makes every write to them ambiguous.
- */
+/** Reject duplicate host keys: two saved entries publish identical workspaces and make writes ambiguous. */
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
   args: AddEnvironmentArgs
@@ -67,10 +64,7 @@ export function addEnvironmentFromPairingCode(
   return saveEnvironmentFromPairingCode(userDataPath, args, false).environment
 }
 
-/**
- * Saves a pairing, or refreshes the saved server it is for. Only for callers that then retire the
- * running app's connections to that server, which still authenticate with the replaced pairing.
- */
+/** Refresh in place only when the caller also retires app connections authenticated with the replaced pairing. */
 export function addOrUpdateEnvironmentFromPairingCode(
   userDataPath: string,
   args: AddEnvironmentArgs
@@ -245,9 +239,7 @@ export function resolveEnvironmentPairingOffer(
   return getPreferredPairingOffer(resolveEnvironment(userDataPath, selector))
 }
 
-// Why: markEnvironmentUsed runs on every runtime round-trip; persisting lastUsedAt each
-// time forces a secure-file rewrite (ACL hardening), which blocks the main thread on
-// Windows. lastUsedAt only needs coarse freshness, so skip writes within this window.
+// Throttle lastUsedAt: per-RPC secure-file/Windows ACL rewrites block main; coarse freshness is enough.
 const LAST_USED_PERSIST_INTERVAL_MS = 60_000
 
 export function markEnvironmentUsed(
@@ -265,8 +257,7 @@ export function markEnvironmentUsed(
   const store = readPersistedEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
-  // Why: a reply that raced a re-pair carries the previous device's identity; recording it beside
-  // the new token makes every later identity check fail.
+  // Ignore identity from replies racing a re-pair; attaching the old device to the new token breaks subsequent checks.
   const fromSavedPairing =
     args.pairingDeviceToken === undefined ||
     preferredDeviceToken(environment) === args.pairingDeviceToken
@@ -286,7 +277,9 @@ export function markEnvironmentUsed(
   }
   if (runtimeIdChanged || pairedDeviceIdChanged) {
     const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environment.id)
-    if (current.sshAccess || current.pendingSshAccessOperation) {
+    // orcad mints a runtimeId per start; only a pending link must keep the runtime it verifies.
+    const intent = current.pendingSshAccessOperation
+    if (intent?.operation === 'link' || (pairedDeviceIdChanged && (current.sshAccess || intent))) {
       throw new RuntimeEnvironmentStoreError(
         'invalid_argument',
         'SSH access operation cannot change the paired runtime identity.'

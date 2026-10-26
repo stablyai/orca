@@ -1,6 +1,4 @@
-// Claude CLI 2.1.280 stream-json captures, cut to the frames and fields the child-work path reads.
-// Ids, paths and prompts are replaced; the frame order and the relative clock (`at`, ms after the
-// first user message) are the captured ones.
+// CLI 2.1.280 captures: sanitized IDs/paths/prompts; original frame order and send-relative times.
 
 import {
   result,

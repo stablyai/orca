@@ -1,8 +1,4 @@
-// A layout intent for a workspace a paired server's frames draw goes to that server's main
-// (design H5c), under the server's ids. Only the intents on one list do; any other keeps today's
-// path, as does every intent for a server that does not advertise `layout.intents.v1`. Closes,
-// starts and terminal names keep their RPCs (session.tabs.close, terminal.close, terminal.split,
-// session.tabs.createTerminal, terminal.rename), which that server's main applies to its own layout.
+// Route supported layout intents to paired main under its IDs only when frames draw the workspace and layout.intents.v1 is supported (H5c). Close/start/name RPCs retain server terminal-side effects. Editor opens preserve window-proposed IDs (H5d).
 
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
@@ -13,14 +9,9 @@ import type {
 import type { AppState } from '@/store/types'
 import type { LayoutApplyHandlers, WindowLayoutCommand } from './layout-apply-send'
 import { serverLayoutApplyRoute, type ServerLayoutApplyRoute } from './server-layout-apply-routes'
+import { serverEditorFileId } from './server-layout-frame-ids'
 
-/**
- * The intents a server's main applies from a paired desktop exactly as from its own window: tab and
- * group placement, pane sizes and moves, a tab's props and non-terminal names, and a tab's chat
- * pane. Never a close (closeTabs, closePane): main takes a window's close as already stopped and
- * stops nothing, while this desktop cannot stop a server's terminals; nor a start (createTerminalTab,
- * splitPane), sleep or wake, which need main's terminal side. Their RPCs reach that main instead.
- */
+/** Server main accepts placement, pane resize/move, props/nonterminal names, chat panes, default-tabs marks and editor opens. Never send close/start/sleep/wake intents: local-window close assumes terminals already stopped, and terminal lifecycle needs server RPC side effects. */
 export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'moveTab',
   'splitGroup',
@@ -30,7 +21,10 @@ export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'movePane',
   'setTabProps',
   'setChatPane',
-  'renameTab'
+  'renameTab',
+  'movePaneToNewTab',
+  'setDefaultTabsApplied',
+  'openEditorTab'
 ] as const satisfies readonly WindowLayoutCommand['type'][]
 
 type ServerRoutedCommand = Extract<
@@ -78,9 +72,13 @@ export function serverLayoutApplyFor(
   if (!route) {
     return null
   }
-  if (command.type === 'setGroupRatios') {
-    // Group ids are the server's own: frames carry them unchanged.
+  if (command.type === 'setGroupRatios' || command.type === 'setDefaultTabsApplied') {
+    // Group ids are the server's own: frames carry them unchanged; the mark names no tab.
     return { route, command }
+  }
+  if (command.type === 'openEditorTab') {
+    // A new tab has no server id yet: editor tab ids are kept, so the proposed one is the server's.
+    return { route, command: serverEditorOpen(worktreeId, command) }
   }
   const tabId = route.serverTabId(command.tabId)
   if (!tabId) {
@@ -93,7 +91,26 @@ export function serverLayoutApplyFor(
       command: order ? serverMove(command, tabId, route, order) : anchored(command, tabId, route)
     }
   }
-  return { route, command: { ...command, tabId } }
+  // The desktop's terminal id is not the server's; that main names the moved terminal itself.
+  return command.type === 'movePaneToNewTab'
+    ? {
+        route,
+        command: { ...command, tabId, windowDetach: { ...command.windowDetach, ptyId: null } }
+      }
+    : { route, command: { ...command, tabId } }
+}
+
+type EditorOpen = Extract<WindowLayoutCommand, { type: 'openEditorTab' }>
+
+/** An editor open under the server's ids: its own file id, and a record owned by no environment. */
+export function serverEditorOpen(worktreeId: string, command: EditorOpen): EditorOpen {
+  const { file, ...rest } = command
+  const fileId = serverEditorFileId(command.fileId, worktreeId, file ? [file] : [])
+  if (!file) {
+    return { ...rest, fileId }
+  }
+  const { runtimeEnvironmentId: _desktopOwner, ...serverFile } = file
+  return { ...rest, fileId, file: serverFile }
 }
 
 type MoveTab = Extract<WindowLayoutCommand, { type: 'moveTab' }>

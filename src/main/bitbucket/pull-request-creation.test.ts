@@ -89,7 +89,7 @@ describe('Bitbucket pull request creation', () => {
 
     const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
 
-    // No env var and no stored credential: fail closed rather than POST anonymously.
+    // This fixture has no stored credential after the environment token is removed.
     expect(result).toMatchObject({ ok: false, code: 'auth_required' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -98,8 +98,6 @@ describe('Bitbucket pull request creation', () => {
     const fetchMock = vi.fn(async () => createdPullRequestResponse())
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    // Why: the composer hides the Draft toggle for Bitbucket, so a `true` here
-    // is an unreachable persisted default the user cannot clear.
     await expect(
       createBitbucketPullRequest('/repo', { ...CREATE_INPUT, draft: true }, 'local')
     ).resolves.toMatchObject({ ok: true, number: 42 })

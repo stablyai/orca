@@ -11,8 +11,7 @@ import {
 export function canClickBlockedCreateReviewReason(
   reason: HostedReviewCreationBlockedReason | undefined
 ): boolean {
-  // Why: actionable blocked states stay clickable so the UI can explain the
-  // next step inline instead of silently hard-disabling Create Review.
+  // Keep actionable blockers clickable so inline guidance can explain the next step.
   return (
     reason === 'dirty' ||
     reason === 'default_branch' ||
@@ -79,8 +78,7 @@ export function resolveBlockedCreateReviewNoticeMessage(
     case 'existing_review':
     case 'fork_head_unsupported':
     case 'unsupported_provider':
-    // Why: base_not_on_remote is a create-time hard failure surfaced as an error
-    // result, not an inline-actionable eligibility state, so it is non-clickable.
+    // base_not_on_remote is a create-time hard failure, not an actionable eligibility state.
     // falls through
     case 'base_not_on_remote':
     case null:

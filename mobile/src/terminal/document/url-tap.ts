@@ -19,7 +19,7 @@ export function findTerminalUrlAtColumn(lineText: unknown, col: number, source: 
   if (typeof lineText !== 'string' || lineText.length === 0) {
     return null
   }
-  const re = new RegExp(source, 'gi')
+  const re = new RegExp(source, 'giu')
   let match: RegExpExecArray | null
   while ((match = re.exec(lineText)) !== null) {
     const end = match.index + match[0].length
@@ -53,8 +53,7 @@ export function urlAtViewportPoint(scope: TerminalDocumentScope, clientX: number
   if (!cell) {
     return null
   }
-  // Map the cell column to a string index so wide chars earlier on the line
-  // don't shift the match column off the tapped URL.
+  // Convert wide-cell columns to string offsets before matching URLs.
   return findUrlAtColumn(
     getLineText(scope, cell.row),
     cellColToStringIndex(scope, cell.row, cell.col)

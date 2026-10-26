@@ -23,14 +23,12 @@ function parseSiteDecisions(value: unknown): SiteDecisions | null {
   return Object.keys(decisions).length > 0 ? decisions : null
 }
 
-/** Browser profile id → origin → remembered answers. */
 const store = createBrowserProfileSiteStore({
   fileName: BROWSER_SITE_PERMISSIONS_FILE_NAME,
   description: 'site permissions',
   parseEntry: parseSiteDecisions
 })
 
-/** Answers belong to the Orca profile whose browser profiles they name. */
 export function configureBrowserSitePermissionStore(profileDirectory: string): void {
   store.configure(profileDirectory)
 }
@@ -50,7 +48,12 @@ export function setBrowserSitePermissionDecisions(
   permissions: readonly BrowserSitePermission[],
   decision: BrowserSitePermissionDecision | null
 ): void {
-  const decisions = { ...store.get(profileId, origin) }
+  const current = store.get(profileId, origin)
+  // Coalesced prompts settle once per waiting request; skip the durable write when nothing changes.
+  if (permissions.every((permission) => (current?.[permission] ?? null) === decision)) {
+    return
+  }
+  const decisions = { ...current }
   for (const permission of permissions) {
     if (decision) {
       decisions[permission] = decision

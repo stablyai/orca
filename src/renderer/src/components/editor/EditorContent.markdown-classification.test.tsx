@@ -9,9 +9,7 @@ const classifiers = vi.hoisted(() => ({
   exceedsSizeLimit: vi.fn<(content: string) => boolean>()
 }))
 
-// Why: the decision is what gets cached; the message is resolved from it per
-// read so it can follow the active UI language. The stub uses the message text
-// itself as the reason token so both seams stay observable.
+// Cache decisions but resolve localized messages per read; use message text as the stub reason to expose both seams.
 vi.mock('./markdown-rich-mode', () => ({
   getMarkdownRichModeEligibilityDecision: ({
     content,

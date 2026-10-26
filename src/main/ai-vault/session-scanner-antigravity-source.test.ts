@@ -88,8 +88,7 @@ describe('Antigravity AI Vault discovery', () => {
         workspace
       }
     ])
-    // The transcript is unchanged, so this also covers history refresh after a
-    // cached incremental parse has already been stored.
+    // Leave the transcript unchanged to exercise history enrichment on a cached parse.
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.sessions[0]?.cwd).toBe(workspace)

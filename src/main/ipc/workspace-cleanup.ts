@@ -24,12 +24,9 @@ import {
 
 export { scanWorkspaceCleanup }
 
-// Why: module scope — handler re-registration on a new main window must not
-// orphan the previous window's controllers in a discarded map.
+// Module scope preserves old-window scan cancellation across handler re-registration.
 const activeScans = new Map<string, AbortController>()
-// Keyed by sender AND scan mode: legacy suggestion-only and full-workspace
-// broad scans are separate lanes and must not supersede each other, matching
-// the renderer's broad-scan registry.
+// Separate legacy/full-list lanes by sender and mode, matching renderer scan ownership.
 const broadScanControllersBySenderMode = new Map<string, AbortController>()
 
 function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): string {
@@ -60,14 +57,11 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       const targeted = hasTargetedWorkspaceCleanupScan(scanArgs)
       const broadScanKey = getBroadScanModeKey(sender.id, scanArgs)
       if (!targeted) {
-        // Why: two same-mode broad fleet scans from one renderer can only be a
-        // refresh race; running both doubles git subprocess and fs load for a
-        // result the renderer will discard.
+        // Same-sender, same-mode refreshes supersede expensive work whose result would be discarded.
         broadScanControllersBySenderMode.get(broadScanKey)?.abort()
         broadScanControllersBySenderMode.set(broadScanKey, controller)
       }
-      // Why: a window close or reload must stop the fleet scan's git and fs
-      // work, not merely mute its progress events.
+      // Window retirement must cancel scan work, not merely mute its progress.
       const onSenderDestroyed = (): void => controller.abort()
       sender.once('destroyed', onSenderDestroyed)
       try {
@@ -81,9 +75,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
               }
             : undefined
         })
-        // Focused scans are live-only; persisting each rewrites and fsyncs the
-        // fleet snapshot. worktreeIds: [] is still targeted — persisting its
-        // empty result would wipe the fleet cache.
+        // Persist only fleet scans: even empty targeted results would wipe the broad snapshot.
         if (!targeted) {
           void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
         }

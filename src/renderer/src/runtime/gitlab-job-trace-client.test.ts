@@ -98,8 +98,7 @@ describe('loadGitLabJobLogDetails', () => {
     expect(details?.summary).toBe('No log is available for this GitLab job.')
   })
 
-  // #7732 round 1: a job canceled before it started is `completed`/`cancelled`, so it is
-  // fetched; main answers with an empty trace and the row must show that, not an error.
+  // Canceled-before-start jobs are completed/cancelled; fetch and show main’s empty trace without error (#7732).
   it('explains an empty trace for a job canceled before it produced output', async () => {
     jobTrace.mockResolvedValue({ ok: true, trace: '' })
     const canceledCheck: PRCheckDetail = {

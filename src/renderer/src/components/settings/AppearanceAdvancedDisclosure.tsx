@@ -7,7 +7,6 @@ import { normalizeSettingsSearchQuery } from './settings-search'
 import { translate } from '@/i18n/i18n'
 
 type AppearanceAdvancedDisclosureProps = {
-  /** Optional override label; defaults to "Advanced". */
   label?: string
   showTopBorder?: boolean
   className?: string
@@ -15,9 +14,7 @@ type AppearanceAdvancedDisclosureProps = {
   children: React.ReactNode
 }
 
-/** Inline "Advanced" disclosure for low-frequency controls. An active settings
- *  search force-opens it so matching controls stay reachable instead of being
- *  hidden behind a collapsed trigger. */
+/** Search force-opens advanced controls so matches remain reachable. */
 export function AppearanceAdvancedDisclosure({
   label,
   showTopBorder = true,
@@ -36,8 +33,7 @@ export function AppearanceAdvancedDisclosure({
         type="button"
         aria-expanded={expanded}
         onClick={() => setOpen((prev) => !prev)}
-        // Why: while searching the disclosure is forced open, so disable the
-        // toggle's collapse affordance rather than letting it fight the search.
+        // Search forces expansion; disable collapse instead of fighting the search state.
         disabled={isSearching}
         className="flex w-full items-center gap-2 py-1 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
       >

@@ -4,9 +4,7 @@ import { normalizePaletteText } from './normalized-text'
 export const PALETTE_QUERY_MAX_TOKENS = 16
 
 const DIGIT = /\p{N}/u
-// Why symbols count as content: an emoji is \p{So} and an arrow is \p{Sm}, so a
-// letters-and-digits test would classify `🚀` as punctuation and drop the token —
-// and the palette input expands `:rocket:` into exactly that.
+// Emoji/arrow symbols are query content; punctuation-only filtering must preserve the palette’s :rocket: expansion.
 const ALPHANUMERIC = /[\p{L}\p{N}\p{S}\p{Extended_Pictographic}]/u
 const LETTERS_ONLY = /^\p{L}+$/u
 const LATIN_OR_DIGIT = /^[\p{Script=Latin}\p{Nd}]$/u
@@ -80,10 +78,7 @@ export function createPaletteQueryToken(text: string, index: number): PaletteQue
   }
 }
 
-/**
- * Folds the query once per keystroke and splits it on whitespace only —
- * punctuation stays inside tokens so `08-13` and `orca/main` survive intact.
- */
+/** Fold per keystroke and split only whitespace so identifier punctuation survives within tokens. */
 export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }

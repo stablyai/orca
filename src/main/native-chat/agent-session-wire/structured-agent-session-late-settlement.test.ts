@@ -80,7 +80,6 @@ function journal(): AgentSessionJournal {
   ).sessions.get(SESSION)!.journal
 }
 
-/** A send is accepted first; this waits for the delivery loop to hand it to the provider. */
 async function handedOver(clientMessageId: string): Promise<void> {
   await vi.waitFor(async () => {
     expect(
@@ -190,7 +189,7 @@ describe('settling a send the provider proves it received after the ack window',
       unsubscribe()
     }
     await expect(pending).resolves.toMatchObject({ ok: true })
-    // The late `unknown` from the handover does not reopen the proven acceptance.
+    // Late uncertainty must not undo proven acceptance.
     await vi.waitFor(async () =>
       expect(await submissions()).toMatchObject([
         { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
@@ -247,8 +246,7 @@ describe('settling a send the provider proves it received after the ack window',
     expect(await submissions()).toMatchObject([
       { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
     ])
-    // The point of the fix: the client stops rendering Retry, and Retry is what
-    // was delivering the message to the agent a second time.
+    // Retry previously redelivered; the settled send must remain single-dispatch.
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
@@ -264,7 +262,6 @@ describe('settling a send the provider proves it received after the ack window',
       state: 'rejected',
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
-    // A receipt after the withdrawal cannot turn it into sent.
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: params.envelope.clientOperationId,

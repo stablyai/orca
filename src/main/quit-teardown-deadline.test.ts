@@ -41,8 +41,6 @@ describe('settleTeardownWithinDeadline', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  // Why: pin the magnitude so the wedge escape hatch cannot be silently
-  // shrunk below checkpoint-write time or grown past user patience.
   it('keeps the deadline within the checkpoint-safe window', () => {
     expect(WILL_QUIT_TEARDOWN_DEADLINE_MS).toBeGreaterThanOrEqual(10_000)
     expect(WILL_QUIT_TEARDOWN_DEADLINE_MS).toBeLessThanOrEqual(30_000)

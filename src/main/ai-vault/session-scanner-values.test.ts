@@ -31,7 +31,6 @@ describe('AI Vault session scanner text values', () => {
     )
     expect(normalizePreviewText(line, 'assistant')).toBeNull()
     expect(normalizePreviewText(line, 'user')).toBe(line)
-    // Provider content (Claude/Codex message parts) folds lines; the visual line goes first.
     expect(
       extractPreviewContentText(
         [{ type: 'text', text: `Here it is.\n\n${line}\n\nDone.` }],
@@ -110,8 +109,6 @@ describe('AI Vault session scanner text values', () => {
     )
   })
 
-  // Prime Agent's env var is its agent dir verbatim and the CLI writes to
-  // `<agentDir>/sessions`, so every configured dir maps to that child.
   it('maps any Prime Agent agent dir to its sessions child', () => {
     expect(normalizePrimeAgentSessionsDir('/tmp/prime-agent')).toBe('/tmp/prime-agent/sessions')
     expect(normalizePrimeAgentSessionsDir('/tmp/prime-agent///')).toBe('/tmp/prime-agent/sessions')
@@ -121,8 +118,6 @@ describe('AI Vault session scanner text values', () => {
     )
   })
 
-  // Why: the CLI appends `sessions` unconditionally, so an agent dir that is itself
-  // named `sessions` nests one deeper rather than being taken as the transcripts root.
   it('still appends sessions when the agent dir is itself named sessions', () => {
     expect(normalizePrimeAgentSessionsDir('/data/sessions')).toBe('/data/sessions/sessions')
   })
@@ -133,10 +128,7 @@ describe('AI Vault session scanner text values', () => {
     )
   })
 
-  // Why: any non-absolute root would resolve against the main-process cwd. The
-  // drive-shaped values ('C:foo' is the form that resolves against a per-drive
-  // cwd on Windows) are non-absolute on posix too, so they assert the same
-  // fallback here; real win32 semantics cannot be pinned on a posix runner.
+  // Drive-relative paths are invalid on POSIX too; native Windows semantics need a Windows runner.
   it('falls back to the default root for every non-absolute agent dir', () => {
     const fallback = join(homedir(), '.prime', 'agent', 'sessions')
     for (const value of [
@@ -169,8 +161,6 @@ describe('AI Vault session scanner text values', () => {
       )
     })
 
-    // Why: upstream reads the sessions-root overrides before the agent dir and uses
-    // them verbatim; ignoring them left the vault silently empty.
     it('prefers the sessions-root overrides verbatim over the agent dir', () => {
       expect(
         primeAgentSessionsDirFromEnv({
@@ -196,7 +186,6 @@ describe('AI Vault session scanner text values', () => {
       expect(primeAgentSessionsDirFromEnv({ PRIME_AGENT_SESSION_DIR: '~/t' })).toBe(
         join(homedir(), 't')
       )
-      // Why: '.' would otherwise scan the main-process cwd outright.
       for (const value of ['/', '.', '..', 'rel/path', '   ', 'C:foo']) {
         expect(primeAgentSessionsDirFromEnv({ PRIME_AGENT_SESSION_DIR: value })).toBe(defaultDir)
       }

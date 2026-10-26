@@ -47,8 +47,7 @@ export function useChecksListState({
   )
   const detailsContextRef = useRef(checkDetailsContextKey)
   const autoExpandedContextRef = useRef<string | null>(null)
-  // Why: expanded check details already sit inside the sidebar scroller; keeping
-  // the list scroller too creates nested scrollbars around CI annotations.
+  // Expanded details use the sidebar scroller; constraining the list too would create nested scrollbars.
   const shouldConstrainCheckList = checksExpanded && expandedCheckKeys.size === 0
   const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
     shouldConstrainCheckList && checks.length > 0
@@ -63,9 +62,7 @@ export function useChecksListState({
       })),
     [checkDetailsContextKey, sorted]
   )
-  // Why: every header count comes from the same classifier the checks pill uses — counting only
-  // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
-  // null conclusion as pending kept a completed-but-unresolved check spinning forever.
+  // Share the pill's classifier for skipped passes and completed-without-verdict unresolved checks.
   const {
     passed: passingCount,
     failed: failingCount,
@@ -217,7 +214,7 @@ export function useChecksListState({
                       'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
                       'No inline details are available for this check.'
                     ),
-                // Why: a detail-less result is only final for this status — re-arm the retry once the job moves on.
+                // A null detail result is final only for this state; rearm when the job moves on.
                 errorAt: details
                   ? undefined
                   : { status: row.check.status, conclusion: row.check.conclusion }

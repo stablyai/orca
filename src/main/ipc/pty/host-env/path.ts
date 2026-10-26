@@ -23,8 +23,7 @@ export function promoteAgentTeamsShimPath(
     return
   }
   const shimPath = firstPathEntry(requestedPath)
-  // Why: requestedPath is captured before buildPtyHostEnv scrubs, so a legacy entry that
-  // reached the front would be re-prepended here and outlive the scrub.
+  // requestedPath predates cleanup; re-prepending a legacy entry would undo the scrub.
   if (!shimPath || isLegacyTerminalShimPathEntry(shimPath)) {
     return
   }
@@ -33,7 +32,7 @@ export function promoteAgentTeamsShimPath(
   const remaining = currentPath
     .split(delimiter)
     .filter((entry) => entry.length > 0 && entry !== shimPath)
-  // Why: host env injection prepends Orca's shims; Claude Agent Teams must still resolve our fake tmux before any real tmux.
+  // Agent Teams must resolve Orca's tmux shim before any real tmux, including after host prepends.
   env[currentPathKey] = [shimPath, ...remaining].join(delimiter)
 }
 

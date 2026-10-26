@@ -1,6 +1,4 @@
-// The conversation command a Codex child is running. Codex carries a command out as a turn of its
-// own; that turn writes no record, its rows join the command's turn, and its end is the command's.
-// Held by the child's translator, so it ends with the child and nothing has to release it.
+// Command-carrying provider turns share the command's journal turn instead of creating a second one.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -20,29 +18,25 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 type CarriedCommand = {
   command: StructuredAgentSessionCommandRun
   compacted: boolean
-  /** Codex's own error row already says why the command failed. */
   failureShown: boolean
 }
 
 export class CodexJournalCommandTurn {
-  /** Sent, and not yet carried by a provider turn. */
+  // Sent but not yet claimed by a provider turn.
   private awaiting: StructuredAgentSessionCommandRun | null = null
   private readonly carried = new Map<string, CarriedCommand>()
 
-  /** Before Orca sends the command: the next primary turn to start carries it out. */
   begin(command: StructuredAgentSessionCommandRun): void {
     this.awaiting = command
   }
 
-  /** The command was never taken. */
   forget(turnId: string): void {
     if (this.awaiting?.turnId === turnId) {
       this.awaiting = null
     }
   }
 
-  /** The command the primary turn `providerTurnId` carries out. Idempotent per provider turn, so a
-   *  refused frame's retry gets the same answer. */
+  // Repeated claims must return the same command when a refused frame is retried.
   claim(providerTurnId: string): StructuredAgentSessionCommandRun | null {
     const carried = this.carried.get(providerTurnId)
     if (carried || !this.awaiting) {
@@ -65,7 +59,7 @@ export class CodexJournalCommandTurn {
       : null
   }
 
-  /** The provider turn a Stop on `turnId` interrupts: none while the command has not started one. */
+  /** An unclaimed command has no provider turn to interrupt. */
   providerTurnId(turnId: string): string | undefined {
     if (this.awaiting?.turnId === turnId) {
       return undefined
@@ -78,7 +72,6 @@ export class CodexJournalCommandTurn {
     return turnId
   }
 
-  /** Codex reported the compaction, in the turn carrying the command. */
   compacted(providerTurnId: string): void {
     const carried = this.carried.get(providerTurnId)
     if (carried) {
@@ -86,7 +79,6 @@ export class CodexJournalCommandTurn {
     }
   }
 
-  /** The command's end, for the batch that settles the provider turn carrying it. */
   end(
     providerTurnId: string,
     ended: {
@@ -103,14 +95,12 @@ export class CodexJournalCommandTurn {
     const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'person')
     const verdict = structuredCompactionOutcome({
       compacted: carried.compacted,
-      // Codex reports the user's stop as the turn's own status.
       interruptRequested: ended.status === 'interrupted',
-      // A turn that did not complete failed, not merely went unconfirmed.
       failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
     })
     const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(command.identity) }
     return [
-      // A success already drew Codex's own compaction marker inside the command's turn.
+      // Successful compaction already has Codex's marker; do not add a second status row.
       ...(verdict.failure && !carried.failureShown
         ? [
             {
@@ -143,12 +133,11 @@ export class CodexJournalCommandTurn {
     ]
   }
 
-  /** Codex's `error` frame, already a row in the turn it names. A turn-ending one says why the
-   *  command failed, so the failed completion that follows it adds no second row. */
+  // Suppress duplicate failure rows after Codex's own terminal error frame.
   errorShown(params: unknown): void {
     const providerTurnId = readCodexTurnId(params)
     const carried = providerTurnId ? this.carried.get(providerTurnId) : undefined
-    // A stream error Codex is about to retry ends nothing.
+    // Retried stream errors do not end the command.
     if (carried && readCodexJournalRecord(params).willRetry !== true) {
       carried.failureShown = true
     }

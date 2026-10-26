@@ -27,9 +27,7 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
-  // One seam, two hosts: natively the microphone, on the page the shell's three audio verbs.
-  // Everything below this line is the same flow either way, the screen included — an open
-  // microphone holds it on the device side, under both halves.
+  // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
   const capture = useDictationCapture()
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -98,8 +96,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   )
 
   useEffect(() => {
-    // Microphone events are a hot path; reuse this wiring instead of allocating
-    // a queue object and release predicate for every audio chunk.
+    // Reuse wiring on the microphone hot path instead of allocating per chunk.
     const audioChunkQueue = {
       pendingChunks: pendingChunksRef.current,
       pendingAudioBudget: pendingAudioBudgetRef.current,
@@ -113,9 +110,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         return
       }
       if (chunk.droppedBytes > 0) {
-        // Audio the capture already lost is the condition the budget refuses on by another route —
-        // the page is not keeping up with the microphone — so it reaches the one message the
-        // composer renders for it. Only the page can drop: natively this is always zero.
+        // Page capture loss and budget overflow both mean the page fell behind the microphone; report the same error. Native capture never drops here.
         failActiveDictation(dictationId, new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE))
         return
       }
@@ -138,14 +133,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     try {
       opened = await capture.open()
     } catch (err) {
-      // Same check the arm below makes, for the same reason: a refusal this start no longer owns
-      // must not idle what replaced it, nor toast over the closure the disable already reported.
+      // Stale refusal must neither idle the replacement nor toast over the closure already reported by disable.
       if (generationRef.current !== generation || !enabledRef.current) {
         return
       }
-      // A capture the host refused outright, which on the page is a route that was never granted
-      // the audio verbs. Back to idle before it is rethrown: the caller toasts the shell's own
-      // message, and a control left on 'starting' has no way back short of a remount.
+      // A page without audio grants can refuse capture; return to idle before rethrowing its message so starting cannot get stuck.
       applyStatus('idle')
       throw err instanceof Error ? err : new Error(String(err))
     }
@@ -211,13 +203,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     generationRef.current = generation
     applyStatus('processing')
     try {
-      // Inside the try so a throwing native shutdown still runs the finally
-      // release and error cleanup.
-      //
-      // Awaited, and chunks are still accepted while it runs: `end` hands over whatever the
-      // capture is still holding, which on the page is up to one drain interval of the tail of
-      // what the user just said. Refusing chunks first would drop exactly that audio, and taking
-      // the pending set before it would let `finish` overtake the last send.
+      // Keep shutdown inside try for finally cleanup; accept its tail chunks and snapshot pending sends only after end settles, or finish can overtake the last audio.
       await capture.end()
       acceptingChunksRef.current = false
       await Promise.allSettled(Array.from(pendingChunksRef.current))
@@ -266,11 +252,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
   }, [applyStatus, capture, failActiveDictation])
 
-  /**
-   * Ends whatever dictation is underway. `reason === null` is the user's own cancel, the one silent
-   * end a tap is allowed; anything else reaches `onError`, because a start the user asked for that
-   * stops before it records has nothing else to show for the tap.
-   */
+  // Only the user’s own cancel (reason:null) ends silently; other interruptions call onError so the tap has a visible outcome.
   const abandonDictation = useCallback(
     async (reason: string | null) => {
       const client = clientRef.current
@@ -283,8 +265,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       if (client && dictationId) {
         await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
       }
-      // The cancel is a desktop round trip, and a start that landed inside it owns the status by
-      // now: reporting here would toast over a live recording, and resetting would idle one.
+      // The cancel round trip may overlap a new recording; stale completion must neither report over it nor reset it.
       if (generationRef.current !== generation) {
         return
       }
@@ -309,7 +290,6 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   useEffect(() => {
     if (!enabled) {
-      // Not the user's cancel: the composer lost its send while the tap was still in flight.
       void abandonDictation(MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE)
     }
   }, [abandonDictation, enabled])

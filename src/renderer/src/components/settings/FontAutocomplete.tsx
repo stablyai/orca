@@ -13,10 +13,7 @@ type FontAutocompleteProps = {
   onChange: (value: string) => void
   placeholder?: string
   onRequestSuggestions?: () => void
-  /** Fires with whichever option the user is currently highlighting in the
-   *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
-   *  highlighted / the dropdown is closed. Lets a consumer show a live
-   *  preview of the font without committing the selection. */
+  /** Preview the highlighted font without committing; null clears the preview when nothing is highlighted or the menu closes. */
   onPreviewFontFamily?: (font: string | null) => void
 }
 
@@ -45,8 +42,7 @@ export function FontAutocomplete({
   const setRootNode = useCallback((element: HTMLDivElement | null): void => {
     rootRef.current = element
     if (!element) {
-      // Why: settings search can unmount this control while a hover preview is
-      // active; the consumer must not keep rendering that transient font.
+      // Search can unmount a previewing control; clear the consumer’s transient font on detach.
       previewFontFamilyRef.current?.(null)
     }
   }, [])
@@ -79,8 +75,7 @@ export function FontAutocomplete({
     () => filterFontSuggestions(suggestions, query),
     [suggestions, query]
   )
-  // Why: the committed font fills the input, but opening the chooser should
-  // still reveal every installed font instead of only fonts sharing that name.
+  // Opening with the committed font must still show all fonts rather than filter by its name.
   const visibleSuggestions =
     !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
   const renderedSuggestions = useMemo(
@@ -88,9 +83,7 @@ export function FontAutocomplete({
     [visibleSuggestions, highlightedIndex]
   )
 
-  // Why: sync the highlighted index during render rather than via useEffect so
-  // the correct item is highlighted on the very first paint after open/filter
-  // changes — useEffect would leave one render with the stale index visible.
+  // Reconcile highlights before paint so opening/filter changes cannot flash a stale index.
   const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
@@ -110,9 +103,7 @@ export function FontAutocomplete({
     }
   }
 
-  // Why: notify the consumer of the currently-highlighted font so it can
-  // render a live preview. Closing the dropdown or moving past all options
-  // clears the preview back to the committed value.
+  // Preview the highlight; closing or leaving options restores the committed font.
   useEffect(() => {
     if (!onPreviewFontFamily) {
       return
@@ -268,17 +259,14 @@ export function FontAutocomplete({
           </div>
         </PopoverAnchor>
 
-        {/* Why: portal the dropdown outside the settings section — an in-flow
-          absolute panel makes the highlighted option's scrollIntoView scroll
-          the whole settings pane, pushing the section content out of view. */}
+        {/* Portal outside Settings so option scrollIntoView cannot scroll the whole pane away. */}
         <PopoverContent
           align="start"
           className="w-[var(--radix-popover-trigger-width)]"
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => {
-            // Why: the input and its clear/toggle buttons are the anchor, not
-            // the content, so Radix would otherwise dismiss on every click there.
+            // The input/buttons are anchors outside content; prevent Radix from dismissing on those clicks.
             if (rootRef.current?.contains(e.target as Node)) {
               e.preventDefault()
             }

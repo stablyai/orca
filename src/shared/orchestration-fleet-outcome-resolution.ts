@@ -1,5 +1,4 @@
-/** One reading of "what happened to this Dispatch", shared by worker-list, worker-show and the
- *  fleet projection. Three copies of this ladder disagreed on pre-v3 rows. */
+/** Share outcome precedence across worker-list/show and fleet; separate ladders disagreed on pre-v3 rows. */
 
 export type FleetAttemptOutcome =
   | 'in_progress'
@@ -21,8 +20,7 @@ export function isUnsupervisedWorker(workerState: string | null | undefined): bo
   return workerState == null || workerState === 'unsupervised'
 }
 
-/** A settled Dispatch that never had a worker row: pre-v3, or settled with the Task before a
- *  worker was ever started. There is no supervised process, so absence of one is not news. */
+/** Pre-v3 or task-settled dispatches may lack worker rows; no supervised process means absence adds no news. */
 export function isUnsupervisedSettledDispatch(subject: FleetSettlementSubject): boolean {
   return (
     isUnsupervisedWorker(subject.workerState) &&
@@ -49,9 +47,7 @@ export function resolveFleetWorkerOutcome(args: {
   if (workerState === 'failed' || dispatchStatus === 'failed') {
     return 'failed'
   }
-  // `dispatch_contexts.status = 'completed'` is only ever written from an accepted `succeeded`
-  // worker report or a Task completion. With no worker row that record is the whole settlement,
-  // and reading it as unknown reported every pre-v3 Dispatch as needing attention forever.
+  // Completed comes from accepted success or Task completion; without a worker row it is the whole settlement, including pre-v3 dispatches.
   if (dispatchStatus === 'completed' && isUnsupervisedWorker(workerState)) {
     return 'succeeded'
   }

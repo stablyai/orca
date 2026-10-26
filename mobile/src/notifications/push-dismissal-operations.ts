@@ -2,15 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { missedNotificationsSchema } from './notification-reply-schema'
 
-/**
- * The catch-up read that tells this device which of the banners still in its OS tray the host has
- * already dismissed elsewhere.
- *
- * A skip rather than a throw: reconciliation is a background pass with no screen to raise a host
- * message on, and a refusal leaves the tray as it is for the next pass. The member read stays at
- * the call site, where the optional chaining over `dismissedPushes` tolerates a null result instead
- * of throwing on it.
- */
+// Keep catch-up refusals nonthrowing: background reconciliation has no error screen and must leave banners for the next pass. Preserve nullish replies for the caller’s optional access.
 export const pushMissedSinceRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'notifications.missed-since-or-skip',
@@ -21,5 +13,4 @@ export const pushMissedSinceRead = bindDeferredRpcOperation(
   })
 )
 
-/** What the reconciliation sends with, named from the operation so no module names the raw port. */
 export type MobilePushDismissalRpcSender = Parameters<typeof pushMissedSinceRead.request>[0]

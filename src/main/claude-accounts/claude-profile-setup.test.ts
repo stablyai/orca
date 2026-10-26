@@ -51,7 +51,7 @@ function fixture() {
   return { root, defaultHome, dataRoot, service, installHooks, setup }
 }
 
-// Why: setup runs as 'linux', so it creates real symlinks, which Windows needs privilege for.
+// Linux-mode setup creates symlinks that require additional privileges on Windows.
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude account profile setup', () => {
@@ -82,6 +82,31 @@ describe('Claude account profile setup', () => {
     expect(realpathSync(join(home, 'projects'))).toBe(realpathSync(join(f.defaultHome, 'projects')))
     expect(existsSync(join(home, '.credentials.json'))).toBe(false)
     expect((await f.setup()).warnings).toEqual([])
+  })
+  itLinks('shares plugins Claude wrote into the folder before its first setup', async () => {
+    const f = fixture()
+    mkdirSync(join(f.defaultHome, 'plugins'))
+    writeFileSync(join(f.defaultHome, 'plugins', 'installed_plugins.json'), '{"mine":true}')
+    const home = join(f.dataRoot, 'claude-profiles/a/home')
+    // A pane's `claude` read the pointer before setup ran and made its own registry.
+    mkdirSync(join(home, 'plugins'), { recursive: true })
+    writeFileSync(join(home, 'plugins', 'installed_plugins.json'), '{"version":2,"plugins":{}}')
+    writeFileSync(join(home, 'plugins', 'claude-only.json'), '{}')
+    const report = await f.setup()
+    expect(report.surfaces.plugins).toBe('linked')
+    expect(realpathSync(join(home, 'plugins'))).toBe(realpathSync(join(f.defaultHome, 'plugins')))
+    expect(readFileSync(join(f.defaultHome, 'plugins', 'installed_plugins.json'), 'utf8')).toBe(
+      '{"mine":true}'
+    )
+    expect(existsSync(join(f.defaultHome, 'plugins', 'claude-only.json'))).toBe(true)
+    expect(report.warnings).toContainEqual(
+      expect.objectContaining({ surface: 'plugins', code: 'retained-conflict' })
+    )
+    // After setup, a folder the user put in place of the link stays theirs.
+    rmSync(join(home, 'plugins'))
+    mkdirSync(join(home, 'plugins'))
+    writeFileSync(join(home, 'plugins', 'own.json'), '{}')
+    expect((await f.setup()).surfaces.plugins).toBe('user-owned')
   })
   itLinks('marks the folder set up only after its last step', async () => {
     const f = fixture()
@@ -167,7 +192,6 @@ describe('Claude account profile setup', () => {
       platform: 'linux'
     })
     expect(skipped.surfaces.hooks).toBe('absent')
-    // Copied as is from the default home, where Claude reports it the same way.
     writeFileSync(join(f.defaultHome, 'settings.json'), '{bad')
     const failed = await f.setup()
     expect(failed.surfaces.hooks).toBe('failed')

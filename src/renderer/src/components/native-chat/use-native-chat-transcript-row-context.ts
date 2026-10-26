@@ -12,7 +12,6 @@ type NativeChatTranscriptRowContextInput = Omit<
   hostWork: StructuredAgentSessionHostWork | undefined
 }
 
-/** The context every transcript row reads, stable until one of its inputs changes. */
 export function useNativeChatTranscriptRowContext({
   agent,
   hostWork,

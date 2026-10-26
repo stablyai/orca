@@ -37,7 +37,6 @@ type MacDaemonLaunchOptions = Omit<
   runtimeDir: string
 }
 
-/** Why a launch fell back to forking the daemon from the app. */
 export type MacStableLaunchFallbackReason =
   | 'prepare-failed'
   | 'deadline'
@@ -57,7 +56,7 @@ function buildMacDaemonLaunchJob(
   label: string
 ): Record<string, unknown> {
   const env: NodeJS.ProcessEnv = { ...process.env, ORCA_USER_DATA_PATH: options.userDataPath }
-  // The helper's executable is plain Node; Electron's Node-mode switch and IPC fds mean nothing there.
+  // Plain Node does not use Electron’s Node-mode switch or inherited IPC descriptors.
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_CHANNEL_FD
   delete env.NODE_CHANNEL_SERIALIZATION_MODE
@@ -74,15 +73,17 @@ function buildMacDaemonLaunchJob(
     RunAtLoad: true,
     KeepAlive: false,
     AbandonProcessGroup: true,
-    // A plist job outside SMAppService names its app here so Local Network access resolves to Orca.
+    // Associate plist-launched jobs with Orca for Local Network access.
     AssociatedBundleIdentifiers: [LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId],
     ProcessType: 'Interactive',
+    // launchd disables cloud-file downloads for jobs unless asked; shells need them like Terminal.app.
+    MaterializeDatalessFiles: true,
     StandardOutPath: '/dev/null',
     StandardErrorPath: '/dev/null'
   }
 }
 
-/** Fork instead, unless the fork could no longer finish before the startup gate. */
+/** Permit fork fallback only before the handoff deadline. */
 function fallBackToFork(
   reason: MacStableLaunchFallbackReason,
   error: unknown,
@@ -98,10 +99,7 @@ function fallBackToFork(
   return null
 }
 
-/**
- * A label held by a service that retired its endpoint but never exited would refuse every launch;
- * the recovery verifies that retirement first, so a live or unreadable service is never touched.
- */
+/** Recover a verified retired service whose occupied label blocks every new launch. */
 async function recoverBlockingMacDaemonJob(options: MacDaemonLaunchOptions): Promise<boolean> {
   try {
     return await recoverRetiredMacDaemonJob(
@@ -115,15 +113,12 @@ async function recoverBlockingMacDaemonJob(options: MacDaemonLaunchOptions): Pro
   }
 }
 
-/**
- * Starts the daemon under launchd from the signed helper copy, so it keeps Orca's identity when an
- * update replaces the app. Null means no job can claim the endpoint and the caller should fork.
- */
+/** Use a signed launchd helper to survive app updates; null permits safe fork fallback. */
 export async function launchMacDaemonFromStableBundle(
   options: MacDaemonLaunchOptions,
   deadlineMs: number
 ): Promise<DaemonProcessHandle | null> {
-  // `macosLoginSessionWatch` is set only for the macOS GUI desktop, never for serve mode.
+  // GUI login-session watching excludes serve mode.
   if (
     process.platform !== 'darwin' ||
     !options.macosLoginSessionWatch ||
@@ -131,7 +126,7 @@ export async function launchMacDaemonFromStableBundle(
   ) {
     return null
   }
-  // The helper's Node cannot load below its floor; those Macs keep the fork and make no copy.
+  // Older Macs need the fork path because the helper’s Node cannot load there.
   const systemVersion = process.getSystemVersion?.()
   if (!systemVersion || compareDottedVersions(systemVersion, NODE_RUNTIME_DARWIN_MINIMUM_OS) < 0) {
     return null
@@ -139,7 +134,7 @@ export async function launchMacDaemonFromStableBundle(
   const label = macDaemonJobLabel(options.userDataPath)
   const domain = `gui/${process.getuid?.()}`
   const service = `${domain}/${label}`
-  // Preparation ends early enough for bootstrap and this job's readiness wait to meet the deadline.
+  // Reserve time after preparation for bootstrap and readiness.
   const remainingMs = deadlineMs - BOOTSTRAP_TIMEOUT_MS - STARTUP_TIMEOUT_MS - Date.now()
   const prepareSignal = remainingMs > 0 ? AbortSignal.timeout(remainingMs) : AbortSignal.abort()
   const root = getMacDaemonBundleRoot(options.userDataPath)
@@ -150,7 +145,7 @@ export async function launchMacDaemonFromStableBundle(
     return fallBackToFork(prepareSignal.aborted ? 'deadline' : 'prepare-failed', error, deadlineMs)
   }
   void retireOtherMacDaemonCopies(root, bundle.directory)
-  // Forks only once the job provably cannot start; the copy itself may be why it did not.
+  // Permit fallback only after proving this job cannot start.
   const abandon = async (reason: MacStableLaunchFallbackReason, error: unknown): Promise<null> => {
     if (!(await releaseMacDaemonJob(service))) {
       throw error
@@ -159,7 +154,7 @@ export async function launchMacDaemonFromStableBundle(
     return fallBackToFork(reason, error, deadlineMs)
   }
 
-  // Reserve bootstrap/readiness time while shutdown and launchd finish retiring the old job.
+  // Old-job retirement must leave enough time for bootstrap and readiness.
   const releaseByMs = Math.min(
     Date.now() + DAEMON_SHUTDOWN_TIMEOUT_MS + 2_000,
     deadlineMs - BOOTSTRAP_TIMEOUT_MS - STARTUP_TIMEOUT_MS
@@ -172,7 +167,7 @@ export async function launchMacDaemonFromStableBundle(
       'A macOS terminal service from an earlier launch is still registered. Restart terminals from Settings → Manage Sessions.'
     )
   }
-  // The inherited environment can contain credentials; never leave it on disk after bootstrap.
+  // Remove the plist after bootstrap because its inherited environment may contain credentials.
   const jobPath = join(bundle.directory, `launch-${options.launchNonce}.plist`)
   const removeJobFile = (): Promise<void> => rm(jobPath, { force: true }).catch(() => {})
   try {
@@ -194,7 +189,7 @@ export async function launchMacDaemonFromStableBundle(
     await removeJobFile()
     return fallBackToFork(prepareSignal.aborted ? 'deadline' : 'prepare-failed', error, deadlineMs)
   }
-  // Never aborted: a killed launchctl leaves the job's fate unknown.
+  // Do not inherit the preparation abort signal: interrupted bootstrap leaves job ownership unknown.
   const bootstrap = await runProcess({
     program: '/bin/launchctl',
     args: ['bootstrap', domain, jobPath],
@@ -216,7 +211,7 @@ export async function launchMacDaemonFromStableBundle(
       break
     } catch (error) {
       client.disconnect()
-      // A copy refused at exec never answers; hand off as soon as its job stops.
+      // A helper refused at exec cannot answer; fall back once its job stops.
       const state = await readMacDaemonJobState(service)
       if (state === 'stopped' || state === 'missing' || Date.now() >= readyByMs) {
         return await abandon('exited-before-ready', error)
@@ -226,7 +221,7 @@ export async function launchMacDaemonFromStableBundle(
   }
   if (client.getDaemonIdentity()?.launchNonce !== options.launchNonce) {
     client.disconnect()
-    // The fork launcher adopts that occupant normally rather than as a degraded endpoint.
+    // Let the fork launcher adopt the competing endpoint normally.
     await stopMacDaemonJob(service)
     const error = new DaemonEndpointOwnershipError('Another daemon owns the terminal endpoint')
     return fallBackToFork('endpoint-taken', error, deadlineMs)

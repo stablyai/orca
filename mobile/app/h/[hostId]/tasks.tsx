@@ -4,16 +4,9 @@ import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-rou
 import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 
-/**
- * The shell route for tasks, in `index.tsx`'s shape.
- *
- * The page is opened from the native home screen, so the pathname and the provider param are what
- * the shell tells it; `taskSource` rides in `init.route.params`, which the page folds back into
- * its own URL before the first render.
- */
+// Pass native pathname and taskSource via init.route.params; page restores its URL before first render.
 export default function MobileTasksRoute() {
-  // Through `firstParam`, as the agent-history route does: expo-router hands back an array for a
-  // repeated query key, and a bare read builds `/h/host-a%2Chost-b/tasks` out of one.
+  // Use firstParam: repeated query keys are arrays and must not form a comma-joined host segment.
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     taskSource?: string | string[]
@@ -24,8 +17,7 @@ export default function MobileTasksRoute() {
   const route = hostId
     ? shellScreenRoute({
         pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
-        // Omitted rather than empty: an absent provider lets the page pick its own default, where
-        // `taskSource=` is a provider named nothing.
+        // Omit absent taskSource so page selects its default; taskSource= is an explicit empty provider.
         ...(taskSource === '' ? {} : { params: { taskSource } })
       })
     : null
@@ -34,8 +26,7 @@ export default function MobileTasksRoute() {
   }
   return (
     <MobileWebShellScreen
-      // Keyed for the reason every shell route is: a host holds the grants its session opened
-      // with, so a host id change must be a remount rather than a prop update.
+      // Remount on host change to discard the old session’s grants.
       key={hostId}
       hostId={hostId}
       route={route}

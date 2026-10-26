@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreground-commands'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   acquireReadyCodexForTest,
@@ -25,7 +25,6 @@ function refusal(code: number, message: string): CodexAppServerRequestError {
   )
 }
 
-/** A session whose turn spawned `HELPER`, which is still working on its own first turn. */
 async function runningHelper(routes: Record<string, Route>) {
   const codex = fakeCodex(routes)
   const evidence: AgentChildWorkEvidence[] = []
@@ -95,7 +94,6 @@ describe('Codex sub-agent Stop', () => {
       type: 'ended',
       outcome: 'cancelled'
     })
-    // Its turn is over: a second Stop has nothing to name.
     await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: false })
     expect(codex.interrupts()).toHaveLength(1)
   })
@@ -231,7 +229,6 @@ describe('Codex sub-agent Stop', () => {
     expect(codex.evidence.at(-1)).toMatchObject({ type: 'removed' })
   })
 
-  /** `runningHelper`, plus a dev server the session's own turn left running. */
   async function helperAndDevServer(interrupt: Route) {
     const running = ['4242']
     const terminated: unknown[] = []

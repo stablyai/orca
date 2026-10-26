@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   emptyWorkspaceDefaultChatAwaitsDetection,
   loadEmptyWorkspaceDefaultChatDetection,
@@ -52,6 +53,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
+  setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -59,7 +61,6 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
   it('launches the default agent as a chat', () => {
     seedSettings({})
 
-    // The chat's tab opens once its host admits it, so none is primary yet.
     expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toEqual({
       primaryTabId: null
     })
@@ -68,7 +69,6 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     )
   })
 
-  // The function's promise: no agent nobody asked for. A "no" seeds the shell it would have.
   it("seeds a plain shell, not the agent's terminal, when the host declines the chat", () => {
     seedSettings({})
 
@@ -127,6 +127,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
 describe('agent detection for the default chat', () => {
   it('waits only while chat is the default and the host list has not loaded', () => {
     seedSettings({})
+    setLocalRuntimeCapabilitiesForTests([])
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
     useAppStore.setState({ remoteDetectedAgentIds: {} })
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(true)
@@ -139,7 +140,7 @@ describe('agent detection for the default chat', () => {
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
   })
 
-  // Why: Blank Terminal opens a shell whatever the host has, so waiting only delays that shell.
+  // Blank Terminal cannot use host agent facts, so waiting would only delay its shell.
   it('does not wait when the default agent is Blank Terminal', () => {
     seedSettings({ defaultTuiAgent: 'blank' })
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')

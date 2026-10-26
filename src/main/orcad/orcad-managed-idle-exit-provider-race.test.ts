@@ -79,7 +79,6 @@ it.each(['provider', 'client', 'request', 'recent request'])(
     expect(await stopping).toBe(false)
     expect(shutdown).not.toHaveBeenCalled()
     expect(discardOrcadIdleStopRecord).toHaveBeenCalledWith('test-profile')
-    // The retired daemon is replaced so the server that stays can still open terminals.
     expect(restartDaemon).toHaveBeenCalledOnce()
   }
 )

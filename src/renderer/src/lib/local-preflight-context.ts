@@ -44,8 +44,7 @@ type LocalProjectRuntimeState = Pick<
 > &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
 
-// Why: the shared indexes are WeakMap-keyed on slice identity, so a fresh `{}`
-// or `[]` fallback would miss the cache on every read.
+// Reuse fallback identities so WeakMap slice indexes hit instead of rebuilding on every read.
 const EMPTY_REPOS: AppState['repos'] = []
 
 type LocalProjectRuntimeWslContext = {
@@ -53,12 +52,10 @@ type LocalProjectRuntimeWslContext = {
   availableWslDistros?: readonly string[] | null
 }
 
-/** Extracts a WSL distribution name from supported UNC path forms. */
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
 }
 
-/** Resolves the owning local project's Windows runtime for project-scoped targets. */
 export function getLocalProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null,
@@ -98,7 +95,6 @@ export function getLocalProjectExecutionRuntimeContext(
   })
 }
 
-/** Resolves the Windows default only when no project can own the runtime. */
 export function getGlobalWindowsExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null,
@@ -199,9 +195,7 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(projectRuntime)
   }
 
-  // Why: Settings -> Agents is global and can mount before any project is
-  // active; still respect the Windows/WSL runtime default for PATH detection.
-  // An active workspace on another host says nothing about this machine's context (#18837).
+  // Global Agents settings can precede project activation; respect local Windows/WSL defaults independently of remote focus (#18837).
   const globalRuntime = getGlobalWindowsExecutionRuntimeContext(
     !worktreeId && isActiveWorkspaceOnAnotherHost(state)
       ? { ...state, activeRepoId: null, activeWorktreeId: null }
@@ -267,8 +261,7 @@ function isActiveWorkspaceOnAnotherHost(state: AppState): boolean {
 }
 
 function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
-  // Why: preflight selectors are synchronous. Reuse an existing capability
-  // answer when available without spawning WSL probes from store reads.
+  // Synchronous selectors may reuse capabilities but must not launch WSL probes during store reads.
   if (!hasCachedWindowsTerminalCapabilities()) {
     return {}
   }

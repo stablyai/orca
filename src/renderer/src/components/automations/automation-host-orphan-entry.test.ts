@@ -1,12 +1,4 @@
-/**
- * How an authority's orphan bucket becomes visible at all.
- *
- * Two independent ways it fails to appear, and fixing one leaves the other: a
- * scoped answer that omits `orphanCount` must stay unsettled rather than commit
- * a fabricated zero, and an old runtime's unscoped answer must report the count
- * it just computed so the entry can bootstrap without an orphan request that
- * only exists once the entry does.
- */
+/** Bootstrap orphan visibility from reported counts. Omitted scoped orphanCount stays unknown; legacy partitioning must report its count before an orphan entry/request exists. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -193,8 +185,7 @@ describe('an old runtime answering with one unscoped list', () => {
     controller.dispose()
   })
 
-  // Already worked before the bootstrap fix: a persisted orphan selection puts its
-  // own entry in the catalog, which is what got the orphan request sent at all.
+  // A persisted orphan selection can seed its entry before count bootstrap; preserve that path.
   it('settles a selected orphan entry the selection itself put in the catalog', async () => {
     const listScoped = vi.fn(() => Promise.resolve(scopedAnswer({ automations: [], items: [] })))
     const listLegacy = vi.fn(() => Promise.resolve([unverifiedAutomation('a1')]))

@@ -45,19 +45,18 @@ export function useRemoteFileBrowserFilterKeyCommands({
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         if (preview) {
-          // Path mode Enter.
           if (preview.error || preview.loading) {
             e.preventDefault()
             return
           }
           const parsed = parsePathInput(filter, pathFlavor)
-          // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
+          // Without a trailing filter, commit the resolved preview directory itself.
           if (parsed.mode === 'path' && parsed.trailingFilter === '') {
             e.preventDefault()
             navigate(preview.resolvedPath)
             return
           }
-          // Trailing filter: resolve to a single folder match in the preview listing, mirroring filter-mode Enter.
+          // Resolve the trailing filter with the same unique-folder rule as normal Enter.
           const filtered = filterEntries(preview.entries, preview.filter)
           const action = decideEnterAction(filtered)
           if (action.type === 'navigate') {
@@ -94,7 +93,6 @@ export function useRemoteFileBrowserFilterKeyCommands({
         }
       }
       if (e.key === 'Backspace' && filter === '' && !preview) {
-        // Backspace in an empty input climbs to the parent; in-word backspaces are untouched.
         if (resolvedPath !== '/') {
           e.preventDefault()
           navigateUp()

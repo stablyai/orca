@@ -1,16 +1,4 @@
-/**
- * The one fixed script Windows orcad hosts run, as a file beside the slots, under the pinned
- * node.exe with plain path and number arguments: `node.exe <script> <op> <args...>`.
- *
- * Why a file and not `-e`: a script on the command line has to survive sshd's DefaultShell,
- * which may be cmd.exe or PowerShell, and the only quoting both accept is base64 through
- * `powershell.exe -EncodedCommand`, a first-class Defender alert (windows-edr-posture.md). A
- * staged file needs no interpreter hop at all. It is named by its content hash, so clients of
- * different versions never run each other's copy.
- *
- * Answers that carry host bytes are base64 behind a marker, because a PowerShell DefaultShell
- * re-decodes native output through the console code page.
- */
+// A content-addressed Node script avoids cmd/PowerShell quoting and EDR-scored encoded execution; base64 replies survive console code pages.
 import { createHash } from 'node:crypto'
 import {
   ORCAD_LAUNCHER_FILENAME,
@@ -48,9 +36,7 @@ export const ORCAD_WINDOWS_RUNTIME_MARKER = '__ORCAD_RUNTIME__'
 export const ORCAD_WINDOWS_ENTRY_MARKER = '__ORCAD_ENTRY__'
 export const ORCAD_WINDOWS_LIVENESS_MANY_MARKER = '__ORCAD_LIVENESS__'
 export const ORCAD_WINDOWS_LOG_TAIL_MARKER = '__ORCAD_LOG_TAIL__'
-/** A slot whose marker names no usable runtime; the POSIX selector exits the same way. */
 export const ORCAD_WINDOWS_RUNTIME_MISSING_EXIT = 78
-/** The record exists but cannot be read within its bound. */
 export const ORCAD_WINDOWS_RECORD_UNREADABLE_EXIT = 65
 
 export type OrcadWindowsHostOp =
@@ -301,7 +287,6 @@ if (!run) {
 run(...args)
 `
 
-/** Content-addressed, so a client never runs another version's copy. */
 export const ORCAD_WINDOWS_HOST_SCRIPT_FILENAME = `orcad-host-script-${createHash('sha256')
   .update(ORCAD_WINDOWS_HOST_SCRIPT)
   .digest('hex')

@@ -9,16 +9,19 @@ export function isNativeChatImageAttachmentPath(path: string): boolean {
   return isImageDropPath(path)
 }
 
-/** True when a path is a clipboard-paste temp file (`orca-paste-<ts>-<uuid>.png`).
- *  Those names are noise in the UI, so the composer shows a friendly label
- *  instead of the basename. */
+/** Use friendly UI labels for Orca clipboard-image temp filenames. */
 export function isNativeChatPastedImagePath(path: string): boolean {
   const base = path.split(/[\\/]/).findLast(Boolean) ?? path
   return /^orca-paste-.+\.png$/i.test(base)
 }
 
-/** True for a local paste in the folder older builds kept them in, judged from the path alone;
- *  main checks the real file before a restore keeps it. */
+/** True for a long text paste Orca saved as a file (`orca-paste-<ts>-<uuid>.txt`). */
+export function isNativeChatPastedTextPath(path: string): boolean {
+  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
+  return /^orca-paste-.+\.txt$/i.test(base)
+}
+
+/** Recognize legacy paste-folder paths; main still validates the actual file before restore. */
 export function isNativeChatKeptPastePath(path: string): boolean {
   const parts = path.split(/[\\/]/).filter(Boolean)
   return parts.at(-2) === NATIVE_CHAT_PASTE_FOLDER && isNativeChatPastedImagePath(path)

@@ -508,9 +508,7 @@ describe('parseOpenCodeSqliteSession', () => {
     expect(session!.previewMessages).toEqual([])
   })
 
-  // The preview may degrade to nothing, but the search index may not: an empty
-  // capture is committed under a complete-read cursor, so the session would stay
-  // unsearchable with nothing on its row to say why and no retry.
+  // Empty successful capture advances the search cursor, so unreadable parts must fail for retry.
   it('refuses to capture a transcript it cannot read the message parts of', async () => {
     const { db, path } = createTempDb()
     applyMinimalOpenCodeSchema(db)
@@ -569,7 +567,6 @@ describe('parseOpenCodeSqliteSession', () => {
       timeCreated: 20,
       text: 'first ask line two'
     })
-    // Non-text parts of the same message must not leak into the copied prompt.
     insertPart(db, {
       id: 'part_1c',
       messageId: 'msg_1',

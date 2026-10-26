@@ -12,8 +12,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
-// Stub the card and dialog so the board test stays free of xterm / Radix
-// machinery while still exercising the board-owned dialog wiring.
+// Stub card/dialog internals while retaining the board’s dialog wiring.
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
@@ -101,7 +100,6 @@ describe('AgentKanbanBoard', () => {
       'matchMedia',
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     )
-    // The board relays seen-acks through the dashboard preload API.
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
   })
   afterEach(() => {
@@ -212,7 +210,6 @@ describe('AgentKanbanBoard', () => {
 
   it('shows "None" for empty columns', () => {
     renderBoard([card({ bucket: 'working' })])
-    // attention and done are empty → two "None" placeholders.
     expect(screen.getAllByText('None')).toHaveLength(2)
   })
 
@@ -321,15 +318,13 @@ describe('AgentKanbanBoard', () => {
     fireEvent.click(screen.getByTestId('card'))
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
 
-    // Sending a message flips the agent done → working; the dialog must
-    // follow the card to its new bucket instead of closing.
+    // Replying moves done agents to working; the dialog must survive the bucket change.
     const moved = { ...agent, bucket: 'working' as const, dotState: 'working' as const }
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.bucket).toBe('working')
 
-    // Even a vanished card (pane closed) keeps the dialog up — the user
-    // dismisses it explicitly, but stale live routing is cleared.
+    // Keep vanished-card dialogs open until dismissed, but clear stale live routing.
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
@@ -338,7 +333,6 @@ describe('AgentKanbanBoard', () => {
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
     const agent = card({ paneKey: 'pk-ack', bucket: 'done', unseen: true })
     const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
-    // unseen comes straight from the snapshot (the shared ack map).
     expect(screen.getByTestId('card').dataset.unseen).toBe('true')
 
     fireEvent.click(screen.getByTestId('card'))
@@ -360,8 +354,7 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.bucket).toBe('idle')
     expect(ackAgent).not.toHaveBeenCalled()
 
-    // A state change while the dialog is open re-acks (watching counts as
-    // seeing), so the card never flips bold under an open dialog.
+    // Watching new state counts as seeing it; keep open-dialog cards acknowledged.
     rerender(
       <AgentKanbanBoard
         snapshot={{

@@ -71,7 +71,7 @@ export function rankQuickOpenFiles(
 }
 
 export class QuickOpenPathRanker {
-  private readonly normalizedQuery: readonly string[] | null
+  private readonly normalizedQuery: readonly QuickOpenQueryTerm[] | null
   private readonly retained: QuickOpenRankedResult[] = []
   private inputIndex = 0
   private matchCount = 0
@@ -109,25 +109,34 @@ export class QuickOpenPathRanker {
   }
 }
 
-function normalizeQuickOpenQuery(query: string): readonly string[] {
+type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined }
+
+function normalizeQuickOpenQuery(query: string): readonly QuickOpenQueryTerm[] {
   const terms = [...new Set(query.trim().replace(/\\/g, '/').toLowerCase().split(/\s+/))]
     .filter(Boolean)
     .sort()
-  return terms
+  return terms.map((text) => ({
+    text,
+    withoutSeparators:
+      text.includes('-') || text.includes('_') ? text.replace(/[-_]/g, '') : undefined
+  }))
 }
 
-function scoreQuickOpenTerms(terms: readonly string[], file: QuickOpenIndexedFile): number | null {
+function scoreQuickOpenTerms(
+  terms: readonly QuickOpenQueryTerm[],
+  file: QuickOpenIndexedFile
+): number | null {
   let score = 0
-  for (const term of terms) {
+  for (const { text: term, withoutSeparators } of terms) {
     let termScore = fuzzyMatchIndexedFile(term, file)
-    if (termScore === null && (term.includes('-') || term.includes('_'))) {
+    if (termScore === null && withoutSeparators !== undefined) {
       const filenameStart = file.lowerPath.lastIndexOf('/') + 1
       const parentStart = file.lowerPath.lastIndexOf('/', filenameStart - 2) + 1
       const fallback =
-        fuzzyMatchIndexedFile(term, file, true) ??
-        fuzzyMatchIndexedFile(term, file, true, filenameStart) ??
-        fuzzyMatchIndexedFile(term, file, true, parentStart) ??
-        (fuzzyMatchIndexedFile(term.replace(/[-_]/g, ''), file) === null
+        fuzzyMatchIndexedFile(term, file, withoutSeparators) ??
+        fuzzyMatchIndexedFile(term, file, withoutSeparators, filenameStart) ??
+        fuzzyMatchIndexedFile(term, file, withoutSeparators, parentStart) ??
+        (fuzzyMatchIndexedFile(withoutSeparators, file) === null
           ? null
           : matchQuickOpenSeparatorAlternatives(
               term,
@@ -177,9 +186,10 @@ function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexe
 function fuzzyMatchIndexedFile(
   query: string,
   file: QuickOpenIndexedFile,
-  equivalentSeparators = false,
+  queryWithoutSeparators?: string,
   searchStart = 0
 ): number | null {
+  const equivalentSeparators = queryWithoutSeparators !== undefined
   let qi = 0
   let score = 0
   let lastMatchIdx = -1
@@ -218,13 +228,10 @@ function fuzzyMatchIndexedFile(
     qi++
   }
 
-  if (qi < query.length) {
-    return null
-  }
   if (
     equivalentSeparators
       ? filenameContainsSeparatorVariant(file.lowerFilename, query) ||
-        file.lowerFilename.includes(query.replace(/[-_]/g, ''))
+        file.lowerFilename.includes(queryWithoutSeparators ?? query)
       : file.lowerFilename.includes(query)
   ) {
     score -= 100

@@ -32,7 +32,6 @@ const AGENT_LEAF = '11111111-1111-4111-8111-111111111111'
 const SHELL_LEAF = '22222222-2222-4222-8222-222222222222'
 const AGENT_PANE = `tab-1:${AGENT_LEAF}`
 
-/** One tab split into an agent pane and a shell pane. */
 function storeWithAgentPane(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
   seedStore(store, {

@@ -2,6 +2,7 @@ import * as mocks from './orca-runtime-test-mocks.spec'
 import type { MockInstance } from 'vitest'
 import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
 import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
+import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
@@ -63,23 +64,19 @@ const { updateGitHubIssueMock } = mocks
 const { updateGitHubPRDetailsMock, updateGitHubPRStateMock, updateGitHubPRTitleMock } = mocks
 const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, vi } = mocks
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prototype carries the removal method the wrapper replaces.
-awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype as never)
+awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
+commitFakeSpawnsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
 
 function resetRuntimeTestMocks(): void {
   _resetCanonicalRepoKeyCacheForTests()
   _resetPendingWorktreeRemovalsForTests()
-  // Why: constructing the browser commands is what pulls the Chromium cluster in, so
-  // production installs this at the Electron entry. A Node host installs none and the
-  // browser RPCs reject rather than silently succeeding.
+  // Chromium commands install only at Electron entry; Node hosts must refuse browser RPCs without them.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
     clientHosting: true
   })
   setRuntimeBrowserUnavailableCause(null)
   setRuntimeTerminalUnavailableCause(null)
-  // Why: the runtime's notification, window lookup and tab-create-reply channel are
-  // injected now, so the electron mock alone is inert. Back the surface with the same
-  // mocks so every existing expectation still holds.
+  // Runtime uses the injected desktop surface; Electron mocks alone cannot drive these assertions.
   setRuntimeDesktopSurface({
     showNotification: () => true,
     findWindowById: (id) => electronMocks.BrowserWindow.fromId(id) as never,
@@ -89,15 +86,12 @@ function resetRuntimeTestMocks(): void {
   })
   resetPlatform()
   electronMocks.app.isPackaged = false
-  // Why here and not the electron mock: the runtime reads paths and the packaged flag
-  // through the AppEnvironment port now, so the electron mock alone is inert. Reading
-  // electronMocks.app keeps the existing per-test toggles below working unchanged.
+  // AppEnvironment owns runtime paths/package flag; delegate to Electron mocks to retain per-test toggles.
   installFakeAppEnvironment({
     getPath: () => electronMocks.app.getPath(),
     isPackaged: () => electronMocks.app.isPackaged
   })
-  // Why: a worker-recovery retry re-arms itself for as long as a deferred worker exists, so one
-  // left armed keeps rescanning worktrees through the shared git stubs for the rest of the run.
+  // Deferred worker recovery re-arms forever; cancel it before shared git stubs leak across cases.
   cancelLegacyWorkerTerminalRecoveryRetriesForTests()
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   _resetTerminalViewAttributesForTest()
@@ -115,8 +109,7 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(describeCreatedWorktree).mockResolvedValue(undefined)
-  // Why delegate: production reads both from one repo state, so a test that stubs the listing must
-  // see the same rows through the create path's strict read.
+  // Strict-create and listing reads share production repo state; delegate mocks so both see identical rows.
   vi.mocked(listWorktreesSharedStrict).mockImplementation((repoPath, options) =>
     options ? listWorktrees(repoPath, options) : listWorktrees(repoPath)
   )
@@ -328,7 +321,6 @@ afterEach(async () => {
     await _settlePendingWorktreeRemovalsForTests()
   } finally {
     try {
-      // Runtime fixtures share a process; invalidators must end with their case.
       for (const result of registrationSpy?.mock.results ?? []) {
         if (result.type === 'return') {
           result.value()

@@ -1,0 +1,21 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcagziputf8codec'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcagziputf8codec'
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  // The android.jar used by JVM unit tests stubs org.json; the shared vectors are JSON.
+  testImplementation 'org.json:json:20240303'
+}

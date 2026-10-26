@@ -1,10 +1,5 @@
-// What becomes of a send the host accepted and can no longer hand over: an earlier host process
-// quit or crashed first (settled at the next open), or the chat is closing. Either way the agent
-// provably never got it. A person's text (typed, or a launch's first prompt) is kept as a card
-// at the head of the queue, an ordinary one: like every card the chat closed with, it waits for the
-// chat's next turn (`queued-message-pause.ts`). Everything else is rejected as before, because
-// something else re-derives it or the person re-runs it. The submission itself is always rejected,
-// so it is never handed over twice.
+// Keep provably unhanded personal text as queued cards on restart/close; reject the submission
+// atomically to prevent duplicate handover. Other senders regenerate work or require explicit retry.
 
 import type {
   AgentJournalItemBody,
@@ -13,28 +8,22 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
-import type { JournalRowTransactionHook } from './journal-row-writer'
-import type { QueuedMessagePositionMove } from './queued-message-positions'
+import type { JournalQueueCardChange } from './journal-queue-events'
+import type { JournalQueuePlan } from './journal-queued-messages'
 
-/** Why the host can no longer hand a send over, which also says which sends it is. */
+type QueuedMessagePositionMove = { messageId: string; position: number }
+
 export type UnsentSendHold =
-  /** At open, and the delivery loop's first step: what an earlier host process accepted. */
+  /** Accepted by an earlier process. */
   | { cause: 'hostRestarted' }
-  /** A close of the chat; `which` narrows it to what a close that did not complete closed. */
+  /** Restrict settlement when only part of a close completed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
-/** The body an unsent send is kept with, or null when it is rejected instead:
- *  - a card's own hand-off: its rejection already returns the card (`rejectedDraftSettlement`);
- *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
- *  - a direct image: it retains the existing rejected-send recovery instead of becoming a card;
- *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
- *    or a restart continuation (their owners re-derive them), a kind this build does not know, and
- *    a row with no source that is not a person's (it could be either). */
+/** Keep personal text only; existing card handoffs, commands, images and nonpersonal sends retain recovery. */
 export function unsentSendKeptAsCard(
   submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
   body: AgentJournalItemBody | null
@@ -46,16 +35,15 @@ export function unsentSendKeptAsCard(
     return null
   }
   const { source } = submission
-  // Exactly 'user': never a fallback that reads a kind it does not know as the person's.
+  // Unknown source kinds must never default to personal sends.
   const persons =
     source?.kind === USER_MESSAGE_SOURCE.kind ||
-    // A build before `source` was recorded: `client` was only ever a person's send.
+    // Before source existed, client origin identified personal sends.
     (source === undefined && submission.origin === 'client')
   return persons ? body : null
 }
 
-/** A send handed to the agent that it has neither echoed nor refused. Handed to a child that never
- *  answered its start, it ran nowhere. */
+/** Failed initialization proves unanswered handed-over sends never ran. */
 export function isUnansweredHandedOverSubmission(
   entry: Pick<
     AgentJournalSubmission,
@@ -69,23 +57,14 @@ export function isUnansweredHandedOverSubmission(
   )
 }
 
-/**
- * Settles every send `hold` names. Each is rejected with the hold's cause in its own row, and a
- * kept one becomes a card in that row's transaction, so a crash between them can never leave
- * both. This batch's cards, and the card of a Send the person asked for, go to the head of the
- * queue in the order they were accepted, behind the cards an earlier settlement kept; the queue's
- * own hand-off returns its card where it stood. Throws once every row was
- * tried when one of them could not be written at all: that row stays queued. Resolves where the
- * newest send it settled was accepted, or null when it settled none.
- */
+/** Atomically reject each send and keep its card; earlier kept cards lead, then this batch in admission order.
+ * Try every row before throwing on write failure; return the latest settled admission cursor. */
 export async function holdUnsentSends(
   journal: AgentSessionJournal,
   input: {
     fence: number
-    hostInstance: string
     hold: UnsentSendHold
-    /** In place of the queued sends: those a child that ended before it answered its start was
-     *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
+    /** Settle handed-over sends instead when failed initialization proves none ran. */
     unrun?: true
   }
 ): Promise<number | null> {
@@ -120,39 +99,37 @@ export async function holdUnsentSends(
   for (const [index, { submission, body }] of kept.entries()) {
     const { clientMessageId } = submission
     const moves = [
-      // The cards an earlier settlement kept move with the first row.
       ...(index === 0 ? positions.earlier : []),
-      ...(submission.queuedMessageId !== undefined
-        ? positions.placed.filter(
-            (entry) => 'consumedAs' in entry && entry.consumedAs === clientMessageId
-          )
-        : [])
+      ...positions.placed.filter((entry) => entry.messageId === submission.queuedMessageId)
     ]
-    const position = positions.placed.find(
-      (entry) => 'messageId' in entry && entry.messageId === clientMessageId
-    )?.position
+    const position = positions.placed.find((entry) => entry.messageId === clientMessageId)?.position
     const card = body && position !== undefined ? { body, position } : null
-    const keep: JournalRowTransactionHook | undefined =
+    const keep: (() => JournalQueuePlan) | undefined =
       card || moves.length > 0
-        ? (db) => {
-            journal.queuedMessages.holdInTransaction(db, {
-              card: card
-                ? {
-                    messageId: clientMessageId,
-                    body: card.body,
-                    fingerprint: agentSessionSendBodyFingerprint(
-                      journal.queuedMessages.sessionId,
-                      card.body
-                    ),
-                    hostInstance: input.hostInstance,
-                    queuedAt: { epoch, sequence: submission.acceptedSequence ?? 0 },
-                    position: card.position,
-                    // Kept with the message, so the card runs on what it was sent with.
-                    ...(submission.options ? { options: submission.options } : {})
-                  }
-                : null,
-              positions: moves
-            })
+        ? () => {
+            const { queuedMessages } = journal
+            const changes: JournalQueueCardChange[] = moves.flatMap((move) =>
+              queuedMessages.get(move.messageId)?.position === move.position
+                ? []
+                : [
+                    {
+                      messageId: move.messageId,
+                      change: { op: 'moved' as const, position: move.position }
+                    }
+                  ]
+            )
+            if (card && !queuedMessages.get(clientMessageId)) {
+              const queuedAt = { epoch, sequence: submission.acceptedSequence ?? 0 }
+              const change = {
+                op: 'queued' as const,
+                body: card.body,
+                position: card.position,
+                queuedAt,
+                ...(submission.options ? { options: submission.options } : {})
+              }
+              changes.push({ messageId: clientMessageId, change })
+            }
+            return queuedMessages.plan(changes)
           }
         : undefined
     const reject = {
@@ -163,7 +140,7 @@ export async function holdUnsentSends(
       recovered: true as const
     }
     try {
-      // The send names its card in the same row, so no surface draws it once the card is gone.
+      // Persist the kept-card link with rejection so clients do not render both.
       await journal.resolveDispatch(
         card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
         keep
@@ -173,8 +150,7 @@ export async function holdUnsentSends(
         failures.push(error)
         continue
       }
-      // Keeping it failed: rejected as before. That loses the message, as every build before this
-      // one did; it is never left queued for a handover nothing will make.
+      // Failed card recovery falls back to rejection; never leave the send stranded for impossible handover.
       console.warn('[journal-hold] keeping an unsent send failed:', {
         sessionId: journal.queuedMessages.sessionId,
         clientMessageId,
@@ -190,10 +166,7 @@ export async function holdUnsentSends(
   return unsent.at(-1)?.acceptedSequence ?? 0
 }
 
-/** Where each card of the batch goes: right before every other card, the cards an earlier
- *  settlement kept first, in the order they stand, then this batch's cards and the cards of the
- *  person's own Sends in the order they were accepted. A kept card's `queuedAt` cannot order it against
- *  them: sequences restart with each epoch, and a returned hand-off's names its draft's time. */
+/** Order earlier kept cards first, then admissions; queuedAt cannot compare across epochs or handoff origins. */
 function headOfQueuePositions(
   journal: AgentSessionJournal,
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
@@ -203,8 +176,7 @@ function headOfQueuePositions(
     journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
   )
   const { epoch } = journal.cursor()
-  // Kept by an earlier settlement: its rejection names it, or, past an epoch that dropped that
-  // row, it was queued in an earlier epoch, before anything this one accepted.
+  // Earlier settlements survive either through explicit links or cards from earlier epochs.
   const earlier = cards
     .filter(
       (card) =>
@@ -218,18 +190,16 @@ function headOfQueuePositions(
     if (body && !earlier.includes(clientMessageId)) {
       placed.push({ messageId: clientMessageId, position: 0 })
     } else if (
-      // Kept by its settlement (`rejectedDraftSettlement`): a Send the person asked for.
+      // Explicit Send handoffs return to the head; automatic queue handoffs stay put.
       submission.origin === 'client' &&
+      submission.queuedMessageId !== undefined &&
       cards.some((card) => card.consumedAs === clientMessageId)
     ) {
-      placed.push({ consumedAs: clientMessageId, position: 0 })
+      placed.push({ messageId: submission.queuedMessageId, position: 0 })
     }
   }
   const inHead = (card: (typeof cards)[number]): boolean =>
-    earlier.includes(card.messageId) ||
-    placed.some((move) =>
-      'messageId' in move ? move.messageId === card.messageId : move.consumedAs === card.consumedAs
-    )
+    earlier.includes(card.messageId) || placed.some((move) => move.messageId === card.messageId)
   const others = cards.filter((card) => !inHead(card)).map((card) => card.position)
   const anchor = others.length > 0 ? Math.min(...others) : 1
   const first = anchor - earlier.length - placed.length

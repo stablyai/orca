@@ -1,10 +1,4 @@
-/**
- * Runs the generated POSIX commands through a real `/bin/sh`.
- *
- * The unit tests assert on command *text*, which is exactly the kind of test that stays
- * green while the shell it produces does not work — a quoting slip, a `case` pattern that
- * never matches, a `tar` invocation that silently captures nothing. These run the strings.
- */
+// Execute generated commands in /bin/sh to catch quoting and shell-semantic errors.
 import { execFileSync, spawn } from 'node:child_process'
 import {
   existsSync,
@@ -62,7 +56,6 @@ const host = getRemoteHostPlatform('linux-x64')
 let root = ''
 let dataDir = ''
 let snapshotDir = ''
-// The ~/.orca-remote stand-in that holds the state-mutation lock.
 const baseDir = (): string => join(root, '.orca-remote')
 let versionDir = ''
 const launchedPids = new Set<number>()
@@ -88,9 +81,7 @@ afterEach(() => {
   for (const pid of launchedPids) {
     try {
       process.kill(pid, 'SIGKILL')
-    } catch {
-      // Successful stops have already removed their test processes.
-    }
+    } catch {}
   }
   launchedPids.clear()
   rmSync(root, { recursive: true, force: true })
@@ -117,7 +108,6 @@ async function launchTestRuntime(
       `});`,
       ...(stopRequests
         ? [
-            // Like orcad's listener: consume the slot request, then stop.
             `setInterval(() => {`,
             `  if (fs.existsSync(${JSON.stringify(requestFile)})) {`,
             `    fs.unlinkSync(${JSON.stringify(requestFile)});`,
@@ -146,7 +136,7 @@ async function launchTestRuntime(
     activationRoot: join(dataDir, '.orcad-activation-transaction')
   })
   if (legacyWrapper) {
-    // The trailing command retains the old macOS waiting-shell behavior on every POSIX shell.
+    // A trailing command reproduces legacy macOS waiting-shell behavior on all POSIX shells.
     command = command
       .replace('exec nohup ', 'nohup ')
       .replace('< /dev/null &', '< /dev/null && : &')
@@ -262,7 +252,6 @@ describe('state snapshot commands, run for real', () => {
     ).toBe('captured')
     expect(sh(probeOrcadStateSnapshotCommand(host, snapshotDir, baseDir())).trim()).toBe('PRESENT')
 
-    // The new version migrates the store and adds a file of its own.
     writeFileSync(join(dataDir, 'orca-profile-index.json'), '{"v":"migrated"}')
     writeFileSync(join(dataDir, 'profiles', 'p1', 'new-build-only.json'), '{}')
 
@@ -272,7 +261,7 @@ describe('state snapshot commands, run for real', () => {
       )
     ).toBe('restored')
     expect(readFileSync(join(dataDir, 'orca-profile-index.json'), 'utf8')).toBe('{"v":"before"}')
-    // Removed before extraction, so the older build never sees a file it cannot interpret.
+    // Older builds must not see files introduced by the newer build.
     expect(() => readFileSync(join(dataDir, 'profiles', 'p1', 'new-build-only.json'))).toThrow()
   })
 
@@ -285,8 +274,7 @@ describe('state snapshot commands, run for real', () => {
         opened.db,
         JSON.stringify({ settings: { theme: 'dark' }, snapshotMarker: 'before' })
       )
-      // The connection remains open, so WAL/SHM are still part of the archive boundary while
-      // the generated command reads the now-quiescent files.
+      // Keep the connection open so quiescent WAL/SHM files remain inside the archive boundary.
       expect(existsSync(`${databasePath}-wal`)).toBe(true)
       expect(
         parseOrcadSnapshotCapture(
@@ -325,8 +313,7 @@ describe('state snapshot commands, run for real', () => {
 
   it('leaves the live daemon runtime dir untouched through capture and restore', () => {
     sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
-    // The daemon is running across the rollback and rewrites its token; a restore that
-    // reached <root>/daemon would break the fence that keeps its terminals adoptable.
+    // Daemon tokens can change during rollback; restoring them would break terminal adoption.
     writeFileSync(join(dataDir, 'daemon', 'daemon.sock.token'), 'token-after-restart')
     sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
     expect(readFileSync(join(dataDir, 'daemon', 'daemon.sock.token'), 'utf8')).toBe(
@@ -401,7 +388,7 @@ describe('liveness and stop commands, run for real', () => {
       )
       expect(recordedPid).toBe(runtimePid)
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
-      // The prior client recognizes only orcad.js when deciding whether this PID was reused.
+      // Shipped clients recognize only orcad.js when checking PID reuse.
       const legacyIdentity = sh(
         `args=$(ps -o args= -p ${recordedPid}); ` +
           `case "$args" in *${quotePosixShell(join(versionDir, 'orcad.js'))}*) echo LIVE;; *) echo DEAD;; esac`
@@ -409,7 +396,7 @@ describe('liveness and stop commands, run for real', () => {
       expect(legacyIdentity).toBe('LIVE')
       expect(stopTestRuntime()).toBe('stopped')
       expect(readFileSync(terminatedFile, 'utf8')).toBe('terminated')
-      // An unreaped zombie has exited even though kill -0 still succeeds.
+      // kill -0 succeeds for exited, unreaped zombies.
       expect(sh(`ps -o stat= -p ${runtimePid} || true`).trim()).toMatch(/^(?:Z.*)?$/)
       expect(existsSync(join(versionDir, ORCAD_PID_FILENAME))).toBe(true)
       expect(stopTestRuntime()).toBe('already-exited')
@@ -493,7 +480,7 @@ describe('liveness and stop commands, run for real', () => {
         })}`
       )
     )
-    // After a delivered SIGTERM the host may still be changing, so it is not "nothing happened".
+    // Delivered SIGTERM can leave host changes underway even without a final answer.
     expect(outcome).toBe(phase === 'before' ? 'unknown' : 'unconfirmed')
     expect(orcadStopFreedTheHost(outcome)).toBe(false)
     expect(() => process.kill(runtimePid, 0)).not.toThrow()
@@ -501,7 +488,6 @@ describe('liveness and stop commands, run for real', () => {
   })
 
   it('reports NEVER_LAUNCHED with no launch artifacts, UNKNOWN with no pid, DEAD for an exited pid', () => {
-    // A slot installed but never launched: proven exit, so GC may remove it and a wake may start it.
     rmSync(join(versionDir, ORCAD_READINESS_FILENAME), { force: true })
     const neverLaunched = sh(orcadLivenessProbeCommand(host, versionDir))
     expect(parseOrcadLiveness(neverLaunched)).toBe('NEVER_LAUNCHED')
@@ -511,7 +497,7 @@ describe('liveness and stop commands, run for real', () => {
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('UNKNOWN')
     writeFileSync(join(versionDir, ORCAD_PID_FILENAME), 'not-a-pid')
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('UNKNOWN')
-    // A pid that has certainly exited: our own `sh` child from the line above.
+    // This shell child has certainly exited.
     const exited = Number(sh('sh -c "echo $$"').trim())
     writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(exited))
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
@@ -549,7 +535,6 @@ describe('liveness and stop commands, run for real', () => {
   it.each(['orcad.js', 'orcad-server.js'])(
     'reports LIVE and stops a running %s even without entry files',
     async (entry) => {
-      // Stands in for orcad: its command line runs this slot's orcad.js.
       const child = spawn(
         process.execPath,
         ['-e', 'setTimeout(() => {}, 30000)', join(versionDir, entry)],
@@ -575,9 +560,7 @@ describe('liveness and stop commands, run for real', () => {
     }
   )
 
-  // `kill -0` succeeds on a zombie, so a probe built on it alone calls an exited process
-  // live: the stop loop would time out on a process that is already gone, and GC would keep
-  // a dead version dir forever. Verified as a real macOS behaviour, not a hypothetical.
+  // kill -0 alone would keep exited zombies live, blocking stop completion and GC.
   it('reports a zombie as DEAD, not as a running process', () => {
     const child = spawn('/bin/sh', ['-c', 'exit 0'], { stdio: 'ignore' })
     try {
@@ -637,7 +620,6 @@ describe('host-side readiness wait, run for real', () => {
 
   it('waits for a line still being written, and answers pending when its bound ends', () => {
     writeFileSync(readiness(), line.slice(0, 10))
-    // The writer finishes after the wait starts; the shell must pick it up mid-wait.
     sh(
       `(sleep 1; printf '%s\\n' ${quotePosixShell(line.trimEnd().slice(10))} >> ${quotePosixShell(readiness())}) >/dev/null 2>&1 &`
     )

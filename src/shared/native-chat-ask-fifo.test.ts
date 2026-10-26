@@ -3,8 +3,7 @@ import { extractPendingAsk } from './native-chat-ask'
 import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
 import type { AskPrompt } from './native-chat-ask-types'
 
-/** The pre-cursor `shift()` FIFO, verbatim, as the differential oracle. Only the
- *  canonical questions shape is exercised, so the inline parse matches production. */
+/** Verbatim pre-cursor shift() FIFO oracle; canonical question input permits inline parsing. */
 function referenceExtractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   let pending: AskPrompt | null = null
   const outstanding: (AskPrompt | null)[] = []
@@ -66,7 +65,6 @@ function interrupted(id: string): NativeChatMessage {
   } as NativeChatMessage
 }
 
-/** Deterministic PRNG so a failing sequence is reproducible from its seed. */
 function makeRandom(seed: number): () => number {
   let state = seed >>> 0
   return () => {
@@ -133,9 +131,7 @@ it('returns the same ask when a reconnect replays the transcript incrementally',
   for (let seed = 1; seed <= 500; seed += 1) {
     const random = makeRandom(seed)
     const messages = randomTranscript(random, 1 + Math.floor(random() * 10))
-    // A reconnect re-runs extraction over the whole transcript from scratch; every
-    // prefix must agree with the oracle too, so no ask is dropped or shown twice
-    // as frames stream back in.
+    // Reconnect extraction must match at every streamed prefix, avoiding dropped or duplicate asks.
     for (let end = 1; end <= messages.length; end += 1) {
       const prefix = messages.slice(0, end)
       expect(questionTexts(extractPendingAsk(prefix)), `seed ${seed} prefix ${end}`).toEqual(

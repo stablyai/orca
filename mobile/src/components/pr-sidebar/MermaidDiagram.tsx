@@ -9,38 +9,22 @@ export type MermaidDiagramProps = {
   base: number
 }
 
-/**
- * The same diagram, drawn by mermaid in this document.
- *
- * Mermaid is a browser library, so the engine is an `import()`, and there is no second content
- * process to sandbox in. The fence is mermaid's own `securityLevel: 'strict'`, which runs the
- * serialized SVG through DOMPurify before handing it back — a `<script>`, an `on*` attribute or a
- * `javascript:` href in a diagram label reaches this document as nothing at all. That is measured
- * in `config/scripts/mobile-web-app-mermaid-render.test.mjs`, in both engines, against a hostile
- * fixture. The source is a JS string argument, not text spliced into an inline `<script>`, so it
- * needs no escaping.
- *
- * The import is inside the effect, so a session with no diagram in it evaluates none of the engine
- * (ruling 28). It reaches the engine through `mermaid-page-engine.ts`, which loads one pre-bundled
- * artifact rather than the package: importing the package here emitted 103 scripts, all of them
- * already inside the generation the phone downloaded.
- */
+// Deferred pre-bundled engine stays unevaluated without diagrams; one artifact avoids 103 scripts against 256-asset shell cap (ruling 28).
+// No separate sandbox process: mermaid strict mode sanitizes serialized SVG via DOMPurify before insertion; hostile fixtures run on both engines in mobile-web-app-mermaid-render.test.mjs.
+// Source is a JS string argument, never inline-script interpolation.
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
   const hostRef = useRef<View>(null)
-  // The source that failed, rather than a flag: a flag would need clearing from the effect that
-  // renders the next one, and a render the component has already failed is the only thing the
-  // fallback is about.
+  // Remember failing source, not flag, so next source need not clear failure through effect.
   const [failedSource, setFailedSource] = useState<string | null>(null)
-  // mermaid writes `#<id>` into the stylesheet it puts inside the SVG, so this has to be a CSS
-  // identifier. React spells its own `_R_0_`; the strip is for a React that changes that.
+  // Sanitize React id for CSS identifier because mermaid embeds #id rules; do not assume React’s current _R_0_ spelling.
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
   const failed = failedSource === source
 
   useEffect(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
-    const host = hostRef.current as unknown as HTMLElement | null
-    if (!host) {
+    // react-native-web renders View as a div and forwards the ref to it.
+    const host = hostRef.current
+    if (!(host instanceof HTMLElement)) {
       return
     }
     let disposed = false
@@ -52,8 +36,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
         if (disposed) {
           return
         }
-        // Already sanitized: `securityLevel: 'strict'` is what makes this string safe to parse,
-        // and mermaid is the only thing that can sanitize its own serialization.
+        // Only mermaid sanitizes its serialization; strict mode already made returned SVG safe to parse.
         host.innerHTML = svg
       } catch {
         if (!disposed) {
@@ -63,8 +46,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
     })()
     return () => {
       disposed = true
-      // React owns this element, not what mermaid put inside it, so nothing else clears the
-      // previous diagram when the source changes.
+      // React owns container, not mermaid contents; clear prior diagram on source change.
       host.replaceChildren()
     }
   }, [id, source])

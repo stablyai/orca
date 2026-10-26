@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// The module pulls in expo-file-system at import time; only the pure converter is under test here.
+// Mock the import-time native module to test only the URI converter.
 vi.mock('expo-file-system', () => ({
   Directory: class {},
   File: class {},
@@ -11,7 +11,6 @@ import { generationDirectoryPath } from './generation-store-file-system'
 
 describe('generationDirectoryPath', () => {
   it('hands the native view the absolute path both loaders demand', () => {
-    // Both refuse anything without a leading slash, and the store speaks file:// uris.
     expect(
       generationDirectoryPath('file:///var/mobile/Caches/mobile-web/abc/generations/def')
     ).toBe('/var/mobile/Caches/mobile-web/abc/generations/def')

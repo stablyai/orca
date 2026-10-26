@@ -121,9 +121,7 @@ describe('document preview grant handlers', () => {
     expect(() => mint({ ...REQUEST, browserPageId: ' ' })).toThrow(/Invalid/)
   })
 
-  // Why this is refused here and not left to registration: this is where a page becomes a document
-  // page, and the two halves of the page registry have to stay disjoint. A page already hosting a
-  // browsing guest would otherwise resolve in both, and the tool door prefers the document one.
+  // Keep browser/document registries disjoint when minting the document identity.
   it('refuses to make a page that already hosts a browsing guest into a document page', () => {
     mocks.getGuestWebContentsId.mockReturnValue(42)
 
@@ -131,8 +129,7 @@ describe('document preview grant handlers', () => {
     expect(mocks.getGuestWebContentsId).toHaveBeenCalledWith('doc-page-1')
   })
 
-  // Why: this channel hands out filesystem-read authority, so an untrusted sender must leave with
-  // nothing rather than with a grant id the scheme handler would honor.
+  // Untrusted senders must receive no filesystem-read grant.
   it('mints nothing for a sender that is not the trusted renderer', () => {
     mocks.isTrustedBrowserRenderer.mockReturnValue(false)
 
@@ -172,9 +169,7 @@ describe('document preview grant handlers', () => {
     expect(authorize('0'.repeat(32), 'assets/app.js')).toBe(false)
   })
 
-  // Why this channel skips the trusted-renderer check: its sender is a preview guest rendering a
-  // workspace document, which is the untrusted side by construction. The guest policy holds the
-  // gate, so all this listener owes is the sender and a string.
+  // Preview guests are untrusted; the guest policy validates sender binding and link URL.
   it('hands a reported link click to the guest policy with the sender that reported it', () => {
     reportLinkClick('https://example.com/docs')
 

@@ -8,7 +8,6 @@ import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
-import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -74,8 +73,7 @@ export function buildDefaultSettings(args: {
     terminalGpuAcceleration: 'auto',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
-    // Why on: the addon is lazy-loaded off the critical path and only creates
-    // canvas layers once a pane receives an image; parser/decoder setup still has overhead.
+    // Lazy image addon stays off the critical path and creates canvas layers only on first image; decoder setup still has overhead.
     terminalInlineImages: true,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
@@ -111,14 +109,9 @@ export function buildDefaultSettings(args: {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
-    // Why: only the run of spaces shared by every selected line is dropped, so
-    // relative indentation survives and the clipboard loses only the gutter.
+    // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,
-    // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
-    // replies stay disabled and payload size is capped in the OSC 52 handler.
-    // This default only covers new profiles; existing ones persisted `false`
-    // and are flipped once by the stamp below (shared/osc52-clipboard-settings.ts,
-    // applied by both the Electron store and the web client's localStorage store).
+    // Default OSC52 supports Zellij/tmux/nvim with queries disabled and capped writes; the stamp migrates persisted false once in both Electron and web localStorage stores.
     terminalAllowOsc52Clipboard: true,
     terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true,
     claudeAgentTeamsMode: 'off',
@@ -131,6 +124,7 @@ export function buildDefaultSettings(args: {
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,
+    openLinksInAppInBackground: false,
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',
@@ -141,7 +135,7 @@ export function buildDefaultSettings(args: {
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},
-    // The shipped Claude and Codex arguments carry their bypass flags.
+    // New chats of agents on their own settings; others start in their agent permission.
     nativeChatPermissionMode: 'full-access',
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
@@ -157,6 +151,7 @@ export function buildDefaultSettings(args: {
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: 1,
+    orchestrationChatErrorEscalationEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,
@@ -187,8 +182,7 @@ export function buildDefaultSettings(args: {
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
-    // C1 kill switches — runtime reads stay `!== false` so older persisted
-    // settings objects (which omit them) keep the default-on behavior.
+    // Default-on kill switches use !== false so older persisted settings retain behavior.
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
@@ -224,9 +218,12 @@ export function buildDefaultSettings(args: {
     zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
-    agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
-    agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
+    // Arguments hold only the user's own text; the permission flag comes from the choice below.
+    agentDefaultArgs: {},
+    agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
+    agentPermissionDefault: 'full-access',
+    agentPermissionOverrides: {},
     agentStatusHooksEnabled: true,
     agentWorkspaceTrustEnabled: true,
     codexTerminalServerIsolation: true,

@@ -1,3 +1,4 @@
+import { hostSleepKey } from './terminal/stop/worktree-terminal-sleep-key'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
@@ -9,6 +10,10 @@ import {
   type CliWriterHost
 } from './structured-agent-cli-writers'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimeStore } from './runtime-store-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import {
   OPEN_CODE_WRITER_TOPOLOGY,
   tmuxCliWriterEvent
@@ -66,6 +71,28 @@ const refusal = {
   refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
 }
 
+/** Layout-owner builds: an empty store whose session holds main's layout, which binds the pane. */
+function writerLayoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
+}
+
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
   it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
@@ -104,6 +131,196 @@ describe('execution-host conversation writer inspection', () => {
       await expect(check.run()).rejects.toMatchObject(refusal)
     }
   })
+
+  it.each(['claude', 'codex', 'pi', 'opencode', 'opencode2'] as const)(
+    'classifies the saved %s note separately from a physical terminal',
+    async (agent) => {
+      const check = inspection()
+      const record: SleepingAgentSessionRecord = {
+        paneKey: 'source',
+        worktreeId: 'workspace',
+        agent,
+        providerSession: { key: 'session_id', id: 'conversation' },
+        prompt: '',
+        state: 'done',
+        origin: 'worktree-sleep',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      check.host.saved = () => [record]
+      check.host.rows = () => []
+      check.host.sleeping = () => true
+      check.host.terminal = () => null
+      const run = () =>
+        assertCliConversationWritersExited(
+          check.host,
+          agent === 'opencode2' ? 'opencode' : agent,
+          'conversation',
+          { paneKey: record.paneKey, worktreeId: record.worktreeId }
+        )
+      await (agent === 'opencode' || agent === 'opencode2'
+        ? expect(run()).rejects.toMatchObject(refusal)
+        : expect(run()).resolves.toBeUndefined())
+      check.host.terminal = () => ({ pane: null })
+      await expect(run()).rejects.toMatchObject(refusal)
+      expect(check.host.shellAlone).not.toHaveBeenCalled()
+    }
+  )
+
+  it('uses normal physical proof for conclusively pane-owned OpenCode, retaining its saved-note guard', async () => {
+    const check = inspection()
+    check.host.rows = () => [{ ...row, agentType: 'opencode' }]
+    const saved: SleepingAgentSessionRecord = {
+      paneKey: row.paneKey,
+      worktreeId: 'workspace',
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'conversation' },
+      prompt: '',
+      state: 'done',
+      origin: 'live',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    check.host.saved = () => [saved]
+    const run = () => assertCliConversationWritersExited(check.host, 'opencode', 'conversation')
+    await expect(run()).resolves.toBeUndefined()
+    check.observation.presence = async () => 'live'
+    await expect(run()).rejects.toMatchObject(refusal)
+  })
+
+  it('probes a current row before admitting physical absence, even for a sleeping identity', async () => {
+    for (const verdict of [null, 'exited', 'live', 'unverifiable'] as const) {
+      const check = inspection(verdict)
+      check.host.terminal = () => null
+      check.host.sleeping = () => true
+      check.observation.topology = 'unverifiable'
+      const result = expect(check.run())
+      await (verdict === null || verdict === 'exited'
+        ? result.resolves.toBeUndefined()
+        : result.rejects.toMatchObject(refusal))
+      expect(check.observation.presence).toHaveBeenCalledOnce()
+    }
+    const replaced = inspection()
+    replaced.host.terminal = () => null
+    replaced.observation.presence = async () => {
+      replaced.replaceRow()
+      return null
+    }
+    await expect(replaced.run()).rejects.toMatchObject(refusal)
+  })
+
+  it('rechecks an absent saved pane and captured identity after another candidate awaits', async () => {
+    for (const changed of ['terminal', 'capture'] as const) {
+      const check = inspection()
+      const record: SleepingAgentSessionRecord = {
+        paneKey: 'absent',
+        worktreeId: 'workspace',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'conversation' },
+        prompt: '',
+        state: 'done',
+        origin: 'worktree-sleep',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      const other = { ...record, paneKey: 'other' }
+      check.host.saved = () => [record, other]
+      check.host.rows = () => []
+      const terminal = check.host.terminal
+      let appeared = false
+      check.host.terminal = (coordinates) =>
+        coordinates.paneKey === 'absent' && !appeared ? null : terminal(coordinates)
+      check.host.shellAlone = async () => {
+        if (changed === 'terminal') {
+          appeared = true
+        } else {
+          record.updatedAt += 1
+        }
+        return true
+      }
+      await expect(check.run()).rejects.toMatchObject(refusal)
+    }
+  })
+
+  it('retains a matching absent row observation across another saved candidate await', async () => {
+    const check = inspection()
+    const record: SleepingAgentSessionRecord = {
+      paneKey: row.paneKey,
+      worktreeId: 'workspace',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'conversation' },
+      prompt: '',
+      state: 'done',
+      origin: 'worktree-sleep',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    const other = { ...record, paneKey: 'other' }
+    check.host.saved = () => [record, other]
+    const terminal = check.host.terminal
+    check.host.terminal = (coordinates) =>
+      coordinates.paneKey === row.paneKey ? null : terminal(coordinates)
+    check.host.shellAlone = async () => {
+      check.replaceRow()
+      return true
+    }
+    await expect(check.run()).rejects.toMatchObject(refusal)
+  })
+
+  it.each(['absent', 'shell'] as const)(
+    'retains %s current-row proof without a saved match across a later saved census',
+    async (physical) => {
+      for (const changed of ['unchanged', 'row', 'terminal'] as const) {
+        const check = inspection()
+        const other: SleepingAgentSessionRecord = {
+          paneKey: 'other',
+          worktreeId: 'workspace',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'conversation' },
+          prompt: '',
+          state: 'done',
+          origin: 'worktree-sleep',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+        check.host.saved = () => [other]
+        const terminal = check.host.terminal
+        const otherTerminal = terminal(other)
+        let appeared = false
+        check.host.terminal = (coordinates) =>
+          coordinates.paneKey !== row.paneKey
+            ? otherTerminal
+            : physical === 'absent' && !appeared
+              ? null
+              : terminal(coordinates)
+        const entered = Promise.withResolvers<void>()
+        const released = Promise.withResolvers<boolean>()
+        let scans = 0
+        check.host.shellAlone = async () => {
+          scans += 1
+          if (physical === 'shell' && scans === 1) {
+            return true
+          }
+          entered.resolve()
+          return released.promise
+        }
+        const result = check.run()
+        const assertion =
+          changed === 'unchanged'
+            ? expect(result).resolves.toBeUndefined()
+            : expect(result).rejects.toMatchObject(refusal)
+        await entered.promise
+        if (changed === 'row') {
+          check.replaceRow()
+        } else if (changed === 'terminal') {
+          appeared = true
+          check.replacePty()
+        }
+        released.resolve(true)
+        await assertion
+      }
+    }
+  )
 
   it('requires current owned shell proof for saved resumes, including done checkpoints', async () => {
     const record: SleepingAgentSessionRecord = {
@@ -190,7 +407,11 @@ describe('execution-host conversation writer inspection', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
     const pane = `tab-a:${leaf}`
     let rows: AgentStatusIpcPayload[] = []
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const store = ORCA_LAYOUT_OWNER_IS_MAIN ? writerLayoutStore() : null
+    class WriterRuntime extends OrcaRuntimeService {
+      readonly sleepStates = this.terminalSleepStateByHostWorktree
+    }
+    const runtime = new WriterRuntime(store, undefined, {
       getAgentProviderSessionSnapshot: () => rows,
       readHookCliWriterObservation: () => ({
         current: () => true,
@@ -198,8 +419,12 @@ describe('execution-host conversation writer inspection', () => {
         presence: async () => null
       })
     })
-    const register = (tabId: string, incarnationId?: string, isWsl?: boolean) =>
+    const register = (tabId: string, incarnationId?: string, isWsl?: boolean) => {
+      // A move leaves only the new tab holding the pane, as main's layout does after the move.
+      store?.setWorkspaceSession?.(getDefaultWorkspaceSession())
+      bindPaneFirst(runtime, { worktreeId: 'workspace', tabId, leafId: leaf, ptyId: 'pty' })
       runtime.registerPty('pty', 'workspace', null, { tabId, leafId: leaf, incarnationId }, isWsl)
+    }
     register('tab-a', 'i1')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the census reads only listProcesses.
     runtime.setPtyController({
@@ -237,6 +462,24 @@ describe('execution-host conversation writer inspection', () => {
     }
     // The header switch inspects the pane it leaves even when nothing recorded the conversation.
     await census(() => check('claude', { workspaceId: 'workspace', paneKey: pane }))
+    // Another host's same-id workspace cannot hold this local source; each local sleep phase does.
+    const source = { workspaceId: 'workspace', paneKey: pane }
+    for (const phase of ['sleeping', 'partial', 'stopping'] as const) {
+      const state = {
+        worktreeId: 'workspace',
+        generation: 1,
+        phase,
+        ptyIds: [],
+        terminalHandles: [],
+        terminalHandlesByPtyId: {}
+      }
+      runtime.sleepStates.set(hostSleepKey('ssh:twin', 'workspace'), state)
+      await expect(check('claude', source)).resolves.toBeUndefined()
+      runtime.sleepStates.set(hostSleepKey('local', 'workspace'), state)
+      await expect(check('claude', source)).rejects.toMatchObject(refusal)
+      runtime.sleepStates.delete(hostSleepKey('local', 'workspace'))
+    }
+    runtime.sleepStates.clear()
     // A row restored after restart has no observed identity; the pane's current PTY decides.
     rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
     await census(() => check('claude'))

@@ -43,7 +43,7 @@ export function resolvePiAgentSourceDir(
   const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
-  // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
+  // Source-less inherited overlays must not be mirrored into another agent's tree.
   if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
     return publicDir
   }
@@ -109,7 +109,6 @@ export function exposePiManagedExtensionEnv(
   }
 }
 
-// Why: variadic because a nested call per source made intermediate `string[] | undefined` collide with the parameter type.
 export function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
   ...additionalKeyGroups: readonly (readonly string[])[]
@@ -121,7 +120,7 @@ export function mergePtyEnvDeletions(
 }
 
 export function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
-  // Why: resume provenance is launch-authoritative; late deletions must not fall back to the current account.
+  // Resume provenance selects the home; late deletions must not fall back to current account.
   const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'ORCA_CODEX_HOME')
   return filtered?.length ? filtered : undefined
 }
@@ -130,7 +129,7 @@ export function getInheritedAgentHookEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
+  // Providers later merge ambient env; delete stale hooks without removing freshly injected coordinates.
   return [
     ...AGENT_HOOK_RUNTIME_ENV_KEYS,
     'ORCA_OPENCODE_AGENT',
@@ -143,8 +142,7 @@ export function getInheritedAgentSessionStampEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: a caller that explicitly provides a Claude stamp (a nested Claude child) keeps it; no
-  // terminal is a structured session, so the session caller keys always go.
+  // Explicit nested-Claude stamps survive; structured-session caller keys never belong to terminal panes.
   return [
     ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
     ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS
@@ -183,7 +181,7 @@ export function resolveOpenCodeSourceConfigDir(
     return sourceDir
   }
 
-  // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is Orca-owned, not user config; treating it as user config makes child Orcas mirror the hook dir.
+  // Matching public/private paths identify Orca-owned state, not user config to mirror into child Orcas.
   if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
     return undefined
   }

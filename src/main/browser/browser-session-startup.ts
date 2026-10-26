@@ -35,8 +35,7 @@ export function initializeBrowserSessionsForApp(
     )
   }
 
-  // Why: cookie replay must happen before the first session.fromPartition()
-  // call, otherwise Chromium opens the stale live cookie DB before import.
+  // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
   browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   initialized = true

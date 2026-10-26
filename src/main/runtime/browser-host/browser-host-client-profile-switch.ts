@@ -22,7 +22,6 @@ const pendingByPlacements = new WeakMap<
   Map<string, RuntimeBrowserClientPlacement>
 >()
 
-/** Replacement placements of switches still waiting on the client, by page. */
 export function pendingBrowserHostProfileSwitches(
   placements: BrowserHostPagePlacementRegistry
 ): Map<string, RuntimeBrowserClientPlacement> {
@@ -76,7 +75,7 @@ export async function switchBrowserHostClientProfile(
       )
     }
   }
-  // Why: a held grant blocks recreating the page once its placement is retired.
+  // Held grants would block recreation after retirement.
   const releaseGrant = () => {
     if (input.grants.get(authority.browserPageId) === grant) {
       input.grants.delete(authority.browserPageId)
@@ -114,7 +113,6 @@ export async function switchBrowserHostClientProfile(
     input.onCommitted?.(authority.browserPageId, expected.pageHostGeneration)
     return placement
   }
-  // The client retired the old guest once its switch completed, so that placement is gone.
   const retireSwitchedPage = () => {
     input.placements.cancelClientPageReservation(reservation)
     retirePlacement()
@@ -142,7 +140,7 @@ export async function switchBrowserHostClientProfile(
     return commit()
   } catch (error) {
     if (resultPending) {
-      // Why: the client still decides; a late success is adopted, a late failure keeps the old page.
+      // Timeout is not final: adopt late success; retain the old page on late failure.
       void resultPending
         .then(
           (result) => {

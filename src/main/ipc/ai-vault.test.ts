@@ -33,9 +33,7 @@ vi.mock('../ai-vault/session-delete', () => ({
   deleteAiVaultSessionFile: mocks.deleteAiVaultSessionFile
 }))
 
-// Why: only the invalidation seam is replaced — everything else (cachedList,
-// listAiVaultSessions, ...) keeps its real implementation so the existing
-// host-routing/caching tests below stay exercising real behavior.
+// Mock only invalidation so routing and cache tests retain the real list implementation.
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   const actual = await importOriginal<typeof CachedSessionListModule>()
   return {

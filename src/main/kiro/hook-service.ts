@@ -20,8 +20,7 @@ import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-scrip
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
@@ -39,9 +38,16 @@ import {
   removeManagedKiroHooks,
   serializeKiroAgentConfig
 } from './hook-settings'
+import { getKiroRemoteStandaloneHooksFilePath } from './standalone-hook-settings'
+import {
+  getKiroStandaloneHooksStatus,
+  installKiroStandaloneHooks,
+  installKiroStandaloneHooksRemote,
+  removeKiroStandaloneHooks,
+  withKiroStandaloneHooksStatus
+} from './standalone-hooks'
 
-// Why: hook stdout from agentSpawn/userPromptSubmit is injected into Kiro's model context,
-// so every path below must stay silent.
+// Kiro injects hook stdout into model context; every path must stay silent.
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -51,7 +57,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('kiro'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -60,8 +65,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('kiro'),
-    // Why: the endpoint file holds the live port/token; a PTY that outlived an Orca
-    // restart carries stale env, so source it to reach the new server.
+    // Refresh endpoint credentials for PTYs surviving an Orca restart.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -78,7 +82,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 function noAgentsDetail(agentsDir: string): string {
-  return `No custom Kiro agents in ${agentsDir}. Kiro's built-in default agent cannot carry hooks; create one with \`kiro-cli agent create\` and make it the default so Orca can track Kiro's status`
+  return `No custom Kiro agents in ${agentsDir}. On Kiro's V2 engine the built-in default agent cannot carry hooks; create one with \`kiro-cli agent create\` and make it the default so Orca can track Kiro's status`
 }
 
 type AgentFileRead =
@@ -163,7 +167,6 @@ function buildStatus(agentsDir: string, files: AgentFileRead[]): AgentHookInstal
   return status(agentsDir, 'partial', problems.join('; '), managedHooksPresent)
 }
 
-/** Installs Orca's status hooks into every global Kiro agent config. */
 export class KiroHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getKiroManagedScriptPath(), getManagedScript())
@@ -172,30 +175,31 @@ export class KiroHookService {
   getStatus(): AgentHookInstallStatus {
     const agentsDir = getKiroAgentsDir()
     const files = readLocalAgentFiles(agentsDir)
+    const standalone = getKiroStandaloneHooksStatus()
     if (files === null) {
-      return status(agentsDir, 'error', 'Could not read the Kiro agents directory')
+      return withKiroStandaloneHooksStatus(
+        status(agentsDir, 'error', 'Could not read the Kiro agents directory'),
+        standalone
+      )
     }
     const result = buildStatus(agentsDir, files)
-    return result.managedHooksPresent && !existsSync(getKiroManagedScriptPath())
-      ? { ...result, state: 'partial', detail: 'Managed hook script missing' }
-      : result
+    return withKiroStandaloneHooksStatus(
+      result.managedHooksPresent && !existsSync(getKiroManagedScriptPath())
+        ? { ...result, state: 'partial', detail: 'Managed hook script missing' }
+        : result,
+      standalone
+    )
   }
 
   install(): AgentHookInstallStatus {
     const agentsDir = getKiroAgentsDir()
     const files = readLocalAgentFiles(agentsDir)
-    if (files === null) {
-      return status(agentsDir, 'error', 'Could not read the Kiro agents directory')
-    }
     const scriptPath = getKiroManagedScriptPath()
-    // Write the script first so no agent config ever points at a missing file.
+    // Write the script first so no hooks file ever points at a missing file.
     writeManagedScript(scriptPath, getManagedScript())
-    if (files.length === 0) {
-      return status(agentsDir, 'not_installed', noAgentsDetail(agentsDir))
-    }
     const command = getKiroManagedCommand(scriptPath)
     const isManaged = getKiroManagedCommandMatcher()
-    for (const file of files) {
+    for (const file of files ?? []) {
       if ('error' in file) {
         continue
       }
@@ -205,10 +209,12 @@ export class KiroHookService {
         preserveMode: true
       })
     }
+    // V3 applies it to every agent, including the built-in default.
+    installKiroStandaloneHooks(command)
     return this.getStatus()
   }
 
-  /** Install on an SSH execution host, where Kiro runs hooks through sh. */
+  /** SSH hosts execute hooks through sh. */
   async installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,
@@ -217,14 +223,23 @@ export class KiroHookService {
     const agentsDir = getKiroRemoteAgentsDir(remoteHome, kiroHomeDir)
     const scriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/kiro-hook.sh`
     try {
+      // Write the script first so no hooks file ever points at a missing file.
+      await writeManagedScriptRemote(sftp, scriptPath, getManagedScript('posix'))
+      const command = getKiroRemoteManagedCommand(scriptPath)
+      const standalone = await installKiroStandaloneHooksRemote(
+        sftp,
+        getKiroRemoteStandaloneHooksFilePath(remoteHome, kiroHomeDir),
+        command
+      )
       const fileNames = ((await listRemoteDirectory(sftp, agentsDir)) ?? [])
         .filter(isKiroAgentConfigFileName)
         .sort()
       if (fileNames.length === 0) {
-        return status(agentsDir, 'not_installed', noAgentsDetail(agentsDir))
+        return withKiroStandaloneHooksStatus(
+          status(agentsDir, 'not_installed', noAgentsDetail(agentsDir)),
+          standalone
+        )
       }
-      await writeManagedScriptRemote(sftp, scriptPath, getManagedScript('posix'))
-      const command = getKiroRemoteManagedCommand(scriptPath)
       const isManaged = getKiroManagedCommandMatcher()
       const files: AgentFileRead[] = []
       for (const fileName of fileNames) {
@@ -243,17 +258,18 @@ export class KiroHookService {
         await writeTextFileRemoteAtomic(sftp, path, serializeKiroAgentConfig(next))
         files.push({ fileName, config: next })
       }
-      return buildStatus(agentsDir, files)
+      return withKiroStandaloneHooksStatus(buildStatus(agentsDir, files), standalone)
     } catch (err) {
       return status(agentsDir, 'error', err instanceof Error ? err.message : String(err))
     }
   }
 
   remove(): AgentHookInstallStatus {
+    removeKiroStandaloneHooks()
     const agentsDir = getKiroAgentsDir()
     const files = readLocalAgentFiles(agentsDir)
     if (files === null) {
-      return status(agentsDir, 'error', 'Could not read the Kiro agents directory')
+      return this.getStatus()
     }
     const isManaged = getKiroManagedCommandMatcher()
     for (const file of files) {

@@ -1,5 +1,3 @@
-// Layout-owner build: a window view that attaches while main starts its pane takes main's start,
-// with no second provider attach (one round trip, as the window's own cold restore was).
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
@@ -69,7 +67,6 @@ const PANE: PaneArgs = {
 describe('a window view of a pane main is starting', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  /** Main starts the pane while the window's view of it waits; resolves the view's attach. */
   async function viewDuringMainStart(startResult: Record<string, unknown>) {
     const providerSpawn = vi.fn(async (opts: { sessionId?: string }) => ({
       id: opts.sessionId ?? 'pty-main',
@@ -106,6 +103,7 @@ describe('a window view of a pane main is starting', () => {
         controller = value
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_main'),
+      getAgentProviderSessionRows: vi.fn(() => []),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -136,7 +134,7 @@ describe('a window view of a pane main is starting', () => {
   })
 
   it("attaches as today when main's start carries no payload to paint", async () => {
-    // A fresh start: nothing to paint, so the view's own attach takes the provider's snapshot.
+    // No main-start snapshot exists; use the view attach snapshot.
     const { view, providerSpawn } = await viewDuringMainStart({})
     expect(view).toMatchObject({ id: 'pty-main' })
     expect(providerSpawn).toHaveBeenCalledTimes(2)

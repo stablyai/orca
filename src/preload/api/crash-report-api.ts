@@ -26,9 +26,7 @@ export type CrashReportsApi = {
   copyLatestDiagnostics: (
     args?: CrashReportCopyDiagnosticsArgs
   ) => Promise<{ ok: true } | { ok: false; error: string }>
-  /** Exact V8/Blink heap sizes; null when the runtime withholds them. */
   readHeapStatistics: () => RendererHeapStatistics | null
-  /** This renderer's OS-level footprint, which the heap counters never include. */
   readProcessMemory?: () => Promise<RendererProcessMemory | null>
 }
 

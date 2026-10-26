@@ -22,8 +22,6 @@ describe('agent-browser process environment', () => {
     ).toBeLessThan(104)
   })
 
-  // Why ownsSocketDirectory is false for both: a directory Orca did not derive can be shared with
-  // another Orca profile, so `session list` under it is no proof of ownership.
   it('preserves explicit overrides and leaves Windows socket routing unchanged', () => {
     const configured = createAgentBrowserProcessEnvironment({
       inheritedEnv: { AGENT_BROWSER_SOCKET_DIR: '/custom/socket-dir' },
@@ -43,7 +41,6 @@ describe('agent-browser process environment', () => {
     expect(windows.ownsSocketDirectory).toBe(false)
   })
 
-  // Why: the only daemon bound that survives a SIGKILL'd Orca, so it must be set on every platform.
   it.each<NodeJS.Platform>(['darwin', 'linux', 'win32'])(
     'bounds daemon idle lifetime on %s',
     (platform) => {

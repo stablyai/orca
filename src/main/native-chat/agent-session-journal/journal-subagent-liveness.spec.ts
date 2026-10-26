@@ -53,7 +53,7 @@ export function registerJournalSubagentLivenessTests(): void {
     })
   }
 
-  /** A grouped row as an earlier build wrote it: the structured block plus its twin. */
+  /** Legacy grouped roster and its plain-text twin. */
   function rosterRow(agents: NativeChatSubagentEntry[]) {
     return {
       identity: { provider: 'orca' as const, clientMessageId: `codex-subagents:${GROUP_ID}` },
@@ -145,7 +145,7 @@ export function registerJournalSubagentLivenessTests(): void {
         { id: 'a', state: 'unverifiable' },
         { id: 'b', state: 'completed' }
       ])
-      // Mobile reads only this sentence, so it may not go on saying `Kicked off`.
+      // Mobile reads only the fallback sentence.
       expect(twinOf(revisions[0]!.body)).toBe('Ran 2 subagents (1 unverifiable)')
     })
 
@@ -166,8 +166,6 @@ export function registerJournalSubagentLivenessTests(): void {
       expect(twinOf(revisions[0]!.body)).toBe('Background command "sleep 20" stopped reporting')
     })
 
-    // The child stopped being observable at an unknown moment. A stamp taken now
-    // would report the time the app was down as how long the child ran.
     it('records no terminal timestamp for a child whose run length is unknown', () => {
       const revisions = staleSubagentRosterRevisions([
         renderItem([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
@@ -213,8 +211,6 @@ export function registerJournalSubagentLivenessTests(): void {
       ).toEqual([])
     })
 
-    // Appending under a fresh identity would add a second row rather than revise
-    // the one on disk, so an unaddressable key is left exactly as it is.
     it('skips a row whose key cannot be parsed back to its identity', () => {
       expect(
         staleSubagentRosterRevisions([
@@ -304,7 +300,6 @@ export function registerJournalSubagentLivenessTests(): void {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
 
-      // Still the writing host: it can see the children, so the row says so.
       const beforeRestart = live.snapshot().items.at(-1)!
       expect(rosterOf(beforeRestart.body)).toMatchObject([
         { state: 'working' },
@@ -312,7 +307,7 @@ export function registerJournalSubagentLivenessTests(): void {
       ])
       expect(twinOf(beforeRestart.body)).toBe('Kicked off 2 subagents')
 
-      // The host dies without ever settling them — no `ended`, so no session sweep.
+      // Closing bypasses provider-end/session-sweep settlement.
       await live.close()
       clock += 3_600_000
 

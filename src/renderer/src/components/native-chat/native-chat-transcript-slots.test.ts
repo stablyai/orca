@@ -67,8 +67,31 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
-  // The trailing run is the one still live while the turn works. Prose or a
-  // further run after it settles it; a reasoning aside leaves it live.
+  it('shows unresolved historical input without a timer or unanchored live attribution', () => {
+    const message = text('follow-up', 'keep this text', 'user')
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: message.id,
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: message.blocks },
+        turnScope: { kind: 'unknown' }
+      }
+    ]
+    const membership = nativeChatTurnMembership([message], { items, submissions: [] })
+    const slots = build([message], { ...membership, isWorking: true, lifecycleWorking: true })
+    expect(slots).toHaveLength(1)
+    expect(slots[0]).toMatchObject({
+      message,
+      drawsMessage: true,
+      activeTurnIsWorking: false,
+      turnFolds: false
+    })
+    expect(slots[0]?.turnKey).toBeUndefined()
+    expect(slots[0]?.status).toBeUndefined()
+  })
+  // Only newer speech/actions settle the trailing run; reasoning remains in the same batch.
   it('marks the last row that speaks or acts as the trailing run', () => {
     const trailing = (messages: NativeChatMessage[]) =>
       build(messages)
@@ -76,7 +99,6 @@ describe('transcript slots', () => {
         .map((slot) => slot.message.id)
 
     expect(trailing([text('u', 'go', 'user'), toolRun('a'), text('b', 'Done.')])).toEqual(['b'])
-    // Two runs in a row draw as one, headed by the first.
     expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['a'])
     expect(
       trailing([text('u', 'go', 'user'), toolRun('a'), text('r', 'hmm', 'reasoning')])
@@ -84,8 +106,7 @@ describe('transcript slots', () => {
     expect(trailing([toolRun('a'), text('u', 'again', 'user')])).toEqual(['a'])
   })
 
-  // Approving a call lets that call run, and it sits in the run above the
-  // receipt. A question's receipt blocks the agent on the reader, so it does not.
+  // Approval receipts leave the tool running above them; question receipts block on the reader.
   it('keeps the run above an approval receipt trailing, but not above a question', () => {
     const resolution = {
       state: 'resolved' as const,
@@ -108,8 +129,6 @@ describe('transcript slots', () => {
     expect(trailing('question')).toEqual(['question'])
   })
 
-  // A counted row that draws nothing is a gap in the transcript: it reserves
-  // estimated height for a bubble that never appears.
   it('gives no slot to a message with nothing to draw', () => {
     const slots = build([text('a', 'visible'), text('blank', ''), text('b', 'also visible')])
     expect(slots.map((slot) => slot.message.id)).toEqual(['a', 'b'])
@@ -192,9 +211,7 @@ describe('a send the host rejected', () => {
   const DIAGNOSTIC =
     'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
 
-  // The restarted child died before starting, so the send was rejected and the exit wrote why.
-  // The local clock had watched the send go pending and stop; that must not settle a turn that
-  // never ran and fold the one row naming the cause behind a "Worked for 0s".
+  // A rejected startup never ran a turn; do not fold its diagnostic behind a locally measured Worked for 0s.
   it('leaves the row naming the cause on screen', () => {
     const messages = [
       text('orca:first-start', DIAGNOSTIC, 'system'),
@@ -276,14 +293,13 @@ describe('a turn no message opened', () => {
     const slots = build(messages, {
       turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
     })
-    // Folded rows take no slot; the error is the turn's visible end.
     expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
       ['u1', false],
       ['exit', false]
     ])
   })
 
-  // Stored red for clients that predate it, but Orca stopped, not the agent: no failure, never folded.
+  // Legacy red Orca-stop rows are not agent failures and must stay visible.
   it("keeps the row about Orca's stop on screen beside the reply it cut, which stays the answer", () => {
     const orcaStop: NativeChatMessage = {
       ...failure('orca-stop'),
@@ -306,7 +322,6 @@ describe('a turn no message opened', () => {
       ['a1', false],
       ['orca-stop', false]
     ])
-    // The same, once a reader re-presented it neutral.
     const neutral: NativeChatMessage = {
       ...orcaStop,
       blocks: orcaStop.blocks.map((block) =>
@@ -363,7 +378,6 @@ describe('the live turn', () => {
       turnScope
     )
 
-  /** "List three fruits", answered and settled; then a turn the provider opened on its own. */
   const messages = [
     text('u1', 'List three fruits', 'user'),
     text('a1', 'Apple, banana, cherry.'),
@@ -497,8 +511,7 @@ describe('the live turn', () => {
   })
 })
 
-// Rows belong to the turn the host says owns them, not to the nearest preceding
-// user bubble. The owned turn keys reshape the fold, the bar and liveness.
+// Host ownership, not nearest prompt position, controls turn folds, bars and liveness.
 describe('turn-owned grouping', () => {
   const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 70 }
   // The #23621 shape: B lands mid-turn, three tool calls follow, one turn.
@@ -518,7 +531,6 @@ describe('turn-owned grouping', () => {
       turnKeys: ownedKeys,
       turnStatuses: { active: null, completedByTurn: { A: settled } }
     })
-    // All four tool rows fold; the steered bubble stays visible with no bar of its own.
     expect(slots.map((slot) => [slot.message.id, slot.status ?? null])).toEqual([
       ['A', settled],
       ['B', null],
@@ -527,7 +539,6 @@ describe('turn-owned grouping', () => {
     expect(slots[0]?.turnFolds).toBe(true)
   })
 
-  // A stored-only provider event draws nothing, so a disclosure over it would open onto nothing.
   it('offers no disclosure when the only row besides the answer draws nothing', () => {
     const wordless: NativeChatMessage = {
       id: 'frame',

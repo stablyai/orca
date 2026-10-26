@@ -210,7 +210,6 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       observeOnly
         ? observeWebRuntimeStatus(selector, timeoutMs)
         : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
-    retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: ({
       selector,

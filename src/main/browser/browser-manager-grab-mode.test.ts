@@ -70,11 +70,9 @@ describe('browserManager grab operations', () => {
     })
 
     it('cancels active grab op when disabling', async () => {
-      // Start a grab op first
       guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
       const selectionPromise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Disable grab mode
       const result = await browserManager.setGrabMode('tab-1', false, guest)
       expect(result).toBe(true)
 

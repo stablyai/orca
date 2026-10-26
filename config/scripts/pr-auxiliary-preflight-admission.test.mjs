@@ -383,6 +383,7 @@ function createMobileCiScopeRepository(
   for (const file of [
     'package.json',
     'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-darwin-terminal-node-route.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
@@ -514,11 +515,10 @@ describe.skipIf(process.platform === 'win32')('Daemon mock complete Git change e
     expect(flags).toContain('test=true\n')
     expect(flags).toContain('typecheck=true\n')
   })
-  it('routes the complete four-file modification through the real detector', () => {
+  it('routes the complete three-file modification through the real detector', () => {
     const companions = [
       'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-      'config/scripts/process-host-build-dist.test.mjs',
-      'src/main/codex/codex-app-server-connection.test.ts'
+      'config/scripts/process-host-build-dist.test.mjs'
     ]
     const repo = createMobileCiScopeRepository(true, helper, companions)
     for (const file of [helper, ...companions]) {

@@ -70,8 +70,7 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
   }
 
   let maxTokens = 0
-  // Why: usage history can be large enough to exceed V8's argument limit if
-  // every day is spread into Math.max.
+  // Iterate large histories instead of exceeding V8’s Math.max spread-argument limit.
   for (const entry of byDay.values()) {
     maxTokens = Math.max(maxTokens, entry.totalTokens)
   }

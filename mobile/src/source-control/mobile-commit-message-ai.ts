@@ -8,8 +8,7 @@ import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type { MobileGenerateCommitMessageResult }
 
-// A refusal or a malformed payload collapses to { success:false } so the caller never has to
-// special-case either; the operation's reader owns the payload half of that.
+// Collapse refusals and malformed payloads to the same failed-generation verdict.
 export async function requestMobileCommitMessage(
   client: RpcOperationSender,
   worktreeId: string

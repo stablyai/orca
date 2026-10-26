@@ -5,13 +5,16 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession
 } from '../../orca-runtime-test-fixtures.spec'
+import { committingSpawn } from '../../bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
 function runtimeWithSavedGrid() {
-  const spawn = vi.fn().mockResolvedValue({ id: 'pty-held' })
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+    id: 'pty-held'
+  }))
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
     ...getDefaultWorkspaceSession(),
     activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-active' },
@@ -26,7 +29,7 @@ function runtimeWithSavedGrid() {
   })
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null

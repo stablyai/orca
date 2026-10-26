@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock the IO seam so the test stays pure: we only assert the write order and
-// the inter-write delay, not the local-vs-remote pty branching.
+// Mock PTY I/O to isolate write ordering and delays from local/remote routing.
 const sendRuntimePtyInput = vi.fn()
 const sendRuntimePtyInputVerified = vi.fn()
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
@@ -28,7 +27,10 @@ import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
 } from './native-chat-runtime-image-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 
 const PTY = 'pty-1'
 
@@ -59,8 +61,7 @@ describe('sendNativeChatMessage', () => {
 
   it('does not fire Enter before the proven 500ms gap (busy-agent safety)', () => {
     sendNativeChatMessage(PTY, 'hi')
-    // A short gap would fire Enter while a busy Codex has not yet landed the
-    // paste, submitting an empty box — so nothing must happen before 500ms.
+    // Busy Codex can swallow Enter before paste lands; retain the full submit delay.
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
   })
@@ -80,7 +81,6 @@ describe('sendNativeChatMessage', () => {
     handle.cancel()
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
-    // Pre-send clear + body + cancel clear; Enter must not fire.
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('hi'),
@@ -100,8 +100,8 @@ describe('sendNativeChatMessage', () => {
     expect(sendRuntimePtyInput.mock.calls.map((call) => call[1])).toEqual([
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('tell me a joke'),
-      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT, // cancel cleanup
-      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT, // next send pre-clear
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('continue')
     ])
   })
@@ -119,7 +119,6 @@ describe('sendNativeChatMessage', () => {
     sendNativeChatMessage(PTY, 'tell me a joke')
     sendNativeChatMessage(PTY, 'continue')
 
-    // First clear+body are immediate; second sequence waits for the first Enter.
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('tell me a joke')
@@ -182,8 +181,7 @@ describe('sendNativeChatMessageVerified', () => {
   })
 
   it('awaits body acceptance before the delayed Enter write (no pre-clear)', async () => {
-    // Why: model-switch confirmation watches the PTY while this send runs;
-    // verified option commands must not inject Ctrl+U noise.
+    // Model-confirmation observers must not see Ctrl+U from verified commands.
     const result = sendNativeChatMessageVerified(PTY, '/model sonnet')
     await vi.waitFor(() => {
       expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
@@ -229,7 +227,6 @@ describe('sendNativeChatMessageVerified', () => {
 
     expect(await result).toBe(true)
     const submits = sendRuntimePtyInput.mock.calls.filter((call) => call[1] === NATIVE_CHAT_SUBMIT)
-    // Only the verified path's Enter — chat's delayed Enter was cancelled.
     expect(submits).toHaveLength(0)
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
@@ -425,7 +422,6 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     handle.cancel()
     vi.runAllTimers()
 
-    // Pre-clear + image body + cancel clear; no Enter.
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       '\x1b[200~/tmp/orca-paste-image.png\x1b[201~ ',

@@ -1,34 +1,31 @@
-// Giving a session its provider child back.
-//
-// Only work starts one: the delivery loop for a queued message, and the few operations that need
-// the provider itself — never a view, and never the app launching. It runs outside the session's
-// serialize as one registered flight (`structured-agent-session-start-flight`), so a message sent
-// meanwhile is accepted at once; each of its writes is a fenced commit under the serialize.
+// Only queued work or provider operations start children. Run waits outside serialization;
+// fence each state commit so concurrent sends remain immediately acceptable.
 
 import {
   providerDiagnosticOf,
+  type SubmissionRejectionFact,
   type AgentSessionArgumentProblem,
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
-  readAgentSessionRefusalReference,
-  refuseUnclassified
+  readAgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { randomUUID } from 'node:crypto'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
-import { structuredAgentSessionStartFlightLock } from './structured-agent-session-start-flight'
-import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
+import {
+  failedStructuredAgentSessionStart,
+  registerStructuredAgentSessionStart,
+  structuredAgentSessionStartStillQueued
+} from './structured-agent-session-start-attempts'
+import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import {
   joinClosingStructuredAgentSessionChild,
@@ -40,31 +37,31 @@ import {
   structuredAgentSessionStartParams
 } from './structured-agent-session-start-eligibility'
 
-/** A resume answers with the attach's own refusal, verdict and all, so the asker can tell a lease
- *  someone else is settling from an owner that will not come back. */
+/** Preserve attach refusal verdicts so callers distinguish recovery in progress from permanent loss. */
 export type StructuredAgentSessionResumeOutcome =
   | { ok: true }
   | {
       ok: false
       refusal: AgentSessionWireRefusal
-      /** What the provider said about the failed start, for the chat's own record; host-side
-       *  only, never on the refusal. */
+      /** Provider diagnostic is host-only, never part of the refusal. */
       diagnostic?: ProviderDiagnostic
-      /** The host's own close, Stop or quit aborted the start, so it failed nothing it was for. */
+      /** Host cancellation must not fail work the start was serving. */
       aborted?: true
-      /** The start went silent or hit its ceiling before it proved itself: Orca stopped it. */
+      /** Startup silence/ceiling expiry means Orca stopped the start. */
       expired?: true
       argumentProblem?: AgentSessionArgumentProblem
+      retry?: boolean
+      failure?: SubmissionRejectionFact
+      startKey?: string | null
     }
 
-/** The attach's caller key: the ledger row a start settles is Orca's own. */
 const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
 
 export type StructuredAgentSessionStartClaim = {
   outcome: Promise<StructuredAgentSessionResumeOutcome>
 }
 
-/** Claims the effect in the ordered decision that needs it; waiting happens outside that lane. */
+/** Claim under the ordered decision; wait outside its lane. */
 export function claimStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
@@ -72,28 +69,26 @@ export function claimStructuredAgentSessionAgent(
 ): StructuredAgentSessionStartClaim {
   const session = context.sessions.get(sessionId)
   const child = session?.child
-  if (
-    startedFor &&
-    !session?.journal
-      .submissions()
-      .some(
-        (submission) =>
-          submission.clientMessageId === startedFor && isQueuedAgentJournalSubmission(submission)
-      )
-  ) {
-    return { outcome: Promise.resolve({ ok: false, aborted: true, refusal: startFailedRefusal() }) }
+  if (!structuredAgentSessionStartStillQueued(session, startedFor)) {
+    return { outcome: Promise.resolve({ ...failedStructuredAgentSessionStart(), aborted: true }) }
+  }
+  const flight = context.runtimeState.startFlights.get(sessionId)
+  if (flight) {
+    return { outcome: flight.outcome }
   }
   if (child && !child.close) {
     return { outcome: Promise.resolve({ ok: true }) }
   }
   return {
-    outcome:
-      context.runtimeState.startFlights.get(sessionId)?.outcome ??
-      registerStart(context, sessionId, startedFor)
+    outcome: registerStructuredAgentSessionStart(
+      context,
+      sessionId,
+      startedFor,
+      (lock, attemptId) => runStart(context, sessionId, startedFor, lock, attemptId)
+    )
   }
 }
 
-/** Convenience for callers outside the lane; the claim itself never awaits its execution. */
 export async function startStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
@@ -105,7 +100,6 @@ export async function startStructuredAgentSessionAgent(
   return claim.outcome
 }
 
-/** The same, for an operation's admission: a start that throws is that operation's refusal. */
 export function startStructuredAgentSessionAgentForOperation(
   context: StructuredAgentSessionAttachContext,
   sessionId: string
@@ -127,55 +121,9 @@ export function claimOperationStart(
         sessionId,
         error
       })
-      return { ok: false, refusal: startFailedRefusal() }
+      return failedStructuredAgentSessionStart()
     })
   }
-}
-
-/** Inside the register step, before any wait: the controller a Stop, close or quit aborts, the
- *  startup clock, and quit's drain all cover the start from here. */
-function registerStart(
-  context: StructuredAgentSessionAttachContext,
-  sessionId: string,
-  startedFor: string | undefined
-): Promise<StructuredAgentSessionResumeOutcome> {
-  const { runtimeState } = context
-  const attemptId = randomUUID()
-  const acquire = runtimeState.acquireAborts.begin(sessionId)
-  runtimeState.startupAttempts.begin(sessionId, attemptId)
-  const lock = structuredAgentSessionStartFlightLock({
-    sessionId,
-    attemptId,
-    signal: acquire.signal,
-    flights: runtimeState.startFlights,
-    serialize: context.serialize
-  })
-  const outcome = context.tasks.trackAttach(
-    Promise.resolve()
-      .then(() => runStart(context, sessionId, startedFor, lock, attemptId))
-      .catch((error: unknown) => {
-        if (!acquire.signal.aborted) {
-          throw error
-        }
-        const expired = isStructuredAgentSessionStartupExpired(acquire.signal.reason)
-        return {
-          ok: false as const,
-          refusal: startFailedRefusal(),
-          ...(expired ? { expired: true as const } : { aborted: true as const })
-        }
-      })
-      .finally(() => {
-        acquire.end()
-        runtimeState.startFlights.end(sessionId, attemptId)
-        runtimeState.startupAttempts.abandon(sessionId, attemptId)
-      })
-  )
-  runtimeState.startFlights.register(sessionId, {
-    attemptId,
-    outcome,
-    abort: acquire.abort
-  })
-  return outcome
 }
 
 async function runStart(
@@ -185,25 +133,20 @@ async function runStart(
   lock: StructuredAgentSessionAttachLock,
   attemptId: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
-  // A child a stop began closing takes no input, and none may start beside it: the start waits on
-  // that close, and is refused while its exit stays unverifiable.
+  // Never start beside a closing child; unverifiable exit refuses the restart.
   const closed = await joinClosingStructuredAgentSessionChild(context, sessionId, lock)
   if (!closed.ok) {
     return closed
   }
   const callerKey = AGENT_START_CALLER_KEY
-  // The record is read only once this host has adjudicated it and recovery resolution has
-  // concluded about any owner a failed attempt left in `recovering`, so the eligibility below sees
-  // the lease the resolver handed back. Both probe outside; each commits in the store's own
-  // transaction, against the owner identity it probed.
+  // Read eligibility only after lease adjudication/recovery; each commits against its probed owner.
   const unreconciled = await lock.wait(context.reconcileLeases(sessionId))
   if (unreconciled) {
     return { ok: false, refusal: unreconciled }
   }
   await lock.wait(context.runtimeState.resolveRecovery(sessionId))
   const eligible = await lock.commit(async () => {
-    // A start needs the lease released; a release the exit's own wind-down could not write is
-    // re-derived from this host's proof of that exit, never refused on.
+    // Re-derive release from this host’s exit proof when wind-down could not persist it.
     await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId)
     return structuredAgentSessionStartParams(context, sessionId, startedFor)
   })
@@ -236,9 +179,7 @@ async function runStart(
       }
     })
   } catch (error) {
-    // The attach settles an acquisition that failed — the ledger row, the released lease — before
-    // it rethrows the cause. That row is the answer: a failure it recorded is this resume's
-    // refusal, verdict and all. Only an error it did not record is a fault for the caller.
+    // Attach records refusal before rethrowing; only unrecorded errors remain caller faults.
     const settled = settledResumeRefusal(
       context,
       callerKey,
@@ -263,13 +204,6 @@ async function runStart(
       )
 }
 
-function startFailedRefusal(): AgentSessionWireRefusal {
-  return refuseUnclassified(
-    'agent_session_owner_restart_failed',
-    agentSessionWriteNoticeEnglish(['restartFailed'])
-  )
-}
-
 function withDiagnostic(
   refusal: AgentSessionWireRefusal,
   error: unknown,
@@ -283,7 +217,8 @@ function withDiagnostic(
     ...(diagnostic ? { diagnostic } : {}),
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
-    ...(argumentProblem ? { argumentProblem } : {})
+    ...(argumentProblem ? { argumentProblem } : {}),
+    retry: retryableStructuredAgentSessionAcquisition(error)
   }
 }
 

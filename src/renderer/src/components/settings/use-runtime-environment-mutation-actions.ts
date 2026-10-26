@@ -64,7 +64,7 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
     setIsSaving(true)
     try {
-      // Why main judges a taken name: a code for that same saved server refreshes it instead.
+      // Main distinguishes duplicate names from refreshing the same saved server.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
@@ -95,7 +95,7 @@ export function useRuntimeEnvironmentMutationActions({
       }
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
-        // Why not a refreshed entry: removing it would drop a server the user had already saved.
+        // Rollback must not remove an existing server refreshed by this pairing.
         if (!connected && !result.updatedExisting) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()

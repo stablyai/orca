@@ -17,7 +17,7 @@ import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// Why: relative to now — the labels under test are relative times, so fixed dates would rot.
+// Use relative dates because the labels under test are relative times.
 function artifact(slug: string, title: string): ArtifactListItem {
   const createdAt = new Date(Date.now() - DAY_MS).toISOString()
   return {
@@ -57,16 +57,14 @@ function SelectingCollection({ items }: { items: ArtifactListItem[] }): React.JS
   )
 }
 
-// `hidden`, because a modal Radix menu marks the rest of the tree aria-hidden while it is open —
-// and the row behind that menu is exactly what these assertions have to read.
+// Include aria-hidden rows behind Radix’s modal menu so assertions can inspect their selection state.
 function rowFor(title: string): HTMLElement {
   return screen.getByRole('button', { name: new RegExp(title), hidden: true })
 }
 
 describe('ArtifactCollection', () => {
   afterEach(cleanup)
-  // Why: the viewport stub spies on HTMLElement.prototype, so an unrestored one fabricates
-  // layout for every later test in the run.
+  // Restore prototype layout spies or later tests inherit fabricated geometry.
   afterEach(() => vi.restoreAllMocks())
 
   function renderCollection(
@@ -141,11 +139,7 @@ describe('ArtifactCollection', () => {
     expect(screen.getByText('No matches')).toBeInTheDocument()
   })
 
-  /**
-   * Both of the row's menu escapes at once. The actions trigger is a DOM descendant of the row, and
-   * Radix portals the open menu out of it but React still bubbles its clicks back through the row —
-   * so without either guard the detail drawer opens behind every menu interaction.
-   */
+  /** Guard clicks from both descendant triggers and React-bubbling portaled menu items so actions cannot select the row behind them. */
   it('runs a row menu action without selecting the artifact behind the menu', async () => {
     const user = userEvent.setup()
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
@@ -172,8 +166,7 @@ describe('ArtifactCollection', () => {
     expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
   })
 
-  // Why past 50: below the windowing threshold every row is in the DOM, so nothing has to be
-  // announced — the set size only has to be right once the rows are windowed.
+  // Exceed the windowing threshold so announced set sizes cannot be inferred from mounted rows alone.
   const PAGED_ITEM_COUNT = 60
 
   function pagedItems(): ArtifactListItem[] {
@@ -182,8 +175,7 @@ describe('ArtifactCollection', () => {
     )
   }
 
-  // Why: happy-dom has no layout, and the virtualizer sizes its window from the scroller's
-  // offsetHeight — left at 0 it mounts no rows at all and the assertions below would be vacuous.
+  // Supply viewport height because happy-dom has no layout; otherwise the virtualizer mounts no rows and assertions are vacuous.
   function stubScrollerViewport(): void {
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
       this: HTMLElement

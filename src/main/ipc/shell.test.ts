@@ -59,7 +59,6 @@ import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
 import { resolveExternalEditorLaunchSpec } from '../external-editor-launch'
 import type { SshTarget } from '../../shared/ssh-types'
 
-// Why shell:false: hidden launches go through @orca/process-host, which pins it.
 const HIDDEN_EDITOR_LAUNCH_OPTIONS = expect.objectContaining({
   detached: true,
   stdio: 'ignore',
@@ -465,7 +464,7 @@ describe('registerShellHandlers', () => {
         ).resolves.toEqual({
           ok: true
         })
-        // Why: a waiting batch launcher skips the start /B wrap; process-host builds its cmd line.
+        // Waiting batch launchers bypass start /B; process-host owns command-line encoding.
         expect(getSpawnArgsForWindowsMock).toHaveBeenCalledTimes(1)
         expect(spawnMock).toHaveBeenLastCalledWith(
           expect.any(String),

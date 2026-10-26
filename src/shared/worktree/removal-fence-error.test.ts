@@ -12,7 +12,6 @@ describe('isWorktreeRemovalFenceError', () => {
   })
 
   it('recognizes the message after Electron IPC prefixes the reject', () => {
-    // Electron wraps a rejected ipcMain.handle error with its own prefix.
     const wrapped = `Error invoking remote method 'pty:spawn': Error: ${TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE}`
     expect(isWorktreeRemovalFenceError(wrapped)).toBe(true)
   })

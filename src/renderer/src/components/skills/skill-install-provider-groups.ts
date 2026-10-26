@@ -11,8 +11,7 @@ export type SkillInstallProviderChoice = {
 }
 
 export type SkillInstallProviderGroups = {
-  /** Agents that read the canonical `.agents/skills` root, so every install
-   *  reaches them and there is nothing to choose. */
+  /** Canonical-root consumers receive every install and have no per-agent checkbox. */
   canonical: SkillInstallProviderDefinition[]
   selectable: SkillInstallProviderChoice[]
 }
@@ -42,8 +41,7 @@ export function groupSkillInstallProviders(
   if (!detectedAgents) {
     return { canonical, selectable }
   }
-  // Why: agents the machine does not have are still offered — you may install
-  // one later — but they belong under the ones the choice actually affects.
+  // Keep absent agents available for future installs, below currently installed agents.
   const installed = new Set(detectedAgents)
   return {
     canonical,
@@ -54,11 +52,7 @@ export function groupSkillInstallProviders(
   }
 }
 
-/**
- * Starts with the agents the target machine actually has, so the common case is
- * one click. A null detection (a runtime that cannot be probed from here) falls
- * back to every agent, which is what installing did before the picker existed.
- */
+/** Default to detected agents; unknown detection retains the legacy all-agent install behavior. */
 export function defaultSelectedSkillProviders(
   detectedAgents: readonly string[] | null
 ): Set<SkillInstallProviderId> {

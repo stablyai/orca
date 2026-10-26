@@ -42,6 +42,8 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
+import type { PtyLaneMailboxTarget } from '../terminal/query/pty-terminal-summary'
 
 export abstract class RuntimeConstructionServices {
   abstract getOrchestrationDb(): OrchestrationDb
@@ -103,12 +105,16 @@ export abstract class RuntimeConstructionServices {
     agent: TuiAgent
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
+  protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
+  protected abstract clearWaitBlockedStamp(ptyId: string): void
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract getLeafKey(tabId: string, leafId: string): string
+  /** L80: sole reader of a PTY record's tab/pane copies. */
+  protected abstract paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane
   protected abstract getLivePtyForHandle(handle: string): {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord
@@ -117,6 +123,9 @@ export abstract class RuntimeConstructionServices {
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   }
+  protected abstract getOrchestrationMailboxLeafForHandle(handle: string): OrchestrationMailboxLeaf
+  protected abstract getPtyLaneMailboxTarget(leafKey: string): PtyLaneMailboxTarget | null
+  protected abstract hasMailboxTerminalHandle(handle: string): boolean
   protected abstract startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -125,6 +134,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract getPtyTitleDisplayClear(
     ptyId: string | null | undefined
   ): TitleDisplayClear | null
+  protected abstract flushPendingWaitBlockedCheck(ptyId: string): void
   protected abstract makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string
   protected abstract refreshTerminalSideEffectConsumerAvailability(): void
   protected abstract resolveNativeChatLaunchDraftOwner(handle: string): {
@@ -226,6 +236,7 @@ export abstract class RuntimeConstructionServices {
     tabId: string
     leafId: string
   }): boolean
+  protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliCommand(
     handle: string
   ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>

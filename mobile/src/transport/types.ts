@@ -20,13 +20,7 @@ export type RpcRequest = {
   params?: unknown
 }
 
-/**
- * `_meta` is optional because the wire does not guarantee it. `isRpcResponse`, which is what both
- * sides of the bridge actually read a reply through, checks `id`, `ok` and the presence of
- * `result` or `error` and never looks at `_meta`; `src/shared/runtime-rpc-envelope.ts` already
- * makes it optional on a failure. The shell also answers `native.` verbs itself, and those replies
- * name no runtime because none produced them. Nothing in this app reads the field.
- */
+// Wire validation does not require _meta, and shell-produced native replies have no runtime to name.
 export type RpcSuccess = {
   id: string
   ok: true
@@ -75,13 +69,11 @@ export type ConnectionLogEntry = {
   id: string
   ts: number
   level: ConnectionLogLevel
-  // Short human-readable phase label, e.g. 'Opening WebSocket'.
   message: string
-  // Optional second line for endpoint/error/elapsed detail.
   detail?: string
   code?: ConnectionDiagnosticCode
   path?: MobileConnectionDiagnosticPath
-  // The relay close code behind a relay-dial-failed entry, so diagnostics need not read it out of `detail`.
+  // Carry the relay close code separately so diagnostics need not parse detail.
   relayCloseCode?: number
 }
 
@@ -102,18 +94,16 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
-// Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
-// network-change nudge marks the socket suspect enough to replace it.
+// Attention nudges probe healthy relays; only a network change justifies replacing the socket.
 export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
 
 export type HostProfile = {
   id: string
-  /** Resolved display value; the store maintains `name === personalName ?? lastKnownMachineName ?? "Host N"`,
-   *  except that a desktop reporting its OS without a machine name leaves the last adopted one here. */
+  // Resolved display name; an OS-only desktop report preserves the last adopted name.
   name: string
-  /** The name typed on this phone. Present only when the user renamed the host here; it overrides the desktop's. */
+  // This phone’s rename overrides the desktop’s machine name.
   personalName?: string
-  /** What the desktop last called itself over status.get, kept for offline and post-restart rows. */
+  // Last desktop-reported name, retained offline and across restarts.
   lastKnownMachineName?: string
   lastKnownHostPlatform?: NodeJS.Platform
   endpoint: string
@@ -131,9 +121,8 @@ export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
   profile: HostProfile | null
 }
 
-// Why: salvaged so a value this build cannot read (a newer build's platform, an empty string)
-// drops only that field; a failed record parse would drop the whole paired host on the next write.
-// The outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+// Salvage unknown/empty platform values independently so persisting them cannot drop the paired host.
+// Keep outer optional() so the inferred key remains optional.
 const hostNameIdentityFields = {
   personalName: salvagedOptional('personalName', z.string().min(1)).optional(),
   lastKnownMachineName: salvagedOptional('lastKnownMachineName', z.string().min(1)).optional(),
@@ -154,9 +143,7 @@ export const HostProfileSchema = z.object({
   relay: MobileRelayEndpointSchema.optional()
 })
 
-// Why: persisted host record after the v0.0.3 keychain split. The
-// deviceToken is held in iOS Keychain via expo-secure-store and joined
-// in at load time; it must NOT appear in AsyncStorage anymore.
+// Never persist deviceToken in AsyncStorage; join it from Keychain when loading the host.
 export const StoredHostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),

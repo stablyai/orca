@@ -5,16 +5,12 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) => String(options?.[name] ?? match))
 }))
 
-import { connectedHostCountLabel, connectingHostsLabel } from './ssh-status-segment-copy'
+import { connectedHostCountLabel } from './ssh-status-segment-copy'
 
 describe('ssh status segment copy', () => {
   it('keeps the host noun singular for a lone connected host', () => {
     expect(connectedHostCountLabel(0)).toBe('0 hosts')
     expect(connectedHostCountLabel(1)).toBe('1 host')
     expect(connectedHostCountLabel(4)).toBe('4 hosts')
-  })
-
-  it('labels hosts still connecting', () => {
-    expect(connectingHostsLabel()).toBe('Connecting…')
   })
 })

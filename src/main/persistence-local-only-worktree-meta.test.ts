@@ -3,11 +3,8 @@ import {
   createStore,
   readPersistedStateJson,
   testState
-} from './persistence-test-harness'
-/**
- * The floating and setup terminals have no repo row, so their metadata belongs to this store's own
- * machine. An older build left them unstamped, which projected them onto every SSH host (#31498).
- */
+} from './persistence/persistence-test-harness'
+// Repo-less floating/setup terminals belong to this machine and must not project onto SSH hosts (#31498).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -124,6 +121,15 @@ describe('local-only workspace metadata', () => {
       reloaded.getAllWorktreeMetaForHost('local')[FLOATING_TERMINAL_WORKTREE_ID]
     ).toMatchObject({ hostId: 'local', lastActivityAt: 5, workspaceStatus: 'done' })
     expect(reloaded.getAllWorktreeMetaForHost(SSH_HOST)).toEqual({})
+  })
+
+  it('owns a floating terminal row on this machine before any row exists', () => {
+    expect(
+      resolveWorktreeMetaOwner(
+        { getRepos: () => [], getWorktreeMeta: () => undefined },
+        FLOATING_TERMINAL_WORKTREE_ID
+      )?.hostId
+    ).toBe('local')
   })
 
   it('lands every floating terminal write on this machine, whichever host the caller named', () => {

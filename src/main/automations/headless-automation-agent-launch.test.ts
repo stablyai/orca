@@ -39,7 +39,8 @@ function harness(options: { startupTerminal?: Record<string, unknown> | null } =
       paneKey: 'tab-1:leaf-1',
       ptyId: 'pty-1',
       worktreeId: 'wt-1',
-      title: 'Nightly'
+      title: 'Nightly',
+      suppressStartupUpdatePrompt: true
     })),
     showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
     getAgentStatusRowsForPane: vi.fn((_paneKey: string) => [
@@ -124,7 +125,8 @@ describe('headless automation agent launch', () => {
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
       agent: 'hermes',
       prompt: 'fix the flaky test',
-      title: 'Nightly'
+      title: 'Nightly',
+      suppressStartupUpdatePrompt: true
     })
     expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
     expect(launched.terminalHandle).toBe('term_existing')
@@ -139,6 +141,7 @@ describe('headless automation agent launch', () => {
       agent: 'claude',
       prompt: 'fix the flaky test',
       title: 'Nightly',
+      suppressStartupUpdatePrompt: true,
       extraAgentArgs: '--model opus'
     })
     expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
@@ -162,7 +165,6 @@ describe('headless automation agent launch', () => {
 
     const launched = await launch(runtime, { agentId: 'aider' })
 
-    // The run is recorded while the agent is still coming up, as before.
     expect(launched.terminalPaneKey).toBe('tab-1:leaf-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
       'id:wt-1',

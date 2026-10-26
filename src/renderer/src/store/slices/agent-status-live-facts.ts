@@ -81,8 +81,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.subagents !== existing.subagents ||
       entry.children !== existing.children ||
       entry.providerSession !== existing.providerSession)
-  // A verdict moves no clock: a failure keeps a done's completion time, and a main agent that fails
-  // while its subagents keep the row working leaves the row's state and start as they were.
+  // Verdicts move no clocks: failures preserve done completion and working subagent state/start.
   const verdictChanged =
     !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
   const retentionRelevantChange =

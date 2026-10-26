@@ -1,6 +1,3 @@
-// One journal item as a bounded-frame reader receives it: never more than one row's share of a
-// frame.
-
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { boundJournalKeyComponent } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -11,11 +8,10 @@ import {
 } from './agent-session-history-page-bounds'
 import { shortenedAgentJournalItem } from './agent-session-item-wire-form'
 
-/** One row's share of a page, so a page always carries several rows. */
+/** Reserve room for several rows per page. */
 export const BOUNDED_FRAME_ROW_BYTES = BOUNDED_FRAME_CONTENT_BUDGET_BYTES / 8
 
-/** The too-large marker with every identifier it carries held to a key's bound, so the marker
- *  itself always fits a row. Provenance a reader never joins on is dropped. */
+/** Bound marker identifiers so the fallback itself fits; omit provenance readers do not join on. */
 function oversizedFrameItem(item: AgentJournalRenderItem): AgentJournalRenderItem {
   const {
     providerParentRef: _provenance,
@@ -38,7 +34,7 @@ function oversizedFrameItem(item: AgentJournalRenderItem): AgentJournalRenderIte
   }
 }
 
-// Items are immutable per revision, so a catch-up or a second subscriber reuses the bound form.
+// Revision objects are immutable, so readers/subscribers may reuse the bounded form.
 const bounded = new WeakMap<AgentJournalRenderItem, HistoryItemForm>()
 
 export function boundedFrameItem(formed: HistoryItemForm): HistoryItemForm {

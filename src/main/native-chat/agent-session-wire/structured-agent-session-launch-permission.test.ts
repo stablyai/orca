@@ -1,6 +1,3 @@
-// The mode a start launches with: Claude's Approve for me needs its model listed for it in the saved
-// catalog; anything the catalog cannot confirm launches Ask.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'

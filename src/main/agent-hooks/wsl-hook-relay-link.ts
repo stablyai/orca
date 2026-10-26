@@ -1,7 +1,3 @@
-// Envelope forwarding and death handling for one live WSL relay link.
-// Extracted from the manager so its state machine stays readable; the manager
-// decides what a dead link means (cooldown, restart), this module guarantees
-// it finds out exactly once, whichever signal fires first.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
@@ -19,10 +15,7 @@ export type WslRelayLinkOptions = {
     isCurrent: () => boolean
   ) => () => void
   warn: (message: string) => void
-  /** Called exactly once when the link dies — from EITHER a mux dispose
-   *  (protocol error, keepalive timeout) or the child exiting. A mux death
-   *  without child death would otherwise blackhole every later envelope
-   *  while the guest keeps returning 204 to hook clients. */
+  /** Notify once on mux or child death; a dead mux can otherwise silently discard hook events. */
   onDead: (reason: string) => void
 }
 
@@ -45,8 +38,7 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
         `[agent-hooks] WSL relay envelope (${distro}): pane=${p.paneKey} state=${p.payload?.state ?? '?'}`
       )
     }
-    // Trust boundary: ingestRemote re-validates paneKey/tabId and
-    // re-normalizes the payload, same as the SSH relay path.
+    // Revalidate identifiers and payload at ingest, just as for SSH relays.
     ingest(params, connectionId)
   })
 

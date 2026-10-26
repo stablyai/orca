@@ -1,15 +1,10 @@
-// What the host's own fold and history readers send a phone subscribed to a journal, at any row.
-
-import type {
-  AgentJournalCursor,
-  AgentJournalSnapshot
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
   applyJournalRow,
-  createJournalReducerState,
-  renderJournalState
+  createJournalReducerState
 } from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
+import { readJournalPublicView } from '../../../src/main/native-chat/agent-session-journal/journal-public-read'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import {
@@ -18,15 +13,10 @@ import {
 } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 
 export type HostJournalFrames = {
-  /** The host's fold after `upTo`, read through its own history readers. */
   journalAt: (upTo: number) => AgentSessionJournal
-  /** The lease fence once the host has written `upTo`. */
   fenceAt: (upTo: number) => number
-  /** The snapshot a phone subscribing at `upTo` gets. */
   snapshotAt: (upTo: number) => AgentSessionSubscribeEvent
-  /** What the host sends a subscriber at `cursor` and `fence` once the journal reaches `upTo`: the
-   *  rows since as batches carrying the subscriber's fence, or, once the fence moved (a new child),
-   *  a fresh snapshot, as the attach that moved it sends every subscriber. */
+  // Fence changes publish fresh snapshots; otherwise send cursor batches under the subscriber’s fence.
   framesTo: (
     subscriber: { cursor: AgentJournalCursor; fence: number },
     upTo: number
@@ -38,25 +28,25 @@ export function hostJournalFrames(
   epoch: string,
   rows: readonly JournalRow[]
 ): HostJournalFrames {
-  // One fold, read at every row: each row's snapshot and the aliases its readers resolve with.
   const state = createJournalReducerState(sessionId, epoch)
-  const snapshots: AgentJournalSnapshot[] = []
+  const views: ReturnType<typeof readJournalPublicView>[] = []
   const aliases: ReadonlyMap<string, string>[] = []
   const fences: number[] = []
   for (const row of rows) {
     applyJournalRow(state, row)
-    // A copy: the fold revises its submissions in place.
-    snapshots.push(structuredClone(renderJournalState(state)))
+    // Clone each view because the fold revises submissions in place.
+    views.push(structuredClone(readJournalPublicView(state)))
     aliases.push(new Map(state.aliases))
     fences.push(Math.max(row.fence, fences.at(-1) ?? 0))
   }
   const journalAt = (upTo: number): AgentSessionJournal => {
-    const snapshot = snapshots[upTo - 1]!
+    const view = views[upTo - 1]!
+    const { snapshot } = view
     const journal = {
       isReadOnly: false,
       snapshot: () => snapshot,
+      publicRead: () => view,
       cursor: () => snapshot.cursor,
-      // Without a body the store's own resolution reads only the aliases.
       canonicalItemId: (itemId: string) => aliases[upTo - 1]!.get(itemId) ?? itemId,
       readSince: (cursor: AgentJournalCursor, limit?: number) => ({
         ok: true as const,

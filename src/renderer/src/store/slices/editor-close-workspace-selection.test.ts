@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -43,7 +42,6 @@ describe.each(workspaces)('editor close selection in a $label', ({ id: worktreeI
       agentSessionAgent: 'codex',
       label: 'Codex Chat'
     })
-    // Main holds the tabs drawn so far; the editor's tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const fileId = openMarkdown(store, worktreeId)
     await main.settle()
@@ -79,7 +77,6 @@ describe.each(workspaces)('editor close selection in a $label', ({ id: worktreeI
   it.each(closeActions)('%s returns to the welcome screen when no tab survives', async (action) => {
     const store = createEditorTabsStore()
     store.setState({ activeWorktreeId: worktreeId })
-    // Main holds the tabs drawn so far; the editor's tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const fileId = openMarkdown(store, worktreeId)
     await main.settle()
@@ -110,7 +107,6 @@ describe('editor close mixed tab history', () => {
       agentSessionAgent: 'codex'
     })
     store.getState().activateTab(first.id)
-    // Main holds the tabs drawn so far; the editor's tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const fileId = openMarkdown(store, 'wt-1')
     await main.settle()
@@ -137,7 +133,6 @@ describe('editor close mixed tab history', () => {
       agentSessionAgent: 'codex',
       activate: false
     })
-    // Main holds the tabs drawn so far; the editor's tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const fileId = openMarkdown(store, 'wt-1')
     await main.settle()

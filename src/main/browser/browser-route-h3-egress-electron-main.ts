@@ -4,13 +4,12 @@ const { app, BrowserWindow, protocol, session } = require('electron')
 const { readFileSync, writeFileSync } = require('node:fs')
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'))
 
-// Why: WebTransport and the Direct Sockets constructors are secure-context gated, so a data: URL guest reports them
-// absent for reasons unrelated to egress policy. This scheme is intercepted before the network stack, so it adds no egress.
+// Use a local secure scheme so secure-context gating does not mask the egress policy.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'probe', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ])
 
-// Why: the probes never complete a handshake; accepting the peer keeps a TLS refusal from masking a packet count.
+// Ignore certificate errors so TLS rejection cannot mask egress packets.
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
   event.preventDefault()
   callback(true)
@@ -96,7 +95,7 @@ async function probe() {
   const webTransport = await window.webContents.executeJavaScript(
     webTransportScript(config.host + ':' + config.webTransportPort)
   )
-  // Why: attribution is by destination port, so let the last datagrams land before the next probe starts.
+  // Allow late datagrams to arrive before starting the next probe.
   await settle(500)
 
   const directSockets = await window.webContents.executeJavaScript(DIRECT_SOCKETS_SCRIPT)
@@ -106,15 +105,14 @@ async function probe() {
   )
   await settle(500)
 
-  // Why: runs last because the control arm's mojo ReportBadMessage kills the renderer the earlier probes need.
+  // Run last because Direct Sockets kills the control renderer.
   const directSocketsConstruct = await Promise.race([
     window.webContents
       .executeJavaScript(DIRECT_SOCKETS_CONSTRUCT_SCRIPT)
       .catch((error) => 'call-failed:' + String(error && error.message)),
     settle(4000).then(() => 'no-answer')
   ])
-  // Why: ReportBadMessage is asynchronous, so the constructor can return before the kill lands; wait for the verdict
-  // instead of a fixed delay, and cap the wait so the guarded arm (which never dies) still finishes.
+  // Wait for asynchronous ReportBadMessage termination; the guarded arm must also finish.
   for (let attempt = 0; attempt < 30 && rendererGone === 'none'; attempt += 1) {
     await settle(100)
   }

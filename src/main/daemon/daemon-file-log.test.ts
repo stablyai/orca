@@ -45,16 +45,14 @@ describe('createDaemonFileLog', () => {
     expect(existsSync(filePath)).toBe(true)
     expect(existsSync(`${filePath}.1`)).toBe(true)
     expect(existsSync(`${filePath}.2`)).toBe(true)
-    // Only 2 rotated files are retained — the oldest is dropped, not kept.
     expect(existsSync(`${filePath}.3`)).toBe(false)
 
-    // The active file holds the most recent line.
     const active = readLines(filePath)
     expect(active.at(-1)).toMatchObject({ event: 'tick', i: 39 })
   })
 
   it('is fail-open when the log directory cannot be created', () => {
-    // Make the parent a file so mkdir of the logs subdir fails (ENOTDIR).
+    // A file as parent forces ENOTDIR without relying on directory permissions.
     const blocker = join(dir, 'blocker')
     writeFileSync(blocker, 'x')
     const filePath = join(blocker, 'logs', 'daemon.log')
@@ -71,7 +69,6 @@ describe('createDaemonFileLog', () => {
     const circular: Record<string, unknown> = {}
     circular.self = circular
     expect(() => log.log('weird', circular)).not.toThrow()
-    // The bad line is dropped; a later good line still lands.
     log.log('ok')
     const lines = readLines(filePath)
     expect(lines.map((l) => l.event)).toEqual(['ok'])

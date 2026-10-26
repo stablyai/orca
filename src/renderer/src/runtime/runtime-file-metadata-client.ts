@@ -50,7 +50,11 @@ export async function statRuntimePath(
 export function isMissingRuntimePathError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
-    message.includes('enoent') || message.includes('not found') || message.includes('no such file')
+    message.includes('enoent') ||
+    message.includes('not found') ||
+    message.includes('no such file') ||
+    // Old hosts’ full ENOTDIR errno means absence like ENOENT; do not mistake a filename beginning enotdir for an error.
+    message.includes('enotdir: not a directory')
   )
 }
 

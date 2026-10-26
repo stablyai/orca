@@ -63,7 +63,6 @@ function KindIcon({ kind, size }: { kind: TaskKind; size: number }): React.JSX.E
 // React Native has no root font; its points stand in for desktop's 16 px rem.
 const NARROW_STRIP_WIDTH = NARROW_BACKGROUND_TASKS_STRIP_REM * 16
 
-// Monitoring is drawn in the same amber everywhere it shows; the other kinds are plain markers.
 function kindIconColor(kind: TaskKind): string {
   return kind === 'monitor' ? AGENT_WORKING_COLOR : colors.textMuted
 }
@@ -141,10 +140,7 @@ function TaskRow({
   )
 }
 
-/** The session's running child work — agents, shells, monitors, workflows — as one collapsible box
- *  above the composer. Desktop parity: `NativeChatBackgroundTasksStatus`, from the same host roster
- *  and the same shared grouping, header and Stop rules. Mounted per conversation, so its open and
- *  stopping state outlive the moment a sequential fan-out's roster empties between children. */
+// Keep disclosure/stop state mounted across temporary empty rosters during sequential fan-out.
 function MobileNativeChatBackgroundTasksImpl({
   tasks
 }: {
@@ -152,7 +148,7 @@ function MobileNativeChatBackgroundTasksImpl({
 }): React.JSX.Element | null {
   const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
-  // Before the first layout, the window less the strip's own margins, so it opens in its final form.
+  // Seed from usable window width to avoid changing form after first layout.
   const [narrow, setNarrow] = useState(
     () => Dimensions.get('window').width - 2 * spacing.lg < NARROW_STRIP_WIDTH
   )
@@ -193,7 +189,6 @@ function MobileNativeChatBackgroundTasksImpl({
                 <View key={segment.kind ?? 'total'} style={styles.segment}>
                   {index > 0 ? <Text style={styles.separator}>·</Text> : null}
                   {segment.kind ? (
-                    // The turn owns the voice: same icons, dimmed until it ends.
                     <View style={view.isMonitoring ? undefined : styles.dimmed}>
                       <KindIcon kind={segment.kind} size={12} />
                     </View>

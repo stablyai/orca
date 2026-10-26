@@ -166,13 +166,11 @@ export class RelayOriginPool {
       }
       const preferredRegion = await this.options.resolvePreferredRegion?.().catch(() => undefined)
       this.assertCurrent()
-      // Why: only the configured director can choose a migration target.
+      // Migration targets must come from the configured director.
       let assignment = await requestRelayAssignment({
         directorUrl: this.options.directorUrl,
         relayToken: this.relayJwt,
         relayHostId: this.options.relayHostId,
-        // Recovery always follows an established assignment; the director
-        // verifies this and admits through its reconnect fast lane.
         reconnect: true,
         preferredRegion,
         isCurrent: () => this.isCurrent(),
@@ -192,8 +190,7 @@ export class RelayOriginPool {
           await origin.rebind(this.relayJwt, assignment)
           rebound = true
         } catch {
-          // Why: a restarted cell cannot know the prior process's resume secret;
-          // after rebind fails, a fresh generation is the only recoverable path.
+          // A restarted cell lost the resume secret; failed rebind must recover with a fresh generation.
           await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
         }
         if (rebound) {
@@ -210,8 +207,7 @@ export class RelayOriginPool {
       this.rotation.schedule()
     } catch (error) {
       if (this.isCurrent() && origin === this.activeOrigin) {
-        // Why: this retry loop ran silently during the 2026-08 incident while
-        // Director 503 throttling stretched recovery to minutes.
+        // Silent retries hid minutes of Director-503 recovery delays in the 2026-08 incident.
         console.warn(
           '[relay] control recovery attempt failed:',
           error instanceof Error ? error.message : String(error)

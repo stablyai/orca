@@ -53,7 +53,6 @@ describe('terminateWindowsProcessTree', () => {
     await terminateWindowsProcessTree(0, { execFileImpl: execFileImpl as never })
     await terminateWindowsProcessTree(-1, { execFileImpl: execFileImpl as never })
     expect(execFileImpl).not.toHaveBeenCalled()
-    // No tree was addressed, so nothing reports it terminated.
     await expect(terminateWindowsProcessTree(0)).resolves.toBe(false)
   })
 })

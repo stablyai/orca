@@ -21,7 +21,7 @@ import {
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getWorktreeOptionId } from './option-dom'
+import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
@@ -62,8 +62,7 @@ export type WorktreeItemRowContext = {
   onCardDragEnd: () => void
 }
 
-// Geometry differs three ways: a plain grouped row, a lineage child inheriting its parent's
-// surface, and a row inside a folder-backed project group.
+// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -150,8 +149,13 @@ export function renderWorktreeItemRow(
       data-scroll-reveal-highlight={
         ctx.highlightedRevealRowKey === itemRow.rowKey ? 'true' : undefined
       }
-      // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
-      onClick={nested ? stopNestedWorktreeCardBubble : undefined}
+      onClick={(event) => {
+        forwardOptionPressToCardSurface(event)
+        // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
+        if (nested) {
+          event.stopPropagation()
+        }
+      }}
       onClickCapture={ctx.onRowClickCapture}
       onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
       onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}

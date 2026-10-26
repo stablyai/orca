@@ -27,7 +27,6 @@ describe('page-initiated tab budget', () => {
 
     expect(budget.tryConsume(0)).toBe(true)
     expect(budget.tryConsume(900)).toBe(true)
-    // The first grant has aged out by 1_000 but the second has not.
     expect(budget.tryConsume(1_000)).toBe(true)
     expect(budget.tryConsume(1_100)).toBe(false)
   })

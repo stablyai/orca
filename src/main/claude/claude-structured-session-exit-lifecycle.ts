@@ -17,7 +17,7 @@ import type {
 export type ClaudeExitLifecycle = {
   sessions: Map<string, ClaudeSession>
   exits: Map<string, ClaudeSessionExit>
-  /** A settled exit's diagnostic, kept for a send admitted before the host heard of the exit. */
+  /** Preserve diagnostics for sends admitted before the host learns of the exit. */
   settledExitErrors: Map<string, Error>
   deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
@@ -36,9 +36,7 @@ export function observeClaudeSessionExit(
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.sessions.delete(sessionId)
-  // Re-enter the provider's close ladder before publishing lifecycle recovery.
-  // An exit callback is root evidence only; the retained tree proof must run
-  // before the host releases and reacquires this exact child.
+  // Run tree cleanup before recovery; an exit callback proves only root exit.
   const closePromise = session.connection.close().catch(() => false)
   const exit: ClaudeSessionExit = {
     connection: session.connection,
@@ -50,7 +48,7 @@ export function observeClaudeSessionExit(
   lifecycle.exits.set(sessionId, exit)
   exit.publication = closePromise
     .then((proven) => {
-      // A first-hand root exit is final like a proven one: the owner releases the lease on it.
+      // Observed root exit releases the lease even if tree cleanup remains unverified.
       if (!proven && !claudeRootExitObserved(session.connection)) {
         return undefined
       }
@@ -59,8 +57,6 @@ export function observeClaudeSessionExit(
     .catch(() => undefined)
 }
 
-/** Lifecycle recovery is published only after the close ladder ran and proved the tree gone or
- *  observed the root's own exit. */
 export function settleClaudeUnexpectedExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,
@@ -73,10 +69,8 @@ export function settleClaudeUnexpectedExit(
       settleClaudeExitedSession(exit.session)
       return
     }
-    // Persist the last completed turn before publishing the lifecycle
-    // event that lets the host release and reacquire this exact child.
+    // Save the completed-turn cursor before recovery permits reacquisition.
     await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
-      // Recovery still publishes: the record keeps its last durable point, and the loss is logged.
       console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
     })
     if (exits.get(sessionId) !== exit) {
@@ -89,8 +83,7 @@ export function settleClaudeUnexpectedExit(
       type: 'ended',
       sessionId,
       reason: exit.error.message,
-      // A start that never landed says why it failed. After it landed, only the child's own exit
-      // blames the provider; an Orca fault that closed it is Orca's.
+      // Distinguish provider exit from a host fault that forced cleanup.
       failure: providerExitObserved(exit.error)
         ? agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(exit.error) })
         : agentSessionFailureFact('hostFault'),
@@ -108,7 +101,7 @@ export function settleClaudeUnexpectedExit(
   return exit.settlementPromise
 }
 
-/** Wait for each first-hand exit's publication, including exits observed while waiting. */
+/** Include exits observed while waiting for earlier publications. */
 export async function drainClaudeObservedExits(
   exits: Map<string, ClaudeSessionExit>
 ): Promise<void> {

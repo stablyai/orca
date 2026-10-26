@@ -157,6 +157,7 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     vi.useFakeTimers()
     const input: RewindInput = {
       sessionId: SESSION,
+      capturePresentation: () => () => true,
       composerScopeKey: 'old-rewind-clear-compat',
       state: {
         ...EMPTY_STRUCTURED_AGENT_SESSION,

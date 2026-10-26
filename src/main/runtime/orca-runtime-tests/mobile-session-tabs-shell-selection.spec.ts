@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
@@ -7,7 +8,7 @@ function makeHeadlessRuntime(runtimeStore: typeof store = store) {
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell-pick' })
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -37,8 +38,7 @@ describe('OrcaRuntimeService session-tab shell selection', () => {
         shellOverride: 'git-bash'
       })
 
-      // The defect this pins: the pick rode as `command`, so the managed host typed
-      // `git-bash` into PowerShell and the tab stayed PowerShell.
+      // Passing the shell as command typed git-bash into PowerShell instead of selecting it.
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({ shellOverride: 'git-bash', command: undefined })
       )

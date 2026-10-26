@@ -1,14 +1,15 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
-import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
-import { historyRowShowsChatName } from '../../shared/structured-chat-row-name'
+import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
+  terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
@@ -21,8 +22,7 @@ import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-r
 import type { StructuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-registration-types'
 import { commandName, commandProgramIndex, shellCommands } from './shell-command-words'
 
-/** Whether the client a projection answers opens a chat of this agent from its history row. A row
- *  owned by a chat it cannot open is hidden from it: resuming that row in a terminal is refused. */
+/** Hide chat-owned rows from clients unable to open that agent’s chat. */
 export type StructuredChatOpener = (agent: StructuredAgentId) => boolean
 
 export const OPENS_EVERY_STRUCTURED_CHAT: StructuredChatOpener = () => true
@@ -51,8 +51,7 @@ export function projectStructuredAiVaultSessions(
     : { ...result, sessions }
 }
 
-/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can.
- *  An owned hit opens its chat, so it carries no terminal resume command. */
+/** Owned search hits open their chat and omit terminal resume commands, matching history rows. */
 export function projectStructuredAiVaultSearchResponse(
   response: AiVaultSearchResponse,
   opensChat: StructuredChatOpener
@@ -77,8 +76,7 @@ export function projectStructuredAiVaultSearchResponse(
   }
 }
 
-/** The hits once the chat host is installed; plain hits if it will not install, since owning and
- *  naming them must never cost the user the search. */
+/** Keep search available when the chat host cannot install; return hits without ownership metadata. */
 export async function searchWithStructuredOwners(
   search: Promise<AiVaultSearchResponse>,
   options: {
@@ -107,15 +105,13 @@ function ownedRow(rowAgent: string, ownership: StructuredProviderSessionOwnershi
     sessionId: ownership.sessionId,
     workspaceId: ownership.workspaceId
   }
-  return historyRowShowsChatName(rowAgent)
-    ? {
-        title: ownership.conversationName ?? defaultAgentChatLabel(ownership.provider),
-        structuredSession
-      }
-    : { structuredSession }
+  const title =
+    ownership.conversationName ??
+    (historyRowFallsBackToChatLabel(rowAgent) ? defaultAgentChatLabel(ownership.provider) : null)
+  return title === null ? { structuredSession } : { title, structuredSession }
 }
 
-/** One index per projection: a list holds hundreds of rows, each once searched every record. */
+// Build one lookup per projection to avoid scanning all chat records for every row.
 function ownershipLookup():
   | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
   | null {
@@ -125,22 +121,20 @@ function ownershipLookup():
   const byProviderSession = new Map<string, StructuredProviderSessionOwnership>()
   for (const ownership of listOwnership()) {
     const key = `${ownership.provider}\0${ownership.providerSessionId}`
-    if (!byProviderSession.has(key)) {
+    const kept = byProviderSession.get(key)
+    if (!kept || (kept.role !== 'head' && ownership.role === 'head')) {
       byProviderSession.set(key, ownership)
     }
   }
   return (row) => {
-    for (const owner of historyRowOwners(row.agent)) {
-      const ownership = byProviderSession.get(`${owner}\0${row.sessionId}`)
-      if (ownership) {
-        return ownership
-      }
-    }
-    return null
+    const found = historyRowOwners(row.agent).flatMap(
+      (owner) => byProviderSession.get(`${owner}\0${row.sessionId}`) ?? []
+    )
+    return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
   }
 }
 
-/** The agents whose chats own history rows listed under each row agent: one CLI can run as several. */
+/** One history row agent can correspond to several chat providers. */
 const HISTORY_ROW_OWNERS = new Map<string, StructuredAgentId[]>()
 for (const { definition, sessionHistory } of STRUCTURED_AGENT_RUNTIME_METADATA) {
   for (const rowAgent of sessionHistory.rowAgents) {
@@ -157,9 +151,9 @@ function historyRowOwners(rowAgent: string): readonly StructuredAgentId[] {
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
   // A fork writes a new conversation, and preparing its home never writes this one.
-  const ownership = args.fork ? null : findResumeOwnership(args)
-  if (ownership) {
-    refuseLegacyWriter(ownership)
+  const blocking = args.fork ? undefined : resumeOwnerships(args).find(terminalResumeBlocked)
+  if (blocking) {
+    refuseLegacyWriter(blocking)
   }
 }
 
@@ -171,36 +165,39 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
   if (invocations.length === 0) {
     return
   }
-  // A terminal command is not a chat: with chats refused here there is no ownership to check.
   await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return
-  }
   for (const ownership of listOwnership()) {
-    if (invocations.some((invocation) => resumesOwnedSession(invocation, ownership))) {
+    if (
+      terminalResumeBlocked(ownership) &&
+      invocations.some((invocation) => resumesOwnedSession(invocation, ownership))
+    ) {
       refuseLegacyWriter(ownership)
     }
   }
 }
 
-/** The chat that owns the row a resume or fork names; null when none does. */
 export function findResumeOwnership(
   args: Pick<AiVaultPrepareSessionResumeArgs, 'agent' | 'sessionId' | 'filePath'>
 ): StructuredProviderSessionOwnership | null {
+  return resumeOwnerships(args)[0] ?? null
+}
+
+/** Every link naming the row, those matched by id first. */
+function resumeOwnerships(
+  args: Pick<AiVaultPrepareSessionResumeArgs, 'agent' | 'sessionId' | 'filePath'>
+): StructuredProviderSessionOwnership[] {
   const owners = new Set(historyRowOwners(args.agent))
   if (owners.size === 0) {
-    return null
+    return []
   }
   const owned = listOwnership().filter((ownership) => owners.has(ownership.provider))
   const fileName = args.filePath.split(/[\\/]/).at(-1) ?? ''
-  return (
-    (args.sessionId
-      ? owned.find((ownership) => ownership.providerSessionId === args.sessionId)
-      : undefined) ??
-    owned.find((ownership) => fileName.includes(ownership.providerSessionId)) ??
-    null
-  )
+  return [
+    ...(args.sessionId
+      ? owned.filter((ownership) => ownership.providerSessionId === args.sessionId)
+      : []),
+    ...owned.filter((ownership) => fileName.includes(ownership.providerSessionId))
+  ]
 }
 
 function listOwnership(): StructuredProviderSessionOwnership[] {
@@ -215,9 +212,7 @@ function resumesOwnedSession(
   if (invocation.provider !== ownership.provider) {
     return false
   }
-  // A target-less resume (--last, --continue, or a bare --resume/-r) may pick
-  // any provider session, so it cannot be admitted while one is structured.
-  // Only an explicit target that names a different session is safe.
+  // A targetless resume could open any owned session, so require a provably different target.
   if (invocation.target === null) {
     return true
   }
@@ -242,8 +237,7 @@ function parseResumeInvocations(command: string): ResumeInvocation[] {
       binaries.set(name, [...(binaries.get(name) ?? []), registration])
     }
   }
-  // Only a command's program can resume: a name elsewhere is an argument or prompt text
-  // ("Fix the Pi --resume flag", `claude --model pi -r x`).
+  // Match programs only; agent names in arguments and prompts cannot resume sessions.
   const invocations: ResumeInvocation[] = []
   for (const words of shellCommands(command)) {
     const program = commandProgramIndex(words)

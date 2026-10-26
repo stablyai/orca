@@ -5,7 +5,7 @@ import {
   writePersistedStateJson,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -58,7 +58,7 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   ...overrides
 })
 
-/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+/** Inject persisted drift that normal creation would resolve. */
 function mutateDataFile(
   mutate: (state: {
     automations: Record<string, unknown>[]

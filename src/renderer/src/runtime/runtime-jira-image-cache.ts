@@ -4,7 +4,7 @@ import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
   JIRA_IMAGE_MAX_PENDING_READS
-} from '../../../shared/jira-attachment-image'
+} from '../../../shared/jira/jira-attachment-image'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { readRuntimeJiraImage } from './runtime-jira-image-client'
@@ -14,6 +14,7 @@ import {
   onRuntimeEnvironmentRevisionsChanged
 } from './runtime-environment-revision'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 const MAX_CACHE_BYTES = 24 * 1024 * 1024
 const MAX_CACHE_ENTRIES = 96
@@ -184,7 +185,7 @@ export function migrateLegacyJiraImages(content: string, target: RuntimeClientTa
         return `${prefix}${suffix}`
       }
       try {
-        const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0))
+        const bytes = decodeBase64Bytes(encoded)
         if (bytes.byteLength === 0 || bytes.byteLength > JIRA_IMAGE_MAX_BYTES) {
           return `${prefix}${suffix}`
         }

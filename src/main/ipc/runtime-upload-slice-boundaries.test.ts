@@ -14,8 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileWriteBase64Chunk } from '../../shared/rpc-contract/files-mutation-params'
 import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-upload-staging-contract'
 
-// Why: real limits, real host write flags ('wx' then 'a') and the real chunk
-// schema — the slice loop is exercised exactly at the boundaries it must respect.
+// Exercise real limits, chunk schema and exclusive-create/append host flags.
 
 type ChunkParams = { relativePath: string; contentBase64: string; append: boolean }
 type CallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }
@@ -31,8 +30,7 @@ type CallArgs = [
 ]
 
 const callRuntimeEnvironment = vi.fn<(...args: CallArgs) => Promise<unknown>>()
-// Why: vi.fn retains every call's params; a 2 GiB stream would pin ~2.8 GB of
-// base64 in mock.calls and masquerade as a leak. Big tests swap in a plain fn.
+// vi.fn retains base64 parameters; large-stream tests use a plain function to avoid pinning gigabytes.
 let transportImpl: (...args: CallArgs) => Promise<unknown> = (...args) =>
   callRuntimeEnvironment(...args)
 vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
@@ -41,7 +39,8 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
 
 const { RUNTIME_UPLOAD_SLICE_BYTES, streamExternalFileToRuntime } =
   await import('./runtime-upload-file-stream')
-const { stageOneSourceForRuntimeUpload } = await import('./filesystem-runtime-upload-staging')
+const { stageOneSourceForRuntimeUpload } =
+  await import('./filesystem/filesystem-runtime-upload-staging')
 const { REMOTE_IMPORT_MAX_FILE_BYTES, REMOTE_IMPORT_MAX_TOTAL_BYTES, formatByteCeiling } =
   await import('./runtime-import-limits')
 
@@ -71,7 +70,7 @@ function chunkCalls(): ChunkParams[] {
     .map(([, , , params]) => params)
 }
 
-/** Mirrors the host: first chunk is an exclusive create, appends open with 'a'. */
+/** Match host flags: exclusive create first, then append. */
 function installRealHostWrites(): void {
   callRuntimeEnvironment.mockImplementation(async (_u, _e, method, params) => {
     if (method === 'files.writeBase64Chunk') {

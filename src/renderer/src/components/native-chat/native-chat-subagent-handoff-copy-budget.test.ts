@@ -136,7 +136,6 @@ describe('nested subagent handoff accumulation', () => {
     const result = countHandoffCopies(input, calls)
     expect([...result.live]).toEqual(['parent', 'child'])
     expect(input).toEqual(before)
-    // Consecutive calls draw as one work run; its members are the rows.
     const messages = slots(input).flatMap((slot) =>
       slot.kind === 'message' ? (slot.workRun ?? [slot.message]) : []
     )

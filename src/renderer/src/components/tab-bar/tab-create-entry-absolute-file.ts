@@ -1,16 +1,19 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { toWorktreeRelativePath } from '@/lib/terminal-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { OpenFile } from '@/store/slices/editor'
 import {
   validateNewTabEntryAbsolutePath,
   type TabEntryLocalPlatform
 } from './tab-create-entry-path-validation'
 import type { statUserOpenedPath, UserOpenedPathStat } from '@/lib/user-opened-local-path'
-import type { openWorkspaceFile } from '@/lib/workspace-file-open'
 
 type AbsoluteFileOperations = {
   assertAbsolutePathAllowed: () => void
-  openWorkspaceFile: typeof openWorkspaceFile
+  openFile: (
+    file: Omit<OpenFile, 'id' | 'isDirty'>,
+    options?: { preview?: boolean; targetGroupId?: string }
+  ) => void
   statUserOpenedPath: typeof statUserOpenedPath
 }
 
@@ -36,9 +39,8 @@ export async function openAbsoluteTabEntryFile(args: {
   }
   args.operations.assertAbsolutePathAllowed()
 
-  args.operations.openWorkspaceFile({
-    kind: 'file',
-    file: {
+  args.operations.openFile(
+    {
       filePath,
       // Why: a project link out of the project keeps its absolute path, so it reads as user-named.
       relativePath: stat.escapesWorktree
@@ -48,6 +50,6 @@ export async function openAbsoluteTabEntryFile(args: {
       language: detectLanguage(filePath),
       mode: 'edit'
     },
-    options: { preview: false, targetGroupId: args.groupId }
-  })
+    { preview: false, targetGroupId: args.groupId }
+  )
 }

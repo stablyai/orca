@@ -1,5 +1,4 @@
-// Why: the pill and the in-section notice are the same claim in two places, so they must be
-// driven by one predicate — a pill reading "partial" over a silent section is a real lie.
+// The pill and inline coverage notice must use one predicate so their claims cannot diverge.
 import { describe, expect, it } from 'vitest'
 import { LinearFacetCoverageNotice } from './linear-issue-attribute-filter-coverage-notice'
 import { isLinearMetadataGroupSelectionPartial } from './linear-issue-attribute-filter-team-ids'

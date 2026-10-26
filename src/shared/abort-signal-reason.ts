@@ -7,6 +7,11 @@ export function abortSignalReason(signal: AbortSignal): Error {
   return Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
 }
 
+/** The signal's own reason, thrown: the abort itself, not a failure it raced. */
+export function isAbortSignalReason(signal: AbortSignal | undefined, error: unknown): boolean {
+  return signal?.aborted === true && error === abortSignalReason(signal)
+}
+
 export function throwIfSignalAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw abortSignalReason(signal)

@@ -187,7 +187,6 @@ describe('Linear issue queries', () => {
       { id: 'comment-3', body: 'Third', createdAt: '2026-01-02T03:06:05.000Z', user: undefined }
     ])
 
-    // The point of the fix: one request regardless of comment count.
     expect(signedRawRequest).toHaveBeenCalledTimes(1)
     expect(signedRawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueComments')
     expect(signedRawRequest.mock.calls[0][0]).toContain('user {')

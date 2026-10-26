@@ -18,7 +18,6 @@ describe('browser host client identity', () => {
     const first = readOrCreateBrowserHostClientId(directory)
     const second = readOrCreateBrowserHostClientId(directory)
 
-    // Why: a fresh id per launch is what made the server fence the lease and drop the tabs.
     expect(second).toBe(first)
     expect(first).toMatch(/^[0-9a-f-]{36}$/)
   })
@@ -62,7 +61,6 @@ describe('browser host client identity', () => {
 
   it('still names the host when the profile cannot be written', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A path whose parent is a file, so the directory can never be created.
     const file = join(profileDirectory(), 'occupied')
     writeFileSync(file, 'not a directory')
 

@@ -9,7 +9,6 @@ import {
   promptedLaunchNotice
 } from './pr-ai-triage-launch'
 
-// A connected client whose only behaviour is the scripted `sendRequest`.
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
   return {
     sendRequest,
@@ -40,7 +39,6 @@ function ok(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
 }
 
-// Answers by method so the order of the agent loader's reads doesn't matter.
 function hostClient(replies: { settings?: unknown; detected?: unknown[]; launch?: RpcResponse }) {
   const sendRequest = vi.fn(async (method: string, _params?: unknown) => {
     if (method === 'repo.list') {
@@ -107,7 +105,6 @@ describe('launchAgentWithPrompt', () => {
       prompt: { text: 'Fix the failing checks', delivery: 'submit' },
       launchSource: 'task_page'
     })
-    // No saved arguments: the host applies the user's configured defaults.
     expect(launchParams(sendRequest)).not.toHaveProperty('agentArgs')
     expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
     expect(
@@ -199,7 +196,6 @@ describe('launchAgentWithPrompt', () => {
       launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
     })
     await run(client)
-    // Catalog order, as the desktop resolves it.
     expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude' })
   })
 
@@ -215,7 +211,6 @@ describe('launchAgentWithPrompt', () => {
   })
 
   it('reports prompt-not-sent when the agent started without its prompt (v1.4.206-207 hosts)', async () => {
-    // Those hosts start a terminal agent with no prompt and say so.
     const { client } = hostClient({
       launch: launchedWith({ delivery: 'submit', outcome: 'not-delivered' })
     })
@@ -279,7 +274,6 @@ describe('promptedLaunchNotice', () => {
     })
   })
 
-  // The host can attach a warning to a launch it still carried out.
   it('never reports the host warning on a launch that went ahead as an error', () => {
     expect(promptedLaunchNotice({ kind: 'sent', warning: 'arguments were ignored' })).toEqual({
       succeeded: true,
@@ -305,7 +299,6 @@ describe('promptedLaunchNotice', () => {
 })
 
 describe('agentStartedMessage', () => {
-  // Issue #20543: a launch from the phone must say it happened, and where.
   it('names the workspace the agent started in', () => {
     expect(promptedLaunchNotice({ kind: 'sent' }, 'feature-login').success).toBe(
       'Agent started in feature-login'

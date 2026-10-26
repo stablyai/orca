@@ -36,7 +36,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
     getRemoteRuntimeSharedControlDiagnostics: vi.fn(() => null),
     reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
     retryRemoteRuntimeSharedControlConnectionsNow: vi.fn(),
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: vi.fn()

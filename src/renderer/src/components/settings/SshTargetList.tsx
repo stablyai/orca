@@ -36,15 +36,12 @@ function groupTitle(group: SshTargetGroup): React.JSX.Element {
   return <>{translate('auto.components.settings.SshTargetList.fromConfig', 'From ~/.ssh/config')}</>
 }
 
-// Why: a generated ~/.ssh/config can import >10k hosts; a card each cost GBs of DOM, so rows window.
+// Virtualize generated configs with over 10k hosts; rendering every card consumed gigabytes of DOM.
 const SSH_TARGET_ROW_ESTIMATE_PX = 52
 
 const NOT_LIST_CONTEXT = '[role="dialog"], [role="alertdialog"], [role="menu"], pre, textarea'
 
-/**
- * ⌘/Ctrl-A selects hosts only from the list's own row controls. React bubbles keydown through
- * portals, so a row's dialog, menu, or copyable detail text would otherwise lose select-all-text.
- */
+/** Scope host select-all to list controls; React portal bubbling must not steal text selection in dialogs/menus/details. */
 export function isListOwnSelectAllTarget(list: Element, target: EventTarget | null): boolean {
   if (!(target instanceof Element) || !list.contains(target)) {
     return false
@@ -58,7 +55,6 @@ export function isListOwnSelectAllTarget(list: Element, target: EventTarget | nu
   return target.closest(NOT_LIST_CONTEXT) === null
 }
 
-/** Hosts grouped by where they came from, each group selectable as a whole. */
 export function SshTargetList({
   targets,
   totalBySource,
@@ -140,7 +136,7 @@ export function SshTargetList({
               scrollElement={scrollElement}
               estimateRowHeightPx={SSH_TARGET_ROW_ESTIMATE_PX}
               renderRow={(target) => (
-                // Why per-row borders: windowed rows are absolutely positioned, so divide-y can't reach them.
+                // Absolutely positioned virtual rows need individual borders; divide-y cannot reach them.
                 <div
                   key={target.id}
                   data-first-row={target === group.targets[0] ? 'true' : undefined}

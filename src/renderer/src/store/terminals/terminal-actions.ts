@@ -6,7 +6,8 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type {
   AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
@@ -28,6 +29,11 @@ import type {
   CodexRestartNotice,
   HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
+
+/** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
+export type HostTerminalStop =
+  | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
+  | { failed: true; stoppedPtyIds: readonly string[] }
 
 export type TerminalActions = {
   setTerminalStartupRestorationReady: (value: boolean) => void
@@ -148,6 +154,8 @@ export type TerminalActions = {
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
       backendOwnsPtyTeardown?: boolean
+      /** Main stops these terminals itself: the window only guards and then commits its panes. */
+      hostStop?: Promise<HostTerminalStop>
       onAdmitted?: () => void
     }
   ) => Promise<void>
@@ -200,6 +208,7 @@ export type TerminalActions = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -226,6 +235,7 @@ export type TerminalActions = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null

@@ -27,7 +27,6 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnectionMock,
   retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -43,7 +42,6 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
   reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
   retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
-  retryRemoteRuntimeSharedControlConnectionNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
 
@@ -74,7 +72,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: retryRemoteRuntimeSharedControlConnectionNowMock,
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -134,7 +131,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
     retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
-    retryRemoteRuntimeSharedControlConnectionNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
 
@@ -189,29 +185,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(retryRemoteRuntimeSharedControlConnectionsNowMock).toHaveBeenCalledTimes(1)
   })
 
-  it('retries one control connection without reversing manual disconnect intent', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
-      'runtimeEnvironments:addFromPairingCode'
-    )
-    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
-    const retry = handler<{ selector: string }, void>('runtimeEnvironments:retryControlConnection')
-
-    await retry(null, { selector: 'desk' })
-    expect(retryRemoteRuntimeSharedControlConnectionNowMock).toHaveBeenCalledWith(
-      added.environment.id
-    )
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
-
-    const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
-    await disconnect(null, { selector: 'desk' })
-    retryRemoteRuntimeSharedControlConnectionNowMock.mockClear()
-    await retry(null, { selector: 'desk' })
-
-    expect(retryRemoteRuntimeSharedControlConnectionNowMock).not.toHaveBeenCalled()
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
-  })
-
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
@@ -244,7 +217,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
-    // A removed server's session partition and layout snapshot go too.
     expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
       `runtime:${encodeURIComponent(added.environment.id)}`
     )
@@ -610,9 +582,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
-    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
-    // on the environment record (ephemeral-vm.ts), so the public list reads it
-    // straight from the record rather than cross-referencing the VM runtime store.
+    // Provisioning records ephemeral-vm source directly; listing must not depend on the VM runtime store.
     const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'orca VM abc12345',
       pairingCode: pairingCode(),

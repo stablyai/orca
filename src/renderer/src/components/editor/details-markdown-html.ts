@@ -5,8 +5,7 @@ import {
   type MarkdownFenceRanges
 } from './markdown-fence-scanner'
 
-// Toggle summaries can render at heading scales 1–5, mirroring the plain
-// heading levels the slash menu / toolbar dropdown offer (h1–h5).
+// Match the slash menu and toolbar’s heading scales.
 export type ToggleHeadingVariant =
   | 'heading-1'
   | 'heading-2'
@@ -56,8 +55,7 @@ export function escapeDetailsHtml(value: string): string {
 }
 
 export function parseDetailsAttributes(rawAttributes: string): Record<string, unknown> {
-  // Why: validation accepts normal HTML whitespace around `=`, so parsing
-  // must accept it too or an editable toggle loses its heading variant.
+  // Match validation’s whitespace rules around = or editable toggles lose heading variants.
   const variantMatch = rawAttributes.match(
     /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
   )
@@ -245,16 +243,14 @@ function isHtmlTagNamePart(code: number): boolean {
   )
 }
 
-// Why: nested toggles validate recursively and each level rescans its own body,
-// so a pathological file would otherwise blow the stack or go quadratic.
+// Bound recursive rescanning to avoid stack exhaustion and quadratic work on pathological nesting.
 const MAX_DETAILS_NESTING_LEVELS = 16
 
-// Removes nested toggles that are themselves editable, so the caller's raw-tag
-// scan sees only the body's own markup. Null when a nested toggle can't be one.
+// Remove editable nested toggles before scanning this body’s raw tags; null means a nested toggle is unsupported.
 function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): string | null {
   let result = ''
   let index = 0
-  // Why: without sharing this, N sibling toggles rescan the whole body N times.
+  // Share fence ranges so sibling toggles cannot rescan the entire body per sibling.
   let fenceRanges: MarkdownFenceRanges | null = null
 
   for (;;) {

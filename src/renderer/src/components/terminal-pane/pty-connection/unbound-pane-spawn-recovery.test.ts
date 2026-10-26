@@ -24,7 +24,7 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
     vi.clearAllMocks()
   })
 
-  it('remounts the tab so the pane rebinds over its live PTY', () => {
+  it('requests a tab remount for an unbound spawn', () => {
     settleSpawnThatLeftPaneUnbound(buildSession())
 
     expect(requestTerminalPaneRecovery).toHaveBeenCalledExactlyOnceWith({
@@ -48,13 +48,13 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 
-  it('remounts when the transport reports no recovery of its own', () => {
+  it('requests a remount when the transport reports no recovery of its own', () => {
     settleSpawnThatLeftPaneUnbound(buildSession({ transport: { ownsRecovery: () => false } }))
 
     expect(requestTerminalPaneRecovery).toHaveBeenCalledOnce()
   })
 
-  it('settles the spawn as failed before remounting', () => {
+  it('settles the spawn as failed before requesting a remount', () => {
     const settlePaneAttachAttempt = vi.fn()
 
     settleSpawnThatLeftPaneUnbound(
@@ -63,6 +63,9 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
 
     expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith('failed')
     expect(requestTerminalPaneRecovery).toHaveBeenCalledOnce()
+    expect(settlePaneAttachAttempt.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(requestTerminalPaneRecovery).mock.invocationCallOrder[0]
+    )
   })
 
   // Distinct ids per case: warnTerminalLifecycleAnomaly dedups on a module-global key.

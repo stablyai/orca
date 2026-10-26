@@ -5,16 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { buildHandlerRoutes, dispatch, type HandlerContext } from './dispatch'
 import { HANDLER_GROUPS, type HandlerGroup } from './handler-group-manifest'
 
-// Why: dispatch trusts the manifest's eager key lists to route without loading a
-// group. These tests are the only thing standing between that trust and a
-// silently unreachable command, so they load every group for real.
-
-// Why: __dirname works under both Vitest and the CommonJS tsc emit that
-// build:cli type-checks this file against; import.meta.dirname does not.
+// import.meta.dirname is unavailable in the CommonJS build:cli emit.
 const HANDLERS_DIR = join(__dirname, 'handlers')
 
-// Why: both the plural records and the single-command `*_HANDLER` ones that
-// nested modules export get spread into a group, so both must route.
 const HANDLER_RECORD_EXPORT = /_HANDLERS?$/
 
 function listHandlerModules(dir: string): string[] {
@@ -49,10 +42,7 @@ describe('handler group manifest', () => {
     expect(notCallable).toEqual([])
   })
 
-  // Why: dropping a group from the manifest silently unregisters its commands —
-  // walk the tree so a new or forgotten handler file fails here, not in prod.
-  // Nested modules are spread into a parent group rather than registered under
-  // their own name, so routability, not file name, is the invariant that holds.
+  // Nested modules are spread into parent groups; verify routability rather than group names.
   it('routes every command exported by a handler module', async () => {
     const routes = buildHandlerRoutes(HANDLER_GROUPS)
     const unroutable: string[] = []

@@ -327,7 +327,6 @@ describe('status bar runtime switch groups', () => {
     } as GlobalSettings
 
     expect(resolveCodexStatusAccountState(settings, remoteState, 'env-1')).toBe(remoteState)
-    // Without a remote owner, settings-derived accounts win as before.
     expect(
       resolveCodexStatusAccountState(settings, remoteState, null).accounts.map(
         (account) => account.id

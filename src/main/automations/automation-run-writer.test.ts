@@ -1,8 +1,3 @@
-/**
- * Run and usage writes are the highest-frequency events in the system, so they
- * carry the host they belong to: an unscoped one refetches every host in the
- * catalog.
- */
 import { describe, expect, it, vi } from 'vitest'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { collectAutomationRunUsage } from './run-usage-collection'
@@ -87,7 +82,6 @@ describe('automation run writer publications', () => {
     expect(publish).toHaveBeenCalledWith({ reason: 'usage', selector: { kind: 'self' } })
   })
 
-  // Over-broad beats silent: a subscriber must still hear that something changed.
   it('falls back to the whole authority when the record can no longer be named', async () => {
     const { writer, publish } = writerWith(null)
     await writer.createRun(automation, 0, 'scheduled')

@@ -5,9 +5,7 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
-// Removes one binding from an action. The hover-reveal wrapper lives in the
-// parent row so it can key off that row's hover group (the header row and the
-// sub-rows use different group names).
+// Let parent rows own hover reveal because header/subrows use different hover groups.
 export function ShortcutRemoveButton({
   actionId,
   title,

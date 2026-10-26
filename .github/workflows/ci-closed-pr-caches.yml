@@ -47,7 +47,6 @@ jobs:
               ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
               ['pi-owner-runtime', 'pi-owner-runtime.yml'],
               ['git-command-termination', 'git-command-termination-runtime.yml'],
-              ['skill-roundtrip-pull_request', 'skill-update-roundtrip.yml'],
               ['ci-cache-warmup', 'ci-cache-warmup.yml']
             ]
             const stillCurrent = async () => {

@@ -10,15 +10,7 @@ import {
   type PromptCacheCountdownSelection
 } from './prompt-cache-timer-selection'
 
-/**
- * The most-urgent cache start time when a countdown should show, else null.
- * The worktree card uses it to both gate its metadata row and feed CacheTimer,
- * so neither the card nor the timer subscribes twice to the same store slices.
- *
- * When a worktree has multiple Claude tabs, this resolves the *most urgent*
- * (shortest remaining) start time — if any tab's cache is about to expire, the
- * user should know.
- */
+/** Resolve the soonest-expiring Claude cache once for both row visibility and countdown rendering. */
 export function usePromptCacheCountdownStartedAt(worktreeId: string, active = true): number | null {
   const [enabled, ttlMs, startedAt] = useAppStore(
     useShallow((s) => {
@@ -58,15 +50,7 @@ export function usePromptCacheCountdownForPane(
   )
 }
 
-/**
- * Per-worktree prompt-cache countdown, shown in the sidebar worktree card. The
- * card renders this only once a cache is active, so it's a pure countdown view.
- *
- * Why: prompt caching (Anthropic API / Bedrock) has a TTL (default 5 min).
- * When the cache expires, the next request re-sends the full conversation as
- * uncached input tokens — up to 10x more expensive. Showing a countdown lets
- * users decide whether to resume interaction before the cache drops.
- */
+/** Expose cache expiry so users can resume before uncached conversation input increases cost. */
 export default function CacheTimer({
   startedAt,
   ttlMs
@@ -99,8 +83,6 @@ export default function CacheTimer({
           )}
         >
           <Timer className="size-2.5" />
-          {/* When expired, the red icon alone conveys state — the countdown
-              text is only meaningful while the cache is still alive. */}
           {!expired && <span>{label}</span>}
         </div>
       </TooltipTrigger>

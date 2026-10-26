@@ -37,9 +37,7 @@ describe('ui.set task resume state', () => {
     expect(updateUIState).toHaveBeenCalledWith({ taskResumeState })
   })
 
-  // Why: this object is `.strict()` behind ui.set's field-level `.catch`, so ONE key a
-  // host predates silently discards the whole resume state — github and jira with it —
-  // and still reports success. That is why per-device view preferences stay client-local.
+  // A strict nested object behind field-level catch drops all resume state on one unknown key; keep device preferences local.
   it('drops the whole resume state when a payload carries a key the schema omits', async () => {
     const { dispatcher, updateUIState } = makeDispatcher()
 
@@ -54,8 +52,7 @@ describe('ui.set task resume state', () => {
     expect(updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
-  // Why: #12710 shipped this key and every host older than it drops the whole resume
-  // state on receipt. It is device-local storage now; putting it back re-breaks pairing.
+  // Hosts predating #12710 drop all resume state on linearIssueView; keep it device-local.
   it('keeps the Linear issue view off the wire', () => {
     expect(Object.keys(TaskResumeState.shape)).not.toContain('linearIssueView')
   })

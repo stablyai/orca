@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { omitPairingLocalUiFields, PAIRING_LOCAL_UI_FIELDS } from './pairing-local-ui-fields'
 
 describe('pairing-local UI fields', () => {
-  // Why a census: the seams that honor this set are spread across the host RPC and the web
-  // preload, so a field added here without wiring every seam would otherwise ship silently.
+  // Host RPC and web-preload seams are spread out; a census catches new fields without complete boundary wiring.
   it('census: the set is exactly the fields no pairing may exchange', () => {
     expect([...PAIRING_LOCAL_UI_FIELDS]).toEqual([
       'automationHostFilter',
@@ -44,8 +43,7 @@ describe('pairing-local UI fields', () => {
     expect(omitPairingLocalUiFields(state)).toEqual(state)
   })
 
-  // A member explicitly set to undefined must still be removed, not forwarded as a present key
-  // that a receiver would read as "cleared".
+  // Present undefined still looks like a clear operation to receivers; drop the key itself.
   it('drops a member present with an undefined value', () => {
     expect(
       Object.keys(omitPairingLocalUiFields({ manualRepoOrder: undefined, sidebarWidth: 280 }))

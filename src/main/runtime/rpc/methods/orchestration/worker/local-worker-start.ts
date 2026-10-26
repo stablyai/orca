@@ -4,7 +4,7 @@ import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-rea
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { RunRow, TaskRow } from '../../../../orchestration/types'
+import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
 import type {
   OrchestrationCallerIdentity,
   OrchestrationSessionCaller
@@ -48,6 +48,8 @@ export async function startLocalWorker(args: {
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
+  /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
+  helperCreator?: DispatchContextRow
 }): Promise<unknown> {
   const { runtime, db, run, coordinator, callerSession, existingTask, orchestrationMutation } = args
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
@@ -147,11 +149,13 @@ export async function startLocalWorker(args: {
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
+    requiredCreatorDispatchId: args.helperCreator?.id,
     taskId: existingTask?.id,
     taskSpec: params.spec,
     taskTitle: params.taskTitle,
     taskDeps: parseTaskDeps(params.deps),
-    taskParentId: params.parent,
+    // A helper's Task sits under its creator's Task, so the Run's Task tree shows who started it.
+    taskParentId: params.parent ?? args.helperCreator?.task_id,
     taskRunId: run.id,
     // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
     taskCreatedByTerminalHandle: coordinator?.terminalHandle ?? undefined,
@@ -195,8 +199,7 @@ export async function startLocalWorker(args: {
         failedStage = stage
       }
     })
-    // A created worktree settles its mode only once the host can be asked about it, so the
-    // receipt the caller decided is not always the one that ran.
+    // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
     resolvedWorktree = placed.worktree
     terminalHandle = placed.terminalHandle
@@ -219,8 +222,7 @@ export async function startLocalWorker(args: {
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
-    // A structured session has no boot-to-idle gap or terminal title to read: its agent's start is
-    // waited out by the preamble's send. Only the repo's wait-for-setup policy is waited on here.
+    // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
           runtime,

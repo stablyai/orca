@@ -72,6 +72,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     readFileTab,
     leaveSession,
     discardMarkdownLocalContent,
+    copyMarkdownPath,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
     handleManageShortcuts,
@@ -239,13 +240,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void clipboard
-                  .writeText(target.relativePath || target.filePath)
-                  .then(() => showToast('Path copied'))
-                  .catch(() => {
-                    triggerError()
-                    showToast("Couldn't copy path", 1500)
-                  })
+                void copyMarkdownPath(target)
               }
             }
           },

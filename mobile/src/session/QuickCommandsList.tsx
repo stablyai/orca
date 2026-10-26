@@ -22,7 +22,6 @@ type ListProps = {
   query: string
   loading: boolean
   disabled: boolean
-  canAdd: boolean
   error: string | null
   onQueryChange: (value: string) => void
   onLaunch: (command: TerminalQuickCommand) => void
@@ -38,7 +37,6 @@ export function QuickCommandsList({
   query,
   loading,
   disabled,
-  canAdd,
   error,
   onQueryChange,
   onLaunch,
@@ -47,7 +45,6 @@ export function QuickCommandsList({
   onAdd
 }: ListProps) {
   const hasVisible = repoCommands.length + globalCommands.length > 0
-  const addDisabled = disabled || !canAdd
   // Why: keep an active filter clearable if a delete or paired desktop edit
   // leaves only one command while the sheet is open.
   const showSearch = totalCount > 1 || query.length > 0
@@ -110,17 +107,15 @@ export function QuickCommandsList({
       <Pressable
         style={({ pressed }) => [
           styles.addRow,
-          addDisabled && styles.disabled,
-          pressed && !addDisabled && styles.pressed
+          disabled && styles.disabled,
+          pressed && !disabled && styles.pressed
         ]}
-        disabled={addDisabled}
+        disabled={disabled}
         onPress={onAdd}
         accessibilityRole="button"
       >
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={styles.addText}>
-          {canAdd ? 'New quick command' : 'Quick command limit reached'}
-        </Text>
+        <Text style={styles.addText}>New quick command</Text>
       </Pressable>
     </View>
   )

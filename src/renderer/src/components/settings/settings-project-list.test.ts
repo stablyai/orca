@@ -65,7 +65,6 @@ describe('buildSettingsProjectList', () => {
 
     expect(projects).toHaveLength(1)
     expect(projects[0].setups).toHaveLength(2)
-    // Representative is the local host's repo.
     expect(projects[0].representativeRepoId).toBe('local-1')
     expect(getSettingsProjectRemovalScope(projects[0])).toBe('project')
   })
@@ -387,7 +386,7 @@ describe('removeSettingsProjectFromAllHosts', () => {
 
     await removeSettingsProjectFromAllHosts(setups, removeProject)
 
-    // errorFeedback: this is a user-initiated removal, so a failure must surface (#11994).
+    // User-initiated removal failures must surface.
     expect(removeProject.mock.calls).toEqual([
       ['local-1', { hostId: 'local', errorFeedback: 'toast' }],
       ['remote-9', { hostId: 'runtime:home-mac', errorFeedback: 'toast' }]

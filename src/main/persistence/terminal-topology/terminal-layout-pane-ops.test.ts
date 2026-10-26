@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,16 +37,15 @@ afterEach(() => {
   }
 })
 
-/** What only the legacy close writes, which no reader distinguishes from its absence. */
+/** Legacy-only fields whose absence is equivalent to readers. */
 function legacyOnly(change: ReturnType<typeof diffStoredSession>[number]): boolean {
   if (change.table !== 'session') {
     return false
   }
-  // The legacy close re-derives the active tab's type; layout.apply leaves selection alone.
+  // Legacy close re-derives active type; layout.apply preserves selection.
   if (change.field === 'activeTabTypeByWorktree') {
     return true
   }
-  // An empty tombstone map where none was stored.
   return (
     change.field === 'terminalSurfaceTombstonesByPaneKey' &&
     change.after === undefined &&
@@ -53,10 +53,15 @@ function legacyOnly(change: ReturnType<typeof diffStoredSession>[number]): boole
   )
 }
 
-/**
- * Known gap, the same one the record-patch test pins: the load folds this legacy row into the
- * tab-bar tab whose terminal it repeats, so the stored row keeps its terminal id after the close.
- */
+/** Layout-owner builds retain closed-terminal exit evidence that legacy closes cannot record. */
+function layoutOwnerOnly(change: ReturnType<typeof diffStoredSession>[number]): boolean {
+  return (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    change.table === 'session' &&
+    change.field === 'closedTerminalPanesByPaneKey'
+  )
+}
+
 const FOLDED_LEGACY_ROW_CLOSES = new Map([
   [
     'tab-legacy',
@@ -88,13 +93,12 @@ describe('layout.apply closePane against the legacy pane close', () => {
             })
             const label = `${tab.id}:${leafId}`
             if (legacy.resolution !== 'pane') {
-              // The legacy close changes nothing here; nor may layout.apply (a refusal or no-op).
               expect(dark.session, label).toBeNull()
               continue
             }
             expect(dark.value.ok, label).toBe(true)
             const differences = diffStoredSession(legacy.session, dark.session ?? stored)
-              .filter((change) => !legacyOnly(change))
+              .filter((change) => !legacyOnly(change) && !layoutOwnerOnly(change))
               .map(({ table, record, field }) => `${table}/${record}/${field}`)
             expect(differences, label).toEqual(FOLDED_LEGACY_ROW_CLOSES.get(tab.id) ?? [])
           }
@@ -103,8 +107,7 @@ describe('layout.apply closePane against the legacy pane close', () => {
     }
   )
 
-  // The legacy persisted close refuses a pane restarted after the request, but the window has
-  // already removed it and saves its layout without it; main closes it outright.
+  // Renderer already removed the pane; main must close it even if its terminal restarted meanwhile.
   it('closes a pane whose terminal restarted after the window asked', () => {
     const window = new WindowSession(getDefaultWorkspaceSession())
     window.addTab(WORKTREE, TAB, LEAF_A)

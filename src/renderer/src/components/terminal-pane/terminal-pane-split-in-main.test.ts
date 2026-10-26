@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { splitPaneFirstSize, splitPaneInMain } from './terminal-pane-split-in-main'
+import { provideServerLayoutApplyRoutes } from '@/runtime/server-layout-apply-routes'
+import { splitPaneFirstSize, splitPaneInMain, splitServerPane } from './terminal-pane-split-in-main'
 
 const mocks = vi.hoisted(
   (): {
@@ -121,6 +122,49 @@ describe('a window split in a layout-owner build', () => {
     mocks.pairedServer = 'env-1'
 
     expect(splitPaneInMain(REQUEST, vi.fn())).toBe(false)
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('takes a handle-less pane’s split to the server’s main whose frames draw the workspace', async () => {
+    mocks.pairedServer = 'env-1'
+    mocks.callRuntimeRpc.mockResolvedValue({ split: {} })
+    const stop = provideServerLayoutApplyRoutes('env-1', (worktreeId) =>
+      worktreeId === 'wt-1'
+        ? {
+            environmentId: 'env-1',
+            serverTabId: (tabId) => (tabId === 'tab-1' ? 'server-tab-1' : null),
+            desktopTabId: (tabId) => tabId,
+            redraw: vi.fn()
+          }
+        : null
+    )
+    try {
+      expect(splitServerPane({ ...REQUEST, cwd: '/srv/wt' })).toBe(true)
+      await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1))
+      const [target, method, params] = mocks.callRuntimeRpc.mock.calls[0]!
+      expect(target).toEqual({ kind: 'environment', environmentId: 'env-1' })
+      expect(method).toBe('terminal.split')
+      expect(params).toMatchObject({
+        pane: { worktreeId: 'wt-1', tabId: 'server-tab-1', leafId: 'leaf-1' },
+        direction: 'vertical',
+        cwd: '/srv/wt'
+      })
+      expect(isTerminalLeafId(params.newLeafId)).toBe(true)
+
+      // A tab the server's frames do not hold, or a workspace they do not draw, keeps today's path.
+      expect(splitServerPane({ ...REQUEST, tabId: 'tab-elsewhere' })).toBe(false)
+      expect(splitServerPane({ ...REQUEST, worktreeId: 'wt-2' })).toBe(false)
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
+    } finally {
+      stop()
+    }
+  })
+
+  it('leaves a server workspace no layout-intents stream draws, and main’s own, to the caller', () => {
+    mocks.pairedServer = 'env-1'
+    expect(splitServerPane(REQUEST)).toBe(false)
+    mocks.pairedServer = null
+    expect(splitServerPane(REQUEST)).toBe(false)
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 

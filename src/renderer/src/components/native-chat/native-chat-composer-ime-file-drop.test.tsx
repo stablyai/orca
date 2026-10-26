@@ -42,15 +42,15 @@ vi.mock('@/store', () => {
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
-// Real notice strings, so a copy of the wording here cannot outlive the string
-// users actually read, and a newly added export cannot go missing from the mock.
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,
   resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: testState.ownerKind })
 }))
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
 vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
@@ -200,13 +200,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function osDrop(target: HTMLElement) {
+async function osDrop(target: HTMLElement, names = ['notes.txt']) {
   const event = new Event('drop', { bubbles: true, cancelable: true, composed: true })
   Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', {
     value: {
       types: ['Files'],
-      files: [new File(['notes'], 'notes.txt')]
+      files: names.map((name) => new File(['file'], name))
     }
   })
   await act(async () => target.dispatchEvent(event))
@@ -247,6 +247,21 @@ describe('OS file drops through the real composing chat field', () => {
       expect(promptValue(editor).match(/@\/drop\/notes.txt/g)).toHaveLength(1)
     }
   )
+
+  it('numbers images dropped together 1, 2, 3, each with its chip in the prompt', async () => {
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    await osDrop(editor, ['a.png', 'b.png', 'c.png'])
+    expect(
+      [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
+        (chip) => chip.textContent
+      )
+    ).toEqual(['Image #1', 'Image #2', 'Image #3'])
+  })
 
   it('shows a dropped file and a file picked with the attach button as the same filename pill', async () => {
     render(

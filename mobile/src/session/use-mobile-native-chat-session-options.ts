@@ -1,7 +1,7 @@
 import { appliedReportByScope, getScopedRecord } from './mobile-session-option-records'
 export { clearMobileSessionOptionRecordsForTests } from './mobile-session-option-records'
 import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   getAgentSessionOptionCatalog,
@@ -13,7 +13,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   buildNativeChatSessionOptionCommand,
   recordNativeChatSessionOptionCommand
@@ -35,14 +35,10 @@ export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
   optionPickerRequest?: { id: string; sequence: number } | null
-  /** Model descriptor first, then the current model's options; empty when the
-   *  agent has no catalog. */
   snapshot: SessionOptionDescriptor[]
-  /** Descriptor id with a dispatch in flight; the UI disables rows meanwhile. */
   pendingId: string | null
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   invokeAction: (id: string) => Promise<boolean>
-  /** Track a slash command the user typed themselves (e.g. `/model sonnet`). */
   recordCommand: (command: string) => void
 }
 
@@ -50,14 +46,9 @@ type PendingOperation = { id: string; token: number }
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 
-/** Model and session-option state for the active mobile chat tab: builds the
- *  picker snapshot from the agent's catalog, seeds it from the hook-reported
- *  model, and dispatches picks as the agent's own slash commands. */
 export function useMobileNativeChatSessionOptions(args: {
   agent: string | null
-  /** Stable per-tab scope (host + worktree + tab), or null when no tab is active. */
   scopeKey: string | null
-  /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
   discoveredModels?: CatalogModel[] | null
   modelSwitchCommand?: string
@@ -65,8 +56,6 @@ export function useMobileNativeChatSessionOptions(args: {
     command: string,
     options?: { delivery?: CatalogCommandDelivery }
   ) => Promise<MobileNativeChatSendOutcome>
-  /** A model change that must happen in the agent's own TUI picker was
-   *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker, discoveredModels } = args
@@ -102,22 +91,21 @@ export function useMobileNativeChatSessionOptions(args: {
     }
   }, [identity])
 
-  // Seed the current model from live agent status; hook reports are authority
-  // over locally dispatched guesses (desktop 'reported' source parity).
   useEffect(() => {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
     // OMP reports exact selectors, including models absent from cached discovery.
     const matched =
-      agent === 'omp' ? reportedModel.trim() : matchNativeChatCatalogModelId(catalog, reportedModel)
+      agent === 'omp'
+        ? reportedModel.trim()
+        : matchNativeChatCatalogModelId(catalog, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched) {
       return
     }
-    // Why: the same report is re-delivered whenever the tab is re-entered or the
-    // status stream reconnects, and a session-start report cannot have observed a
-    // `/model` sent after it. Re-applying it would revert the user's pick. Only a
-    // report that CHANGES is evidence; the value itself still wins when it does.
+    // Repeated session-start reports predate later picks; only a changed report is fresh evidence allowed to override them.
     if (appliedReportByScope.get(scopeKey) === matched) {
       return
     }
@@ -132,13 +120,11 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent) {
       return EMPTY_SNAPSHOT
     }
-    // Why: `version` invalidates this memo after in-place record mutations.
     void version
     const record = getScopedRecord(scopeKey, agent)
     return buildNativeChatSessionOptionSnapshot({
       catalog,
-      // The snapshot no longer self-heals an unlisted tracked model; every caller
-      // reconciles it in, so a value the seed dropped keeps its row and options.
+      // Reconcile tracked models absent from discovery so their rows/options survive stale catalog data.
       models: withTrackedNativeChatModel(catalog, catalog.models, record),
       record,
       mode: 'live',
@@ -204,10 +190,8 @@ export function useMobileNativeChatSessionOptions(args: {
           ? getTrackedSessionOption(record, previousModelId, id)
           : undefined
         if (flipOnly && !trackedToggle) {
-          // Why: a flip from an unknown baseline cannot honor an absolute target.
           return false
         }
-        // Why: same absolute target must never re-dispatch a flip (would invert the agent).
         if (flipOnly && trackedToggle?.value === value) {
           return true
         }
@@ -223,9 +207,7 @@ export function useMobileNativeChatSessionOptions(args: {
         if (!command) {
           return false
         }
-        // Baseline for detecting a hook report or typed command that lands while
-        // the dispatch is in flight — the record is shared mutable state and the
-        // report effect is not on this queue.
+        // Capture the dispatch baseline because live reports/typed commands mutate the shared record outside this queue.
         const trackedBeforeDispatch =
           id === 'model' ? undefined : getTrackedSessionOption(record, previousModelId, id)
         const outcome = await dispatchCommand(command)
@@ -233,10 +215,7 @@ export function useMobileNativeChatSessionOptions(args: {
           return false
         }
         if (id !== 'model') {
-          // Why (desktop parity): `setTrackedSessionOption` resolves the owning
-          // model when it commits, not when the command was built. If the model
-          // moved during the dispatch, committing now would file this value under
-          // the NEW model — claiming an effort the agent was never asked for.
+          // If the model moved during dispatch, never file the old model’s option under its new destination.
           const modelStill = typeof record.model?.value === 'string' ? record.model.value : null
           if (
             modelStill !== previousModelId ||
@@ -247,11 +226,10 @@ export function useMobileNativeChatSessionOptions(args: {
         }
         if (id === 'model') {
           if (typeof value === 'string' && previousModelId !== value) {
-            // Why: switching models can reset effort/toggles for the destination model.
             delete record.valuesByModel[value]
           }
         }
-        // Why: flip-only never heals via agent report — track as applied best-known.
+        // Flip-only controls cannot heal via report; keep their best-known applied state.
         setTrackedSessionOption(record, id, value, flipOnly ? 'applied' : 'dispatched')
         bump()
         return true
@@ -288,7 +266,6 @@ export function useMobileNativeChatSessionOptions(args: {
           return true
         }
         if (isFlipOnlyMidSession(midSession) && !getTrackedSessionOption(record, modelId, id)) {
-          // Why: an unknown baseline remains unknown after one inversion.
           return (await dispatchCommand(midSession.command)) !== 'rejected'
         }
         return false

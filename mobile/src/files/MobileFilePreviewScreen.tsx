@@ -37,7 +37,7 @@ type Props = {
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
-  // Why: every workspace screen uses the handoff so it shares the route chunk; else the bundle overruns its asset budget.
+  // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
   const { client, state: connState } = useWorkspaceClient(previewParams?.hostId)

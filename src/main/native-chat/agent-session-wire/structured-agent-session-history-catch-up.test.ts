@@ -20,6 +20,7 @@ describe('history catch-up runner', () => {
     let barriers = 0
     const journal = {
       epoch: 'epoch-1',
+      cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       item: () => null,
       itemBody: () => null,
       canonicalItemId: (key: string) => key,

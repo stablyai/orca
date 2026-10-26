@@ -156,7 +156,7 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).not.toBeNull()
   })
 
-  it('records a mailbox pointer, which drives the running agent', async () => {
+  it("records a mailbox pointer as driving the agent, but not as a user's draft input", async () => {
     const run = await createFreshRun()
 
     await writeOrchestrationPointerWithSettlement({
@@ -165,8 +165,9 @@ describe('run facts: the controller write funnel', () => {
       controller: run.controller
     })
 
-    expect(run.kinds).toEqual(['driving'])
+    expect(run.kinds).toEqual(['orchestration'])
     expect(run.firstUserInputAt()).not.toBeNull()
+    expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
   })
 
   it('records nothing for a client query reply', async () => {

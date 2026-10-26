@@ -9,6 +9,7 @@ import {
 } from './terminal-input-echo-delay'
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
+import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS } from './foreground-output-budgets'
 
 const writeTerminalOutput = vi.hoisted(() => vi.fn())
@@ -142,6 +143,7 @@ describe('remote echo keeps typing latency-sensitive', () => {
       synchronizedForegroundInteractivePresentPending: false,
       lastTerminalInputAt: now.value,
       inputEchoDelay,
+      idleCursorReset: new TerminalIdleCursorReset(),
       scheduleForegroundGridDriftCheck: vi.fn(),
       shouldForceForegroundRenderRefresh: vi.fn(() => ({ refresh: false, inPlaceRewrite: false })),
       isLatencySensitiveForegroundOutput: vi.fn(() => false),

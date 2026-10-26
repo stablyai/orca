@@ -1,5 +1,4 @@
-// Only a `warning` frame earns a row: a prompt hook's outcome when it halts the prompt, else its own
-// words; `info`, `notice` (a hook's systemMessage) and `suggestion` are session chrome, not chat rows.
+// Only warning-level informational frames belong on the chat timeline.
 
 import {
   hookOutcomeRowBody,
@@ -11,14 +10,14 @@ import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
 export const CLAUDE_INFORMATIONAL_FRAME_KIND = 'message:system:informational'
 
-// `no_verdict` is Claude ending the prompt itself, not a hook's refusal: only its sentence is read.
+// no_verdict is the CLI ending a prompt, so it uses the warning text instead of a hook outcome.
 const STRUCTURED_OUTCOMES = new Map<unknown, AgentSessionHookOutcome>([
   ['blocked_by_hook', 'blocked'],
   ['dropped_by_hook', 'blocked'],
   ['not_passed_on', 'blocked'],
   ['stopped_by_hook', 'stopped']
 ])
-// Older Claude sends only its sentence: the hook's `[label]: ` and reason, then a copy of the prompt.
+// Older CLIs report hook outcomes as sentences followed by a prompt copy.
 const SENTENCE_OUTCOMES: [RegExp, AgentSessionHookOutcome][] = [
   [/^\S+ operation blocked by hook:\s*/, 'blocked'],
   [/^Operation stopped by hook:?\s*/, 'stopped']
@@ -34,13 +33,12 @@ function hookOutcomeOf(message: Record<string, unknown>, text: string) {
   if (!sentence) {
     return null
   }
-  // The prompt copy goes first, so an empty reason never reads it as the reason.
+  // Remove the prompt copy before extracting a possibly empty reason.
   const [sentenceText = ''] = text.split(/\n+Original prompt:/)
   const reason = sentenceText.replace(sentence[0], '').replace(/^\[[^\]\n]+\]: /, '')
   return hookOutcomeRowBody(sentence[1], [reason])
 }
 
-/** The row a warning-level note writes; null for every other level and for a warning with no words. */
 export function claudeInformationalRowBody(
   message: Record<string, unknown>
 ): AgentJournalStatusItem | null {
@@ -48,7 +46,6 @@ export function claudeInformationalRowBody(
   if (!text) {
     return null
   }
-  // A warning that halts the prompt is a hook's outcome, shown whether or not its words are known.
   const halts = message.prevent_continuation === true
   return (
     (halts ? hookOutcomeOf(message, text) : null) ?? {

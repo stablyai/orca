@@ -143,9 +143,7 @@ function WorkspaceKanbanDrawerContent({
     manualOrderCatalog,
     worktreesByStatus
   })
-  // Why: dragging or right-clicking one visible match must not silently move
-  // hidden selected cards. selectedWorktreeIds stays unfiltered so highlighting
-  // and area-selection anchoring still see the whole selection.
+  // Drag/context actions must exclude hidden selected cards while selection anchoring still retains the full set.
   const renderedSelectedWorktrees = useMemo(
     () =>
       matchingWorktreeIds
@@ -155,8 +153,7 @@ function WorkspaceKanbanDrawerContent({
         : selectedWorktrees,
     [matchingWorktreeIds, selectedWorktrees]
   )
-  // Why: selectForContextMenu closes over the unfiltered selection, so the
-  // "Move to Status" payload has to be narrowed here too.
+  // Narrow the context-menu payload because its selection callback closes over unfiltered cards.
   const selectRenderedForContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const selection = selectForContextMenu(event, worktree)
@@ -193,8 +190,7 @@ function WorkspaceKanbanDrawerContent({
     onOpenChange(false)
   }, [onOpenChange])
   const handleHeaderClose = useCallback(() => {
-    // Why: generic Radix close requests stay ignored so sidebar drag/outside
-    // dismiss rules remain explicit; the header X is a board-owned close path.
+    // Only the board’s own close paths bypass its explicit drag/outside-dismiss rules.
     onOpenChange(false)
   }, [onOpenChange])
   const {

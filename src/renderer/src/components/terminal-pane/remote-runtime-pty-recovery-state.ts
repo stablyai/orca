@@ -5,6 +5,7 @@ import {
   REMOTE_RUNTIME_RECOVERY_DELAYS_MS
 } from './remote-runtime-pty-recovery-limits'
 export * from './remote-runtime-pty-recovery-limits'
+export * from './remote-runtime-pty-control-ready-revivers'
 
 export type RemoteRuntimePtyRecoveryPhase =
   | 'idle'
@@ -31,44 +32,6 @@ export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
   return advanced
 }
 
-// Why: a route that returns without an OS `online` event (Tailscale, VPN, a re-keyed link) fires no
-// trigger, so a pane latched past its window stayed dead over a working link. The environment's
-// control socket answering again is positive reachability evidence, as good as a Reconnect click.
-const controlReadyRevivers = new Map<string, Set<() => boolean>>()
-
-export function registerRemoteRuntimePtyControlReadyReviver(
-  environmentId: string,
-  revive: () => boolean
-): () => void {
-  let revivers = controlReadyRevivers.get(environmentId)
-  if (!revivers) {
-    revivers = new Set()
-    controlReadyRevivers.set(environmentId, revivers)
-  }
-  revivers.add(revive)
-  return () => {
-    const current = controlReadyRevivers.get(environmentId)
-    current?.delete(revive)
-    if (current?.size === 0) {
-      controlReadyRevivers.delete(environmentId)
-    }
-  }
-}
-
-export function getControlReadyReviverCountForTests(environmentId: string): number {
-  return controlReadyRevivers.get(environmentId)?.size ?? 0
-}
-
-export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
-  let revived = 0
-  for (const revive of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {
-    if (revive()) {
-      revived += 1
-    }
-  }
-  return revived
-}
-
 export class RemoteRuntimePtyRecoveryState {
   // Caller settlement does not restore this epoch's spent owner-refresh allowance.
   private ownerRefresh: {
@@ -83,8 +46,7 @@ export class RemoteRuntimePtyRecoveryState {
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
   private pendingRetry: ((epoch: number) => void) | null = null
   private pendingEpoch: number | null = null
-  // Why: only the wall-clock deadline proves the auto-recovery window was actually spent; a UI latch
-  // via markDisconnected() must not forge that evidence (#12683).
+  // Only wall-clock expiry proves spent recovery time; a UI latch cannot authorize fenced-handle reuse (#12683).
   private deadlineExpired = false
 
   constructor(private readonly onChange?: () => void) {}
@@ -107,6 +69,11 @@ export class RemoteRuntimePtyRecoveryState {
 
   get autoRecoveryDeadlineExpired(): boolean {
     return this.deadlineExpired
+  }
+
+  /** A retry is parked for online/resume/control-ready or a host publish; nothing is in flight. */
+  get awaitingExternalTrigger(): boolean {
+    return this.phase === 'recovering' && this.pendingRetry !== null && this.retryTimer === null
   }
 
   get hasOwnerRefresh(): boolean {
@@ -211,12 +178,15 @@ export class RemoteRuntimePtyRecoveryState {
 
   // Why: a wait that ends with no liveness evidence arms no timer, so park a retry or online/resume/reconnect find nothing to revive.
   parkRetryForExternalTrigger(epoch: number, retry: (epoch: number) => void): boolean {
-    return this.isCurrent(epoch) && this.parkRetry(retry)
+    if (!this.isCurrent(epoch) || !this.parkRetry(retry)) {
+      return false
+    }
+    // Why: the phase stays 'recovering', but the pane must now say it waits rather than retries.
+    this.onChange?.()
+    return true
   }
 
-  // Why: the deadline can latch while an attempt is still in flight, before schedule() parked anything,
-  // so the late failure has no live epoch to join and must not begin a new one — that would re-arm a
-  // full-length window and the budget would never actually expire.
+  // Post-deadline failures park without beginning a new epoch, or silent RPC timeouts would re-arm the window forever.
   parkRetryAfterDeadline(retry: (epoch: number) => void): boolean {
     return this.phase === 'disconnected' && this.parkRetry(retry)
   }
@@ -281,9 +251,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
-    // Why: same latch the deadline arrives at, so it must be equally revivable — stop auto-retry but keep
-    // the parked retry registered for online/resume/reconnect. clearTimers() here would be strictly more
-    // destructive than exhausting the whole recovery budget.
+    // Fatal latching stops automatic work but preserves parked retry registration for online/resume/Reconnect, like deadline expiry.
     this.stopRetryTimer()
     this.clearDeadlineTimer()
     this.phase = 'disconnected'

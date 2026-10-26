@@ -24,7 +24,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
   terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
   hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12],
-  getModifyOtherKeysActivePane?: Parameters<typeof resolveTerminalShortcutAction>[13]
+  getModifyOtherKeysActivePane?: Parameters<typeof resolveTerminalShortcutAction>[13],
+  isActivePaneNonAgentFullScreen?: Parameters<typeof resolveTerminalShortcutAction>[14]
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   return resolveTerminalShortcutAction(
     event,
@@ -40,7 +41,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isWindowsTerminalHost,
     terminalShortcutPolicy,
     hasCtrlEnterCsiUAuthority,
-    getModifyOtherKeysActivePane
+    getModifyOtherKeysActivePane,
+    isActivePaneNonAgentFullScreen
   )
 }
 

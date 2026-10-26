@@ -94,6 +94,7 @@ const RESUME: CommandItem = {
 
 function renderStructuredChat() {
   const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
@@ -156,7 +157,6 @@ describe('/resume in the native chat composer', () => {
     expect(transport.send).not.toHaveBeenCalled()
     expect(transport.dispatchCommand).not.toHaveBeenCalled()
     expect(mocks.setDraft).toHaveBeenCalledWith('')
-    // Attachments stay for the next real prompt.
     expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
 
     cleanup()
@@ -186,7 +186,6 @@ describe('/resume in the native chat composer', () => {
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
     expect(transport.dispatchCommand).toHaveBeenCalledWith('/resume make it one page')
-    // Back to the bare token with the menu open: choosing Orca's own row still opens the dialog.
     mocks.draft = '/resume'
     rerender()
     act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))

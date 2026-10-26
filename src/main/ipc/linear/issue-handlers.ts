@@ -41,8 +41,7 @@ export function registerLinearIssueHandlers(): void {
         ? (args!.filter as LinearListFilter)
         : undefined
       const limit = clampLinearIssueListLimit(args?.limit)
-      // Why: reject malformed filters at the trust boundary instead of
-      // normalizing them to empty (which would silently broaden results).
+      // Reject malformed filters; normalizing to empty would silently broaden results.
       const attributeFilter =
         args && 'attributeFilter' in args && args.attributeFilter !== undefined
           ? optionalParsedLinearIssueAttributeFilter(args.attributeFilter)
@@ -119,9 +118,7 @@ export function registerLinearIssueHandlers(): void {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
         return { ok: false, error: 'Issue ID is required' }
       }
-      // Why: IPC args are untyped at runtime — validate the updates object and
-      // individual fields to prevent the Linear SDK from receiving unexpected
-      // primitives that would produce confusing API errors.
+      // Validate untyped IPC updates before the SDK sees malformed primitives.
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }

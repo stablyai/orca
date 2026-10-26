@@ -5,6 +5,7 @@ import {
   type AgentSubagentSnapshot
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import { readCodexSubagentIdentity } from './codex-subagent-identity'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness
@@ -20,6 +21,7 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
+  identityTranscriptPath?: string
 }
 
 export function upsertCodexSubagent(
@@ -61,12 +63,26 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
   roster.delete(id.trim())
 }
 
-/**
- * Record the model a already-tracked child is running. Deliberately narrower
- * than `upsertCodexSubagent`: it never creates a roster entry and never touches
- * `state`, so late model discovery from a child rollout cannot resurrect a
- * finished child nor move any child's lifecycle.
- */
+export function enrichCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string | undefined
+): void {
+  const child = roster.get(id.trim())
+  if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
+    return
+  }
+  const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
+  if (!identity) {
+    return
+  }
+  child.identityTranscriptPath = transcriptPath
+  child.description =
+    normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
+    child.description
+}
+
+/** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
 export function setCodexSubagentModel(
   roster: CodexSubagentRoster,
   id: string,
@@ -123,9 +139,7 @@ export function codexRosterToSnapshots(
   return snapshots
 }
 
-/** The roster as child-work evidence for the shared fold. Every tracked child is a spawned
- *  agent thread, classified by the one kind test the other lanes use, so a waiting child
- *  reads `waiting` and a live one `working`; nothing here is a watch loop. */
+/** Project spawned agent threads through the shared kind policy: waiting/working child evidence, never watch loops. */
 export function codexRosterChildWorkLiveness(
   roster: CodexSubagentRoster | undefined
 ): AgentChildWorkLiveness {

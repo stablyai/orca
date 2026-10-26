@@ -18,12 +18,7 @@ export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
   | { ok: false; error: string }
 
-/**
- * One fixed sentence per diagnosis, and never the same sentence twice: run
- * coalescing folds repeats on identical error text, so a message that varied per
- * occurrence would write a row each, and a shared one would merge a host that is
- * gone with a host that was replaced.
- */
+// Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
 const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
     'The automation host is no longer registered, so this automation has nowhere to run.',
@@ -60,14 +55,13 @@ function resolveAutomationOwnerRefusal(store: Store, automation: Automation): st
 const LEGACY_TWIN_REFUSAL =
   'This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.'
 
-/** A record with no captured run target names its project by repo id alone. */
 function resolveLegacyAutomationRunTarget(
   store: Store,
   automation: Automation
 ): AutomationRunTargetResult {
   const repoId = getAutomationLegacyRepoId(automation)
   const rows = store.getRepos().filter((entry) => entry.id === repoId)
-  // Why first: `getRepo(id)`, and the owner verdict below, would silently pick one twin's host.
+  // Reject twin repos before getRepo or owner resolution silently selects one host.
   if (rows.length > 1) {
     return { ok: false, error: LEGACY_TWIN_REFUSAL }
   }
@@ -83,11 +77,7 @@ function resolveLegacyAutomationRunTarget(
   return { ok: true, cwd, repo }
 }
 
-/**
- * The run target to capture for a legacy record that resolves to exactly one host, so a twin
- * added later cannot make it ambiguous. Only a context that runs it in the same folder on the
- * same row qualifies, so capturing never changes where it runs.
- */
+/** Capture a legacy host only if the folder and destination stay unchanged. */
 function findLegacyAutomationRunContextStamp(
   store: Store,
   automation: Automation,
@@ -124,10 +114,7 @@ function findLegacyAutomationRunContextStamp(
     : null
 }
 
-/**
- * Captures a legacy record's one host before the dispatch snapshot, which must already hold the
- * target dispatch rechecks. Returns the record as stored afterwards.
- */
+/** Capture before the dispatch snapshot so later checks use the persisted target. */
 export function captureLegacyRunTarget(
   store: Store,
   automation: Automation,
@@ -139,7 +126,7 @@ export function captureLegacyRunTarget(
   if (!runContext) {
     return automation
   }
-  // Why re-read even when the write is refused: another run may have captured it first.
+  // Another run may have captured first, even if this write was refused.
   store.stampLegacyAutomationRunContext(automation.id, runContext)
   return store.listAutomations().find((entry) => entry.id === automation.id) ?? automation
 }
@@ -165,11 +152,7 @@ export function resolveAutomationRunTarget(
     }
   }
 
-  // Why: removing a host — or removing and re-registering it under the same id —
-  // keeps hostId, repoId and path intact, so every check below still passes while
-  // the host is gone or is a different machine. Asks the list's projection for the
-  // verdict rather than re-deriving one, so the row the user sees as orphaned can
-  // never be the row that quietly keeps firing.
+  // Use the list’s host-generation verdict: matching IDs and paths can survive host replacement.
   const hostIssue = store.automationCapturedHostIssue(automation)
   if (hostIssue) {
     return { ok: false, error: CAPTURED_HOST_REFUSALS[hostIssue] }
@@ -190,9 +173,7 @@ export function resolveAutomationRunTarget(
       error: `Project setup on the selected automation host is ${setup.setupState}.`
     }
   }
-  // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
-  // matching on it strands automations created before their repo's identity resolved.
-  // Anchor on repoId/hostId/path instead — the durable, stable target identity.
+  // Derived project IDs evolve; compare stable repo, host and path identities instead.
   if (setup.hostId !== context.hostId || setup.repoId !== context.repoId) {
     return {
       ok: false,

@@ -67,8 +67,7 @@ describe('agent model catalog service', () => {
       origin: 'unknown',
       listingInProgress: true
     })
-    // A second read while the probe is in flight must not start another, and a
-    // record-scoped read probes the RECORD's pinned home, not the selection.
+    // Coalesce reads under the record's pinned account, regardless of current selection.
     await service.read({ agent: 'grok', sessionId: 'session-1' })
     expect(probe).toHaveBeenCalledTimes(1)
     expect(probe).toHaveBeenCalledWith(GROK_HOME('/homes/a'), { signal: expect.any(AbortSignal) })
@@ -81,7 +80,7 @@ describe('agent model catalog service', () => {
   it('probes as for no record when this build cannot start the record as it is pinned', async () => {
     const store = new AgentModelCatalogStore()
     const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
-    // A Codex record pinning Claude's variable: its path is not a Codex home to probe under.
+    // A foreign account-home variable cannot authorize a Codex probe.
     const pinned = { ...record('/x'), accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/x' } }
     const drivesRecord = vi.fn(() => false)
     const service = createAgentModelCatalogService({
@@ -102,7 +101,6 @@ describe('agent model catalog service', () => {
 
   it('an account switch with no record reads and prewarms the NEW account, never the old entry', async () => {
     const store = new AgentModelCatalogStore()
-    // The old account listed under its own fingerprint before the switch.
     const oldFingerprint = selectedHomeFingerprint('/homes/old')
     store.recordSuccess(oldFingerprint, 'grok', listing('gpt-old'), 'discovery')
     const probe = vi.fn(async () => listing('gpt-new'))
@@ -113,7 +111,6 @@ describe('agent model catalog service', () => {
       resolveAccountHome: async () => GROK_HOME('/homes/new'),
       probes: { grok: probe }
     })
-    // The record-less read follows the CURRENT selection: unknown, never gpt-old.
     expect(await service.read({ agent: 'grok' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
@@ -125,7 +122,6 @@ describe('agent model catalog service', () => {
       const result = await service.read({ agent: 'grok' })
       expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-new')
     })
-    // The new listing landed under the new selection's key; the old entry is untouched.
     expect(store.get(selectedHomeFingerprint('/homes/new'))!.models[0]!.id).toBe('gpt-new')
     expect(store.get(oldFingerprint)!.models[0]!.id).toBe('gpt-old')
   })
@@ -196,7 +192,6 @@ describe('agent model catalog service', () => {
       listingInProgress: true
     })
     await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
-    // Still a clean unknown — and the failure TTL suppresses a probe storm.
     expect(await service.read({ agent: 'grok', sessionId: 'session-1' })).toEqual({
       origin: 'unknown'
     })

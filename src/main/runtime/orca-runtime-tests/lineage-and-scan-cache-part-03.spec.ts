@@ -117,7 +117,6 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    // Why: the SSH host lists only its own stored rows, so the local row never surfaces there.
     const result = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`, 'ssh-1')
 
     expect(result.worktrees).toEqual([])
@@ -213,8 +212,7 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  // #11994: the host renderer already applied its own repos:changed, so re-notifying it
-  // would re-sort the sidebar; only the client-event stream may fire here.
+  // #11994: host already applied repos:changed; notify clients only or sidebar re-sorts.
   it('notifyReposChangedForRemoteClients emits to clients without re-notifying the host', () => {
     const runtime = createRuntime()
     const reposChanged = vi.fn()
@@ -280,8 +278,7 @@ describe('OrcaRuntimeService', () => {
 
   it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
     vi.mocked(listWorktrees).mockClear()
-    // TTL reads Date.now(). Flushing the timer queue also runs scans earlier tests left
-    // scheduled, and a real git dir can prove "unchanged" and skip the rescan entirely.
+    // Test Date.now TTL without flushing queued scans; stub fingerprint or real Git could skip rescanning.
     vi.useFakeTimers({ now: 0 })
     const fingerprint = vi
       .spyOn(repoWorktreeAdminFingerprint, 'readRepoWorktreeAdminFingerprint')

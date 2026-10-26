@@ -32,8 +32,7 @@ export async function requestServeSimAccessibilityTree(axUrl: string): Promise<N
     ) {
       throw new EmulatorError('emulator_error', 'serve-sim AX returned an invalid tree.')
     }
-    // serve-sim reports frames in absolute pixels; normalize to 0..1 so the
-    // output feeds straight back into tap/gesture.
+    // Normalize pixels to the 0..1 coordinates accepted by tap and gesture.
     return normalizeServeSimAxTree(tree)
   } catch (error) {
     if (error instanceof EmulatorError) {

@@ -1,8 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
-/** The fold rebuilt this row with nothing in it changed: the same fields and the same block objects
- *  in the same order. Its id only names the candidate; content decides. */
+// Treat id only as a candidate key; compare fields and ordered block identities before reuse.
 function unchanged(previous: NativeChatMessage, next: NativeChatMessage): boolean {
   if (
     previous.blocks.length !== next.blocks.length ||
@@ -18,9 +17,7 @@ function unchanged(previous: NativeChatMessage, next: NativeChatMessage): boolea
   )
 }
 
-/** The folded rows, keeping each unchanged row's last committed object: a raw message re-folds the
- *  whole window, which copies every tool run, so rows that drew nothing new would draw again. Only
- *  the last committed rows of the chat shown are kept. */
+// Reuse unchanged committed rows because folding copies runs across the window and would otherwise rerender every message.
 export function useMobileNativeChatFoldReuse(
   folded: NativeChatMessage[],
   scope: string

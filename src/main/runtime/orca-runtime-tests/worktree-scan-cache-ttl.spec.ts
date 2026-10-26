@@ -33,8 +33,7 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
   })
 
   it('never extends the TTL for SSH repos', () => {
-    // Why: scratch classification reads local path conventions; a remote path
-    // that merely looks similar must keep normal freshness.
+    // Remote paths that resemble local scratch paths must retain normal freshness.
     expect(
       resolveWorktreeScanCacheTtlMs({
         path: '/home/dev/.codex-tmp/capsule',
@@ -44,10 +43,7 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
   })
 
   it('keeps a scratch repo scan cached past the base TTL while normal repos rescan', async () => {
-    // Why: the whole fix lives in the cache-stamp call site; pin the wiring so
-    // a revert to the flat TTL fails CI, not just the pure-function tests.
-    // Why only Date: each refresh starts a real admin-fingerprint read, which must settle on the
-    // real event loop; a probe still pending at the next refresh reuses the cache by design.
+    // Fake only Date: real admin-fingerprint probes must settle before refresh can invalidate the cache.
     vi.useFakeTimers({ toFake: ['Date'] })
     let runtimeProbes: { size: number } = { size: 0 }
     const settleFingerprintProbes = async (): Promise<void> => {
@@ -55,8 +51,6 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
     }
-    // Why: the shared listWorktrees stub keeps call history across this file's
-    // tests; absolute counts need a clean baseline.
     vi.mocked(listWorktrees).mockClear()
     try {
       const scratchPath = '/tmp/.codex-tmp/capsule-a'
@@ -74,7 +68,6 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
         ]
       } as never)
       const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
-      // Why bracket access: the probe set is protected runtime state this test only reads.
       runtimeProbes = runtime['worktreeAdminFingerprintProbes']
       const scanCallsFor = (path: string): number =>
         vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
@@ -98,9 +91,7 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
   })
 
   it('scans a repo registered after the last snapshot instead of answering from it', async () => {
-    // Why: the fleet snapshot only covers the repos that existed when it ran, so for a full TTL it
-    // reported a just-connected SSH host as having no worktrees at all — and callers that resolve a
-    // workspace through it turned that gap into `skill-install-workspace-not-found`.
+    // A newly registered SSH repo must invalidate the fleet snapshot or workspace lookup falsely reports absence.
     vi.mocked(listWorktrees).mockClear()
     const addedPath = '/tmp/repo-registered-later'
     const repos = [

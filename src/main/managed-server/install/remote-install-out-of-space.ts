@@ -1,5 +1,4 @@
-// Names a full disk behind a failed install write. OpenSSH's sftp-server reports ENOSPC and EDQUOT
-// as the generic SSH_FX_FAILURE ("Failure"), so the host's free space is the only evidence.
+// OpenSSH maps ENOSPC/EDQUOT to generic SFTP failure; host free space supplies the diagnosis.
 
 import { lstat, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -12,8 +11,7 @@ import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 
 const DIAGNOSIS_TIMEOUT_MS = 15_000
 const SSH_FX_FAILURE = 4
-// Why a floor and not the write's size: a partial upload already spent some room, so only a
-// filesystem that is effectively empty proves the write ran out of it.
+// Partial writes may consume room; only an effectively full filesystem proves exhaustion.
 const EXHAUSTED_KB = 1024
 
 export class RemoteInstallOutOfSpaceError extends Error {
@@ -33,7 +31,6 @@ export class RemoteInstallOutOfSpaceError extends Error {
   }
 }
 
-/** The `df -Pk` line for the deepest directory of `remotePath` that exists. */
 export function remoteFreeSpaceProbeCommand(remotePath: string): string {
   return (
     `p=${quotePosixShell(remotePath)}; ` +
@@ -42,7 +39,7 @@ export function remoteFreeSpaceProbeCommand(remotePath: string): string {
   )
 }
 
-/** What an upload of `path` writes: uploadDirectory follows the root but skips symlinks inside. */
+/** Match uploadDirectory: follow the root, skip interior symlinks. */
 export async function localTreeBytes(path: string, root = true): Promise<number> {
   const info = await (root ? stat(path) : lstat(path))
   if (info.isSymbolicLink()) {
@@ -58,10 +55,7 @@ export async function localTreeBytes(path: string, root = true): Promise<number>
   return total
 }
 
-/**
- * The out-of-space error when SFTP's generic failure met an exhausted filesystem, else `error`
- * itself. A lost or aborted transfer stays as it was: loss of contact says nothing about the disk.
- */
+/** Diagnose generic SFTP failure only on proven exhaustion; preserve lost or aborted transfers. */
 export async function explainRemoteInstallWriteFailure(
   conn: RemoteInstallTransport,
   host: RemoteHostPlatform,

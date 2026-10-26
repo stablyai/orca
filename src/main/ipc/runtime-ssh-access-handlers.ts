@@ -11,7 +11,7 @@ export function registerRuntimeSshAccessHandlers(options: {
 }): void {
   ipcMain.handle('runtimeEnvironments:linkSshAccess', async (event, input: unknown) => {
     const args = RuntimeSshAccessLinkRequestSchema.parse(input)
-    // Why: a link to an unreachable host holds two lifecycle queues; a closed window cancels it.
+    // Unreachable links hold two lifecycle queues; cancel when their window closes.
     const controller = new AbortController()
     const cancel = (): void => controller.abort()
     event.sender.once('destroyed', cancel)

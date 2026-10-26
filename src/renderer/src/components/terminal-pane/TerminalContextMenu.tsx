@@ -289,8 +289,7 @@ function TerminalContextMenuItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
-          // Why: Set Title moves focus into an overlay input. Force-close
-          // before opening it so the menu's focus guards are not still active.
+          // Close focus guards before opening the title editor overlay.
           onOpenChange(false)
           onSetTitle()
         }}

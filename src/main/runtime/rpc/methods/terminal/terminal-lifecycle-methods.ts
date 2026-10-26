@@ -38,10 +38,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
-      // A focused terminal create predates paired-client navigation. Keep the
-      // authority boundary here so a remote caller cannot activate the host
-      // renderer. This legacy RPC remains a background create for paired viewers;
-      // caller-local selection belongs to the session-tab RPC flow.
+      // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
       const activate = pairedViewer ? false : params.activate === true
@@ -49,8 +46,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
       // Switch point: the window's own new tab, which main starts; refused as a pane-named split is.
       if (params.windowTab) {
-        // Only this host's own window draws its tabs, by the identity its IPC proved: that channel
-        // also labels itself a client, and a paired viewer's window starts its own host's.
+        // Only transport-proven local IPC owns these host tabs; paired viewers create tabs on their own hosts.
         if (
           context.caller?.kind !== 'desktop' ||
           !params.worktree?.startsWith('id:') ||
@@ -98,6 +94,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeProviderSession
               ? { resumeProviderSession: params.resumeProviderSession }
               : {}),
+            ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
@@ -154,7 +151,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               direction: params.direction,
               command: params.command,
               env: params.env,
-              telemetrySource: params.telemetrySource
+              telemetrySource: params.telemetrySource,
+              retrySplit: params.retrySplit
             })
     })
   }),
@@ -164,7 +162,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     permission: 'workspace',
     params: TerminalResizeForClient,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
+      // Reject stale handles before resize can reach the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
@@ -197,14 +195,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   }),
   defineMethod({
-    // Why a method of its own: terminal.focus resolves a handle on the host that runs the PTY, and a
-    // paired server has no window, so only the desktop showing its pane can reveal it (#24688).
+    // Keep reveal separate from host-side focus: only the desktop showing a remote pane can reveal it (#24688).
     name: 'terminal.reveal',
     permission: 'workspace',
     params: TerminalReveal,
     handler: async (params, { runtime, clientKind }) => {
-      // Why local callers only: it moves this host's window, which terminal.focus lets a paired
-      // client do only by asking for host navigation, and a CLI or companion app here needs no more.
+      // Local callers may move this window; paired callers need explicit host-navigation intent through focus.
       if (clientKind !== undefined) {
         throw Object.assign(
           new Error('terminal.reveal is available only to callers on this machine.'),

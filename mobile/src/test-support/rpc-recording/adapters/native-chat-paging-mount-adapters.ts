@@ -7,17 +7,7 @@ const AGENT = 'claude'
 const SESSION = 'session-1'
 const TRANSCRIPT_PATH = '/work/feature/.claude/session-1.jsonl'
 
-/**
- * Native chat's older-history page.
- *
- * The read is a callback, but only the mount effect's `nativeChat.subscribe` arms what it pages
- * against: `hasMore` gates the call at all, and the snapshot's `beforeOffset` decides whether the
- * request carries a cursor or asks for a growing tail. So the stream is the setup, not decoration —
- * the frames a scenario delivers are what make a page request exist and what shape it takes.
- *
- * Message ids rather than bodies: paging is about which window is held, and a full transcript in
- * every checkpoint would cost bytes without making a reordered or dropped page more visible.
- */
+// Use real subscribe frames to arm paging capability/cursor state; observe message ids because window membership, not text, is the claim.
 export function nativeChatPagingMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

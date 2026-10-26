@@ -13,7 +13,6 @@ import {
   resolveGitHubApiRepositoryProbe
 } from './github-api-repository-probe'
 
-// Why: cache the uncached Enterprise remote probe used by hot paths.
 const ORIGIN_REPO_CACHE_TTL_MS = 30_000
 const ORIGIN_REPO_CACHE_MAX_ENTRIES = 512
 const originRepoCache = new Map<string, { value: GitHubApiRepository | null; expiresAt: number }>()
@@ -40,11 +39,7 @@ function pruneOriginRepoCache(now: number): void {
   }
 }
 
-/**
- * Host-qualified repository identity for one remote: github.com remotes come
- * from the cached slug parser; any other GitHub-shaped host is auth-gated so a
- * non-GitHub forge never routes to the GitHub provider.
- */
+/** Resolve this remote exactly; auth-gate Enterprise hosts so other forges cannot route to GitHub. */
 export async function getGitHubApiRepositoryForRemote(
   repoPath: string,
   remoteName: string,
@@ -52,8 +47,7 @@ export async function getGitHubApiRepositoryForRemote(
   localGitOptions: LocalGitExecOptions = {},
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  // Why: generic PR resolution prefers upstream, but this API represents the
-  // caller-selected remote exactly (#7331).
+  // Generic PR resolution prefers upstream; this entry point must honor the selected remote.
   const requireVerifiedSshProbe = probeOptions.requireVerifiedSshProbe === true
   const verifiedIdentityArgs = requireVerifiedSshProbe ? ([probeOptions] as const) : []
   const ownerRepo = await getOwnerRepoForRemote(
@@ -102,8 +96,7 @@ export async function getGitHubApiRepositoryForRemote(
             enterpriseOptions,
             ...verifiedEnterpriseArgs
           )
-    // Why: undefined means the gh auth inventory could not be read. Caching it
-    // as a negative would turn a transient spawn failure into a 30-second miss.
+    // Undefined means auth inventory was unreadable; do not cache transient probe failures.
     if (slug !== undefined) {
       originRepoCache.set(cacheKey, {
         value: slug,

@@ -13,6 +13,8 @@ import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
 import { OpenPlainSshTerminalButton } from '../plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnywayAction'
 import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
+import { canRecoverSshHostServer, SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
+import { Button } from '../ui/button'
 import { getManagedOrcadApi } from './use-managed-server-catalog'
 
 export type SshTargetServerDialog =
@@ -20,15 +22,17 @@ export type SshTargetServerDialog =
   | 'delta-move'
   | 'keep-server'
   | 'restart'
+  | 'recover'
   | 'move-anyway'
 
-/** Whether Orca on this SSH host serves it, and why not when it doesn't. */
 export function SshTargetServerStatusLine({
   target,
-  state
+  state,
+  onOpenDialog
 }: {
   target: SshTarget
   state: SshConnectionState | undefined
+  onOpenDialog?: (dialog: SshTargetServerDialog) => void
 }): React.JSX.Element | null {
   const line = sshHostServerStatusLine(target, state)
   if (!line) {
@@ -47,18 +51,22 @@ export function SshTargetServerStatusLine({
         {line.text}
       </p>
       {line.hint ? <p className="px-1 text-xs text-muted-foreground">{line.hint}</p> : null}
-      {/* Why inline, not in the menu: it is the way out of this failure. */}
+      {/* Keep failure recovery inline rather than buried in the menu. */}
       <SshHostNodeMirrorAction targetId={target.id} status={state?.managedServer} />
       <OpenPlainSshTerminalButton
         targetId={target.id}
         targetLabel={target.label}
         status={state?.managedServer}
       />
+      {onOpenDialog && canRecoverSshHostServer(state?.managedServer) ? (
+        <Button type="button" size="xs" variant="outline" onClick={() => onOpenDialog('recover')}>
+          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
+        </Button>
+      ) : null}
     </div>
   )
 }
 
-/** The managed-server actions this host offers right now, as row-menu entries. */
 export function SshTargetServerMenuItems({
   target,
   state,
@@ -72,8 +80,9 @@ export function SshTargetServerMenuItems({
   const hasDetail = Boolean(sshHostServerStatusLine(target, state)?.detail)
   const sourceChanged = hasSshHostSourceChanged(target)
   const canRestart = canRestartSshHostServer(status)
+  const canRecover = canRecoverSshHostServer(status)
   const canMoveAnyway = canMoveSshHostAnyway(status)
-  if (!hasDetail && !sourceChanged && !canRestart && !canMoveAnyway) {
+  if (!hasDetail && !sourceChanged && !canRestart && !canRecover && !canMoveAnyway) {
     return null
   }
   return (
@@ -92,6 +101,11 @@ export function SshTargetServerMenuItems({
       {canRestart ? (
         <DropdownMenuItem onSelect={() => onOpenDialog('restart')}>
           {translate('auto.components.settings.restartServer.action', 'Restart Orca’s server…')}
+        </DropdownMenuItem>
+      ) : null}
+      {canRecover ? (
+        <DropdownMenuItem onSelect={() => onOpenDialog('recover')}>
+          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
         </DropdownMenuItem>
       ) : null}
       {canMoveAnyway ? (
@@ -149,6 +163,12 @@ export function SshTargetServerDialogs({
         status={status}
         open={dialog === 'restart'}
         onOpenChange={openChange('restart')}
+        onChanged={onChanged}
+      />
+      <SshHostRecoverServerDialog
+        status={status}
+        open={dialog === 'recover'}
+        onOpenChange={openChange('recover')}
         onChanged={onChanged}
       />
       <SshHostMoveAnywayDialog

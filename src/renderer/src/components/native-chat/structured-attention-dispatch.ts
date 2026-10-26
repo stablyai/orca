@@ -1,30 +1,4 @@
-/**
- * Turns a host-derived structured edge — a settled turn, or a prompt put to the user mid-turn — into
- * unread markers and one OS notification.
- *
- * This is the structured lane's counterpart to `dispatchTerminalNotification`, and it deliberately
- * does NOT go through it. That function's first half arbitrates PTY evidence — a committed
- * terminal title against a hook status snapshot, with staleness and pane-reuse rules — because a
- * terminal only ever infers that a turn ended. A structured session does not infer: the execution
- * host derived this completion from its own journal commit and it carries an explicit outcome.
- * Running it through the terminal preamble would mean re-deriving a fact we were handed.
- *
- * What it does share is everything after that: the same neutral policy in
- * `attention/agent-attention-policy`, the same four store sinks, #21274's structured surface
- * adapter, and the same delivery tail — so suppression, acknowledgement, addressing, the success
- * sound and the blocked-permission fallback all have exactly one implementation.
- *
- * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: the outcome picks the wording — "finished",
- * "failed" or "stopped" — exactly as the hook lane's verdict does. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
- * here may turn that absence into success. A clean settle while a prompt (a subagent's approval,
- * say) waits on the user is worded "needs input" instead, as the hook lane words a blocked row; a
- * failure keeps its own wording. So is every prompt the host raises, once per prompt, as the hook
- * lane alerts on a blocked or waiting row. The wording rule is `agentSessionAttentionNews`, shared
- * with the host's own phone push.
- *
- * Prompt news already covered by an actual read is quiet, even when its attention frame arrives
- * later. Unread and delivery otherwise share the existing `resolveAgentAttention` decision.
- */
+/** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
   notificationSourceForOwner
@@ -77,17 +51,13 @@ function dispatchStructuredAttention(
   subscriptionTarget: RuntimeClientTarget | undefined,
   readFrontier?: () => StructuredAttentionRead | undefined
 ): void {
-  // 'done' and 'blocked' are what the host told us, not the row's state: the row can still read
-  // 'working' when the edge outruns the status re-projection. ABSENT OUTCOME IS UNKNOWN AND LIGHTS
-  // NOTHING: a host that predates the field reaches here with `undefined`.
+  // Host outcomes outrank stale row state; absent outcomes from older hosts remain unknown and quiet.
   const news = agentSessionAttentionNews(edge)
   if (!news) {
     return
   }
   const sessionId = edge.type === 'prompt' ? edge.prompt.sessionId : edge.completion.sessionId
-  // The pane key below is built from the tab, so news for a session the tab has since been
-  // rebound to something else would mark the NEW session's key with the OLD session's news. Checked
-  // here rather than only at the subscription, because the key is minted here.
+  // Recheck session ownership where the pane key is minted so old news cannot mark a rebound tab.
   if (sessionId !== tab.entityId) {
     return
   }
@@ -104,16 +74,12 @@ function dispatchStructuredAttention(
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const decision = resolveAgentAttention(
     {
-      // The tab's worktree, not `completion.scope.workspaceId`: the scope names the workspace on
-      // the execution host, which for a remote host is not the id this store addresses tabs and
-      // unread markers by. The tab is what the surface adapter resolves, so the tab decides.
+      // Address the renderer tab’s workspace; host scope ids may name different remote workspaces.
       subject: { workspaceId: tab.worktreeId, surfaceKey: paneKey },
       reason: 'agent-completion',
       // A prompt earns unread like a settled turn, as the hook lane's blocked row does.
       settlesTurn: true,
-      // The host saw this edge in its own journal. That is the out-of-band proof this
-      // flag is for, and it is why a backgrounded chat with no rendered transcript still counts —
-      // admission below still rejects a key the tab no longer owns.
+      // Host journal edges prove fresh activity even without a rendered transcript; still require current tab ownership.
       hasFreshActivityEvidence: true
     },
     createStructuredAttentionSurface(state)
@@ -140,8 +106,7 @@ function dispatchStructuredAttention(
         {
           source: 'agent-task-complete',
           surface: 'agent-session',
-          // Acknowledgement retires by subject (main keeps the ids it announced per pane), and the
-          // shared id lets it retire the phone notification the host pushed under the same id.
+          // Shared phone/desktop ids let subject-based acknowledgment retire both notifications.
           notificationId: attentionKey,
           attentionKey,
           structuredOrigin: origin,

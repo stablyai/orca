@@ -1,4 +1,3 @@
-// The fake Claude CLI fixture for structured chat specs, and creating a chat on the host.
 import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
@@ -21,8 +20,7 @@ import {
   structuredAgentSessionCreateFingerprint
 } from '../../../src/shared/structured-agent-session-mutation'
 
-// Why skip Windows: the stub runs through a POSIX sh wrapper, a .cmd variant is unverified, and
-// the full e2e suite runs on Linux CI only.
+// Skip Windows until the POSIX stub wrapper has a verified .cmd equivalent.
 export const SUPPORTED = process.platform !== 'win32'
 const STUB_SCRIPT = path.join(
   process.cwd(),
@@ -58,8 +56,7 @@ export const test = base.extend<{ claudeStub: ClaudeStub }>({
     const launchLog = path.join(dir, 'launches.jsonl')
     const emptyHome = path.join(dir, 'empty-home')
     mkdirSync(emptyHome)
-    // Why: a login shell's PATH lands ahead of the launch PATH, and a PATH miss falls back to
-    // install dirs; a real claude in any of those could be probed before the stub, so never launch.
+    // Refuse launch if login-shell PATH or fallback install dirs could select real Claude before the stub.
     const shadowing = resolveCliCommand('claude', {
       pathEnv: [...SYSTEM_DIRS, ...macLoginShellPathDirs()].join(path.delimiter),
       homePath: emptyHome
@@ -69,7 +66,6 @@ export const test = base.extend<{ claudeStub: ClaudeStub }>({
       testInfo.skip(true, 'a system-wide claude would shadow the stub')
     }
     const quote = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`
-    // Absolute node and stub paths, so the wrapper needs nothing from PATH to run.
     writeFileSync(
       command,
       `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(STUB_SCRIPT)} ${quote(launchLog)} "$@"\n`

@@ -1,8 +1,4 @@
-// The shadow self-check. Its assertion is idempotence: what today's writers store must load and
-// save to a fixed point, so a second load changes nothing. A first load may change what older
-// writers left (the Loader's fixed precedence); the known-kinds list below is broad, so it only
-// catches a field no rule touches. The first load's change counts per kind are returned for
-// logging, so a new kind of change shows up even when it is in the list.
+// Check load/save idempotence: a second load must change nothing. Known first-load kinds are broad; return per-kind counts for logging so new normalizations remain visible.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -22,13 +18,7 @@ const TAB_FACTS = [
   'worktreeId'
 ]
 
-/**
- * Each `table.field` a Loader rule can change, by rule: one tab order; rows get a tab-bar entry
- * and group, and repeated or orphaned records go (`*`); the row wins over its tab-bar entry, the
- * label over the row title, the owner over a stored host, the focused pane over the row's
- * terminal, and permanent over a disagreeing preview flag; repeated pane ids get new ids, a
- * terminal in two panes stays in the first, and legacy tombstones and pane-less rows are applied.
- */
+/** Known Loader repairs: canonical ordering/ownership, row/label/preview precedence, unique pane IDs and PTY bindings, and legacy retirements. */
 export const KNOWN_LOAD_CHANGES: ReadonlySet<string> = new Set([
   ...['row', 'terminalEntry', 'entry', 'group', 'layout', 'sleeping', 'incarnation', 'file'].map(
     (table) => `${table}.*`

@@ -24,9 +24,7 @@ export function groupDefinitions(
   disabledTuiAgents: readonly TuiAgent[],
   additionalDefinitions: readonly KeybindingDefinition[] = []
 ): ShortcutGroup[] {
-  // Why: per-agent launch rows only make sense for agents the user keeps
-  // enabled in Settings → Agents; hiding disabled ones keeps the Agents group
-  // scoped to what the chord could actually launch.
+  // Hide launch bindings for disabled agents because those chords cannot launch them.
   const hiddenAgentActionIds = new Set<KeybindingActionId>(
     disabledAgentTabActionIds(disabledTuiAgents)
   )

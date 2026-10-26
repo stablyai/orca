@@ -1,6 +1,4 @@
-// A browser, chat or simulator tab open in a layout-owner build: the window proposes the ids and
-// sends the open; main's frame draws the tab with the window's facts for it, and only then does
-// the window act on it (select, focus). A caller acting on the tab waits with `afterPendingTab`.
+// Send browser/chat/simulator open with proposed IDs; main’s frame draws tab/content before selection/focus. afterPendingTab waits for that result.
 
 import { sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
 import { beginPendingTab } from './layout-owner-pending-tabs'

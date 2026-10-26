@@ -21,6 +21,44 @@ import {
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
 
+function openMainWindowForContextMenu() {
+  const windowHandlers: Record<string, (...args: any[]) => void> = {}
+  const webContents = {
+    on: vi.fn((event, handler) => {
+      windowHandlers[event] = handler
+    }),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn(),
+    isDevToolsOpened: vi.fn(),
+    openDevTools: vi.fn(),
+    closeDevTools: vi.fn(),
+    replaceMisspelling: vi.fn(),
+    session: { addWordToSpellCheckerDictionary: vi.fn() }
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => true),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn(() => Promise.resolve())
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+
+  createMainWindow(null)
+  return { webContents, windowHandlers, browserWindowInstance }
+}
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
@@ -368,8 +406,7 @@ describe('createMainWindow', () => {
 
     const isDarwin = process.platform === 'darwin'
 
-    // Cmd+Shift+B is not in the policy allowlist, so no action resolves and no
-    // preventDefault fires — but the carve-out must not be what lets it through.
+    // Cmd+Shift+B must reach policy rejection, not the carve-out.
     const shiftPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: shiftPreventDefault } as never,
@@ -385,9 +422,7 @@ describe('createMainWindow', () => {
     )
     expect(shiftPreventDefault).not.toHaveBeenCalled()
 
-    // Cmd+Alt+B is not a modifier chord in the policy (alt excluded), so the
-    // policy returns null and no preventDefault fires. Assert the carve-out
-    // is not what's short-circuiting this — it requires !alt.
+    // Cmd+Alt+B must reach policy rejection; the carve-out excludes alt.
     const altPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: altPreventDefault } as never,
@@ -442,8 +477,7 @@ describe('createMainWindow', () => {
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
 
-    // Seed to true with a legitimate payload, then send a non-boolean and
-    // assert the flag returns to false by checking Cmd+B resumes interception.
+    // Seed focus true, reject a non-boolean update, then verify Cmd+B is intercepted again.
     setFocusedListener?.({ sender: webContents } as never, true)
     setFocusedListener?.({ sender: webContents } as never, { malicious: true } as never)
 
@@ -467,40 +501,7 @@ describe('createMainWindow', () => {
   })
 
   it('opens a table-aware context menu synchronously without a renderer query', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isDevToolsOpened: vi.fn(),
-      openDevTools: vi.fn(),
-      closeDevTools: vi.fn(),
-      replaceMisspelling: vi.fn(),
-      session: { addWordToSpellCheckerDictionary: vi.fn() }
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
+    const { webContents, windowHandlers, browserWindowInstance } = openMainWindowForContextMenu()
 
     const tableTargetListener = vi
       .mocked(ipcMain.on)
@@ -531,5 +532,39 @@ describe('createMainWindow', () => {
       ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+  })
+
+  it('builds the plain edit menu for the one right-click the renderer marks as plain text', () => {
+    const { webContents, windowHandlers } = openMainWindowForContextMenu()
+    const params = {
+      x: 10,
+      y: 20,
+      isEditable: true,
+      formControlType: 'none',
+      dictionarySuggestions: ['reference'],
+      misspelledWord: 'refrence'
+    }
+    const plainTextListener: ((...args: any[]) => void) | undefined = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'editable-context-menu:plain-text-target')?.[1]
+
+    plainTextListener?.({ sender: webContents })
+    windowHandlers['context-menu']({}, params)
+    windowHandlers['context-menu']({}, params)
+
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({ label: 'reference' }),
+      { type: 'separator' },
+      expect.objectContaining({ label: 'Add to dictionary' }),
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      expect.objectContaining({ label: 'Paste' }),
+      { role: 'selectAll' }
+    ])
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
+    )
   })
 })

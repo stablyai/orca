@@ -8,10 +8,7 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
 
-/** The one pending agent prompt shown above the composer: a structured
- *  AskUserQuestion wins, then a heuristic permission, then a heuristic question.
- *  The controller owns dismissal (it must survive this subtree unmounting on a
- *  view toggle); `ask` arrives already nulled once answered. */
+// Keep dismissal in the controller across chat/terminal toggles; structured asks take precedence over heuristic prompts.
 export function MobileNativeChatPromptCard({
   ask,
   askKey,
@@ -38,9 +35,7 @@ export function MobileNativeChatPromptCard({
   onCancelAsk?: () => Promise<boolean>
   onCancelPrompt?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   onCollapseAsk?: () => void
-  /** Fold the permission/question occurrence to a strip and free Send, writing nothing. */
   onCollapsePrompt?: () => void
-  /** Set while the shown occurrence is collapsed: its card stays mounted but hidden under a strip. */
   collapsedPrompt?: { title: string; expand: () => void } | null
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
@@ -100,8 +95,7 @@ export function MobileNativeChatPromptCard({
         onCollapse={onCollapsePrompt}
       />
     ) : null
-  // Why one stable wrapper: collapsing hides the card without remounting it, so a partly answered
-  // card keeps its selections.
+  // Hide without remounting so a collapsed prompt keeps partial selections.
   return (
     <>
       <View style={collapsedPrompt ? styles.collapsed : undefined}>{card}</View>

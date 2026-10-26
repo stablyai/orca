@@ -9,8 +9,7 @@ export function abbreviateOrchestrationTasks<T extends { spec: string }>(
     return {
       ...task,
       spec: truncated ? `${truncateAtCodePoint(spec).trimEnd()}…` : spec,
-      // Why: whitespace normalization alone is not truncation; flagging it
-      // would make agents re-fetch full specs that --brief already shows.
+      // Whitespace cleanup alone must not trigger agents to refetch an already complete brief.
       spec_truncated: truncated
     }
   })
@@ -18,8 +17,7 @@ export function abbreviateOrchestrationTasks<T extends { spec: string }>(
 
 function truncateAtCodePoint(spec: string): string {
   const sliced = spec.slice(0, TASK_SPEC_BRIEF_LENGTH - 1)
-  // Why: a cut through a surrogate pair leaves a lone high surrogate that
-  // strict JSON consumers reject; drop it rather than emit malformed UTF-16.
+  // Drop a split high surrogate rather than send malformed UTF-16 to strict JSON consumers.
   const lastUnit = sliced.charCodeAt(sliced.length - 1)
   return lastUnit >= 0xd800 && lastUnit <= 0xdbff ? sliced.slice(0, -1) : sliced
 }

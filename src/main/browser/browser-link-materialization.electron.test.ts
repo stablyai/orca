@@ -178,7 +178,7 @@ describe('production link bridge, store and mounted guest', () => {
     expect(receipts.some((receipt) => receipt.path === '/removed-page')).toBe(false)
   })
 
-  // Known defects until the claim handoff repair; these assertions deliberately describe baseline evidence.
+  // These assertions capture unsafe baseline behavior pending claim handoff repair.
   it.each(['remove-tab', 'profile-switch', 'delete-profile'])(
     'records unsafe stale-source baseline through the real mount: %s',
     async (transition) => {

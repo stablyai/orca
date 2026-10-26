@@ -18,12 +18,7 @@ type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
 type MenuKind = 'skill' | 'command'
 
-/**
- * The composer's draft and the `/`/`@` menu over it.
- *
- * A picked skill leads the draft as `<token> `, which is exactly what a send carries; the field
- * draws that token highlighted and treats it as one unit.
- */
+// Keep a picked skill’s leading token atomic in both draft text and field rendering.
 export function useMobileNativeChatComposerMenu(input: {
   value: string
   onChangeText: (text: string) => void
@@ -49,7 +44,6 @@ export function useMobileNativeChatComposerMenu(input: {
   )
   const skillToken = leadingSkillToken(value, skillTokens)
   const setDraft = (next: string): void => {
-    // The narrowed menu lasts while its `/` does.
     if (!next.startsWith('/')) {
       setMenuKind(null)
     }
@@ -64,7 +58,7 @@ export function useMobileNativeChatComposerMenu(input: {
   }
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  // Keyed on what the menu shows, so a caret move inside the same query rebuilds nothing.
+  // Memoize by query content so caret movement within it rebuilds nothing.
   const menuMode = trigger?.kind ?? null
   const menuQuery = trigger?.query ?? ''
   const rows = useMemo<ComposerMenuRow[]>(() => {
@@ -109,7 +103,7 @@ export function useMobileNativeChatComposerMenu(input: {
       return
     }
     setMenuKind(null)
-    // On the page a tapped row takes focus from the field; typing goes on where the pick left off.
+    // Restore page field focus after a menu tap so typing continues at the inserted pick.
     input.focusField()
     if (row.kind === 'skill') {
       const rest = value.slice(trigger.end).trimStart()
@@ -122,9 +116,7 @@ export function useMobileNativeChatComposerMenu(input: {
     placeCaret(next.cursor)
   }
 
-  /** The + sheet's Skills and Commands rows: a leading `/` opens the menu, narrowed. */
   const openSlashMenu = (kind: MenuKind): void => {
-    // A skill already picked is replaced by the next one.
     const rest = (skillToken ? value.slice(skillToken.length + 1) : value).trimStart()
     onChangeText(rest ? `/ ${rest}` : '/')
     setMenuKind(kind)
@@ -132,7 +124,6 @@ export function useMobileNativeChatComposerMenu(input: {
     input.focusField()
   }
 
-  /** The + sheet's Workspace file row: an `@` at the caret opens the file search. */
   const openFileMenu = (): void => {
     const before = value.slice(0, cursor)
     const lead = before.length === 0 || /\s$/.test(before) ? '@' : ' @'

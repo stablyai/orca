@@ -94,7 +94,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       if (normalizedState) {
         args.push('--state', normalizedState)
       }
-      // Why: agent-browser's selector wait lacks a per-command timeout — enforce it here so a missing selector fails as browser_timeout, not a hang.
+      // Bound condition waits here because agent-browser lacks a per-command timeout.
       return (await this.execAgentBrowser(sessionName, args, {
         timeoutMs:
           options?.timeout != null && hasCondition
@@ -143,7 +143,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       browserPageId,
       async (sessionName) => {
         if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
-          // Why: agent-browser resolves the ref directly, preserving iframe/shadow-root/unfocusable semantics for ordinary fields.
+          // Let the helper resolve ordinary refs inside iframes and shadow roots, including unfocusable fields.
           await this.execAgentBrowser(sessionName, ['fill', element, ''])
           return { cleared: element }
         }
@@ -161,7 +161,6 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     browserPageId?: string
   ): Promise<BrowserSelectAllResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser has no select-all command — implement as focus + Ctrl+A
       await this.execAgentBrowser(sessionName, ['focus', element])
       return (await this.execAgentBrowser(sessionName, [
         'press',
@@ -181,9 +180,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       async (sessionName, target) => {
         const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
         if (!parsed) {
-          // Why: a key name the table cannot express must not dispatch keyCode 0 and
-          // report success — route it to the helper, creating its session only now so
-          // the direct path never pays for it.
+          // Unknown keys need the helper; create its session only on this fallback path.
           await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
           return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
         }
@@ -212,8 +209,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           await dispatchPageKeyEvent(
             wc,
             {
-              // Why: rawKeyDown is the no-character form; sending keyDown without text
-              // makes Blink synthesize an empty input for editing keys.
+              // keyDown without text makes Blink synthesize empty input; use rawKeyDown for editing keys.
               type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
               ...event,
               ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
@@ -226,7 +222,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
             {
               type: 'keyUp',
               ...event,
-              // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
+              // Blink clears a modifier's own bit on keyup.
               modifiers: parsed.modifiers & ~parsed.selfModifier
             },
             send,
@@ -234,9 +230,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           )
           return { pressed: key }
         } catch (error) {
-          // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
-          // runtime_error — the helper path this replaced always produced a browser_* code, and
-          // the pane only reclaims a dead page when it sees one.
+          // Browser error codes let the pane recognize and reclaim a dead page.
           if (error instanceof BrowserError) {
             throw error
           }
@@ -256,8 +250,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
-    // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
-    // Printing lays the page out afresh, so it works on an undrawn page and needs no paint hold.
+    // Native printing avoids helper CDP hangs and lays out undrawn pages without a paint hold.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {

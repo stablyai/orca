@@ -107,7 +107,7 @@ export class CodexJournalItems {
       source === 'history'
         ? endedJournalReasoning()
         : event.method === 'item/completed'
-          ? // A completion with no start on record claims no span it never saw.
+          ? // Without a recorded start, completion cannot establish a duration.
             endedJournalReasoning(active?.startedAt === undefined ? undefined : receivedAt)
           : { state: 'running' }
     const translated = withItemLifecycle(
@@ -134,13 +134,12 @@ export class CodexJournalItems {
         if (!admission.accepted) {
           return { handled: true, admission }
         }
-        // An item whose row waits for its first text still started here.
+        // Preserve the start time while the row waits for its first text.
         this.track(event.threadId, turnId, item, identity, receivedAt)
       }
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
-    // Whichever write creates the row, the row starts with its item: a completion can be the first
-    // write when its text came within one coalescing window.
+    // Coalescing can delay the first write until completion; preserve the item's start time.
     const startedAt = event.method === 'item/completed' ? active?.startedAt : receivedAt
     const admission = this.appendTranslated(event.method, identity, translated, {
       ...this.deps.attributionFor(event.threadId, turnId),
@@ -261,8 +260,7 @@ export class CodexJournalItems {
     return !this.activeItems.has(itemKey) && !codexCommandOutlivesTurn(item)
   }
 
-  /** Makes room for an item before it is tracked: tracking it first lets the stream bound drop an
-   *  evictee's text before this eviction can close the evictee's row with it. */
+  /** Evict before tracking so stream bounds cannot discard text needed to settle the evictee. */
   private trimActiveState(incoming: boolean): CodexJournalTranslationAdmission {
     const room = MAX_CODEX_ACTIVE_ITEMS - (incoming ? 1 : 0)
     while (this.activeItems.size - this.streams.persistentCount > room) {

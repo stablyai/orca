@@ -1,7 +1,4 @@
-/**
- * A state mutation can outlast the activation fence's stale window, so it keeps the fence
- * fresh while it runs. Run a short real heartbeat and the real steal command.
- */
+// Exercise real heartbeats and steal commands so long mutations retain activation ownership.
 import {
   existsSync,
   mkdirSync,
@@ -44,7 +41,6 @@ describe.skipIf(process.platform === 'win32')(
       mkdirSync(fence, { recursive: true })
       writeFileSync(join(fence, ORCAD_FENCE_OWNER_FILENAME), 'holder-1')
     })
-    // The mutation runs under the fence its run holds, generation `holder-1`.
     const mutation = (script: string): string =>
       serializedStateMutationCommand(base, script, HEARTBEAT_SECONDS, {
         lockDir: fence,
@@ -59,7 +55,6 @@ describe.skipIf(process.platform === 'win32')(
     const age = (): number => Date.now() / 1000 - statSync(fence).mtimeMs / 1000
 
     it('is not stolen while a long mutation runs, and is once its holder dies', async () => {
-      // Stands in for a restore that outlasts the stale window.
       const run = spawnProcess({
         program: '/bin/sh',
         args: ['-c', mutation('sleep 30')]
@@ -75,7 +70,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(age()).toBeLessThan(STALE_SECONDS)
         expect(await steal()).toBe('BUSY')
 
-        // The host process dies (OOM, reboot of the session): nothing refreshes the fence now.
+        // Kill the owner; subsequent fence freshness must come from no surviving heartbeat.
         process.kill(Number(readFileSync(pidFile, 'utf8').trim()), 'SIGKILL')
         await pause(OBSERVE_HEARTBEATS_MS)
         await backdate()

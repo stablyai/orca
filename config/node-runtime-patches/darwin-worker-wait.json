@@ -1,0 +1,7 @@
+{
+  "version": "24.22.1",
+  "sourceArchive": "node-v24.22.1.tar.gz",
+  "sourceSha256": "001773d9bd53fbd27a25efd42aa6a9693ebfe500998ca9bec635e9b6ee79bc91",
+  "recipeVersion": 1,
+  "workerSourceSha256": "06ab0be8159c22cfb5f4a715d776693825835f1369c7c82d13a22e607947b4fd"
+}

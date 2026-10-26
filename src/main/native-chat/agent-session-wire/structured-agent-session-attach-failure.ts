@@ -73,7 +73,7 @@ export function endStructuredAgentSessionReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
-      // Orca failed to attach; the provider said nothing.
+      // Host attach faults are not provider failures.
       failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
       ...verdict
@@ -84,11 +84,10 @@ export function endStructuredAgentSessionReleasedChild(
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
   context.publishStatus?.(sessionId)
-  // The released acquisition was the live generation: readers and the queued-card drain re-derive.
+  // Re-derive reader/queue state after releasing the live acquisition.
   context.generationEnded?.(sessionId)
 }
 
-/** A reservation that support drift invalidated, released as processless. */
 export async function settleUnsupportedReservation(
   input: AttachFlowInput,
   record: AgentSessionRecord

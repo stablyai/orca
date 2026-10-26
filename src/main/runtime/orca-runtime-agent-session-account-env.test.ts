@@ -6,6 +6,7 @@ import {
 import { HostAccountLaunchEnvParams } from '../../shared/host-account-launch-env'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const ACCOUNT_ENV = {
   CLAUDE_CONFIG_DIR: '/home/u/.orca/claude-accounts/a/config',
@@ -38,8 +39,7 @@ function createRuntime() {
       agentDefaultEnv: { codex: { KEEP: '1', CODEX_HOME: '/stale' } }
     })
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch paths under test read only getSettings().
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: 'worktree-1',
@@ -50,7 +50,7 @@ function createRuntime() {
   return runtime
 }
 
-/** createTerminal up to its spawn: records the launch the host planner made of each create. */
+/** Capture each host-planned create before spawning. */
 function planCreates(runtime: OrcaRuntimeService) {
   const planned: TerminalCreateOptions[] = []
   const createTerminal = vi
@@ -101,8 +101,6 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
     expect(planned[0]?.env).toMatchObject({ CODEX_HOME: '/stale' })
   })
 
-  // The account the user picked wins over a per-agent env override in Settings, as on the host
-  // planner's other launches.
   it('puts the host-selected account over Settings agent env', async () => {
     const runtime = createRuntime()
     runtime.setHostAccountLaunchEnv(

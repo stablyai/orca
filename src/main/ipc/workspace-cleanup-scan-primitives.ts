@@ -19,8 +19,7 @@ export function throwIfWorkspaceCleanupScanAborted(signal: AbortSignal | undefin
 }
 
 export function appendWorkspaceCleanupItems<T>(target: T[], entries: readonly T[]): void {
-  // Why: cleanup can aggregate generated-size worktree batches; spreading
-  // those batches into push can exceed JavaScript's argument limit.
+  // Large fleet batches can exceed JavaScript's spread argument limit.
   for (const entry of entries) {
     target.push(entry)
   }
@@ -97,8 +96,7 @@ export function createWorkspaceCleanupScanError(
   }
 }
 
-// Why: git errors often include absolute paths or command output. Keep the
-// cause useful without leaking raw local/remote filesystem details to the UI.
+// Git errors can expose paths/output; map causes without leaking local or remote filesystem details.
 export function toSafeWorkspaceCleanupRepoScanError(error: unknown): string {
   const message = toWorkspaceCleanupErrorMessage(error)
   if (message === 'Timed out listing SSH worktrees.') {

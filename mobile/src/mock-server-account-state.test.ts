@@ -16,6 +16,8 @@ describe('mock account reset state', () => {
 
   it('keeps reset and expiry deadlines fixed between snapshots', () => {
     const first = createMockAccountsSnapshot()
+    expect(first.rateLimits.codex.session?.resetsAt).toBe(1_700_005_400_000)
+    expect(first.rateLimits.codex.rateLimitResetCredits.nextExpiresAt).toBe(1_700_432_000_000)
     const second = createMockAccountsSnapshot()
 
     expect(second.rateLimits.codex.session?.resetsAt).toBe(first.rateLimits.codex.session?.resetsAt)
@@ -47,6 +49,7 @@ describe('mock account reset state', () => {
     const scope = getMockCodexResetScope()
     expect(scope).not.toBeNull()
     const first = consumeMockCodexResetCredit(FIRST_OPERATION_ID, scope)
+    expect(first).toEqual({ outcome: 'reset', scope })
     expect(consumeMockCodexResetCredit(FIRST_OPERATION_ID, scope)).toEqual(first)
 
     expect(() => consumeMockCodexResetCredit('not-a-uuid', scope)).toThrow('Invalid idempotencyKey')

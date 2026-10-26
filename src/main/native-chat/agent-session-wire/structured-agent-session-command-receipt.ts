@@ -31,7 +31,6 @@ type CommandReceiptIdentity = {
   context: AgentSessionTurnContext
 }
 
-/** Acceptance identity and compatibility bookkeeping share the commit of the command's effect. */
 export async function runCommandReceiptMutation<TValue>(
   input: CommandReceiptIdentity & {
     plan: MutationPlan<TValue>
@@ -105,7 +104,7 @@ export async function runCommandReceiptMutation<TValue>(
   }
 }
 
-/** Accepted, then failed: the answer is its receipt, whatever went wrong after the commit. */
+/** Post-commit failures still answer from durable acceptance. */
 function failedAfterAcceptance(
   { envelope, context }: CommandReceiptIdentity,
   acceptedReceipt: CommandReceipt | undefined,
@@ -168,9 +167,7 @@ function unknownOutcome(input: CommandReceiptIdentity): TurnOutcome<never> {
   }
 }
 
-/** A no-op is answered only once its receipt commits, alone. An identity verdict or a classified
- *  refusal throws for admission to answer; an unclassified storage failure is logged and answered
- *  unknown, with nothing recorded, so a retry decides afresh. */
+/** Commit no-op receipts alone; classified refusals propagate, storage faults stay unknown and retryable. */
 async function commitNoOpReceipt(
   input: CommandReceiptIdentity,
   commit: () => Promise<void>

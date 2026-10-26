@@ -1,7 +1,4 @@
-/**
- * MiniMax usage credentials on this host, shared by the desktop's IPC and the runtime RPC so a
- * paired client saves them where the usage poller runs. Nothing here may import Electron.
- */
+// Share host-local credential commands across IPC/RPC so paired saves reach the usage poller.
 import {
   clearMiniMaxSessionCookie,
   getMiniMaxSessionCookieProtection,
@@ -54,7 +51,7 @@ function cookieUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
   })
 }
 
-/** For a paired client's save; forgetting is always allowed, since nobody here can read the file. */
+/** Refuse unreadable saved credentials; forgetting remains available. */
 export function assertMiniMaxCredentialOpensHere(credential: 'apiKey' | 'cookie'): void {
   const unreadable =
     credential === 'apiKey'
@@ -79,11 +76,11 @@ export function saveMiniMaxSessionCookieCredential(
   rateLimits: UsageRefresher | null,
   cookie: unknown
 ): MiniMaxCredentialsStatus {
-  // Why: the value arrives as unknown over IPC/RPC; the declared type is compile-time only.
+  // IPC/RPC values remain untrusted despite the declared type.
   if (typeof cookie !== 'string') {
     throw new Error('MiniMax session cookie must be a string')
   }
-  // Why: the cookie fetch runs in the desktop's browser session; refuse rather than store a dead key.
+  // Cookie acquisition requires a desktop browser session; refuse unusable credentials elsewhere.
   if (getMainHttpClient().partitionSession === undefined) {
     throw new Error(
       'MiniMax session cookies need the Orca desktop app on this computer. Save an API key instead.'

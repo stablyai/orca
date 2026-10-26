@@ -2,7 +2,7 @@ import { realpath, rename } from 'node:fs/promises'
 import { dirname, normalize } from 'node:path'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
 
-// Why: parent scope covers native Unicode aliases without guessing each filesystem's collation.
+// Parent-scoped serialization covers Unicode aliases without guessing filesystem collation.
 const pendingRenamesByParent = new Map<string, Promise<void>>()
 
 function isENOENT(error: unknown): boolean {
@@ -17,8 +17,7 @@ export async function serializedParentDirectoryKey(filePath: string): Promise<st
   try {
     return normalize(await realpath(parentPath))
   } catch (error) {
-    // A missing parent will fail the rename; retain its path so that failure
-    // does not prevent unrelated destinations from progressing.
+    // Keep missing-parent failures scoped to their destination so unrelated renames can proceed.
     if (isENOENT(error)) {
       return normalize(parentPath)
     }

@@ -48,7 +48,7 @@ describe('mobile markdown document byte accounting', () => {
   })
 
   it('keeps the read budget above the edit budget', () => {
-    // Behavioural pin for truncated => not editable: the bridge's over-budget read test.
+    // Over-budget bridge reads must be truncated and noneditable.
     expect(MOBILE_MARKDOWN_READ_MAX_BYTES).toBeGreaterThan(MOBILE_MARKDOWN_EDIT_MAX_BYTES)
   })
 })

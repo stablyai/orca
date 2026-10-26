@@ -5,9 +5,7 @@ import {
   type WorkspaceSessionWrite
 } from './session-write-subscriber'
 
-// Why: useAppStore is a module-level singleton — tests must snapshot and
-// restore the full state around each case so cross-test pollution can't mask
-// a real regression in the gate logic this suite exists to lock down.
+// Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState
 
 function makeTerminalSessionState(title: string, label = title): Partial<AppState> {
@@ -100,10 +98,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('writes when the gate is already open at creation, with no store tick to wake it', () => {
-    // Why the store-write spy: every other case here opens the gate *after* creating the
-    // subscriber, so the opening setState is itself the tick that produces the first write. With
-    // the gate already open only the creation-time seed can, and equal catalogs no longer publish
-    // a tick to stand in for it.
+    // With the gate already open, only creation-time seeding triggers the first write; unchanged catalogs no longer provide incidental store ticks.
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
 
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
@@ -142,8 +137,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
 
-    // setAgentStatus / setCacheTimerStartedAt mutate fields that are NOT in
-    // SESSION_RELEVANT_FIELDS — the gate must skip the timer reset entirely.
+    // Agent-status/timer fields are outside SESSION_RELEVANT_FIELDS and must not reset debounce.
     useAppStore.getState().setAgentStatus('tab-1:1', {
       state: 'working',
       prompt: 'Fix tests',
@@ -427,8 +421,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('ignores recovery-ledger-only changes', () => {
-    // Why: the ledger is stripped from the persisted session, so churning it
-    // must not rebuild and rewrite the durable payload on every remount.
+    // The handoff ledger is not persisted; remount churn must not rebuild/rewrite durable payloads.
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
@@ -707,10 +700,7 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).not.toHaveBeenCalled()
 
-    // Why: without this second mutation, the assertion above only proves the
-    // pending timer was cancelled — a regression where cleanup() forgot to
-    // unsub() would still pass. Mutating after cleanup verifies the listener
-    // was detached and no new timer is queued.
+    // Mutate after cleanup to prove unsubscribe; timer cancellation alone passes even with the listener still attached.
     useAppStore.setState({ activeTabId: 'tab-2' })
     vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()

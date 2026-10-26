@@ -16,10 +16,7 @@ import {
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
 
-/**
- * A new PTY needs a workspace no WSL move is taking, and a folder that still exists. Reattaching to
- * a session the daemon still runs is not a new PTY: a reload mid-move must not orphan a live pane.
- */
+/** WSL moves block new PTYs, but proven daemon reattach must survive reload; folder workspaces still require usable paths. */
 export function assertWorkspaceAcceptsNewPty(
   store: Store | undefined,
   worktreeId: string | undefined,
@@ -71,11 +68,11 @@ export function resolvePtySpawnStartupCwd(
 }
 
 export async function localStartupCwdDirectoryExists(path: string): Promise<boolean> {
-  // Why: Win32 stat on \\wsl.localhost 9P shares can falsely report ENOENT; defer to the provider's WSL-aware validation.
+  // Win32 9P stat can falsely report WSL-share absence; defer to WSL-aware provider validation.
   if (isWslUncPath(path)) {
     return true
   }
-  // Why async: a statSync on a dead network mount would freeze the whole main process.
+  // A dead network mount must not block main's event loop.
   try {
     return (await stat(path)).isDirectory()
   } catch {

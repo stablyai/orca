@@ -55,8 +55,7 @@ function stateDotTooltipLabel(
   if (dotState === 'interrupted') {
     return agentVerdictStatusLine(agent.entry) ?? agentStateLabel(dotState)
   }
-  // Why: report the observation, not a verdict on the agent — the elapsed gap is what
-  // lets the user apply context Orca has no way to know (a long build, a slow download).
+  // Report the observed silence; only the user knows whether a long build or download explains it.
   return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
@@ -156,9 +155,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
-  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
-  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
-  // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
+  // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
@@ -182,19 +179,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
-  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
-  // failure does so even while subagents still run.
+  // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
   const dotTooltipLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
-  // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
-  // row's own timestamp slot rather than hiding in a hover tooltip.
+  // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
-
-  // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
   const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
   const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
@@ -300,7 +293,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         </span>
         {model && (
           <span
-            className="max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground/70"
+            className={cn(
+              'max-w-24',
+              // Why: only shrink when the in-flow Send button would otherwise overflow the row.
+              sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
+                ? 'min-w-0'
+                : 'shrink-0',
+              'truncate font-mono text-[10px] text-muted-foreground/70'
+            )}
             title={model}
           >
             {model}
@@ -340,7 +340,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           stoppingLabel ??
           (presentation.attention ? programStatusAttentionLine(presentation.attention) : null) ??
           // A blocked row (auth) shows no tool line, so the program's block stands in for it.
-          (!showsTool && agent.entry.programStatus?.state === 'blocked'
+          (agent.state === 'blocked' && agent.entry.programStatus?.state === 'blocked'
             ? programStatusAttentionLine({
                 ...(agent.entry.programStatus.kind ? { kind: agent.entry.programStatus.kind } : {}),
                 ...(presentation.message ? { message: presentation.message } : {})

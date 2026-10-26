@@ -1,5 +1,5 @@
-import { encodeJiraImageFrame } from '../../../../shared/jira-image-stream-frame'
-import { JIRA_IMAGE_CHUNK_BYTES } from '../../../../shared/jira-attachment-image'
+import { encodeJiraImageFrame } from '../../../../shared/jira/jira-image-stream-frame'
+import { JIRA_IMAGE_CHUNK_BYTES } from '../../../../shared/jira/jira-attachment-image'
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import {

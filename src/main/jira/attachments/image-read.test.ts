@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from '../authenticated-request'
-import { JIRA_IMAGE_MAX_PENDING_READS } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_MAX_PENDING_READS } from '../../../shared/jira/jira-attachment-image'
 import { readAttachmentImageBytes } from './image-bytes'
 import {
   registerAttachmentImageGrant,

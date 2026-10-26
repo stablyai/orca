@@ -1,14 +1,5 @@
 /** @vitest-environment happy-dom */
-/**
- * The cold-park effect must keep re-running on every tab-model write — watcher
- * coverage is re-derived from store and registry state the park key cannot
- * encode, and terminal-cold-park-verdict-loop pins what happens when it stops.
- *
- * What it must NOT do is cancel and re-arm every pending recheck timer on each
- * run. Recheck deadlines are absolute, so a title-only write recomputes the same
- * instant and the re-arm changed nothing but the syscall count. This pins both
- * halves: no timer churn under a title flood, and an unchanged park instant.
- */
+/** Tab-model writes must recheck watcher coverage without rearming unchanged absolute deadlines; title floods must preserve the park instant and avoid timer churn. */
 import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -163,10 +154,8 @@ describe('cold-park recheck timers under a background title flood', () => {
     const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
     act(() => root?.render(<ParkingHost writes={TITLE_FLOOD_WRITES} />))
 
-    // The effect still runs per write — that is the coverage wakeup, and dropping
-    // it regresses terminal-cold-park-verdict-loop.
+    // Per-write effect runs preserve watcher-coverage wakeups (terminal-cold-park-verdict-loop).
     expect(park.effectRuns).toBeGreaterThanOrEqual(TITLE_FLOOD_WRITES)
-    // Before: one clearTimeout and one setTimeout per hidden tab per run.
     expect(setTimeoutSpy.mock.calls.length).toBe(0)
     expect(clearTimeoutSpy.mock.calls.length).toBe(0)
   })

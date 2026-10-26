@@ -6,7 +6,7 @@ import {
   resolveRuntimeNavigationTarget
 } from '../../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { hasSleptAgentToWake } from '../../../shared/agent-session-resume'
+import { phoneWakeReport } from '../../../shared/workspace-sleep'
 import type { Repo } from '../../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -69,9 +69,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     repoId: string
     worktreeId: string
     activated: boolean
-    /** Mobile-scoped slept-agent wake outcome. `unsupported-headless` means no
-     *  renderer holds the sleeping records (headless `orca serve`), so nothing
-     *  woke — clients must not present the worktree's agents as resumed. */
+    /** unsupported-headless means no renderer holds wake records; clients must not claim agents resumed. */
     sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable'
   }> {
     this.assertGraphReady()
@@ -90,8 +88,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       target &&
       this.store?.getWorktreeMetaForHost?.(target.id, target.hostId)?.isUnread
     ) {
-      // Why: mobile/web session activation intentionally bypasses renderer
-      // selection, so the runtime must acknowledge the unread state itself.
+      // Mobile/web activation bypasses renderer selection, so main must acknowledge unread state.
       this.store.setWorktreeMeta(target, { isUnread: false })
       this.notifyWorktreesChanged(repo.id)
     }
@@ -99,8 +96,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     let sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable' =
       'not-applicable'
     if (targetsHost || targetsClients) {
-      // Why: inactive worktree terminal panes are renderer-owned and may not have
-      // live PTYs until the desktop activates the worktree and mounts them.
+      // Inactive renderer-owned panes may need desktop activation to gain PTYs.
       if (targetsHost) {
         this.notifyHostActivateWorktree(repo.id, worktree.id)
       }
@@ -109,44 +105,30 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       }
     }
     if (!targetsHost) {
-      // Why: mobile/web selection needs fresh session surfaces without forcing
-      // every attached desktop renderer to navigate to the phone's workspace.
+      // Refresh phone surfaces without navigating attached desktops.
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
         allowAttachedWindow: true
       })
       await this.refreshMobileSessionPtyRecords()
       this.notifyMobileSessionTabsChanged(worktree.id)
-      // Why: a phone open must also wake the worktree's slept agents (experimental
-      // agent sleep). Only the host renderer holds the sleeping records + wake
-      // authority, so fire-and-forget ask it — mobile-scoped so web/desktop are
-      // unaffected. Headless serve has no renderer to wake anything, so report
-      // that explicitly instead of letting mobile assume the agents resumed.
+      // Why: main resumes a workspace sleep's agents; only a window wakes its own hibernation.
       if (opts.clientKind === 'mobile') {
-        if (this.getAvailableAuthoritativeWindow()) {
-          this.notifier?.resumeSleepingAgents?.(worktree.id)
-          sleepingAgentWake = 'requested'
-        } else if (
-          // Why: sleeping records are partitioned by execution host; reading
-          // only the local partition would miss slept agents on SSH-host
-          // worktrees and skip the headless warning for them.
-          hasSleptAgentToWake(
-            this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
-              .sleepingAgentSessionsByPaneKey,
-            worktree.id
-          )
-        ) {
-          // Why: headless is only degraded when this worktree actually has a
-          // persisted resume record. Ordinary mobile activation must not show
-          // an unsupported warning merely because no desktop window is open.
-          sleepingAgentWake = 'unsupported-headless'
-        }
+        // Not awaited: behind a running sleep it would outlast the phone's request timeout.
+        const worktreeId = worktree.id
+        void this.queueSleepingAgentWake(worktreeId)
+        // Wake records live in the repo host's partition, including SSH.
+        const records = this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
+        sleepingAgentWake = phoneWakeReport(
+          records?.sleepingAgentSessionsByPaneKey,
+          worktreeId,
+          Boolean(this.getAvailableAuthoritativeWindow())
+        )
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
   }
 
-  /** The agent a create's linked draft starts, chosen as `buildStartupForDraft` chooses it, so a
-   *  launch can name the agent before the create runs. */
+  /** Use buildStartupForDraft's selection so launches can name the agent before creation. */
   async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
     if (!this.store) {
       return null
@@ -185,6 +167,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     launchInputs?: {
       agentArgs?: string | null
       extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
       /** The existing workspace it starts in; absent is a new workspace of `repo`. */
@@ -201,6 +184,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
+      ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
       settings: this.store.getSettings(),
@@ -225,11 +209,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
   }
 
-  /**
-   * Only for a newly launched agent, before its first input. Settles when the agent's composer
-   * signal fires on a screen with no startup dialog and no Codex provisional header; with
-   * `stopOnDialog`, a dialog ends the wait so the caller's idle wait can report it.
-   */
+  /** Before first input only: await composer readiness without startup dialogs or Codex provisional headers. stopOnDialog returns early for the caller's idle report. */
   async waitForFreshWorkerComposer(
     handle: string,
     agent: TuiAgent,
@@ -335,13 +315,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       setupOnly?: boolean
       setupCommandPlatform: 'windows' | 'posix'
       observeSetupCompletion?: boolean
-      // Why: when the agent startup is sequenced to wait for setup
-      // (waitForAgentStartup), the startup PTY runs a wrapper that already embeds
-      // the setup command. Pass that wrapped command through so the Setup tab runs
-      // the same script the agent is waiting on instead of a bare runner.
+      // Pass the setup wrapper that the agent awaits; a bare runner would execute a different script.
       wrappedSetupCommand?: string
-      // Why: a workspace provisioned in the background must not pull the sidebar
-      // to itself; the user never asked to look at these tabs.
+      // Background provisioning must not move the user's sidebar selection.
       surfaceOwner?: false
     },
     createdWorktree?: Worktree

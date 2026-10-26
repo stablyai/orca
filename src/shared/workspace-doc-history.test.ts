@@ -31,7 +31,6 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
     )
     const entries = normalizeWorkspaceDocHistoryEntries(oversized)
     expect(entries).toHaveLength(MAX_WORKSPACE_DOC_HISTORY_ENTRIES)
-    // The oldest rows are the dropped ones.
     expect(entries.at(-1)?.lastVisitedAt).toBe(10)
   })
 

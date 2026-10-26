@@ -19,7 +19,7 @@ export function resolveEditorModelOwner(
   const captured = file.operationProvenance?.generation.route
   const route =
     captured ??
-    // The same focus-free owner the file's writes take, so retained text keys on that host.
+    // Use focus-independent write ownership so retained text stays keyed to the file’s actual host.
     resolveWorktreeOperationRoute(
       state.activeWorktreeId === file.worktreeId ? { ...state, activeWorktreeId: null } : state,
       file.worktreeId
@@ -64,8 +64,7 @@ export function getEditorModelOwnerKey(
     resolvedEditorModelOwnerKey(owner) ??
     JSON.stringify([owner.environmentId, 'unresolved', file.worktreeId, file.id])
   const recordId = state.editorBufferIdOf?.[file.id]
-  // Why: a detached record keeps its own text, so it must never share a model with the file's
-  // other record; the host owner stays in the key so two hosts' detached models stay apart too.
+  // Detached records need separate models from their file’s other record; retain host ownership to isolate identical record IDs across hosts.
   return recordId !== undefined && isDetachedEditorBufferId(recordId)
     ? JSON.stringify(['detached', recordId, ownerKey])
     : ownerKey

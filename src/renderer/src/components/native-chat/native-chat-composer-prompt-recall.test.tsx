@@ -90,6 +90,7 @@ function renderComposer(prompts: string[]): HTMLElement {
       targetPtyId={null}
       agent="codex"
       structuredTransport={{
+        capturePresentation: () => () => true,
         send: vi.fn(() => true),
         dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
         optionsSurface: {

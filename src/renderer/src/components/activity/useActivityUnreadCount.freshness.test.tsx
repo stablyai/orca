@@ -3,8 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 
-// Real slice, not a hand-rolled store: the hook subscribes to agentStatusEpoch alone, so the
-// test must prove the reducer bumps that epoch for every transition the count depends on.
+// Use the real reducer to prove every count-relevant transition bumps the hook’s sole status subscription, agentStatusEpoch.
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   return { useAppStore: createTestStore() }

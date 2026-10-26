@@ -1,7 +1,4 @@
-/**
- * A setup that couldn't download Node on either machine carries a structured flag the renderer
- * reads to offer a mirror; nothing parses the message text.
- */
+/** Carry structured Node-download failure for the mirror offer; never infer it from message text. */
 import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'

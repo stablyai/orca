@@ -143,6 +143,7 @@ export function makeActivityResult(args: {
   entries?: Record<string, AgentStatusEntry>
   retained?: Record<string, RetainedAgentEntry>
   tab?: TerminalTab
+  tabs?: TerminalTab[]
   now?: number
 }): ReturnType<typeof buildActivityEvents> {
   const repo = makeRepo()
@@ -150,10 +151,11 @@ export function makeActivityResult(args: {
   const tab = args.tab ?? makeTab()
 
   return buildActivityEvents({
+    chatNames: new Map(),
     agentStatusByPaneKey: args.entries ?? {},
     retainedAgentsByPaneKey: args.retained ?? {},
     tabsByWorktree: {
-      [worktree.id]: [tab]
+      [worktree.id]: args.tabs ?? [tab]
     },
     worktreeMap: new Map([[worktree.id, worktree]]),
     repoMap: new Map([[repo.id, repo]]),

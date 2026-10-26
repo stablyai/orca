@@ -1,4 +1,3 @@
-/** Session and UI parts of the WSL move projection: the rows a scoped workspace owns. */
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
 import {
@@ -72,8 +71,7 @@ function projectSessionField(
         (pages) => Array.isArray(pages) && pages.some((page) => ownerInScope(rowOwner(page)))
       )
     case 'global':
-      // Only global history rows that name a scoped workspace move; focus is re-projected and
-      // per-environment browser intents stay with the client that owes them.
+      // Keep scoped history only; focus is reprojected and browser intents remain client-owned.
       return Array.isArray(value)
         ? value.filter((row) =>
             ownerInScope(
@@ -101,7 +99,6 @@ export function projectWslMoveUi(
       continue
     }
     if (Array.isArray(value)) {
-      // Repo-id lists, and the manual repo order's `{hostId, repoId}` rows.
       out[field] = value.filter((entry: unknown) =>
         typeof entry === 'string'
           ? repoEntryInScope(entry, undefined)

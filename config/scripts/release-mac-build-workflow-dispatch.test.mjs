@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  dispatchReleaseMacBuildWorkflow,
   executeReleaseMacBuildMode,
   expectedReleaseMacBuildRunTitle,
   readReleaseMacBuildWorkflowOptions,
@@ -22,13 +21,15 @@ const baseOptions = {
 
 describe('release mac build workflow dispatch', () => {
   it('passes the shared JavaScript commit only when the parent produced a bundle', async () => {
-    const request = vi.fn(async () => ({}))
-    const api = { owner: 'stablyai', repo: 'orca', request }
-    await dispatchReleaseMacBuildWorkflow(api, {
-      ...baseOptions,
-      javascriptSourceSha: 'a'.repeat(40)
-    })
-    expect(request.mock.calls[0][2].inputs).toEqual({
+    const { fetch, requests } = createGitHubFetch([
+      jsonResponse(200, { workflow_run_id: 123 }),
+      jsonResponse(200, { id: 123, status: 'completed', conclusion: 'success' })
+    ])
+    await runReleaseMacBuildWorkflow(
+      { ...baseOptions, javascriptSourceSha: 'a'.repeat(40) },
+      { fetch, now: () => Date.parse('2026-06-30T12:00:00Z'), sleep: vi.fn() }
+    )
+    expect(requests[0].body.inputs).toEqual({
       release_run_id: '777',
       tag: 'v1.2.3-rc.4',
       javascript_source_sha: 'a'.repeat(40)
@@ -163,7 +164,7 @@ describe('release mac build workflow dispatch', () => {
     expect(options.releaseRunId).toBe('987')
     expect(options.workflow).toBe('release-mac-build.yml')
     expect(options.pollSeconds).toBe(30)
-    expect(options.timeoutMinutes).toBe(90)
+    expect(options.timeoutMinutes).toBe(390)
   })
 })
 
@@ -194,6 +195,84 @@ const splitRun = {
 }
 
 describe('release mac build split dispatch and verification', () => {
+  it('hands a pending exact run to verification after observing 180 minutes without renewing its deadline', async () => {
+    const startedAt = Date.parse('2026-06-30T12:00:00Z')
+    let currentTime = startedAt
+    const live = { ...splitRun, status: 'in_progress', conclusion: null }
+    const { fetch } = createGitHubFetch([
+      jsonResponse(200, { workflow_run_id: 123 }),
+      jsonResponse(200, live),
+      jsonResponse(200, live),
+      jsonResponse(200, live)
+    ])
+    const appendOutput = vi.fn()
+    const result = await executeReleaseMacBuildMode(
+      'dispatch',
+      { ...splitEnvironment, RELEASE_MAC_BUILD_OBSERVE_MINUTES: '180' },
+      {
+        fetch,
+        appendOutput,
+        now: () => currentTime,
+        sleep: async () => {
+          currentTime += 180 * 60_000
+        }
+      }
+    )
+    expect(result).toMatchObject({ id: 123, status: 'in_progress', conclusion: null })
+    expect(appendOutput).toHaveBeenCalledOnce()
+    expect(appendOutput.mock.calls[0][1]).toContain(
+      `wait_deadline_ms=${startedAt + 390 * 60_000}\n`
+    )
+    const { fetch: finalFetch } = createGitHubFetch([
+      jsonResponse(200, { ...splitRun, updated_at: '2026-06-30T18:00:00Z' })
+    ])
+    await expect(
+      executeReleaseMacBuildMode(
+        'wait',
+        {
+          ...splitEnvironment,
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: String(startedAt + 390 * 60_000)
+        },
+        { fetch: finalFetch, now: () => startedAt + 360 * 60_000 }
+      )
+    ).resolves.toMatchObject({
+      status: 'completed',
+      conclusion: 'success'
+    })
+    const { fetch: expiredFetch } = createGitHubFetch([jsonResponse(200, live)])
+    await expect(
+      executeReleaseMacBuildMode(
+        'wait',
+        {
+          ...splitEnvironment,
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: String(startedAt + 390 * 60_000)
+        },
+        { fetch: expiredFetch, now: () => startedAt + 391 * 60_000 }
+      )
+    ).rejects.toThrow(/Timed out/)
+  })
+
+  it.each([
+    { ...splitRun, conclusion: 'failure' },
+    { ...splitRun, head_sha: 'b'.repeat(40) }
+  ])('does not hand off failure or changed identity as pending: %j', async (observed) => {
+    const { fetch } = createGitHubFetch([
+      jsonResponse(200, { workflow_run_id: 123 }),
+      jsonResponse(200, splitRun),
+      jsonResponse(200, observed)
+    ])
+    await expect(
+      executeReleaseMacBuildMode(
+        'dispatch',
+        {
+          ...splitEnvironment,
+          RELEASE_MAC_BUILD_OBSERVE_MINUTES: '180'
+        },
+        { fetch, appendOutput: vi.fn(), now: () => Date.parse('2026-06-30T12:00:00Z') }
+      )
+    ).rejects.toThrow()
+  })
+
   it('waits for the exact dispatched run metadata to become consistent', async () => {
     const { fetch, requests } = createGitHubFetch([
       jsonResponse(200, { workflow_run_id: 123 }),
@@ -248,7 +327,7 @@ describe('release mac build split dispatch and verification', () => {
     expect(requests[0].headers['X-GitHub-Api-Version']).toBe('2026-03-10')
     expect(appendOutput).toHaveBeenCalledWith(
       splitEnvironment.GITHUB_OUTPUT,
-      `run_id=123\nworkflow_sha=${splitRun.head_sha}\nrun_attempt=1\nwait_deadline_ms=${splitEnvironment.RELEASE_MAC_BUILD_WAIT_DEADLINE_MS}\n`
+      `run_id=123\nworkflow_sha=${splitRun.head_sha}\nrun_attempt=1\nwait_deadline_ms=${Date.parse('2026-06-30T18:30:00Z')}\n`
     )
   })
 

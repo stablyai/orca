@@ -1,9 +1,4 @@
-// LIVE-ONLY PIN for the renderer half of the completion feed.
-//
-// The point of most of these is not that the feed delivers, but that it REMEMBERS NOTHING: no
-// snapshot for a late listener, no buffer, and no catch-up across a reconnect. A refactor that
-// quietly adds a cursor or a replay arm to make reconnects "lossless" has to fail here, because
-// what it would actually do is light the dot for work the user already read.
+// Keep completion/prompt edges live-only: no late snapshot, buffering or reconnect catch-up, which would mark already-read work unread again.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -151,16 +146,14 @@ describe('structured turn completion feed (renderer)', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(subscriptions).toHaveLength(2)
 
-    // NO CURSOR ANYWHERE: the reopen call carries the target and three callbacks and nothing
-    // else. A catch-up arm would have to add an argument here, so this assertion is the pin.
+    // Assert target plus callbacks only; adding a catch-up cursor must break this contract.
     for (const call of mocks.subscribe.mock.calls) {
       expect(call).toHaveLength(4)
       expect(call[0]).toEqual({ kind: 'local' })
       expect(call.slice(1).every((argument) => typeof argument === 'function')).toBe(true)
     }
 
-    // The reopened stream is empty until the host sends something new; whatever completed during
-    // the gap is gone, not queued.
+    // Reopened streams deliver only future edges; completions during the gap are lost.
     expect(seen).toEqual(['before-drop'])
     subscription(1).emit({ type: 'completion', completion: completion('after-reconnect') })
     expect(seen).toEqual(['before-drop', 'after-reconnect'])

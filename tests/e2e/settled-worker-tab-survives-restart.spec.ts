@@ -336,9 +336,7 @@ for (const daemonSessionGone of [false, true]) {
 
       // Hidden mount, then click to reveal: reveal runs the missing-session reconciler.
       await backgroundMountTab(second.page, targetWorktreeId, workerTabId)
-      // Poll, don't sample: the hidden pane binds when its deferred reattach lands, and
-      // backgroundMountTab only waits for the pane manager to exist. hasPty reads host liveness, so
-      // only the pane's own binding proves the live session was reattached before reveal.
+      // Poll the pane’s binding after hidden mount: backgroundMountTab waits only for its manager, while hasPty proves host liveness without proving reattach.
       if (!daemonSessionGone) {
         await expect
           .configure({ soft: true })

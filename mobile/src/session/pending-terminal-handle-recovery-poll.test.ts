@@ -75,7 +75,7 @@ function makeHarness() {
   )
   const client = { sendRequest, subscribe } as unknown as RpcClient
   const consumeAcceptedSessionTabs = () => {}
-  const fetchTerminals = async () => {}
+  const fetchTerminals = async () => true
   const getPendingTerminalRecoveryContextKey = () => contextKey
   const hasRecoveryNeed = () => otherRecoveryNeeded
   const onPendingTerminalRecoveryParked = (key: string | null) => parkedContexts.push(key)
@@ -89,6 +89,7 @@ function makeHarness() {
       client,
       connState,
       worktreeId: 'repo::worktree',
+      terminalInventoryRecoveryScopeKey: 'repo::worktree',
       applySessionTabs,
       consumeAcceptedSessionTabs,
       fetchTerminals,
@@ -130,9 +131,7 @@ async function flush(): Promise<void> {
   }
 }
 
-// react-test-renderer's types do not resolve in the type-aware lint project, so both
-// ReactTestRenderer and ReturnType<typeof create> degrade to `any` and poison this union.
-// Name the two methods this suite actually uses instead.
+// Name only the methods used: unresolved react-test-renderer types become any in the type-aware project.
 type MountedHarness = {
   unmount: () => void
   update: (element: ReturnType<typeof createElement>) => void

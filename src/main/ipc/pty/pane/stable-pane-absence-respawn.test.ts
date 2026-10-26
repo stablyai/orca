@@ -187,9 +187,7 @@ describe('stable pane adoption after the owning host reports the PTY absent', ()
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
-  // Why a real store: without one the `args.worktreeId` guard short-circuits and the retirement —
-  // which once deleted the parent tab and its layout — never runs. "Reconnect lost every tab" is the
-  // regression this subsystem was reverted for twice, so the composition needs its own coverage.
+  // Reach real binding retirement; a store-less fixture would miss regressions that delete the parent tab.
   describe('with persistence actually reached', () => {
     it("clears only the absent leaf's binding and leaves the tab and its sibling bound", async () => {
       const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
@@ -210,8 +208,7 @@ describe('stable pane adoption after the owning host reports the PTY absent', ()
       expect(layout?.ptyIdsByLeafId?.[LEAF]).toBeUndefined()
     })
 
-    // The fresh spawn takes the pane, so the tab, its group and the leaf all stay; only the dead
-    // id is unbound. Dropping the tab here left main with no tab bar until the window saved again.
+    // Replacing the only leaf must keep its tab/group/layout; otherwise main loses the tab bar.
     it('keeps the tab and its pane when the absent leaf was the only one', async () => {
       const { store, read } = sessionStore([LEAF])
       const { run, spawn } = spawnAfterAttachRejection(new SessionNotFoundError(OWNER.ptyId), {
@@ -229,7 +226,6 @@ describe('stable pane adoption after the owning host reports the PTY absent', ()
       expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[LEAF]).toBeUndefined()
     })
 
-    // Adoption holds the pane's reservation through its fresh launch, so that bind swaps the dead id.
     it('keeps the absent binding for the swap when the spawn takes it', async () => {
       const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
       const before = JSON.stringify(read())

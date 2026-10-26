@@ -179,8 +179,7 @@ function SubagentBranchRow({
   )
 }
 
-// AI Vault run statuses map onto the shared dot vocabulary: a completed Task
-// is an outcome ('done'), stopped/killed reads as an interruption.
+// Map completed tasks to outcome done, but stopped/killed tasks to interruption.
 const SUBAGENT_DOT_STATES: Record<AiVaultSubagentRunStatus, AgentDotState> = {
   running: 'working',
   completed: 'done',
@@ -206,8 +205,7 @@ function SubagentSessionLine({
       <div className="flex min-w-0 items-center gap-1.5">
         {disclosure}
         {dotState ? (
-          // Why: a plain inline span would baseline-align the dot; flex keeps it
-          // vertically centered with the row text.
+          // Flex-center the dot rather than baseline-aligning an inline span.
           <span className="flex shrink-0 items-center">
             <AgentStateDot state={dotState} />
           </span>

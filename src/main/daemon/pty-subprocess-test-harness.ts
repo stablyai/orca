@@ -1,5 +1,4 @@
-// Shared node-pty stub, PowerShell path stubs and daemon env lifecycle for the
-// pty-subprocess test files. `vi.mock` calls must stay in each test file.
+// Keep hoisted vi.mock calls in each test file.
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -18,16 +17,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
-/**
- * Makes the daemon look like it is sitting in a deleted cwd, without moving the
- * test process there.
- *
- * Why: `process.cwd()` and `process.chdir()` are process-global. The previous
- * version of these tests really did chdir into a temp dir and delete it, so every
- * other test file sharing the worker saw a missing cwd for that window — an
- * intermittent failure that got likelier once this suite was split across files.
- * Stubbing keeps the cwd-repair assertion exact and the process untouched.
- */
+/** Stub cwd repair without changing the process-wide cwd of other tests. */
 export function stubMissingDaemonCwd(): {
   chdirSpy: Mock<(directory: string) => void>
   restoreCwdStubs: () => void
@@ -57,9 +47,28 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
+const CONPTY_MOCK_PRELUDE = '\x1b[c'
+
+/** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
+export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
+  let sent = false
+  return (cb) => {
+    if (process.platform === 'win32' && !sent) {
+      sent = true
+      queueMicrotask(() => cb(CONPTY_MOCK_PRELUDE))
+    }
+  }
+}
+
+/** What a mocked pane printed before the test's own output; the replayed prelude on Windows. */
+export function mockConptyStartupOutput(): string[] {
+  return process.platform === 'win32' ? [CONPTY_MOCK_PRELUDE] : []
+}
+
 export function mockPtyProcess(pid = 12345): MockPtyProcess {
   const onDataListeners: ((data: string) => void)[] = []
   const onExitListeners: ((e: { exitCode: number }) => void)[] = []
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
@@ -68,6 +77,7 @@ export function mockPtyProcess(pid = 12345): MockPtyProcess {
     process: 'zsh',
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+      sendConptyPrelude(cb)
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn((cb: (e: { exitCode: number }) => void) => {
@@ -87,7 +97,6 @@ export type PtySubprocessSpawnMocks = {
   validateWorkingDirectoryMock: Mock
 }
 
-/** Registers the createPtySubprocess beforeEach/afterEach; `userDataPath` is set per test. */
 export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
   userDataPath: string
 } {

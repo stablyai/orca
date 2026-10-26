@@ -1,6 +1,4 @@
-// The queued-message actions: Send-now, Delete and in-place Edit on one card, and Resume on a
-// paused queue. Not gated on agent-session.queued-messages.v1: a host without it still publishes
-// the cards it kept unsent. A host older than the queue, or than edit-v1, lacks them.
+// Do not gate queued-card actions on queued-messages.v1: hosts without it still publish unsent cards. Older pre-queue/edit hosts lack the methods.
 
 import { defineMethod } from '../core'
 import {

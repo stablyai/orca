@@ -11,12 +11,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Desktop, CLI, web and mobile clients now build their hello, ready check, auth frame and
- * sealed channel from one shared handshake core. Neither direction of version skew may notice:
- * the core must authenticate against the released host, and the released client must keep
- * authenticating against this host.
- */
+// Shared handshake-core refactoring must preserve authentication in both directions against real released peers.
 const SUITE_TIMEOUT_MS = 180_000
 
 type ChannelLike = {

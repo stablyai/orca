@@ -69,17 +69,14 @@ describe('jsonl tokenization', () => {
   })
 
   it('colours a property key differently from a string value', () => {
-    // The `(?=\s*:)` lookahead is the only thing separating the two; a regression
-    // there makes every key look like a value.
+    // Keep the colon lookahead or property keys become string values.
     const [line] = tokenizeJsonl('{"key": "value"}')
 
     expect(tokenTypeAt(line, 1)).toBe('type.identifier')
     expect(tokenTypeAt(line, 8)).toBe('string')
   })
 
-  // Regression, found by this suite once it started running the real tokenizer:
-  // `@string` used to survive the line break, so one truncated record rendered
-  // every record after it as a single string.
+  // Truncated strings must not carry state into later JSONL records.
   it.each([
     ['mid-string', '{"a": "truncated here'],
     ['mid-escape', '{"a": "truncated\\'],
@@ -103,8 +100,7 @@ describe('jsonl tokenization', () => {
     ['unicode escape', '{"m": "\\u00e9"}', 7],
     ['newline escape', '{"m": "a\\nb"}', 8]
   ])('still highlights an %s inside a well-formed record', (_name, record, escapeOffset) => {
-    // The fix must not cost escape fidelity on the common case: a candidate that
-    // collapsed the string into one regex lost every one of these.
+    // Retain escape fidelity; replacing string state with one regex previously lost these cases.
     const [line] = tokenizeJsonl(record)
 
     expect(tokenTypeAt(line, escapeOffset)).toBe('string.escape')

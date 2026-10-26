@@ -6,6 +6,7 @@ import { assertExternalSshReadOwnership, canReadRelativeRuntimeFile } from './ru
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 /** A file on a paired runtime, addressed the way its host's `files.*` methods expect. */
 export type RuntimeRemoteFileAddress = {
@@ -112,7 +113,7 @@ export async function readRuntimeFileRange(
     }
     throw error
   }
-  const bytes = Uint8Array.from(atob(result.contentBase64), (character) => character.charCodeAt(0))
+  const bytes = decodeBase64Bytes(result.contentBase64)
   if (bytes.length !== result.bytesRead || bytes.length > length || bytes.length === 0) {
     throw new Error('File changed or returned an invalid CSV chunk. Reload the preview.')
   }

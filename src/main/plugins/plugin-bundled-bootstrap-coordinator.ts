@@ -19,8 +19,7 @@ export class PluginBundledBootstrapCoordinator {
 
   request(): Promise<PluginBundledBootstrapResult | null> {
     const run = this.pending.then(() => this.runOnce())
-    // Why: feature-toggle and startup requests can overlap; preserve their
-    // order even when one resource read fails.
+    // Preserve overlapping startup/toggle request order even after resource-read failure.
     this.pending = run.then(
       () => undefined,
       () => undefined

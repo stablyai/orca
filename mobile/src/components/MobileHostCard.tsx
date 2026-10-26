@@ -16,8 +16,7 @@ export function MobileHostCard(props: {
   state: ConnectionState
   verdict: ConnectionVerdict
   path: MobileConnectionPath
-  // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
-  // away (STA-3123 shipped that bug once already).
+  // Card owns fresh/stale/unavailable wording so callers cannot hide retained counts again (STA-3123).
   worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void

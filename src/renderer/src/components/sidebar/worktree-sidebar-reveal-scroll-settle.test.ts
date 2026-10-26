@@ -11,8 +11,6 @@ describe('isRevealScrollSettling', () => {
   })
 
   it('stays settling while a smooth reveal scroll is still animating', () => {
-    // Regression: the anchor restore wrote scrollTop two frames into the animation and
-    // cancelled it after a couple of pixels, so revealing took several button clicks.
     const pending = createPendingRevealScroll(387, 0)
     expect(isRevealScrollSettling({ now: 16, pending, scrollTop: 2 })).toBe(true)
     expect(isRevealScrollSettling({ now: 200, pending, scrollTop: 260 })).toBe(true)

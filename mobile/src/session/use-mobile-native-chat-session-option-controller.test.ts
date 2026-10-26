@@ -23,7 +23,6 @@ describe('useMobileNativeChatSessionOptionController on a structured chat', () =
         isTabChatView: () => true,
         isWorking: false,
         reportedModel: null,
-        // OMP's options read answers with no model list, so there is nothing to pick.
         structured: {
           conversationCommands: ['clear', 'compact'],
           snapshot: [],

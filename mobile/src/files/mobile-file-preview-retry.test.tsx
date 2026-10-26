@@ -40,7 +40,7 @@ vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
-// A host the shell has not reached by default: no client, so the screen settles on `waiting`.
+// No shell client initially: the screen must settle on waiting.
 vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
@@ -56,7 +56,7 @@ afterEach(() => {
   transport.connection = { client: null, state: 'reconnecting' }
 })
 
-// One object for every render, so a re-render changes nothing the preview keys on but the client.
+// Keep identity stable so only the client changes across renders.
 const ROUTE = {
   ok: true,
   params: { hostId: 'host-a', worktreeId: 'wt-1', relativePath: 'README.md' }
@@ -106,12 +106,26 @@ describe('the file preview Retry while the host is unreachable', () => {
     transport.forceReconnect = null
     const rendered = await render()
     expect(retryButtons(rendered)).toHaveLength(0)
-    const sendRequest = vi.fn(() => new Promise(() => {}))
+    const sendRequest = vi.fn(async () => ({
+      id: 'reconnected',
+      ok: true,
+      result: { content: '# Recovered preview', truncated: false, byteLength: 19 },
+      _meta: { runtimeId: 'host' }
+    }))
     transport.connection = { client: { sendRequest }, state: 'connected' }
     await act(async () => {
       rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
     })
-    expect(sendRequest).toHaveBeenCalled()
+    expect(sendRequest).toHaveBeenCalledWith('files.read', {
+      worktree: 'id:wt-1',
+      relativePath: 'README.md'
+    })
+    expect(
+      rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
+    ).toBe('# Recovered preview')
+    expect(
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+    ).toHaveLength(0)
   })
 })
 

@@ -63,8 +63,7 @@ import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES } from './markdown-rich-size-limit'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 
-// Why: preview/rich surfaces build the whole document in one task; 2 MB blocked
-// the renderer 7.8 s at 2.3 GB and 5 MB 38 s at 4 GB (scan29 crash reports).
+// Whole-document rendering previously blocked for seconds and retained gigabytes; enforce the fallback budget.
 const mediumDoc = 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1024)
 const hugeDoc = 'a'.repeat(MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES + 1)
 // Multibyte text whose UTF-16 length is under the cap but UTF-8 size is over it.

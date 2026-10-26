@@ -30,11 +30,8 @@ describe('normalizedToDevicePixels', () => {
   })
 
   it('rounds to the nearest pixel', () => {
-    // 0.4999 * 1080 = 539.892 -> 540 (rounds up)
     expect(normalizedToDevicePixels(0.4999, 0, PIXEL_7).x).toBe(540)
-    // 0.5002 * 1080 = 540.216 -> 540 (rounds down)
     expect(normalizedToDevicePixels(0.5002, 0, PIXEL_7).x).toBe(540)
-    // 0.5008 * 1080 = 540.864 -> 541 (rounds up)
     expect(normalizedToDevicePixels(0.5008, 0, PIXEL_7).x).toBe(541)
   })
 })

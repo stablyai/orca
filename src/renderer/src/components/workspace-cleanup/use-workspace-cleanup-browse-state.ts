@@ -16,23 +16,16 @@ export type WorkspaceCleanupBrowseController = {
   ) => void
   toggleSortField: (field: WorkspaceCleanupSortField) => void
   clearFilters: () => void
-  /** Applies a whole-state transform, for callers that clear one named constraint. */
   replaceFilters: (
     transform: (filters: WorkspaceCleanupFilterState) => WorkspaceCleanupFilterState
   ) => void
 }
 
-/**
- * Single seam over the persisted browse slice so reopening the dialog keeps the
- * user's filters and sort.
- */
 export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseController {
   const browse = useAppStore((s) => s.workspaceCleanupBrowse)
   const updateBrowse = useAppStore((s) => s.updateWorkspaceCleanupBrowseState)
 
-  // Why the updater form: a checkbox toggle writes several fields at once, so two
-  // patches can land in one tick. Reading `browse` from the render would make the
-  // second overwrite the first.
+  // Functional updates merge same-tick patches instead of overwriting from a stale render snapshot.
   const patchFilters = useCallback<WorkspaceCleanupBrowseController['patchFilters']>(
     (key, value) => {
       updateBrowse((current) => {
@@ -60,8 +53,7 @@ export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseControll
     [updateBrowse]
   )
 
-  // Same updater form as patchFilters: a chip clear and a facet patch can land in one
-  // tick, and whichever read the render snapshot would undo the other.
+  // Facet patches and chip clears can share a tick; merge through the same functional-update path.
   const replaceFilters = useCallback<WorkspaceCleanupBrowseController['replaceFilters']>(
     (transform) => {
       updateBrowse((current) => ({ ...current, filters: transform(current.filters) }))

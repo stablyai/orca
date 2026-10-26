@@ -264,12 +264,11 @@ export function VaultViewMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6} className="w-56">
-        {/* Why: Select all / Clear lets users isolate one agent without unchecking 15 boxes. */}
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[11px] font-semibold text-muted-foreground">
             {translate('auto.components.right.sidebar.AiVaultPanelControls.agents', 'Agents')}
           </span>
-          {/* Why: real menu items so arrow keys reach them; plain buttons are skipped by Radix roving focus. */}
+          {/* Use menu items so Radix arrow navigation can reach Select all/Clear. */}
           <div className="flex items-center gap-1">
             <DropdownMenuItem
               disabled={allAgentsSelected}

@@ -9,12 +9,7 @@ import type {
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
 
-/**
- * Cleanup for an acquisition the host could not commit or prove. A session that
- * a first-hand exit already removed is not an absence to report as proven: the
- * ladder on its connection still answers, and that answer is classified like
- * any other unproven acquisition cleanup.
- */
+/** An observed exit still requires connection cleanup; absence alone cannot prove release. */
 export async function releaseClaudeAcquisition(input: {
   sessionId: string
   sessions: Map<string, ClaudeSession>
@@ -29,13 +24,11 @@ export async function releaseClaudeAcquisition(input: {
     return closeClaudeSession(input)
   }
   const firstProof = exit.closePromise ? await exit.closePromise : false
-  // A failed exit-path proof is retained as evidence, not as a terminal result;
-  // a release retry must drive a fresh tree verification on the same connection.
+  // Retry tree verification on the same connection after an unproven close.
   const retriedProof = firstProof || (await exit.connection.close())
   if (retriedProof) {
     await input.onExitProven?.(input.sessionId, exit)
-    // Only a proven close drops the exit here. An unknown one stays indexed so it is retryable and
-    // cannot look like an absent session; an observed root exit is dropped by its own settlement.
+    // Retain unproven exits for retries; observed root exits are removed by their own settlement.
     input.exits.delete(input.sessionId)
     return true
   }

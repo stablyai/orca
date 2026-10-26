@@ -21,7 +21,6 @@ type Command = {
   processId?: string
 }
 
-/** A command process starting, or ending: it exited, its thread closed, or the session ended. */
 export type CodexBackgroundCommandChange =
   | {
       type: 'started'
@@ -103,9 +102,7 @@ export class CodexBackgroundCommandTracker {
     return [...this.commands.values()]
       .filter((command) => command.backgrounded && !coveredThreads?.has(command.threadId))
       .map(({ threadId, task }) => {
-        // The agent row carrying the child's name is gone by the time this row shows;
-        // unqualified it reads as a bare shell string with no owner. Resolved on read so
-        // a label registered after the command still lands.
+        // Qualify orphaned command rows on read so labels arriving after the command still apply.
         const label = threadId === this.primaryThreadId ? null : childLabel?.(threadId)
         return label
           ? { ...task, description: codexChildCommandDescription(label, task.description) }
@@ -113,17 +110,15 @@ export class CodexBackgroundCommandTracker {
       })
   }
 
-  /** Whether a running command carries a process id a background-terminal stop could name. */
   get holdsProcess(): boolean {
     return [...this.commands.values()].some((command) => command.processId !== undefined)
   }
 
-  /** Every live process, on every thread. */
   liveCommands(): CodexBackgroundCommandChange[] {
     return [...this.commands.values()].map((command) => this.liveChange(command))
   }
 
-  /** The processes the named tasks run: only backgrounded commands, the ones the strip offers. */
+  /** Only backgrounded commands have rows the user can stop. */
   backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
     const named = new Set(taskIds)
     return [...this.commands.values()].flatMap(({ threadId, backgrounded, task, processId }) =>
@@ -138,7 +133,6 @@ export class CodexBackgroundCommandTracker {
       .map((command) => this.liveChange(command))
   }
 
-  /** The session ended, and every command with it. */
   clear(): CodexBackgroundCommandChange[] {
     const ended = [...this.commands.values()].map(
       ({ threadId, task }): CodexBackgroundCommandChange => ({

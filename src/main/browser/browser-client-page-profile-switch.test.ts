@@ -152,7 +152,6 @@ describe('staged client page profile switching', () => {
         registration: expect.objectContaining({ webContentsId: 41 })
       })
     )
-    // Rebinding before releasing the staged guest keeps the page's live downloads.
     const binding = h.dependencies.guestBinding
     const stagedRelease = binding.release.mock.calls.findIndex(
       ([registration]) => registration.webContentsId === 42

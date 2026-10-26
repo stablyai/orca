@@ -18,7 +18,6 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 
 const NOW = 1_800_000_000_000
 
-// The runtime state never reads the journal database; it only fills the deps' shape.
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-host-runtime-state-'))
 afterAll(() => {
   closeTestJournalHostDatabases()
@@ -90,8 +89,7 @@ function liveRecord(): AgentSessionRecord {
 
 describe('host runtime-state owner probe', () => {
   it('routes an ownerless reservation through the strict probe instead of fabricating proof', async () => {
-    // Fabricating `reservation-unused` here skipped the processless-proof rule the runtime
-    // probe enforces — the exact answer that mints a second writer on one provider session.
+    // Fabricated processless proof would permit a second writer on the same provider session.
     const probeOwner = vi.fn(async () => ({
       outcome: 'indeterminate' as const,
       reason: 'reservation named no process'

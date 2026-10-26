@@ -15,22 +15,15 @@ import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
 type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
 
-/**
- * Hands a started worker the dispatch preamble, over whichever transport it has.
- *
- * The preamble differs only in how it names the worker and calls it a chat or a terminal: a worker
- * is taught the same verbs whichever mode it runs in, and only the delivery differs — a PTY write
- * returns a queued/accepted receipt, while a structured turn is acknowledged, still held for an
- * agent that has not started, or throws. Held is a turn start nobody observed yet: the start is left
- * unknown, not torn down. A chat's task is a queued send, held as a card while the chat is busy:
- * handed over, with its start unobserved, as a busy terminal holding typed input is.
- */
+/** Teach every worker the same verbs; vary only identity/surface wording and transport.
+ * PTY writes return queued/accepted; structured turns may stay held while agents start. Unobserved starts remain unknown, never torn down.
+ * Busy chat tasks queue as cards, like input waiting in busy terminals. */
 export async function deliverWorkerDispatchPreamble(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -54,9 +47,7 @@ export async function deliverWorkerDispatchPreamble(args: {
 }> {
   const { runtime, structuredSession, terminalHandle } = args
   const preamble = buildDispatchPreamble({
-    // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
-    // become a second gate: resolving the caller's worktree is what lets a structured worker
-    // dispatch sub-workers exactly like a PTY one.
+    // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
     taskId: args.taskId,
     dispatchId: args.dispatchId,

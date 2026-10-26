@@ -54,7 +54,7 @@ export async function addPRReviewComment(
     }
     const { stdout } = await ghExecFileAsync(fields, ghOptions)
     const data = JSON.parse(stdout) as Parameters<typeof mapReviewCommentResponse>[0]
-    // Why: mapReviewCommentResponse substitutes Date.now() for a missing id, which later replies/reactions would target.
+    // Reject synthetic fallback IDs that replies and reactions could otherwise target.
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }

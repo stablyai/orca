@@ -4,7 +4,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { readFile, stat } from 'node:fs/promises'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from '../filesystem/filesystem-path-containment'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -15,7 +15,7 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
-      // Why: this process serves no SSH filesystem.
+      // SSH ownership must never fall through to local filesystem inspection.
       if (!repo || isFolderRepo(repo) || getRepoDialableSshTargetId(repo)) {
         return []
       }

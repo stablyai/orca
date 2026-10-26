@@ -18,8 +18,6 @@ describe('readCredentialFileProtection', () => {
     expect(readFileSyncMock).not.toHaveBeenCalled()
   })
 
-  // Why null and not 'plaintext': credentialFileHasContent already treats an empty
-  // file as "no credential saved", so warning about one would contradict the badge.
   it('reports null for an empty file, which reads as no credential at all', () => {
     existsSyncMock.mockReturnValue(true)
     readFileSyncMock.mockReturnValue(Buffer.alloc(0))

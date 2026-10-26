@@ -4,7 +4,7 @@ import {
   resolveProgramStatusPresentation
 } from '../shared/program-status/presentation'
 
-/** Compact OSC 7501 suffix for a `worktree ps` line: a block beats progress; '' when neither. */
+/** A block takes precedence over progress. */
 export function formatWorktreePsProgramStatus(
   agents: readonly RuntimeWorktreeAgentRow[] | undefined
 ): string {

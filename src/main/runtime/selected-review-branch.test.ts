@@ -7,8 +7,6 @@ import {
   type SelectedReviewBranchInput
 } from './selected-review-branch'
 
-// characterization: current behavior
-
 const PROVIDER_CASES: {
   label: string
   input: SelectedReviewBranchInput

@@ -1,7 +1,6 @@
 import { windowsPathAccess, type WindowsPathAccess } from '../shared/windows-path-access'
 import { getWslHostService } from './wsl/wsl-host-service-instance'
 
-/** {@link windowsPathAccess} as main resolves it: the WSL host records main persists. */
 export function resolveWindowsPathAccess(
   ownerHostId: unknown,
   platform: NodeJS.Platform = process.platform

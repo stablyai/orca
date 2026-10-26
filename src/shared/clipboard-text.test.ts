@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as utf8ByteLimits from './utf8-byte-limits'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_TOO_LARGE_ERROR,
@@ -52,7 +53,7 @@ describe('clipboard text limits', () => {
     expect(yieldToEventLoop).toHaveBeenCalled()
   })
 
-  it('uses the default 256k code-unit yield cadence for accepted large clipboard text', async () => {
+  it('yields twice across two default clipboard measurement batches', async () => {
     const yieldToEventLoop = vi.fn(async () => {})
 
     const measurement = await measureClipboardTextByteLengthWithYield(
@@ -80,7 +81,7 @@ describe('clipboard text limits', () => {
   })
 
   it('rejects text whose string length already exceeds the byte limit without scanning', () => {
-    const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
+    const measureBytes = vi.spyOn(utf8ByteLimits, 'measureUtf8ByteLength')
 
     expect(isClipboardTextByteLengthOverLimit('x'.repeat(6), 5)).toBe(true)
     expect(() => assertClipboardTextWithinLimit('x'.repeat(6), { maxBytes: 5 })).toThrow(
@@ -89,7 +90,7 @@ describe('clipboard text limits', () => {
     expect(() => assertClipboardTextWriteWithinLimit('x'.repeat(6), { maxBytes: 5 })).toThrow(
       CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
     )
-    expect(codePointAt).not.toHaveBeenCalled()
+    expect(measureBytes).not.toHaveBeenCalled()
   })
 
   it('lets each clipboard consumer override the shared default byte limits', async () => {
@@ -129,7 +130,7 @@ describe('clipboard text limits', () => {
     ).rejects.toThrow(CLIPBOARD_TEXT_TOO_LARGE_ERROR)
     await expect(
       assertClipboardTextWriteWithinLimitWithYield('copied-secret-token-value', { maxBytes: 4 })
-    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
+    ).rejects.toEqual(new Error(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR))
 
     try {
       await assertClipboardTextWithinLimitWithYield('secret-token-value', { maxBytes: 4 })

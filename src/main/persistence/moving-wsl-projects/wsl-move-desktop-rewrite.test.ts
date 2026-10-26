@@ -26,6 +26,7 @@ beforeEach(() => {
   setWslMoveDesktopRewriteRegistryCompleteForTests(true)
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
   rmSync(userDataPath, { recursive: true, force: true })
@@ -139,7 +140,10 @@ describe('WSL move desktop rewrite', () => {
     })
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     const warn = vi.fn()
-    await runWslMoveDesktopRewritePass({ userDataPath, warn, storeTimeoutMs: 10 })
+    vi.useFakeTimers()
+    const running = runWslMoveDesktopRewritePass({ userDataPath, warn, storeTimeoutMs: 10 })
+    await vi.advanceTimersByTimeAsync(10)
+    await running
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('slow run timed out'))
     expect(record()?.rewrittenStores).toEqual([])
 

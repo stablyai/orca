@@ -1,5 +1,4 @@
-// The queue's pause is a pure function of the journal: a Stop and a Resume are rows, an accepted
-// turn is a row, and /clear records the exact waiting cards. No separate pause state is stored.
+// Derive pauses from journal rows; never maintain a second stored pause state.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -29,6 +28,7 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 
 export function registerQueuedMessagePauseTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -38,7 +38,6 @@ export function registerQueuedMessagePauseTests(): void {
     agent: 'claude',
     providerHandle: claudeProviderHandle('native-1', null)
   }
-  const HOST = 'proc-1'
 
   let root: string
   let clock = 1_000
@@ -46,6 +45,10 @@ export function registerQueuedMessagePauseTests(): void {
 
   function message(text: string): AgentJournalMessageItem {
     return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+  }
+
+  function fingerprintOf(text: string): string {
+    return agentSessionSendBodyFingerprint(IDENTITY.sessionId, message(text))
   }
 
   function open(): Promise<AgentSessionJournal> {
@@ -58,23 +61,16 @@ export function registerQueuedMessagePauseTests(): void {
   }
 
   function queueDraft(journal: AgentSessionJournal, messageId: string) {
-    return journal.queuedMessages.insert({
-      messageId,
-      body: message(messageId),
-      fingerprint: `fp-${messageId}`,
-      hostInstance: HOST
-    })
+    return journal.queuedMessages.insert({ messageId, body: message(messageId) })
   }
 
   function clearContext(journal: AgentSessionJournal) {
     return journal.context.clear(
       { operationId: `clear-${++clock}`, afterFence: 0, clearedAt: clock },
-      { write: () => {}, committed: () => {} },
-      `caller-clear-${clock}`
+      { write: () => {}, committed: () => {} }
     )
   }
 
-  /** A turn sent, then accepted by the provider. */
   async function turn(journal: AgentSessionJournal, id: string, accept = true): Promise<void> {
     await journal.appendSubmission({
       clientMessageId: id,
@@ -97,7 +93,6 @@ export function registerQueuedMessagePauseTests(): void {
     })
   }
 
-  /** A person's Stop taking effect. */
   function userStop(journal: AgentSessionJournal) {
     return journal.appendStopEvent({ reason: 'user-stop' }, 0)
   }
@@ -106,7 +101,6 @@ export function registerQueuedMessagePauseTests(): void {
     return journal.queuedMessages.pauses()[0]?.reason ?? null
   }
 
-  /** Each card, and whether a pause in force holds it. */
   function held(journal: AgentSessionJournal): [string, boolean][] {
     const pauses = journal.queuedMessages.pauses()
     return journal.queuedMessages
@@ -115,7 +109,6 @@ export function registerQueuedMessagePauseTests(): void {
       .map((card) => [card.messageId, queuePauseHolding(pauses, card) !== undefined])
   }
 
-  /** The Stop events stored in the live epoch, oldest first. */
   function stopEvents(): unknown[] {
     const db = new Database(journalDatabasePath(root), { readonly: true })
     try {
@@ -130,7 +123,6 @@ export function registerQueuedMessagePauseTests(): void {
     }
   }
 
-  /** Rewrites one key of each row at a sequence, as a corrupt write would leave it. */
   function rewriteRows(keys: Record<number, [string, unknown]>): void {
     const db = new Database(journalDatabasePath(root))
     try {
@@ -147,7 +139,6 @@ export function registerQueuedMessagePauseTests(): void {
     }
   }
 
-  /** Tables that could store a pause: none, the journal rows are the only record. */
   function pauseTables(): number {
     const db = new Database(journalDatabasePath(root), { readonly: true })
     try {
@@ -185,10 +176,9 @@ export function registerQueuedMessagePauseTests(): void {
       const journal = await open()
       await turn(journal, 'before-stop', false)
       await userStop(journal)
-      // Sent before the Stop: its acceptance now does not end a Stop that came after it.
+      // Late acceptance of a pre-Stop send cannot lift the pause.
       await acceptTurn(journal, 'before-stop')
       expect(reason(journal)).toBe('stopped')
-      // Orchestration mail: sent, not yet accepted, lifts nothing; accepted, it lifts the pause.
       await turn(journal, 'mail', false)
       expect(reason(journal)).toBe('stopped')
       await acceptTurn(journal, 'mail')
@@ -254,7 +244,7 @@ export function registerQueuedMessagePauseTests(): void {
         throw new Error('expected a tombstone row')
       }
       expect(parsed.row.stopEvent?.at).toBe(parsed.row.ts)
-      // An older build ignores the unknown key: the row is an ordinary removal of nothing.
+      // Older readers ignore the annotation and remove a nonexistent item.
       const { stopEvent: _ignored, ...asOlderBuildReadsIt } = parsed.row
       const state = createJournalReducerState(IDENTITY.sessionId, parsed.row.epoch)
       for (const row of stored.slice(0, -1)) {
@@ -273,7 +263,6 @@ export function registerQueuedMessagePauseTests(): void {
     it('a Stop or Resume row holding a value no build writes is ignored on read, never trusted', async () => {
       let journal = await open()
       await queueDraft(journal, 'held')
-      /** Appends a row, then reopens with one of its keys rewritten as a corrupt write would. */
       const corrupted = async (
         append: Promise<{ sequence: number }>,
         key: string,
@@ -285,12 +274,10 @@ export function registerQueuedMessagePauseTests(): void {
         journal = await open()
       }
       const malformed = [null, 'stopped', { at: 1 }]
-      // Pauses nothing as the latest Stop row.
       for (const value of malformed) {
         await corrupted(userStop(journal), 'stopEvent', value)
         expect(reason(journal)).toBeNull()
       }
-      // Ends nothing after a person's Stop: neither as a later Stop nor as a Resume.
       await userStop(journal)
       for (const value of malformed) {
         await corrupted(userStop(journal), 'stopEvent', value)
@@ -309,7 +296,7 @@ export function registerQueuedMessagePauseTests(): void {
         journal.appendSubmission(
           {
             clientMessageId: id,
-            payloadFingerprint: 'fp-draft-1',
+            payloadFingerprint: fingerprintOf('draft-1'),
             body: message('draft-1'),
             fence: 0,
             handoverRecorded: true
@@ -317,8 +304,6 @@ export function registerQueuedMessagePauseTests(): void {
           {
             messageId: 'draft-1',
             expect: 'waiting',
-            settledByOp: null,
-            hostInstance: HOST,
             ...(automatic ? { yieldsToPause: true as const } : {})
           }
         )
@@ -345,7 +330,6 @@ export function registerQueuedMessagePauseTests(): void {
       for (const reason of ['user-close', 'host-stop', 'evict'] as const) {
         await journal.appendStopEvent({ reason }, 0)
       }
-      // A newer build's reason this one does not know.
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately outside the type, as a newer build could write it.
       await journal.appendStopEvent({ reason: 'future-reason' as 'evict' }, 0)
       expect(reason(journal)).toBeNull()
@@ -367,7 +351,7 @@ export function registerQueuedMessagePauseTests(): void {
       const journal = await open()
       await queueDraft(journal, 'held')
       await userStop(journal)
-      // An eviction writer must write only when it ends a running turn, or it would lift this pause.
+      // Eviction rows must describe ended work or they would incorrectly lift this pause.
       expect(reason(journal)).toBe('stopped')
       expect(held(journal)).toEqual([['held', true]])
     })
@@ -433,12 +417,12 @@ export function registerQueuedMessagePauseTests(): void {
       await journal.appendSubmission(
         {
           clientMessageId: 'send-now-1',
-          payloadFingerprint: 'fp-steered',
+          payloadFingerprint: fingerprintOf('steered'),
           body: message('steered'),
           fence: 0,
           handoverRecorded: true
         },
-        { messageId: 'steered', expect: 'waiting', settledByOp: null, hostInstance: HOST }
+        { messageId: 'steered', expect: 'waiting' }
       )
       await userStop(journal)
       await queueDraft(journal, 'after')
@@ -463,7 +447,7 @@ export function registerQueuedMessagePauseTests(): void {
         journal.appendSubmission(
           {
             clientMessageId: 'drain-newer',
-            payloadFingerprint: 'fp-newer',
+            payloadFingerprint: fingerprintOf('newer'),
             body: message('newer'),
             fence: 0,
             handoverRecorded: true
@@ -471,8 +455,6 @@ export function registerQueuedMessagePauseTests(): void {
           {
             messageId: 'newer',
             expect: 'waiting',
-            settledByOp: null,
-            hostInstance: HOST,
             yieldsToPause: true
           }
         )
@@ -495,8 +477,7 @@ export function registerQueuedMessagePauseTests(): void {
   })
 
   describe("a reopen's pause", () => {
-    /** This handle closes and the next one opens and marks it, as a quit, a crash or a chat close
-     *  leaves it; `failMark` makes the mark's write fail. */
+    /** Reopen as a new handle; failMark injects a reopen-mark write failure. */
     async function reopen(
       journal: AgentSessionJournal,
       failMark = false
@@ -544,19 +525,18 @@ export function registerQueuedMessagePauseTests(): void {
       expect(reason(journal)).toBe('restarted')
     })
 
-    // A hand-off in flight may come back to waiting after the open: the open marks for it too.
     it('marks a reopen whose only card is mid-hand-off, and holds it once it comes back', async () => {
       let journal = await open()
       await queueDraft(journal, 'in-flight')
       await journal.appendSubmission(
         {
           clientMessageId: 'drain-1',
-          payloadFingerprint: 'fp-in-flight',
+          payloadFingerprint: fingerprintOf('in-flight'),
           body: message('in-flight'),
           fence: 0,
           handoverRecorded: true
         },
-        { messageId: 'in-flight', expect: 'waiting', settledByOp: null, hostInstance: HOST }
+        { messageId: 'in-flight', expect: 'waiting' }
       )
       journal = await reopen(journal)
       await journal.resolveDispatch({
@@ -570,8 +550,6 @@ export function registerQueuedMessagePauseTests(): void {
       expect(held(journal)).toEqual([['in-flight', true]])
     })
 
-    // Written after a later send was accepted, the mark starts where the chat stopped, so that
-    // send still lifts it; it never narrows a wider mark before it.
     it('a mark written late starts where the chat stopped, and narrows no earlier mark', async () => {
       const journal = await open()
       await queueDraft(journal, 'kept')
@@ -604,13 +582,10 @@ export function registerQueuedMessagePauseTests(): void {
       expect(reason(journal)).toBe('restarted')
       await turn(journal, 'carry-on')
       expect(reason(journal)).toBeNull()
-      // Still waiting (here, nothing drained it): the chat closed with it again, so it waits again.
       journal = await reopen(journal)
       expect(reason(journal)).toBe('restarted')
     })
 
-    // The open could not write its mark: the open itself is the boundary, so nothing sends by
-    // itself; the next turn or Resume lifts it, and the next open marks again.
     it('without a mark the open itself is where the pause begins', async () => {
       let journal = await open()
       await queueDraft(journal, 'before')
@@ -622,19 +597,17 @@ export function registerQueuedMessagePauseTests(): void {
 
     it("reads an earlier build's stored 'kept' and 'stopped' holds as none; send_failed stays", async () => {
       let journal = await open()
-      for (const id of ['was-kept', 'was-stopped', 'failed']) {
-        await queueDraft(journal, id)
-      }
-      await journal.queuedMessages.hold({ messageIds: ['failed'], reason: 'send_failed' })
       const db = new Database(journalDatabasePath(root))
-      for (const [id, stored] of [
-        ['was-kept', 'kept'],
-        ['was-stopped', 'stopped']
-      ]) {
-        db.prepare('UPDATE queued_messages SET hold_reason = ? WHERE message_id = ?').run(
-          stored,
-          id
-        )
+      for (const [position, id, stored] of [
+        [1, 'was-kept', 'kept'],
+        [2, 'was-stopped', 'stopped'],
+        [3, 'failed', 'send_failed']
+      ] as const) {
+        db.prepare(
+          `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
+             created_at, host_instance, state, hold_reason)
+           VALUES (?, ?, ?, ?, '', 0, 'earlier', 'waiting', ?)`
+        ).run(IDENTITY.sessionId, id, position, JSON.stringify(message(id)), stored)
       }
       db.close()
       journal = await reopen(journal)
@@ -660,8 +633,7 @@ export function registerQueuedMessagePauseTests(): void {
       return { messageId, ...base, queuedAt, ...fields }
     }
 
-    /** A Stop at sequence 5 unless `stopped` is 0; this handle opened at `opened` and could not mark
-     *  it (0: nothing to mark); no turn, Resume or reopen mark since. */
+    /** Simulate Stop/open boundaries with no subsequent turn, Resume or reopen mark. */
     function pausesOver(cards: readonly Card[], stopped = 5, opened = 0, clearedIds?: string[]) {
       return deriveQueuePauses({
         epoch: 'epoch-1',
@@ -691,7 +663,7 @@ export function registerQueuedMessagePauseTests(): void {
     it('a Stop holds a card with no recorded position, and one queued before a rewind', () => {
       const cards = [
         card('unrecorded', 5, { queuedAt: null }),
-        // Later in its own epoch than the Stop is in this one: only the epoch says it came first.
+        // Epoch precedence outranks raw sequence values.
         card('before-rewind', 5, { queuedAt: { epoch: 'epoch-0', sequence: 9 } }),
         card('after', 5)
       ]
@@ -710,7 +682,6 @@ export function registerQueuedMessagePauseTests(): void {
       ])
       expect(holding([after], 5, 6)).toEqual([['after', 'restarted']])
       expect(nextSendableQueuedCard(pausesOver([after], 5, 6), [after])).toBeNull()
-      // Queued since the open, nothing holds it: a card queued after a Stop sends normally.
       expect(nextSendableQueuedCard(pausesOver([after]), [after])).toBe(after)
     })
 
@@ -723,7 +694,6 @@ export function registerQueuedMessagePauseTests(): void {
       expect(resumableQueuePause(pausesOver(cards, 5, 6), cards)?.reason).toBe('stopped')
     })
 
-    // R13-1: a message Orca kept after a quit is an ordinary card, in order, under the reopen's pause.
     it('a card from before the open waits in order, and so do the cards behind it', () => {
       const cards = [card('kept', 1), card('behind', 2)]
       expect(holding(cards, 0, 4)).toEqual([
@@ -733,7 +703,6 @@ export function registerQueuedMessagePauseTests(): void {
       expect(nextSendableQueuedCard(pausesOver(cards, 0, 4), cards)).toBeNull()
     })
 
-    // A card held on its own waits for its own Send, so it starts no reopen pause for the others.
     it('a card held on its own from before the open starts no reopen pause', () => {
       const cards = [card('held', 1, { holdReason: 'send_failed' }), card('live', 5)]
       expect(pausesOver(cards, 0, 4)).toEqual([])

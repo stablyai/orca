@@ -189,8 +189,6 @@ describe('SshConnectionStore', () => {
       expect(sshConfigHostsToTargetsMock).toHaveBeenCalledWith([{ host: 'a' }], new Set())
     })
 
-    // PRIMARY regression (#4684 item #1): a rotated port must take effect on
-    // re-import instead of silently keeping the stale value.
     it('updates an existing config-sourced target when the port changed', () => {
       mockStore.addSshTarget({
         id: 'ssh-1',
@@ -212,7 +210,6 @@ describe('SshConnectionStore', () => {
         'ssh-1',
         expect.objectContaining({ port: 2222, source: 'ssh-config' })
       )
-      // Only the seed insert — no duplicate target created.
       expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
       expect(result).toHaveLength(1)
       expect(result[0].port).toBe(2222)
@@ -298,7 +295,6 @@ describe('SshConnectionStore', () => {
       const result = sshStore.importFromSshConfig()
 
       expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
-      // Only the manual seed insert — the config alias is not duplicated.
       expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
       expect(result).toEqual([])
     })
@@ -349,8 +345,7 @@ describe('SshConnectionStore', () => {
       expect(result).toEqual([])
     })
 
-    // SSH matches Host patterns case-insensitively, so `Prod` and `prod` are one host
-    // everywhere else in the picker — import ownership must agree.
+    // Import alias ownership must use the picker's case-insensitive Host matching.
     it('treats a case-only alias variant as owned by the existing manual target', () => {
       mockStore.addSshTarget({
         id: 'ssh-m',
@@ -419,7 +414,6 @@ describe('SshConnectionStore', () => {
         source: 'ssh-config'
       })
       loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
-      // Candidate is identical to the persisted target (same default fields).
       sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'cluster' })])
 
       const result = sshStore.importFromSshConfig()
@@ -449,8 +443,6 @@ describe('SshConnectionStore', () => {
       }
     }
 
-    // PRIMARY regression: deleting a config-sourced host must not let the next
-    // ~/.ssh/config sync resurrect it.
     it('tombstones a deleted config-sourced host so re-import skips it', () => {
       mockStore.addSshTarget({
         id: 'ssh-1',
@@ -470,7 +462,7 @@ describe('SshConnectionStore', () => {
 
       const result = sshStore.importFromSshConfig()
 
-      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1) // only the seed insert
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
       expect(result).toEqual([])
     })
 
@@ -503,7 +495,6 @@ describe('SshConnectionStore', () => {
 
       loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
       sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
-      // Alias reclaimed, but it is now a manual target — still not re-inserted.
       const result = sshStore.importFromSshConfig()
       expect(result).toEqual([])
     })
@@ -612,7 +603,6 @@ describe('SshConnectionStore', () => {
     })
 
     it('re-adopts orphaned repos when the same host is re-added', () => {
-      // Simulate a prior removal by seeding a matching tombstone.
       mockStore.addRemovedSshTargetTombstone({
         oldTargetId: 'ssh-old',
         host: 'dev.example.com',
@@ -638,9 +628,7 @@ describe('SshConnectionStore', () => {
       ])
     })
 
-    // Why: drive the real remove→re-add path so the tombstone carries the
-    // defaulted configHost (host) that buildRemovedSshTargetTombstone produces,
-    // rather than a hand-seeded tombstone without one.
+    // Exercise real remove/re-add so default configHost participates in tombstone readoption.
     it('re-adopts through an actual removeTarget then re-add of the same host', () => {
       const added = sshStore.addTarget({
         label: 'Dev',
@@ -649,7 +637,6 @@ describe('SshConnectionStore', () => {
         username: 'tim'
       })
       sshStore.removeTarget(added.id)
-      // The tombstone was built from the real target (configHost defaulted to host).
       const tombstones = mockStore.getRemovedSshTargetTombstones()
       expect(tombstones).toHaveLength(1)
       expect(tombstones[0]).toMatchObject({ oldTargetId: added.id, configHost: 'dev.example.com' })
@@ -668,8 +655,6 @@ describe('SshConnectionStore', () => {
       ])
     })
 
-    // A different account on the SAME host must NOT re-adopt, even though both
-    // manual adds default configHost to the shared hostname.
     it('does not re-adopt a different account on the same host', () => {
       const alice = sshStore.addTarget({
         label: 'alice',

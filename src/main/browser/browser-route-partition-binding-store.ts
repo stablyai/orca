@@ -35,11 +35,7 @@ export class BrowserRoutePartitionBindingStore {
       partitionDataRoot?: string
       maxBindings?: number
       maxFileBytes?: number
-      /**
-       * Retained partitions are never evicted: their storage is in use right now.
-       * Absent means the caller cannot tell, so nothing is evictable and capacity
-       * throws as before -- evicting a live partition would destroy storage in use.
-       */
+      /** Without a retention probe, assume every partition is in use to prevent destructive eviction. */
       isPartitionRetained?: (partition: string) => boolean
     }
   ) {
@@ -77,7 +73,6 @@ export class BrowserRoutePartitionBindingStore {
     return removed
   }
 
-  /** Partition already bound to `fingerprint` or aliased to it: where that identity's storage lives. */
   findPartitionByFingerprint(fingerprint: string): string | null {
     for (const [partition, binding] of Object.entries(this.load().bindings)) {
       if (bindingAnswersTo(binding, fingerprint)) {
@@ -87,10 +82,6 @@ export class BrowserRoutePartitionBindingStore {
     return null
   }
 
-  /**
-   * Re-points a bound partition at a new fingerprint, so an identity-scheme change keeps its
-   * storage. `alias` lets it also answer to a newer identity that older builds cannot derive.
-   */
   rebind(partition: string, fingerprint: string, storageScope: string, alias?: string): void {
     assertBinding(partition, fingerprint)
     assertStorageScope(storageScope)
@@ -120,7 +111,6 @@ export class BrowserRoutePartitionBindingStore {
     })
   }
 
-  /** Records continued use, so eviction reaches abandoned partitions before live ones. */
   touch(partition: string): void {
     const state = this.load()
     const existing = state.bindings[partition]
@@ -129,12 +119,7 @@ export class BrowserRoutePartitionBindingStore {
     }
   }
 
-  /**
-   * Binds a partition, evicting least-recently-used releasable bindings at capacity.
-   *
-   * Returns the evicted partitions: their metadata is gone, so the caller owns
-   * destroying their storage. Capacity throws only when every binding is retained.
-   */
+  /** Returns evicted partitions for caller cleanup; retained partitions are never evicted. */
   set(
     partition: string,
     fingerprint: string,
@@ -187,7 +172,7 @@ export class BrowserRoutePartitionBindingStore {
     binding: BrowserRoutePartitionBinding
   ): void {
     const now = Date.now()
-    // Why: preparing a page must not cost a store write, so coarse recency is enough for LRU.
+    // Coarse recency avoids writing on every page preparation.
     if (now - binding.lastUsedAt < TOUCH_INTERVAL_MS) {
       return
     }

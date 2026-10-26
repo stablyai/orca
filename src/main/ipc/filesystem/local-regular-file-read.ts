@@ -1,11 +1,10 @@
 import { constants, type Stats } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from './filesystem-path-containment'
 
 export const NOT_A_REGULAR_FILE_MESSAGE = 'Not a regular file'
 
-// Why O_NONBLOCK: opening a FIFO would otherwise wait for a writer forever; regular files ignore
-// the flag and Windows has none.
+// O_NONBLOCK prevents FIFO-open hangs; regular files ignore it and Windows omits it.
 export const LOCAL_READ_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0)
 const LOCAL_WRITE_PROBE_FLAGS = constants.O_WRONLY | (constants.O_NONBLOCK ?? 0)
 const READ_CHUNK_BYTES = 1024 * 1024
@@ -18,7 +17,6 @@ export function fileTooLargeError(size: number, limit: number): Error {
   )
 }
 
-/** Opens a path for reading, refusing anything but a regular file (FIFO, device, socket, directory). */
 export async function openLocalRegularFile(
   filePath: string
 ): Promise<{ handle: FileHandle; stats: Stats }> {
@@ -35,11 +33,7 @@ export async function openLocalRegularFile(
   }
 }
 
-/**
- * Reads from the start of the handle, sized from its fstat so a small file costs a small buffer.
- * The size is only a hint: a file that grows past it is read on in bounded chunks, and the cap holds
- * even when a file reports a false size.
- */
+/** Size from fstat is a hint; bounded chunks handle growth and false sizes without exceeding the cap. */
 export async function readLocalFileBounded(
   handle: FileHandle,
   limit: number,
@@ -59,7 +53,7 @@ export async function readLocalFileBounded(
     if (total > limit) {
       throw fileTooLargeError(total, limit)
     }
-    // Why a 1-byte probe after a short read: it confirms EOF without another full-size buffer.
+    // Confirm EOF after short reads without allocating another full-size chunk.
     nextChunkBytes = bytesRead < chunk.length ? 1 : READ_CHUNK_BYTES
   }
 }
@@ -70,7 +64,6 @@ export async function readLocalFilePrefix(handle: FileHandle, bytes: number): Pr
   return probe.subarray(0, bytesRead)
 }
 
-/** Refuses writing over an existing non-regular file, e.g. a device or FIFO. */
 export async function assertLocalWriteTargetIsRegularFile(filePath: string): Promise<void> {
   let handle: FileHandle
   try {

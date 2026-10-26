@@ -19,15 +19,7 @@ export type BrowserRoutePartitionStorageClear = {
   livePartitions: string[]
 }
 
-/**
- * Sweeps route partitions whose owning record is gone.
- *
- * Runs at startup only, and never treats a disconnected host as removed: an
- * environment or SSH target that still exists in the store keeps every
- * partition it owns. `listLocalSshTargetIds` comes from the caller because the
- * SSH store singleton may not be registered yet at sweep time — and a missing
- * target list must skip the sweep, never mistake live jars for orphans.
- */
+// Require the SSH target list so uninitialized SSH state cannot make live storage look orphaned.
 export async function collectOrphanedBrowserRoutePartitionStorage(
   listLocalSshTargetIds?: () => string[]
 ): Promise<string[]> {
@@ -58,12 +50,7 @@ export async function collectOrphanedBrowserRoutePartitionStorage(
   return released.clearedPartitions
 }
 
-/**
- * Destroys the storage of every route partition owned by a removed environment.
- *
- * Reports the partitions that still had prepared pages separately: they were left intact on
- * purpose, and the caller decides whether a retry after teardown can reach them.
- */
+// Return still-live partitions separately so the caller can retry after teardown.
 export async function clearBrowserRoutePartitionStorageForEnvironment(
   environmentId: string
 ): Promise<BrowserRoutePartitionStorageClear> {
@@ -84,7 +71,6 @@ export async function clearBrowserRoutePartitionStorageForEnvironment(
   return { clearedPartitions: released.clearedPartitions, livePartitions: released.livePartitions }
 }
 
-/** Destroys the storage of every route partition owned by a removed SSH target. */
 export async function clearBrowserRoutePartitionStorageForLocalSshTarget(
   targetId: string
 ): Promise<BrowserRoutePartitionStorageClear> {
