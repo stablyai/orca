@@ -44,7 +44,13 @@ export async function dispatchMobileStructuredCommand(input: {
   if (input.pending.current) {
     return 'rejected'
   }
-  if (!isStructuredAgentSessionComposerCommand(input.text, input.controller.agent)) {
+  if (
+    !isStructuredAgentSessionComposerCommand(
+      input.text,
+      input.controller.agent,
+      input.controller.sessionCommands
+    )
+  ) {
     return null
   }
   if (input.hasAttachments) {

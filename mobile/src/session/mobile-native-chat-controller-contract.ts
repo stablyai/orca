@@ -22,6 +22,7 @@ import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -93,5 +94,6 @@ export type MobileNativeChatController = {
   // Read parked TUI launch text to clear one line per Ctrl+U before pasting images.
   readSeededLaunchDraft: () => string | null
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
 }
