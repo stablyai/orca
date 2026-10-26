@@ -5,7 +5,6 @@ import type { Dirent } from 'node:fs'
 import { open, readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { app, crashReporter } from 'electron'
-import { installAppImageCrashpadHandlerExit } from './appimage-crashpad-handler-exit'
 import { createMinidumpFileSource, observeMinidumpExtent } from './minidump-file-source'
 import {
   parseMinidumpCrashSignature,
@@ -61,7 +60,6 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
     console.error('[crash-reporting] Crashpad start failed:', error)
     return false
   }
-  installAppImageCrashpadHandlerExit()
   crashpadDumpDirectory = options.dumpDirectory ?? resolveDumpDirectory()
   // Prune immediately: repeated main-process crashes can outrun deferred cleanup.
   void pruneCrashpadDumps().catch((error) => {

@@ -31,6 +31,7 @@ import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recover
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { installAppImageMountExit } from './appimage-mount-exit'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -94,6 +95,8 @@ const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => state.mainWindow,
   requestActivation: requestDesktopActivation
 })
+
+installAppImageMountExit()
 
 const preflightReady = runMainProcessPreflight({
   focusExistingWindow,

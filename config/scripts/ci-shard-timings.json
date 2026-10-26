@@ -1998,7 +1998,7 @@
       "src/main/computer/sidecar-provider-reaping.integration.test.ts": 295,
       "src/main/computer/windows-powershell-execution-policy.test.ts": 54,
       "src/main/copilot/hook-service.test.ts": 126,
-      "src/main/crash-reporting/appimage-crashpad-handler-exit.test.ts": 35,
+      "src/main/appimage-mount-exit.test.ts": 35,
       "src/main/crash-reporting/crash-breadcrumb-renderer-attribution.test.ts": 55,
       "src/main/crash-reporting/crash-breadcrumb-store-leak.test.ts": 93,
       "src/main/crash-reporting/crash-breadcrumb-store-orphan-cleanup.test.ts": 43,
