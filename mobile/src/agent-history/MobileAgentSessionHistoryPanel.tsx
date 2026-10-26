@@ -171,9 +171,9 @@ function MobileAgentSessionHistoryPanelContent({
       setResumeMessage(null)
       try {
         const {
-          catalog,
           settings,
-          worktrees: freshWorktrees
+          worktrees: freshWorktrees,
+          ...catalog
         } = await loadMobileResumeMetadata(client)
         assertCurrentOwner()
         const target = resolveMobileAiVaultSessionResumeTarget({

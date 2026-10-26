@@ -16,11 +16,12 @@ import type { MobileAiVaultResumeCatalog } from './agent-history-resume-target'
 
 type ResumeRepos = MobileAiVaultResumeCatalog['repos']
 
-export async function loadMobileResumeMetadata(client: RpcClient): Promise<{
-  catalog: MobileAiVaultResumeCatalog
-  settings: AiVaultResumeLaunchSettings | null
-  worktrees: Worktree[] | null
-}> {
+export async function loadMobileResumeMetadata(client: RpcClient): Promise<
+  MobileAiVaultResumeCatalog & {
+    settings: AiVaultResumeLaunchSettings | null
+    worktrees: Worktree[] | null
+  }
+> {
   // Fetch repo-enriching metadata only on resume intent; RESUME_RPC_TIMEOUT_MS prevents dropped sockets parking spinner on multi-minute reconnect waiter.
   const [repoReply, folderWorkspaceReply, projectGroupReply, settingsReply, worktreeReply] =
     await Promise.all([
@@ -55,11 +56,9 @@ export async function loadMobileResumeMetadata(client: RpcClient): Promise<{
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const repos = rpcPayloadMember(repoResult, 'repos') as ResumeRepos | undefined
   return {
-    catalog: {
-      repos: repos ?? [],
-      folderWorkspaces: readAcceptedResumeList(folderWorkspaceResult, 'folderWorkspaces') ?? [],
-      projectGroups: readAcceptedResumeList(projectGroupResult, 'groups') ?? []
-    },
+    repos: repos ?? [],
+    folderWorkspaces: readAcceptedResumeList(folderWorkspaceResult, 'folderWorkspaces') ?? [],
+    projectGroups: readAcceptedResumeList(projectGroupResult, 'groups') ?? [],
     settings: settings ?? null,
     worktrees: readAcceptedResumeList(worktreeResult, 'worktrees') ?? null
   }
