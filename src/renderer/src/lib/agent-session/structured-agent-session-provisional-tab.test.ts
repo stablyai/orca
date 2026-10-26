@@ -11,7 +11,7 @@ import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-nat
 import {
   getStructuredAgentSessionLaunchFailure,
   resetStructuredAgentLaunchRegistryForTests
-} from '../structured-agent-session-launch-registry'
+} from './launch/structured-agent-session-launch-registry'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-launch-admission'
 import {

@@ -6,6 +6,8 @@ import {
   orchestrationRequest,
   resultOf,
   SESSION_X,
+  SESSION_Y,
+  WORKER_HANDLE,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -39,5 +41,44 @@ describe('check --wait from an agent session', () => {
       `run:${runId}`,
       expect.objectContaining({ timeoutMs: 600_000 })
     )
+  })
+
+  it('lets a chat hold two waits that share one Delivery and are both fenced on takeover', async () => {
+    const as = (sessionId: string | undefined, method: string, params: Record<string, unknown>) =>
+      h.dispatch(orchestrationRequest(method, params, { sessionId }))
+    const runId = idOf(
+      resultOf(await as(SESSION_X, 'orchestration.runCreate', { objective: 'o' })).run
+    )
+    const waiter = vi.spyOn(h.runtime, 'waitForMessage')
+    const parkTwoWaits = async () => {
+      const parked = waiter.mock.calls.length + 2
+      const waits = Promise.all(
+        [1, 2].map(() =>
+          as(SESSION_X, 'orchestration.check', { run: runId, wait: true, timeoutMs: 5_000 })
+        )
+      )
+      await vi.waitFor(() => expect(waiter).toHaveBeenCalledTimes(parked))
+      return { settled: waits }
+    }
+
+    const shared = await parkTwoWaits()
+    await as(undefined, 'orchestration.send', {
+      from: WORKER_HANDLE,
+      to: `run:${runId}`,
+      subject: 'done',
+      run: runId
+    })
+    const [first, second] = (await shared.settled).map(resultOf)
+    expect(first.deliveryId).toEqual(expect.any(String))
+    expect(second.deliveryId).toBe(first.deliveryId)
+    await as(SESSION_X, 'orchestration.check', { run: runId, ack: first.deliveryId })
+
+    const fenced = await parkTwoWaits()
+    await as(SESSION_Y, 'orchestration.runUse', { id: runId })
+    const fencedError = { ok: false, error: expect.objectContaining({ code: 'consumer_fenced' }) }
+    expect(await fenced.settled).toEqual([
+      expect.objectContaining(fencedError),
+      expect.objectContaining(fencedError)
+    ])
   })
 })

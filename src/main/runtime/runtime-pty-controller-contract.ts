@@ -1,3 +1,5 @@
+import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
+import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
@@ -6,7 +8,6 @@ import type {
   SpawnIntent
 } from '../../shared/host-spawn-admission'
 import type {
-  AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
@@ -39,8 +40,9 @@ export type RuntimePtyController = {
     connectionId: string | null
     tabId: string
     leafId: string
-  }): () => void
+  }): RuntimePaneCreateClaim
   adoptStablePane?(opts: {
+    onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
     signal?: AbortSignal
     spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
     cols: number
@@ -68,11 +70,14 @@ export type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    launchConfig?: WorktreeStartupLaunch['launchConfig']
+    launchToken?: string
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
@@ -115,17 +120,13 @@ export type RuntimePtyController = {
       }
       materialized?: true
     }
-  }): Promise<{
-    id: string
-    pid?: number | null
-    incarnationId?: PtyIncarnationId
-    wslDistro?: string
-    stablePaneOwner?: { handle: string; tabId: string; leafId: string }
-    agentSessionEnsure?: AgentSessionClaimedSpawnResult
-    /** The host started this process at the workspace root because the requested folder is gone. */
-    startupCwdFallback?: StartupCwdFallback
-    savedStartupCwd?: string
-  }>
+  }): Promise<
+    PtySpawnResult & {
+      stablePaneOwner?: { handle: string; tabId: string; leafId: string }
+      startupCwdFallback?: StartupCwdFallback
+      savedStartupCwd?: string
+    }
+  >
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>

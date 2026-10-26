@@ -1,4 +1,4 @@
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {

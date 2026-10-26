@@ -134,7 +134,9 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, warmRecords
       steps: [
         step(node, [
           'config/scripts/run-typecheck-projects-in-parallel.mjs',
-          ...plan.typecheckProjects.map((config) => `--project=${config}`)
+          ...plan.typecheckProjects.map((config) => `--project=${config}`),
+          // A worker cap means a shared host; 4 checkers cut typecheck CPU by about a third.
+          ...(maxWorkers ? [`--checkers=${Math.max(2, Number(maxWorkers) * 2)}`] : [])
         ])
       ]
     })

@@ -67,7 +67,7 @@ vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQu
 vi.mock('./MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('./MobileNativeChatComposerMenu', () => ({
+vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerMenu: 'Suggestions',
   composerMenuInsertText: () => ''
 }))

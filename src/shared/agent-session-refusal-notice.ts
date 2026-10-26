@@ -41,7 +41,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   'queued-edit': 'notDoneQueuedEdit',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal'
+  goal: 'notDoneGoalChangeIncomplete'
 }
 
 /** Share actionable wording for /clear and /compact blocked by running work. */

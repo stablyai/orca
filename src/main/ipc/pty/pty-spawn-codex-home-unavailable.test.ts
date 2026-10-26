@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSyncMock } from '../pty-ipc-mock-registry'
+import { readFileSyncMock, noChatsRuntimeMembers } from '../pty-ipc-mock-registry'
 import { TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON } from '../pty-ipc-test-constants'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from '../pty-ipc-daemon-provider-fixtures'
@@ -80,6 +80,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
   function makeRuntime() {
     return {
       setPtyController: vi.fn(),
+      ...noChatsRuntimeMembers(),
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),

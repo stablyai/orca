@@ -479,6 +479,114 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(chat.turns).toHaveLength(1)
     expect(chat.steers).toHaveLength(1)
   })
+
+  it('wakes a coordinator holding an unacked batch once, at turn end, for mail that came mid-turn', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    await settleTurn(COORDINATOR, 0)
+    const held = await call('orchestration.check', { run: runId }, { sessionId: COORDINATOR })
+    const heldId = String(held.deliveryId)
+
+    expect(await sendUserMessage(COORDINATOR, 'keep working')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    const notify = (method: string, params: unknown) =>
+      chat.handlers.onNotification?.(method, params)
+    notify('turn/started', { turn: { id: 'turn-2' } })
+    notify('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-2',
+        clientId: chat.turns[1]!.clientUserMessageId,
+        content: [{ type: 'text', text: 'keep working' }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    const task2 = await call('orchestration.taskCreate', { spec: 'b' }, { sessionId: COORDINATOR })
+    await finishWorker(idOf(task2.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
+
+    notify('turn/completed', { turn: { id: 'turn-2' } })
+    await host.flushStreamedEvents(COORDINATOR)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
+    // Held until the turn ended, not steered into it.
+    expect(chat.steers).toHaveLength(0)
+    const cli = localOrchestrationCliCommand()
+    expect(turnText(chat.turns[2]!)).toContain(
+      `You have 1 new orchestration message after delivery ${heldId}, which you have not acknowledged. If you no longer have it, run \`${cli} orchestration check --run ${runId}\` to see it again; once it is handled, run \`${cli} orchestration check --run ${runId} --ack ${heldId}\`.`
+    )
+
+    // Ending that turn without acking stays quiet: nothing newer arrived, so no edge even reads the chat to send.
+    const reads = vi.spyOn(host, 'journalSnapshot')
+    await settleTurn(COORDINATOR, 2)
+    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
+    expect(reads).not.toHaveBeenCalled()
+    reads.mockRestore()
+    expect(chat.turns).toHaveLength(3)
+    expect(chat.steers).toHaveLength(0)
+
+    // Newer mail reaching the idle chat wakes it once more, still naming the held batch.
+    const task3 = await call('orchestration.taskCreate', { spec: 'c' }, { sessionId: COORDINATOR })
+    await finishWorker(idOf(task3.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(4), WAIT)
+    expect(turnText(chat.turns[3]!)).toContain(
+      `You have 1 new orchestration message after delivery ${heldId}`
+    )
+
+    const next = await call(
+      'orchestration.check',
+      { run: runId, ack: heldId },
+      { sessionId: COORDINATOR }
+    )
+    expect(next).toMatchObject({ acknowledged: heldId, count: 2 })
+  })
+
+  it('holds a held-batch nudge for a turn that starts while the nudge reads the chat', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    await settleTurn(COORDINATOR, 0)
+    const held = await call('orchestration.check', { run: runId }, { sessionId: COORDINATOR })
+    const task2 = await call('orchestration.taskCreate', { spec: 'b' }, { sessionId: COORDINATOR })
+    const reading = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const snapshot = host.journalSnapshot.bind(host)
+    vi.spyOn(host, 'journalSnapshot').mockImplementationOnce(async (sessionId) => {
+      reading.resolve()
+      await release.promise
+      return snapshot(sessionId)
+    })
+    await finishWorker(idOf(task2.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
+    await reading.promise
+
+    expect(await sendUserMessage(COORDINATOR, 'start a new turn')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    const notify = (method: string, params: unknown) =>
+      chat.handlers.onNotification?.(method, params)
+    notify('turn/started', { turn: { id: 'turn-2' } })
+    notify('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-race',
+        clientId: chat.turns[1]!.clientUserMessageId,
+        content: [{ type: 'text', text: 'start a new turn' }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    const sends = vi.spyOn(host, 'send')
+    release.resolve()
+    await vi.waitFor(() => expect(sends).toHaveBeenCalled(), WAIT)
+    // The held send refuses at admission rather than steering.
+    await expect(sends.mock.results[0]!.value).rejects.toThrow()
+    expect(chat.steers).toHaveLength(0)
+
+    notify('turn/completed', { turn: { id: 'turn-2' } })
+    await host.flushStreamedEvents(COORDINATOR)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
+    expect(chat.steers).toHaveLength(0)
+    expect(turnText(chat.turns[2]!)).toContain(`--ack ${String(held.deliveryId)}`)
+  })
 })
 
 describe('a /clear keeps the chat its orchestration address', () => {

@@ -28,7 +28,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneAnswer: 'Your answer was not sent.',
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
-  notDoneGoal: "The goal wasn't changed.",
+  notDoneGoalChangeIncomplete: "Couldn't finish changing the goal. Check the chat.",
   notDoneQueuedEdit: "Your edit wasn't saved.",
   restartFailed: "The agent couldn't restart.",
   capacity:

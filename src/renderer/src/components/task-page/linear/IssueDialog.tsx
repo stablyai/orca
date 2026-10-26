@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'

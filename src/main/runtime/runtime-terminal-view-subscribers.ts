@@ -73,16 +73,19 @@ export class RuntimeTerminalViewSubscribers {
 
   /** A remote view that will receive output now; a paused one drops it, so cannot answer its queries. */
   hasRemoteReceivingOutput(ptyId: string): boolean {
-    if (this.deps.hasMobileSubscribers(ptyId)) {
-      return true
-    }
+    return this.remoteReceivingOutputCount(ptyId) > 0
+  }
+
+  /** Mobile subscribers count once: callers only distinguish none, one, or several. */
+  remoteReceivingOutputCount(ptyId: string): number {
     let paused = 0
     for (const view of this.pausableRemoteViews.get(ptyId) ?? []) {
       if (view.isOutputPaused()) {
         paused += 1
       }
     }
-    return (this.remoteCounts.get(ptyId) ?? 0) > paused
+    const mobile = this.deps.hasMobileSubscribers(ptyId) ? 1 : 0
+    return (this.remoteCounts.get(ptyId) ?? 0) - paused + mobile
   }
 
   isKnownUnattachedLocal(ptyId: string): boolean {

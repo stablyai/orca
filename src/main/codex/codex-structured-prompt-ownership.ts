@@ -13,6 +13,7 @@ import {
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexTurn } from './codex-structured-turn-cancellation'
 import { codexStopTarget, interruptOpeningCodexTurn } from './codex-structured-turn-open-wait'
+import { stopCodexGoal } from './codex-structured-goal-stop'
 import { CODEX_STOP_GRACE_MS } from './codex-request-end-wait'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
@@ -89,6 +90,20 @@ export async function cancelCodexStructuredTurn(input: {
 }): Promise<AgentSessionCancelOutcome> {
   const { request, sessions, requestTimeoutMs } = input
   const session = requireLiveCodexSession(sessions, request.sessionId)
+  if (request.stoppedAt !== undefined && !request.prompt) {
+    const generation = session.acquisitionGeneration
+    return stopCodexGoal({
+      session,
+      stoppedAt: request.stoppedAt,
+      timeoutMs: requestTimeoutMs,
+      current: () =>
+        sessions.get(request.sessionId) === session &&
+        !session.ended &&
+        session.fence === request.fence &&
+        session.acquisitionGeneration === generation,
+      interrupt: () => cancelCodexConversation(input, session)
+    })
+  }
   const prompt = request.prompt
   const requestedTurnId = request.turnId
   if (requestedTurnId === undefined) {

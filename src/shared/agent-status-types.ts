@@ -41,7 +41,8 @@ export type {
   AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
-  MigrationUnsupportedPtyEntry
+  MigrationUnsupportedPtyEntry,
+  RefusedPaneResume
 } from './agent-status-ipc-payload'
 export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
 export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'

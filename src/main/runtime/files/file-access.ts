@@ -16,7 +16,7 @@ import type { RuntimeFileCommandHost } from './file-command-host'
 import type { RuntimeFileOpenResult } from '../../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import { joinWorktreeRelativePath } from '../runtime-relative-paths'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   resolveFileExplorerPath,

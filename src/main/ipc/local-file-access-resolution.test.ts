@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
-import { resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,

@@ -225,6 +225,7 @@ export function buildDefaultSettings(args: {
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: {},
     agentStatusHooksEnabled: true,
+    claudeSubagentNavigationEnabled: true,
     agentWorkspaceTrustEnabled: true,
     codexTerminalServerIsolation: true,
     codexSharedServerWarning: true,

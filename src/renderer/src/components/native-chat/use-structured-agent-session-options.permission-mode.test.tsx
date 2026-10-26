@@ -1,3 +1,9 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import {
+  AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session-permission-modes-capability'
+import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 // @vitest-environment happy-dom
 
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -8,7 +14,8 @@ const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -72,6 +79,7 @@ function renderReopened(fence: number, agent: 'codex' | 'claude' = 'codex') {
 
 describe('the permission mode another device picks', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
   })
@@ -99,6 +107,22 @@ describe('the permission mode another device picks', () => {
     unmount()
   })
 
+  it('waits for the new child’s report after an own-settings chat restarts', async () => {
+    optionsAnswering('own')
+    const read = mocks.call.getMockImplementation()!
+    mocks.call.mockImplementation(async (...args) => {
+      const answer = await read(...args)
+      return { ...answer, current: { ...answer.current, reportedPermissionMode: 'full-access' } }
+    })
+    const { result, rerender, unmount } = renderReopened(1)
+    const row = () => result.current.optionSnapshot.find((entry) => entry.id === 'permissionMode')
+    await waitFor(() => expect(row()).toMatchObject({ description: 'Full access', settable: true }))
+    mocks.call.mockImplementation(() => new Promise(() => {}))
+    rerender({ fence: 2, stamp: 'model-a|own' })
+    expect(row()).toMatchObject({ description: 'Permissions', settable: false })
+    unmount()
+  })
+
   it('shows no picker for a host that states no mode', async () => {
     optionsAnswering(undefined)
     const { result, unmount } = renderReopened(1)
@@ -115,9 +139,49 @@ describe('the permission mode another device picks', () => {
 
 describe('a permission pick on this device', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
     mocks.call.mockReset()
     vi.mocked(mutate).mockReset()
     resetHostModelCatalogSnapshotsForTests()
+  })
+
+  it('writes an explicit per-chat pick matching the report without changing agent settings', async () => {
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
+      AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
+    ])
+    mocks.call.mockResolvedValue({
+      models: [{ id: 'model-a', label: 'Model A', isDefault: true, efforts: [] }],
+      current: { model: 'model-a', permissionMode: 'own', reportedPermissionMode: 'full-access' }
+    })
+    vi.mocked(mutate).mockResolvedValue({ options: { permissionMode: 'full-access' } })
+    vi.mocked(enqueueSessionOptionSettingsWrite).mockClear()
+    const { result, unmount } = renderReopened(1)
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('full-access'))
+    await act(async () => {
+      expect(await result.current.setStructuredOption('permissionMode', 'full-access')).toBe(true)
+    })
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      'agentSession.setOption',
+      'agentSession.setOption',
+      {
+        key: 'permissionMode',
+        value: 'full-access'
+      }
+    )
+    expect(enqueueSessionOptionSettingsWrite).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('a PR2 client never sends own to a PR1 host', async () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
+    optionsAnswering('ask')
+    const { result, unmount } = renderReopened(1)
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('ask'))
+    expect(await result.current.setStructuredOption('permissionMode', 'own')).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
+    unmount()
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 
   it('shows at once and stays pickable while the write waits behind a start', async () => {

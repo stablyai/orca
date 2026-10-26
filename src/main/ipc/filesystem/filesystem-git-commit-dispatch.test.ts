@@ -82,8 +82,6 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('refuses ssh git:commit as not served instead of running local commitChanges', async () => {
-    const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
-
     registerFilesystemHandlers(store as never)
 
     await expect(
@@ -96,13 +94,10 @@ describe('registerFilesystemHandlers', () => {
       'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
     )
 
-    expect(sshCommitMock).not.toHaveBeenCalled()
     expect(commitChangesMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:remoteCommitUrl with a short hash before SSH dispatch', async () => {
-    const sshRemoteCommitUrlMock = vi.fn()
-
     registerFilesystemHandlers(store as never)
 
     await expect(
@@ -112,8 +107,6 @@ describe('registerFilesystemHandlers', () => {
         connectionId: 'conn-1'
       })
     ).rejects.toThrow('sha must be a full git object id')
-
-    expect(sshRemoteCommitUrlMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:commit with whitespace-only message and does not call commitChanges', async () => {
@@ -130,8 +123,6 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('rejects git:commit with whitespace-only message before SSH dispatch', async () => {
-    const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
-
     registerFilesystemHandlers(store as never)
 
     await expect(
@@ -141,8 +132,6 @@ describe('registerFilesystemHandlers', () => {
         connectionId: 'conn-1'
       })
     ).rejects.toThrow('Commit message is required')
-
-    expect(sshCommitMock).not.toHaveBeenCalled()
   })
 })
 

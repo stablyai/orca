@@ -1,3 +1,5 @@
+import type { PtyOwnerBackend } from './pty-owner-backend'
+
 /** xterm `windowsPty` for a ConPTY-backed terminal, shared by the window and the daemon's emulator. */
 export type XtermConptyOptions = { backend: 'conpty'; buildNumber?: number }
 
@@ -16,4 +18,18 @@ export function buildXtermConptyOptions(buildNumber: number | undefined): XtermC
     return { backend: 'conpty' }
   }
   return { backend: 'conpty', buildNumber }
+}
+
+/**
+ * ConPTY repaints its own grid after a resize, so every emulator of a ConPTY pane (the daemon's,
+ * main's copy and the window's) must grow rows without pulling scrollback back into it.
+ * Every PTY a Windows host owns is ConPTY, WSL shells included.
+ */
+export function windowsPtyForOwnerBackend(
+  ownerBackend: PtyOwnerBackend | undefined,
+  osRelease: string | null | undefined
+): XtermConptyOptions | undefined {
+  return ownerBackend === undefined || ownerBackend === 'posix-pty'
+    ? undefined
+    : buildXtermConptyOptions(parseWindowsBuildNumber(osRelease))
 }

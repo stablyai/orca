@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -20,15 +21,29 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: vi.fn(),
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -72,12 +87,12 @@ import {
   getStructuredAgentSessionLaunchSelection,
   holdStructuredAgentSessionLaunchOption
 } from './structured-agent-session-launch-options'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
-import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { markStructuredAgentSessionLaunchPublished } from './agent-session/launch/structured-agent-session-launch-publication'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionModelCatalog,

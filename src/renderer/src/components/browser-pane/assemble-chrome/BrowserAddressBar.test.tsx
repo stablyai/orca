@@ -519,7 +519,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(mocks.removeBrowserHistoryEntry).not.toHaveBeenCalled()
   })
 
-  it('dismisses suggestions when focus moves into an Electron webview guest', async () => {
+  it('dismisses suggestions on a webview focusin event', async () => {
     const onNavigate = vi.fn()
     const onSubmit = vi.fn()
     const webview = document.createElement('webview')
@@ -556,7 +556,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('lets the second press of a double-click select a word instead of the whole URL', async () => {
+  it('clears the whole-URL selection on the second double-click press', async () => {
     const url = 'https://github.com/stablyai/orca/pull/27021'
     await act(async () => {
       root.render(<AddressBarHarness initialValue={url} onNavigate={vi.fn()} onSubmit={vi.fn()} />)

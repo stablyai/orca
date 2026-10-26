@@ -8,6 +8,7 @@ import type {
 } from '../../../session/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
@@ -26,9 +27,9 @@ export function diffReviewActionMountAdapters(
       const reviewSheets = modules.load<
         typeof import('../../../session/mobile-diff-review-sheets')
       >('mobile/src/session/mobile-diff-review-sheets.ts')
-      const staleInput = modules.load<
-        typeof import('../../../session/mobile-native-chat-stale-input')
-      >('mobile/src/session/mobile-native-chat-stale-input.ts')
+      const staleInput = modules.load<typeof NativeChatStaleInput>(
+        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+      )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
         side: 'modified',

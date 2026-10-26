@@ -1,3 +1,4 @@
+import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
@@ -114,7 +115,9 @@ export function renderedRow(id: string): ReactElement<Record<string, unknown>> {
   const listNode = list()
   const data = listNode.props.data as NativeChatMessage[]
   const index = data.findIndex((row) => row.id === id)
-  return listNode.props.renderItem({ item: data[index], index })
+  const row = listNode.props.renderItem({ item: data[index], index })
+  const resolved = resolveMobileNativeChatRowProps(index, data[index]!, row.props.lookups)
+  return createElement('Row', { ...row.props, ...resolved })
 }
 
 export function banners(): ReactTestInstance[] {

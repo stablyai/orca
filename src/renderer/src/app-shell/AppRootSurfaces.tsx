@@ -12,7 +12,7 @@ import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePic
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
-import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'

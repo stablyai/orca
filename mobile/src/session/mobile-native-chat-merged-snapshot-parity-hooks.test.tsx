@@ -1,3 +1,5 @@
+import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
+import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 // Compare live merged hooks/list output after every frame with a newly opened chat, including own echoes and host Stopping. Native row rendering, controller input construction and reconnects are outside this proof.
 
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
@@ -17,7 +19,7 @@ import {
   STOP_JOURNAL_SESSION,
   stopJournal
 } from './mobile-native-chat-stop-journal.test-fixture'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -62,7 +64,9 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
+vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
+  MobileNativeChatComposer: 'Composer'
+}))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
 vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
@@ -113,10 +117,13 @@ type DrawnRowProps = {
 }
 
 function drawnRow(row: ReactNode): unknown {
-  if (!isValidElement<DrawnRowProps>(row)) {
+  if (!isValidElement<DrawnRowProps & Parameters<typeof MobileNativeChatRow>[0]>(row)) {
     return row ?? null
   }
-  const { message, turnStatus, activeTurnIsWorking } = row.props
+  const { message, turnStatus, activeTurnIsWorking } =
+    row.type === MobileNativeChatRow
+      ? resolveMobileNativeChatRowProps(row.props.index, row.props.message, row.props.lookups)
+      : row.props
   const bar = turnStatus === null ? '-' : (turnStatus.workedSeconds ?? 'live')
   return [
     message.id,
@@ -139,7 +146,9 @@ function drawnFooter(node: ReactNode): unknown {
   if (element.type === 'LiveStatus') {
     return ['live', element.props.line?.stopping === true]
   }
-  return element.type === 'ChatMessage' ? drawnRow(element) : drawnFooter(element.props.children)
+  return element.type === 'ChatMessage' || element.type === MobileNativeChatRow
+    ? drawnRow(element)
+    : drawnFooter(element.props.children)
 }
 
 const mounted: ReactTestRenderer[] = []

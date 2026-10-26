@@ -211,22 +211,12 @@ describe('native chat names in Vault rows', () => {
   )
 
   it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
-    'keeps the CLI title on a %s chat row, as its terminal conversations do',
+    'shows a %s chat row its CLI title until the chat is named, then the chat name',
     async (agent) => {
-      useAppStore.setState({
-        unifiedTabsByWorktree: {
-          'folder-workspace': [
-            {
-              ...tab('Manual name'),
-              agentSessionAgent: agent === 'opencode2' ? 'opencode' : agent
-            }
-          ]
-        }
-      })
       await renderRow({ ...row('local', 'Fix the parser'), agent })
-      publish('local', 'Explain the parser')
       expect(screen.getByText('Fix the parser')).toBeTruthy()
-      expect(screen.queryByText('Manual name')).toBeNull()
+      publish('local', 'Explain the parser')
+      expect(screen.getByText('Explain the parser')).toBeTruthy()
     }
   )
 

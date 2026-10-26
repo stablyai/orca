@@ -131,7 +131,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     `  process.env.${ownerEnv} = selfPid`,
     '  resetPostQueue()',
     ...getPiSubagentRosterSetupSourceLines(kind),
-    ...getOmpSessionOwnerHandlerSourceLines(),
+    ...getOmpSessionOwnerHandlerSourceLines(kind),
     ...getAgentStatusSessionBoundaryHandlerSourceLines(kind),
     ...getOmpModelCommandSourceLines(),
     ...sessionStartHandler,

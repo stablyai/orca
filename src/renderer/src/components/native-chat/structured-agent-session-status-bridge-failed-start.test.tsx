@@ -2,6 +2,7 @@
 
 // Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
@@ -63,15 +64,29 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn(async () => [])
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -81,8 +96,8 @@ import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
 } from '@/lib/structured-agent-session-launch'
-import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,

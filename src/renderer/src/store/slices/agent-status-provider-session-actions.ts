@@ -1,10 +1,10 @@
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
   AgentProviderSessionRecordMetadata,
   AgentProviderSessionRouting,
   AgentProviderSessionTiming
-} from './agent-status-contract'
+} from './agent-status/agent-status-contract'
 import {
   agentProviderSessionsEqual,
   getAgentResumeArgv,
@@ -18,7 +18,7 @@ import {
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
-import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { removePaneKeys } from './agent-status/agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { copyLaunchConfig } from '../../../../shared/agent-resume-record-from-status'
 import { agentVerdictFields } from '../../../../shared/agent-main-agent-verdict'

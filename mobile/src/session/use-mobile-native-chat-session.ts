@@ -11,7 +11,7 @@ import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
-} from './mobile-native-chat-stream-frame'
+} from './native-chat/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 

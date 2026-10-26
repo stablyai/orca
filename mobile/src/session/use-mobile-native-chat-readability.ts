@@ -9,7 +9,7 @@ import { resumeFolderWorkspaceListRead } from '../agent-history/mobile-agent-his
 import {
   isMobileFolderNativeChatReadable,
   isMobileNativeChatTranscriptReadable
-} from './mobile-native-chat-eligibility'
+} from './native-chat/mobile-native-chat-eligibility'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
 type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }

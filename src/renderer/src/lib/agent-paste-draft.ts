@@ -109,6 +109,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   timeoutMs?: number
   onTimeout?: () => void
   onUnconfirmedDelivery?: () => void
+  /** Last check after readiness; false drops the paste. */
+  beforePaste?: () => Promise<boolean>
 }): Promise<boolean> {
   const { ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -131,6 +133,9 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
       return false
     }
     onUnconfirmedDelivery?.()
+  }
+  if (args.beforePaste && !(await args.beforePaste())) {
+    return false
   }
 
   return await sendBracketedPasteToAgent({

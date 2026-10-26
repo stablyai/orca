@@ -3,7 +3,6 @@ import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-t
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
-import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
 import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
@@ -182,8 +181,7 @@ function deriveStructuredAgentSendTargets(
       tabId: tab.id,
       sessionId: tab.entityId,
       agentType: tab.agentSessionAgent,
-      // Why: false matches the tab strip, which labels a chat tab customLabel ?? label.
-      title: resolveUnifiedTabLabel(tab, false),
+      title: tab.customLabel?.trim() || tab.label,
       entry,
       status: disabledReason ? 'disabled' : 'eligible',
       ...(disabledReason ? { disabledReason } : {})

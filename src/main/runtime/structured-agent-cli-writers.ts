@@ -74,6 +74,7 @@ export async function assertCliConversationWritersExited(
       chatAgentsShareConversations(rowChat, agent)
     ) &&
     id === providerSessionId
+  const proofs: (() => boolean)[] = []
   const paneOf = (coordinates: CliWriterCoordinates) => host.terminal(coordinates)?.pane ?? null
   // The pane's PTY itself, not a recorded pid: a wrapper pid can read exited beside a paused agent.
   const censusPane = async (
@@ -83,6 +84,7 @@ export async function assertCliConversationWritersExited(
   ) => {
     const terminal = read()
     if (!terminal && absentAdmits) {
+      proofs.push(() => !read())
       return
     }
     const pane = terminal?.pane
@@ -94,10 +96,11 @@ export async function assertCliConversationWritersExited(
     ) {
       throw refuse()
     }
+    proofs.push(() => !host.sleeping(worktreeId ?? '') && read()?.pane?.identity === pane.identity)
   }
   try {
     if (source) {
-      await censusPane(() => host.terminal(source), source.worktreeId, false)
+      await censusPane(() => host.terminal(source), source.worktreeId, true)
     }
     const savedCandidates = () =>
       host
@@ -143,23 +146,33 @@ export async function assertCliConversationWritersExited(
         record.providerSession.id === row.providerSession?.id
       const matching = saved.filter(matches)
       const observed = host.observation(row)
-      if (
-        !observed ||
-        !observed.current() ||
-        observed.topology !== 'pane-owned' ||
-        host.sleeping(row.worktreeId ?? '')
-      ) {
+      if (!observed || !observed.current()) {
         throw refuse()
       }
+      proofs.push(() => observed.current())
       const pane = paneOf(row)
       const presence = await observed.presence()
       if (
         !observed.current() ||
         presence === 'live' ||
         presence === 'unverifiable' ||
-        (pane && paneOf(row)?.identity !== pane.identity) ||
-        host.sleeping(row.worktreeId ?? '')
+        (pane && paneOf(row)?.identity !== pane.identity)
       ) {
+        throw refuse()
+      }
+      if (!host.terminal(row)) {
+        proofs.push(() => !host.terminal(row))
+        if (row.agentType !== 'opencode' && row.agentType !== 'opencode2') {
+          for (const record of matching) {
+            covered.set(
+              record,
+              () => savedCurrent(record) && observed.current() && !host.terminal(row)
+            )
+          }
+        }
+        continue
+      }
+      if (observed.topology !== 'pane-owned' || host.sleeping(row.worktreeId ?? '')) {
         throw refuse()
       }
       if (presence === 'exited' && matching.length === 0) {
@@ -179,16 +192,11 @@ export async function assertCliConversationWritersExited(
       ) {
         throw refuse()
       }
+      const current = () =>
+        paneOf(row)?.identity === pane.identity && !host.sleeping(row.worktreeId ?? '')
+      proofs.push(current)
       for (const record of matching) {
-        covered.set(
-          record,
-          () =>
-            observed.current() &&
-            paneOf(row)?.identity === pane.identity &&
-            !host.sleeping(row.worktreeId ?? '') &&
-            matches(record) &&
-            host.saved().includes(record)
-        )
+        covered.set(record, () => current() && savedCurrent(record) && matches(record))
       }
     }
     for (const link of host.links()) {
@@ -213,7 +221,12 @@ export async function assertCliConversationWritersExited(
         throw refuse()
       }
       const coordinates = { paneKey, worktreeId }
-      const pane = paneOf(coordinates)
+      const terminal = host.terminal(coordinates)
+      if (!terminal) {
+        covered.set(record, () => savedCurrent(record) && !host.terminal(coordinates))
+        continue
+      }
+      const pane = terminal.pane
       if (!pane) {
         throw refuse()
       }
@@ -228,6 +241,7 @@ export async function assertCliConversationWritersExited(
       covered.set(record, current)
     }
     if (
+      proofs.some((current) => !current()) ||
       [...saved, ...savedCandidates()].some(
         (record) => !savedCurrent(record) || !covered.get(record)?.()
       )

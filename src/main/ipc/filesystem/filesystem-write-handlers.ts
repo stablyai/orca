@@ -9,7 +9,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalWriteRequestPath
 } from '../local-file-access-resolution'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from './filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -18,6 +18,7 @@ import type {
   FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from './local-disk-write-precondition'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -45,7 +46,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       }
       const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
       try {
-        const fileStats = await lstat(filePath)
+        const fileStats = await lstat(windowsFsPath(filePath))
         if (fileStats.isDirectory()) {
           throw new Error('Cannot write to a directory')
         }

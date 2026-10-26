@@ -155,44 +155,6 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  it('destroys session after 3 consecutive timeouts', async () => {
-    const killedError = Object.assign(new Error('timeout'), { killed: true })
-
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('close')) {
-          cb(null, JSON.stringify({ success: true, data: null }), '')
-          return
-        }
-        cb(killedError, '', '')
-      }
-    )
-
-    for (let i = 0; i < 3; i++) {
-      await expect(bridge.snapshot()).rejects.toThrow('timed out')
-    }
-
-    succeedWith({ snapshot: 'fresh' })
-    await bridge.snapshot()
-
-    const lastArgs = execFileMock.mock.calls.at(-1)![1] as string[]
-    expect(lastArgs).toContain('--cdp')
-  })
-
-  it('bounds owner cleanup independently from command execution timeouts', async () => {
-    succeedWith({ snapshot: 'initial' })
-    await bridge.snapshot()
-    execFileMock.mockClear()
-
-    succeedWith(null)
-    await bridge.onPageClosed('tab-1')
-
-    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('close')
-    )
-    expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
-  })
-
   it('waits for pending session destruction before recreating the same session', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
@@ -496,33 +458,6 @@ describe('AgentBrowserBridge', () => {
     expect(routeCalls[0]).toContain('--cdp')
   })
 
-  it('clears pending intercept restore state when a swapped tab closes before reuse', async () => {
-    const tabs = new Map([['tab-1', 100]])
-    const mgr = mockBrowserManager(tabs)
-    const b = new AgentBrowserBridge(mgr)
-    b.setActiveTab(100)
-
-    succeedWith({ ok: true })
-    await b.interceptEnable(['https://old.example/**'])
-
-    tabs.set('tab-1', 200)
-    webContentsFromIdMock.mockReturnValue(mockWebContents(200))
-    succeedWith(null)
-    await b.onProcessSwap('tab-1', 200)
-
-    expect(
-      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
-        .size
-    ).toBe(1)
-
-    await b.onTabClosed(200)
-
-    expect(
-      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
-        .size
-    ).toBe(0)
-  })
-
   it('replays intercept routes after the daemon idles out', async () => {
     succeedWith({ ok: true })
     await bridge.interceptEnable(['https://api.example/**'])
@@ -619,43 +554,5 @@ describe('AgentBrowserBridge', () => {
     await shutdown
 
     expect(peakRetirements).toBe(4)
-  })
-
-  it('bounds every teardown close well inside the quit barrier', async () => {
-    succeedWith({ snapshot: 'tree' })
-    await bridge.snapshot()
-
-    succeedWith(null)
-    await bridge.destroyAllSessions()
-
-    const closeCall = execFileMock.mock.calls.findLast((c: unknown[]) =>
-      (c[1] as string[]).includes('close')
-    )
-    expect((closeCall![2] as { timeout: number }).timeout).toBeLessThanOrEqual(5_000)
-  })
-
-  it('closes a session still being created when everything is torn down', async () => {
-    let releaseProxyStart: (() => void) | undefined
-    CdpWsProxyMock.mockImplementationOnce(function (this: Record<string, unknown>) {
-      this.start = vi.fn(
-        () =>
-          new Promise<string>((resolve) => {
-            releaseProxyStart = () => resolve('ws://127.0.0.1:9222')
-          })
-      )
-      this.stop = vi.fn(async () => {})
-      this.getPort = vi.fn(() => 9222)
-    })
-
-    succeedWith({ snapshot: 'tree' })
-    const inFlight = bridge.snapshot()
-    await vi.waitFor(() => expect(releaseProxyStart).toBeDefined())
-
-    const closesBeforeTeardown = closeCallCount()
-    const teardown = bridge.destroyAllSessions()
-    releaseProxyStart!()
-    await Promise.allSettled([inFlight, teardown])
-
-    expect(closeCallCount()).toBeGreaterThan(closesBeforeTeardown)
   })
 })

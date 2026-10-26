@@ -43,7 +43,7 @@ import {
   createStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from '@/lib/launch-structured-agent-session'
-import { launchAndReconcile } from '@/lib/structured-agent-session-launch-recovery'
+import { launchAndReconcile } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 
 function launchState(executionHostId: 'local' | 'runtime:server-1') {
   return {

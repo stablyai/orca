@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "설정 → 에이전트",
       "permissionsTitle": "새 채팅의 권한",
       "permissionsDescription": "새 채팅에만 적용됩니다. 에이전트별 기본값은 설정 → 에이전트에 있습니다.",
       "description": "채팅의 모양과 동작 방식을 선택하세요.",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "글꼴",
+        "fontFamilyDescription": "메시지, 활동 및 메시지 입력란에 사용하는 글꼴입니다.",
+        "inheritFont": "IDE와 같은 글꼴",
+        "fontPreviewLabel": "채팅 글꼴 미리보기",
+        "fontPreview": "이 문장에서 채팅 글꼴을 미리 볼 수 있습니다.",
         "title": "채팅",
         "textSize": "텍스트 크기",
         "textSizeDescription": "메시지, 도구 활동 및 메시지 입력란. 채팅에서 {{increase}} / {{decrease}} 키로도 변경할 수 있습니다.",
@@ -209,7 +215,8 @@
           "microphone": "마이크",
           "location": "위치",
           "notifications": "알림",
-          "clipboard": "클립보드"
+          "clipboard": "클립보드",
+          "localNetwork": "로컬 네트워크"
         },
         "title": "사이트 권한",
         "profile": "브라우저 프로필",
@@ -4284,6 +4291,7 @@
               "metric": {
                 "workingSetDescription": "합산된 워킹 세트(WS): 지금 RAM에 상주 중인 페이지입니다. 공유 페이지가 둘 이상의 프로세스에 나타날 수 있으며, Windows가 페이지 아웃한 메모리는 여기에 포함되지 않습니다.",
                 "privateBytesDescription": "합산된 프라이빗 바이트: 이 프로세스들이 커밋한 메모리로, 상주 여부와 관계없이 계산됩니다. 호스트가 커밋 한도에 반영하는 값이므로, 페이징으로 위의 워킹 세트가 줄어드는 동안에도 계속 늘어납니다.",
+                "footprintDescription": "합산된 메모리 사용 공간으로, 활성 상태 보기에 표시되는 값과 같습니다. 그래픽 메모리를 포함해 각 프로세스가 소유한 메모리이며, 프로세스 간에 공유되는 페이지는 중복으로 계산되지 않습니다.",
                 "rssDescription": "합산된 레지던트 세트 크기(RSS). 공유 또는 별칭된 페이지가 둘 이상의 프로세스에 나타날 수 있습니다."
               }
             },
@@ -5540,7 +5548,9 @@
           "51001182e3": "빈 디렉터리",
           "971d85cc84": "이 호스트에서 프로젝트로 열립니다 · {{value0}}",
           "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다.",
-          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음"
+          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음",
+          "entriesLabel": "폴더 항목",
+          "inputLabel": "필터 또는 경로"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -6036,17 +6046,17 @@
           "sshTargetNotFoundDetail": "워크스페이스의 새로고침을 실행하거나 호스트를 다시 연결한 후 다시 시도하세요.",
           "sshTargetInvalid": "SSH 호스트 구성이 불완전합니다.",
           "sshTargetInvalidDetail": "SSH 호스트를 편집하거나 다시 연결한 후 다시 시도하세요.",
-          "sshAliasRequired": "VS Code에는 이 호스트에 대한 SSH 구성 별칭이 필요합니다.",
+          "sshAliasRequired": "이 편집기에는 이 호스트에 대한 SSH 구성 별칭이 필요합니다.",
           "sshAliasRequiredDetail": "로컬 SSH 설정에 {{host}}:{{port}}의 Host 별칭을 추가하고 워크스페이스를 다시 연결한 후 다시 시도하세요.",
           "remoteEditorUnsupported": "이 앱은 SSH 워크스페이스를 열 수 없습니다.",
-          "remoteEditorUnsupportedDetail": "VS Code를 선택하거나 로컬에서 앱을 사용하세요.",
+          "remoteEditorUnsupportedDetail": "VS Code, Cursor 또는 Zed를 선택하거나 앱을 로컬에서 사용하세요.",
           "remotePathInvalid": "SSH 호스트에 대한 경로가 유효하지 않습니다.",
           "remotePathInvalidDetail": "워크스페이스의 새로고침을 실행한 후 다시 시도하세요.",
-          "remoteLaunchFailed": "VS Code에서 경로를 열 수 없습니다.",
-          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 VS Code 명령을 확인하세요.",
+          "remoteLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
+          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
           "wsl": "WSL",
           "remoteRuntimeEditorHint": "Orca가 SSH로 이 서버에 연결된 경우에만 이 컴퓨터의 앱에서 서버 파일을 열 수 있습니다.",
-          "remoteEditorHint": "VS Code만 SSH 호스트의 폴더를 열 수 있습니다."
+          "remoteEditorHint": "VS Code, Cursor, Zed만 SSH 호스트의 폴더를 열 수 있습니다."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "읽지 않음:",
@@ -8904,6 +8914,8 @@
           "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
           "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
           "editingPrefix": "편집 중",
+          "reconnectOnLaunch": "시작 시 다시 연결",
+          "reconnectOnLaunchHelp": "끄면 Orca가 시작될 때 이 호스트와 이 호스트를 통해 연결되는 Orca 서버를 직접 연결할 때까지 연결하지 않습니다.",
           "allowRemoteCliControl": "이 호스트의 orca CLI가 Orca를 제어하도록 허용",
           "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다.",
           "addHost": "호스트 추가"
@@ -14309,6 +14321,7 @@
             "prepareSessionResumeFailed": "재개를 위해 이 세션을 준비할 수 없습니다.",
             "sessionDeleted": "세션이 삭제되었습니다",
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
+            "sessionDeleteCheckingHost": "{{value0}} 확인 중…",
             "resumeInChatConflict": "다른 채팅에서 이미 이 대화를 진행 중입니다.",
             "resumeInChatTranscriptMissing": "이 대화 기록을 로드할 수 없어 채팅에서 재개할 수 없습니다.",
             "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다.",
@@ -14450,6 +14463,7 @@
             "subagentCountPlural": "서브에이전트 {{value0}}개",
             "delete": "삭제",
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
+            "deleteReasonHostUpdateRequired": "여기에서 세션을 삭제하려면 {{value0}}을(를) 업데이트하세요.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
             "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
             "resumeInNewNativeChat": "새 채팅에서 재개",
@@ -14460,6 +14474,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
+            "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
           },
           "FileExplorerNameFilter": {
@@ -18367,6 +18382,7 @@
             "clipboard": "클립보드",
             "windowManagement": "창 관리",
             "idleDetection": "장치 사용",
+            "localNetwork": "로컬 네트워크",
             "midi": "MIDI 장치"
           },
           "allow": "허용",
@@ -18377,6 +18393,7 @@
             "location": "위치 정보 확인",
             "microphone": "마이크 사용",
             "idleDetection": "이 장치의 사용 여부 감지",
+            "localNetwork": "이 장치의 앱과 로컬 네트워크의 장치에 액세스",
             "clipboard": "클립보드에 복사된 텍스트 및 이미지 보기",
             "windowManagement": "모든 디스플레이의 창 관리",
             "midi": "MIDI 장치 사용"
@@ -18671,6 +18688,9 @@
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
+        "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
+        "conversationOpenElsewhere": "Codex가 아직 이 대화를 열어 두고 있습니다. 잠시 후 다시 시도하거나 다른 Codex 터미널을 닫으세요.",
+        "conversationOpenInTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 후 여기서 계속하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
         "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
         "chooseClaudeAccountThenSend": "Claude 계정 설정에서 선택하거나 추가한 다음 메시지를 다시 보내세요.",
@@ -18755,7 +18775,6 @@
         "notDoneAnswer": "답변이 전송되지 않았습니다.",
         "notDoneOption": "설정이 변경되지 않았습니다.",
         "notDoneCommand": "명령이 실행되지 않았습니다.",
-        "notDoneGoal": "목표가 변경되지 않았습니다.",
         "notDoneQueuedEdit": "편집한 내용은 저장되지 않았습니다.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
         "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
@@ -19001,6 +19020,8 @@
         "runFileChangeMany": "{{value0}} 파일을 편집했습니다.",
         "runWebSearchOne": "웹을 1회 검색했습니다.",
         "runWebSearchMany": "웹을 {{value0}}번 검색했습니다.",
+        "runBrowserOne": "브라우저를 사용했습니다",
+        "runBrowserMany": "브라우저를 {{value0}}회 사용했습니다",
         "runIntegrationOne": "1개 통합 사용",
         "runIntegrationMany": "{{value0}} 통합 사용",
         "runAgentOne": "에이전트 1명 실행",
@@ -19023,6 +19044,8 @@
         "runLiveFileChangeMany": "{{value0}} 파일 편집 중",
         "runLiveWebSearchOne": "웹 검색 1회",
         "runLiveWebSearchMany": "웹 검색 {{value0}}회",
+        "runLiveBrowserOne": "브라우저 사용 중",
+        "runLiveBrowserMany": "브라우저 {{value0}}회 사용 중",
         "runLiveIntegrationOne": "1개의 통합 사용",
         "runLiveIntegrationMany": "{{value0}} 통합 사용",
         "runLiveAgentOne": "에이전트 1개 실행 중",
@@ -19030,7 +19053,9 @@
         "runLivePlanOne": "계획 업데이트 중",
         "runLivePlanMany": "계획을 {{value0}}번 업데이트 중",
         "runLiveToolOne": "도구 1개 사용",
-        "runLiveToolMany": "{{value0}} 도구 사용"
+        "runLiveToolMany": "{{value0}} 도구 사용",
+        "showBrowserPage": "보기",
+        "showBrowserPageLabel": "{{value0}} 보기"
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
@@ -19060,10 +19085,11 @@
         "showTerminal": "terminal 표시"
       },
       "resumeInNewChat": {
+        "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
         "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
         "cannotResume": "이 {{agent}} 대화는 기본 채팅에서 재개할 수 없습니다.",
-        "exitUnconfirmedFromTerminal": "Orca가 터미널에서 {{agent}} 종료 여부를 확인할 수 없습니다. 실행 중인 프로세스를 중지하거나 터미널을 닫은 후 세션 기록에서 이 대화를 여세요.",
-        "exitUnconfirmed": "Orca가 터미널에서 {{agent}} 종료 여부를 확인할 수 없습니다. 실행 중인 프로세스를 중지하거나 터미널을 닫은 후 다시 시도하세요."
+        "exitUnconfirmedFromTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요.",
+        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요."
       },
       "state": {
         "loading": {
@@ -19365,8 +19391,7 @@
         "continue": "계속",
         "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
         "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다.",
-        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요.",
-        "usageLimitExplanation": "중단한 곳부터 계속하도록 에이전트에 요청합니다. 한도가 초기화된 후 사용하세요."
+        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요."
       },
       "rewind": {
         "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",
@@ -19420,7 +19445,13 @@
       "explicitChatWsl": "WSL에서는 채팅을 사용할 수 없습니다. 대신 터미널에서 에이전트를 여세요.",
       "explicitChatSsh": "SSH 연결에서는 채팅을 사용할 수 없습니다. 대신 터미널에서 에이전트를 여세요.",
       "structuredSessionTerminalNotVisible": "Orca가 터미널에서 {{value0}}을(를) 열었지만 실행이 완료된 후 여기에 표시하지 못했습니다. 채팅 초안은 보관되었습니다.",
-      "explicitChatUnavailable": "이 워크스페이스에서는 채팅을 실행할 수 없습니다. 에이전트 설치 상태를 확인하거나 터미널에서 여세요."
+      "explicitChatUnavailable": "이 워크스페이스에서는 채팅을 실행할 수 없습니다. 에이전트 설치 상태를 확인하거나 터미널에서 여세요.",
+      "goalControl": {
+        "settingsRejected": "Codex가 선택한 모델과 추론 수준을 적용하지 못했습니다. 이 목표 변경은 전송되지 않았습니다. 선택 항목을 확인하고 다시 시도하세요.",
+        "settingsUnconfirmed": "Codex가 선택한 모델과 추론 수준의 적용을 확인하지 않았습니다. 이 목표 변경은 전송되지 않았습니다. 채팅을 확인하고 다시 시도하세요.",
+        "pauseUnconfirmed": "Codex 실행은 중지되었지만 목표 일시 중지는 확인되지 않았습니다. 계속하기 전에 목표를 확인하세요.",
+        "stopUnconfirmed": "Codex 중지를 확인하지 못했습니다. 계속하기 전에 채팅을 확인하세요."
+      }
     },
     "tab": {
       "bar": {
@@ -19448,6 +19479,10 @@
           "editors": "모든 편집기 탭을 닫을까요?",
           "description": "선택한 탭을 닫습니다. 고정된 탭은 열린 상태로 유지됩니다.",
           "confirm": "탭 닫기"
+        },
+        "chatRename": {
+          "empty": "채팅 이름은 비워 둘 수 없습니다",
+          "failed": "이 채팅의 이름을 바꾸지 못했습니다"
         }
       }
     },
@@ -21181,5 +21216,8 @@
       "main": "기본 작업 트리가 보호됩니다."
     },
     "rowActions": "{{name}}에 대한 작업"
+  },
+  "browserTab": {
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
   }
 }

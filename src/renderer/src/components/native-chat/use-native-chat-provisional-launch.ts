@@ -7,7 +7,7 @@ import {
   useStructuredAgentSessionLaunchLifecycle
 } from '@/lib/structured-agent-session-launch'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
-import { subscribeStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch-registry'
+import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { relaunchFailedStructuredAgentSessionWithMessage } from '@/lib/structured-agent-session-launch-message'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 

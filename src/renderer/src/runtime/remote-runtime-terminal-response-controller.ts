@@ -1,3 +1,4 @@
+import { parseTerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
@@ -99,7 +100,11 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.callbacks.onOutputPauseCapability?.()
       }
       if (!stream.initialSnapshotReceived) {
-        stream.callbacks.onSubscribeAcknowledged?.()
+        stream.callbacks.onSubscribeAcknowledged?.(
+          event.terminal === stream.terminal
+            ? parseTerminalAttachmentLaunchResult(event.launchResult)
+            : undefined
+        )
       }
     } else if (event.type === 'end') {
       disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')

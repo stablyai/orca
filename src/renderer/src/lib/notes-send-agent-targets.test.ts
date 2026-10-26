@@ -122,6 +122,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -146,6 +147,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -168,6 +170,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [STATUS_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -190,6 +193,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -215,6 +219,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -240,6 +245,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'zsh' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -256,6 +262,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -278,6 +285,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -294,6 +302,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -310,6 +319,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -333,6 +343,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -355,6 +366,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -371,6 +383,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -388,6 +401,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -408,6 +422,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 2: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -433,6 +448,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 2: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -460,6 +476,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -491,6 +508,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -516,6 +534,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -542,6 +561,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -571,6 +591,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 2: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -603,6 +624,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -632,6 +654,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -645,6 +668,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -666,6 +690,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'OC | Ad hoc build' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -695,6 +720,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'OC | Ad hoc build' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -726,6 +752,7 @@ describe('notes send agent targets', () => {
         }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 

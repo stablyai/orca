@@ -10,9 +10,11 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -209,16 +211,14 @@ async function openEditorFileDropPaths(
     }
     try {
       // OS drops supply client paths; upload before opening them in remote/SSH workspaces.
-      const destinationDir = joinPath(worktreePath, '.orca/drops')
+      const destinationDir = joinPath(worktreePath, DROP_STAGING_RELATIVE_DIR)
       const { results } = await importExternalPathsToRuntime(
         fileContext,
         [...paths],
         destinationDir,
         { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
-      if (!canOpenEditorFileDrop(context, destination)) {
-        return
-      }
+      // Rechecked per result, so it also covers the wait for the upload itself.
       for (const result of results) {
         if (!canOpenEditorFileDrop(context, destination)) {
           return
@@ -240,12 +240,14 @@ async function openEditorFileDropPaths(
           { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
         )
       }
-      if (results.some((result) => result.status !== 'imported')) {
+      const rejected = results.filter((result) => result.status !== 'imported')
+      if (rejected.length > 0) {
         toast.error(
           translate(
             'auto.hooks.useGlobalFileDrop.d720e2f855',
             'Some dropped files could not be uploaded.'
-          )
+          ),
+          { description: describeSharedDropFailureReason(rejected) }
         )
       }
     } catch {

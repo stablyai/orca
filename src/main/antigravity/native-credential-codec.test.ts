@@ -32,7 +32,8 @@ describe('native Antigravity credential format', () => {
         issuer: 'https://accounts.google.com',
         subject: 'synthetic-subject',
         email: 'test@example.invalid'
-      }
+      },
+      refreshToken: 'synthetic-refresh'
     })
   })
 
@@ -88,7 +89,8 @@ describe('native Antigravity credential format', () => {
     expect(parseAntigravityNativeCredential(contents)).toEqual({
       contents,
       authMethod: 'future',
-      identity: null
+      identity: null,
+      refreshToken: null
     })
   })
 })

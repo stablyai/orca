@@ -425,6 +425,13 @@
   opacity: 1;
 }
 
+/* A shown but unavailable action (pending, or its host needs an update) reads as dimmed. */
+.pane-title-bar[data-active-pane] .pane-title-split-trigger:disabled,
+.pane-title-bar:hover .pane-title-split-trigger:disabled,
+.pane-title-bar:focus-within .pane-title-split-trigger:disabled {
+  opacity: 0.5;
+}
+
 .pane-title-bar:hover .pane-title-close,
 .pane-title-bar:focus-within .pane-title-close,
 .pane-title-close:focus-visible {
@@ -441,6 +448,10 @@
 .pane-title-split-trigger[data-state='instant-open'] {
   background: transparent;
   color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
+}
+
+.pane-title-split-trigger:disabled:hover {
+  color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
 }
 
 /* Match title text while editing to prevent layout shift. */

@@ -125,7 +125,12 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       }
     },
     removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store)
+      retireRemovedRuntimeEnvironment(
+        environmentId,
+        args.invalidateTransport,
+        args.store,
+        args.getUserDataPath()
+      )
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)

@@ -54,6 +54,14 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
             'Searched the web {{value0}} times',
             value0
           )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runBrowserOne', 'Used the browser')
+        : translate(
+            'components.native-chat.tool.runBrowserMany',
+            'Used the browser {{value0}} times',
+            value0
+          )
     case 'mcpToolCall':
       return one
         ? translate('components.native-chat.tool.runIntegrationOne', 'Used 1 integration')
@@ -133,6 +141,14 @@ function liveClause(
         : translate(
             'components.native-chat.tool.runLiveWebSearchMany',
             'Searching the web {{value0}} times',
+            value0
+          )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runLiveBrowserOne', 'Using the browser')
+        : translate(
+            'components.native-chat.tool.runLiveBrowserMany',
+            'Using the browser {{value0}} times',
             value0
           )
     case 'mcpToolCall':

@@ -128,7 +128,6 @@ export async function setupTerminalCreateSurfacing(
   const focusTerminalListenerRef: ListenerRef<(data: FocusTerminalListenerPayload) => void> = {
     current: null
   }
-  const newTerminalTabListenerRef: ListenerRef<() => void> = { current: null }
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -203,8 +202,7 @@ export async function setupTerminalCreateSurfacing(
       replyTerminalCreate,
       createTerminalListenerRef,
       requestTerminalCreateListenerRef,
-      focusTerminalListenerRef,
-      newTerminalTabListenerRef
+      focusTerminalListenerRef
     })
   )
 
@@ -214,9 +212,6 @@ export async function setupTerminalCreateSurfacing(
 
   if (typeof createTerminalListenerRef.current !== 'function') {
     throw new Error('Expected create-terminal listener to be registered')
-  }
-  if (typeof newTerminalTabListenerRef.current !== 'function') {
-    throw new Error('Expected new-terminal-tab listener to be registered')
   }
   return {
     createTab,
@@ -241,7 +236,6 @@ export async function setupTerminalCreateSurfacing(
     storeState,
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,
-    focusTerminalListenerRef,
-    newTerminalTabListenerRef
+    focusTerminalListenerRef
   }
 }

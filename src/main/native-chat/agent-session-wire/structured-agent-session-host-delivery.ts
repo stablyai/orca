@@ -12,7 +12,10 @@ import {
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
-import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import {
+  StructuredAgentSessionDeliveryLoop,
+  type StructuredAgentSessionDeliveryLoopDeps
+} from './structured-agent-session-delivery-loop'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
@@ -55,6 +58,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   trackStart: <T>(start: Promise<T>) => Promise<T>
   startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
   deliveryOrder: StructuredAgentSessionDeliveryOrder
+  startFlights?: StructuredAgentSessionDeliveryLoopDeps['startFlights']
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -105,6 +109,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       })
     },
     readiness: input.readiness,
+    startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),

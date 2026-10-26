@@ -75,9 +75,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   /** Undefined when the pane changed or exited during a screen read; the caller then has no answer. */
   protected readTerminalInteractiveWaitEvidence(
     handle: string,
-    ptyId: string
+    ptyId: string,
+    paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (this.getPaneAgentForTuiIdle(ptyId) !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>

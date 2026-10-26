@@ -48,6 +48,9 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
 }))
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
   refreshInstalledOpenCodeStatusPlugins: state.refreshOpenCodePlugins
 }))
@@ -133,6 +136,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     attachAgentStatusStore() {
       return () => {}
     }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'headless-runtime'
     }

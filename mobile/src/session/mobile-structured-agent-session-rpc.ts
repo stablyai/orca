@@ -22,7 +22,7 @@ import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 

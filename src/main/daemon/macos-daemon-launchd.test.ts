@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type * as TimerPromises from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import { DAEMON_V8_FLAGS } from './daemon-launched-child-spawn'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const { state, runProcessMock, materializeMock, ensureWithinMock, disconnectMock, recoverMock } =
@@ -218,6 +219,7 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
     Label: macDaemonJobLabel(state.root),
     KeepAlive: false,
     AssociatedBundleIdentifiers: ['com.stablyai.orca'],
+    MaterializeDatalessFiles: true,
     EnvironmentVariables: { ORCA_TEST_SECRET: 'test-value' }
   })
   expect(JSON.stringify(job)).not.toContain('NODE_CHANNEL_FD')
@@ -229,7 +231,13 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
     Array.isArray(job.ProgramArguments)
       ? job.ProgramArguments.map(String)
       : []
-  expect(args.slice(0, 4)).toEqual([helperExec(), helperEntry(), '--socket', options.socketPath])
+  expect(args.slice(0, 5)).toEqual([
+    helperExec(),
+    ...DAEMON_V8_FLAGS,
+    helperEntry(),
+    '--socket',
+    options.socketPath
+  ])
   // Replacement preflight compares the installed entry, not the private helper copy.
   expect(args[args.indexOf('--entry-path') + 1]).toBe(options.entryPath)
   expect(args[args.indexOf('--spawner-exec-path') + 1]).toBe(helperExec())

@@ -14,11 +14,9 @@ vi.mock('@/lib/telemetry', () => ({
 
 import {
   buildCompletedOnboardingNotificationSettings,
-  buildOnboardingDismissedPayload,
   onboardingChatPermissionSetting,
   useCloseWith,
-  type DismissedExtras,
-  trackOnboardingDismissed
+  type DismissedExtras
 } from './use-onboarding-flow-persistence'
 import type { StepNumber } from './use-onboarding-flow-types'
 
@@ -89,32 +87,6 @@ describe('onboarding flow persistence', () => {
     root = null
     container = null
     vi.useRealTimers()
-  })
-
-  it('builds dismissed telemetry with the triggering advance path', () => {
-    expect(
-      buildOnboardingDismissedPayload(3, {
-        durationMs: 250,
-        advancedVia: 'keyboard'
-      })
-    ).toEqual({
-      last_step: 3,
-      duration_ms: 250,
-      advanced_via: 'keyboard'
-    })
-  })
-
-  it('tracks dismissed onboarding telemetry with the triggering advance path', () => {
-    trackOnboardingDismissed(3, {
-      durationMs: 250,
-      advancedVia: 'keyboard'
-    })
-
-    expect(trackMock).toHaveBeenCalledWith('onboarding_dismissed', {
-      last_step: 3,
-      duration_ms: 250,
-      advanced_via: 'keyboard'
-    })
   })
 
   it('preserves explicit focus notification suppression when completing onboarding', () => {

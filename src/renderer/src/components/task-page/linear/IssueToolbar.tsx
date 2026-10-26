@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, SlidersHorizontal, List, ArrowDownUp, Eye } from 'lucide-react'
@@ -18,7 +18,7 @@ import type {
   LinearViewMode,
   LinearGroupBy,
   LinearOrderBy
-} from '@/components/task-page-localized-options'
+} from '../../../../../shared/linear/issue-view-resume-state'
 export function TaskPageLinearIssueToolbar({
   model
 }: {

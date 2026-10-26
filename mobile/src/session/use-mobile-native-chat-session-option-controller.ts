@@ -7,8 +7,8 @@ import type {
   SessionOptionValue,
   SessionOptionsSurface
 } from '../../../src/shared/native-chat-session-options'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,

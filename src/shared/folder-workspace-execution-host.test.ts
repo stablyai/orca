@@ -35,7 +35,7 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path'>): Repo {
     badgeColor: '#000',
     addedAt: 0,
     ...overrides
-  } as Repo
+  }
 }
 
 function state(overrides: Partial<FolderWorkspaceHostState> = {}): FolderWorkspaceHostState {

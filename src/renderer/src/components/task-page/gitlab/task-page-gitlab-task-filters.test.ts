@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { isGitLabIssueFilter, isGitLabMRFilter } from '../../task-page-source-context'
+import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
 describe('isGitLabMRFilter', () => {
   it('accepts MR statuses including all', () => {

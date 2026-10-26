@@ -251,6 +251,10 @@ A denied share fails with `artifact_sharing_disabled` before any upload. Do not 
 answer will not change until a human acts. Tell the user to turn the setting on and re-run, or
 deliver the file locally if they decline.
 
+On a headless Orca server, artifact and skill-sharing commands fail with
+`sharing_unavailable_on_host`: no Orca cloud sign-in exists there. Do not retry or ask the
+user to change settings; tell them to share from the Orca desktop app instead.
+
 The `artifacts` commands, and the separate default-off permission for publishing installed skills, are in `references/publishing.md`. Load it before publishing either kind of link; a skill folder can hold scripts, configuration, or credentials.
 
 ## Built-In Browser

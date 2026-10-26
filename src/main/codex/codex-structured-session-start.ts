@@ -106,6 +106,7 @@ export async function openCodexStructuredSession(
   )
   current()
   start.setPrimaryThreadId(opened.threadId)
+  attempt.window.appliedSettings.observe(opened)
   const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
   if (restored && !restored.accepted) {
     throw AgentSessionAcquisitionRefusal.historyTooLarge(
@@ -147,6 +148,7 @@ export async function openCodexStructuredSession(
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
     reportedOptions: reportedCodexThreadOptions(opened),
+    appliedSettings: attempt.window.appliedSettings,
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,
     translator,

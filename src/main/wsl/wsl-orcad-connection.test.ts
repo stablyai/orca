@@ -1,4 +1,4 @@
-import { connect, type Server, type Socket } from 'node:net'
+import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -215,6 +215,33 @@ describe('WslOrcadConnectionManager', () => {
     await staleClosed
     expect(await roundTrip(after, 'new')).toBe('new')
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
+  })
+
+  it('rebinds the bridge port the host record saved, so an app restart keeps the pairing', async () => {
+    const saved = await setup().manager.ensure('Ubuntu')
+    const port = saved.localPort
+    await saved.close()
+
+    const { manager } = setup({ recordedLocalPort: () => port })
+    const restarted = await manager.ensure('Ubuntu')
+    expect(restarted.localPort).toBe(port)
+    expect(restarted.pairingOffer).toBe(saved.pairingOffer)
+    expect(await roundTrip(restarted, 'again')).toBe('again')
+  })
+
+  it('picks a free port when the recorded one is taken', async () => {
+    const squatter = createServer()
+    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve))
+    const address = squatter.address()
+    const taken = typeof address === 'object' && address ? address.port : 0
+    try {
+      const { manager } = setup({ recordedLocalPort: () => taken })
+      const connection = await manager.ensure('Ubuntu')
+      expect(connection.localPort).not.toBe(taken)
+      expect(await roundTrip(connection, 'free')).toBe('free')
+    } finally {
+      squatter.close()
+    }
   })
 
   it('serves the incumbent with its deferred update, then reports the update landing', async () => {

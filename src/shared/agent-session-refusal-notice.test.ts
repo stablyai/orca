@@ -94,7 +94,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   command: 'notDoneCommand',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal',
+  goal: 'notDoneGoalChangeIncomplete',
   'queued-edit': 'notDoneQueuedEdit'
 }
 

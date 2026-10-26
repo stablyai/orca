@@ -3,6 +3,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { startStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
 import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
@@ -17,12 +18,13 @@ describe('an operation whose agent start throws', () => {
     const context = {
       deps: { logger: log.logger },
       sessions: new Map(),
+      publishStatus: vi.fn(),
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
       tasks: { trackAttach: (start: Promise<unknown>) => start },
       runtimeState: {
         acquireAborts: new StructuredAgentSessionAcquireAborts(),
         startFlights: new StructuredAgentSessionStartFlights(),
-        startupAttempts: { begin: () => {}, abandon: () => {} }
+        startupAttempts: new StructuredAgentSessionStartupAttempts({ expire: () => {} })
       },
       reconcileLeases: () => Promise.reject(cause)
     }
@@ -35,13 +37,14 @@ describe('an operation whose agent start throws', () => {
 
     expect(refused).toEqual({
       ok: false,
+      failure: { kind: 'hostFault' },
       refusal: {
         code: 'agent_session_owner_restart_failed',
         message: "The agent couldn't restart."
       }
     })
     expect(log.entries.map((entry) => entry.fields)).toEqual([
-      { scope: 'operation-agent-start', sessionId: SESSION, error: cause }
+      { scope: 'agent-start', sessionId: SESSION, error: cause }
     ])
   })
 })

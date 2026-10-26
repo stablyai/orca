@@ -91,6 +91,12 @@ export function installOrcadShutdownSignals(
   return shutdown
 }
 
+export async function stopOrcadStructuredAgentSessions(): Promise<void> {
+  const { stopStructuredAgentSessionRuntime } =
+    await import('../runtime/structured-agent-session-runtime')
+  await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
+}
+
 export async function startOrcadWithLifecycle<T extends object>(
   start: (registerRuntimeCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
   cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
@@ -162,10 +168,15 @@ export async function startOrcadWithHost<T extends object>(
   )
 }
 
-export async function flushOrcadProfileStoreForShutdown(store: {
-  flushFinalOrThrowAsync(): Promise<void>
-  freezeWritesAsync(): Promise<void>
-}): Promise<void> {
+export async function flushOrcadProfileStoreForShutdown(
+  store: { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> },
+  paneGrids?: { flushPaneGrids(): Promise<void> | null } | null
+): Promise<void> {
+  // A pane's grid still inside its write burst joins the final save.
+  const flushing = paneGrids?.flushPaneGrids()
+  if (flushing) {
+    await flushing
+  }
   try {
     await store.flushFinalOrThrowAsync()
   } finally {

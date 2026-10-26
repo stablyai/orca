@@ -1,9 +1,9 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
-import { getLinearPriorityLabel } from '@/components/task-page-localized-options'
+import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { ChevronDown, Check, UserRound, LoaderCircle, Users, Tag, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 export function TaskPageLinearProjectFields({

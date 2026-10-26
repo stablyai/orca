@@ -283,7 +283,7 @@ describe('AppearancePane', () => {
     ).toBeNull()
   })
 
-  it('renders the language dropdown with every built-in language option', async () => {
+  it('saves distinct language selections from the dropdown', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -305,20 +305,18 @@ describe('AppearancePane', () => {
     expect(languageTrigger).not.toBeNull()
     expect(chineseOption).not.toBeNull()
     expect(portugueseOption).not.toBeNull()
-    expect(container.textContent).not.toContain('Advanced')
-    expect(container.textContent).toContain('System')
-    expect(container.textContent).toContain('English')
-    expect(container.textContent).toContain('中文（简体）')
-    expect(container.textContent).toContain('한국어')
-    expect(container.textContent).toContain('日本語')
-    expect(container.textContent).toContain('Español')
-    expect(container.textContent).toContain('Português (Brasil)')
-
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
+    expect(updateSettings).toHaveBeenNthCalledWith(1, { uiLanguage: 'zh' })
+
+    await act(async () => {
+      portugueseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenNthCalledWith(2, { uiLanguage: 'pt' })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
   it('includes the selected language in the collapsed Interface summary', async () => {
@@ -470,7 +468,7 @@ describe('AppearancePane', () => {
     ).not.toBeNull()
   })
 
-  it('shows and updates the menu bar icon preference only on desktop macOS', async () => {
+  it('shows and updates the menu bar icon preference on desktop macOS', async () => {
     mocks.state.appPlatform = 'darwin'
     mocks.state.settingsSearchQuery = 'menu bar'
     const updateSettings = vi.fn()

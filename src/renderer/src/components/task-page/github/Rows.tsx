@@ -1,8 +1,8 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
-import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
+import { formatPRDelta } from '../task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,
   getTaskPageGitHubPRIconTone
@@ -25,7 +25,7 @@ import {
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
   getTaskPageRepoSourceContext,
   formatRelativeTime
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'

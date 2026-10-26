@@ -32,6 +32,10 @@ You can also right-click an open agent tab:
 - On a structured chat tab, **Continue with Terminal Agent** starts a new terminal agent with a copy of the conversation.
 - On a supported terminal agent tab, **Continue in Chat UI** opens the conversation in a new structured chat. The terminal pane header shows the same action as a chat button.
 
+These continuation actions also work for conversations on a paired **Remote Orca Server** that supports conversation-history resume. The chat and its history stay on that server. Direct SSH workspaces without an Orca runtime do not support this action. If the action is unavailable on an older server, update that server as well as the client.
+
+If the terminal agent still owns the conversation, Orca asks you to stop or exit it before continuing from **Agent Session History**. Continuing in Chat does not forcibly terminate the terminal agent.
+
 ## Switch an existing terminal-backed chat
 
 Structured chat tabs have no in-place terminal view; use **Continue with Terminal Agent** above instead.

@@ -67,9 +67,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
       return
     }
-    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
-      return
-    }
     // Gate settled-agent input at this shared commit point; refusal parks for recheck instead of dropping mail.
     if (!this.deps.isAgentSettledForDelivery(leaf)) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
@@ -113,7 +110,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    const unread = selectOrchestrationPointerBatch({
+    const { messages: unread, heldDeliveryId } = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters,
@@ -153,6 +150,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       leaf,
       mailboxHandle,
       messages: unread,
+      heldDeliveryId,
       newestSequence,
       enterDelayMs: pointerEnterDelayMs(),
       leafKey: this.leafKey(leaf),

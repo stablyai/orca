@@ -283,6 +283,23 @@ describe('reply ownership matrix', () => {
     expect(replies).toHaveLength(2)
   })
 
+  // #32944: a paused view's discarded queries fall back to main only when that view alone owned them.
+  it('reports sole remote query ownership and answers yielded stateless queries', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-yield')
+    const releaseA = runtime.registerRemoteTerminalViewSubscriber('pty-yield', () => false)
+    expect(runtime.isSoleRemoteTerminalQueryOwner('pty-yield')).toBe(true)
+    const releaseB = runtime.registerRemoteTerminalViewSubscriber('pty-yield', () => false)
+    expect(runtime.isSoleRemoteTerminalQueryOwner('pty-yield')).toBe(false)
+    releaseB()
+    releaseA()
+
+    runtime.onPtyData('pty-yield', 'prompt', 0)
+    runtime.answerYieldedTerminalQueries('pty-yield', '\x1b[c')
+    await settle(runtime, 'pty-yield')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+  })
+
   it('keeps raw preview presence separate from terminal query authority', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-preview')

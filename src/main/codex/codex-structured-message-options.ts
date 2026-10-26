@@ -6,6 +6,27 @@ import { CODEX_DEFAULT_SERVICE_TIER } from './codex-structured-service-tier'
 import type { CodexSession } from './codex-structured-session-state'
 import { applyCodexStructuredSessionOption } from './codex-structured-session-options'
 
+function codexModelDefaults(session: CodexSession, selected?: string) {
+  const listing = codexAcquireCatalogListing(session.catalogAccess)
+  const model =
+    selected ??
+    session.reportedOptions.model ??
+    listing?.models.find((entry) => entry.isDefault)?.id
+  const defaultEffort =
+    (model === session.reportedOptions.model ? session.reportedOptions.effort : undefined) ??
+    listing?.models.find((entry) => entry.id === model)?.defaultEffort
+  return { model, defaultEffort }
+}
+
+export function resolvedCodexGoalSettings(
+  session: CodexSession,
+  choices: AgentSessionExecutionOptions = {}
+) {
+  const { model, defaultEffort } = codexModelDefaults(session, choices.model)
+  const effort = choices.effort ?? defaultEffort
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
+
 /** Resolve per-message overrides without replacing the session's saved picks. */
 export async function resolvedCodexMessageOptions(
   session: CodexSession,
@@ -14,19 +35,13 @@ export async function resolvedCodexMessageOptions(
   if (choices === undefined) {
     return undefined
   }
-  const listing = codexAcquireCatalogListing(session.catalogAccess)
   const priorModel = session.options.get('model')
   const priorEffort = session.options.get('effort')
   // Keep the thread's effort unless switching models.
-  const thread = session.reportedOptions
-  const model =
-    choices.model ?? thread.model ?? listing?.models.find((entry) => entry.isDefault)?.id
+  const { model, defaultEffort } = codexModelDefaults(session, choices.model)
   if (!model && (choices.effort || priorModel || priorEffort)) {
     throw new AgentSessionOptionRejectedError(new Error('codex default model is unavailable'))
   }
-  const listedModel = listing?.models.find((entry) => entry.id === model)
-  const threadEffort = model === thread.model ? thread.effort : undefined
-  const defaultEffort = threadEffort ?? listedModel?.defaultEffort
   if (choices.effort === undefined && priorEffort && !defaultEffort) {
     throw new AgentSessionOptionRejectedError(new Error('codex default effort is unavailable'))
   }

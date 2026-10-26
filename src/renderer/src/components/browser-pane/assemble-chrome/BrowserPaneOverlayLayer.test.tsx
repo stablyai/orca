@@ -12,6 +12,7 @@ type MockAppState = {
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
+  browserPagesByWorkspace: Record<string, readonly { id: string }[]>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -20,17 +21,24 @@ const mocks = vi.hoisted(() => ({
   automationVisiblePageIds: new Set<string>(),
   mobileDrivenPageIds: new Set<string>(),
   remotelyViewedPageIds: new Set<string>(),
-  focusGroup: vi.fn()
+  focusGroup: vi.fn(),
+  pagePointerDown: vi.fn<(target: { browserPageId: string }) => void>()
 }))
 
-vi.mock('../../../store', () => ({
-  useAppStore: (selector: (state: MockAppState) => unknown) => {
+vi.mock('../../../store', () => {
+  const readState = (): MockAppState => {
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
     }
-    return selector(mocks.state)
+    return mocks.state
   }
-}))
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: MockAppState) => unknown) => selector(readState()),
+      { getState: readState }
+    )
+  }
+})
 
 vi.mock('../host-guest/browser-automation-visibility', () => ({
   useBrowserAutomationVisibilityForAny: (pageIds: readonly string[]) =>
@@ -94,10 +102,19 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
+    vi.stubGlobal('api', {
+      ui: {
+        onBrowserPagePointerDown: (listener: (target: { browserPageId: string }) => void) => {
+          mocks.pagePointerDown.mockImplementation(listener)
+          return () => {}
+        }
+      }
+    })
   })
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
     // Clear the module-level row store so sibling tests cannot inherit extra panes.
     clearClientHostedBrowserRowSelection()
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
@@ -457,6 +474,26 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(slotDisplay('browser-b')).toBe('flex')
   })
 
+  it('makes the split of a page clicked into the active one (#22144)', () => {
+    const state = createState()
+    const [tabA, tabB] = state.unifiedTabsByWorktree['wt-1']
+    state.unifiedTabsByWorktree = { 'wt-1': [tabA, { ...tabB, groupId: 'group-2' }] }
+    state.groupsByWorktree = {
+      'wt-1': [
+        { id: 'group-1', worktreeId: 'wt-1', activeTabId: tabA.id, tabOrder: [tabA.id] },
+        { id: 'group-2', worktreeId: 'wt-1', activeTabId: tabB.id, tabOrder: [tabB.id] }
+      ]
+    }
+    state.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
+    mocks.state = state
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+
+    // Main reports the press by page id, which is how both local and client-hosted guests register.
+    act(() => mocks.pagePointerDown({ browserPageId: 'page-b' }))
+
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+  })
+
   // The host-row pane shares an absolute anchor with guests; only last-in-DOM order keeps it visible above them.
   it('renders the client-hosted host-row pane after every browser slot', () => {
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [HOST_ROW] })
@@ -520,6 +557,10 @@ function createState(): MockAppState {
     },
     // Default: the browser's own group holds focus, so active === focused.
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    browserPagesByWorkspace: {
+      [browserA.id]: [{ id: 'page-a' }],
+      [browserB.id]: [{ id: 'page-b' }]
+    },
     focusGroup: mocks.focusGroup
   }
 }

@@ -1,3 +1,6 @@
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
+import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type {
   AgentSessionOptionsResult,
@@ -7,7 +10,6 @@ import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { createCoalescingKeyedRunner } from '../../../src/shared/coalescing-keyed-runner'
 import type { RpcClient } from '../transport/rpc-client'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
 import { cloneStructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
@@ -27,6 +29,7 @@ export function useMobileStructuredOptionState(args: {
   coherentCatalog?: boolean
   agent: string | null
   enabled: boolean
+  statusFeed: boolean
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
@@ -34,6 +37,7 @@ export function useMobileStructuredOptionState(args: {
   const {
     agent,
     enabled,
+    statusFeed,
     fence,
     optionCatalog,
     sessionId,
@@ -43,6 +47,19 @@ export function useMobileStructuredOptionState(args: {
     worktree,
     coherentCatalog: hostCoherentCatalog = false
   } = args
+  const connected = useSyncExternalStore(
+    client?.onStateChange ?? (() => () => {}),
+    () => client?.getState() === 'connected'
+  )
+  const feed =
+    enabled && connected && statusFeed && client && sessionId
+      ? mobileStructuredSessionStatusFeed(client)
+      : null
+  const summary = useSyncExternalStore(feed?.subscribe ?? (() => () => {}), () =>
+    sessionId ? feed?.getSnapshot().get(sessionId) : undefined
+  )
+  const projectPermission = <T extends { reportedPermissionMode?: string | null }>(state: T): T =>
+    projectRuntimePermission(state, summary, fence)
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
@@ -59,7 +76,7 @@ export function useMobileStructuredOptionState(args: {
     },
     []
   )
-  const contextKey = JSON.stringify([agent, sessionId, newLaunch, worktree, fence])
+  const contextKey = JSON.stringify([agent, sessionId, newLaunch, worktree, fence, connected])
   const contextRef = useRef({ key: contextKey, client })
   useEffect(() => {
     contextRef.current = { key: contextKey, client }
@@ -83,7 +100,8 @@ export function useMobileStructuredOptionState(args: {
             ...previous,
             catalogSource: 'host' as const,
             record: cloneStructuredAgentSessionOptionRecord(previous.record),
-            pendingId: null
+            pendingId: null,
+            reportedPermissionMode: undefined
           }
         : seeded
     // Keep the chat’s mode visible through provider restarts.
@@ -192,6 +210,7 @@ export function useMobileStructuredOptionState(args: {
   ])
 
   return {
+    projectPermission,
     conversationSupport,
     imageSupport,
     awaitingOptions,

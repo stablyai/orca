@@ -1,3 +1,4 @@
+import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createHash } from 'node:crypto'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
@@ -38,7 +39,9 @@ export function commitConversationClearRecord(
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   state.records.set(clear.sessionId, {
-    ...source,
+    ...(source.conversationNameSource === 'user'
+      ? source
+      : setAgentSessionRecordConversationName(source, null, clear.now)),
     providerHandleChain: [],
     lease: { ...source.lease, provenHandleLinkId: null },
     conversationCommand: clear.command,

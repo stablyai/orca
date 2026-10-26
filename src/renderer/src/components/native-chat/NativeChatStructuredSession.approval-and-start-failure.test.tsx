@@ -228,6 +228,16 @@ afterEach(() => {
     })
   }
 
+  it('renders the terminal refusal once beside the rejected message', async () => {
+    const fact: AgentSessionFailureFact = { kind: 'conversationOpenInTerminal' }
+    renderPane([rejected('terminal-held', 'Host fallback words.', fact)])
+    const row = await notice('terminal-held')
+    expect(row.textContent).toContain(
+      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal to continue here.'
+    )
+    expect(within(row).queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
   // The start row owns the failure reason; resending a rejected message creates a new message.
   it("says only 'not sent', with no Retry, on each message the failed start's row explains", async () => {
     mocks.journalItems = [startFailureRow(START_FAILED)]

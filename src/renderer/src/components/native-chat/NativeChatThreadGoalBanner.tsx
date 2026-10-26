@@ -57,7 +57,7 @@ export function NativeChatThreadGoalBanner(props: {
   runningTurn: { startedAt: number | null } | null
   onChange: (change: AgentSessionThreadGoalChange) => void
 }): React.JSX.Element | null {
-  const { goal, pending, onChange } = props
+  const { goal, onChange } = props
   const [expanded, setExpanded] = useState(false)
   const { runningTurn } = props
   const now = useNow(1_000, props.isVisible && goal.status === 'active' && runningTurn !== null)
@@ -91,10 +91,7 @@ export function NativeChatThreadGoalBanner(props: {
             <GoalAction
               label={translate('components.native-chat.goal.clear', 'Clear goal')}
               // Claude's `/goal clear` must enter a fresh turn, like a composer send.
-              disabled={
-                pending ||
-                (!props.hostChanges && (props.sendUnavailable || props.startsHeld === true))
-              }
+              disabled={!props.hostChanges && (props.sendUnavailable || props.startsHeld === true)}
               onClick={() => onChange({ kind: 'clear' })}
             >
               <Trash2 className="size-3.5" />
@@ -102,7 +99,7 @@ export function NativeChatThreadGoalBanner(props: {
             {statusChange === 'paused' ? (
               <GoalAction
                 label={translate('components.native-chat.goal.pause', 'Pause goal')}
-                disabled={pending}
+                disabled={false}
                 onClick={() => onChange({ kind: 'status', status: 'paused' })}
               >
                 <Pause className="size-3.5" />
@@ -110,7 +107,7 @@ export function NativeChatThreadGoalBanner(props: {
             ) : statusChange === 'active' ? (
               <GoalAction
                 label={translate('components.native-chat.goal.resume', 'Resume goal')}
-                disabled={pending || props.startsHeld === true}
+                disabled={props.startsHeld === true}
                 onClick={() => onChange({ kind: 'status', status: 'active' })}
               >
                 <Play className="size-3.5" />

@@ -152,5 +152,4 @@ export type TerminalCreateSurfacingScenario = Pick<
     (data: RequestTerminalCreateListenerPayload) => void
   >
   focusTerminalListenerRef: ListenerRef<(data: FocusTerminalListenerPayload) => void>
-  newTerminalTabListenerRef: ListenerRef<() => void>
 }

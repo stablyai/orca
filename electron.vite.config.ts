@@ -2,7 +2,7 @@ import { markdownParserAliases } from './config/build-plugins/markdown-parser-ex
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
-import type { Plugin } from 'vite'
+import type { Plugin, Rollup } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
@@ -180,25 +180,16 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-function createMainBootstrapPlugin() {
-  return {
-    name: 'orca-main-bootstrap',
-    generateBundle(_options, bundle) {
-      const mainChunk = bundle['index.js']
-      if (!mainChunk || mainChunk.type !== 'chunk') {
-        return
-      }
-      if (!mainChunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
-        throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
-      }
-
-      // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-      mainChunk.code =
-        createBootstrapFatalExitBanner() +
-        createStartupDiagnosticsBanner(mainChunk.fileName) +
-        mainChunk.code
-    }
+// postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
+function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
+  if (chunk.fileName !== 'index.js') {
+    return ''
   }
+  if (!chunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
+    throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
+  }
+  // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
+  return createBootstrapFatalExitBanner() + createStartupDiagnosticsBanner(chunk.fileName)
 }
 
 // Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
@@ -227,12 +218,14 @@ export const electronViteConfig: UserConfig = {
         preserveEntrySignatures: 'exports-only',
         // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
         output: {
+          // V8 stores a whole script as UTF-16 when any char is above U+00FF; escaping keeps sources one-byte (half the memory).
+          charset: 'ascii',
           format: 'cjs',
           entryFileNames: '[name].js',
-          chunkFileNames: 'chunks/[name]-[hash].js'
+          chunkFileNames: 'chunks/[name]-[hash].js',
+          postBanner: createMainBootstrapPostBanner
         },
         plugins: [
-          createMainBootstrapPlugin(),
           createPlainNodeEntryGuardPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin()
@@ -260,6 +253,10 @@ export const electronViteConfig: UserConfig = {
     build: {
       externalizeDeps: {
         exclude: ['zod']
+      },
+      rollupOptions: {
+        // Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
+        output: { charset: 'ascii', comments: { legal: true, annotation: true, jsdoc: false } }
       }
     }
   },
@@ -284,7 +281,10 @@ export const electronViteConfig: UserConfig = {
       createViteCacheRetentionPlugin()
     ],
     worker: {
-      format: 'es'
+      format: 'es',
+      rollupOptions: {
+        output: { charset: 'ascii' }
+      }
     },
     build: {
       manifest: true,
@@ -296,6 +296,7 @@ export const electronViteConfig: UserConfig = {
       rollupOptions: {
         // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
+        output: { charset: 'ascii' },
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),

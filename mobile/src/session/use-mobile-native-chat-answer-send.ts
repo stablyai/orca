@@ -12,12 +12,12 @@ import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome
-} from './mobile-native-chat-send'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 import {
   nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,

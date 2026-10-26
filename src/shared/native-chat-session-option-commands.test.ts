@@ -122,13 +122,17 @@ describe('recordNativeChatSessionOptionCommand', () => {
   })
 
   it('clears tracked truth for a bare picker command and reports the agent picker', () => {
+    const claude = claudeRecord('sonnet')
+    claude.valuesByModel.sonnet = { effort: { value: 'low', source: 'dispatched' } }
     const claudeResult = recordNativeChatSessionOptionCommand({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record: claudeRecord('sonnet'),
+      record: claude,
       command: '/model'
     })
-    expect(claudeResult.opensAgentPicker).toBe(true)
+    expect(claudeResult).toEqual({ changed: true, opensAgentPicker: true })
+    expect(claude.model).toBeUndefined()
+    expect(claude.valuesByModel.sonnet).toBeUndefined()
     const codexRecord = createNativeChatSessionOptionRecord('codex')
     codexRecord.model = { value: 'gpt-5.5', source: 'dispatched' }
     const codexResult = recordNativeChatSessionOptionCommand({
@@ -356,6 +360,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
 
   it('still resets tracked state when the typed model is a real switch', () => {
     const record = grokRecord()
+    record.valuesByModel['grok-build'] = { effort: { value: 'high', source: 'reported' } }
     recordGrok(record, '/effort low')
     recordNativeChatSessionOptionCommand({
       catalog: GROK_SESSION_OPTION_CATALOG,
@@ -367,6 +372,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       command: '/model grok-build'
     })
     expect(record.model).toEqual({ value: 'grok-build', source: 'dispatched' })
+    expect(record.valuesByModel['grok-build']).toBeUndefined()
     expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
       value: 'low',
       source: 'dispatched'

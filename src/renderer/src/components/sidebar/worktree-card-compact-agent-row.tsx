@@ -6,6 +6,9 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
+import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
+import { ClaudeAgentViewIndicator } from '@/components/ClaudeAgentViewIndicator'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
@@ -117,6 +120,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
+  const view = useClaudeAgentRowView(agent)
+  const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -160,8 +165,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       e.stopPropagation()
       // Child agents activate their spawning parent pane because they have no pane of their own.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewClaudeAgentFromRow(agent)
     },
-    [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
+    [agent, onActivate]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -187,7 +193,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <span
       className={cn(
         'shrink-0 text-[10px] tabular-nums',
-        isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/60'
+        highlighted ? 'text-foreground/70' : 'text-muted-foreground/60'
       )}
     >
       {shortTime}
@@ -197,7 +203,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // Focused fills wash out muted text; brighten the lead while preserving unread emphasis.
   const leadClassName = cn(
     isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
-    isFocusedPane && !isUnvisited && 'text-foreground'
+    highlighted && !isUnvisited && 'text-foreground'
   )
 
   const rowBody = (
@@ -208,7 +214,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           row={agent.childRow}
           now={now}
           leadClassName={leadClassName}
-          trailClassName={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}
+          trailClassName={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}
           separator=" - "
           dotTitle={sendTargetDisabledReason ? null : undefined}
           tooltipSide="right"
@@ -235,7 +241,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           >
             <span className={leadClassName}>{leadingText}</span>
             {trailingText && (
-              <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+              <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}
                 - {trailingText}
               </span>
@@ -243,11 +249,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         </>
       )}
+      <ClaudeAgentViewIndicator view={view} showChild={!childAgentsExpanded} />
       {model && (
         <span
           className={cn(
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+            highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
           title={model}
         >
@@ -258,7 +265,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <span
           className={cn(
             'shrink-0 text-[10px] tabular-nums',
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+            highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
         >
           +{childAgentCount}
@@ -287,7 +294,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
-        isFocusedPane && 'bg-worktree-sidebar-accent',
+        highlighted && 'bg-worktree-sidebar-accent',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
@@ -296,7 +303,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onDragStart={(e) => e.stopPropagation()}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      data-focused-agent-pane={highlighted ? 'true' : undefined}
+      data-current={view?.current ? 'true' : undefined}
+      aria-current={view?.current ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}

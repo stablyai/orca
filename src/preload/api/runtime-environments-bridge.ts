@@ -9,6 +9,7 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
+import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/runtime-environment-catalog-channel'
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
   type WslOrcadAccountNotAppliedEvent
@@ -22,6 +23,8 @@ import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from './wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
+  desktopCreatedChatIds: (): Promise<string[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {
@@ -31,6 +34,11 @@ export const runtimeEnvironmentsApi = {
     ): void => callback(snapshot)
     ipcRenderer.on(RUNTIME_HOST_STATUS_CHANNEL, listener)
     return () => ipcRenderer.removeListener(RUNTIME_HOST_STATUS_CHANNEL, listener)
+  },
+  onCatalogChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL, listener)
   },
   list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
     ipcRenderer.invoke('runtimeEnvironments:list'),

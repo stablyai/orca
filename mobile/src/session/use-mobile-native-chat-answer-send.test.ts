@@ -14,12 +14,12 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'

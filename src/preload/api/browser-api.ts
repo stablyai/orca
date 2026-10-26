@@ -1,5 +1,9 @@
 import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type {
+  BrowserAgentActivityEvent,
+  BrowserAgentCursorEvent
+} from '../../shared/browser-agent-activity-contract'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
   BrowserPageSiteDisplay,
@@ -186,6 +190,11 @@ export type BrowserApi = {
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
   ) => () => void
   agentInputFocusGuardReady: (token: string, composing: boolean) => void
+  /** Main marks the pages an agent drives; the tab strip badges them. */
+  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void
+  /** Main shows the agent's pointer before its input; `agentCursorArrived` answers awaited moves. */
+  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void) => () => void
+  agentCursorArrived: (sequence: number) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void

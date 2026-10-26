@@ -4,8 +4,12 @@ import type {
   AgentMessageSource,
   AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
+import type { OrchestrationCliCommand } from './cli-command'
+import { formatMessagePointer } from './formatter'
+import type { OrchestrationPointerBatch } from './mailbox-pointer-eligibility'
 
 export type MailSourceMessage = Pick<
   MessageRow,
@@ -46,6 +50,30 @@ export function structuredMailSource(input: {
         from: message.from_handle
       }))
     }
+  }
+}
+
+/** The chat turn a structured pointer sends: a terminal's pointer text, with who the mail is from. */
+export function structuredMailNotice(input: {
+  db: OrchestrationDb
+  mailboxHandle: string
+  dispatchId: string | null
+  batch: OrchestrationPointerBatch
+  cliCommand: OrchestrationCliCommand
+  senderName: SenderNameResolver
+}): AgentJournalMessageItem {
+  const { messages, heldDeliveryId } = input.batch
+  const text = formatMessagePointer(
+    messages.length,
+    input.mailboxHandle,
+    input.cliCommand,
+    heldDeliveryId
+  )
+  return {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: text.trim() }],
+    from: structuredMailSource({ ...input, batch: messages })
   }
 }
 

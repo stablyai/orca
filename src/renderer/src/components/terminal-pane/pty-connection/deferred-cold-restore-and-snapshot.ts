@@ -28,16 +28,28 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   session.applyColdRestoreAgentResumeStartup = (
     startup: ColdRestoreAgentResumeStartup | null
   ): boolean => {
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return false
     }
     const state = useAppStore.getState()
+    if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
+      session.pendingStartupCommand = {
+        command: startup.command,
+        resumeSource: startup.resumeSource
+      }
+    }
     state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
       agentType: startup.agent,
       launchToken: startup.launchToken,
       tabId: session.deps.tabId,
       leafId: session.pane.leafId
     })
+    if (startup.resumeSource) {
+      session.savedStartupLaunchRegistration = {
+        source: startup.resumeSource,
+        entry: useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+      }
+    }
     return true
   }
   session.clearSleepingRecordAfterColdRestoreSpawn = (
@@ -75,6 +87,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
+    if (startup?.resumeSource?.cancelled) {
+      return Promise.resolve(null)
+    }
     const mainPane = mainResumedSleepPane(session, startup)
     if (mainPane && startup?.sleepingRecordEntry) {
       return attachToMainResumedSleepPane(
@@ -107,7 +122,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     session.transport.getPtyId() === ptyId
-  const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
+  const runTerminalPasteStartupCommand = async (
+    command: string,
+    current: () => boolean
+  ): Promise<boolean> => {
     const ptyId = session.transport.getPtyId()
     const result = await executeTerminalStartupCommandPaste({
       command,
@@ -120,43 +138,52 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         isWindowsConpty: session.isNativeWindowsConpty
       }),
       transport: session.transport,
-      isTargetCurrent: isStartupPasteTargetCurrent
+      isTargetCurrent: (target) => current() && isStartupPasteTargetCurrent(target)
     })
-    if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
+    if (result.status !== 'pasted' || !current() || !isStartupPasteTargetCurrent(ptyId)) {
       return false
     }
     return session.transport.sendInput('\r', 'launch')
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return
     }
     if (session.startupInjectTimer !== null) {
       clearTimeout(session.startupInjectTimer)
     }
+    const generation = session.transportStreamGeneration
+    const isCurrent = (): boolean =>
+      !session.disposed &&
+      session.pendingStartupCommand === startup &&
+      !startup.resumeSource?.cancelled &&
+      generation === session.transportStreamGeneration &&
+      (startup.isCurrent?.() ?? true)
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
       void (async () => {
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         if (session.shouldDeliverStartupViaTerminalPaste) {
           await waitForTerminalOutputParsed(session.pane.terminal)
         }
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         const command = startup.command
         const submitted = session.shouldDeliverStartupViaTerminalPaste
-          ? await runTerminalPasteStartupCommand(command)
+          ? await runTerminalPasteStartupCommand(command, isCurrent)
           : session.transport.sendInput(`${command}\r`, 'launch')
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()
         }
-        session.pendingStartupCommand = null
+        if (session.pendingStartupCommand === startup) {
+          session.pendingStartupCommand = null
+        }
       })()
     }, 50)
   }

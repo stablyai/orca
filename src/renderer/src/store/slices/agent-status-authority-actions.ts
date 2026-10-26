@@ -1,4 +1,4 @@
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
@@ -10,13 +10,13 @@ import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,
   removePaneKeys
-} from './agent-status-pane-keyed-records'
+} from './agent-status/agent-status-pane-keyed-records'
 import {
   getLeafIdFromPaneKey,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
-import { rekeyMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { rekeyMigrationUnsupportedEntries } from './agent-status/agent-status-migration-unsupported-entries'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   movePaneAttention,

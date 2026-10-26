@@ -24,6 +24,7 @@ import {
 } from '../../daemon/daemon-folder-access-reset'
 import type { MacDaemonTccAttributionHealth } from '../../daemon/daemon-tcc-attribution'
 import type { DaemonEndpointIdentity } from '../../daemon/daemon-hello-protocol'
+import { sameEndpointIdentity } from '../../daemon/daemon-endpoint-incarnation'
 import type { DaemonSessionInfo } from '../../daemon/daemon-session-info'
 import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
 
@@ -88,7 +89,11 @@ export function registerDaemonManagementHandlers(): void {
     const identity = adapter.getDaemonIdentity()
     const health = await adapter.getAsyncIoHealth()
     // A result from a replaced endpoint cannot diagnose its successor.
-    return identity && adapter.getDaemonIdentity() === identity && getDaemonProvider() === provider
+    const current = adapter.getDaemonIdentity()
+    return identity &&
+      current &&
+      sameEndpointIdentity(identity, current) &&
+      getDaemonProvider() === provider
       ? health
       : { state: 'unverifiable' }
   })

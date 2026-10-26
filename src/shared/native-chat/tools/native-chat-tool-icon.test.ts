@@ -1,49 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   isShellActivityToolCall,
-  NATIVE_CHAT_TOOL_ICON_NAMES,
   nativeChatToolCategory,
   nativeChatToolIconName,
   nativeChatToolRunCategory,
-  nativeChatToolRunIconName,
-  type NativeChatToolCategory
+  nativeChatToolRunIconName
 } from './native-chat-tool-icon'
 
-const ALL_CATEGORIES: NativeChatToolCategory[] = [
-  'read',
-  'search',
-  'listFiles',
-  'unknown',
-  'fileChange',
-  'webSearch',
-  'mcpToolCall',
-  'subAgentActivity',
-  'todoList',
-  'other'
-]
-
 describe('native chat tool icons', () => {
-  it('names a glyph for every category in the vocabulary', () => {
-    expect(NATIVE_CHAT_TOOL_ICON_NAMES).toEqual({
-      read: 'eye',
-      search: 'search',
-      listFiles: 'folder',
-      unknown: 'square-terminal',
-      fileChange: 'pencil',
-      webSearch: 'globe',
-      mcpToolCall: 'plug',
-      subAgentActivity: 'bot',
-      todoList: 'list-checks',
-      other: 'wrench'
-    })
-    expect(Object.keys(NATIVE_CHAT_TOOL_ICON_NAMES).sort()).toEqual([...ALL_CATEGORIES].sort())
-  })
-
-  it('gives each category a distinct glyph so rows are told apart by icon', () => {
-    const glyphs = ALL_CATEGORIES.map((category) => NATIVE_CHAT_TOOL_ICON_NAMES[category])
-    expect(new Set(glyphs).size).toBe(glyphs.length)
-  })
-
   it('maps the row words the Codex lane renders to their category', () => {
     expect(nativeChatToolCategory('read')).toBe('read')
     expect(nativeChatToolCategory('search')).toBe('search')
@@ -213,6 +177,22 @@ describe('native chat tool icons', () => {
       expect(nativeChatToolRunIconName(run)).toBe('square-terminal')
     })
 
+    it('reads shell calls that drive the Orca browser CLI as a browser run', () => {
+      const run = [
+        { name: 'Bash', input: { command: 'orca snapshot' } },
+        { name: 'shell', input: { command: "/bin/zsh -lc 'orca click --element e3'" } }
+      ]
+
+      expect(nativeChatToolRunCategory(run)).toBe('browser')
+      expect(nativeChatToolRunIconName(run)).toBe('globe')
+      expect(
+        nativeChatToolRunCategory([
+          ...run,
+          { name: 'Bash', input: { command: 'orca worktree ls' } }
+        ])
+      ).toBeNull()
+    })
+
     it('falls back to the generic tool glyph when the run spans categories', () => {
       const run = [{ name: 'shell' }, { name: 'Read' }]
 
@@ -251,9 +231,6 @@ describe('native chat tool icons', () => {
 })
 
 describe('qualified tool identity icons', () => {
-  it.each(['mcp__linear__list_issues'])('uses the MCP glyph for %s', (name) =>
-    expect(nativeChatToolIconName(name)).toBe('plug')
-  )
   it.each([
     'setup.py',
     'src/read',

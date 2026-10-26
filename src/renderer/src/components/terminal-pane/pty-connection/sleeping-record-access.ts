@@ -1,3 +1,5 @@
+import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
+import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -55,6 +57,9 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       }
     }
   }
+  session.savedStartupAutomaticClaim = session.paneStartup?.resumeSource
+    ? useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
+    : undefined
   session.launchToken = session.paneStartup?.launchConfig
     ? (session.paneStartup.launchToken ?? createBrowserUuid())
     : undefined
@@ -114,6 +119,12 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         tabId: session.deps.tabId,
         leafId: session.pane.leafId
       })
+    if (session.paneStartup.resumeSource) {
+      session.savedStartupLaunchRegistration = {
+        source: session.paneStartup.resumeSource,
+        entry: useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+      }
+    }
   } else if (session.paneStartup) {
     useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
   }
@@ -154,9 +165,24 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       leafId: session.pane.leafId
     })
   }
-  session.clearRegisteredStartupLaunchConfig = (): void => {
-    useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
+  session.clearRegisteredStartupLaunchConfig = (expected = session.paneStartup): void => {
+    const state = useAppStore.getState()
+    const installed = state.agentLaunchConfigByPaneKey[session.cacheKey]
+    const captured = session.savedStartupLaunchRegistration
+    const ownsRegistration = expected?.resumeSource
+      ? captured?.source === expected.resumeSource && captured.entry === installed
+      : true
+    if (
+      ownsRegistration &&
+      installed &&
+      expected?.launchConfig &&
+      installed.identity.launchToken === (expected.launchToken ?? session.launchToken) &&
+      launchConfigsEqual(installed.launchConfig, expected.launchConfig)
+    ) {
+      state.clearAgentLaunchConfig(session.cacheKey)
+    }
   }
+  installSavedResumeStartupCancellation(session)
   session.neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(

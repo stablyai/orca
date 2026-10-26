@@ -37,7 +37,7 @@ it('joins disposal and does not confuse disconnect/error with physical exit', as
   const result = first.then(disposed)
   c.events.emit('disconnect')
   c.events.emit('error', new Error('spawn or IPC failure'))
-  await Promise.resolve()
+  await new Promise<void>((resolve) => setImmediate(resolve))
   expect(disposed).not.toHaveBeenCalled()
   expect(logical).toHaveBeenCalledOnce()
   c.close()
@@ -55,7 +55,7 @@ it('includes children already signaled by synchronous or retired-owner disposal'
   const disposed = vi.fn()
   const result = owner.disposeAndWait(() => {}).then(disposed)
   replacement.close()
-  await Promise.resolve()
+  await new Promise<void>((resolve) => setImmediate(resolve))
   expect(disposed).not.toHaveBeenCalled()
   old.close()
   await result
@@ -71,7 +71,7 @@ it('retains a child after termination deadline failure and supports explicit ret
   expect(await result).toMatchObject({ message: 'watcher_owned_children_shutdown_incomplete' })
   const completed = vi.fn()
   const retry = owner.disposeAndWait(() => {}).then(completed)
-  await Promise.resolve()
+  await vi.advanceTimersByTimeAsync(0)
   expect(completed).not.toHaveBeenCalled()
   c.close()
   await retry
@@ -96,7 +96,7 @@ it('waits for other children even when logical disposal and one kill fail', asyn
       finished()
       return error
     })
-  await Promise.resolve()
+  await new Promise<void>((resolve) => setImmediate(resolve))
   expect(finished).not.toHaveBeenCalled()
   pending.close()
   expect(await result).toMatchObject({ errors: [logicalFailure, expect.any(Error)] })

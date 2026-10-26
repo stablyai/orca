@@ -1,3 +1,4 @@
+import { newChatPermissionModeForSettings } from '../../../shared/agent-chat-permission-mode'
 import { homedir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -6,7 +7,6 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { applyAgentPermissionMode } from '../../../shared/tui-agent-permissions'
 import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
@@ -164,7 +164,6 @@ describe('the new-chat permission setting', () => {
     saved: Partial<GlobalSettings>
     raw: string[]
     choices: string[]
-    chat: string
     terminal: string[]
   }>([
     {
@@ -178,7 +177,6 @@ describe('the new-chat permission setting', () => {
       },
       raw: ['--model sonnet', '--config tui.animations=false'],
       choices: ['full-access', 'auto'],
-      chat: 'ask',
       terminal: [
         '--dangerously-skip-permissions --model sonnet',
         '--approve-for-me --config tui.animations=false'
@@ -193,7 +191,6 @@ describe('the new-chat permission setting', () => {
       },
       raw: ['', ''],
       choices: ['own', 'own'],
-      chat: 'auto',
       terminal: ['', '']
     },
     {
@@ -205,7 +202,6 @@ describe('the new-chat permission setting', () => {
       },
       raw: ['--permission-mode plan --model sonnet', ''],
       choices: ['own', 'own'],
-      chat: 'accept-edits',
       terminal: ['--permission-mode plan --model sonnet', '']
     },
     {
@@ -213,13 +209,15 @@ describe('the new-chat permission setting', () => {
       saved: { agentYoloDefaultsMigrated: false, agentDefaultArgs: {} },
       raw: ['', ''],
       choices: ['full-access', 'full-access'],
-      chat: 'full-access',
       terminal: ['--dangerously-skip-permissions', '--dangerously-bypass-approvals-and-sandbox']
     }
   ])(
     'loads and reloads $name through the real profile pipeline',
-    ({ saved, raw, choices, chat, terminal }) => {
+    ({ saved, raw, choices, terminal }) => {
       const defaults = getDefaultPersistedState(homedir())
+      const retiredChatSettings = {
+        agentNativeChatPermissionModes: { claude: 'ask', codex: 'auto' }
+      }
       const parsed: PersistedState = {
         ...defaults,
         settings: {
@@ -227,7 +225,7 @@ describe('the new-chat permission setting', () => {
           agentPermissionDefault: undefined,
           agentPermissionOverrides: undefined,
           nativeChatPermissionMode: undefined,
-          agentNativeChatPermissionModes: { claude: 'ask', codex: 'auto' },
+          ...retiredChatSettings,
           agentDefaultEnv: { claude: { QA_LOADER_NOTE: 'preserved' } },
           ...saved
         }
@@ -242,8 +240,12 @@ describe('the new-chat permission setting', () => {
       expect(needsSave).toHaveBeenCalled()
       expect(loaded.agentYoloDefaultsMigrated).toBe(true)
       expect(loaded.agentPermissionDefault).toBeDefined()
-      expect(loaded.nativeChatPermissionMode).toBe(chat)
-      expect(loaded.agentNativeChatPermissionModes).toEqual({ claude: 'ask', codex: 'auto' })
+      expect(
+        (['claude', 'codex'] as const).map((agent) =>
+          newChatPermissionModeForSettings(agent, loaded)
+        )
+      ).toEqual(choices)
+      expect(loaded).not.toHaveProperty('agentNativeChatPermissionModes')
       expect(loaded.agentDefaultEnv?.claude).toEqual({ QA_LOADER_NOTE: 'preserved' })
       expect(
         (['claude', 'codex'] as const).map((agent) => loaded.agentDefaultArgs?.[agent])
@@ -264,35 +266,39 @@ describe('the new-chat permission setting', () => {
       ).toEqual(loaded)
     }
   )
-
-  it.each([
-    ['manual', 'ask'],
-    ['yolo', 'full-access']
-  ] as const)('seeds a profile without it from %s Agent Permissions', (mode, expected) => {
-    const normalized = normalizeLegacyProfile({
-      nativeChatPermissionMode: undefined,
-      ...applyAgentPermissionMode({ mode })
-    })
-    expect(normalized.nativeChatPermissionMode).toBe(expected)
-  })
-
-  it('keeps a saved value when Agent Permissions change afterwards', () => {
-    const normalized = normalizeLegacyProfile({
-      nativeChatPermissionMode: 'ask',
-      ...applyAgentPermissionMode({ mode: 'yolo' })
-    })
-    expect(normalized.nativeChatPermissionMode).toBe('ask')
-  })
 })
 
 describe('scoped new-chat permission defaults', () => {
-  it('preserves an agent override across load while rejecting unsupported stored modes', () => {
+  it('retires old chat copies while terminal intent and existing chat choices survive', () => {
     const normalized = normalizeLegacyProfile({
       nativeChatPermissionMode: 'full-access',
       agentNativeChatPermissionModes: { codex: 'auto', claude: 'ask', omp: 'auto', unknown: 'auto' }
     })
-    expect(normalized.agentNativeChatPermissionModes).toEqual({ codex: 'auto', claude: 'ask' })
+    expect(normalized).not.toHaveProperty('agentNativeChatPermissionModes')
     expect(normalized.nativeChatPermissionMode).toBe('full-access')
+  })
+})
+
+it('migrates a shipped split chat/terminal profile using terminal choices while retaining other saved data', () => {
+  const normalized = normalizeLegacyProfile({
+    agentPermissionDefault: undefined,
+    agentPermissionOverrides: undefined,
+    agentPermissionMigrated: false,
+    agentDefaultArgs: { claude: '--model opus --permission-mode acceptEdits', codex: '' },
+    nativeChatPermissionMode: 'ask',
+    agentNativeChatPermissionModes: { claude: 'full-access', codex: 'auto' },
+    nativeChatSessionOptions: {
+      claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
+    }
+  })
+  expect(normalized).not.toHaveProperty('agentNativeChatPermissionModes')
+  expect(newChatPermissionModeForSettings('claude', normalized)).toBe('accept-edits')
+  expect(newChatPermissionModeForSettings('codex', normalized)).toBe('own')
+  expect(normalized.nativeChatPermissionMode).toBe('ask')
+  expect(normalized.agentDefaultArgs?.claude).toBe('--model opus')
+  expect(normalized.nativeChatSessionOptions?.claude).toEqual({
+    model: 'opus',
+    valuesByModel: { opus: { effort: 'high' } }
   })
 })
 

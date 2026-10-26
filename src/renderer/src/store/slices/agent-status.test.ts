@@ -6,12 +6,12 @@ import {
 import { flushMicrotasks } from './agent-status-test-harness'
 import { createTestStore, makeTab, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/structured-agent-session-projection'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status/agent-status-drop-reducer'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 

@@ -19,12 +19,12 @@ import {
   readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

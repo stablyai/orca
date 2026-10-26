@@ -62,10 +62,6 @@ type WaitingCheck = RuntimeRpcSuccess<{
   messages: { subject: string }[]
 }>
 
-type WaitingCheckOutcome =
-  | { response: WaitingCheck; error?: never }
-  | { response?: never; error: unknown }
-
 // Retry startup context replacement, matching installTerminalPtyWriteSpy.
 async function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
   for (let attempt = 1; ; attempt += 1) {
@@ -347,41 +343,32 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const mailbox = await createRunMailbox(client, pane, 'Live waiter')
 
     // A supervised waiter consumes read while push stamps delivered_at; either alone leaves duplicate delivery possible.
-    const waitForMail = (): Promise<WaitingCheckOutcome> =>
-      client
-        .call<WaitingCheck['result']>('orchestration.check', {
-          terminal: pane.handle,
-          wait: true,
-          timeoutMs: 30_000
-        })
-        .then(
-          (response) => ({ response }),
-          (error: unknown) => ({ error })
-        )
+    // Two waits model a forgotten listener plus its replacement.
+    const waitForMail = (): Promise<WaitingCheck> =>
+      client.call<WaitingCheck['result']>('orchestration.check', {
+        terminal: pane.handle,
+        wait: true,
+        timeoutMs: 30_000
+      })
     const waiters = [waitForMail(), waitForMail()]
-    const registrationBarrier = await Promise.race(waiters)
-    expect(registrationBarrier).toEqual({
-      error: expect.objectContaining({ code: 'waiter_exists' })
-    })
+    // ast-grep-ignore: test-no-real-time-wait -- the runtime exposes no signal that a wait registered
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
 
     const subject = 'Waiter claims it'
     const messageId = await sendMail(client, mailbox, { subject })
 
-    const outcomes = await Promise.all(waiters)
-    const pulled = outcomes.find((outcome) => outcome.response)?.response
-    expect(outcomes.filter((outcome) => outcome.error)).toHaveLength(1)
-    expect(pulled).toBeDefined()
-    if (!pulled) {
-      throw new Error('registered waiter did not receive the message')
-    }
-    expect(pulled.result.messages.map((message) => message.subject)).toContain(subject)
-    expect(pulled.result.deliveryId).toEqual(expect.any(String))
+    const [first, second] = await Promise.all(waiters)
+    expect(first.result.messages.map((message) => message.subject)).toContain(subject)
+    expect(first.result.deliveryId).toEqual(expect.any(String))
+    expect(second.result.deliveryId).toBe(first.result.deliveryId)
     expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
     expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
-    await client.call('orchestration.check', {
-      terminal: pane.handle,
-      ack: pulled.result.deliveryId
-    })
+    for (const waiter of [first, second]) {
+      await client.call('orchestration.check', {
+        terminal: pane.handle,
+        ack: waiter.result.deliveryId
+      })
+    }
     expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pulled')
   })
 
@@ -499,6 +486,64 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     expect(checked.result.messages).toEqual([
       expect.objectContaining({ id: sent.result.message.id, body })
     ])
+  })
+
+  // STA-11980: an unacked batch defers the nudge for newer mail instead of dropping it.
+  test('points newer mail once behind an unacked Delivery, after a turn that started in the Enter delay', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    // Agent launch, two idle edges and two settle windows.
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const reminder = 'which you have not acknowledged'
+    const pane = await openAgentPane({
+      titleOnStdin: { needle: reminder, title: CODEX_WORKING_TITLE }
+    })
+    pane.agent.setTitle(CODEX_WORKING_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    const mailbox = await createRunMailbox(client, pane, 'Unacked Delivery')
+    await sendMail(client, mailbox, { subject: 'Held batch' })
+    const held = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle
+    })
+    const heldId = held.result.deliveryId!
+    const newerId = await sendMail(client, mailbox, { subject: 'Newer mail' })
+
+    // The fake starts working as the reminder lands, inside the Enter delay.
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expect
+      .poll(() => countOccurrences(pane.agent.readStdin(), reminder), {
+        timeout: DELIVERY_TIMEOUT_MS,
+        message: 'held-batch reminder never reached the agent'
+      })
+      .toBe(1)
+    expect(pane.agent.readStdin()).toContain(`--ack ${heldId}`)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    // ast-grep-ignore: test-no-real-time-wait -- outlast the Enter delay; a withheld Enter has no signal
+    await orcaPage.waitForTimeout(1_000)
+    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(0)
+
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expectSubmitted(pane)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, newerId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+
+    // A later idle edge with nothing newer stays quiet.
+    await driveToLiveIdle(client, pane)
+    // ast-grep-ignore: test-no-real-time-wait -- absence of a second pointer needs the delivery chain's window
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+    expect(countOccurrences(pane.agent.readStdin(), reminder)).toBe(1)
+    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(1)
+
+    const acked = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle,
+      ack: heldId
+    })
+    expect(acked.result.messages.map((message) => message.subject)).toEqual(['Newer mail'])
   })
 
   test('never points direct Run A mail after the pane binds Run B', async ({

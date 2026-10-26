@@ -1,6 +1,9 @@
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  TerminalLaunchResult,
+  SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -67,6 +70,14 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   paneKey?: string | null
   /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
   surfaceRecordedAtGraphSequence?: number
+  savedTerminalLaunchResult?: {
+    incarnationId: PtyIncarnationId | null
+    launchConfig: SleepingAgentLaunchConfig | null
+    launchToken: string | null
+    result: TerminalLaunchResult
+  }
+  /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
+  spawnPaneKey?: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -147,6 +158,10 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** Output seq a renderer hydration seed already painted; queued live chunks at/below it are not rewritten. */
+  rendererSeedSeq?: number
+  /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */
+  rendererSeedEscapeTail?: string
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
 }

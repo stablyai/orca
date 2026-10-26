@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "Configuración → Agentes",
       "permissionsTitle": "Permisos para chats nuevos",
       "permissionsDescription": "Solo para chats nuevos. Los valores predeterminados de cada agente están en Configuración → Agentes.",
       "description": "Elige cómo se ven y se comportan los chats.",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Fuente",
+        "fontFamilyDescription": "Fuente de los mensajes, la actividad y el cuadro de mensaje.",
+        "inheritFont": "Misma fuente que el IDE",
+        "fontPreviewLabel": "Vista previa de la fuente del chat",
+        "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
         "title": "Chat",
         "textSize": "Tamaño del texto",
         "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",
@@ -209,7 +215,8 @@
           "microphone": "micrófono",
           "location": "ubicación",
           "notifications": "notificaciones",
-          "clipboard": "portapapeles"
+          "clipboard": "portapapeles",
+          "localNetwork": "red local"
         },
         "profile": "Perfil del navegador",
         "ask": "Preguntar de nuevo",
@@ -4299,6 +4306,7 @@
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
                 "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
+                "footprintDescription": "Suma de la huella de memoria, la misma cifra que muestra el Monitor de Actividad: la memoria propia de cada proceso, incluida la memoria gráfica. Las páginas compartidas entre procesos no se cuentan dos veces.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
               }
             },
@@ -5574,7 +5582,9 @@
           "51001182e3": "Directorio vacío",
           "971d85cc84": "Se abre como proyecto en este host · {{value0}}",
           "00c4235c10": "No hay coincidencias para '{{value0}}'",
-          "largeInputNoMatches": "No hay coincidencias para esta entrada larga"
+          "largeInputNoMatches": "No hay coincidencias para esta entrada larga",
+          "entriesLabel": "Entradas de la carpeta",
+          "inputLabel": "Filtro o ruta"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -6070,16 +6080,16 @@
           "sshTargetNotFoundDetail": "Actualice los espacios de trabajo o vuelva a conectar el host y vuelva a intentarlo.",
           "sshTargetInvalid": "La configuración del host SSH está incompleta.",
           "sshTargetInvalidDetail": "Edite o vuelva a conectar el host SSH y vuelva a intentarlo.",
-          "sshAliasRequired": "VS Code necesita un alias de configuración SSH para este host.",
+          "sshAliasRequired": "Este editor necesita un alias de configuración SSH para este host.",
           "sshAliasRequiredDetail": "Añade un alias Host para {{host}}:{{port}} a tu configuración SSH local, vuelve a conectar el espacio de trabajo e inténtalo de nuevo.",
           "remoteEditorUnsupported": "Esta aplicación no puede abrir espacios de trabajo SSH.",
-          "remoteEditorUnsupportedDetail": "Elija VS Code o use la aplicación localmente.",
+          "remoteEditorUnsupportedDetail": "Elige VS Code, Cursor o Zed, o usa la aplicación localmente.",
           "remotePathInvalid": "La ruta no es válida para el host SSH.",
           "remotePathInvalidDetail": "Actualice el espacio de trabajo antes de volver a intentarlo.",
-          "remoteLaunchFailed": "No se pudo abrir la ruta en VS Code.",
-          "remoteLaunchFailedDetail": "Comprueba el comando de VS Code configurado en este equipo.",
+          "remoteLaunchFailed": "No se pudo abrir la ruta en el editor.",
+          "remoteLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina.",
           "wsl": "WSL",
-          "remoteEditorHint": "Sólo VS Code puede abrir carpetas en un host SSH.",
+          "remoteEditorHint": "Sólo VS Code, Cursor y Zed pueden abrir carpetas en un host SSH.",
           "remoteRuntimeEditorHint": "Las aplicaciones de este equipo solo pueden abrir los archivos del servidor cuando Orca se conecta a él por SSH."
         },
         "WorktreeTitleInlineRename": {
@@ -8935,6 +8945,8 @@
           "editDescription": "Actualiza los detalles de conexión de esta máquina. Los cambios se aplican en la próxima conexión.",
           "addDescription": "Agrega una máquina persistente en la que puedas iniciar sesión por SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar al iniciar",
+          "reconnectOnLaunchHelp": "Si está desactivado, Orca deja este host, y cualquier servidor de Orca al que se llegue a través de él, desconectado al iniciarse hasta que lo conectes.",
           "allowRemoteCliControl": "Permitir que la orca CLI de este host controle Orca",
           "allowRemoteCliControlHelp": "Activado de forma predeterminada en los hosts nuevos. Permite que los comandos orca ejecutados en este host abran y controlen pestañas del navegador de Orca en este escritorio, solo en los espacios de trabajo de este host y solo mientras esté conectado, y que las terminales iniciadas por una versión anterior de Orca en este host ejecuten comandos de orquestación (check, inbox, send, ask, reply) para su propio trabajo supervisado. No pueden leer tus archivos, tu portapapeles ni tus cookies. Cuando está desactivado, solo llegan al propio servidor de Orca de este host.",
           "addHost": "Añadir host"
@@ -14342,6 +14354,7 @@
             "prepareSessionResumeFailed": "No se pudo preparar esta sesión para reanudarla.",
             "sessionDeleted": "Sesión eliminada",
             "sessionDeleteFailed": "No se pudo eliminar la sesión",
+            "sessionDeleteCheckingHost": "Comprobando {{value0}}…",
             "resumeInChatConflict": "Otro chat ya está manteniendo esta conversación.",
             "resumeInChatTranscriptMissing": "El historial de esta conversación no se pudo cargar, por lo que no se puede reanudar en el chat.",
             "resumeInChatFailed": "No se pudo reanudar esta sesión en un chat nuevo.",
@@ -14483,6 +14496,7 @@
             "subagentCountPlural": "{{value0}} subagentes",
             "delete": "Eliminar",
             "deleteReasonNonLocalHost": "Solo se pueden eliminar las sesiones de este dispositivo.",
+            "deleteReasonHostUpdateRequired": "Actualiza {{value0}} para eliminar sus sesiones desde aquí.",
             "deleteReasonSyntheticPath": "Esta sesión no se puede eliminar desde Orca.",
             "deleteReasonUnsupportedAgent": "Las sesiones de {{value0}} no se pueden eliminar desde Orca.",
             "resumeInNewNativeChat": "Reanudar en un nuevo chat",
@@ -14493,6 +14507,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "¿Eliminar esta sesión?",
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
+            "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
           },
           "FileExplorerNameFilter": {
@@ -18379,7 +18394,8 @@
             "clipboard": "Portapapeles",
             "midi": "Dispositivos MIDI",
             "windowManagement": "Gestión de ventanas",
-            "idleDetection": "Uso del dispositivo"
+            "idleDetection": "Uso del dispositivo",
+            "localNetwork": "Red local"
           },
           "allow": "Permitir",
           "block": "Bloquear",
@@ -18391,7 +18407,8 @@
             "camera": "Usar la cámara",
             "midi": "Usar tus dispositivos MIDI",
             "windowManagement": "Gestionar ventanas en todas tus pantallas",
-            "idleDetection": "Detectar cuándo estás usando este dispositivo"
+            "idleDetection": "Detectar cuándo estás usando este dispositivo",
+            "localNetwork": "Acceder a las apps de este dispositivo y a los dispositivos de tu red local"
           },
           "localFiles": "Archivos locales",
           "title": "{{site}} solicita permiso para",
@@ -18641,6 +18658,9 @@
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
+        "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+        "conversationOpenElsewhere": "Codex sigue manteniendo abierta esta conversación. Inténtalo de nuevo en un momento o cierra otras terminales de Codex.",
+        "conversationOpenInTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal para continuar aquí.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",
         "chooseClaudeAccountThenRunCommand": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a ejecutar /{{command}}.",
         "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
@@ -18725,7 +18745,6 @@
         "notDoneAnswer": "Su respuesta no se envió.",
         "notDoneOption": "La configuración no se cambió.",
         "notDoneCommand": "El comando no se ejecutó.",
-        "notDoneGoal": "El objetivo no se cambió.",
         "notDoneQueuedEdit": "Tu edición no se guardó.",
         "restartFailed": "El agente no pudo reiniciarse.",
         "capacity": "Orca en el equipo que ejecuta este chat alcanzó un límite de solicitudes. Actualice Orca en ese equipo y vuelva a intentarlo.",
@@ -18972,6 +18991,8 @@
         "runFileChangeMany": "Se editaron {{value0}} archivos",
         "runWebSearchOne": "Se buscó en la web 1 vez",
         "runWebSearchMany": "Se buscó en la web {{value0}} veces",
+        "runBrowserOne": "Se usó el navegador",
+        "runBrowserMany": "Se usó el navegador {{value0}} veces",
         "runIntegrationOne": "Se usó 1 integración",
         "runIntegrationMany": "Se usaron {{value0}} integraciones",
         "runAgentOne": "Se ejecutó 1 agente",
@@ -18993,6 +19014,8 @@
         "runLiveFileChangeMany": "Editando {{value0}} archivos",
         "runLiveWebSearchOne": "Buscando en la web 1 vez",
         "runLiveWebSearchMany": "Buscando en la web {{value0}} veces",
+        "runLiveBrowserOne": "Usando el navegador",
+        "runLiveBrowserMany": "Usando el navegador {{value0}} veces",
         "runLiveIntegrationOne": "Usando 1 integración",
         "runLiveIntegrationMany": "Usando {{value0}} integraciones",
         "runLiveAgentOne": "Ejecutando 1 agente",
@@ -19000,7 +19023,9 @@
         "runLivePlanOne": "Actualizando el plan",
         "runLivePlanMany": "Actualizando el plan {{value0}} veces",
         "runLiveToolOne": "Usando 1 herramienta",
-        "runLiveToolMany": "Usando {{value0}} herramientas"
+        "runLiveToolMany": "Usando {{value0}} herramientas",
+        "showBrowserPage": "Mostrar",
+        "showBrowserPageLabel": "Mostrar {{value0}}"
       },
       "status": {
         "responding": "El agente está respondiendo",
@@ -19030,10 +19055,11 @@
         "showTerminal": "Mostrar terminal"
       },
       "resumeInNewChat": {
+        "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
         "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
         "cannotResume": "Esta conversación de {{agent}} no se puede reanudar en un chat nativo.",
-        "exitUnconfirmed": "Orca no puede confirmar que {{agent}} haya salido de su terminal. Detenga lo que se está ejecutando allí o cierre la terminal y vuelva a intentarlo.",
-        "exitUnconfirmedFromTerminal": "Orca no puede confirmar que {{agent}} haya salido de su terminal. Detenga lo que se está ejecutando allí o cierre la terminal, luego abra esta conversación desde el Historial de sesiones."
+        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
+        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
       },
       "state": {
         "loading": {
@@ -19335,8 +19361,7 @@
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo.",
-        "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
+        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo."
       },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
@@ -19386,7 +19411,13 @@
       "explicitChatSsh": "El chat no está disponible en SSH. En su lugar, abra el agente en una terminal.",
       "explicitChatWsl": "El chat no está disponible en WSL. En su lugar, abra el agente en una terminal.",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
-      "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal."
+      "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
+      "goalControl": {
+        "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
+        "settingsUnconfirmed": "Codex no confirmó el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa el chat e inténtalo de nuevo.",
+        "pauseUnconfirmed": "Codex dejó de ejecutarse, pero no se confirmó la pausa del objetivo. Revisa el objetivo antes de continuar.",
+        "stopUnconfirmed": "Codex no pudo confirmar la detención. Revisa el chat antes de continuar."
+      }
     },
     "tab": {
       "bar": {
@@ -19414,6 +19445,10 @@
           "editors": "¿Cerrar todas las pestañas del editor?",
           "description": "Se cerrarán las pestañas seleccionadas. Las pestañas fijadas permanecerán abiertas.",
           "confirm": "Cerrar pestañas"
+        },
+        "chatRename": {
+          "empty": "El nombre del chat no puede estar vacío",
+          "failed": "No se pudo cambiar el nombre de este chat"
         }
       }
     },
@@ -21182,5 +21217,8 @@
       "pending": "La eliminación está en curso."
     },
     "rowActions": "Acciones para {{name}}"
+  },
+  "browserTab": {
+    "agentDriving": "Un agente está usando esta página"
   }
 }

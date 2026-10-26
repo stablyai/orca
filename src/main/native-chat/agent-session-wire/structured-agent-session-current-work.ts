@@ -1,3 +1,4 @@
+import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
 // Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
@@ -176,6 +177,10 @@ export class StructuredAgentSessionCurrentWork {
 
   isCurrentItem(itemId: string): boolean {
     if (this.liveFence === null) {
+      return false
+    }
+    const item = this.journal.item(itemId)
+    if (item && isHistoricalProviderTimelineItem(item, (key) => this.journal.item(key))) {
       return false
     }
     const provenance = this.journal.itemFence(itemId)

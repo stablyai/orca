@@ -12,6 +12,11 @@ export type RpcCallerIdentity =
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
 
+/** The orca CLI agents run, locally or forwarded from a remote host; relayed devices are people. */
+export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean {
+  return caller?.kind === 'local-cli'
+}
+
 /** Trust explicit transport identity; unnamed declared clients have none. Temporarily, no declared client means local CLI.
  * SSH CLI bridges/browser automation share that namespace; before plugins ship, require explicit local-cli stamping (plan §4). */
 export function resolveRpcCallerIdentity(
