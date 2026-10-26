@@ -3,6 +3,10 @@ import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
 /** Return accepted immediately; nonblocking questions receive answers in later user messages ({questions:[{title, options?: string[]}]}). */
 export const CODEX_ASYNC_QUESTION_TOOL = 'request_user_input_async'
 
+export function isCodexAsyncQuestionTool(name: string): boolean {
+  return name.split('.').at(-1) === CODEX_ASYNC_QUESTION_TOOL
+}
+
 export function parseCodexAsyncQuestionsInput(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object' || !('questions' in input)) {
     return null
