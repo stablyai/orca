@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
+import { LINT_STEPS } from './run-lint.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -175,6 +176,6 @@ describe('README local link check', () => {
     expect(scripts['check:readme-local-links']).toBe(
       'node config/scripts/check-readme-local-links.mjs'
     )
-    expect(scripts.lint).toContain('pnpm run check:readme-local-links')
+    expect(LINT_STEPS).toContain('check:readme-local-links')
   })
 })
