@@ -1,7 +1,7 @@
 import { ConnectorPollResponseSchema } from '@orca-cloud/connector-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanupConnectorHarnesses } from './connector-server-harness.test-fixture.js'
-import { answerDeliveryId } from './owner-controls.js'
+import { answerDeliveryId, stopDeliveryId } from './owner-controls.js'
 import {
   CHANNEL,
   conversation,
@@ -9,6 +9,7 @@ import {
   OWNER,
   startedThread,
   TEAMMATE,
+  TURN,
   turnEnded,
   turnStarted
 } from './slack-harness.test-fixture.js'
@@ -49,13 +50,20 @@ async function asked(prompt: unknown = approval()) {
       ? { ...JSON.parse(String(row.body)), ts: row.slack_ts === null ? null : String(row.slack_ts) }
       : undefined
   }
+  const statusTs = async () => {
+    const [row] = await harness.database.query(
+      'SELECT slack_ts FROM connector_slack_posts WHERE post_id = ?',
+      [`status:${EXTERNAL_ID}`]
+    )
+    return String(row?.slack_ts)
+  }
   const deliveries = async () =>
     ConnectorPollResponseSchema.parse((await harness.machine.poll()).body).deliveries
   const ephemerals = async () =>
     (await harness.posts())
       .filter((post) => post.kind === 'ephemeral')
       .map((post) => [String(post.post_id), JSON.parse(String(post.body)).text])
-  return { ...harness, card, deliveries, ephemerals }
+  return { ...harness, card, statusTs, deliveries, ephemerals }
 }
 
 describe('Slack prompt cards', () => {
@@ -143,7 +151,30 @@ describe('Slack prompt cards', () => {
       'SELECT body FROM connector_slack_posts WHERE post_id = ?',
       [`status:${EXTERNAL_ID}`]
     )
-    expect(JSON.parse(String(row?.body)).text).toBe('Waiting for your answer.')
+    const status = JSON.parse(String(row?.body))
+    expect(status.text).toBe('Waiting for your answer.')
+    expect(status.blocks.map((block: { type: string }) => block.type)).toEqual([
+      'section',
+      'actions'
+    ])
+  })
+
+  it('says a Stop that reached a finished turn in plain words', async () => {
+    const harness = await asked()
+    await harness.click({
+      messageTs: await harness.statusTs(),
+      actionId: 'stop',
+      value: String(TURN)
+    })
+    const [stop] = await harness.deliveries()
+    await harness.machine.ack([
+      {
+        deliveryId: stop?.deliveryId,
+        step: 'done',
+        result: { outcome: 'refused', reason: 'turn_not_running' }
+      }
+    ])
+    expect(await harness.status()).toBe('That turn had already finished.')
   })
 
   it('leaves prompts Slack can’t answer to Orca: no card, the status says where', async () => {
@@ -190,6 +221,92 @@ describe('Slack prompt cards', () => {
     expect((await harness.ephemerals()).map(([, text]) => text)).toEqual([
       'Orca for Slack is paused.'
     ])
+  })
+
+  it('stops the running turn on the owner’s Stop, once, and shows it stopping', async () => {
+    const harness = await asked()
+    const ts = await harness.statusTs()
+    await harness.click({ messageTs: ts, actionId: 'stop', value: String(TURN) })
+    await harness.click({ messageTs: ts, actionId: 'stop', value: String(TURN) })
+    expect(await harness.deliveries()).toEqual([
+      expect.objectContaining({
+        kind: 'cancel',
+        deliveryId: stopDeliveryId(EXTERNAL_ID, TURN),
+        turnId: TURN
+      })
+    ])
+    const [status] = await harness.database.query(
+      'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+      [`status:${EXTERNAL_ID}`]
+    )
+    const body = JSON.parse(String(status?.body))
+    expect(body.text).toBe('Stopping on build-box…')
+    expect(body.blocks.map((block: { type: string }) => block.type)).toEqual(['section'])
+    expect(await harness.ephemerals()).toEqual([])
+  })
+
+  it('stops nothing for a teammate, a finished turn, or a Stop pressed on a prompt card', async () => {
+    const harness = await asked()
+    const ts = await harness.statusTs()
+    await harness.click({ user: TEAMMATE, messageTs: ts, actionId: 'stop', value: String(TURN) })
+    expect(await harness.ephemerals()).toEqual([
+      [`only-owner:status:${EXTERNAL_ID}:${TEAMMATE}`, `Only <@${OWNER}> can do this.`]
+    ])
+    await harness.click({
+      messageTs: (await harness.card()).ts,
+      actionId: 'stop',
+      value: String(TURN)
+    })
+    await harness.events(turnEnded)
+    await harness.click({ messageTs: ts, actionId: 'stop', value: String(TURN) })
+    expect(await harness.deliveries()).toEqual([])
+  })
+
+  it('never sends a Stop whose turn ended before the machine polled, even when a new turn began', async () => {
+    const harness = await asked()
+    await harness.click({
+      messageTs: await harness.statusTs(),
+      actionId: 'stop',
+      value: String(TURN)
+    })
+    await harness.events(turnEnded, { ...turnStarted, at: TURN + 10_000 })
+    expect(await harness.deliveries()).toEqual([])
+    const [stop] = await harness.database.query(
+      'SELECT state FROM connector_inbox WHERE delivery_id = ?',
+      [stopDeliveryId(EXTERNAL_ID, TURN)]
+    )
+    expect(stop?.state).toBe('dropped')
+  })
+
+  it('keeps showing a stop until its turn ends, whether the ack, a message or the end comes first', async () => {
+    const harness = await asked()
+    await harness.click({
+      messageTs: await harness.statusTs(),
+      actionId: 'stop',
+      value: String(TURN)
+    })
+    const [stop] = await harness.deliveries()
+    await harness.machine.ack([
+      { deliveryId: stop?.deliveryId, step: 'done', result: { outcome: 'accepted' } }
+    ])
+    const status = async () => {
+      const [row] = await harness.database.query(
+        'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+        [`status:${EXTERNAL_ID}`]
+      )
+      return JSON.parse(String(row?.body))
+    }
+    expect((await status()).text).toBe('Stopping on build-box…')
+    expect((await status()).blocks).toHaveLength(1)
+    await harness.message({
+      text: 'and then?',
+      ts: '1800000000.000300',
+      thread_ts: '1800000000.000100'
+    })
+    expect((await status()).text).toBe('Stopping on build-box…')
+    // The turn's end settles the stop; what shows next is the follow-up waiting for the machine.
+    await harness.events(turnEnded)
+    expect((await status()).text).toBe('Waiting for your Orca on build-box…')
   })
 
   it('shows an answer’s refusal or unknown outcome as soon as it is settled', async () => {
@@ -264,5 +381,24 @@ describe('Slack prompt cards', () => {
     expect(await harness.deliveries()).toEqual([
       expect.objectContaining({ kind: 'answer', promptId, optionId: 'allow_once' })
     ])
+  })
+
+  it('offers no Stop, and takes none, from a machine that doesn’t bind a cancel to its turn', async () => {
+    const harness = await asked()
+    await harness.database.query(
+      `UPDATE connector_hosts SET hello = REPLACE(hello, ',"turnCancel"', '')`
+    )
+    await harness.events(approval())
+    const [row] = await harness.database.query(
+      'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+      [`status:${EXTERNAL_ID}`]
+    )
+    expect(JSON.parse(String(row?.body)).blocks).toHaveLength(1)
+    await harness.click({
+      messageTs: await harness.statusTs(),
+      actionId: 'stop',
+      value: String(TURN)
+    })
+    expect(await harness.deliveries()).toEqual([])
   })
 })

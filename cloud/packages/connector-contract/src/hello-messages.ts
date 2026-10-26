@@ -5,7 +5,7 @@ import { ConnectorHostDescription, PlaceIdSchema } from './connector-wire-scalar
 
 export const CONNECTOR_AGENTS = ['claude', 'codex'] as const
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
-export const CONNECTOR_FEATURES = ['answer', 'cancel', 'reply'] as const
+export const CONNECTOR_FEATURES = ['answer', 'cancel', 'reply', 'turnCancel'] as const
 
 // The cloud uses only what a machine lists; an entry it does not know is ignored, not refused.
 const CapabilityList = z.array(z.string().min(1))

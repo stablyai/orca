@@ -139,7 +139,22 @@ describe('Slack thread status and posts', () => {
         args: {
           channel: CHANNEL,
           ts: expect.any(String),
-          text: 'Working on build-box…'
+          text: 'Working on build-box…',
+          // While the turn runs, the owner can stop it from the status.
+          blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text: 'Working on build-box…' } },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  action_id: 'stop',
+                  text: { type: 'plain_text', text: 'Stop' },
+                  value: String(TURN)
+                }
+              ]
+            }
+          ]
         }
       }
     ])
@@ -451,7 +466,16 @@ describe('Slack thread status and posts', () => {
         args: {
           channel: CHANNEL,
           ts: expect.any(String),
-          text: `Couldn’t reach <@${OWNER}>’s Orca on build-box. Send again when it’s back.`
+          text: `Couldn’t reach <@${OWNER}>’s Orca on build-box. Send again when it’s back.`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `Couldn’t reach <@${OWNER}>’s Orca on build-box. Send again when it’s back.`
+              }
+            }
+          ]
         }
       }
     ])

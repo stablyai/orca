@@ -8,7 +8,7 @@ import type { SlackPosts } from './slack-posts.js'
 import { isOpenCard, promptCardId, settledCard } from './slack-prompt-cards.js'
 import type { QueueInTransaction } from './queue-delivery.js'
 import { slackText } from './slack-text.js'
-import { refreshSlackStatus } from './slack-thread-posts.js'
+import { refreshSlackStatus, statusPostId } from './slack-thread-posts.js'
 
 const BlockActionsSchema = z.looseObject({
   type: z.literal('block_actions'),
@@ -21,14 +21,14 @@ const BlockActionsSchema = z.looseObject({
     .min(1)
 })
 
-// A press of an answer button on a prompt card. What it answers is found from the message it is
-// on; the button only says which option.
+// A press of a button on a prompt card (answer) or on the status message (stop). What it acts on is
+// found from the message it is on; the button only says which option or turn.
 export type SlackClick = {
   teamId: string
   channelId: string
   userId: string
   messageTs: string
-  optionId: string
+  button: { kind: 'answer'; optionId: string } | { kind: 'stop'; turnId: number }
 }
 
 // Slack sends interactions form-encoded, the JSON in `payload`. Other interactions are ignored.
@@ -44,7 +44,16 @@ export function readSlackClick(rawBody: string): SlackClick | 'ignored' | 'inval
     return typeof payload === 'object' && payload !== null ? 'ignored' : 'invalid'
   }
   const [action] = parsed.data.actions
-  if (!action?.action_id.startsWith('answer:') || action.value === undefined) {
+  const value = action?.value
+  const button =
+    value === undefined
+      ? undefined
+      : action?.action_id.startsWith('answer:')
+        ? { kind: 'answer' as const, optionId: value }
+        : action?.action_id === 'stop' && Number.isSafeInteger(Number(value))
+          ? { kind: 'stop' as const, turnId: Number(value) }
+          : undefined
+  if (!button) {
     return 'ignored'
   }
   return {
@@ -52,11 +61,11 @@ export function readSlackClick(rawBody: string): SlackClick | 'ignored' | 'inval
     channelId: parsed.data.channel.id,
     userId: parsed.data.user.id,
     messageTs: parsed.data.container.message_ts,
-    optionId: action.value
+    button
   }
 }
 
-// Decisions §1: only the conversation's owner answers; anyone else is told so privately.
+// Decisions §1: only the conversation's owner answers or stops; anyone else is told so privately.
 export async function handleSlackClick(
   deps: {
     config: SlackConfig
@@ -89,8 +98,11 @@ export async function handleSlackClick(
        WHERE team_id = ? AND channel_id = ? AND thread_ts = ?`,
       [place.teamId, place.channelId, place.threadTs]
     )
+    // The button must sit on the message that offers it: a stop on a status, an answer on a card.
     const thread = threads.find((row) =>
-      postId.startsWith(promptCardId(String(row.external_id), ''))
+      click.button.kind === 'stop'
+        ? postId === statusPostId(String(row.external_id))
+        : postId.startsWith(promptCardId(String(row.external_id), ''))
     )
     if (!thread) {
       return
@@ -110,20 +122,25 @@ export async function handleSlackClick(
       )
       return
     }
-    // Cards close only under the host lock (events, clicks), so this read holds until commit.
-    await lockConnectorHost(transaction, String(thread.host_id))
-    const [card] = await transaction.query(
-      'SELECT body FROM connector_slack_posts WHERE post_id = ?',
-      [postId]
-    )
-    if (!isOpenCard(JSON.parse(String(card?.body ?? '{}')))) {
-      await tell(`moved-on:${postId}:${click.userId}`, slackText.alreadyAnswered)
-      return
-    }
-    const action: OwnerAction = {
-      kind: 'answer',
-      promptId: postId.slice(promptCardId(externalId, '').length),
-      optionId: click.optionId
+    const action: OwnerAction =
+      click.button.kind === 'stop'
+        ? click.button
+        : {
+            kind: 'answer',
+            promptId: postId.slice(promptCardId(externalId, '').length),
+            optionId: click.button.optionId
+          }
+    if (action.kind === 'answer') {
+      // Cards close only under the host lock (events, clicks), so this read holds until commit.
+      await lockConnectorHost(transaction, String(thread.host_id))
+      const [card] = await transaction.query(
+        'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+        [postId]
+      )
+      if (!isOpenCard(JSON.parse(String(card?.body ?? '{}')))) {
+        await tell(`moved-on:${postId}:${click.userId}`, slackText.alreadyAnswered)
+        return
+      }
     }
     const outcome = await applyOwnerAction(transaction, queue, externalId, click.userId, action)
     switch (outcome?.kind) {
@@ -131,7 +148,10 @@ export async function handleSlackClick(
         await tell(`only-owner:${postId}:${click.userId}`, slackText.onlyOwner(outcome.ownerUserId))
         return
       case 'moved_on':
-        await tell(`moved-on:${postId}:${click.userId}`, slackText.alreadyAnswered)
+        // A repeated Stop needs no reply: the status already says it is stopping or done.
+        if (action.kind === 'answer') {
+          await tell(`moved-on:${postId}:${click.userId}`, slackText.alreadyAnswered)
+        }
         return
       case 'answered':
         await transaction.lockQuotaScope(`orca-connector-slack-status:${externalId}`)
@@ -143,6 +163,9 @@ export async function handleSlackClick(
             slackText.promptAnswered(outcome.ownerUserId, outcome.label)
           )
         })
+        await refreshSlackStatus(transaction, posts, String(thread.host_id), externalId)
+        return
+      case 'stopping':
         await refreshSlackStatus(transaction, posts, String(thread.host_id), externalId)
     }
   })

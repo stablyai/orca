@@ -159,7 +159,7 @@ export async function createSlackHarness(slack: Partial<SlackConfig> = {}) {
         orcaVersion: '1.4.230',
         agents: ['claude', 'codex'],
         promptKinds: ['approval'],
-        features: ['answer', 'cancel', 'reply'],
+        features: ['answer', 'cancel', 'reply', 'turnCancel'],
         projects
       },
       'PUT'

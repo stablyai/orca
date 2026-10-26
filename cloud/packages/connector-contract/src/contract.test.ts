@@ -43,6 +43,11 @@ describe('poll response', () => {
     expect(result.data?.control).toBeUndefined()
   })
 
+  it('carries the turn a Stop was pressed for on its cancel', () => {
+    const result = poll([{ ...base, kind: 'cancel', turnId: 1_800_000_001_000 }])
+    expect(result.data?.deliveries[0]).toMatchObject({ kind: 'cancel', turnId: 1_800_000_001_000 })
+  })
+
   it('rejects a delivery the cloud must never send', () => {
     for (const delivery of [
       { ...base, kind: 'rewind' },

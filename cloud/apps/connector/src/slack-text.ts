@@ -10,10 +10,10 @@ export function escapeSlackText(text: string): string {
 
 const MAX_LISTED_OPTIONS = 10
 // Slack's limits on a section's text and a button's label.
-const MAX_SECTION_CHARS = 3_000
+export const MAX_SECTION_CHARS = 3_000
 export const MAX_BUTTON_LABEL_CHARS = 75
 
-// The machine's refusal reasons (its CONNECTOR_REFUSALS).
+// The machine's refusal reasons (its CONNECTOR_REFUSALS, plus turn_not_running for a Stop).
 // A Map, so only these own entries match: a code like `toString` falls to the generic line.
 const REFUSALS = new Map<string, (machine: string) => string>([
   ['connectors_disabled', (machine) => `Connectors are turned off in Orca on ${machine}.`],
@@ -36,7 +36,8 @@ const REFUSALS = new Map<string, (machine: string) => string>([
     'option_not_offered',
     (machine) => `That option isn’t offered any more. Answer in Orca on ${machine}.`
   ],
-  ['conversation_cancelled', () => 'Stopped before it reached the agent.']
+  ['conversation_cancelled', () => 'Stopped before it reached the agent.'],
+  ['turn_not_running', () => 'That turn had already finished.']
 ])
 
 export const slackText = {
@@ -59,6 +60,7 @@ export const slackText = {
       `Waiting for your answer in Orca on ${escapeSlackText(hostName)}.`,
     // The prompt's card in the thread has the buttons.
     needsAnswerHere: 'Waiting for your answer.',
+    stopping: (hostName: string) => `Stopping on ${escapeSlackText(hostName)}…`,
     done: (hostName: string) => `Done on ${escapeSlackText(hostName)}.`,
     // Q18, in the public status: the thread sees who it was waiting on (Slack renders <@U…> as a name).
     offline: (ownerUserId: string, hostName: string) =>
@@ -94,6 +96,7 @@ export const slackText = {
     `<@${ownerUserId}> answered: ${escapeSlackText(label.slice(0, MAX_BUTTON_LABEL_CHARS))}.`,
   promptClosed: 'No longer waiting for this answer.',
   onlyOwner: (ownerUserId: string) => `Only <@${ownerUserId}> can do this.`,
+  stopButton: 'Stop',
   alreadyAnswered: 'Already answered or moved on.',
   // Agent-facing, not posted: a mention's earlier thread (null when Slack couldn't be read).
   threadStart: (thread: { name: string; text: string }[] | null, request: string) => {

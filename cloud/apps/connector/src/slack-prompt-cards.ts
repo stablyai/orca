@@ -3,7 +3,7 @@ import type { ConnectorHelloRequest } from '@orca-cloud/connector-contract'
 import { z } from 'zod'
 import { answerablePrompt, type AnswerablePrompt } from './owner-controls.js'
 import type { SlackBlock, SlackPlace, SlackPosts } from './slack-posts.js'
-import { MAX_BUTTON_LABEL_CHARS, slackText } from './slack-text.js'
+import { MAX_BUTTON_LABEL_CHARS, MAX_SECTION_CHARS, slackText } from './slack-text.js'
 
 // Slack's limit on buttons per actions block.
 const MAX_BUTTONS = 25
@@ -28,6 +28,29 @@ export function slackAnswerablePrompt(
     prompt.options.every((option) => option.label.trim().length > 0) &&
     slackText.promptCard(prompt).length > 0
   return fits ? prompt : null
+}
+
+// The status message's blocks: its text, and Stop while the owner can stop the turn. Always sent, so
+// an edit that drops the button replaces the old blocks.
+export function statusBlocks(text: string, stoppableTurnId: number | null): SlackBlock[] {
+  return [
+    { type: 'section', text: { type: 'mrkdwn', text: text.slice(0, MAX_SECTION_CHARS) } },
+    ...(stoppableTurnId === null
+      ? []
+      : [
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                action_id: 'stop',
+                text: { type: 'plain_text', text: slackText.stopButton },
+                value: String(stoppableTurnId)
+              }
+            ]
+          }
+        ])
+  ]
 }
 
 function openCard(prompt: AnswerablePrompt): { text: string; blocks: SlackBlock[] } {

@@ -12,6 +12,7 @@ import {
 } from '@orca-cloud/connector-contract'
 import type { Context, Hono, MiddlewareHandler } from 'hono'
 import { lockConnectorHost, type ConnectorHosts } from './connector-hosts.js'
+import { retireStaleStops } from './owner-controls.js'
 import type { ConnectorInbox, Unsettled } from './connector-inbox.js'
 import type { ConnectorThreads } from './connector-threads.js'
 import type { InboxWaker } from './inbox-waker.js'
@@ -163,6 +164,7 @@ export function registerMachineRoutes(
     return await onCurrentHello(context, body.data.helloRev, async (transaction, hostId) => {
       if (await hosts.advanceEventsSeq(transaction, hostId, body.data.seq)) {
         await threads.applyEvents(transaction, hostId, body.data.events)
+        await retireStaleStops(transaction, hostId, now())
         await slack?.onEvents(transaction, hostId, body.data.events)
       }
     })
