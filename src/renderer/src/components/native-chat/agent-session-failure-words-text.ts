@@ -149,6 +149,17 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    conversationOpenElsewhere: () =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenElsewhere',
+        COPY.conversationOpenElsewhere
+      ),
+    conversationOpenInTerminal: (values) =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenInTerminal',
+        COPY.conversationOpenInTerminal,
+        values
+      ),
     chooseClaudeAccount: () =>
       translate(
         'components.native-chat.failureWords.chooseClaudeAccount',
@@ -224,6 +235,8 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
     agentStillWorking: () =>
       translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
+    waitForTurn: () =>
+      translate('components.native-chat.writeNotice.waitForTurn', COPY.waitForTurn),
     runCommandWhenDone: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandWhenDone',

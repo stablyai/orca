@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Benchmark four per-keystroke/store-write projections. Scenarios 1/3/4 compare production with pre-change baseline after checking equivalence.
+// Benchmark four projection workloads. Scenarios 1/3/4 compare current production with local baselines after checking equivalence.
 // Scenario 2 models both loops because its React hook cannot load without a renderer; it does not time production.
 import { spawnSync } from 'node:child_process'
 import { transformSync } from 'esbuild'
@@ -133,7 +133,7 @@ compare({
   label: 'workspace board filter (per keystroke burst)',
   scale: `${WORKTREES} worktrees x ${KEYSTROKES} keystrokes`,
   drives: 'production',
-  // Omitting `documents` is the pre-change shape: the index is rebuilt inside every match.
+  // Omitting `documents` rebuilds the index inside every match.
   before: () => matchAll(undefined),
   // The hook memoizes the index on [worktrees, repoMap]; only the match reruns per keystroke.
   after: () => matchAll(buildWorkspaceBoardPaletteDocuments({ worktrees: boardWorktrees, repoMap }))
@@ -156,9 +156,17 @@ const groupTabById = new Map(groupTabs.map((item) => [item.id, item]))
 function tabProjections(findOpenFile, findGroupTab) {
   const editorItems = groupTabs
     .filter((item) => item.contentType === 'editor')
-    .map((item) => findOpenFile(item.entityId))
-    .filter((file) => file !== undefined)
-  const order = tabOrder.map((itemId) => findGroupTab(itemId)?.entityId ?? itemId)
+    .map((item) => {
+      const file = findOpenFile(item.entityId)
+      return file ? { ...file, tabId: item.id } : null
+    })
+    .filter((file) => file !== null)
+  const order = tabOrder.map((itemId) => {
+    const item = findGroupTab(itemId)
+    return item && (item.contentType === 'terminal' || item.contentType === 'browser')
+      ? item.entityId
+      : itemId
+  })
   return [editorItems, order]
 }
 
@@ -193,7 +201,7 @@ const changedEntries = Array.from({ length: CHANGED_FILES }, (_, index) => ({
   path: `src/area-${index % 20}/module-${index % 60}/nested/deep/part-${index % 7}/file-${index}.ts`
 }))
 
-// Pre-change `buildSourceControlTree`: identical except each ancestor path is re-joined.
+// Local tree comparator re-joins ancestor paths; shares current normalization and sorting.
 function buildSourceControlTreeBefore(area, entries) {
   const makeDirectory = (dirPath, name, depth) => ({
     type: 'directory',
@@ -291,7 +299,7 @@ const boundaryArgs = {
   repoHeaderBucketByRepoId: new Map(headerRepoIds.map((id) => [id, 'ungrouped']))
 }
 
-// Pre-change `getRepoHeaderSectionEndByRepoId`: a findIndex and an indexOf per header row.
+// Local boundary comparator uses findIndex and indexOf per header row.
 function getRepoHeaderSectionEndByRepoIdBefore(args) {
   const rowStarts = []
   let offset = 0

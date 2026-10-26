@@ -548,7 +548,7 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('clears multiple sleeping records and launch configs in one update', () => {
+  it('clears multiple sleeping records in one update and leaves launch configs untouched', () => {
     const store = createTestStore()
     const sleeping = {
       'tab-1:leaf-1': { paneKey: 'tab-1:leaf-1' },
@@ -594,7 +594,7 @@ describe('captureAllSleepingAgentSessions', () => {
     const state = store.getState()
     expect(changedUpdates).toBe(1)
     expect(Object.keys(state.sleepingAgentSessionsByPaneKey)).toEqual(['tab-3:leaf-3'])
-    expect(Object.keys(state.agentLaunchConfigByPaneKey)).toEqual(['tab-3:leaf-3'])
+    expect(state.agentLaunchConfigByPaneKey).toBe(launchConfigs)
   })
 
   it('clears launch config registry entries when invalid sleeping sessions are pruned', () => {

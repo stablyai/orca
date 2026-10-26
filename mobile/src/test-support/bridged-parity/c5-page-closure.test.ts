@@ -33,11 +33,11 @@ describe('the C5 page closure', () => {
   // Assert class totals beside per-id pins; a self-consistent misderived table can satisfy each pin while losing wrapped entries.
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
-      identical: 66,
+      identical: 61,
       'result-absent-settlement': 49,
       'params-undefined': 7,
       'result-absent-stream-release': 3,
-      'write-ordinal': 2
+      'write-ordinal': 7
     })
   })
 
@@ -60,12 +60,15 @@ describe('the C5 page closure', () => {
     ])
   })
 
-  it('has a byte-identical golden in every family it adds, unlike C2 s five', () => {
+  it('keeps byte-identical controls outside History and strict ordinal controls within it', () => {
     const added = Object.entries(C5_PAGE_CLOSURE).filter(([family]) => !(family in C1_PAGE_CLOSURE))
     const wholly = added
       .filter(([, pins]) => !Object.values(pins).includes('identical'))
       .map(([family]) => family)
-    expect(wholly).toEqual([])
+    expect(wholly.sort()).toEqual(['aiVault.history', 'aiVault.history-screen'])
+    for (const family of wholly) {
+      expect(Object.values(C5_PAGE_CLOSURE[family] ?? {})).toContain('write-ordinal')
+    }
   })
 
   it('pins goldens that exist, in the family the corpus records them under', () => {
@@ -92,7 +95,7 @@ describe('the C5 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C5_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(61)
+    expect(exclusions.length).toBe(66)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )

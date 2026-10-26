@@ -31,7 +31,7 @@ import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { titleHasExplicitAgentIdentity } from './title-agent-identity'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
-import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
+import { isTerminalPaneLocalWindowsConpty } from './terminal-pane-local-windows-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import {
   isEditableTarget,
@@ -135,7 +135,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     if (!pane) {
       return false
     }
-    return isLocalWindowsConptyPaneForCtrlArrow({
+    return isTerminalPaneLocalWindowsConpty({
       isWindows,
       userAgent: navigator.userAgent,
       state: useAppStore.getState(),

@@ -52,6 +52,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         title: tab.title || tab.url || 'Browser',
         browserWorkspaceId: tab.browserPageId,
         browserPageId: tab.browserPageId,
+        browserProfileId: tab.profileId ?? undefined,
         url: tab.url || 'about:blank',
         loading: false,
         canGoBack: false,

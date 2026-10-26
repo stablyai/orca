@@ -1,12 +1,7 @@
 import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
-import {
-  hookScreenMount,
-  projectMountedScreen,
-  renderedElementProps,
-  screenMount
-} from './mounted-screen-tree'
+import { hookScreenMount, projectMountedScreen, screenMount } from './mounted-screen-tree'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { runRecording } from './run-recording'
 import { readScenarios } from './scenario-input'
@@ -40,36 +35,6 @@ describe('a mounted screen', () => {
       labels: [],
       crash: 'a reply took the screen down'
     })
-  })
-
-  it('projects the elements, copy and labels of what rendered', () => {
-    const screen = screenMount(
-      () =>
-        createElement(
-          'View',
-          null,
-          createElement('Text', { accessibilityLabel: 'title' }, 'Files'),
-          createElement('Text', null, 'orca-files')
-        ),
-      effectSink().effect
-    )
-    screen.mount()
-    expect(projectMountedScreen(screen)).toEqual({
-      elements: { View: 1, Text: 2 },
-      text: ['Files', 'orca-files'],
-      labels: ['title'],
-      crash: null
-    })
-  })
-
-  it('reads the props an inert element was handed, which is all a list ever renders', () => {
-    const screen = screenMount(
-      () => createElement('View', null, createElement('FlatList', { data: [{ id: 'row-1' }] })),
-      effectSink().effect
-    )
-    screen.mount()
-    expect(renderedElementProps(screen.tree(), 'FlatList')).toEqual([{ data: [{ id: 'row-1' }] }])
-    expect(renderedElementProps(screen.tree(), 'SectionList')).toEqual([])
   })
 
   // Hook projections omit crashes; the effect sink must record them independently.

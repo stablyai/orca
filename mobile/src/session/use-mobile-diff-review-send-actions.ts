@@ -9,7 +9,7 @@ import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobil
 import { reviewTerminalListRead, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import { launchAgentWithPrompt } from './pr-ai-triage-launch'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 

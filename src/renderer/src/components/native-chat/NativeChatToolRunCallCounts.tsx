@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat-tool-activity'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 
 /** Count failures separately from calls interrupted by Stop. */
 export function NativeChatToolRunCallCounts({

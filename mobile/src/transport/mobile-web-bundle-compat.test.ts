@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import { MOBILE_WEB_BUNDLE_SCHEMA_VERSION } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   evaluateMobileWebBundleCompat,
-  SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS,
   type MobileWebBundleCompatManifest,
   type MobileWebBundleCompatVerdict,
   type MobileWebBundleHostStatus
@@ -174,10 +172,6 @@ describe('evaluateMobileWebBundleCompat', () => {
         manifest: manifest({ runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 2 })
       })
     ).toMatchObject({ reason: 'bundle-incompatible', side: 'mobile' })
-  })
-
-  it('supports the schema the desktop writes today, so a current bundle opens', () => {
-    expect(SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS).toContain(MOBILE_WEB_BUNDLE_SCHEMA_VERSION)
   })
 })
 

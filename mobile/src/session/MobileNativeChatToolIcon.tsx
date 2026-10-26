@@ -13,7 +13,7 @@ import {
   Wrench,
   type LucideIcon
 } from 'lucide-react-native'
-import type { NativeChatToolIconName } from '../../../src/shared/native-chat-tool-icon'
+import type { NativeChatToolIconName } from '../../../src/shared/native-chat/tools/native-chat-tool-icon'
 
 const GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   eye: Eye,

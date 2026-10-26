@@ -9,7 +9,7 @@ import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
-} from './mobile-native-chat-eligibility'
+} from './native-chat/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'

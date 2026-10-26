@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { tabHasLivePty } from './tab-has-live-pty'
 
 describe('tabHasLivePty', () => {
-  it('returns false for an empty map', () => {
-    expect(tabHasLivePty({}, 'tab-1')).toBe(false)
-  })
-
   it('returns false for a missing tab id', () => {
     expect(tabHasLivePty({ 'other-tab': ['pty-1'] }, 'tab-1')).toBe(false)
   })

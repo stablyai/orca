@@ -138,6 +138,29 @@ describe('adopted conversation ownership', () => {
     ).not.toThrow()
   })
 
+  it('admits a conversation another record only held before its current one', () => {
+    const fixture = agentSessionRecordFixture()
+    const holder: AgentSessionRecord = {
+      ...fixture,
+      providerHandleChain: [
+        ...fixture.providerHandleChain,
+        adoptedLink({
+          linkId: 'later',
+          handle: claudeProviderHandle('provider-session-later', null),
+          origin: 'created'
+        })
+      ]
+    }
+
+    expect(() =>
+      applyAgentSessionReservation(
+        storeState([holder]),
+        reserveRequest({ adoptedHandleLink: adoptedLink() }),
+        LEASE_TTL_MS
+      )
+    ).not.toThrow()
+  })
+
   it('preserves the adopted chain and launch pin when retrying an existing reservation', () => {
     // Pin self-exemption directly; create-by-intent has null expectedFence and rejects existing ids before this can act as replay.
     const link = adoptedLink()

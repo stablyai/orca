@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT,
-  WATCHER_IGNORE_DIRS,
-  buildParcelWatcherIgnoreOptions
-} from './filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 
 const realPlatform = process.platform
 
@@ -22,8 +18,8 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     const option = options.ignore ?? []
     // FSEvents rejects all plain exclusions above eight paths, silently restoring node_modules/.git churn.
     const plainPaths = option.filter((entry) => !entry.includes('*'))
-    expect(plainPaths.length).toBeLessThanOrEqual(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
-    expect(option).toEqual(WATCHER_IGNORE_DIRS.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT))
+    expect(plainPaths.length).toBeLessThanOrEqual(8)
+    expect(option).toEqual(WATCHER_IGNORE_DIRS.slice(0, 8))
     const fallbackRegex = new RegExp(options.ignoreGlobs?.[0] ?? '(?!)')
     for (const dir of WATCHER_IGNORE_DIRS) {
       expect(fallbackRegex.test(dir)).toBe(true)

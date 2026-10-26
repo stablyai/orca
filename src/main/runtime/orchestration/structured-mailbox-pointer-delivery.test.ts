@@ -39,6 +39,7 @@ function harness(options: {
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let attached = options.attached ?? true
   let awaitingHuman = false
+  let working = false
   let submissions: StructuredPointerSubmission[] = []
   const mail = [
     { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
@@ -63,16 +64,21 @@ function harness(options: {
   const stored = new Map<string, StructuredPointerOperationRow>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
-    hasOutstandingMailboxDelivery: (handle: string) =>
+    getOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
-      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
+      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:'))
+        ? { id: 'delivery_1', messageIds: ['m1'] }
+        : undefined,
     getUndeliveredUnreadMessages: (
       _handle: string,
       _filter: unknown,
-      input: { excludeTypes: readonly string[] }
+      input: { excludeTypes: readonly string[]; excludeIds?: readonly string[] }
     ) =>
       mail.filter(
-        (message) => !pointed.has(message.id) && !input.excludeTypes.includes(message.type)
+        (message) =>
+          !pointed.has(message.id) &&
+          !input.excludeTypes.includes(message.type) &&
+          !input.excludeIds?.includes(message.id)
       ),
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
@@ -90,6 +96,7 @@ function harness(options: {
     host: {
       readSessionFacts: async () => (attached ? { submissions } : null),
       hasActionablePromptNow: () => awaitingHuman,
+      isWorkingNow: () => working,
       currentFence: () => 4,
       currentContextClearOperationId: readContext,
       send
@@ -112,6 +119,9 @@ function harness(options: {
     },
     setAwaitingHuman: (next: boolean) => {
       awaitingHuman = next
+    },
+    setWorking: (next: boolean) => {
+      working = next
     }
   }
 }
@@ -320,12 +330,18 @@ describe('structured mailbox pointer delivery', () => {
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
-  it('does not re-nudge a mailbox still holding its own unacked batch', async () => {
-    // Suppress another nudge when this mailbox already has an outstanding delivery.
-    const { delivery, send } = harness({ outstandingOwnDelivery: true })
+  it('parks a held-batch nudge while the agent works and sends it on the next journal edge', async () => {
+    const { delivery, send, receive, setWorking } = harness({ outstandingOwnDelivery: true })
+    setWorking(true)
+    receive('m2', 4)
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+
+    setWorking(false)
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
   })
 
   it('retries a rejected nudge on the next journal edge, under the same id', async () => {
@@ -505,7 +521,7 @@ describe('forgetting one settled worker', () => {
     }))
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
-      hasOutstandingMailboxDelivery: () => false,
+      getOutstandingMailboxDelivery: () => undefined,
       getUndeliveredUnreadMessages: () =>
         pointed.has('m1')
           ? []
@@ -529,6 +545,7 @@ describe('forgetting one settled worker', () => {
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         hasActionablePromptNow: () => false,
+        isWorkingNow: () => false,
         currentFence: () => 4,
         currentContextClearOperationId: () => undefined,
         send
@@ -596,7 +613,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
     const stored = new Map<string, StructuredPointerOperationRow>()
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
-      hasOutstandingMailboxDelivery: () => false,
+      getOutstandingMailboxDelivery: () => undefined,
       getUndeliveredUnreadMessages: () => mail.filter((message) => !pointed.has(message.id)),
       markAsDelivered: (ids: string[]) => ids.forEach((id) => pointed.add(id)),
       getStructuredPointerOperation: (key: string) => stored.get(key),
@@ -628,6 +645,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         hasActionablePromptNow: () => false,
+        isWorkingNow: () => false,
         currentFence: () => 4,
         currentContextClearOperationId: () => contextClearOperationId,
         send

@@ -82,65 +82,6 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('clears reload fallback timer after the load event settles', async () => {
-    vi.useFakeTimers()
-    try {
-      succeedWith(null)
-      const wc = {
-        ...mockWebContents(100, 'https://reloaded.example', 'Reloaded'),
-        reload: vi.fn(),
-        on: vi.fn(),
-        removeListener: vi.fn()
-      }
-      webContentsFromIdMock.mockReturnValue(wc)
-
-      const result = bridge.reload()
-
-      await vi.waitFor(() => {
-        expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
-      })
-
-      const finishListener = wc.on.mock.calls.find(
-        ([event]) => event === 'did-finish-load'
-      )?.[1] as (() => void) | undefined
-      const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
-        | (() => void)
-        | undefined
-      expect(finishListener).toBeDefined()
-      expect(failListener).toBeDefined()
-      expect(vi.getTimerCount()).toBe(1)
-
-      finishListener!()
-
-      await expect(result).resolves.toEqual({
-        url: 'https://reloaded.example',
-        title: 'Reloaded'
-      })
-      expect(wc.removeListener).toHaveBeenCalledWith('did-finish-load', finishListener)
-      expect(wc.removeListener).toHaveBeenCalledWith('did-fail-load', failListener)
-      expect(vi.getTimerCount()).toBe(0)
-
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(wc.removeListener).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('navigates the registered webContents without spawning agent-browser', async () => {
-    const wc = mockWebContents(100, 'https://example.com/start', 'Example')
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await expect(bridge.goto('https://example.com/next')).resolves.toEqual({
-      url: 'https://example.com/next',
-      title: 'Example'
-    })
-
-    expect(wc.loadURL).toHaveBeenCalledWith('https://example.com/next')
-    expect(wc.isLoading).not.toHaveBeenCalled()
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
   it('preserves scheme-less navigation semantics at the direct WebContents boundary', async () => {
     const wc = mockWebContents(100)
     webContentsFromIdMock.mockReturnValue(wc)

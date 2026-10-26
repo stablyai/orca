@@ -3,6 +3,7 @@ import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import {
   claimEmptyWorkspaceDefaultSurface,
   releaseEmptyWorkspaceDefaultSurface
@@ -11,6 +12,7 @@ import {
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
   const storeClosedRecords: Record<string, { worktreeId: string; closedAt: number }> = {}
+  const storePendingCreations: Record<string, PendingWorktreeCreation> = {}
   return {
     gate: vi.fn(),
     resume: vi.fn(),
@@ -18,18 +20,24 @@ const mocks = vi.hoisted(() => {
     launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
     createTab: vi.fn(),
     storeTabsByWorktree,
-    storeClosedRecords
+    storeClosedRecords,
+    storePendingCreations
   }
 })
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(() => mocks.authority, {
-    getState: () => ({
-      activeWorktreeId: 'wt-1',
-      tabsByWorktree: mocks.storeTabsByWorktree,
-      closedTerminalTabTombstonesByTabId: mocks.storeClosedRecords
-    })
+vi.mock('@/store', () => {
+  const getState = () => ({
+    activeWorktreeId: 'wt-1',
+    tabsByWorktree: mocks.storeTabsByWorktree,
+    closedTerminalTabTombstonesByTabId: mocks.storeClosedRecords,
+    pendingWorktreeCreations: mocks.storePendingCreations
   })
-}))
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
+      { getState }
+    )
+  }
+})
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({
   gateWorktreeAgentActivation: mocks.gate
 }))
@@ -41,7 +49,7 @@ vi.mock('@/lib/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: mocks.resume
 }))
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
-  createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
+  createWorkspaceTerminalHostAuthoritySelector: () => () => mocks.authority
 }))
 vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
   pruneParkedTerminalWatchers: vi.fn(),
@@ -60,6 +68,7 @@ afterEach(async () => {
   mocks.authority = 'none'
   mocks.storeTabsByWorktree = {}
   mocks.storeClosedRecords = {}
+  mocks.storePendingCreations = {}
 })
 
 function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}): null {
@@ -101,6 +110,37 @@ function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}
 }
 
 describe('passive terminal seeding during native chat creation', () => {
+  it('waits for worktree creation before checking whether a fallback shell is needed', async () => {
+    mocks.storePendingCreations['creation-1'] = {
+      creationId: 'creation-1',
+      worktreeId: 'wt-1',
+      phase: 'creating',
+      status: 'creating',
+      startedAt: 1,
+      indeterminate: false,
+      loaderVisible: true,
+      request: {
+        repoId: 'repo-1',
+        name: 'workspace',
+        setupDecision: 'inherit',
+        agent: 'codex',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      }
+    }
+    mocks.gate.mockResolvedValue('empty')
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    expect(mocks.gate).not.toHaveBeenCalled()
+    expect(mocks.createTab).not.toHaveBeenCalled()
+
+    mocks.storePendingCreations = {}
+    await act(async () => root?.render(<Watcher />))
+    expect(mocks.createTab).toHaveBeenCalledOnce()
+  })
   it.each([
     ['claude', 'pending', 0],
     ['codex', 'pending', 0],

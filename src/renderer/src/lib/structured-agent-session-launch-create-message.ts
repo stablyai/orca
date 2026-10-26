@@ -1,11 +1,11 @@
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection

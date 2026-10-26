@@ -90,11 +90,11 @@ function queries(): string[] {
   const run = (index: number, length: number): string =>
     Array.from({ length }, (_unused, step) => QUERIES[(index + step) % QUERIES.length]).join(' ')
   return [
-    // Two terms, unquoted: not literal, so straight to OR.
+    // Unquoted pairs use the current phrase/AND/OR retrieval ladder.
     ...QUERIES,
-    // Quoted pair reaches phrase: fourteen-word corpus contains every pair.
+    // Quoted pairs sample phrase matching in the fourteen-word corpus.
     ...QUERIES.map((query) => `"${query}"`),
-    // Quoted eight-term run is absent from corpus, forcing phrase miss then AND.
+    // Longer quoted runs sample fallback routes; reports group by the observed route.
     ...QUERIES.map((_query, index) => `"${run(index, 4)}"`)
   ]
 }

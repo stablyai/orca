@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { formatToolDuration } from '../../../../shared/native-chat-tool-identity'
+import { formatToolDuration } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import { IpynbCellOutputs } from './IpynbCellOutputs'
 import { IpynbRunPrompt } from './IpynbCellToolbar'
 import { useCellRun } from './ipynb-kernel-store'

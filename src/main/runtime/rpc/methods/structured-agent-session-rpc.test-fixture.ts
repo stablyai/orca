@@ -100,12 +100,15 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), itemFence() and runningTurn() of a journal with no sends.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             stopMarks: { latest: () => null, revision: () => 0 },
             snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
+            item: ((itemId) =>
+              STATUS_ITEMS.find((item) => item.itemId === itemId) ??
+              null) satisfies AgentSessionJournal['item'],
             itemFence: () => undefined,
             runningTurn: () => null
           } as unknown as AgentSessionJournal,
@@ -255,10 +258,8 @@ export function dispatcher(
     ...runtimeCalls,
     ...runtimeOverrides
   }
-  return new RpcDispatcher({
-    runtime: runtime as unknown as OrcaRuntimeService,
-    methods
-  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial runtime supplies the dispatcher methods under test and runtimeOverrides; a missing access fails the test.
+  return new RpcDispatcher({ runtime: runtime as unknown as OrcaRuntimeService, methods })
 }
 
 /** Reply transport carries the negotiated client identity the capability gate reads. */

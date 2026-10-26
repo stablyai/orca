@@ -10,6 +10,7 @@ import {
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
+  answerBrowserLocalNetworkCheck,
   browserSitePermissionRequestingOrigin,
   browserSitePermissionsFor,
   decideBrowserSitePermissions,
@@ -249,14 +250,22 @@ export async function installBrowserSessionPartitionPolicies(
         details?.mediaType ? [details.mediaType] : undefined
       )
       if (sitePermissions) {
+        const source = {
+          // Service-worker checks have no WebContents; use their requesting origin.
+          pageUrl: webContents?.getURL() ?? requestingOrigin,
+          // Checks supply the frame's inherited origin.
+          frameOrigin: requestingOrigin
+        }
+        if (sitePermissions.includes('local-network')) {
+          return answerBrowserLocalNetworkCheck({
+            requester: webContents,
+            source,
+            memory: siteMemory
+          })
+        }
         return (
           isBrowserSitePermissionAllowed({
-            // Service-worker checks have no WebContents; use their requesting origin.
-            source: {
-              pageUrl: webContents?.getURL() ?? requestingOrigin,
-              // Checks supply the frame's inherited origin.
-              frameOrigin: requestingOrigin
-            },
+            source,
             memory: siteMemory,
             permissions: sitePermissions
           }) &&

@@ -11,7 +11,7 @@ import {
 } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import {
   resolveBundledWindowsNativeHookExecutable,
@@ -85,7 +85,8 @@ export function getWindowsClaudeHookEntry(): string {
     'echo {}',
     ...buildWindowsHookEnvironmentGuardLines(),
     WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
-    ...buildWindowsHookStdinDrainEpilogue(),
+    WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
+    'exit /b 0',
     ''
   ].join('\r\n')
 }

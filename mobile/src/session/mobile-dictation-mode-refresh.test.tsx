@@ -53,7 +53,7 @@ vi.mock('../hooks/use-mobile-dictation', () => ({
     }
   }
 }))
-vi.mock('./use-mobile-native-chat-send-error', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-send-error', () => ({
   useMobileNativeChatSendError: () => ({
     show: () => {},
     clear: () => {},
@@ -64,7 +64,7 @@ vi.mock('./use-mobile-native-chat-send-error', () => ({
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },

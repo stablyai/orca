@@ -4,6 +4,7 @@ import type { AgentSessionFailureFact } from './agent-session-failure'
 import {
   AGENT_STARTING,
   AGENT_STILL_WORKING,
+  WAIT_FOR_TURN,
   BACKGROUND_TASKS_RUNNING,
   QUIT_TERMINAL_AGENT,
   START_NEW_CHAT,
@@ -28,7 +29,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneAnswer: 'Your answer was not sent.',
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
-  notDoneGoal: "The goal wasn't changed.",
+  notDoneGoalChangeIncomplete: "Couldn't finish changing the goal. Check the chat.",
   notDoneQueuedEdit: "Your edit wasn't saved.",
   restartFailed: "The agent couldn't restart.",
   capacity:
@@ -62,7 +63,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   agentStarting: AGENT_STARTING,
   waitForStart: WAIT_FOR_START,
   turnActive: 'The agent is still responding.',
-  waitForTurn: 'Wait for the agent to finish responding, or stop it.',
+  waitForTurn: WAIT_FOR_TURN,
   promptPending: 'The agent is waiting for an answer to a question or approval.',
   answerFirst: 'Answer the question or approval first.',
   backgroundTasksRunning: BACKGROUND_TASKS_RUNNING,

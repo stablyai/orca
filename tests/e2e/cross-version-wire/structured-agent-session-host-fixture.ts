@@ -77,6 +77,7 @@ export function structuredHostStub(
       readable: true
     })),
     regenerateConversationName: vi.fn(() => true),
+    setUserConversationName: vi.fn(async () => ({ name: 'Release notes', applied: true })),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),

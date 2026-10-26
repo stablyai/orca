@@ -4,7 +4,7 @@ import type { AgentJournalDispatchRejection } from '../../shared/agent-session-f
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionOptionsReportedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type * as SessionAdapter from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -60,7 +60,7 @@ export type ClaudeStructuredSessionEvent =
       fence: number
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
-  | StructuredAgentSessionOptionsReportedEvent
+  | SessionAdapter.StructuredAgentSessionOptionsReportedEvent
   | {
       type: 'ended'
       sessionId: string
@@ -159,7 +159,12 @@ export type ClaudeSession = {
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  reportedOptions: {
+    model?: string
+    effort?: string
+    fastMode?: boolean
+    reportedPermissionMode?: string | null
+  }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
@@ -177,6 +182,9 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
+  /** Construction intent and the first admitted root init belong to this process only. */
+  launchPermissionMode?: string
+  firstRootInit?: { permissionMode: string | null }
   /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
   retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */
@@ -341,6 +349,15 @@ export async function cancelClaudeAcquisitionAttempt(
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
+}
+
+export type ClaudeSessionAcquisitionInput = {
+  input: SessionAdapter.StructuredAgentSessionAcquireInput
+  deps: ClaudeStructuredSessionAdapterDeps
+  sessions: Map<string, ClaudeSession>
+  acquisitions: ClaudeAcquisitionRegistry
+  exits: Map<string, ClaudeSessionExit>
+  callbacks: ClaudeAcquireCallbacks
 }
 
 export type ClaudeAcquireCallbacks = {

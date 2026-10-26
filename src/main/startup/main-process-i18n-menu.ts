@@ -19,6 +19,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
+import { browserManager } from '../browser/browser-manager'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -42,6 +43,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
+    toggleFocusedPageDevTools: (focused) => browserManager.toggleDevToolsOfFocusedPage(focused),
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       sendOpenSetupGuide(targetWindow instanceof BrowserWindow ? targetWindow : null)

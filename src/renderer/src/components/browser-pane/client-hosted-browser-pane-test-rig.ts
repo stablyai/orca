@@ -44,6 +44,7 @@ export function installClientHostedPaneApi(overrides?: {
         onContextMenuDismissed: inert,
         onTargetUrlChanged: inert,
         openDevTools: vi.fn(async () => true),
+        onDevToolsDockChanged: inert,
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),
         ...overrides?.browser

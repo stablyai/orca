@@ -106,16 +106,6 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Partial answer that is now much longer than before')
   })
 
-  it('keeps showing while the preview still leads (grows past the last turn)', () => {
-    // The transcript hasn't flushed the new content yet; preview is longer.
-    expect(
-      deriveNativeChatStreamingText({
-        messages: [assistant('Partial')],
-        previewText: 'Partial answer that is now much longer than before',
-        working: true
-      })
-    ).toBe('Partial answer that is now much longer than before')
-  })
   it('hides the sentence it streamed while a tool runs, but not a new reply after the tool', () => {
     // A Claude transcript writes the sentence and the tool call it led into as separate rows.
     const sentence = 'Checking the notes file now, then I will compare it with the settings.'

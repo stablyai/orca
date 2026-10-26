@@ -12,7 +12,10 @@ import {
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
-import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import {
+  StructuredAgentSessionDeliveryLoop,
+  type StructuredAgentSessionDeliveryLoopDeps
+} from './structured-agent-session-delivery-loop'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
@@ -55,6 +58,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   trackStart: <T>(start: Promise<T>) => Promise<T>
   startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
   deliveryOrder: StructuredAgentSessionDeliveryOrder
+  startFlights?: StructuredAgentSessionDeliveryLoopDeps['startFlights']
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -79,12 +83,21 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
-    retireOutgrownChild: async (sessionId) => {
+    retireOutgrownChild: async (sessionId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
         ? undefined
         : sessions.get(sessionId)
-      await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
+      return retireOutgrownStructuredAgentSessionChild(sessionId, session, {
+        next,
+        turnScopedSteering: deps.store.getRecord(sessionId)?.provider === 'claude',
+        requiresModelTransitionRestart: (submission) =>
+          session?.child?.phase === 'ready' &&
+          deps.adapter.requiresModelTransitionRestart?.({
+            sessionId,
+            fence: session.child.fence,
+            executionOptions: submission.options
+          }) === true,
         work: {
           currentWork: () =>
             hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
@@ -94,7 +107,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             const record = deps.store.getRecord(sessionId)
             return record !== null && deps.hasOpenDispatch?.(record) === true
           },
-          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+          providerHoldsDispatch: () =>
+            deps.adapter.holdsDispatch?.(sessionId) === true ||
+            hostStructuredAgentSessionCurrentWork(
+              { store: deps.store, sessions },
+              sessionId
+            )?.holdsHandedOverSend() === true
         },
         launchPermission: async () => {
           const record = deps.store.getRecord(sessionId)
@@ -105,6 +123,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       })
     },
     readiness: input.readiness,
+    startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),

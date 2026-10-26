@@ -455,6 +455,23 @@ describe('tui agent startup plans', () => {
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
+  it('resumes an agent from the folder it ran in when the pane starts elsewhere (#16960)', () => {
+    const resume = (cwd: string, launchCwd: string) =>
+      buildAgentResumeStartupPlan({
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 's1', cwd },
+        cmdOverrides: {},
+        platform: 'darwin',
+        launchCwd
+      })?.launchCommand
+
+    expect(resume('/repo/pkg', '/repo')).toBe("cd '/repo/pkg' && claude '--resume' 's1'")
+    expect(resume('/repo/', '/repo')).toBe("claude '--resume' 's1'")
+    expect(resume('/home/me/repo', '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).toBe(
+      "claude '--resume' 's1'"
+    )
+  })
+
   it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'grok',

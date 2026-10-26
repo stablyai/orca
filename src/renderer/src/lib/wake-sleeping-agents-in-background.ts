@@ -13,6 +13,7 @@ import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
 import {
   getProviderSessionClaimKey,
   activationTreatsNoteAsFinished,
+  isStrandedWorkspaceSleepRecord,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 
@@ -146,8 +147,11 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       detail: { worktreeId, wokenClaimKeys }
     })
   )
-  // Why: main resumes a workspace sleep's records; the steps below are the window's own hibernation.
-  const worktreeRecords = sleptRecords.filter((record) => !isWorkspaceSleepRecord(record))
+  // Why: main resumes a workspace sleep's placed records; the steps below are the window's own hibernation and stranded sleeps.
+  const state = useAppStore.getState()
+  const worktreeRecords = sleptRecords.filter(
+    (record) => !isWorkspaceSleepRecord(record) || isStrandedWorkspaceSleepRecord(record, state)
+  )
   if (worktreeRecords.length === 0) {
     return
   }

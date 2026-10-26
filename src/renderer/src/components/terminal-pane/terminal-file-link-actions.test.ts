@@ -364,7 +364,7 @@ describe('open in this group', () => {
     rows.find((row: { label: string }) => row.label === 'Open in this group').run()
     expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/src/main.ts', 3, null, {
       ...sourceDeps,
-      openInSourceGroup: true
+      openInSourceGroupSurface: 'internal'
     })
   })
 

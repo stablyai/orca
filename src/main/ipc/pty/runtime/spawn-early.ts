@@ -42,6 +42,8 @@ export function adoptMaterializedRuntimePtySpawn(
     throw new Error('terminal_pane_owner_unknown')
   }
   ctx.result = {
+    ...ctx.preAdoptedStablePane.result,
+    isReattach: true,
     id: ctx.preAdoptedStablePane.result.id,
     ...(ctx.preAdoptedStablePane.result.incarnationId
       ? { incarnationId: ctx.preAdoptedStablePane.result.incarnationId }

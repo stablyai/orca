@@ -64,6 +64,7 @@ export function AgentLaunchSettingsCatalog({
   refreshSettings,
   autoSupported = true,
   nativeChatPermissionsSupported = false,
+  chatOwnSupported = false,
   local
 }: {
   settings: AgentLaunchSettings
@@ -74,6 +75,7 @@ export function AgentLaunchSettingsCatalog({
   refreshSettings?: () => void
   autoSupported?: boolean
   nativeChatPermissionsSupported?: boolean
+  chatOwnSupported?: boolean
   local?: {
     settings: GlobalSettings
     saveEnvironment: (agent: TuiAgent, value: Record<string, string>) => Promise<void>
@@ -127,6 +129,7 @@ export function AgentLaunchSettingsCatalog({
     const chatSupport = agentChatPermissionModes(agent)
     return {
       choices,
+      chatOwnSupported,
       ...resolved,
       terminalChoice:
         agentPermissionArgs(agent, resolved.choice) ||
@@ -257,13 +260,13 @@ export function AgentLaunchSettingsCatalog({
       />
       {permissionSettings ? (
         <AllAgentsPermissionSetting
+          chatOwnSupported={chatOwnSupported}
           choice={permissionSettings.agentPermissionDefault ?? 'own'}
           withoutAutoChoice={sharedChoice(
             PERMISSION_CHOICE_AGENTS.filter(
               (agent) => !agentPermissionChoices(agent).includes('auto')
             ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
           )}
-          ownChoiceCount={Object.keys(permissionSettings.agentPermissionOverrides ?? {}).length}
           onChange={(choice) => save({ type: 'permission', choice })}
           onChangeWithoutAuto={(choice) => save({ type: 'permission', choice, withoutAuto: true })}
         />
@@ -303,4 +306,28 @@ export function AgentLaunchSettingsCatalog({
 
 function sharedChoice(choices: readonly AgentPermissionChoice[]): AgentPermissionChoice | null {
   return choices.length > 0 && choices.every((choice) => choice === choices[0]) ? choices[0] : null
+}
+
+export function AgentLaunchSettingsLoading(): React.JSX.Element {
+  return (
+    <fieldset disabled className="min-w-0 space-y-8">
+      <AgentDefaultSetting
+        defaultAgent="blank"
+        detectedIds={null}
+        enabledDetectedAgents={[]}
+        catalog={[]}
+        description={translate(
+          'settings.agents.hostDefaults',
+          'Defaults for new agents on the selected host.'
+        )}
+        onSetDefault={() => {}}
+      />
+      <AllAgentsPermissionSetting
+        choice={null}
+        withoutAutoChoice={null}
+        onChange={() => {}}
+        onChangeWithoutAuto={() => {}}
+      />
+    </fieldset>
+  )
 }

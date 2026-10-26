@@ -1,12 +1,12 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
 const typeCommandWithOutcome = vi.fn()
-vi.mock('./mobile-native-chat-send', () => ({
+vi.mock('./native-chat/mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
   typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
@@ -14,7 +14,7 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
-vi.mock('./mobile-native-chat-stale-input', () => ({
+vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
 
@@ -23,7 +23,7 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>

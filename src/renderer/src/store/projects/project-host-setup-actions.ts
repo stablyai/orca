@@ -12,12 +12,13 @@ import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
+  assertNotSshProjectHost,
   assertProjectHostSetupMutationRuntimeCapabilities,
   getProjectSetupRuntimeTarget,
   isSameProjectHostSetup,
@@ -39,6 +40,7 @@ export function createProjectHostSetupActions(
   return {
     setupProjectExistingFolder: async (args) => {
       try {
+        assertNotSshProjectHost(get(), args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
         const projectProviderIdentity =
@@ -254,11 +256,7 @@ export function createProjectHostSetupActions(
 
     setupProjectClone: async (args) => {
       try {
-        const parsedHost = parseExecutionHostId(args.hostId)
-        // Why: an SSH host clones only through its paired server; never fall back to this computer.
-        if (parsedHost?.kind === 'ssh') {
-          throw new Error(`SSH connection "${parsedHost.targetId}" not found or not connected`)
-        }
+        assertNotSshProjectHost(get(), args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
         const repo =

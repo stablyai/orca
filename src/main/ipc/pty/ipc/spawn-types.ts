@@ -33,6 +33,8 @@ export type PtySpawnIpcArgs = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  // Untyped on purpose: only `'saved'` marks a resume built from saved facts.
+  resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery

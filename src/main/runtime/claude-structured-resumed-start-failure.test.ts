@@ -39,7 +39,8 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     await waitForStructuredAgentSessionRecovery()
     await host.close(SESSION, 'evict')
 
-    // Opening starts nothing; the next send spawns the child whose init hangs and tree is unproven.
+    // Opening starts nothing; the send retries children whose root exits are observed,
+    // even when descendant cleanup cannot be confirmed.
     claude.behave(SESSION, { initHangs: true, closeUnproven: true })
     const events: AgentSessionSubscribeEvent[] = []
     await host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: (event) => events.push(event) })
@@ -61,8 +62,18 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
 
-    claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
-    await waitForStructuredAgentSessionRecovery()
+    for (let count = 2; count <= 6; count++) {
+      await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(count), {
+        timeout: 10_000
+      })
+      await vi.waitFor(() => expect(claude.child(SESSION).initializing).toBe(true))
+      expect(statusTexts(events)).not.toContain(STARTUP_TEXT)
+      claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
+      await waitForStructuredAgentSessionRecovery()
+      await vi.waitFor(() =>
+        expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+      )
+    }
 
     await vi.waitFor(() => expect(statusTexts(events)).toContainEqual(STARTUP_TEXT))
     const submission = (await host.journalSnapshot(SESSION)).submissions.find(

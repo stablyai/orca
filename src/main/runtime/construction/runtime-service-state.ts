@@ -59,6 +59,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTrackedPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title?.trim() || null,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    confirmForegroundProcess: (ptyId) =>
+      this.ptyController?.confirmForegroundProcess?.(ptyId) ?? null,
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
@@ -231,9 +233,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
     getDb: () => this._orchestrationDb,
-    getLeaf: (leafKey) => this.leaves.get(leafKey),
+    getLeaf: (leafKey) => this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf,
     getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
-    getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    getTerminalHandleForLeafKey: (leafKey) =>
+      this.handleByLeafKey.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.handle,
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
     onRoutedMessageTypes: (mailboxHandle, types) =>
       this.messageWaiters.notifyRouted(mailboxHandle, types),
@@ -244,7 +247,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
     getDb: () => this._orchestrationDb,
     getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-    hasTerminalHandle: (handle) => this.handles.has(handle),
+    hasTerminalHandle: (handle) => this.hasMailboxTerminalHandle(handle),
     isStructuredSessionOwner: (handle) =>
       isStructuredWorkerHandle(handle) || handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX),
     canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
@@ -256,14 +259,15 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
-    getLeaf: (leafKey) => this.leaves.get(leafKey),
+    getLeaf: (leafKey) => this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf,
     getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
-    getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+    getLiveLeafForHandle: (handle) => this.getOrchestrationMailboxLeafForHandle(handle),
     isAgentSettledForDelivery: (leaf) => this.checkDeliverySettledAndArmRecheck(leaf),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    getTerminalHandleForLeafKey: (leafKey) =>
+      this.handleByLeafKey.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.handle,
     resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
@@ -303,13 +307,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       pointerDelivery: this.orchestrationMailboxPointerDelivery,
       structuredPointerDelivery: this.orchestrationStructuredMailboxPointerDelivery,
       getDb: () => this._orchestrationDb,
-      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+      getLiveLeafForHandle: (handle) => this.getOrchestrationMailboxLeafForHandle(handle),
       getPaneKeyForHandle: (handle) => {
         const record = this.handles.get(handle)
         return record ? `${record.tabId}:${record.leafId}` : undefined
       },
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-      hasTerminalHandle: (handle) => this.handles.has(handle),
+      hasTerminalHandle: (handle) => this.hasMailboxTerminalHandle(handle),
       deliverForHandle: (handle, reservedTypes) =>
         this.deliverPendingMessagesForHandle(handle, reservedTypes),
       notifyMessageArrived: (handle, messageType) => this.notifyMessageArrived(handle, messageType),

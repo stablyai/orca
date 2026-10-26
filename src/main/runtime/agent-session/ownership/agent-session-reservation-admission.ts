@@ -210,7 +210,7 @@ export function applyAgentSessionReservation(
   })
 }
 
-/** Refuse conversations held by other records, including other branches of their root.
+/** Refuse another record's current conversation, matching the pre-commit check.
  * Run inside the transaction: distinct adoption ids evade per-record CAS and providers may permit corrupting concurrent writers.
  * Self-exemption is not replay; the operation ledger resolves replay before this guard. */
 export function assertAdoptedConversationUnowned(
@@ -226,14 +226,15 @@ export function assertAdoptedConversationUnowned(
     if (record.sessionId === request.sessionId) {
       continue
     }
-    const holdsSameConversation = record.providerHandleChain.some(
-      (link) =>
-        agentSessionProviderHandleRoot(link.handle) === root ||
+    // Only the conversation a chat continues now: an earlier link no longer holds anything.
+    const head = record.providerHandleChain.at(-1)
+    const holdsSameConversation =
+      !!head &&
+      (agentSessionProviderHandleRoot(head.handle) === root ||
         // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
-        (link.handle.transport === adopted.handle.transport &&
-          link.handle.nativeId === adopted.handle.nativeId &&
-          chatAgentsShareConversations(link.handle.agent, adopted.handle.agent))
-    )
+        (head.handle.transport === adopted.handle.transport &&
+          head.handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(head.handle.agent, adopted.handle.agent)))
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere',

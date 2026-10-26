@@ -16,7 +16,6 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import {
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue,
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
@@ -60,7 +59,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ])}`,
       `del "${payloadFile}" 2>nul`,
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

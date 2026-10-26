@@ -161,7 +161,12 @@ describe('Claude structured turn timing', () => {
         state: 'running',
         startedAt: 1_000,
         userItemId: USER_1_KEY,
-        options: { observedAt: 1_000, lifecycle: true, turnScope: { kind: 'thread' } }
+        options: {
+          criticalRoot: true,
+          observedAt: 1_000,
+          lifecycle: true,
+          turnScope: { kind: 'thread' }
+        }
       }
     ])
   })
@@ -191,7 +196,7 @@ describe('Claude structured turn timing', () => {
       startedAt: 1_000,
       completedAt: 4_500,
       userItemId: USER_1_KEY,
-      options: { lifecycle: true, turnScope: { kind: 'thread' } }
+      options: { criticalRoot: true, lifecycle: true, turnScope: { kind: 'thread' } }
     })
     expect(state.items.at(-1)?.identity).toEqual(state.items[0]?.identity)
   })

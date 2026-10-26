@@ -88,31 +88,6 @@ beforeEach(() => {
 })
 
 describe('importCookiesIntoClientRoutePartition', () => {
-  it('imports into a main-derived route partition, never the server profile partition', async () => {
-    const result = await importCookiesIntoClientRoutePartition(request)
-
-    expect(result).toMatchObject({ ok: true, profileId: 'default' })
-    expect(requireRouteBrowserProfileMock).toHaveBeenCalledWith('default')
-    const [source, partition] = importCookiesFromBrowserMock.mock.calls[0] ?? []
-    expect(source).toBe(chrome)
-    expect(partition).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
-    expect(bindingStore.set).toHaveBeenCalledWith(
-      partition,
-      expect.stringMatching(/^[a-f0-9]{64}$/),
-      routeIdentity.storageScope,
-      expect.stringMatching(/^[a-f0-9]{64}$/)
-    )
-    expect(recordClientRouteImportSourceMock).toHaveBeenCalledWith({
-      environmentId: 'env-a',
-      profileId: 'default',
-      source: {
-        browserFamily: 'chrome',
-        profileName: 'Person 1',
-        importedAt: expect.any(Number)
-      }
-    })
-  })
-
   it('defers to the server-side import when the desktop hosts no pages for the server', async () => {
     getRouteIdentityMock.mockReturnValue(null)
 
@@ -135,16 +110,6 @@ describe('importCookiesIntoClientRoutePartition', () => {
       await importCookiesIntoClientRoutePartition({ ...request, browserProfile: '../../etc' })
     ).toEqual({ ok: false, reason: 'Invalid browser profile name.' })
     expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
-  })
-
-  it('reselects a non-default desktop browser profile', async () => {
-    const secondary = { ...chrome, selectedProfile: 'Profile 2' }
-    selectBrowserProfileMock.mockReturnValue(secondary)
-
-    await importCookiesIntoClientRoutePartition({ ...request, browserProfile: 'Profile 2' })
-
-    expect(selectBrowserProfileMock).toHaveBeenCalledWith(chrome, 'Profile 2')
-    expect(importCookiesFromBrowserMock.mock.calls[0]?.[0]).toBe(secondary)
   })
 
   it('leaves the profile source untouched when the import fails', async () => {

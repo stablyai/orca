@@ -248,13 +248,17 @@ export function useNativeChatContextMenu({
           align="start"
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            // Release captured targets once the menu has faded out.
-            setState((prev) => ({
-              ...prev,
-              image: undefined,
-              target: noNativeChatContextMenuTarget,
-              returnFocusTo: null
-            }))
+            // A closing menu must not clear a newly opened menu's target.
+            setState((prev) =>
+              prev.open
+                ? prev
+                : {
+                    ...prev,
+                    image: undefined,
+                    target: noNativeChatContextMenuTarget,
+                    returnFocusTo: null
+                  }
+            )
           }}
         >
           {image ? (

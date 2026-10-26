@@ -31,6 +31,7 @@ export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
+  sourceTabId?: string | null
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
@@ -42,6 +43,7 @@ type UrlLinkHitTestDeps = {
 
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
+  sourceTabId?: string | null
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
@@ -87,8 +89,16 @@ export function handleTerminalHttpLink(
   return requestTerminalLinkAction(event, deps.linkActionContext, {
     destination: deps.actionDestination ?? url,
     kind: 'url',
-    ...buildHttpLinkActions(deps.actionDestinations, (destination) =>
-      openRoutedHttpLink(url, { ...deps, modifierHeld: false, forceDestination: destination })
+    ...buildHttpLinkActions(
+      deps.actionDestinations,
+      (destination) =>
+        openRoutedHttpLink(url, { ...deps, modifierHeld: false, forceDestination: destination }),
+      {
+        ...deps,
+        url,
+        openInSourceGroup: () =>
+          openRoutedHttpLink(url, { ...deps, forceDestination: 'orca', openInSourceGroup: true })
+      }
     )
   })
 }
@@ -154,6 +164,7 @@ export function installHttpLinkClickFallback(
       url &&
       handleTerminalHttpLink(url, event, {
         worktreeId: deps.worktreeId,
+        sourceTabId: deps.sourceTabId,
         sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.getLinkActionContext?.(),

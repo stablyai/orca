@@ -37,6 +37,7 @@ export function createFixturePageRunner(baseUrl, browserPromise) {
       workers.set(scale, createWorker(scale))
     }
     const worker = await workers.get(scale)
+    worker.pageErrors = []
     if (worker.revision !== sourceRevision) {
       const revision = sourceRevision
       await worker.page.goto(`${baseUrl}/fixtures.html?worker=1`)
@@ -47,7 +48,6 @@ export function createFixturePageRunner(baseUrl, browserPromise) {
       )
       worker.revision = revision
     }
-    worker.pageErrors = []
     return worker
   }
 

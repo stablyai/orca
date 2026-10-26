@@ -1,4 +1,4 @@
-import { readStructuredAgentLaunchRecords } from './structured-agent-session-launch-persistence'
+import { readStructuredAgentLaunchRecords } from './agent-session/launch/structured-agent-session-launch-persistence'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { WatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
@@ -42,8 +42,8 @@ vi.mock('./file-watcher-host', () => ({
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
 
-vi.mock('../ipc/filesystem-auth', async () => {
-  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+vi.mock('../ipc/filesystem/filesystem-auth', async () => {
+  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock

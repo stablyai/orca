@@ -27,6 +27,7 @@ let nextQueuedMessageId: string | null = null
 let pendingSends: StructuredAgentSessionPendingSend[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))

@@ -71,7 +71,11 @@ describe('web settings preload API', () => {
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
-  it('mirrors the host-owned agent skill sharing capability without granting it', async () => {
+  // A headless host has no sharing service and omits the field (#33593).
+  it.each([
+    ['reports it off', { agentSkillSharingEnabled: false }],
+    ['omits it', {}]
+  ])('mirrors host skill sharing without granting it when the host %s', async (_label, host) => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -80,7 +84,7 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { agentSkillSharingEnabled: false } },
+            result: { settings: host },
             _meta: { runtimeId: 'runtime-1' }
           })
         }

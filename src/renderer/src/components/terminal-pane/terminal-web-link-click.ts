@@ -13,7 +13,12 @@ import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 type TerminalWebLinkClickDeps = Pick<
   LinkHandlerDeps,
-  'worktreeId' | 'worktreePath' | 'startupCwd' | 'runtimeEnvironmentId' | 'terminalHomePath'
+  | 'worktreeId'
+  | 'worktreePath'
+  | 'startupCwd'
+  | 'runtimeEnvironmentId'
+  | 'terminalHomePath'
+  | 'sourceTabId'
 > & {
   terminal: Terminal | null
   sourceOwner?: HttpLinkSourceOwner
@@ -36,6 +41,7 @@ export function handleTerminalWebLinkClick(
   if (completeUrl) {
     handled = handleTerminalHttpLink(completeUrl, event, {
       worktreeId: deps.worktreeId,
+      sourceTabId: deps.sourceTabId,
       sourceOwner:
         deps.sourceOwner ??
         (deps.runtimeEnvironmentId

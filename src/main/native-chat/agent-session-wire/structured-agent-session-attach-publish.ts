@@ -111,17 +111,20 @@ export async function publishAttachedChild(
   context.runtimeState.adoptEventSink(sessionId, candidate.sink)
   attempt.committed = candidate.sink === input.attemptSink
   indexProviderChild(conversation, candidate.child)
+  context.runtimeState.startFlights.published(sessionId, candidate.child)
+  if (attempt.startup) {
+    context.runtimeState.startupAttempts.published(
+      sessionId,
+      attempt.startup.attemptId,
+      candidate.child
+    )
+  }
   // Apply exits observed during background startup after indexing the matching child.
   const exited = context.runtimeState.startFlights.takeExit(sessionId, candidate.child)
   const indexed = conversation.child
   if (exited && indexed) {
     await context.endExitedChild(sessionId, indexed, structuredAgentSessionEndedEventExit(exited))
   } else if (attempt.startup) {
-    context.runtimeState.startupAttempts.published(
-      sessionId,
-      attempt.startup.attemptId,
-      candidate.child
-    )
     if (candidate.child.phase === 'ready') {
       noteStructuredAgentSessionProviderStarted(context.deps, sessionId)
     } else {

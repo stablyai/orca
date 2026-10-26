@@ -13,6 +13,7 @@ import type {
   TerminalSubscribeBinaryState,
   TerminalSubscriptionArgs
 } from './terminal-subscribe-types'
+import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
 
 export function activateTerminalSubscribeBinaryLive(
   args: TerminalSubscriptionArgs,
@@ -67,6 +68,7 @@ export function activateTerminalSubscribeBinaryLive(
           scrollbackRows: recovery.scrollbackRows,
           truncatedByByteBudget: recovery.truncatedByByteBudget === true
         })
+        await deepenHeadlessCopyToDesktopDepth(runtime, ptyId, recovery, () => !state.closed)
       })
       .catch(() => {})
   }

@@ -90,6 +90,7 @@ export function useNativeChatTranscriptWindow({
   )
 
   const scaledGapPx = NATIVE_CHAT_ROW_GAP_PX * typography.spacingScale
+  // Keep offscreen sizes as estimates through reflows; ResizeObserver refreshes mounted rows.
   const virtualizer = useVirtualizer({
     count: slots.length,
     getScrollElement: () => scrollRef.current,

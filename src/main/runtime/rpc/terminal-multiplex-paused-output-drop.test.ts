@@ -4,6 +4,7 @@ import type { RuntimeTerminalDataMeta } from '../orca-runtime'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
@@ -69,6 +70,13 @@ async function subscribePausable(capabilities: Record<string, 1>) {
       (bytes) =>
         decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.PausedOutputDropped
     ).length
+  const outputText = (): string =>
+    harness.binaryFrames
+      .map((bytes) => decodeTerminalStreamFrame(bytes))
+      .map((frame) =>
+        frame?.opcode === TerminalStreamOpcode.Output ? decodeTerminalStreamText(frame.payload) : ''
+      )
+      .join('')
   const close = async (): Promise<void> => {
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
@@ -79,6 +87,7 @@ async function subscribePausable(capabilities: Record<string, 1>) {
     setPaused,
     emitOutput,
     dropNotices,
+    outputText,
     remoteViewHoldsAuthority,
     close
   }
@@ -108,11 +117,13 @@ describe('terminal multiplex paused-output drop notice', () => {
     await host.close()
   })
 
-  it('announces output still batched when the pause lands', async () => {
+  // #32944: main yielded the batched bytes' replies to this view, so a DA1 dropped here went unanswered.
+  it('delivers output still batched when the pause lands', async () => {
     const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
-    host.emitOutput('batched-before-pause')
+    host.emitOutput('batched-before-pause\x1b[c')
     host.setPaused(true)
-    expect(host.dropNotices()).toBe(1)
+    expect(host.outputText()).toContain('batched-before-pause\x1b[c')
+    expect(host.dropNotices()).toBe(0)
     await host.close()
   })
 

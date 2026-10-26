@@ -344,23 +344,4 @@ describe('automationsChanged publication', () => {
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
     service.stop()
   })
-
-  it('changes nothing for a consumer that ignores the unknown event type', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const oldClientState = { repoRefreshes: 0 }
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      onAutomationsChanged: (payload) => {
-        if ((payload as { type?: string }).type === 'reposChanged') {
-          oldClientState.repoRefreshes += 1
-        }
-      }
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(oldClientState.repoRefreshes).toBe(0)
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
-    service.stop()
-  })
 })

@@ -140,7 +140,7 @@ describe('grok-session-paths', () => {
     ).toBe(history)
   })
 
-  it('resolves the CLI long-cwd slug group without scanning other groups', () => {
+  it('resolves the CLI long-cwd slug group', () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
     const sessionId = 'sess-long'

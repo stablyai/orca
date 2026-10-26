@@ -151,25 +151,22 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       { leafId: 'leaf-c', ptyId: 'pty-c', splitFromLeafId: 'leaf-a', direction: 'vertical' }
     )
 
+    expect(next.root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-a' },
+        second: { type: 'leaf', leafId: 'leaf-c' }
+      },
+      second: { type: 'leaf', leafId: 'leaf-b' }
+    })
     expect(countTerminalLayoutLeaves(next.root)).toBe(3)
     expect(next.ptyIdsByLeafId).toEqual({
       'leaf-a': 'pty-a',
       'leaf-b': 'pty-b',
       'leaf-c': 'pty-c'
     })
-  })
-
-  it('does not collapse — the persisted layout keeps both leaves (regression guard)', () => {
-    // Rebuild from the persisted split must retain multiple leaves.
-    const afterSplit = buildHeadlessTerminalSplitLayout(
-      {
-        root: { type: 'leaf', leafId: 'leaf-a' },
-        activeLeafId: 'leaf-a',
-        expandedLeafId: null,
-        ptyIdsByLeafId: { 'leaf-a': 'pty-a' }
-      },
-      { leafId: 'leaf-b', ptyId: 'pty-b', splitFromLeafId: 'leaf-a', direction: 'vertical' }
-    )
-    expect(countTerminalLayoutLeaves(afterSplit.root)).toBeGreaterThan(1)
   })
 })

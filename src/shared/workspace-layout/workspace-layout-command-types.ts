@@ -272,7 +272,12 @@ export type NewGroupSplit = {
 
 export type TabTitle =
   /** A generated title replaces the tab's existing one only with `replaceExisting`: first wins. */
-  | { kind: 'custom' | 'generated'; title: string | null; replaceExisting?: true }
+  | {
+      kind: 'custom' | 'generated'
+      title: string | null
+      replaceExisting?: true
+      expected?: { entityId: string; executionHostId: string; customTitle: string }
+    }
   | { kind: 'aiVault'; title: AiVaultSessionTitle | null }
 
 /** One tab's agent-generated title in a `renameTabs` batch. */

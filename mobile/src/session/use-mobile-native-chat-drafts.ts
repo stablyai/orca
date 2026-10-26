@@ -8,9 +8,9 @@ import {
   migrateImagePreviewMessageIds
 } from './mobile-native-chat-draft-reconcile'
 import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../src/shared/native-chat-image-transcript-markers'
-import { useMobileNativeChatUnconfirmedSends } from './use-mobile-native-chat-unconfirmed-sends'
+import { useMobileNativeChatUnconfirmedSends } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
-import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
+import { retireLandedMobileNativeChatPending } from './native-chat/mobile-native-chat-pending-retirement'
 import {
   appendMobileNativeChatPending,
   combineMobileNativeChatPending,
@@ -18,8 +18,8 @@ import {
   removeWaitingSessionPending,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
-} from './mobile-native-chat-pending-echo'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+} from './native-chat/mobile-native-chat-pending-echo'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {

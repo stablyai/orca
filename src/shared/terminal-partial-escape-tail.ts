@@ -41,6 +41,29 @@ function stateAfterEscByte(code: number): ScanState {
 
 /** Return the incomplete trailing escape (empty when clean), preserving extract(a + b) === extract(extract(a) + b) for incremental ingest. */
 export function extractPartialEscapeTail(stream: string): string {
+  return scanPartialEscapeTail(stream, false)
+}
+
+const STATE_PREFIX: Record<ScanState, string> = {
+  ground: '',
+  esc: '\x1b',
+  escIntermediate: '\x1b ',
+  csi: '\x1b[',
+  osc: '\x1b]',
+  oscEsc: '\x1b',
+  string: '\x1bP',
+  stringEsc: '\x1b'
+}
+
+/** Boundary-only fold; its constant-size state is NOT a replayable application tail. */
+export function advanceTerminalEscapeBoundary(statePrefix: string, chunk: string): string {
+  if (!statePrefix && !chunk.includes('\x1b')) {
+    return ''
+  }
+  return scanPartialEscapeTail(statePrefix + chunk, true)
+}
+
+function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
@@ -131,7 +154,7 @@ export function extractPartialEscapeTail(stream: string): string {
   if (state === 'oscEsc' || state === 'stringEsc') {
     return '\x1b'
   }
-  return state === 'ground' ? '' : stream.slice(start)
+  return stateOnly ? STATE_PREFIX[state] : state === 'ground' ? '' : stream.slice(start)
 }
 
 /** Advance the incremental tail; abandon it past the cap. */

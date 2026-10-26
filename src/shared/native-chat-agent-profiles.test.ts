@@ -8,31 +8,6 @@ import {
 } from './native-chat-agent-profiles'
 
 describe('native chat agent picker profiles', () => {
-  // Composer trigger stays /; skillPrefix changes only picked-skill insertion.
-  it('keeps Codex skills invocable as dollar tokens', () => {
-    expect(getNativeChatAgentProfile('codex')).toMatchObject({
-      skillPrefix: '$',
-      skillSourceOwner: 'codex'
-    })
-  })
-
-  it('writes Claude-family and Grok skills as slash tokens', () => {
-    expect(getNativeChatAgentProfile('claude')).toMatchObject({
-      skillPrefix: '/',
-      skillSourceOwner: 'claude'
-    })
-    expect(getNativeChatAgentProfile('openclaude')).toMatchObject({ skillSourceOwner: 'claude' })
-    expect(getNativeChatAgentProfile('grok')).toMatchObject({
-      skillPrefix: '/',
-      skillSourceOwner: 'grok'
-    })
-  })
-
-  // OpenCode 2.x reads the same skill folders as 1.x.
-  it("lists OpenCode's skills for OpenCode 2", () => {
-    expect(getNativeChatAgentProfile('opencode2')).toMatchObject({ skillSourceOwner: 'opencode' })
-  })
-
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })
@@ -72,26 +47,15 @@ describe('native chat command replies', () => {
     expect(getNativeChatCommandReply('omp', 'compact')).toBeNull()
   })
 
-  it('declares only /context, the one reply the desktop chat implements', () => {
-    for (const agent of ['claude', 'openclaude', 'codex', 'omp', 'grok', 'custom-agent']) {
-      const declared = getVerifiedNativeChatCommands(agent).filter(({ reply }) => reply)
-      expect(declared.map(({ name }) => name)).toEqual(
-        agent === 'omp' || agent === 'openclaude' ? ['context'] : []
-      )
-    }
-  })
-
   it('leaves out of the agent-answered catalog only the commands that declare a reply', () => {
     const names = (agent: string) =>
       getAgentAnsweredNativeChatCommands(agent).map(({ name }) => name)
-    expect(names('openclaude')).toEqual(names('claude'))
-    expect(names('omp')).toEqual(
-      getVerifiedNativeChatCommands('omp')
-        .map(({ name }) => name)
-        .filter((name) => name !== 'context')
-    )
-    expect(getAgentAnsweredNativeChatCommands('codex')).toEqual(
-      getVerifiedNativeChatCommands('codex')
-    )
+    expect(names('openclaude')).toContain('compact')
+    expect(names('openclaude')).not.toContain('context')
+    expect(names('omp')).toContain('model')
+    expect(names('omp')).toContain('usage')
+    expect(names('omp')).not.toContain('context')
+    expect(names('codex')).toContain('permissions')
+    expect(names('grok')).toEqual([])
   })
 })

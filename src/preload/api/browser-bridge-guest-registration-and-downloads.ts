@@ -1,3 +1,4 @@
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import type {
@@ -76,7 +77,25 @@ export const browserGuestRegistrationAndDownloadsApi = {
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }
+    detach?: boolean
   }): Promise<boolean> => ipcRenderer.invoke('browser:openDevTools', args),
+  closeDevTools: (args: { browserPageId: string }): Promise<void> =>
+    ipcRenderer.invoke('browser:closeDevTools', args),
+  setDevToolsDockBounds: (args: {
+    browserPageId: string
+    bounds: BrowserDevToolsDockBounds | null
+    snapshot?: boolean
+  }): Promise<string | null> => ipcRenderer.invoke('browser:setDevToolsDockBounds', args),
+  onDevToolsDockChanged: (
+    callback: (event: { browserPageId: string; docked: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { browserPageId: string; docked: boolean }
+    ): void => callback(data)
+    ipcRenderer.on('browser:devToolsDockChanged', listener)
+    return () => ipcRenderer.removeListener('browser:devToolsDockChanged', listener)
+  },
   addWordToDictionary: (args: { browserPageId: string; word: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:addWordToDictionary', args),
   copyImageAt: (args: {

@@ -79,13 +79,15 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
       }
+      if (payload.paused) {
+        // Why: main yielded these batched bytes' query replies to this view at ingestion, so deliver them rather than drop them.
+        stream.outputBatcher.flush()
+      }
       stream.outputPaused = payload.paused
       if (stream.outputPaused) {
         stream.pausedOutputDropNoticeSent = false
         const discardsQueuedOutput =
           stream.ackPendingOutput.length > 0 || stream.ackPendingOutputOverflowed
-        // Why: batched bytes flush into the paused gate, which reports them as dropped.
-        stream.outputBatcher.flush()
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false

@@ -40,7 +40,7 @@ vi.mock('node:fs/promises', () => ({
   writeFile: fsWriteFileMock,
   default: { writeFile: fsWriteFileMock, mkdir: vi.fn() }
 }))
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
   resolveAuthorizedPath: vi.fn()
 }))

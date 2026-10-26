@@ -37,7 +37,6 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
-import { isForeignEphemeralCodexThread } from './codex-ephemeral-threads'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -159,11 +158,6 @@ export function normalizeCodexEvent(
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
-  }
-
-  // Ephemeral side chats share the pane but must not replace its recorded main turn.
-  if (isForeignEphemeralCodexThread(state, paneKey, eventName, hookPayload)) {
-    return null
   }
 
   // Auto-allowed request_user_input still blocks on PreToolUse (Codex0.145+).

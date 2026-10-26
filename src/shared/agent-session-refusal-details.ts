@@ -85,6 +85,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */
     'runtimeNotInstalled',
+    /** A terminal may still be writing the chat's conversation, so its agent did not start. */
+    'conversationOpenInTerminal',
+    'conversationOpenElsewhere',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],

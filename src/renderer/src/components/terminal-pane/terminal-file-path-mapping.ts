@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
-import { buildWorkspaceFileContext } from '@/lib/workspace-file-host-routing'
+import {
+  buildWorkspaceFileContext,
+  canClientOsOpenWorkspaceFile
+} from '@/lib/workspace-file-host-routing'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -11,6 +14,11 @@ import { terminalFileSourceHost } from './terminal-worktree-path-link'
 export type TerminalFileContext = RuntimeFileOperationArgs & {
   /** False when no single owner names the terminal's host; file operations must refuse, not go local. */
   sourceHostResolved: boolean
+}
+
+export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFileContext): boolean {
+  // Why: an unresolved owner has no connectionId either, which would otherwise read as local.
+  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext)
 }
 
 // Why its own module: resolving a link's host path must not load the open flow (worktree activation).

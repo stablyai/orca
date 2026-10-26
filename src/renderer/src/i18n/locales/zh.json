@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "设置 → 智能体",
       "permissionsTitle": "新聊天的权限",
       "permissionsDescription": "仅适用于新聊天。各智能体的默认设置位于设置 → 智能体。",
       "description": "选择聊天的外观和行为方式。",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "字体",
+        "fontFamilyDescription": "用于消息、活动和消息输入框的字体。",
+        "inheritFont": "与 IDE 字体相同",
+        "fontPreviewLabel": "聊天字体预览",
+        "fontPreview": "这段文字用于预览聊天字体。",
         "title": "聊天",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
@@ -209,7 +215,8 @@
           "microphone": "麦克风",
           "location": "位置",
           "notifications": "通知",
-          "clipboard": "剪贴板"
+          "clipboard": "剪贴板",
+          "localNetwork": "本地网络"
         },
         "title": "站点权限",
         "empty": "尚未允许或阻止任何网站。",
@@ -310,6 +317,7 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
+    "toggleDevTools": "切换开发者工具",
     "resetSize": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
@@ -4221,10 +4229,6 @@
               "waiting": {
                 "label": "运行 Claude 时更新",
                 "message": "Claude 用量将在下次运行 Claude 时更新。"
-              },
-              "expired": {
-                "label": "登录已过期",
-                "message": "Claude 用量已过期。请在此账户中启动 Claude 以刷新。"
               }
             },
             "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
@@ -16938,7 +16942,12 @@
             "copyImage": "复制图片",
             "copyImageAddress": "复制图片地址",
             "searchSelection": "使用 {{value0}} 搜索“{{value1}}”",
-            "inspect": "检查"
+            "inspect": "检查",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "停靠到右侧",
+            "devToolsDockBottom": "停靠到底部",
+            "devToolsUndock": "在单独窗口中打开",
+            "devToolsClose": "关闭 DevTools"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -18365,6 +18374,7 @@
             "clipboard": "剪贴板",
             "midi": "MIDI 设备",
             "idleDetection": "设备使用",
+            "localNetwork": "本地网络",
             "windowManagement": "窗口管理"
           },
           "allow": "允许",
@@ -18377,7 +18387,8 @@
             "midi": "使用 MIDI 设备",
             "clipboard": "查看复制到剪贴板的文本和图像",
             "windowManagement": "管理所有显示器上的窗口",
-            "idleDetection": "检测您是否正在使用此设备"
+            "idleDetection": "检测您是否正在使用此设备",
+            "localNetwork": "访问此设备上的应用和本地网络中的设备"
           },
           "localFiles": "本地文件",
           "title": "{{site}} 请求执行以下操作",
@@ -18634,6 +18645,8 @@
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装。",
+        "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端。",
+        "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
         "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送您的消息。",
@@ -18718,7 +18731,6 @@
         "notDoneAnswer": "您的回答未发送。",
         "notDoneOption": "设置未更改。",
         "notDoneCommand": "命令未运行。",
-        "notDoneGoal": "目标未更改。",
         "notDoneQueuedEdit": "你的编辑未保存。",
         "restartFailed": "智能体无法重新启动。",
         "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
@@ -18964,6 +18976,8 @@
         "runFileChangeMany": "编辑 {{value0}} 文件",
         "runWebSearchOne": "网上搜索了1次",
         "runWebSearchMany": "网络搜索 {{value0}} 次",
+        "runBrowserOne": "使用了浏览器",
+        "runBrowserMany": "使用了浏览器 {{value0}} 次",
         "runIntegrationOne": "使用 1 集成",
         "runIntegrationMany": "使用 {{value0}} 集成",
         "runAgentOne": "然 1 智能体",
@@ -18986,6 +19000,8 @@
         "runLiveFileChangeMany": "编辑 {{value0}} 文件",
         "runLiveWebSearchOne": "网上搜索1次",
         "runLiveWebSearchMany": "搜索网络 {{value0}} 次",
+        "runLiveBrowserOne": "正在使用浏览器",
+        "runLiveBrowserMany": "正在使用浏览器 {{value0}} 次",
         "runLiveIntegrationOne": "使用 1 集成",
         "runLiveIntegrationMany": "使用 {{value0}} 集成",
         "runLiveAgentOne": "运行 1 个智能体",
@@ -18993,7 +19009,9 @@
         "runLivePlanOne": "更新计划",
         "runLivePlanMany": "更新计划 {{value0}} 次",
         "runLiveToolOne": "使用 1 个工具",
-        "runLiveToolMany": "使用 {{value0}} 工具"
+        "runLiveToolMany": "使用 {{value0}} 工具",
+        "showBrowserPage": "显示",
+        "showBrowserPageLabel": "显示 {{value0}}"
       },
       "status": {
         "responding": "智能体正在回复",
@@ -19025,8 +19043,8 @@
       "resumeInNewChat": {
         "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
         "cannotResume": "此 {{agent}} 对话无法在本机聊天中恢复。",
-        "exitUnconfirmed": "Orca 无法确认 {{agent}} 已在其终端中退出。停止那里正在运行的程序或关闭终端，然后重试。",
-        "exitUnconfirmedFromTerminal": "Orca 无法确认 {{agent}} 已在其终端中退出。停止那里正在运行的程序或关闭终端，然后从会话历史记录中打开此对话。"
+        "exitUnconfirmed": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。",
+        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。"
       },
       "state": {
         "loading": {
@@ -19411,6 +19429,10 @@
           "editors": "关闭所有编辑器标签页？",
           "description": "选中的标签页将关闭。固定的标签页将保持打开。",
           "confirm": "关闭标签页"
+        },
+        "chatRename": {
+          "empty": "聊天名称不能为空",
+          "failed": "无法重命名此聊天"
         }
       }
     },
@@ -21193,5 +21215,8 @@
       "unavailable": "该工作区受保护或不可用。"
     },
     "rowActions": "{{name}} 的操作"
+  },
+  "browserTab": {
+    "agentDriving": "智能体正在使用此页面"
   }
 }

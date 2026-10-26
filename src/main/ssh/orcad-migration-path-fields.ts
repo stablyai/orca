@@ -124,6 +124,10 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
     kind: 'absolute'
   },
   {
+    at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.providerSession.cwd',
+    kind: 'absolute'
+  },
+  {
     at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.launchConfig.ompResumeFilePath',
     kind: 'absolute'
   },

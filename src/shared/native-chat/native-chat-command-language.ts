@@ -1,4 +1,4 @@
-import { nativeChatToolInputText } from '../native-chat-tool-input-text'
+import { nativeChatToolInputText } from './tools/native-chat-tool-input-text'
 
 // A tool named after its shell ran there, whatever the host's own shell is.
 const LANGUAGE_BY_TOOL_NAME: ReadonlyMap<string, string> = new Map([

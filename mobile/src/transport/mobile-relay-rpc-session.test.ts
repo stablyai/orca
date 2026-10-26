@@ -203,11 +203,15 @@ describe('mobile relay RPC session', () => {
   })
 
   it('connects when the relay never answers capability negotiation', async () => {
+    vi.useFakeTimers()
     const { session } = await confirmResume()
+    expect(session.getState()).toBe('handshaking')
 
-    // An unanswered capability advisory must not trap a slow link before connected.
-    await vi.waitFor(() => expect(session.getState()).toBe('connected'), { timeout: 5_000 })
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(session.getState()).toBe('connected')
     expect(session.getFailure()).toBeNull()
+    session.close()
   })
 
   // Dial stages distinguish a missing upgrade from slow cell assignment while both report connecting.
@@ -333,7 +337,10 @@ describe('mobile relay RPC session', () => {
       .sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
       .catch((cause: unknown) => cause)
 
-    expect((error as Error).message).toBe('relay outbound overflow')
+    if (!(error instanceof Error)) {
+      throw new Error('Expected the relay failure')
+    }
+    expect(error.message).toBe('relay outbound overflow')
     expect(isRpcDeliveryUnknown(error)).toBe(false)
   })
 
@@ -352,17 +359,32 @@ describe('mobile relay RPC session', () => {
     vi.useFakeTimers()
     try {
       const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
-      const outcome = pending.catch((error: unknown) => ({
-        message: (error as Error).message,
-        unknown: isRpcDeliveryUnknown(error)
-      }))
+      let settled = false
+      const outcome = pending.then(
+        (response) => {
+          settled = true
+          return response
+        },
+        (error: unknown) => {
+          settled = true
+          return error
+        }
+      )
       // Let sendRequest pass its connected-check microtask and register the timer.
       await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(1_000)
-      await expect(outcome).resolves.toEqual({
-        message: 'relay RPC timed out: terminal.send',
-        unknown: true
-      })
+      expect(fakes.sendText).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('"method":"terminal.send"')
+      )
+      await vi.advanceTimersByTimeAsync(999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const error = await outcome
+      if (!(error instanceof Error)) {
+        throw new Error('Expected the relay timeout')
+      }
+      expect(error.message).toBe('relay RPC timed out: terminal.send')
+      expect(isRpcDeliveryUnknown(error)).toBe(true)
+      session.close()
     } finally {
       vi.useRealTimers()
     }

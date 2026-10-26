@@ -1,4 +1,4 @@
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 import type {
   StagedStructuredLaunchPrompt,

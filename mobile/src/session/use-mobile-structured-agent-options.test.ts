@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -144,18 +144,17 @@ type ProbeProps = {
 }
 
 function Probe(props: ProbeProps): null {
-  props.onRender(
-    useMobileStructuredAgentOptions({
-      agent: props.agent,
-      client: props.client,
-      sessionId: props.sessionId,
-      enabled: true,
-      fence: props.fence,
-      mutate: props.mutate,
-      ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
-      hostSupport: { permissionModes: true }
-    })
-  )
+  const controller = useMobileStructuredAgentOptions({
+    agent: props.agent,
+    client: props.client,
+    sessionId: props.sessionId,
+    enabled: true,
+    fence: props.fence,
+    mutate: props.mutate,
+    ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
+    hostSupport: { permissionModes: true, statusFeed: false }
+  })
+  useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])
   return null
 }
 

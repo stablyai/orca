@@ -1,5 +1,6 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -17,6 +18,10 @@ import {
   endAgentInputFocusGuard,
   watchUserComposition
 } from '@/components/browser-pane/host-guest/agent-input-focus-guard'
+import {
+  setBrowserAgentPageActive,
+  showBrowserAgentCursor
+} from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 
 /** Client-hosted webview events originate in this desktop even for remote workspaces; runtime-active guards would incorrectly drop them. */
 function isClientHostedBrowserPage(browserPageId: string): boolean {
@@ -134,6 +139,23 @@ export function registerBrowserStateIpcBridge(
       clearAgentInputFocusGuards()
     })
   }
+  const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
+    ({ browserPageId, worktreeId, active }) => {
+      setBrowserAgentPageActive(browserPageId, active, worktreeId)
+    }
+  )
+  if (unsubscribeAgentActivity) {
+    unsubs.push(unsubscribeAgentActivity)
+  }
+  const unsubscribeAgentCursor = window.api.browser.onAgentCursor?.((event) => {
+    // Main waits for this answer, so a page nobody can see answers at once.
+    if (!showBrowserAgentCursor(event) && event.awaitsArrival) {
+      window.api.browser.agentCursorArrived(event.sequence)
+    }
+  })
+  if (unsubscribeAgentCursor) {
+    unsubs.push(unsubscribeAgentCursor)
+  }
   unsubs.push(
     window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
       if (isRuntimeEnvironmentActive()) {
@@ -155,14 +177,19 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
+      const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
       const openedPageId = openUrlInTabBesideBrowserPage({
         sourcePageId: browserPageId,
         worktreeId: sourcePage.worktreeId,
         url,
-        activate: activate ?? true
+        activate: activate ?? true,
+        placement
       })
       if (openedPageId) {
         markBrowserPageOpenedByPage(openedPageId)
+        if (placement && activate !== false) {
+          store.focusGroup(sourcePage.worktreeId, placement.targetGroupId)
+        }
       }
     })
   )

@@ -1,3 +1,4 @@
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
@@ -5,6 +6,7 @@ import type {
 } from '../../../../shared/host-spawn-admission'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type {
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
@@ -80,7 +82,7 @@ export type LocalPtySessionMetadata = {
   shellOverride?: string
 }
 
-export type PtyConnectResult = {
+export type PtyConnectResult = TerminalLaunchResult & {
   id: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string
@@ -112,11 +114,15 @@ export type PtyConnectResult = {
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true
+  /** Main refused the resume and started the plain shell: a native chat is the conversation's home
+   *  or may be writing it, or no record could be checked (the saved session is kept to retry). */
+  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
   /** Write daemon’s trailing partial escape after reset so racing live bytes can complete it (#7329). */
   pendingEscapeTailAnsi?: string
 }
 
 type PtyCallbacks = {
+  onLaunchResult?: (result: TerminalAttachmentLaunchResult) => void
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
@@ -178,6 +184,7 @@ export type PtyTransport = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -274,6 +281,7 @@ export type IpcPtyTransportOptions = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'saved'
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   agentArgsOverride?: string | null

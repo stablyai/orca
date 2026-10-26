@@ -160,7 +160,10 @@ export function buildFileLinkActions(
             'Open in this group'
           ),
           run: () =>
-            openDetectedFilePath(filePath, line, column, { ...deps, openInSourceGroup: true })
+            openDetectedFilePath(filePath, line, column, {
+              ...deps,
+              openInSourceGroupSurface: 'internal'
+            })
         }
       : null
   const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)

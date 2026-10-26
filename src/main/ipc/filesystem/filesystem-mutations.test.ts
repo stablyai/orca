@@ -1,3 +1,4 @@
+import { constants } from 'node:fs'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -422,7 +423,7 @@ describe('registerFilesystemMutationHandlers', () => {
     await handlers.get('fs:copy')!(null, { sourcePath, destinationPath })
 
     expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo'), { recursive: true })
-    expect(copyFileMock).toHaveBeenCalledWith(sourcePath, destinationPath, expect.any(Number))
+    expect(copyFileMock).toHaveBeenCalledWith(sourcePath, destinationPath, constants.COPYFILE_EXCL)
   })
 
   it('propagates non-ENOENT lstat errors in assertNotExists', async () => {

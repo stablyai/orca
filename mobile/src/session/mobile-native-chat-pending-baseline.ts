@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../src/shared/native-chat-image-transcript-markers'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 
 // Pin only tail-less text sends on the first settled read; reconnect-retained tails already bound the right history.
 // Never recount ordinals or supply image/empty-send tails: the new read may contain their own echo, so rebasing would exclude it forever.

@@ -9,8 +9,8 @@ import {
   getAllowedRoots,
   getLocalRepos,
   resolveUnanchoredWorkspaceRoot
-} from '../filesystem-allowed-roots'
-import { isPathAllowed } from '../filesystem-auth'
+} from './filesystem-allowed-roots'
+import { isPathAllowed } from './filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,
@@ -35,7 +35,9 @@ vi.mock('../worktree-logic', () => ({
   getWorktreePathSettings: mocks.pathSettings
 }))
 vi.mock('../../project-runtime-git-options', () => ({
-  getWorktreeMirrorDistroForRuntime: vi.fn(),
+  getWorktreeMirrorDistroForRuntime: vi.fn()
+}))
+vi.mock('../../local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.projectRuntimes
 }))
 
@@ -147,21 +149,6 @@ beforeEach(() => {
   )
 })
 
-describe.each(deniedOwners)('$name fixture matrix', ({ owner }) => {
-  it.each([
-    ['repo root', () => storeFor([repo(owner)])],
-    ['group scope', () => storeFor([], [group(owner)])],
-    ['folder scope', () => storeFor([], [], [folder(owner)])],
-    ['folder inheriting the group', () => storeFor([], [group(owner)], [folder()])],
-    [
-      'local-looking group and folder over a remote child repo',
-      () => storeFor([repo(owner, { path: join(root, 'child') })], [group()], [folder()])
-    ]
-  ])('denies the %s', async (_case, build) => {
-    expect(await isPathAllowed(join(root, 'file'), build())).toBe(false)
-  })
-})
-
 describe.each(deniedOwners)('$name filesystem ownership', ({ owner }) => {
   it('does not grant a repository root or register linked roots', async () => {
     const store = storeFor([repo(owner)])
@@ -189,15 +176,18 @@ describe.each(deniedOwners)('$name filesystem ownership', ({ owner }) => {
     }
   )
 
-  it('does not infer a local group or folder from a remote child repo', async () => {
-    const store = storeFor(
-      [repo(owner, { path: join(root, 'child'), projectGroupId: 'nested' })],
-      [group(), group({}, { id: 'nested', parentGroupId: 'group', parentPath: null })],
-      [folder()]
-    )
-    expect(await getAllowedRoots(store)).toEqual([])
-    expect(await isPathAllowed(join(root, 'file'), store)).toBe(false)
-  })
+  it.each([undefined, 'nested'])(
+    'does not infer a local group or folder from a remote child repo with group %s',
+    async (projectGroupId) => {
+      const store = storeFor(
+        [repo(owner, { path: join(root, 'child'), projectGroupId })],
+        [group(), group({}, { id: 'nested', parentGroupId: 'group', parentPath: null })],
+        [folder()]
+      )
+      expect(await getAllowedRoots(store)).toEqual([])
+      expect(await isPathAllowed(join(root, 'file'), store)).toBe(false)
+    }
+  )
 })
 
 describe.each(allowedOwners)('$name filesystem ownership', ({ owner }) => {

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { Pressable, Text } from 'react-native'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
-import type { MobileNativeChatTab } from '../mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
@@ -143,7 +143,7 @@ vi.mock('../use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))
-vi.mock('../use-mobile-native-chat-streaming-bubble', () => ({
+vi.mock('../native-chat/use-mobile-native-chat-streaming-bubble', () => ({
   useMobileNativeChatStreamingBubble: () => null
 }))
 

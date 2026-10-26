@@ -1,3 +1,9 @@
+import {
+  captureSavedResumeCleanup,
+  chooseSavedResumeFreshLaunch,
+  type ResumeSpawnAdmission,
+  resumeSpawnRefusal
+} from '../host-env/saved-resume-admission'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import { noteWslDistrosRunning } from '../../../wsl-background-distro-gate'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
@@ -14,6 +20,42 @@ import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+  const captured: ResumeSpawnAdmission | null =
+    args.launchAgent && args.resumeProviderSession
+      ? {
+          verdict: 'admitted',
+          refused: { agent: args.launchAgent, providerSession: args.resumeProviderSession }
+        }
+      : null
+  if (args.resumeOrigin === 'saved') {
+    await captureSavedResumeCleanup(
+      ctx.deps.runtime,
+      ctx.deps.store,
+      ctx.stablePaneKey,
+      captured,
+      args.worktreeId
+    )
+  }
+  const chooseFresh = async (): Promise<void> => {
+    ctx.spawnOptions.env = { ...ctx.spawnOptions.env }
+    args.launchConfig = ctx.effectiveLaunchConfig
+    ctx.resumeAdmission = await chooseSavedResumeFreshLaunch(
+      ctx.deps.runtime,
+      args,
+      ctx.expectedWslDistro,
+      ctx.spawnOptions
+    )
+    if (captured && ctx.resumeAdmission) {
+      ctx.resumeAdmission.refused = captured.refused
+      ctx.resumeAdmission.sourceRecord = captured.sourceRecord
+    }
+    if (resumeSpawnRefusal(ctx.resumeAdmission)) {
+      ctx.launchCommand = undefined
+      ctx.env = ctx.spawnOptions.env
+      ctx.baseEnv = ctx.spawnOptions.env
+      ctx.spawnEnv = ctx.spawnOptions.env
+    }
+  }
   try {
     if (ctx.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.add(ctx.preAllocatedHandle)
@@ -65,9 +107,19 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     if (!ctx.preAdoptedStablePane && ctx.paneAgentLaunch) {
       ctx.paneAgentLaunch.dispatched = true
     }
-    ctx.result = attachOnlyViewOf(args)
-      ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
-      : await ctx.provider.spawn(ctx.spawnOptions)
+    if (attachOnlyViewOf(args)) {
+      ctx.result = await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
+    } else {
+      await chooseFresh()
+      ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
+    }
+    if (ctx.result.isReattach) {
+      ctx.resumeAdmission = null
+      Object.assign(ctx.result, ctx.deps.runtime?.getTerminalLaunchResult?.(ctx.result.id))
+    }
+    if (resumeSpawnRefusal(ctx.resumeAdmission)) {
+      ctx.effectiveLaunchConfig = undefined
+    }
     ctx.stablePaneOwner = null
     ctx.rejectedRegistrationCandidate = ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {

@@ -99,14 +99,16 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/secure-file-fsync-flags.test.ts',
   'src/shared/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/ipc/pty-codex-account-attribution.test.ts',
-  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
+  'src/main/ipc/pty/pty-codex-account-attribution.test.ts',
+  'src/main/ipc/pty/pty-spawn-env-codex-resume-provenance.test.ts',
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
   'src/main/skills/skill-windows-rename-contention.integration.test.ts',
   'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/plan-selection.test.ts',
+  'src/main/ipc/filesystem/filesystem-read-dir-unc-drive.test.ts',
+  'src/main/ipc/filesystem/filesystem-file-content-unc-drive.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [

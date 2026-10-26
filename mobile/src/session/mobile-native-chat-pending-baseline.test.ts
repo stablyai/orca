@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 
 function userTurn(id: string, text: string, timestamp: number): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }

@@ -60,6 +60,10 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 
 export const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 
+// Same boundaries so ~/x/permission, permission-check and awaiting are not prompts.
+export const STRONG_PERMISSION_KEYWORDS_RE =
+  /(^|[^\w./\\-])(action required|permission|waiting)(?![\w-])/i
+
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
 export function hasGeminiStatusGlyph(title: string): boolean {
@@ -118,11 +122,6 @@ export function containsAgentName(title: string): boolean {
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
   )
-}
-
-export function containsAny(title: string, words: readonly string[]): boolean {
-  const lower = title.toLowerCase()
-  return words.some((word) => lower.includes(word))
 }
 
 export function isClaudeManagementTitle(title: string): boolean {

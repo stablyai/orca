@@ -4,6 +4,7 @@ import {
   normalizeAgentProviderSession,
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
+import { AGENT_EFFORT_LEVEL } from './agent-effort-level'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { normalizeMainAgentStatusField } from './agent-status-types'
 import { salvagingRecord } from './zod-salvage'
@@ -19,7 +20,9 @@ const agentProviderSessionSchema = z.preprocess(
     key: z.enum(['session_id', 'conversation_id']),
     id: z.string().min(1).max(512),
     // Pi resume requires its persisted authoritative transcript path.
-    transcriptPath: z.string().min(1).optional()
+    transcriptPath: z.string().min(1).optional(),
+    cwd: z.string().min(1).optional(),
+    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional()
   })
 )
 
@@ -62,7 +65,7 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
-const sleepingAgentLaunchConfigBaseSchema = z.object({
+export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
   agentEnv: sleepingAgentLaunchEnvSchema,

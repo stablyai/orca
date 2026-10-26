@@ -345,6 +345,19 @@ describe('agent process recognition', () => {
       agent: 'hermes',
       processName: 'hermes'
     })
+    // Hermes' installed launcher, as macOS ps prints its multi-line -c source.
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`/home/u/.hermes/tools/python-3.14.9/bin/python3 -I -c import os, re, sys\012sys.path.insert(0, '/home/u/.hermes/hermes-agent')\012try:\012    import hermes_bootstrap\012except Exception:\012    raise\012from hermes_cli.main import main\012sys.exit(main()) chat --tui`
+      )
+    ).toEqual({ agent: 'hermes', processName: 'hermes' })
+    for (const notHermes of [
+      'python3 -I -c import hermes_bootstrap_tests',
+      'python3 tool.py -c "import hermes_bootstrap"',
+      'python3 -m pytest -c x.ini -k "import hermes_bootstrap"'
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(notHermes)).toBeNull()
+    }
     expect(recognizeAgentProcessFromCommandLine('python -m aider')).toEqual({
       agent: 'aider',
       processName: 'aider'

@@ -29,6 +29,34 @@ export type ResumeRunView = {
 
 const ORDER: Record<Category, number> = { attention: 0, 'in-progress': 1, resumed: 2, other: 3 }
 
+/** A host observation cannot settle this action’s unresolved delivery. */
+export function resumeRunFailures(run: ResumeRun | null, failed: readonly ResumeFailure[]) {
+  const unknown = new Set(
+    run?.inFlight
+      ? []
+      : run?.continued
+          ?.filter((entry) => entry.outcome === 'unknown' || entry.outcome === 'pending')
+          .map((entry) => entry.sessionId)
+  )
+  return new Map<string, ResumeFailure>([
+    ...failed.map((failure) => [failure.sessionId, failure] as const),
+    ...(run?.entries ?? [])
+      .filter((entry) => unknown.has(entry.candidate.sessionId))
+      .map(
+        ({ candidate }) =>
+          [
+            candidate.sessionId,
+            {
+              ...candidate,
+              failedAt: run?.startedAt ?? 0,
+              outcome: 'unconfirmed' as const,
+              reason: 'agent_session_restart_request_failed'
+            }
+          ] as const
+      )
+  ])
+}
+
 export function resumeRunView(
   run: ResumeRun,
   listed: readonly ResumeCandidate[],
@@ -73,6 +101,12 @@ export function resumeRunView(
       statusBySession.set(sessionId, { kind: phase })
       placed.push({ row, category: 'attention', index: placed.length })
     } else if (failure) {
+      placed.push({ row, category: 'attention', index: placed.length })
+    } else if (
+      !run.inFlight &&
+      ['unknown', 'pending'].includes(continuedBySession.get(sessionId) ?? '')
+    ) {
+      statusBySession.set(sessionId, { kind: 'unconfirmed' })
       placed.push({ row, category: 'attention', index: placed.length })
     } else if (listedById.has(sessionId)) {
       placed.push({ row, category: 'other', index: placed.length })

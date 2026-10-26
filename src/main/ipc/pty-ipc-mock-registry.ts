@@ -30,6 +30,7 @@ export const openCodeClearPtyMock: Mock = vi.fn()
 export const buildAgentHookEnvMock: Mock = vi.fn()
 export const clearAgentHookPaneStateMock: Mock = vi.fn()
 export const registerPaneKeyAliasMock: Mock = vi.fn()
+export const forgetRefusedPaneResumeMock: Mock = vi.fn()
 export const piBuildPtyEnvMock: Mock = vi.fn()
 export const piClearPtyMock: Mock = vi.fn()
 export const trackMock: Mock = vi.fn()
@@ -121,10 +122,21 @@ export const openCodeHookServiceModuleMock = () => ({
   }
 })
 
-export const mimoHookServiceModuleMock = () => ({
+export const mimoHookServiceModuleMock = (): {
+  mimoCodeHookService: { carryOverLegacyAuth: Mock; buildPtyEnv: Mock }
+} => ({
   mimoCodeHookService: {
+    carryOverLegacyAuth: vi.fn(),
     buildPtyEnv: mimoCodeBuildPtyEnvMock
   }
+})
+
+/** What a spawn's resume admission reads from a fake runtime: no chats, so every resume runs. */
+export const noChatsRuntimeMembers = () => ({
+  openAgentSessionRecordStore: vi.fn(async () => ({
+    listRecords: () => [],
+    getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] })
+  }))
 })
 
 export const agentHookServerModuleMock = () => ({
@@ -132,6 +144,8 @@ export const agentHookServerModuleMock = () => ({
     buildPtyEnv: buildAgentHookEnvMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
+    forgetRefusedPaneResume: forgetRefusedPaneResumeMock,
+    recordLaunchResumeIdentity: () => {},
     clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }
 })

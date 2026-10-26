@@ -1,3 +1,4 @@
+import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
 // Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
@@ -166,16 +167,37 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   private holds(submission: AgentJournalSubmission): boolean {
+    return this.holdsAny([submission])
+  }
+
+  /** `holds` for any of these sends, reading what the child holds once and only when one is asked
+   *  about: the child's answer is rebuilt on each read and never outlives the call. */
+  private holdsAny(submissions: readonly AgentJournalSubmission[]): boolean {
+    if (submissions.length === 0) {
+      return false
+    }
     const held = this.heldSends?.()
+    const handingOver = structuredAgentSessionHandingOver(this.journal)
     return (
       held === undefined ||
-      held.has(submission.clientMessageId) ||
-      structuredAgentSessionHandingOver(this.journal).has(submission.clientMessageId)
+      submissions.some(
+        ({ clientMessageId }) => held.has(clientMessageId) || handingOver.has(clientMessageId)
+      )
     )
+  }
+
+  /** Whether a send handed to the live generation is still owed: `owesSend` over every send not
+   *  queued, in one pass. */
+  holdsHandedOverSend(): boolean {
+    return this.holdsAny(this.unansweredSends())
   }
 
   isCurrentItem(itemId: string): boolean {
     if (this.liveFence === null) {
+      return false
+    }
+    const item = this.journal.item(itemId)
+    if (item && isHistoricalProviderTimelineItem(item, (key) => this.journal.item(key))) {
       return false
     }
     const provenance = this.journal.itemFence(itemId)

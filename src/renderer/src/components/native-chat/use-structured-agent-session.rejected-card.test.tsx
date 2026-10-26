@@ -43,6 +43,7 @@ const KEPT_SUBMISSION: AgentJournalSubmission = {
 }
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: vi.fn(async () => null),
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))

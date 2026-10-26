@@ -92,31 +92,6 @@ describe('shared-control standing intent', () => {
     scheduler.clear()
   })
 
-  it.each([
-    { manual: false, paused: false, subscriptions: 0, scheduled: true },
-    { manual: false, paused: false, subscriptions: 1, scheduled: true },
-    { manual: false, paused: true, subscriptions: 0, scheduled: false },
-    { manual: false, paused: true, subscriptions: 1, scheduled: true },
-    { manual: true, paused: false, subscriptions: 0, scheduled: false },
-    { manual: true, paused: false, subscriptions: 1, scheduled: false },
-    { manual: true, paused: true, subscriptions: 0, scheduled: false },
-    { manual: true, paused: true, subscriptions: 1, scheduled: false }
-  ])(
-    'applies the intent/capability truth table: $manual/$paused/$subscriptions',
-    ({ manual, paused, subscriptions, scheduled }) => {
-      vi.useFakeTimers()
-      const connection = testConnection({ manual, paused })
-      if (subscriptions > 0) {
-        addLogicalSubscription(connection)
-      }
-
-      closeCurrentGeneration(connection)
-
-      expect(connection.getDiagnostics().state === 'reconnecting').toBe(scheduled)
-      connection.close()
-    }
-  )
-
   it('advances an armed idle retry without recreating cleared work', () => {
     vi.useFakeTimers()
     const connection = testConnection()

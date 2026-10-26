@@ -2,8 +2,8 @@ import { translate } from '@/i18n/i18n'
 import {
   nativeChatToolRunSentence as sharedRunSentence,
   type NativeChatToolRunSentenceWords
-} from '../../../../shared/native-chat-tool-run-sentence'
-import type { NativeChatToolCategory } from '../../../../shared/native-chat-tool-icon'
+} from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
+import type { NativeChatToolCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 
 /** Extraction requires literal keys/fallbacks; parity tests keep these clauses aligned with mobile’s shared record. */
@@ -52,6 +52,14 @@ function clause(category: NativeChatToolCategory, count: number, live: boolean):
         : translate(
             'components.native-chat.tool.runWebSearchMany',
             'Searched the web {{value0}} times',
+            value0
+          )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runBrowserOne', 'Used the browser')
+        : translate(
+            'components.native-chat.tool.runBrowserMany',
+            'Used the browser {{value0}} times',
             value0
           )
     case 'mcpToolCall':
@@ -133,6 +141,14 @@ function liveClause(
         : translate(
             'components.native-chat.tool.runLiveWebSearchMany',
             'Searching the web {{value0}} times',
+            value0
+          )
+    case 'browser':
+      return one
+        ? translate('components.native-chat.tool.runLiveBrowserOne', 'Using the browser')
+        : translate(
+            'components.native-chat.tool.runLiveBrowserMany',
+            'Using the browser {{value0}} times',
             value0
           )
     case 'mcpToolCall':

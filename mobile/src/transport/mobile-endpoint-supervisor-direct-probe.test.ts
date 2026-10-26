@@ -1,8 +1,8 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import {
   dependencies,
-  FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
   host,
@@ -24,9 +24,11 @@ describe('mobile endpoint supervisor direct probe', () => {
   })
 
   it('does not block relay recovery behind a direct probe stuck in its redial loop', async () => {
-    const logical = new FakeLogicalClient('connected', 'relay')
+    const initialRelay = new FakeSession('connected')
+    const logical = createStableLogicalRpcClient(initialRelay, 'relay')
     const direct = new FakeSession('connecting')
-    const openRelay = vi.fn(() => new FakeRelaySession('connected'))
+    const recoveredRelay = new FakeRelaySession('connected')
+    const openRelay = vi.fn(() => recoveredRelay)
     const deps = dependencies({ openDirect: vi.fn(() => direct), openRelay })
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
@@ -37,14 +39,24 @@ describe('mobile endpoint supervisor direct probe', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openDirect).toHaveBeenCalledOnce()
     direct.publishState('reconnecting')
-    logical.publishState('disconnected')
+    initialRelay.publishState('disconnected')
 
     // Release recovery after the redial grace window instead of waiting the probe’s full bound.
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(openRelay).not.toHaveBeenCalled()
+    expect(logical.getGeneration()).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
     expect(openRelay).toHaveBeenCalledOnce()
-    expect(direct.close).toHaveBeenCalled()
+    expect(direct.close).toHaveBeenCalledOnce()
     expect(logical.getState()).toBe('connected')
     expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getGeneration()).toBe(2)
+    await logical.sendRequest('host.getStatus')
+    expect(recoveredRelay.sendRequest).toHaveBeenCalledWith('host.getStatus', undefined, undefined)
+    expect(initialRelay.sendRequest).not.toHaveBeenCalled()
+    expect(initialRelay.close).toHaveBeenCalledOnce()
     supervisor.stop()
+    expect(vi.getTimerCount()).toBe(0)
+    logical.close()
   })
 })

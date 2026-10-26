@@ -94,6 +94,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeProviderSession
               ? { resumeProviderSession: params.resumeProviderSession }
               : {}),
+            ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
             ...(params.terminalKittyKeyboardProtocol === true

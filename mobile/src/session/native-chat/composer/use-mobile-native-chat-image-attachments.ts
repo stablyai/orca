@@ -19,17 +19,17 @@ import {
 import {
   openMobileNativeChatSendBudget,
   type MobileNativeChatSendOutcome
-} from '../../mobile-native-chat-send'
+} from '../mobile-native-chat-send'
 import {
   clearMobileNativeChatInputStale,
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
-} from '../../mobile-native-chat-stale-input'
+} from '../mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../../mobile-native-chat-terminal-write-lock'
+} from '../mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { StructuredMobileSendAttachment } from '../../use-mobile-structured-send-with-outcome'

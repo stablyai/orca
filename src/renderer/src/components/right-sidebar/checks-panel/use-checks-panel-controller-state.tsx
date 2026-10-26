@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
 import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
+import { useWorktreeGitCopyHostId } from '@/lib/worktree-git-copy'
 import { useAppStore, type AppState } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
@@ -234,6 +235,7 @@ export function useChecksPanelControllerState() {
   )
   // Route Git by workspace ownership rather than focused server.
   const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
+  const ownerCopyHostId = useWorktreeGitCopyHostId(activeWorktreeId)
   const repoConnectionId = repo?.connectionId?.trim() || null
   // Separate local host/WSL distros; remote IDs already scope SSH/runtime contexts.
   const localExecutionScope = useMemo<string | null>(() => {
@@ -388,6 +390,7 @@ export function useChecksPanelControllerState() {
     runtimeEnvironmentId,
     ownerSettings,
     ownerTarget,
+    ownerCopyHostId,
     repoConnectionId,
     localExecutionScope,
     sshConnectionStatus,

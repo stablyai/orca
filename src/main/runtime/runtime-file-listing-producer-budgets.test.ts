@@ -5,7 +5,7 @@ import {
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
 const { localList } = vi.hoisted(() => ({ localList: vi.fn() }))
-vi.mock('../ipc/filesystem-list-files', () => ({ listQuickOpenFiles: localList }))
+vi.mock('../ipc/filesystem/filesystem-list-files', () => ({ listQuickOpenFiles: localList }))
 
 describe('runtime producer listing budgets', () => {
   useRuntimeFileCommandsLifecycle()

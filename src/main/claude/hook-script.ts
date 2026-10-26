@@ -17,8 +17,7 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 
 // Daemon workers inherit stale pane keys; exit before draining their potentially abandoned stdin.
@@ -58,7 +57,6 @@ export function getManagedScript(
       // Avoid a PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

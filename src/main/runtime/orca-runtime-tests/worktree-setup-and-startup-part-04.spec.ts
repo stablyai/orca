@@ -66,6 +66,8 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
+    // Delivery waits for composer readiness and pastes; its behaviour is covered with the delivery itself.
+    const deliver = vi.spyOn(runtime, 'deliverStartupFollowup').mockResolvedValue(true)
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
@@ -94,8 +96,9 @@ describe('OrcaRuntimeService', () => {
       })
     )
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
+      expect(deliver).toHaveBeenCalledWith(expect.any(String), { agent: 'aider', prompt: 'fix it' })
     })
+    expect(write).not.toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
   })
 
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {

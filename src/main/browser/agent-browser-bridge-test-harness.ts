@@ -18,6 +18,7 @@ export function mockBrowserManager(
   worktrees = new Map<string, string>(),
   overrides: Partial<BrowserManager> = {}
 ): BrowserManager {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Bridge tests supply only the BrowserManager methods they exercise.
   return {
     getWebContentsIdByTabId: () => tabs,
     getTabIdForWebContentsId: (webContentsId: number) => {
@@ -30,9 +31,15 @@ export function mockBrowserManager(
     },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    getSessionProfileIdForTab: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
+    beginAgentCommand: () => ({
+      run: (execute: () => Promise<unknown>) => execute(),
+      end: () => {}
+    }),
+    showAgentPointer: async () => {},
     ...overrides
   } as unknown as BrowserManager
 }

@@ -13,7 +13,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   buildNativeChatSessionOptionCommand,
   recordNativeChatSessionOptionCommand

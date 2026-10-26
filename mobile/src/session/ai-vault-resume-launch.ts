@@ -19,6 +19,7 @@ import {
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import { managedDataAccountResumeEnv } from '../../../src/shared/managed-data-account-resume'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
@@ -104,7 +105,10 @@ export function buildMobileAiVaultResumeLaunch(args: {
       platform: args.hostPlatform,
       shell,
       agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings, args.hostPlatform),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(args.session.agent, args.settings, args.hostPlatform),
+        ...managedDataAccountResumeEnv(args.session)
+      },
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})

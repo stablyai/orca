@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
@@ -35,6 +36,7 @@ function tabHasSolePane(tab: RuntimeMobileSessionTerminalTab): boolean {
   return collectPersistedTerminalLeafIds(tab.parentLayout).length <= 1
 }
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -257,6 +259,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...('resumeProviderSession' in agentStartup
             ? {
                 resumeProviderSession: agentStartup.resumeProviderSession,
+                resumeOrigin: 'saved' as const,
                 spawnIntent: automatic ? 'automatic-restore' : 'user-resume'
               }
             : {}),
@@ -265,7 +268,30 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           onPtySpawnDispatched: () => {
             dispatched = true
           },
-          ...(resumeClaim ? { onPtyCreated: resumeClaim.bind } : {}),
+          ...(resumeClaim
+            ? {
+                onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
+                  const decision = result.savedResumeDecision
+                  if (
+                    !result.isReattach &&
+                    result.agentSessionDisposition !== 'adopted' &&
+                    decision &&
+                    decision.agent === resumeStartup?.launchAgent &&
+                    decision.verdict !== 'admitted' &&
+                    decision.verdict === result.agentResumeRefused &&
+                    agentProviderSessionsEqual(
+                      decision.agent,
+                      decision.providerSession,
+                      resumeStartup?.resumeProviderSession
+                    )
+                  ) {
+                    resumeClaim.settleFailure(false)
+                  } else {
+                    resumeClaim.bind(ptyId)
+                  }
+                }
+              }
+            : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
           // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})

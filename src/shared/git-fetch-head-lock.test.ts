@@ -2,7 +2,30 @@ import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import * as gitOperationLock from './git-operation-lock'
 import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from './git-fetch-head-lock'
+
+function observeLockEntries(expected: number) {
+  const original = gitOperationLock.runWithGitOperationLock
+  let remaining = expected
+  let markEntered!: () => void
+  const entered = new Promise<void>((resolve) => {
+    markEntered = resolve
+  })
+  const spy = vi
+    .spyOn(gitOperationLock, 'runWithGitOperationLock')
+    .mockImplementation(
+      <T>(key: string, signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> => {
+        const pending = original(key, signal, run)
+        remaining -= 1
+        if (remaining === 0) {
+          markEntered()
+        }
+        return pending
+      }
+    )
+  return { entered, restore: () => spy.mockRestore() }
+}
 
 describe('runWithGitFetchHeadLock', () => {
   it.each([
@@ -95,6 +118,7 @@ describe('runWithGitFetchHeadLock', () => {
     const firstStarted = new Promise<void>((resolve) => {
       markFirstStarted = resolve
     })
+    const observation = observeLockEntries(2)
     const first = runWithGitFetchHeadLock(repo, undefined, async () => {
       markFirstStarted()
       await firstGate
@@ -104,9 +128,13 @@ describe('runWithGitFetchHeadLock', () => {
     const queued = runWithGitFetchHeadLock(repo, controller.signal, async () => 'ran')
 
     try {
+      await observation.entered
+      const rejection = expect(queued).rejects.toMatchObject({ name: 'AbortError' })
       controller.abort()
-      await expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+      releaseFirst()
+      await rejection
     } finally {
+      observation.restore()
       releaseFirst()
       await Promise.allSettled([first, queued])
       await rm(root, { recursive: true, force: true })
@@ -132,6 +160,8 @@ describe('runWithGitFetchHeadLock', () => {
       const firstStarted = new Promise<void>((resolve) => {
         markFirstStarted = resolve
       })
+      const observation = observeLockEntries(3)
+      const pending: Promise<unknown>[] = []
       const order: string[] = []
       try {
         const first = runWithGitFetchHeadLock(repo, undefined, async () => {
@@ -139,20 +169,26 @@ describe('runWithGitFetchHeadLock', () => {
           markFirstStarted()
           await gate
         })
+        pending.push(first)
         await firstStarted
         const nestedRun = runWithGitFetchHeadLock(nested, undefined, async () => {
           order.push('nested')
         })
+        pending.push(nestedRun)
         const aliasRun = runWithGitFetchHeadLock(alias, undefined, async () => {
           order.push('alias')
         })
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        pending.push(aliasRun)
+        await observation.entered
         expect(order).toEqual(['root'])
         release()
         await Promise.all([first, nestedRun, aliasRun])
         expect(order[0]).toBe('root')
         expect(new Set(order.slice(1))).toEqual(new Set(['nested', 'alias']))
       } finally {
+        observation.restore()
+        release()
+        await Promise.allSettled(pending)
         await rm(root, { recursive: true, force: true })
       }
     }
@@ -173,23 +209,30 @@ describe('runWithGitFetchHeadLock', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+    let markFirstStarted!: () => void
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve
+    })
+    const observation = observeLockEntries(2)
     const order: string[] = []
     const first = runWithGitFetchHeadLock(main, undefined, async () => {
       order.push('main')
+      markFirstStarted()
       await gate
     })
-    await vi.waitFor(() => expect(order).toEqual(['main']))
+    await firstStarted
     const second = runWithGitFetchHeadLock(linked, undefined, async () => {
       order.push('linked')
     })
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      await observation.entered
       expect(order).toEqual(['main'])
       release()
       await Promise.all([first, second])
       expect(order).toEqual(['main', 'linked'])
     } finally {
+      observation.restore()
       release()
       await Promise.allSettled([first, second])
       await rm(root, { recursive: true, force: true })

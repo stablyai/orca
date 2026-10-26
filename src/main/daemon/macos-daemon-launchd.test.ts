@@ -218,6 +218,7 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
     Label: macDaemonJobLabel(state.root),
     KeepAlive: false,
     AssociatedBundleIdentifiers: ['com.stablyai.orca'],
+    MaterializeDatalessFiles: true,
     EnvironmentVariables: { ORCA_TEST_SECRET: 'test-value' }
   })
   expect(JSON.stringify(job)).not.toContain('NODE_CHANNEL_FD')

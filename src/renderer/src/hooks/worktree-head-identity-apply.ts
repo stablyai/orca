@@ -1,11 +1,13 @@
 import type { Worktree, WorktreeHeadIdentity } from '../../../shared/worktree/types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 
 export type WorktreeHeadIdentityApplyDeps = {
   getWorktreesForRepo: (repoId: string) => Worktree[] | undefined
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
 }
 
@@ -35,9 +37,11 @@ export function applyWorktreeHeadIdentities(
     if (!worktree) {
       continue
     }
-    deps.updateWorktreeGitIdentity(worktree.id, {
-      head: identity.head,
-      branch: identity.branch
-    })
+    // Why: this watcher reads this machine's checkouts, never a same-path twin on another host.
+    deps.updateWorktreeGitIdentity(
+      worktree.id,
+      { head: identity.head, branch: identity.branch },
+      LOCAL_EXECUTION_HOST_ID
+    )
   }
 }

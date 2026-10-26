@@ -11,6 +11,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { getProviderSessionClaimKey } from '../../../shared/sleeping-record-legacy-pane-key'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import { isPaneResumingInPlace, isPaneSpawnDeferred } from './pane-spawn-deferral-registry'
 
 export { getProviderSessionClaimKey }
@@ -136,6 +137,19 @@ function findPreservedTabOwner(
     }
   }
   return null
+}
+
+/** A workspace sleep's record whose tab is gone: main has no pane to resume it in, so the window reopens it in a fresh tab (#22657). */
+export function isStrandedWorkspaceSleepRecord(
+  record: SleepingAgentSessionRecord,
+  state: AppStoreState
+): boolean {
+  const tabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId
+  return (
+    isWorkspaceSleepRecord(record) &&
+    tabId !== undefined &&
+    !findPreservedTabOwner(state, record.worktreeId, tabId)
+  )
 }
 
 export function recordPaneIsOwnedByPreservedPane(

@@ -104,28 +104,32 @@ describe('useStructuredAgentSessionThreadGoal', () => {
     expect(cleared.result.current?.goal).toBeNull()
   })
 
-  it('serializes changes: a second submit while one is unsettled is answered false, not sent', async () => {
-    let settle: (value: { change: 'set' } | null) => void = () => undefined
-    const { mutate, calls } = mutateWith(
-      () => new Promise<{ change: 'set' } | null>((resolve) => (settle = resolve))
-    )
-    const { result } = harness({ support: { current: null }, mutate })
-
-    let first: Promise<boolean> = Promise.resolve(false)
-    let second: Promise<boolean> = Promise.resolve(false)
+  it('admits Pause and Clear while Set is unsettled, keeping pending until all settle', async () => {
+    const set = Promise.withResolvers<unknown>()
+    const pause = Promise.withResolvers<unknown>()
+    const clear = Promise.withResolvers<unknown>()
+    const answers = [set, pause, clear]
+    const { mutate, calls } = mutateWith(() => answers.shift()!.promise)
+    const { result } = harness({ support: { current: GOAL }, mutate })
+    let changes: Promise<boolean>[] = []
     act(() => {
-      first = result.current!.change({ kind: 'set', objective: 'Ship the parser' })
-      second = result.current!.change({ kind: 'set', objective: 'Ship the parser' })
+      changes = [
+        result.current!.change({ kind: 'set', objective: 'New objective' }),
+        result.current!.change({ kind: 'status', status: 'paused' }),
+        result.current!.change({ kind: 'clear' })
+      ]
     })
-    await expect(second).resolves.toBe(false)
-    expect(calls).toHaveBeenCalledTimes(1)
-    expect(calls).toHaveBeenCalledWith('agentSession.threadGoal', 'agentSession.threadGoal', {
-      change: { kind: 'set', objective: 'Ship the parser' }
+    expect(calls).toHaveBeenCalledTimes(3)
+    expect(result.current?.pending).toBe(true)
+    await act(async () => {
+      clear.resolve({ change: 'clear' })
+      pause.resolve({ change: 'status' })
     })
     expect(result.current?.pending).toBe(true)
-
-    await act(async () => settle({ change: 'set' }))
-    await expect(first).resolves.toBe(true)
+    await act(async () => {
+      set.resolve({ change: 'set' })
+      await expect(Promise.all(changes)).resolves.toEqual([true, true, true])
+    })
     expect(result.current?.pending).toBe(false)
   })
 

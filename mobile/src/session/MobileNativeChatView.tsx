@@ -37,7 +37,7 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 import {
   mobileNativeChatComposerPlaceholder,
   useSettledMobileNativeChatInputLock
-} from './use-mobile-native-chat-input-lease'
+} from './native-chat/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'

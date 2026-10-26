@@ -63,6 +63,9 @@ const jsoncParserEsm = {
   }
 }
 
+// Every orcad bundle (server, children, CLI) must share these, or one ships a UMD build that cannot load (#33592).
+export const ORCAD_BUNDLE_PLUGINS = [jsoncParserEsm, externalNativeAddons]
+
 // One non-ASCII character makes V8 store the ~11MB bundle as ~21MB two-byte text; esbuild escapes strings but leaves regex/tagged-template literals.
 export function findNonAsciiSource(source) {
   let index = 0
@@ -142,7 +145,7 @@ function buildOrcadEntryBundle(outfile, minify) {
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
-    plugins: [jsoncParserEsm, externalNativeAddons],
+    plugins: ORCAD_BUNDLE_PLUGINS,
     metafile: true,
     minify,
     // Licenses stay in the bundle as a trailing comment, which `escapeLegalCommentTail` keeps ASCII.
@@ -164,6 +167,7 @@ export function buildOrcadCli(outfile) {
     target: 'node18',
     format: 'cjs',
     outfile,
+    plugins: ORCAD_BUNDLE_PLUGINS,
     metafile: true,
     minify: true,
     sourcemap: false,

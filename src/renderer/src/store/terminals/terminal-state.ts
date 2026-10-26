@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
+  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
@@ -63,6 +64,8 @@ export type TerminalState = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
+      resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent
       /** The agent launch the pane's own spawn starts, instead of `command`. */

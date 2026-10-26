@@ -412,7 +412,7 @@ describe('Windows managed hook stdin structure', () => {
               : [scriptPath]
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          // Only missing-context Windows paths permit broken writers; in-pane hooks must drain.
+          // Missing-context guards exit before reading stdin, so writers may see a broken pipe.
           for (const error of result.stdinErrors) {
             expect(WRITER_BROKEN_BY_EARLY_EXIT, `${fileName} stdin error`).toContain(error.code)
           }

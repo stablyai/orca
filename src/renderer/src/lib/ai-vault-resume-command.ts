@@ -9,6 +9,7 @@ import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { managedDataAccountResumeEnv } from '../../../shared/managed-data-account-resume'
 import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
 import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
 import {
@@ -104,8 +105,10 @@ function buildAiVaultResumeForWorktree(
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
+    const accountEnv = managedDataAccountResumeEnv(args.session)
     return {
       command: args.session.resumeCommand,
+      ...(Object.keys(accountEnv).length > 0 ? { env: accountEnv } : {}),
       ...realHomeCodexResumeEnvDeletion(args.session),
       ...(providerSession ? { providerSession } : {})
     }

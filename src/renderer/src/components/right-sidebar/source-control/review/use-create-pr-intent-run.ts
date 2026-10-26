@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createCreatePrIntentRunToken } from './create-pr-intent-flow'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
@@ -107,7 +108,9 @@ export function useSourceControlCreatePrIntentRun({
       // Preserve the UI provider so failed eligibility probes can synthesize the right host’s local prep steps.
       provider: provisionalHostedReviewProvider,
       // Pin the selected base across asynchronous commit/push steps.
-      baseRef: effectiveBaseRef ?? null
+      baseRef: effectiveBaseRef ?? null,
+      // The run outlives navigation; its git answers stay on the copy it started from.
+      pinnedCopy: resolveWorktreeGitCopyNow(activeWorktreeId)
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
     const snapshot = createCreatePrIntentRunSnapshot({

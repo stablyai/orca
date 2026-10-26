@@ -160,7 +160,7 @@ export async function executeWorktreeCreation(
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
-  const windowStartup = windowStartupAfterCreate(preparedRequest, result, backendSpawned)
+  const windowStartup = windowStartupAfterCreate(creationId, preparedRequest, result)
   const startupOpt = windowStartup.startup
 
   // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).
@@ -181,7 +181,7 @@ export async function executeWorktreeCreation(
         ...(defaultTabs ? { defaultTabs } : {}),
         ...(startupOpt ? { startup: startupOpt } : {}),
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {}),
+        ...windowStartup.terminalOptions,
         ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
       })
       primaryTabId = activation === false ? null : activation.primaryTabId
@@ -198,7 +198,7 @@ export async function executeWorktreeCreation(
         // Startup terminal ids and stamped agent tabs are the only safe primary
         // ids when activation returned no result.
         primaryTabId = verifiedLaunchTabId
-      } else if (existingTabs.length === 0) {
+      } else if (existingTabs.length === 0 || startupOpt) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -208,7 +208,7 @@ export async function executeWorktreeCreation(
             preparedRequest.issueCommand,
             defaultTabs,
             // Activation failed before providing its promised surface, so recovery must seed one.
-            { ...onCreationHost, ...(backendSpawned && { backendStartupTerminalSpawned: true }) }
+            { ...onCreationHost, ...windowStartup.terminalOptions }
           )
         } catch (recoveryError) {
           console.error('worktree create: recovery seed failed', worktree.id, recoveryError)
@@ -249,7 +249,7 @@ export async function executeWorktreeCreation(
             activateCreatedTabs: false,
             ...onCreationHost,
             ...(callerProvidesSurface ? { callerProvidesSurface: true } : {}),
-            ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+            ...windowStartup.terminalOptions
           }
         )
       } catch (error) {

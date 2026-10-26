@@ -1,17 +1,21 @@
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle
 } from '../../../shared/agent-detection'
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
+import {
+  GENERIC_PROCESS_NAME_AGENTS,
+  recognizeAgentProcess
+} from '../../../shared/agent-process-recognition'
 import {
   resolveStructuredWorkerAuthority,
   resolveStructuredWorkerIdentityForSession
 } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
+import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
   chatDispatchMailTarget,
   handleLessCoordinatorSessionId,
@@ -135,11 +139,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
         foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
         agent = recognizeAgentProcess(foregroundProcess)?.agent
       }
-      if (agent !== 'claude' && agent !== 'codex') {
-        return false
-      }
-      const presence = { retryForegroundWrappers: false, foregroundProcess }
-      if (!(await this.isTerminalRunningAgent(handle, presence))) {
+      // Why every agent: unframed keystrokes can open Pi's `#` completion or answer a trust menu; Dispatch already frames them all.
+      // A generic process name alone could be an ordinary tool, so those agents need title or hook evidence.
+      const proof = agent && GENERIC_PROCESS_NAME_AGENTS.has(agent) ? null : foregroundProcess
+      const presence = { retryForegroundWrappers: false, foregroundProcess: proof }
+      if (agent === undefined || !(await this.isTerminalRunningAgent(handle, presence))) {
         return false
       }
       trackedPty.foregroundAgent = agent
@@ -330,7 +334,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  protected deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
+  protected deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void {
     this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 }

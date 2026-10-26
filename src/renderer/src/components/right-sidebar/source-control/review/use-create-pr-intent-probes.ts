@@ -151,6 +151,7 @@ export function useSourceControlCreatePrIntentProbes({
       return await refreshGitStatusForWorktreeStrict({
         // Background completion must check the worktree that started the intent.
         target: requireGitOwnerTarget(target.target),
+        ownerHostId: target.ownerHostId ?? null,
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         connectionId: target.connectionId,

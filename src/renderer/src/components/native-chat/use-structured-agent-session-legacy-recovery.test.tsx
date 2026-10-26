@@ -16,6 +16,7 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   readStructuredAgentSessionConversationOutline: mocks.outline,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false),

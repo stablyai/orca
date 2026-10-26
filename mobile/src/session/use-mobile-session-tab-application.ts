@@ -23,7 +23,7 @@ import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
-import { withRememberedNativeChatIdentity } from './mobile-native-chat-eligibility'
+import { withRememberedNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 

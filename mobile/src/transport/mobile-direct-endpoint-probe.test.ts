@@ -29,6 +29,10 @@ class FakeClient implements RpcClient {
     return () => this.listeners.delete(listener)
   }
 
+  get listenerCount(): number {
+    return this.listeners.size
+  }
+
   publishState(state: ConnectionState): void {
     this.state = state
     for (const listener of this.listeners) {
@@ -72,25 +76,32 @@ describe('mobile direct endpoint probe', () => {
 
   it('rides out one access-point flap that the first redial recovers', async () => {
     // Allow one redial so an access-point flap does not immediately incur direct-failure cooldown.
+    const client = new FakeClient('connecting')
     const openDirect = vi.fn(() => {
-      const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('connected'), 600)
       return client
     })
 
     const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(600)
-    const result = await probing
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(599)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
 
-    expect(result).not.toBeNull()
-    expect(result?.close).not.toHaveBeenCalled()
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('extends the grace once when the redial reaches a handshake', async () => {
     // Extend for handshake progress because connection also waits for capability RPC completion.
+    const client = new FakeClient('connecting')
     const openDirect = vi.fn(() => {
-      const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('handshaking'), 1_500)
       setTimeout(() => client.publishState('connected'), 3_000)
@@ -98,9 +109,18 @@ describe('mobile direct endpoint probe', () => {
     })
 
     const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(3_000)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
 
-    expect(await probing).not.toBeNull()
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('fails a handshake that stalls, one grace after it started', async () => {

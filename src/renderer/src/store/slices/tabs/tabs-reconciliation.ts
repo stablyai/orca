@@ -1,4 +1,4 @@
-import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'

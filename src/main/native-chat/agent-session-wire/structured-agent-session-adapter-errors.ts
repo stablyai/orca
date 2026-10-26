@@ -45,6 +45,7 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
   | 'runtimeNotInstalled'
+  | 'conversationOpenInTerminal'
 >
 
 /** First-hand proof that acquisition spawned no process. */

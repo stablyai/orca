@@ -23,7 +23,9 @@ function acceptsOptionPick(
   const definition = agents.definition(provider)
   return key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
     ? definition !== null &&
-        agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true
+        agentChatPermissionModes(provider) !== null &&
+        (value === 'own' ||
+          agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true)
     : definition?.restingOptions.acceptsKey(key) === true
 }
 

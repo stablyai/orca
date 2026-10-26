@@ -55,6 +55,7 @@ export class Session {
       scrollback: opts.scrollback,
       wslDistro: opts.wslDistro,
       historySeedChunks: opts.historySeedChunks,
+      ownerBackend: opts.ownerBackend,
       subprocess: this.subprocess,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })

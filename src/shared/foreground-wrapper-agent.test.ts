@@ -22,7 +22,7 @@ describe('resolveOuterWrapperForegroundProcess', () => {
     expect(resolveOuterWrapperForegroundProcess(pi, barePi, [barePi])).toBe('pi')
   })
 
-  it('leaves a cross-group agent (codex) untouched even under a deeper same-name child', () => {
+  it('keeps Codex identity beneath a shell parent', () => {
     const codex = { agent: 'codex' as const, processName: 'codex' }
     expect(
       resolveOuterWrapperForegroundProcess(

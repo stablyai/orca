@@ -16,6 +16,19 @@ const browserMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  WebContentsView: class {
+    onDestroyed: (() => void) | null = null
+    webContents = {
+      id: 9001,
+      isDestroyed: () => false,
+      close: () => this.onDestroyed?.(),
+      once: (_event: string, listener: () => void) => {
+        this.onDestroyed = listener
+      },
+      focus: vi.fn()
+    }
+    setVisible(): void {}
+  },
   app: {
     getPath: browserMocks.appGetPathMock
   },
@@ -75,6 +88,7 @@ const {
   guestSetBackgroundThrottlingMock,
   guestSetWindowOpenHandlerMock,
   guestOpenDevToolsMock,
+  browserWindowFromWebContentsMock,
   webContentsFromIdMock,
   menuBuildFromTemplateMock
 } = browserMocks
@@ -195,20 +209,32 @@ describe('browserManager', () => {
     expect(guestOpenDevToolsMock).not.toHaveBeenCalled()
   })
 
-  it('keeps devtools available for a desktop webview guest', async () => {
+  it('docks devtools into the page pane, or pops them out to a window when asked', async () => {
+    const setDevToolsWebContents = vi.fn()
     const guest = {
       id: 139,
+      hostWebContents: {},
       isDestroyed: vi.fn(() => false),
+      isDevToolsOpened: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       isCurrentlyAudible: vi.fn(() => false),
       send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      setDevToolsWebContents,
       on: guestOnMock,
+      once: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
-    webContentsFromIdMock.mockReturnValue(guest)
+    const renderer = { id: rendererWebContentsId, isDestroyed: () => false, send: vi.fn() }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === rendererWebContentsId ? renderer : guest
+    )
+    browserWindowFromWebContentsMock.mockReturnValue({
+      isDestroyed: () => false,
+      contentView: { addChildView: vi.fn(), removeChildView: vi.fn() }
+    })
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
       browserPageId: 'desktop-devtools',
@@ -217,7 +243,19 @@ describe('browserManager', () => {
     })
 
     await expect(browserManager.openDevTools('desktop-devtools')).resolves.toBe(true)
-    expect(guestOpenDevToolsMock).toHaveBeenCalledWith({ mode: 'detach' })
+    expect(setDevToolsWebContents).toHaveBeenCalledWith(expect.objectContaining({ id: 9001 }))
+    expect(guestOpenDevToolsMock).not.toHaveBeenCalledWith({ mode: 'detach' })
+    expect(renderer.send).toHaveBeenLastCalledWith('browser:devToolsDockChanged', {
+      browserPageId: 'desktop-devtools',
+      docked: true
+    })
+
+    await browserManager.openDevTools('desktop-devtools', undefined, { detach: true })
+    expect(guestOpenDevToolsMock).toHaveBeenLastCalledWith({ mode: 'detach' })
+    expect(renderer.send).toHaveBeenLastCalledWith('browser:devToolsDockChanged', {
+      browserPageId: 'desktop-devtools',
+      docked: false
+    })
   })
 
   it('refuses unregisterGuest for a page the document registry holds', () => {

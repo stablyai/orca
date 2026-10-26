@@ -108,14 +108,18 @@ describe('terminal multiplex RPC', () => {
   })
 
   it("waits for a desktop multiplex subscriber's PTY before retiring the terminal", async () => {
+    let ptyId: string | null = null
     let resolvePty: (ptyId: string) => void = () => {}
     const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      resolveLiveLeafForHandle: vi.fn(() => ({ ptyId })),
       requestRendererTerminalTabMount: vi.fn(),
       waitForLeafPtyId: vi.fn(
         () =>
           new Promise<string>((resolve) => {
-            resolvePty = resolve
+            resolvePty = (resolvedPtyId) => {
+              ptyId = resolvedPtyId
+              resolve(resolvedPtyId)
+            }
           })
       )
     })
@@ -359,17 +363,23 @@ describe('terminal multiplex RPC', () => {
     const activeStreamCount = 44
     const waitSignals: AbortSignal[] = []
     const resolveWaits: ((ptyId: string) => void)[] = []
+    const ptyIds = new Map<string, string>()
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn((terminal: string) =>
-        terminal.startsWith('pending-') ? { ptyId: null } : { ptyId: `pty-${terminal}` }
+        terminal.startsWith('pending-')
+          ? { ptyId: ptyIds.get(terminal) ?? null }
+          : { ptyId: `pty-${terminal}` }
       ),
       waitForLeafPtyId: vi.fn(
-        (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
+        (handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
           new Promise<string>((resolve, reject) => {
             if (signal) {
               waitSignals.push(signal)
             }
-            resolveWaits.push(resolve)
+            resolveWaits.push((ptyId) => {
+              ptyIds.set(handle, ptyId)
+              resolve(ptyId)
+            })
             signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
               once: true
             })

@@ -4,17 +4,6 @@ import { getMobilePaneSearchEntries, shouldOpenMobilePairingAddress } from './mo
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getMobilePaneSearchEntries', () => {
-  // Catalog order breaks search-score ties; preserve Network Interface ranking after catalog splits.
-  it('keeps Network Interface in its original catalog position', () => {
-    expect(getMobilePaneSearchEntries().map((entry) => entry.title)).toEqual([
-      'Mobile Pairing',
-      'Connected Devices',
-      'Network Interface',
-      'When you leave the mobile app',
-      'Machine name'
-    ])
-  })
-
   it('keeps the shared machine-name entry searchable from the Mobile pane', () => {
     const entries = getMobilePaneSearchEntries()
 

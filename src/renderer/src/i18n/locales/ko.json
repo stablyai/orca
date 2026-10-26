@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "설정 → 에이전트",
       "permissionsTitle": "새 채팅의 권한",
       "permissionsDescription": "새 채팅에만 적용됩니다. 에이전트별 기본값은 설정 → 에이전트에 있습니다.",
       "description": "채팅의 모양과 동작 방식을 선택하세요.",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "글꼴",
+        "fontFamilyDescription": "메시지, 활동 및 메시지 입력란에 사용하는 글꼴입니다.",
+        "inheritFont": "IDE와 같은 글꼴",
+        "fontPreviewLabel": "채팅 글꼴 미리보기",
+        "fontPreview": "이 문장에서 채팅 글꼴을 미리 볼 수 있습니다.",
         "title": "채팅",
         "textSize": "텍스트 크기",
         "textSizeDescription": "메시지, 도구 활동 및 메시지 입력란. 채팅에서 {{increase}} / {{decrease}} 키로도 변경할 수 있습니다.",
@@ -209,7 +215,8 @@
           "microphone": "마이크",
           "location": "위치",
           "notifications": "알림",
-          "clipboard": "클립보드"
+          "clipboard": "클립보드",
+          "localNetwork": "로컬 네트워크"
         },
         "title": "사이트 권한",
         "profile": "브라우저 프로필",
@@ -310,6 +317,7 @@
     "view": "보기",
     "reload": "새로고침",
     "forceReload": "강제 새로고침",
+    "toggleDevTools": "개발자 도구 전환",
     "resetSize": "크기 재설정",
     "zoomIn": "확대",
     "zoomOut": "축소",
@@ -4221,10 +4229,6 @@
               "waiting": {
                 "label": "Claude 실행 시 업데이트됨",
                 "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
-              },
-              "expired": {
-                "label": "로그인 만료",
-                "message": "Claude 사용량이 만료되었습니다. 이 계정에서 Claude를 시작하면 사용량이 갱신됩니다."
               }
             },
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
@@ -16938,7 +16942,12 @@
             "copyImage": "이미지 복사",
             "copyImageAddress": "이미지 주소 복사",
             "searchSelection": "{{value0}}에서 “{{value1}}” 검색",
-            "inspect": "검사"
+            "inspect": "검사",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "오른쪽에 도킹",
+            "devToolsDockBottom": "아래쪽에 도킹",
+            "devToolsUndock": "별도 창에서 열기",
+            "devToolsClose": "DevTools 닫기"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",
@@ -18365,6 +18374,7 @@
             "clipboard": "클립보드",
             "windowManagement": "창 관리",
             "idleDetection": "장치 사용",
+            "localNetwork": "로컬 네트워크",
             "midi": "MIDI 장치"
           },
           "allow": "허용",
@@ -18375,6 +18385,7 @@
             "location": "위치 정보 확인",
             "microphone": "마이크 사용",
             "idleDetection": "이 장치의 사용 여부 감지",
+            "localNetwork": "이 장치의 앱과 로컬 네트워크의 장치에 액세스",
             "clipboard": "클립보드에 복사된 텍스트 및 이미지 보기",
             "windowManagement": "모든 디스플레이의 창 관리",
             "midi": "MIDI 장치 사용"
@@ -18669,6 +18680,8 @@
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
+        "conversationOpenElsewhere": "Codex가 아직 이 대화를 열어 두고 있습니다. 잠시 후 다시 시도하거나 다른 Codex 터미널을 닫으세요.",
+        "conversationOpenInTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 후 여기서 계속하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
         "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
         "chooseClaudeAccountThenSend": "Claude 계정 설정에서 선택하거나 추가한 다음 메시지를 다시 보내세요.",
@@ -18753,7 +18766,6 @@
         "notDoneAnswer": "답변이 전송되지 않았습니다.",
         "notDoneOption": "설정이 변경되지 않았습니다.",
         "notDoneCommand": "명령이 실행되지 않았습니다.",
-        "notDoneGoal": "목표가 변경되지 않았습니다.",
         "notDoneQueuedEdit": "편집한 내용은 저장되지 않았습니다.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
         "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
@@ -18999,6 +19011,8 @@
         "runFileChangeMany": "{{value0}} 파일을 편집했습니다.",
         "runWebSearchOne": "웹을 1회 검색했습니다.",
         "runWebSearchMany": "웹을 {{value0}}번 검색했습니다.",
+        "runBrowserOne": "브라우저를 사용했습니다",
+        "runBrowserMany": "브라우저를 {{value0}}회 사용했습니다",
         "runIntegrationOne": "1개 통합 사용",
         "runIntegrationMany": "{{value0}} 통합 사용",
         "runAgentOne": "에이전트 1명 실행",
@@ -19021,6 +19035,8 @@
         "runLiveFileChangeMany": "{{value0}} 파일 편집 중",
         "runLiveWebSearchOne": "웹 검색 1회",
         "runLiveWebSearchMany": "웹 검색 {{value0}}회",
+        "runLiveBrowserOne": "브라우저 사용 중",
+        "runLiveBrowserMany": "브라우저 {{value0}}회 사용 중",
         "runLiveIntegrationOne": "1개의 통합 사용",
         "runLiveIntegrationMany": "{{value0}} 통합 사용",
         "runLiveAgentOne": "에이전트 1개 실행 중",
@@ -19028,7 +19044,9 @@
         "runLivePlanOne": "계획 업데이트 중",
         "runLivePlanMany": "계획을 {{value0}}번 업데이트 중",
         "runLiveToolOne": "도구 1개 사용",
-        "runLiveToolMany": "{{value0}} 도구 사용"
+        "runLiveToolMany": "{{value0}} 도구 사용",
+        "showBrowserPage": "보기",
+        "showBrowserPageLabel": "{{value0}} 보기"
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
@@ -19060,8 +19078,8 @@
       "resumeInNewChat": {
         "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
         "cannotResume": "이 {{agent}} 대화는 기본 채팅에서 재개할 수 없습니다.",
-        "exitUnconfirmedFromTerminal": "Orca가 터미널에서 {{agent}} 종료 여부를 확인할 수 없습니다. 실행 중인 프로세스를 중지하거나 터미널을 닫은 후 세션 기록에서 이 대화를 여세요.",
-        "exitUnconfirmed": "Orca가 터미널에서 {{agent}} 종료 여부를 확인할 수 없습니다. 실행 중인 프로세스를 중지하거나 터미널을 닫은 후 다시 시도하세요."
+        "exitUnconfirmedFromTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요.",
+        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요."
       },
       "state": {
         "loading": {
@@ -19446,6 +19464,10 @@
           "editors": "모든 편집기 탭을 닫을까요?",
           "description": "선택한 탭을 닫습니다. 고정된 탭은 열린 상태로 유지됩니다.",
           "confirm": "탭 닫기"
+        },
+        "chatRename": {
+          "empty": "채팅 이름은 비워 둘 수 없습니다",
+          "failed": "이 채팅의 이름을 바꾸지 못했습니다"
         }
       }
     },
@@ -21193,5 +21215,8 @@
       "main": "기본 작업 트리가 보호됩니다."
     },
     "rowActions": "{{name}}에 대한 작업"
+  },
+  "browserTab": {
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
   }
 }

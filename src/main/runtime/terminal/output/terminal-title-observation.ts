@@ -8,6 +8,8 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-s
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
 import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
+import type { OrchestrationMailboxLeaf } from '../../orchestration/mailbox-owner'
+import type { PtyLaneMailboxTarget } from '../query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -40,7 +42,10 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     tabId: string
     leafId: string
   }): boolean
-  protected abstract deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void
+  protected abstract deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void
+  protected abstract getPtyLaneMailboxTargetForPty(
+    pty: RuntimePtyWorktreeRecord | undefined
+  ): PtyLaneMailboxTarget | null
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
   protected abstract markPaneLiveTitlesDirty(): void
@@ -117,10 +122,17 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
+    let ptyIdleEdge = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
+      // Same delivery edge as the leaf branch below: live idle, or an idle title that changed.
+      ptyIdleEdge =
+        agentStatus === 'idle' &&
+        (prevStatus !== 'idle' ||
+          !pty.lastAgentStatusObservedLive ||
+          (!statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
       if (!statusOnly) {
@@ -209,6 +221,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       ) {
         this.deliverPendingMessagesForLeaf(leaf)
       }
+    }
+    // A pane no window publishes (headless serve) has no leaf above; its PTY is the mailbox target.
+    const lane = ptyIdleEdge ? this.getPtyLaneMailboxTargetForPty(pty) : null
+    if (lane && this.checkDeliverySettledAndArmRecheck(lane.leaf)) {
+      this.deliverPendingMessagesForLeaf(lane.leaf)
     }
     return ptyRecordChanged
   }

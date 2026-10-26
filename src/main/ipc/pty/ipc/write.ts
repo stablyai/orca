@@ -1,5 +1,5 @@
 import type { PtyRendererDelivery } from '../session'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
 

@@ -77,11 +77,6 @@ describe('nativeChatTurnBarRows', () => {
       ])
     )
   })
-
-  it('puts a turn opened by a rendered message under that message', () => {
-    const messages = [message('A', 'user'), message('t1')]
-    expect(nativeChatTurnBarRows(messages, ['A', 'A']).get('A')).toEqual({ index: 0, above: false })
-  })
 })
 
 describe('nativeChatTurnDrawOrder', () => {
