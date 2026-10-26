@@ -3,9 +3,16 @@ import { notify } from './host-notify'
 
 // A release this far below its start, mostly vertical, reads as "swipe down" (the host may dismiss the keyboard).
 const SWIPE_DOWN_MIN_PX = 56
+// This far right, mostly horizontal, reads as "swipe back", like the stack's own swipe-back.
+const SWIPE_BACK_MIN_PX = 80
 
 // The swipe still scrolls scrollback; the host only learns the gesture happened.
-export function reportSwipeDown(scope: TerminalDocumentScope, released: Touch | undefined) {
+export function reportSwipeDown(
+  scope: TerminalDocumentScope,
+  released: Touch | undefined,
+  // A zoomed terminal wider than its viewport pans sideways, so a horizontal drag isn't a swipe back there.
+  pansHorizontally = false
+) {
   const { swipeStartX, swipeStartY } = scope.touchGesture
   // The lift can land past the last touchmove, so classify on where the finger came up.
   const lastX = released?.clientX ?? scope.touchGesture.lastX
@@ -16,7 +23,10 @@ export function reportSwipeDown(scope: TerminalDocumentScope, released: Touch | 
     return
   }
   const dy = lastY - swipeStartY
-  if (dy >= SWIPE_DOWN_MIN_PX && dy > 2 * Math.abs(lastX - swipeStartX)) {
+  const dx = lastX - swipeStartX
+  if (dy >= SWIPE_DOWN_MIN_PX && dy > 2 * Math.abs(dx)) {
     notify(scope, { type: 'terminal-swipe-down' })
+  } else if (!pansHorizontally && dx >= SWIPE_BACK_MIN_PX && dx > 2 * Math.abs(dy)) {
+    notify(scope, { type: 'terminal-swipe-back' })
   }
 }

@@ -31,4 +31,14 @@ describe('reportSwipeDown', () => {
     expect(short.postToHost).not.toHaveBeenCalled()
     expect(sideways.postToHost).not.toHaveBeenCalled()
   })
+
+  it('reports a rightward swipe as back unless a zoomed terminal pans sideways', () => {
+    const flat = scopeWithGesture({ x: 20, y: 300 }, { x: 90, y: 305 })
+    reportSwipeDown(flat.scope, touchAt(120, 310))
+    expect(flat.postToHost).toHaveBeenCalledWith({ type: 'terminal-swipe-back' })
+
+    const zoomed = scopeWithGesture({ x: 20, y: 300 }, { x: 90, y: 305 })
+    reportSwipeDown(zoomed.scope, touchAt(120, 310), true)
+    expect(zoomed.postToHost).not.toHaveBeenCalled()
+  })
 })

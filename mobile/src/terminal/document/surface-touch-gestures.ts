@@ -259,7 +259,9 @@ export function attachSurfaceEventHandlers(
       if (touches.length === 0) {
         reportSwipeDown(
           scope,
-          e.changedTouches ? touchesInRoot(scope.root, e.changedTouches)[0] : undefined
+          e.changedTouches ? touchesInRoot(scope.root, e.changedTouches)[0] : undefined,
+          !!scope.term.element &&
+            scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
         )
         scope.touchGesture.active = false
         // A finger resting after its last move has no remaining momentum to launch.

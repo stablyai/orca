@@ -80,6 +80,7 @@ export type TerminalSelectionEvents = {
   onTerminalInteraction?: () => void
   onTerminalTap?: () => void
   onTerminalSwipeDown?: () => void
+  onTerminalSwipeBack?: () => void
   // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
   onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl?: (url: string) => void
