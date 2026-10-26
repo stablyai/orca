@@ -31,11 +31,13 @@ import {
 } from '../../agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
   protected abstract createAgentPromptRenderGate(
     ptyId: string,
-    pasteIngestMs: number
+    pasteIngestMs: number,
+    agent?: TerminalAgent | null
   ): { arm: () => void; wait: () => Promise<void>; dispose: () => void } | null
 
   protected assertAgentPromptExpectedBinding(
@@ -79,17 +81,16 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
-    const pty = this.ptysById.get(ptyId)
+    const agent = await this.resolveTerminalPromptAgent(ptyId, options.signal)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
-    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
-      pty?.foregroundAgent ?? pty?.launchAgent
-    )
+    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(agent)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.
-    const renderGate = options.composerReady
-      ? null
-      : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    const renderGate =
+      options.composerReady || options.waitForRender === false
+        ? null
+        : this.createAgentPromptRenderGate(ptyId, pasteIngestMs, agent)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
@@ -114,12 +115,14 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      options.reserveWrite?.(ptyId)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
       if (submitWithPaste) {
         options.onSubmitWritten?.()
       }
+      await options.afterWrite?.(ptyId)
     } catch (error) {
       renderGate?.dispose()
       throw error
@@ -140,7 +143,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         options.signal
       )
     } else {
-      const agent = this.getPtyAgent(ptyId)
       const submitDelayMs = options.promptForSchedule
         ? resolveAgentPromptSubmitDelayForAgent(writeHostPlatform, options.promptForSchedule, agent)
         : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
@@ -163,25 +165,24 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
+      options.reserveWrite?.(ptyId)
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       options.onSubmitWritten?.()
+      await options.afterWrite?.(ptyId)
     }
     const submits = submitWithPaste
       ? 1
       : 1 +
         (await this.resubmitHeldAgentPrompt(ptyId, generation, options, {
+          agent,
           baseline,
           readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
           prompt: options.promptForSchedule,
-          heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
-            writeHostPlatform,
-            this.getPtyAgent(ptyId),
-            pastePayload
-          )
+          heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(writeHostPlatform, agent, pastePayload)
         }))
-    const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+    const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(agent)
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
         baseline,
@@ -192,13 +193,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       return { submits }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
-    const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
-    const launchAgent = this.ptysById.get(ptyId)?.launchAgent
-    const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
-      ? foregroundAgent
-      : isTerminalSendSettlementAgent(launchAgent)
-        ? launchAgent
-        : null
+    const settlementAgent = isTerminalSendSettlementAgent(agent) ? agent : null
     const inputAccepted: RuntimeTerminalPromptDelivery = {
       requestId: options.requestId,
       stages: ['input_accepted'],

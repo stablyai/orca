@@ -52,7 +52,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }
-  if (request.method === 'terminal.wait') {
+  if (request.method === 'terminal.wait' || request.method === 'terminal.waitPrompt') {
     return 'wait'
   }
   // Prompt submission waits for lifecycle verification; keep the socket alive.

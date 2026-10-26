@@ -33,12 +33,21 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: (...args: unknown[]) => {
+    if (args[1] === 'terminal.submitPrompt') {
+      throw new testState.RuntimeRpcCallError({
+        error: { code: 'method_not_found', message: 'Older host' }
+      })
+    }
+    return testState.callRuntimeRpc(...args)
+  }
+}))
 vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
 
-describe('active agent note send', () => {
+describe('active agent note send with an older host', () => {
   beforeEach(() => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()

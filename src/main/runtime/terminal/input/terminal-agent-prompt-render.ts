@@ -9,18 +9,19 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
-    pasteIngestMs: number
+    pasteIngestMs: number,
+    agent: TerminalAgent | null = this.getPtyAgent(ptyId)
   ): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
-    const pty = this.ptysById.get(ptyId)
-    if (!['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')) {
+    if (!['claude', 'codex'].includes(agent ?? '')) {
       return null
     }
     let armed = false

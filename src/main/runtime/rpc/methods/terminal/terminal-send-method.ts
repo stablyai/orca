@@ -2,12 +2,11 @@ import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/st
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { isUntypedTerminalInput } from '../../../../../shared/terminal-untyped-input'
-import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
-  assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
+  createTerminalAgentSendGuard,
   getTerminalSendGuardRefusedReason,
   isTerminalInputLockedForClient,
   isTerminalSendGuardNotWritable,
@@ -148,18 +147,7 @@ export const TERMINAL_SEND_METHODS = [
       // Recheck permission and agent presence immediately before PTY acceptance.
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
-          ? async (ptyId?: string): Promise<void> => {
-              await assertTerminalAgentSendable({
-                runtime,
-                handle: params.terminal,
-                assertWritable: () => {
-                  assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-                  if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-                    throw new Error('terminal_guard_not_writable')
-                  }
-                }
-              })
-            }
+          ? createTerminalAgentSendGuard(runtime, params.terminal, params.client)
           : undefined
       if (params.requireAgentStatus === 'sendable') {
         try {
@@ -247,6 +235,7 @@ export const TERMINAL_SEND_METHODS = [
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
+                ...(hasText && params.requireAgentStatus && { includeSubmitDelay: true as const }),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

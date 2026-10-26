@@ -9,9 +9,11 @@ import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 
 type HeldAgentPrompt = {
+  agent: TerminalAgent | null
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
   prompt: string | undefined
@@ -26,7 +28,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     options: RuntimeAgentPromptWriteOptions,
     held: HeldAgentPrompt
   ): Promise<number> {
-    const agent = this.getPtyAgent(ptyId)
+    const agent = held.agent
     const retryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
     const prompt = held.prompt
     const gated = held.heldBudgetMs > 0 && prompt !== undefined
@@ -70,10 +72,12 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
         }
+        options.reserveWrite?.(ptyId)
         if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
           return resubmits
         }
         resubmits += 1
+        await options.afterWrite?.(ptyId)
         if (blind) {
           blind = false
         } else {

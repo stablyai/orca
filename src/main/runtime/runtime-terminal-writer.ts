@@ -32,6 +32,10 @@ export class RuntimeTerminalWriter {
     ) => WriteSettlement | Promise<WriteSettlement>
   ) {}
 
+  getSubmitDelayMs(ptyId: string, text: string, agent = this.getAgent(ptyId)): number {
+    return resolveAgentPromptSubmitDelayForAgent(this.getWriteHostPlatform(ptyId), text, agent)
+  }
+
   async writeAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
@@ -80,14 +84,7 @@ export class RuntimeTerminalWriter {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       if (text) {
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
-        await waitForTerminalWriteDelay(
-          resolveAgentPromptSubmitDelayForAgent(
-            this.getWriteHostPlatform(ptyId),
-            text,
-            this.getAgent(ptyId)
-          ),
-          options.signal
-        )
+        await waitForTerminalWriteDelay(this.getSubmitDelayMs(ptyId, text), options.signal)
       }
       try {
         await options.beforeWrite?.(ptyId)

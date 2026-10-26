@@ -7,6 +7,26 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../../shared/terminal-input'
 import type { TerminalViewportClient } from './terminal-stream-types'
+import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+
+export function createTerminalAgentSendGuard(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  client: TerminalViewportClient | undefined
+): (ptyId?: string) => Promise<void> {
+  return async (ptyId) => {
+    await assertTerminalAgentSendable({
+      runtime,
+      handle,
+      assertWritable: () => {
+        assertTerminalSendExactPtyBinding(runtime, handle, ptyId)
+        if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, client)) {
+          throw new Error('terminal_guard_not_writable')
+        }
+      }
+    })
+  }
+}
 
 export function isTerminalInputLockedForClient(
   runtime: OrcaRuntimeService,

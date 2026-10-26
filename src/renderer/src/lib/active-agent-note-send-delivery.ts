@@ -14,6 +14,7 @@ import {
   isRuntimeTerminalUnavailable
 } from './active-agent-terminal-send-readiness'
 import { codeForReadinessStatus, runtimeFailureCode } from './active-agent-note-send-diagnostics'
+import { submitAgentNotePrompt } from './active-agent-note-submit-prompt'
 
 const ORCA_DESKTOP_TERMINAL_CLIENT = { id: 'orca-desktop', type: 'desktop' as const }
 
@@ -67,7 +68,13 @@ export async function sendPromptWithGuardedPasteAndEnter(
     }
   }
 
+  const submitted = await submitAgentNotePrompt(runtimeTarget, terminalHandle, prompt)
+  if (submitted) {
+    return submitted
+  }
+
   const pastePayload = `${BRACKETED_PASTE_BEGIN}${sanitizeTerminalPasteText(prompt)}${BRACKETED_PASTE_END}`
+  let submitDelayMs: number
   try {
     const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
       runtimeTarget,
@@ -89,6 +96,7 @@ export async function sendPromptWithGuardedPasteAndEnter(
       }
       return { status: 'not-writable', code: 'terminal-send-refused' }
     }
+    submitDelayMs = send.submitDelayMs ?? POST_PASTE_SUBMIT_DELAY_MS
   } catch (error) {
     if (isRuntimeTerminalUnavailable(error)) {
       return {
@@ -102,7 +110,7 @@ export async function sendPromptWithGuardedPasteAndEnter(
     throw error
   }
 
-  await new Promise<void>((resolve) => setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+  await new Promise<void>((resolve) => setTimeout(resolve, submitDelayMs))
   try {
     const submitAgentStatus = await getTerminalAgentSendReadiness(
       runtimeTarget,

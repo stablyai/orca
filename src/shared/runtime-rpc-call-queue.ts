@@ -54,7 +54,11 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
 // Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
 // background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+  return (
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === 'terminal.waitPrompt'
+  )
 }
 
 export class RuntimeRpcCallQueuePool {

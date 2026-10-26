@@ -594,6 +594,41 @@ describe('agent prompt submission queue', () => {
     vi.useRealTimers()
   })
 
+  it.each([
+    { agent: null, submits: 0 },
+    { agent: 'claude', submits: 0 },
+    { agent: 'codex', submits: 1 }
+  ] as const)('uses the resolved $agent policy for retrying Enter', async ({ agent, submits }) => {
+    vi.useFakeTimers()
+    const target = inputDispatchRuntime()
+    const read = vi.fn(() => 'codex' as const)
+    Object.defineProperty(target, 'getPtyAgent', { value: read })
+    const write = vi.fn(() => true)
+    target.setPtyController({ write, kill: () => true, getForegroundProcess: async () => null })
+
+    const baseline = {
+      generation: target['getPtyLifecycleGeneration'](PTY),
+      permissionSequence: 0,
+      workingSequence: 0,
+      explicitWorkingStartedAt: null,
+      outputSequence: 0,
+      status: null
+    }
+    const retry = target['resubmitHeldAgentPrompt'](
+      PTY,
+      target['getPtyLifecycleGeneration'](PTY),
+      { inputKind: 'driving', composerReady: true },
+      { agent, baseline, readActivity: () => baseline, prompt: undefined, heldBudgetMs: 0 }
+    )
+    await vi.advanceTimersByTimeAsync(1_199)
+    expect(write).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(retry).resolves.toBe(submits)
+    expect(write.mock.calls).toEqual(submits ? [[PTY, '\r', 'driving']] : [])
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
     const target = inputDispatchRuntime()
     const gate = Promise.withResolvers<void>()

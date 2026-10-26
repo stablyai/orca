@@ -6,6 +6,28 @@ import {
 } from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
+  it('keeps prompt observations bounded without delaying remote input', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const held = Promise.withResolvers<void>()
+    let started = 0
+    const waits = Array.from({ length: 9 }, () =>
+      queue.enqueue('remote', 'terminal.waitPrompt', async () => {
+        started += 1
+        await held.promise
+      })
+    )
+    const send = vi.fn(async () => 'sent')
+    const input = queue.enqueue('remote', 'terminal.send', send)
+    try {
+      expect(started).toBe(8)
+      expect(send).toHaveBeenCalledOnce()
+    } finally {
+      held.resolve()
+      await Promise.all([...waits, input])
+    }
+    expect(started).toBe(9)
+  })
+
   it('classifies per-worktree decoration lookups as background work', () => {
     expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
     expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)

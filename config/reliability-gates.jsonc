@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-13",
+  "updatedAt": "2026-10-23",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -15417,7 +15417,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, live Codex orchestration, a dev-runtime CLI repro, and Claude and Codex composer traces. A deterministic worker-start RPC/SQLite contract proves delayed Codex composer acceptance, exactly one submitted turn, durable Dispatch success, and explicit stalled failure when Enter is swallowed without a rescue send. The render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
+      "coverageNotes": "Queued-note regression coverage uses fake clocks and production RPC/runtime state to prove zero discovery for known agents, abort during unknown-agent discovery, owner-exit receipt/accounting cleanup, and observer disconnect independence. Real daemon sockets cover JSON-expanded 9 MiB notes, sixfold escaping, Unicode, and paste-end/Enter chunk boundaries. Shared remote queue tests cover bounded observation admission without blocking sends. Physical Linux, Windows, SSH/WSL, mobile, and rendered note-send journeys remain unproved in this follow-up. Local macOS evidence covers the runtime PTY write contract, live Codex orchestration, a dev-runtime CLI repro, and Claude and Codex composer traces. A deterministic worker-start RPC/SQLite contract proves delayed Codex composer acceptance, exactly one submitted turn, durable Dispatch success, and explicit stalled failure when Enter is swallowed without a rescue send. The render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3800",
         "https://linear.app/stably/issue/STA-3904",
@@ -15426,14 +15426,25 @@
         "https://github.com/stablyai/orca/issues/13821",
         "https://github.com/stablyai/orca/issues/14347"
       ],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Local worker-start with supported observation must preserve an unobserved turn as start_unknown without revoking authority, closing questions, or triggering a rescue Enter; a worker report during observation must settle normally. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
+      "invariant": "Known-agent prompt delivery must not await broad process discovery; unknown-agent discovery must release an aborted caller without writing. Host-owned note submissions must settle and release pending accounting when their exact PTY exits. Receipt observation must use bounded capacity outside interactive remote RPC slots. Valid terminal input must fit daemon framing after JSON expansion while retaining one logical paste frame and keeping paste-end with a joined Enter. Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Local worker-start with supported observation must preserve an unobserved turn as start_unknown without revoking authority, closing questions, or triggering a rescue Enter; a worker report during observation must settle normally. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
       "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. The worker-start contract drives the production RPC through a delayed fake Codex composer and independently checks exact turn/Enter counts plus reopened SQLite Task, Dispatch, worker receipt, and mutation receipt state for accepted and swallowed outcomes. Other orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-rpc-call-queue.test.ts src/shared/runtime-rpc-call-queue-retention.test.ts src/main/runtime/rpc/terminal-prompt-submission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-adapter-input-framing.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts src/renderer/src/lib/active-agent-note-submit-prompt.test.ts src/main/runtime/agent-prompt-permission-wait.test.ts --maxWorkers=2",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts --reporter=dot",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
+        "src/shared/runtime-rpc-call-queue.test.ts",
+        "src/shared/runtime-rpc-call-queue-retention.test.ts",
+        "src/main/runtime/rpc/terminal-prompt-submission.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/daemon/daemon-pty-adapter-input-framing.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts",
+        "src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts",
+        "src/renderer/src/lib/active-agent-note-submit-prompt.test.ts",
+        "src/main/runtime/agent-prompt-permission-wait.test.ts",
         "src/shared/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts",
@@ -15497,6 +15508,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-rpc-call-queue.test.ts src/shared/runtime-rpc-call-queue-retention.test.ts src/main/runtime/rpc/terminal-prompt-submission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-adapter-input-framing.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts src/renderer/src/lib/active-agent-note-submit-prompt.test.ts src/main/runtime/agent-prompt-permission-wait.test.ts --maxWorkers=2",
+          "result": "passed",
+          "durationSeconds": 23.64,
+          "summary": "Nine focused suites passed 171 tests. Six initial regressions failed on the reviewed code: known-agent pastes blocked on discovery, unknown discovery ignored abort, eight observations blocked remote input, exited notes stayed pending, and a 9 MiB JSON-expanded daemon write was refused. An additional boundary oracle caught Enter split from paste-end; the final real-socket cases preserve all bytes and the joined suffix, including a surrogate at the chunk boundary. Exit releases pasted/queued receipts, pending bytes, serialization tails, and exit listeners without advancing the long ingest delay."
+        },
         {
           "date": "2026-08-23",
           "runner": "local",
@@ -15566,7 +15586,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude and Codex add one PTY-local output listener until 1.5 seconds of post-marker output quiescence or the bounded fallback; each later frame resets one quiet timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
+        "evidence": "Known-agent prompt delivery adds zero foreground discovery calls; unknown discovery reuses the existing shared read and releases aborted callers without cancelling other readers. Receipt waits reuse the bounded eight-slot long-wait lane and retain global queue/memory caps, leaving interactive slots available. Owner exit aborts queued sends and releases pending accounting/listeners immediately. Runtime prompt writes remain one logical provider write; the daemon adapter emits contiguous chunks with a 2 MiB UTF-8 budget, allowing at most six extra tail code units to keep paste-end and Enter together, safely below the 16 MiB encoded-message cap even with sixfold JSON escaping. Claude and Codex add one PTY-local output listener until 1.5 seconds of post-marker output quiescence or the bounded fallback; each later frame resets one quiet timer. Other agents retain the platform delay. No additional discovery polling, provider listing, subprocess churn, hidden-pane wakeups, or renderer work is added; large daemon writes use existing write messages without changing the wire protocol."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",

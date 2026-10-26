@@ -1,6 +1,12 @@
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
+import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import { NDJSON_MAX_LINE_BYTES } from './ndjson'
+import { BRACKETED_PASTE_END } from '../../shared/terminal-bracketed-paste-text'
+
+// JSON can expand each input byte sixfold; leave room for the request envelope too.
+const DAEMON_WRITE_CHUNK_MAX_BYTES = Math.floor(NDJSON_MAX_LINE_BYTES / 8)
 
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
   write(id: string, data: string): boolean {
@@ -9,7 +15,32 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
       return false
     }
     const recoverable = this.prepareWrite(id)
-    return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
+    if (data.length <= DAEMON_WRITE_CHUNK_MAX_BYTES) {
+      return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
+    }
+    let pending = ''
+    for (const chunk of iterateTerminalInputChunks(data, DAEMON_WRITE_CHUNK_MAX_BYTES)) {
+      // Keep paste-end and Enter together even when the final fragment is only one byte.
+      if (pending && chunk.length >= BRACKETED_PASTE_END.length + 1) {
+        if (
+          !this.finishWrite(
+            id,
+            this.client.notify('write', { sessionId: id, data: pending }),
+            recoverable
+          )
+        ) {
+          return false
+        }
+        pending = chunk
+      } else {
+        pending += chunk
+      }
+    }
+    return this.finishWrite(
+      id,
+      this.client.notify('write', { sessionId: id, data: pending }),
+      recoverable
+    )
   }
 
   /** Preserve ambiguous delivery as a settlement: throwing would look like proven refusal and permit replay. */
