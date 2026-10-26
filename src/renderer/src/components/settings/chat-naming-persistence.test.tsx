@@ -59,7 +59,7 @@ it('keeps the Chat draft and guard after actual persistence fails, then saves it
   persist.mockRejectedValueOnce(new Error('Settings disk is unavailable'))
   render(<ChatPersistenceHarness model={model} />)
   const template = screen.getByText('Command template').nextElementSibling
-  const args = screen.getByText('CLI arguments').nextElementSibling
+  const args = screen.getByText('Arguments').nextElementSibling
   if (!(template instanceof HTMLTextAreaElement) || !(args instanceof HTMLInputElement)) {
     throw new Error('Chat recipe controls are missing')
   }

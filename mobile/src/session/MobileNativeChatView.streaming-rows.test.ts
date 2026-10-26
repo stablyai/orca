@@ -166,7 +166,9 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
-vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
+vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
+  MobileNativeChatQueuedMessages: 'Queued'
+}))
 vi.mock('./MobileNativeChatBackgroundTasks', () => ({
   MobileNativeChatBackgroundTasks: 'BackgroundTasks'
 }))

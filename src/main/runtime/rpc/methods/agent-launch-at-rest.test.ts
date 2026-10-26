@@ -160,9 +160,16 @@ it('a whitespace-only submit creates an eager empty chat without sending a turn'
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 })
 
-it('the opening prompt owns retry for a legacy-capability CLI caller', async () => {
+it('the opening prompt owns retry with explicit model and permission for a legacy-capability CLI caller', async () => {
   holdStarts()
-  const result = await launch(CLI, 'fix the build')
+  const params = AGENT_LAUNCH.params.parse({
+    agent: 'codex',
+    target: { kind: 'existing', worktree: 'id:wt-7' },
+    sessionId: SESSION,
+    chatOptions: { model: 'explicit-model', permissionMode: 'full-access' },
+    prompt: { text: 'fix the build', delivery: 'submit' }
+  })
+  const result = await AGENT_LAUNCH.handler(params, rpcContext(launchRuntime(), CLI))
   expect(result.prompt).toEqual({
     delivery: 'submit',
     outcome: 'journaled',
@@ -185,6 +192,11 @@ it('the opening prompt owns retry for a legacy-capability CLI caller', async () 
   const snapshot = await rig.host.journalSnapshot(SESSION)
   expect(snapshot.submissions).toMatchObject([{ dispatchState: 'accepted' }])
   expect(snapshot.items.filter((item) => item.body.kind === 'status')).toEqual([])
+  expect(rig.store.getRecord(SESSION)).toMatchObject({
+    options: { model: 'explicit-model' },
+    permissionMode: 'full-access'
+  })
+  expect(rig.store.getRecord(SESSION)?.options).not.toHaveProperty('effort')
 })
 
 it('rejects one requester with one failure row when all five children exit', async () => {

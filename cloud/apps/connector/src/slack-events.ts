@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { InboundMessage } from './connector-adapter.js'
+import type { SlackInstall } from './slack-installs.js'
 
 const UrlVerificationSchema = z.object({
   type: z.literal('url_verification'),
@@ -95,4 +97,26 @@ export function promptText(text: string, botUserId: string): string {
     .replaceAll('&gt;', '>')
     .replaceAll('&amp;', '&')
     .trim()
+}
+
+// The core's view of a post: the bot's mention dropped, paused by the cloud or the workspace.
+export function inboundSlackMessage(
+  message: SlackMessage,
+  install: SlackInstall,
+  cloudPaused: boolean
+): InboundMessage {
+  return {
+    source: 'slack',
+    place: {
+      workspaceId: message.teamId,
+      containerId: message.channelId,
+      threadId: message.threadTs
+    },
+    messageId: message.ts,
+    authorId: message.userId,
+    text: promptText(message.text, install.botUserId),
+    mentioned: message.direct || mentionsBot(message.text, install.botUserId),
+    direct: message.direct,
+    paused: cloudPaused || install.paused
+  }
 }

@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import type { CloudDatabase } from '@orca-cloud/cloud-database'
-import { saveSlackIdentity } from './slack-identities.js'
+import { describeAccountHosts } from './connector-hosts.js'
+import { LINK_OPTIONS, linkIdentity, required } from './operator-link.js'
 import { SlackInstalls } from './slack-installs.js'
 
 // Slack ids are upper-case letters and digits; anything else is a typo, and a bot user id ends up
@@ -22,13 +23,6 @@ function slackId(value: string | undefined, flag: string): string {
   return value
 }
 
-function required(value: string | undefined, flag: string): string {
-  if (!value) {
-    throw new Error(`--${flag} is required`)
-  }
-  return value
-}
-
 // Dogfood seeding (no OAuth install or Slack sign-in in v1): one workspace's bot token, and which
 // Orca account each Slack user is, with their machine-choice defaults.
 export async function runSlackOperator(
@@ -44,13 +38,9 @@ export async function runSlackOperator(
   const { values } = parseArgs({
     args: rest,
     options: {
+      ...LINK_OPTIONS,
       team: { type: 'string' },
-      'bot-user': { type: 'string' },
-      user: { type: 'string' },
-      account: { type: 'string' },
-      'default-host': { type: 'string' },
-      'default-project': { type: 'string' },
-      'channel-project': { type: 'string', multiple: true }
+      'bot-user': { type: 'string' }
     }
   })
   const installs = () => {
@@ -78,44 +68,14 @@ export async function runSlackOperator(
       }
       return command === 'pause' ? `Paused ${teamId}.` : `Resumed ${teamId}.`
     }
-    case 'link': {
-      const channelProjects = Object.fromEntries(
-        (values['channel-project'] ?? []).map((entry) => {
-          const [channel, project] = entry.split('=', 2)
-          return [slackId(channel, 'channel-project'), required(project, 'channel-project')]
-        })
-      )
-      const teamId = slackId(values.team, 'team')
-      const slackUserId = slackId(values.user, 'user')
-      await saveSlackIdentity(
+    case 'link':
+      return await linkIdentity(
         deps.database,
-        {
-          teamId,
-          slackUserId,
-          accountId: required(values.account, 'account'),
-          defaultHostId: values['default-host'] ?? null,
-          defaultProject: values['default-project'] ?? null,
-          channelProjects
-        },
+        { source: 'slack', workspaceId: slackId(values.team, 'team'), values, checkId: slackId },
         deps.now()
       )
-      return `Linked ${slackUserId} in ${teamId}.`
-    }
-    case 'hosts': {
-      const rows = await deps.database.query(
-        `SELECT host_id, host_name, orca_version, last_seen_at FROM connector_hosts
-         WHERE account_id = ? ORDER BY last_seen_at DESC`,
-        [required(values.account, 'account')]
-      )
-      return rows.length === 0
-        ? 'No machines have connected for this account.'
-        : rows
-            .map(
-              (row) =>
-                `${String(row.host_id)}  ${String(row.host_name)}  Orca ${String(row.orca_version)}  last seen ${new Date(Number(row.last_seen_at)).toISOString()}`
-            )
-            .join('\n')
-    }
+    case 'hosts':
+      return await describeAccountHosts(deps.database, required(values.account, 'account'))
     default:
       throw new Error(SLACK_OPERATOR_USAGE)
   }

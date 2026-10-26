@@ -94,7 +94,9 @@ export class WslOrcadConnectionManager {
     }
     const status = options.status ?? { pending: CONNECTING, ready: READY }
     // Unchanged live refresh stays quiet; liveness recovery must publish.
-    if (options.status || !this.active.has(key)) {
+    // A no-boot connect may be refused quietly, so it must not leave the row on "Connecting";
+    // an explicit status (liveness recovery) is still published.
+    if (options.status || (!this.active.has(key) && !options.requireRunning)) {
       this.dependencies.onChange?.(name, this.get(name), status.pending)
     }
     const operation = this.connect(name, key, options, status).catch((error: unknown) => {

@@ -71,7 +71,8 @@ vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionShee
 
 vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
+  const { MobileNativeChatStopButton } =
+    await import('./native-chat/input/MobileNativeChatStopButton')
   return {
     MobileNativeChatComposer: (props: {
       onSend: (text: string) => Promise<boolean>

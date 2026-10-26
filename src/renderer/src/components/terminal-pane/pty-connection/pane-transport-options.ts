@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { mainStartsPane } from './main-starts-pane'
@@ -35,6 +37,45 @@ function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
   return !paneHasStartupWork(session)
 }
 
+/**
+ * Whether the pane may show an old terminal: it mirrors a host's tab, or saved history was replayed
+ * into it (a cleared binding can still replay). Before its first connect, also: its leaf names a
+ * terminal or it shows output. Those are not re-read at bind, where the fresh create causes both.
+ */
+function paneMayShowOldTerminal(session: ConnectPanePtySession, atBind: boolean): boolean {
+  if (
+    isWebTerminalSurfaceTabId(session.deps.tabId) ||
+    terminalShowsReplayedHistory(session.pane.terminal)
+  ) {
+    return true
+  }
+  if (atBind) {
+    return false
+  }
+  const state = useAppStore.getState()
+  return Boolean(
+    session.restoredPtyIdForTransport ||
+    state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[session.pane.leafId] ||
+    terminalShowsOutput(session.pane.terminal)
+  )
+}
+
+function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
+  const buffer = terminal.buffer?.active
+  if (!buffer) {
+    return false
+  }
+  if (buffer.baseY > 0) {
+    return true
+  }
+  for (let row = 0; row < buffer.length; row += 1) {
+    if (buffer.getLine(row)?.translateToString(true)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
   return {
@@ -46,6 +87,13 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           bufferInputUntilConnect: true,
           // Why: a resume source can land between mount and bind; keys must not flush ahead of it.
           releasePreconnectInput: () => holdsInputUntilConnect(session)
+        }
+      : {}),
+    // Why: typing on old pixels must never reach a fresh shell (#10065).
+    ...(holdsInput
+      ? {
+          keepTypeAheadForNewTerminal: (phase: 'connect' | 'bind') =>
+            !paneMayShowOldTerminal(session, phase === 'bind')
         }
       : {}),
     // Why gated: a seed alone arms the transport hold, which would flush ahead of startup work.

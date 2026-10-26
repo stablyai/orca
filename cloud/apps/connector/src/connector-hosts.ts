@@ -91,7 +91,11 @@ export class ConnectorHosts {
 
   // Under the host lock, for the current hello: events apply only above its high-water mark, so a
   // late original never undoes newer state.
-  async advanceEventsSeq(transaction: CloudDatabase, hostId: string, seq: number): Promise<boolean> {
+  async advanceEventsSeq(
+    transaction: CloudDatabase,
+    hostId: string,
+    seq: number
+  ): Promise<boolean> {
     const [advanced] = await transaction.query(
       `UPDATE connector_hosts SET events_seq = ?
        WHERE host_id = ? AND (events_seq IS NULL OR events_seq < ?)`,
@@ -108,4 +112,24 @@ export class ConnectorHosts {
       [now, hostId, now - LAST_SEEN_RESOLUTION_MS]
     )
   }
+}
+
+// For operators: an account's machines, most recently seen first.
+export async function describeAccountHosts(
+  database: CloudDatabase,
+  accountId: string
+): Promise<string> {
+  const rows = await database.query(
+    `SELECT host_id, host_name, orca_version, last_seen_at FROM connector_hosts
+     WHERE account_id = ? ORDER BY last_seen_at DESC`,
+    [accountId]
+  )
+  return rows.length === 0
+    ? 'No machines have connected for this account.'
+    : rows
+        .map(
+          (row) =>
+            `${String(row.host_id)}  ${String(row.host_name)}  Orca ${String(row.orca_version)}  last seen ${new Date(Number(row.last_seen_at)).toISOString()}`
+        )
+        .join('\n')
 }

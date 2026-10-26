@@ -64,7 +64,7 @@ vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMess
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('./native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({

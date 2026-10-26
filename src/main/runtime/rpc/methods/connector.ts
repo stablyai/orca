@@ -5,6 +5,7 @@ import {
   ConnectorAnswer,
   ConnectorCancel,
   ConnectorPendingPrompt,
+  ConnectorReply,
   ConnectorSend,
   ConnectorStart,
   ConnectorWatch
@@ -92,6 +93,34 @@ export const CONNECTOR_METHODS = [
         { source, externalId },
         deliveryId
       )
+  }),
+  // `orca connector reply`: the calling pane names its conversation and turn; Orca Cloud posts it.
+  defineMethod({
+    name: 'connector.reply',
+    permission: 'workspace',
+    params: ConnectorReply,
+    handler: async ({ paneKey, replyId, text }, context) => {
+      const target = requireSeam(context.runtime).replyTarget(paneKey)
+      if (target?.key.source !== 'slack') {
+        throw new Error('not_a_cloud_conversation')
+      }
+      if (target.turnId === null) {
+        throw new Error('no_current_turn')
+      }
+      const conversation = { source: 'slack' as const, externalId: target.key.externalId }
+      const sent = await context.runtime
+        .getConnectorCloud()
+        ?.reply({ replyId, conversation, turnId: target.turnId, text })
+      if (!sent) {
+        throw new Error('connector_not_connected')
+      }
+      if (!sent.ok) {
+        throw new Error(
+          sent.error === 'not_this_hosts_thread' ? 'not_this_hosts_thread' : 'connector_unavailable'
+        )
+      }
+      return sent.value
+    }
   }),
   // Development only: the CLI has no stream transport, so a dev watch collects one window.
   defineMethod({

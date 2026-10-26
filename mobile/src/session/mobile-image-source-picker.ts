@@ -7,6 +7,7 @@ import {
   assertClipboardImageByteLengthWithinLimit
 } from '../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
+import { isPickedImageMime } from '../platform/mobile-picked-file-name'
 // Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.
 import { ImageLibraryPermissionError } from '../platform/media-picker-contract'
 import type { MobileImageSource, PickedMobileImage } from '../platform/media-picker-contract'
@@ -111,7 +112,7 @@ async function* pickFromFiles(
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
 ): AsyncGenerator<PickedMobileImage> {
   const result = await launch({
-    type: 'image/*',
+    type: '*/*',
     multiple,
     copyToCacheDirectory: true
   })
@@ -124,7 +125,10 @@ async function* pickFromFiles(
     }
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
     if (base64) {
-      yield { base64, uri: asset.uri }
+      const fileName = isPickedImageMime(asset.mimeType)
+        ? undefined
+        : asset.name.trim() || 'attachment'
+      yield { base64, uri: asset.uri, fileName }
     }
   }
 }

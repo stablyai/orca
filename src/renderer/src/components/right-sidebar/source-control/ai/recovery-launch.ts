@@ -11,12 +11,15 @@ import {
   ensureDetectedAgentsForWorktree,
   type WorktreeAgentInventoryState
 } from '@/lib/agent-detection-target-inventory'
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
+import {
+  sourceControlActionAgentArgs,
+  sourceControlActionLaunchOptions
+} from '../../../../../../shared/source-control-action-launch-preferences'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
@@ -119,14 +122,6 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   const detectedAgents = [...(choices.detected ?? [])]
   const store = getStoreState()
   const savedRecipe = getLaunchActionRecipe(actionId)
-  const agentArgsPlan = planAgentCliArgsSuffix(
-    savedRecipe.agentArgs,
-    activeSourceControlLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  )
-  if (!agentArgsPlan.ok) {
-    toast.error(agentArgsPlan.error)
-    return false
-  }
   if (!basePrompt) {
     toast.error(copy.promptUnavailable)
     return false
@@ -171,7 +166,8 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     worktreeId: activeWorktreeId,
     groupId: activeGroupId ?? activeWorktreeId,
     prompt,
-    agentArgs: savedRecipe.agentArgs,
+    agentArgs: sourceControlActionAgentArgs(savedRecipe, agent, store.settings),
+    ...sourceControlActionLaunchOptions(savedRecipe, agent),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'

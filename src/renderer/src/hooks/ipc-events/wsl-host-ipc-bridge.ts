@@ -102,8 +102,8 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     // Switching to a workspace on a WSL host (or launch restoring one) is the user acting on it.
     if (entry !== focusEntry) {
       focusEntry = entry
-      if (focusedHost && typeof api.focusHost === 'function') {
-        void api.focusHost({ environmentId: focusedHost }).catch((error) => {
+      if (typeof api.focusHost === 'function') {
+        void api.focusHost({ environmentId: focusedHost ?? null }).catch((error) => {
           console.error('Failed to report the focused WSL host:', error)
         })
       }

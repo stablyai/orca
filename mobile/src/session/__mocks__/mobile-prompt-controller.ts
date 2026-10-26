@@ -72,7 +72,7 @@ vi.mock('../MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer:
 vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('../MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('../MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
@@ -131,7 +131,7 @@ vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
     holdUnconfirmedSend: vi.fn()
   })
 }))
-vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
+vi.mock('../native-chat/input/use-mobile-native-chat-session-option-controller', () => ({
   useMobileNativeChatSessionOptionController: () => ({
     nativeChatSessionOptions: undefined,
     recordCommand: vi.fn()

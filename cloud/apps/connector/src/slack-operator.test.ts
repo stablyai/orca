@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openInMemoryConnectorDatabase } from './connector-database.js'
-import { findSlackIdentity } from './slack-identities.js'
+import { findIdentity } from './connector-identities.js'
 import { SlackInstalls } from './slack-installs.js'
 import { runSlackOperator } from './slack-operator.js'
 
@@ -69,11 +69,13 @@ describe('Slack operator command', () => {
       '--channel-project',
       'C1=web'
     )
-    expect(await findSlackIdentity(database, 'T1', 'U1')).toEqual({
+    expect(
+      await findIdentity(database, { source: 'slack', workspaceId: 'T1', userId: 'U1' })
+    ).toEqual({
       accountId: 'user-1',
       defaultHostId: 'user-1:machine',
       defaultProject: 'stablyai/orca',
-      channelProjects: { C1: 'web' }
+      containerProjects: { C1: 'web' }
     })
     expect(await run('hosts', '--account', 'user-1')).toBe(
       'No machines have connected for this account.'

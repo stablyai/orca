@@ -9,7 +9,6 @@ import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { releaseBrowserPageMount } from './browser-page-mount-admission'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import {
@@ -35,16 +34,13 @@ export type BrowserPageWebviewLoadingHandlersArgs = {
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
-  invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
-  setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setAddressBarValue: Dispatch<SetStateAction<string>>
   focusAddressBarNow: () => boolean
 }
 
 export type BrowserPageWebviewLoadingHandlers = {
-  handleDidStartLoading: () => void
   handleDidStopLoading: () => void
   handleFailLoad: (event: BrowserPageFailLoadEvent) => void
 }
@@ -60,19 +56,11 @@ export function createBrowserPageWebviewLoadingHandlers({
   lastKnownWebviewUrlRef,
   keepAddressBarFocusRef,
   recoveryNavigationValidationRef,
-  invalidateBrowserAnnotationDocumentRef,
   onUpdatePageStateRef,
   onSetUrlRef,
-  setBrowserOverlayViewport,
   setAddressBarValue,
   focusAddressBarNow
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
-  const handleDidStartLoading = (): void => {
-    // A reload replaces geometry even when the URL stays the same.
-    invalidateBrowserAnnotationDocumentRef.current()
-    setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
-  }
-
   const handleDidStopLoading = (): void => {
     // Admission starts background guests only; after any first load settlement, normal paint-retention rules decide layout.
     releaseBrowserPageMount(browserTabId)
@@ -167,7 +155,6 @@ export function createBrowserPageWebviewLoadingHandlers({
   }
 
   return {
-    handleDidStartLoading,
     handleDidStopLoading,
     handleFailLoad
   }

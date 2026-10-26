@@ -7,8 +7,7 @@ import {
 import type { ConnectorMachine } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
 
-// `reply` is advertised once `orca slack reply` ships.
-const FEATURES = ['answer', 'cancel']
+const FEATURES = ['answer', 'cancel', 'reply']
 const PROMPT_KINDS = ['approval', 'question']
 // Only Slack conversations reach this machine's seam so far.
 const SOURCES = ['slack']

@@ -1,3 +1,4 @@
+import { structuredLaunchRequestedOptions } from './native-chat-session-option-defaults'
 import {
   commitStructuredAgentSessionOptionValues,
   structuredAgentSessionOptionSnapshot,
@@ -6,6 +7,7 @@ import {
 import type { SessionOptionDescriptor } from './native-chat-session-options'
 import {
   cloneStructuredAgentSessionOptionRecord,
+  createStructuredAgentSessionOptionRecord,
   structuredAgentSessionModelId,
   structuredAgentSessionOwnValue
 } from './structured-agent-session-option-state'
@@ -19,17 +21,30 @@ function catalogListsSeedModel(
   return model === undefined || Boolean(state.catalog?.models.some((entry) => entry.id === model))
 }
 
-/** Derive provisional values without mutating the record: held picks outrank chat values and launch seeds.
- * Keep unlisted models because listing absence cannot disprove they run. Permission mode uses held, host, then seed. */
+/** Derive held picks, host values and launch seeds without mutating the record; retain unlisted models.
+ * Permission mode uses held, host, explicit launch mode, then seed. */
 export function structuredAgentSessionOptionView(
   state: StructuredAgentSessionOptionState,
   seed: Readonly<Record<string, string>> | undefined,
-  held: Readonly<Record<string, string>>
+  held: Readonly<Record<string, string>>,
+  explicit?: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
+  const requested = structuredLaunchRequestedOptions({ explicit, seed, held })
+  // Only a requested model replaces the shown selection; a permission mode alone overlays it.
+  if (requested?.model !== undefined) {
+    return commitStructuredAgentSessionOptionValues(
+      { ...state, record: createStructuredAgentSessionOptionRecord(state.record.agent) },
+      requested
+    )
+  }
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: heldPermission, ...heldSelection } = held
   const view = modelOptionView(state, seed, heldSelection)
   const permissionMode =
-    heldPermission ?? state.permissionMode ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? null
+    heldPermission ??
+    state.permissionMode ??
+    requested?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ??
+    seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ??
+    null
   return view.permissionMode === permissionMode ? view : { ...view, permissionMode }
 }
 

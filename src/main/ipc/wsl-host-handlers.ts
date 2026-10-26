@@ -223,9 +223,8 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
     wsl.setVisibleWork(visibleWork.report(windowId, ids))
   })
   // The user switched to a workspace on this host: the focus entry that may boot its distro.
-  ipcMain.handle('wslHosts:focusHost', (_event, request: { environmentId: string }) => {
-    if (typeof request?.environmentId === 'string') {
-      wsl.focusHost(request.environmentId)
-    }
+  ipcMain.handle('wslHosts:focusHost', (_event, request: { environmentId: string | null }) => {
+    // null: the user is on a workspace that isn't on a WSL host.
+    wsl.focusHost(typeof request?.environmentId === 'string' ? request.environmentId : null)
   })
 }

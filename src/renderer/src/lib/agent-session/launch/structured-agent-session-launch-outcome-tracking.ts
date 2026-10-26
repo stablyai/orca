@@ -1,4 +1,7 @@
 import { useAppStore } from '@/store/index'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
@@ -65,7 +68,7 @@ export function trackLaunchSettlement(
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
   void promise.then(
-    () => {
+    (receipt) => {
       if (state.promise !== promise) {
         return
       }
@@ -76,6 +79,11 @@ export function trackLaunchSettlement(
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent
         recordUnlistedCreatedChat(worktreeId, sessionId, executionHostId)
+      }
+      if (receipt.configurationFailure) {
+        publishStructuredAgentSessionSends(receipt.sessionId, {
+          notice: `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+        })
       }
       settleStructuredLaunchCallers(state.callers, 'published')
       notifyStructuredLaunchListeners()

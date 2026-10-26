@@ -8,7 +8,7 @@ import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-nat
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './native-chat/mobile-native-chat-streaming-gate'
-import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
+import { useMobileNativeChatSessionOptionController } from './native-chat/input/use-mobile-native-chat-session-option-controller'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'

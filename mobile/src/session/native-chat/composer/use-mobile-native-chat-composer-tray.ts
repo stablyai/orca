@@ -4,9 +4,9 @@ import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroun
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
-} from '../../MobileNativeChatQueuedMessages'
+} from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
-import { useMobileNativeChatQueuedEditFocus } from '../../use-mobile-native-chat-queued-edit-focus'
+import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode

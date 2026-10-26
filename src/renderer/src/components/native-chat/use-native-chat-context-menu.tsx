@@ -8,16 +8,7 @@ import {
   type RefObject
 } from 'react'
 import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
-import {
-  Clipboard,
-  Copy,
-  GitFork,
-  Image as ImageIcon,
-  PanelBottomClose,
-  PanelRightClose,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,12 +26,12 @@ import {
 import { isMacPlatform } from './native-chat-shortcut'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
+import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
@@ -322,7 +313,7 @@ export function useNativeChatContextMenu({
             </>
           ) : null}
           {chatPane ? (
-            <StructuredChatPaneMenuItems
+            <NativeChatStructuredPaneMenuItems
               pane={chatPane}
               leadingSeparator={hasEditItems || hasSessionItems}
               splitShortcutLabels={splitShortcutLabels}
@@ -341,51 +332,6 @@ export function useNativeChatContextMenu({
       </DropdownMenu>
     )
   }
-}
-
-function StructuredChatPaneMenuItems({
-  pane,
-  leadingSeparator,
-  splitShortcutLabels,
-  resolveOrcaSessionId
-}: Pick<UseNativeChatContextMenuArgs, 'splitShortcutLabels' | 'resolveOrcaSessionId'> & {
-  pane: NonNullable<UseNativeChatContextMenuArgs['chatPane']>
-  leadingSeparator: boolean
-}) {
-  const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
-  const hasSplitPanes = useAppStore(
-    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
-  )
-  return (
-    <>
-      {leadingSeparator ? <DropdownMenuSeparator /> : null}
-      <DropdownMenuItem onSelect={actions.onSplitRight}>
-        <PanelRightClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
-        <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={actions.onSplitDown}>
-        <PanelBottomClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
-        <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      {resolveOrcaSessionId ? (
-        <>
-          <DropdownMenuSeparator />
-          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
-        </>
-      ) : null}
-      {hasSplitPanes && actions.canClosePane ? (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
-            <X />
-            {actions.closeLabel}
-          </DropdownMenuItem>
-        </>
-      ) : null}
-    </>
-  )
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {

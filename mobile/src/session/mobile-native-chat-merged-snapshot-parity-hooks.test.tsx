@@ -67,7 +67,9 @@ vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveSt
 vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
   MobileNativeChatComposer: 'Composer'
 }))
-vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
+vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
+  MobileNativeChatQueuedMessages: 'Queued'
+}))
 vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))

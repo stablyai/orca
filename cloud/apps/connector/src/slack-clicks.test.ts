@@ -42,11 +42,14 @@ async function asked(prompt: unknown = approval()) {
   await harness.pass()
   const card = async () => {
     const [row] = await harness.database.query(
-      'SELECT body, slack_ts FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT body, message_ref FROM connector_posts WHERE post_id = ?',
       [CARD]
     )
     return row
-      ? { ...JSON.parse(String(row.body)), ts: row.slack_ts === null ? null : String(row.slack_ts) }
+      ? {
+          ...JSON.parse(String(row.body)),
+          ts: row.message_ref === null ? null : String(row.message_ref)
+        }
       : undefined
   }
   const deliveries = async () =>
@@ -89,7 +92,7 @@ describe('Slack prompt cards', () => {
     expect(await harness.deliveries()).toEqual([
       expect.objectContaining({
         kind: 'answer',
-        deliveryId: answerDeliveryId(EXTERNAL_ID, 'p1'),
+        deliveryId: answerDeliveryId(conversation, 'p1'),
         promptId: 'p1',
         optionId: 'reject_once'
       })
@@ -136,11 +139,11 @@ describe('Slack prompt cards', () => {
     const harness = await asked()
     await harness.click({ messageTs: (await harness.card()).ts, value: 'allow_once' })
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     expect(await harness.status()).toMatch(/^Couldn’t reach/)
     await harness.events({ ...approval(), prompt: { ...approval().prompt, promptId: 'p2' } })
     const [row] = await harness.database.query(
-      'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT body FROM connector_posts WHERE post_id = ?',
       [`status:${EXTERNAL_ID}`]
     )
     expect(JSON.parse(String(row?.body)).text).toBe('Waiting for your answer.')
@@ -257,10 +260,10 @@ describe('Slack prompt cards', () => {
     const promptId = 'p'.repeat(128)
     const harness = await asked({ ...approval(), prompt: { ...approval().prompt, promptId } })
     const [card] = await harness.database.query(
-      'SELECT slack_ts FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT message_ref FROM connector_posts WHERE post_id = ?',
       [`prompt:${EXTERNAL_ID}:${promptId}`]
     )
-    await harness.click({ messageTs: String(card?.slack_ts), value: 'allow_once' })
+    await harness.click({ messageTs: String(card?.message_ref), value: 'allow_once' })
     expect(await harness.deliveries()).toEqual([
       expect.objectContaining({ kind: 'answer', promptId, optionId: 'allow_once' })
     ])

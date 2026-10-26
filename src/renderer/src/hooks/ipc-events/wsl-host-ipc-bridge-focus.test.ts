@@ -19,7 +19,7 @@ const api = {
   onStatusChanged: vi.fn(() => () => {}),
   getStatuses: vi.fn(async () => []),
   setVisibleWork: vi.fn(async (_args: { environmentIds: string[] }) => {}),
-  focusHost: vi.fn(async (_args: { environmentId: string }) => {})
+  focusHost: vi.fn(async (_args: { environmentId: string | null }) => {})
 }
 
 function seed(experimentalWslHosts: boolean, activeWorktreeId: string): void {
@@ -70,7 +70,12 @@ describe('WSL host focus entries (E9)', () => {
     // Away and back: the visible set never changes (its tabs stay), but the return is an act.
     useAppStore.setState({ activeWorktreeId: LOCAL_WORKTREE })
     useAppStore.setState({ activeWorktreeId: WSL_WORKTREE })
-    expect(api.focusHost).toHaveBeenCalledTimes(2)
+    expect(api.focusHost.mock.calls).toEqual([
+      [{ environmentId: WSL_ENV }],
+      // Off WSL: the next launch has no host to start early.
+      [{ environmentId: null }],
+      [{ environmentId: WSL_ENV }]
+    ])
     expect(api.setVisibleWork).toHaveBeenCalledTimes(1)
     unsubs.forEach((unsub) => unsub())
   })

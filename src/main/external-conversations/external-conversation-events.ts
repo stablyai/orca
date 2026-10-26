@@ -274,6 +274,16 @@ export class ConversationEvents {
     })
   }
 
+  /** Where this pane's agent replies: its conversation and the turn it is in, as turn events name it. */
+  replyTarget(paneKey: string): { key: ConversationKey; turnId: number | null } | null {
+    const link = this.linkedFor(paneKey)?.link
+    if (!link) {
+      return null
+    }
+    const turnId = this.turnStartedAt.get(paneKey) ?? this.deps.readHookRow(paneKey)?.turnStartedAt
+    return { key: { source: link.source, externalId: link.externalId }, turnId: turnId ?? null }
+  }
+
   private takeTurnId(paneKey: string, row: AgentStatusIpcPayload): number | null {
     const turnId = this.turnStartedAt.get(paneKey) ?? row.turnStartedAt ?? null
     this.turnStartedAt.delete(paneKey)

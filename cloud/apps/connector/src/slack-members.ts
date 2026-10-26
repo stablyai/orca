@@ -6,7 +6,7 @@ import type { SlackWebApi } from './slack-web-api.js'
 export type SlackMembership = 'member' | 'guest' | 'other'
 
 // A cached membership check is trusted this long before users.info is asked again.
-export const MEMBERSHIP_TTL_MS = 24 * 60 * 60_000
+const MEMBERSHIP_TTL_MS = 24 * 60 * 60_000
 const MEMBER_CHECKS_PER_PASS = 20
 
 // Slack may send absent, null or empty profile names; none of that bears on membership.
@@ -52,17 +52,37 @@ export class SlackMembers {
     return names
   }
 
+  // Display names of the given users already confirmed full members, from the cache only, so a
+  // routing transaction never waits on Slack.
+  async trustedNames(
+    transaction: CloudDatabase,
+    teamId: string,
+    userIds: string[]
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(userIds)]
+    if (unique.length === 0) {
+      return new Map()
+    }
+    const rows = await transaction.query(
+      `SELECT slack_user_id, display_name FROM connector_slack_users
+       WHERE team_id = ? AND membership = 'member' AND checked_at >= ?
+         AND slack_user_id IN (${unique.map(() => '?').join(', ')})`,
+      [teamId, this.deps.now() - MEMBERSHIP_TTL_MS, ...unique]
+    )
+    return new Map(rows.map((row) => [String(row.slack_user_id), String(row.display_name)]))
+  }
+
   // Checks teammates whose messages wait as context, so the owner's next message can carry them.
   async checkContextAuthors(): Promise<void> {
     const authors = await this.deps.database.query(
-      `SELECT DISTINCT c.team_id, c.author_user_id FROM connector_thread_context c
+      `SELECT DISTINCT c.workspace_id, c.author_id FROM connector_thread_context c
        LEFT JOIN connector_slack_users u
-         ON u.team_id = c.team_id AND u.slack_user_id = c.author_user_id
-       WHERE u.slack_user_id IS NULL OR u.checked_at < ? LIMIT ?`,
+         ON u.team_id = c.workspace_id AND u.slack_user_id = c.author_id
+       WHERE c.source = 'slack' AND (u.slack_user_id IS NULL OR u.checked_at < ?) LIMIT ?`,
       [this.deps.now() - MEMBERSHIP_TTL_MS, MEMBER_CHECKS_PER_PASS]
     )
     for (const author of authors) {
-      await this.check(String(author.team_id), String(author.author_user_id))
+      await this.check(String(author.workspace_id), String(author.author_id))
     }
   }
 

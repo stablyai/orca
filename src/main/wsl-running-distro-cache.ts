@@ -6,6 +6,9 @@ let retryAfterMs = 0
 let failureStreak = 0
 type RunningDistroObservation = { distros: string[]; confirmed: boolean }
 let inFlightProbe: Promise<RunningDistroObservation> | null = null
+// Monotonic start of the in-flight probe, and one probe chained after it for callers it predates.
+let inFlightStartedAt = 0
+let chainedProbe: Promise<RunningDistroObservation> | null = null
 type RunningDistroStopListener = (stopped: string[], running: string[]) => void
 const stopListeners = new Set<RunningDistroStopListener>()
 
@@ -68,9 +71,10 @@ function armRetryAfterFailure(): void {
 /** Share probes; only failures use stale cache/backoff. A confirmed empty result means no running distros. */
 export async function resolveRunningWslDistros(
   probe: () => Promise<string[]>,
-  options: { requireConfirmed?: boolean } = {}
+  /** `startedAfter` (performance.now()): only a probe started later may answer, e.g. after an exit. */
+  options: { requireConfirmed?: boolean; startedAfter?: number } = {}
 ): Promise<string[]> {
-  const observation = await observeRunningWslDistros(probe)
+  const observation = await observeRunningWslDistros(probe, options.startedAfter)
   if (options.requireConfirmed && !observation.confirmed) {
     throw new Error('WSL running-distro discovery is unavailable. Retry when WSL is reachable.')
   }
@@ -78,14 +82,24 @@ export async function resolveRunningWslDistros(
 }
 
 function observeRunningWslDistros(
-  probe: () => Promise<string[]>
+  probe: () => Promise<string[]>,
+  startedAfter?: number
 ): Promise<RunningDistroObservation> {
-  if (inFlightProbe) {
+  if (inFlightProbe && (startedAfter === undefined || inFlightStartedAt > startedAfter)) {
     return inFlightProbe
+  }
+  if (inFlightProbe) {
+    // The in-flight probe predates what this caller must see: one fresh probe follows it, shared.
+    chainedProbe ??= inFlightProbe.then(() => {
+      chainedProbe = null
+      return observeRunningWslDistros(probe)
+    })
+    return chainedProbe
   }
   if (Date.now() < retryAfterMs) {
     return Promise.resolve({ distros: cache ?? [], confirmed: false })
   }
+  inFlightStartedAt = performance.now()
   const result = probe()
     .then((distros) => {
       const previous = cache
@@ -120,4 +134,5 @@ export function _resetRunningWslDistroCacheForTests(): void {
   retryAfterMs = 0
   failureStreak = 0
   inFlightProbe = null
+  chainedProbe = null
 }

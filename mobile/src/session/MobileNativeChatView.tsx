@@ -52,7 +52,7 @@ import {
 } from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'

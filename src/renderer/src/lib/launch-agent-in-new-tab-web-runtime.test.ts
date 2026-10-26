@@ -113,6 +113,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
         pasteDraftAfterLaunch: false
       })
     )
+    const startupPlan = result?.startupPlan
+    expect(startupPlan).toBeDefined()
+    if (!startupPlan) {
+      throw new Error('Expected the terminal startup plan')
+    }
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
@@ -121,12 +126,13 @@ describe('launchAgentInNewTab paired web runtime', () => {
       ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
       launchAgent: 'claude',
-      command: result?.startupPlan.launchCommand,
-      env: result?.startupPlan.env,
-      launchConfig: result?.startupPlan.launchConfig,
+      preparedAgentCommand: false,
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
       viewMode: 'terminal'
     })
-    expect(result?.startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
+    expect(startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
     expect(mocks.createTab).not.toHaveBeenCalled()
     await expect(result?.terminalCompletion).resolves.toMatchObject({
       outcome: { status },
@@ -167,6 +173,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate: true,
       agentSessionKind: 'fresh',
       launchAgent: 'codex',
+      preparedAgentCommand: false,
       command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       launchConfig: {

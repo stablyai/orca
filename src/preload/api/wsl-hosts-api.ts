@@ -23,7 +23,7 @@ export type WslHostsPreloadApi = {
   /** The WSL hosts an open project or terminal needs; only these may boot a stopped distro. */
   setVisibleWork: (args: { environmentIds: string[] }) => Promise<void>
   /** The user switched to a workspace on this host; may boot its distro (E9). */
-  focusHost: (args: { environmentId: string }) => Promise<void>
+  focusHost: (args: { environmentId: string | null }) => Promise<void>
 }
 
 const wslHostsApi: WslHostsPreloadApi = {

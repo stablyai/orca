@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -109,6 +109,15 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
       runtime
     }
   ])
+  // Linux mtimes tick coarsely, so back-to-back writes can tie and change which row the cap keeps.
+  for (const [path, lastWrite] of [
+    [join(piDir, '2026-05-01T09-00-00-000Z_pi.jsonl'), '2026-05-01T09:00:01.000Z'],
+    [join(ompDir, `${OMP_STEM}.jsonl`), '2026-05-01T10:00:02.000Z'],
+    [join(ompDir, '2026-04-01T10-00-00-000Z_legacy.jsonl'), '2026-04-01T10:00:01.000Z'],
+    [join(ompDir, OMP_STEM, 'Worker.jsonl'), '2026-05-01T10:00:06.000Z']
+  ]) {
+    await utimes(path, new Date(lastWrite), new Date(lastWrite))
+  }
 }
 
 describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {

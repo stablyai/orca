@@ -61,6 +61,11 @@ function renderForm(
       statusCopy: null,
       agentArgs: '',
       agentArgsApply: true,
+      recipe: {
+        agentId: overrides.selectedAgent ?? 'codex',
+        commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
+        agentArgs: overrides.agentArgs ?? ''
+      },
       commandTemplate: '{basePrompt}',
       savedCommandInputTemplate: '{basePrompt}',
       saveLaunchRecipe: true,
@@ -119,6 +124,35 @@ describe('SourceControlAgentActionDialogForm', () => {
     expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
   })
 
+  it('names the saved choice on chat and terminal launches alike', () => {
+    const recipe = {
+      agentId: 'codex' as const,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        model: 'saved',
+        permissionMode: 'ask' as const
+      }
+    }
+    expect(renderForm({ recipe, agentArgsApply: true })).toContain(
+      'Older servers use their own permission settings.'
+    )
+    expect(
+      renderForm({
+        recipe: { ...recipe, launchPreferences: { agentId: 'codex', model: 'saved' } },
+        agentArgsApply: false
+      })
+    ).toContain('Model from Settings: saved')
+    expect(
+      renderForm({
+        selectedAgent: 'antigravity',
+        recipe: {
+          agentId: 'antigravity',
+          launchPreferences: { agentId: 'antigravity', permissionMode: 'ask' }
+        }
+      })
+    ).toContain('Applies to chats only')
+  })
+
   it('offers agents only, since an action cannot start without one', () => {
     expect(renderForm()).toContain('data-allow-blank="false"')
   })
@@ -133,6 +167,7 @@ describe('SourceControlAgentActionDialogForm', () => {
 
     const globalMarkup = renderForm({
       settings,
+      recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}' },
       repo: repoWithoutSavedRecipe,
       saveTargets,
       saveTargetValue: 'global'

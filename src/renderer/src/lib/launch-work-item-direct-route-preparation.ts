@@ -16,6 +16,7 @@ import type {
   AgentSessionLaunchPlan,
   planAgentSessionLaunch
 } from '@/lib/agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
@@ -26,6 +27,7 @@ export type DirectWorkItemAgentLaunchPreparation = {
   launchConnectionId: string | null
   unavailable: boolean
   effectiveAgent: TuiAgent | null
+  agentArgs?: string | null
   startupPlan: ReturnType<typeof buildDirectWorkItemStartup>['startupPlan']
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
@@ -82,6 +84,10 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoId: string
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
+  resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
+  sessionOptionsYieldToAgentArgs?: true
   repoConnectionId: string | null
   repoHost: RepoHostFields & { path: string }
   detectedAgentsPromise: Promise<string[]> | null
@@ -95,6 +101,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoProjectRuntime?: ProjectExecutionRuntimeResolution
   planLaunch: typeof planAgentSessionLaunch
   requestId: AgentLaunchRequestId
+  preflightPlan?: AgentSessionLaunchPlan
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
   const agentSelection = await resolveDirectWorkItemAgent({
@@ -128,33 +135,48 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         // Non-critical: activation still has the explicit startup below.
       })
   }
-  const { startupPlan, draftLaunchedNatively, startupPlanFailed } = buildDirectWorkItemStartup({
-    agent: effectiveAgent,
-    agentArgs: args.agentArgs,
-    draftContent: args.draftContent,
-    promptDelivery: args.promptDelivery,
-    settings: args.settings,
-    launchHost: resolveDirectWorkItemLaunchHost(args),
-    terminalWindowsShell: resolveDirectWorkItemTabShell(args),
-    launchConnectionId
-  })
-
+  const agentArgs =
+    effectiveAgent && args.resolveAgentArgs ? args.resolveAgentArgs(effectiveAgent) : args.agentArgs
+  const sessionOptions = effectiveAgent
+    ? args.resolveSessionOptions
+      ? args.resolveSessionOptions(effectiveAgent)
+      : args.sessionOptions
+    : undefined
   const plan =
     effectiveAgent === null
       ? null
-      : args.planLaunch(args.latestStore, {
-          requestId: args.requestId,
-          agent: effectiveAgent,
-          workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
-          prompt: args.draftContent,
-          promptDelivery: args.promptDelivery
-        })
+      : args.preflightPlan
+        ? adoptAgentSessionLaunchVerdict({ ...args.preflightPlan, worktreeId: args.worktreeId })
+        : args.planLaunch(args.latestStore, {
+            requestId: args.requestId,
+            agent: effectiveAgent,
+            workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
+            prompt: args.draftContent,
+            promptDelivery: args.promptDelivery,
+            ...(sessionOptions ? { launchOptions: sessionOptions } : {})
+          })
   const structuredLaunch = plan?.route === 'structured-native-chat'
+
+  const { startupPlan, draftLaunchedNatively, startupPlanFailed } = structuredLaunch
+    ? { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
+    : buildDirectWorkItemStartup({
+        agent: effectiveAgent,
+        agentArgs,
+        sessionOptions,
+        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+        draftContent: args.draftContent,
+        promptDelivery: args.promptDelivery,
+        settings: args.settings,
+        launchHost: resolveDirectWorkItemLaunchHost(args),
+        terminalWindowsShell: resolveDirectWorkItemTabShell(args),
+        launchConnectionId
+      })
 
   return {
     launchConnectionId,
     unavailable: false,
     effectiveAgent,
+    agentArgs,
     startupPlan,
     draftLaunchedNatively,
     startupPlanFailed,

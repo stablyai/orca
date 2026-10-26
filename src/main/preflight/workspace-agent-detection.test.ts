@@ -17,6 +17,7 @@ import {
 } from '../../shared/protocol-version'
 import {
   resolveWorkspaceAgentDetectionHost,
+  detectProjectLaunchContext,
   type WorkspaceAgentDetectionStore
 } from './workspace-agent-detection'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
@@ -140,6 +141,22 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
     _resetWslCachesForTests()
+  })
+
+  it('prospective detection owns the project runtime before a workspace exists', async () => {
+    detectInstalledMock.mockResolvedValueOnce(['codex'])
+    const target = repo({ id: 'prospective', path: WSL_REPO_PATH })
+    const result = await detectProjectLaunchContext(store({ repos: [target] }), target)
+    expect(result).toMatchObject({
+      workspaceKind: 'git-worktree',
+      executionContext: {
+        kind: 'host',
+        projectRuntime: { status: 'resolved', runtime: { kind: 'wsl' } }
+      }
+    })
+    expect(detectInstalledMock).toHaveBeenCalledWith(
+      wslContext('Ubuntu-24.04', 'prospective', 'project-override')
+    )
   })
 
   it('keeps the host default for a workspace no repo row owns', () => {

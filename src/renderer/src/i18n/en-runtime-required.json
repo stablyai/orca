@@ -1613,7 +1613,8 @@
           "fac59213fc": "Search builtin themes"
         },
         "SourceControlAiActionRecipeDefaults": {
-          "a9359c8aa9": "Unknown error"
+          "a9359c8aa9": "Unknown error",
+          "2cb4bb7e5d": "CLI arguments"
         },
         "SparsePresetSettingsSection": {
           "2d7d45e991": "Cancel",
@@ -2059,6 +2060,9 @@
         },
         "wslHosts": {
           "remove": "Remove"
+        },
+        "RepositorySourceControlAiActionRows": {
+          "7a3a8e431d": "CLI arguments"
         }
       },
       "shared": {
@@ -3537,6 +3541,14 @@
         "probeAgain": "Check again",
         "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
         "title": "Browse through SSH workspace hosts"
+      }
+    },
+    "sourceControl": {
+      "actionModel": {
+        "permissionsDefaultHint": "Terminals use Agent Permissions unless this action sets its own CLI arguments."
+      },
+      "actionPermissions": {
+        "sameAsAgent": "Same as {{agent}}"
       }
     }
   },

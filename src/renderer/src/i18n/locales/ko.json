@@ -301,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "Quick Open에서 연결된 폴더를 검색하고 파일 탐색기에서 로컬 연결 폴더를 펼칩니다.",
     "accounts": {
       "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "켜짐",
+        "off": "꺼짐",
+        "invalidArgs": "{{value0}}의 CLI 인수가 올바르지 않습니다. 설정 → Source Control AI에서 수정하세요.",
+        "model": "모델",
+        "agentDefault": "에이전트 기본값",
+        "effortDefault": "기본값",
+        "savedModel": "설정의 모델: {{value0}}",
+        "permissionsDefaultHint": "이 작업에 자체 CLI 인수가 없으면 터미널은 에이전트 권한을 사용합니다.",
+        "chatsOnly": "채팅에만 적용",
+        "terminalsOnly": "터미널에만 적용",
+        "extraArgs": "추가 CLI 인수",
+        "launchOptions": "모델 및 권한",
+        "savedLaunchOptions": "저장된 옵션: {{value0}}. 이전 서버는 서버의 권한 설정을 사용합니다."
+      }
     }
   },
   "menu": {
@@ -13684,8 +13701,6 @@
           "SourceControlAgentActionDialogForm": {
             "7ec6abbf2a": "재설정",
             "f4f3c9ca4a": "프롬프트 템플릿",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "CLI 인수",
             "b99c33cec5": "설정",
             "15c5d85706": "에이전트",
             "3e8f21954f": "오류",

@@ -441,6 +441,23 @@
     "followSymlinkedDirectoriesDescription": "Recherchez les dossiers liés dans Quick Open et développez les dossiers liés locaux dans l'Explorateur de fichiers.",
     "accounts": {
       "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "Activé",
+        "off": "Désactivé",
+        "invalidArgs": "Les arguments CLI de {{value0}} sont invalides. Corrigez-les dans Paramètres → Source Control AI.",
+        "model": "Modèle",
+        "agentDefault": "Par défaut de l'agent",
+        "effortDefault": "Par défaut",
+        "savedModel": "Modèle des Réglages : {{value0}}",
+        "permissionsDefaultHint": "Les terminaux utilisent les Permissions des agents, sauf si cette action définit ses propres arguments CLI.",
+        "chatsOnly": "S'applique uniquement aux chats",
+        "terminalsOnly": "S'applique uniquement aux terminaux",
+        "extraArgs": "Arguments CLI supplémentaires",
+        "launchOptions": "Modèle et autorisations",
+        "savedLaunchOptions": "Options enregistrées : {{value0}}. Les anciens serveurs utilisent leurs propres réglages d’autorisations."
+      }
     }
   },
   "menu": {
@@ -13869,8 +13886,6 @@
             "ea4788705e": "Annuler",
             "7ec6abbf2a": "Réinitialiser",
             "f4f3c9ca4a": "Modèle de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Arguments CLI",
             "b99c33cec5": "Paramètres",
             "15c5d85706": "Agent",
             "3e8f21954f": "error",

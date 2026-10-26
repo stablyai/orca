@@ -1,3 +1,4 @@
+import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -200,6 +201,11 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       throw new Error('selector_ambiguous')
     }
     throw new Error('repo_not_found')
+  }
+
+  async detectProjectLaunchContext(repoSelector: string) {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return detectProjectLaunchContext(this.requireStore(), repo)
   }
 
   requireStore(): RuntimeStore {

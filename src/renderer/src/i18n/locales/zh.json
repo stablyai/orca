@@ -301,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹。",
     "accounts": {
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "开启",
+        "off": "关闭",
+        "invalidArgs": "{{value0}} 的 CLI 参数无效。请在设置 → Source Control AI 中修正。",
+        "model": "模型",
+        "agentDefault": "智能体默认",
+        "effortDefault": "默认",
+        "savedModel": "设置中的模型：{{value0}}",
+        "permissionsDefaultHint": "除非此操作设置了自己的 CLI 参数，否则终端使用智能体权限。",
+        "chatsOnly": "仅适用于聊天",
+        "terminalsOnly": "仅适用于终端",
+        "extraArgs": "额外 CLI 参数",
+        "launchOptions": "模型和权限",
+        "savedLaunchOptions": "已保存的选项：{{value0}}。旧版服务器使用其自身的权限设置。"
+      }
     }
   },
   "menu": {
@@ -13684,8 +13701,6 @@
           "SourceControlAgentActionDialogForm": {
             "7ec6abbf2a": "重置",
             "f4f3c9ca4a": "提示词模板",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "CLI 参数",
             "b99c33cec5": "设置",
             "15c5d85706": "智能体",
             "3e8f21954f": "错误",

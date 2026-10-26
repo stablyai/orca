@@ -8,6 +8,7 @@ import { OrchestrationDb } from './orchestration-db'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
 import { DISPATCH_CONTEXT_COLUMNS } from './row-column-lists'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './reset/removed-orchestration-work-store'
 import { warnStaleDispatches } from '../coordinator-task-dispatch'
 
 const databases: OrchestrationDb[] = []
@@ -58,6 +59,7 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
   })
   if (version === 'v41') {
     writer.db.exec(`
+      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
