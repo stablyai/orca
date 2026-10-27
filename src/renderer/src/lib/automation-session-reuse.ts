@@ -82,9 +82,13 @@ export function isRunPtyLiveInPane(
 
 type SessionAvailability = 'idle' | 'busy' | 'gone'
 
+/** Give up waiting after a long turn so the run still reaches a terminal outcome. */
+const AUTOMATION_IDLE_WAIT_TIMEOUT_MS = 60 * 60 * 1000
+
 /**
  * Resolves the reused session once its agent finishes the current turn.
- * A closed pane, a lost status row, or another agent in the pane resolves null so the caller launches fresh.
+ * A closed pane, a lost status row, another agent in the pane, or a turn still running past the
+ * timeout resolves null so the caller launches fresh.
  */
 export function waitForIdleAutomationSession(args: {
   session: ReusableAutomationSession
@@ -111,13 +115,19 @@ export function waitForIdleAutomationSession(args: {
     return Promise.resolve(initial === 'idle' ? session : null)
   }
   return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
     const unsubscribe = useAppStore.subscribe(() => {
       const next = availability()
       if (next === 'busy') {
         return
       }
+      clearTimeout(timer)
       unsubscribe()
       resolve(next === 'idle' ? session : null)
     })
+    timer = setTimeout(() => {
+      unsubscribe()
+      resolve(null)
+    }, AUTOMATION_IDLE_WAIT_TIMEOUT_MS)
   })
 }

@@ -3,6 +3,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { waitForIdleAutomationSession } from './automation-session-reuse'
 
 const LEAF_ID = '7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
+const WAIT_TIMEOUT_MS = 60 * 60 * 1000
 const SESSION = { tabId: 'tab-1', ptyId: 'pty-1', paneKey: `tab-1:${LEAF_ID}` }
 
 type PaneState = {
@@ -108,5 +109,20 @@ describe('waitForIdleAutomationSession', () => {
       waitForIdleAutomationSession({ session: SESSION, agentId: 'claude' })
     ).resolves.toBeNull()
     expect(listeners.size).toBe(0)
+  })
+
+  it('stops waiting when the busy turn outlasts the wait timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const waiting = waitForIdleAutomationSession({ session: SESSION, agentId: 'claude' })
+      expect(listeners.size).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(WAIT_TIMEOUT_MS)
+
+      await expect(waiting).resolves.toBeNull()
+      expect(listeners.size).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
