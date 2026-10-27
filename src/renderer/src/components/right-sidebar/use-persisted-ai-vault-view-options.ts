@@ -150,7 +150,7 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
           ? current
           : { ...current, groupSessionLimit }
       ),
-    [updateOptions]
+    []
   )
   const setAgentEnabled = useCallback(
     (agent: AiVaultAgent, enabled: boolean) =>

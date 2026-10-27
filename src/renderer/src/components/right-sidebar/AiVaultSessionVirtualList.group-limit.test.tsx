@@ -46,7 +46,28 @@ afterEach(() => {
 })
 
 function session(id: string): AiVaultSession {
-  return { id } as AiVaultSession
+  return {
+    id,
+    executionHostId: 'local',
+    agent: 'claude',
+    sessionId: id,
+    title: id,
+    cwd: null,
+    branch: null,
+    model: null,
+    filePath: `/sessions/${id}.jsonl`,
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '2026-07-15T02:00:00.000Z',
+    messageCount: 1,
+    totalTokens: 0,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null
+  }
 }
 
 const groups: AiVaultSessionListGroup[] = [
