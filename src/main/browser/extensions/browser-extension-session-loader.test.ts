@@ -106,6 +106,7 @@ const { getBrowserExtensionProfileStateStore } =
 const { getBrowserExtensionSyncStorageStore } =
   await import('./browser-extension-sync-storage-store')
 const { getBrowserExtensionInstallStore } = await import('./browser-extension-install-store')
+const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 const installed = {
   id: ID,
@@ -356,7 +357,7 @@ describe('profile changes while startup loads are in flight', () => {
         id: 'retired',
         partition: 'persist:orca-browser-retired'
       })
-      expect((await vi.importActual<typeof NodeFs>('node:fs')).existsSync(folder)).toBe(false)
+      expect(realFs.existsSync(folder)).toBe(false)
     } finally {
       mocks.storage.path = null
     }

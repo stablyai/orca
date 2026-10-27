@@ -57,6 +57,8 @@ const { getBrowserExtensionInstallStore } = await import('./browser-extension-in
 const { getBrowserExtensionProfileDataDirectory } =
   await import('./browser-extension-profile-data-directory')
 
+const realFsPromises = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
 const ID = 'nngceckbapebfimnlniiiahkandclblb'
 const OTHER = 'ddkjiahejlhfcafbddmgiahcphecmpfh'
 
@@ -330,7 +332,6 @@ it('preserves newly opened native settings while another extension finishes rein
     await (clears <= 2 ? firstGate : secondGate)
   })
   // Both sweeps receive the same pre-load directory snapshot, while deletion stays real.
-  const read = await vi.importActual<typeof FsPromises>('node:fs/promises')
   mocks.readdir.mockResolvedValue([ID, OTHER])
   const first = removeUninstalledBrowserExtensionData(sess, 'concurrent', new Set([ID, OTHER]))
   const second = removeUninstalledBrowserExtensionData(sess, 'concurrent', new Set([ID, OTHER]))
@@ -347,7 +348,7 @@ it('preserves newly opened native settings while another extension finishes rein
     releaseFirst()
     releaseSecond()
     await Promise.allSettled([first, second])
-    mocks.readdir.mockImplementation(read.readdir)
+    mocks.readdir.mockImplementation(realFsPromises.readdir)
   }
 })
 
