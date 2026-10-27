@@ -108,10 +108,12 @@ export function samePanesIgnoringRatios(
   )
 }
 
-function equalizeWeight(
-  node: TerminalPaneLayoutNode,
-  direction: 'vertical' | 'horizontal'
-): number {
+type AxisTree =
+  | { type: 'leaf' }
+  | { type: 'split'; direction: string; first: AxisTree; second: AxisTree }
+
+/** How many panes (or groups) lie side by side along `direction`, so each can get an equal share. */
+export function equalizeWeight(node: AxisTree, direction: string): number {
   return node.type === 'split' && node.direction === direction
     ? equalizeWeight(node.first, direction) + equalizeWeight(node.second, direction)
     : 1

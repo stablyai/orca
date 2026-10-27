@@ -91,7 +91,9 @@ const SplitGroupCommand = z.object({
   type: z.literal('splitGroup'),
   ...OnTab,
   besideGroupId: z.string().min(1),
-  direction: z.enum(['left', 'right', 'up', 'down'])
+  direction: z.enum(['left', 'right', 'up', 'down']),
+  // Optional so an older main still splits, halving the target.
+  distribute: z.literal(true).optional()
 })
 
 /** Record terminal closes with the window’s reason; editor closes leave no terminal record. */

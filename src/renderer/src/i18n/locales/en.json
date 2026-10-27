@@ -8038,7 +8038,9 @@
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it.",
+          "distribute_tab_group_splits": "Split tab groups evenly",
+          "distribute_tab_group_splits_description": "A new split gives every group in its row or column an equal share, instead of halving the group it splits."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -10685,7 +10687,14 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "distribute_tab_group_splits_short": "New splits share their row or column equally.",
+            "split": "split",
+            "group": "group",
+            "even": "even",
+            "equal": "equal",
+            "distribute": "distribute",
+            "size": "size"
           }
         },
         "git": {

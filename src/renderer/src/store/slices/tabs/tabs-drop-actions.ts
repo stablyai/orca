@@ -8,6 +8,7 @@ import {
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { sizeNewGroupSplit } from './tabs-group-actions'
 import {
   findGroupAndWorktree,
   findGroupForTab,
@@ -88,7 +89,11 @@ export function createTabsDropActions(
           nextGroups = [...nextGroups, newGroup]
           nextLayoutByWorktree = {
             ...nextLayoutByWorktree,
-            [worktreeId]: replaceLeaf(currentLayout, target.groupId, replacement)
+            [worktreeId]: sizeNewGroupSplit(
+              state.settings,
+              replaceLeaf(currentLayout, target.groupId, replacement),
+              newGroupId
+            )
           }
           nextActiveGroupIdByWorktree = {
             ...nextActiveGroupIdByWorktree,

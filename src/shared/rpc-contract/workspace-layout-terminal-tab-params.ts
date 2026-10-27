@@ -11,7 +11,9 @@ export const NewGroupSplit = z
   .object({
     besideGroupId: z.string().min(1),
     besideLastGroupId: z.string().min(1).optional(),
-    direction: z.enum(['left', 'right', 'up', 'down'])
+    direction: z.enum(['left', 'right', 'up', 'down']),
+    // Optional so an older main still splits, halving the target.
+    distribute: z.literal(true).optional()
   })
   .optional()
 

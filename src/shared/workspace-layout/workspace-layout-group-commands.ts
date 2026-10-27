@@ -2,7 +2,11 @@
 
 import type { TabGroupLayoutNode } from '../tab-types'
 import { buildHeadlessTabGroupMove, buildHeadlessTabGroupSplit } from './tab-group-moves'
-import { moveGroupLeafBeside, moveGroupLeafBesideBranch } from './tab-group-layout-tree'
+import {
+  distributeGroupSplitRun,
+  moveGroupLeafBeside,
+  moveGroupLeafBesideBranch
+} from './tab-group-layout-tree'
 import {
   applied,
   findTab,
@@ -114,9 +118,13 @@ export function splitGroup(
       command.besideGroupId,
       command.direction
     )
-    return applied(withWorkspace(model, command.workspace, { ...workspace, groupLayout }), {
-      groupId: source.id
-    })
+    return applied(
+      withWorkspace(model, command.workspace, {
+        ...workspace,
+        groupLayout: sizedSplit(groupLayout, source.id, command.distribute)
+      }),
+      { groupId: source.id }
+    )
   }
   const split = buildHeadlessTabGroupSplit({
     groups: workspace.groups,
@@ -134,12 +142,20 @@ export function splitGroup(
     withWorkspace(model, command.workspace, {
       ...workspace,
       groups: split.groups,
-      groupLayout: split.layout
+      groupLayout: sizedSplit(split.layout, split.newGroupId, command.distribute)
     }),
     {
       groupId: split.newGroupId
     }
   )
+}
+
+function sizedSplit(
+  layout: TabGroupLayoutNode,
+  groupId: string,
+  distribute: true | undefined
+): TabGroupLayoutNode {
+  return distribute ? distributeGroupSplitRun(layout, groupId) : layout
 }
 
 function sameGroupsIgnoringRatios(left: TabGroupLayoutNode, right: TabGroupLayoutNode): boolean {
@@ -219,7 +235,7 @@ export function openInNewGroup(
   if (!besideHeld && workspace.groups.length > 0) {
     return refuse('group_not_found')
   }
-  const groupLayout = besideHeld
+  const besideLayout = besideHeld
     ? moveGroupLeafBesideBranch(
         workspace.groupLayout ?? { type: 'leaf', groupId: split.besideGroupId },
         groupId,
@@ -228,6 +244,7 @@ export function openInNewGroup(
         split.direction
       )
     : undefined
+  const groupLayout = besideLayout && sizedSplit(besideLayout, groupId, split.distribute)
   if (besideHeld && !groupLayout) {
     return refuse('invalid_params')
   }

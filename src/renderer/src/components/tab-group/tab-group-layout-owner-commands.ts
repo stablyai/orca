@@ -84,7 +84,13 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
     ) {
       return null
     }
-    return { type: 'splitGroup', tabId, besideGroupId: groupId, direction: drop.direction }
+    return {
+      type: 'splitGroup',
+      tabId,
+      besideGroupId: groupId,
+      direction: drop.direction,
+      ...(state.settings?.distributeTabGroupSplits ? { distribute: true } : {})
+    }
   }
   const group = groups.find((candidate) => candidate.id === groupId)
   // Paired clients can request same-group moves, which must remain no-ops.

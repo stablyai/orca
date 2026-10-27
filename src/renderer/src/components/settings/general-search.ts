@@ -192,6 +192,24 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
       ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.GeneralPane.distribute_tab_group_splits',
+      'Split tab groups evenly'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.distribute_tab_group_splits_short',
+      'New splits share their row or column equally.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.split', 'split'),
+      ...translateSearchKeyword('auto.components.settings.general.search.group', 'group'),
+      ...translateSearchKeyword('auto.components.settings.general.search.even', 'even'),
+      ...translateSearchKeyword('auto.components.settings.general.search.equal', 'equal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.distribute', 'distribute'),
+      ...translateSearchKeyword('auto.components.settings.general.search.size', 'size')
+    ]
   }
 ])
 

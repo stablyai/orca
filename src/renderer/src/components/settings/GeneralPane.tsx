@@ -184,6 +184,32 @@ export function GeneralPane({
         </SearchableSetting>
         <SearchableSetting
           title={translate(
+            'auto.components.settings.GeneralPane.distribute_tab_group_splits',
+            'Split tab groups evenly'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.distribute_tab_group_splits_description',
+            'A new split gives every group in its row or column an equal share, instead of halving the group it splits.'
+          )}
+          keywords={['split', 'group', 'even', 'equal', 'distribute', 'size', 'layout']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.distribute_tab_group_splits',
+              'Split tab groups evenly'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.distribute_tab_group_splits_description',
+              'A new split gives every group in its row or column an equal share, instead of halving the group it splits.'
+            )}
+            checked={settings.distributeTabGroupSplits ?? false}
+            onChange={() =>
+              updateSettings({ distributeTabGroupSplits: !settings.distributeTabGroupSplits })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
             'auto.components.settings.GeneralPane.confirm_running_terminal_close',
             'Confirm before closing running terminals'
           )}

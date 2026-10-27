@@ -1,4 +1,5 @@
-import type { TabGroupLayoutNode } from '../tab-types'
+import type { TabGroupLayoutNode, TabGroupSplitDirection } from '../tab-types'
+import { equalizeWeight } from './terminal-pane-tree'
 
 export function buildSplitNode(
   existingGroupId: string,
@@ -185,4 +186,52 @@ export function moveGroupLeafBesideBranch(
   }
   const rest = removeGroupLayoutLeaf(root, groupId)
   return rest && besideBranch(rest)
+}
+
+/** Whether every split from `node` down to the group runs along `direction`. */
+function runsAlongTo(
+  node: TabGroupLayoutNode,
+  groupId: string,
+  direction: TabGroupSplitDirection
+): boolean {
+  if (node.type === 'leaf') {
+    return node.groupId === groupId
+  }
+  return (
+    node.direction === direction &&
+    (runsAlongTo(node.first, groupId, direction) || runsAlongTo(node.second, groupId, direction))
+  )
+}
+
+function evenRun(node: TabGroupLayoutNode, direction: TabGroupSplitDirection): TabGroupLayoutNode {
+  if (node.type === 'leaf' || node.direction !== direction) {
+    return node
+  }
+  const first = equalizeWeight(node.first, direction)
+  const second = equalizeWeight(node.second, direction)
+  return {
+    ...node,
+    ratio: first / (first + second),
+    first: evenRun(node.first, direction),
+    second: evenRun(node.second, direction)
+  }
+}
+
+/** Give each group in the row (or column) holding `groupId` an equal share, so a third group
+ *  beside two makes thirds; splits across that row keep their ratios. */
+export function distributeGroupSplitRun(
+  root: TabGroupLayoutNode,
+  groupId: string
+): TabGroupLayoutNode {
+  if (root.type === 'leaf' || !holdsGroup(root, groupId)) {
+    return root
+  }
+  if (runsAlongTo(root, groupId, root.direction)) {
+    return evenRun(root, root.direction)
+  }
+  return {
+    ...root,
+    first: distributeGroupSplitRun(root.first, groupId),
+    second: distributeGroupSplitRun(root.second, groupId)
+  }
 }

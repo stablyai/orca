@@ -1,10 +1,12 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import type { AppState } from '../../types'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
-import type { TabGroup } from '../../../../../shared/tab-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
   collapseGroupLayout,
+  distributeGroupSplitRun,
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -19,7 +21,7 @@ type SplitGroupState = Pick<
 
 /** Places `newGroup` beside the target's source group; callers that fill it do so in the same update. */
 export function insertSplitGroup(
-  state: SplitGroupState,
+  state: SplitGroupState & Partial<Pick<AppState, 'settings'>>,
   worktreeId: string,
   target: TabSplitTarget,
   newGroup: TabGroup
@@ -40,13 +42,26 @@ export function insertSplitGroup(
     },
     layoutByWorktree: {
       ...state.layoutByWorktree,
-      [worktreeId]: replaceLeaf(currentLayout, sourceGroupId, replacement)
+      [worktreeId]: sizeNewGroupSplit(
+        state.settings,
+        replaceLeaf(currentLayout, sourceGroupId, replacement),
+        newGroup.id
+      )
     },
     activeGroupIdByWorktree:
       target.activate === false
         ? state.activeGroupIdByWorktree
         : { ...state.activeGroupIdByWorktree, [worktreeId]: newGroup.id }
   }
+}
+
+/** Even out the new group's row or column when the user opted in; otherwise the split halves its target. */
+export function sizeNewGroupSplit(
+  settings: AppState['settings'] | undefined,
+  layout: TabGroupLayoutNode,
+  newGroupId: string
+): TabGroupLayoutNode {
+  return settings?.distributeTabGroupSplits ? distributeGroupSplitRun(layout, newGroupId) : layout
 }
 
 export function emptySplitGroup(worktreeId: string, groupId: string): TabGroup {

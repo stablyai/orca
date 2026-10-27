@@ -7654,7 +7654,9 @@
           "editor_preview_tabs": "浏览文件时重复使用预览选项卡",
           "editor_preview_tabs_description": "单击资源管理器中的文件，或点击 Markdown 源中的链接，可以重复使用每组一个斜体预览选项卡，而不是打开一个新选项卡。编辑、双击或固定可以使该选项卡保持打开状态。关闭此选项可为每个文件提供自己的选项卡。",
           "confirm_running_terminal_close": "关闭运行终端前确认",
-          "confirm_running_terminal_close_description": "关闭终端时，在停止正在运行的智能体或命令之前询问。"
+          "confirm_running_terminal_close_description": "关闭终端时，在停止正在运行的智能体或命令之前询问。",
+          "distribute_tab_group_splits": "均分标签组分屏",
+          "distribute_tab_group_splits_description": "新建分屏时，同一行或同一列的所有标签组平分空间，而不是把被拆分的标签组对半分。"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "感谢您的支持！",
@@ -10252,7 +10254,14 @@
             "close": "关闭",
             "omp": "OMP",
             "nodeDistMirror": "镜像",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "distribute_tab_group_splits_short": "新分屏与同行或同列的标签组平分空间。",
+            "split": "分屏",
+            "group": "标签组",
+            "even": "均分",
+            "equal": "等宽",
+            "distribute": "平分",
+            "size": "大小"
           }
         },
         "git": {

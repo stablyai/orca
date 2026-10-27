@@ -86,7 +86,14 @@ export type LayoutCommand =
       /** Pins or unpins the tab where `index` puts it, in the same step. */
       isPinned?: boolean
     })
-  | (On & { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide })
+  | (On & {
+      type: 'splitGroup'
+      tabId: string
+      besideGroupId: string
+      direction: GroupSide
+      /** Even out the new group's row or column instead of halving the target group. */
+      distribute?: true
+    })
   /** `ratios`, or from a window older than them, `groupLayout`: exactly one. */
   | (On & {
       type: 'setGroupRatios'
@@ -268,6 +275,8 @@ export type NewGroupSplit = {
   besideGroupId: string
   besideLastGroupId?: string
   direction: GroupSide
+  /** Even out the new group's row or column instead of halving the target. */
+  distribute?: true
 }
 
 export type TabTitle =

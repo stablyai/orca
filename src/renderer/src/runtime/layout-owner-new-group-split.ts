@@ -2,10 +2,12 @@ import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import { removeGroupLayoutLeaf } from '../../../shared/workspace-layout/tab-group-layout-tree'
 import type { NewGroupSplit } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { TabsSlice } from '@/store/slices/tabs/tabs-slice-contract'
+import type { AppState } from '@/store/types'
 
 /** Describe the sole tab’s new group beside its sibling, omitting empty groups main never stores. None for the workspace’s only group. state may predate tab creation, as editor opens do. */
 export function newGroupSplitOf(
-  state: Pick<TabsSlice, 'groupsByWorktree' | 'layoutByWorktree'>,
+  state: Pick<TabsSlice, 'groupsByWorktree' | 'layoutByWorktree'> &
+    Partial<Pick<AppState, 'settings'>>,
   worktreeId: string,
   groupId: string,
   tabId: string
@@ -22,7 +24,10 @@ export function newGroupSplitOf(
       held = removeGroupLayoutLeaf(held, other.id)
     }
   }
-  return held ? splitBeside(held, groupId) : null
+  const beside = held && splitBeside(held, groupId)
+  return beside && state.settings?.distributeTabGroupSplits
+    ? { split: { ...beside.split, distribute: true } }
+    : beside
 }
 
 function splitBeside(node: TabGroupLayoutNode, groupId: string): { split: NewGroupSplit } | null {
