@@ -96,7 +96,7 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/tmp/report.html', null, null, deps)
     await flushAsyncWork()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local', undefined)
     expect(createBrowserTabMock).not.toHaveBeenCalled()
 
     // Shift takes the other destination, as it does for http links.
