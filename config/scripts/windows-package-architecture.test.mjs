@@ -7,7 +7,7 @@ const { getWindowsInstallerArtifactName } = require('../windows-package-architec
 describe('Windows package architecture', () => {
   it('gives native ARM64 installers a distinct name', () => {
     expect(getWindowsInstallerArtifactName({ ORCA_WINDOWS_ARM64_BUILD: '1' })).toBe(
-      'orca-windows-arm64-setup.${ext}'
+      'orca-windows-setup-arm64.${ext}'
     )
     expect(getWindowsInstallerArtifactName({})).toBe('orca-windows-setup.${ext}')
   })
