@@ -20,6 +20,14 @@ function repo(id: string, path: string, executionHostId: Repo['executionHostId']
   return { id, path, displayName: id, badgeColor: '#000', addedAt: 1, executionHostId }
 }
 
+const REPOS = [
+  repo('orca', '/home/alice/code/orca', 'ssh:target-1'),
+  repo('site', '/home/alice/code/site', 'ssh:target-1'),
+  repo('api', '/srv/app/api', 'ssh:target-1'),
+  repo('elsewhere', '/opt/other/tool', 'ssh:target-2'),
+  repo('local', '/Users/alice/notes', 'local')
+]
+
 async function flushPromises(): Promise<void> {
   for (let index = 0; index < 4; index += 1) {
     await Promise.resolve()
@@ -67,15 +75,7 @@ describe('RemoteFileBrowser project folders', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     browseDir.mockClear()
     Object.defineProperty(window, 'api', { configurable: true, value: { ssh: { browseDir } } })
-    useAppStore.setState({
-      repos: [
-        repo('orca', '/home/alice/code/orca', 'ssh:target-1'),
-        repo('site', '/home/alice/code/site', 'ssh:target-1'),
-        repo('api', '/srv/app/api', 'ssh:target-1'),
-        repo('elsewhere', '/opt/other/tool', 'ssh:target-2'),
-        repo('local', '/Users/alice/notes', 'local')
-      ]
-    })
+    useAppStore.setState({ repos: REPOS })
   })
 
   afterEach(() => {
@@ -87,7 +87,8 @@ describe('RemoteFileBrowser project folders', () => {
 
   it("lists this host's project folders above the entries and opens one from the keyboard", async () => {
     const { container, input, root } = await render()
-    expect(projectFolderRows(container)).toEqual(['/home/alice/code', '/srv/app'])
+    // Paths under the host's home read as `~/…` so a truncated row keeps its tail.
+    expect(projectFolderRows(container)).toEqual(['~/code', '/srv/app'])
     // Enter keeps its default target: the first entry, not a folder row.
     expect(selectedRow(container)).toBe('docs')
 
@@ -101,7 +102,20 @@ describe('RemoteFileBrowser project folders', () => {
     await press(input, 'Enter')
     expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/srv/app' })
     // The folder being shown is not offered as a jump target.
-    expect(projectFolderRows(container)).toEqual(['/home/alice/code'])
+    expect(projectFolderRows(container)).toEqual(['~/code'])
+    await act(async () => root.unmount())
+  })
+
+  // Why: catalog refreshes replace repo rows with equal copies; the moved highlight must survive them.
+  it('keeps the highlighted folder when projects refresh with the same paths', async () => {
+    const { container, input, root } = await render()
+    await press(input, 'ArrowUp')
+    expect(selectedRow(container)).toBe('/srv/app')
+
+    await act(async () => {
+      useAppStore.setState({ repos: REPOS.map((entry) => ({ ...entry })) })
+    })
+    expect(selectedRow(container)).toBe('/srv/app')
     await act(async () => root.unmount())
   })
 
