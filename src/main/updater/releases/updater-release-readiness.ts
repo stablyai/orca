@@ -1,5 +1,7 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
+import { WINDOWS_ARM64_UPDATE_CHANNEL } from '../../../shared/release-channel'
+import { isWindowsArm64 } from '../../windows-arm64'
 
 const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
 export const FETCH_TIMEOUT_MS = 5000
@@ -15,6 +17,9 @@ function getPlatformManifestName(): string {
   if (process.platform === 'linux') {
     // Match electron-updater getChannelFilePrefix(): non-x64 Linux appends -${arch}.
     return process.arch === 'x64' ? 'latest-linux.yml' : `latest-linux-${process.arch}.yml`
+  }
+  if (isWindowsArm64()) {
+    return `${WINDOWS_ARM64_UPDATE_CHANNEL}.yml`
   }
   return 'latest.yml'
 }
