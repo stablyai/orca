@@ -46,7 +46,9 @@ describe('what a started Claude session says ended it', () => {
     const refusal =
       '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
 
-    connection.handlers.onExit?.(claudeStreamJsonExitError(refusal, { code: 1, signal: null }))
+    connection.handlers.onExit?.(
+      claudeStreamJsonExitError(refusal, { code: 1, signal: null, processless: false })
+    )
 
     expect(await ended()).toMatchObject({
       cause: 'unexpected-exit',

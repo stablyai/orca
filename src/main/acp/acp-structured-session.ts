@@ -8,6 +8,7 @@ import {
   UNVERIFIABLE_TURN_VERDICT,
   type StructuredAgentSessionTurnVerdict
 } from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
+import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import { acpAgentName } from './acp-structured-agent-definitions'
@@ -113,12 +114,15 @@ export function endAcpStructuredSession(
   session.events?.observeExit?.(undefined, observedAt)
   session.exitObservedAt = observedAt
   const stderr = session.connection.stderrTail()
-  // Process exit can follow stream loss; final stderr explains the crash.
+  const how = providerExitStatusText(session.connection.exitStatus)
+  // Process exit can follow stream loss; keep that earlier reason when stderr is absent.
+  const lead =
+    session.journalClosed !== null && !stderr
+      ? session.journalClosed
+      : `${session.spec.agent} ACP agent exited`
   const reason = session.closeRequested
     ? `${session.spec.agent} ACP agent closed by Orca`
-    : session.journalClosed !== null && !stderr
-      ? session.journalClosed
-      : `${session.spec.agent} ACP agent exited${stderr ? `: ${stderr}` : ''}`
+    : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
   // Spontaneous exit interrupts now; requested close leaves the host to revise an unverifiable turn.
   closeAcpSessionJournal(
     session,
@@ -129,7 +133,8 @@ export function endAcpStructuredSession(
       : { state: 'interrupted', completedAt: observedAt },
     observedAt
   )
-  const detail = stderr ? providerDiagnostic(stderr, 'person') : undefined
+  // The tail spans the whole run, so a startup warning can still be in it: a log, not the cause.
+  const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({
     type: 'ended',
     sessionId: session.sessionId,

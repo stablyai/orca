@@ -17,6 +17,7 @@ export type AcpStructuredConnection = Pick<
   | 'pid'
   | 'exited'
   | 'stderrTail'
+  | 'exitStatus'
   | 'onExit'
   | 'pauseReading'
   | 'resumeReading'
