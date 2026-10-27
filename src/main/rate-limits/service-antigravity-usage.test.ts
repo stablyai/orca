@@ -186,7 +186,7 @@ describe('RateLimitService Antigravity usage', () => {
       pending.resolve(okProvider('antigravity', 30))
       await refresh
 
-      expect(service.getState().antigravity?.session).toBeNull()
+      expect(service.getState().antigravity).toBeNull()
     }
   )
 
@@ -216,6 +216,7 @@ describe('Antigravity usage gating', () => {
   it('never spawns agy when the usage meter is hidden', async () => {
     vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
     const service = new RateLimitService()
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     service.setAntigravityUsageEnabledResolver(() => false)
 
     await service.refresh()

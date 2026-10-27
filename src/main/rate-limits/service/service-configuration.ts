@@ -81,7 +81,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.antigravityFetchTarget = { ...target }
     this.antigravityFetchGeneration += 1
     this.activeFailureStreakByProvider.antigravity = 0
-    this.updateState({ ...this.state, antigravity: this.withFetchingStatus(null, 'antigravity') })
+    this.updateState({ ...this.state, antigravity: null })
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
