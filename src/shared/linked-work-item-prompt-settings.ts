@@ -1,5 +1,6 @@
+import type { ExecutionHostId } from './execution-host/execution-host'
 import type { GlobalSettings } from './settings/global-settings-types'
-import type { Project } from './project/project-types'
+import type { Project, ProjectHostSetup } from './project/project-types'
 import { projectMatchesRepo } from './project/project-repo-match'
 
 export function normalizeLinkedWorkItemPromptTemplate(value: unknown): string | undefined {
@@ -10,12 +11,20 @@ export function getLinkedWorkItemPromptTemplate(
   state: {
     settings?: Pick<GlobalSettings, 'linkedWorkItemPromptTemplate'> | null
     projects?: readonly Pick<Project, 'id' | 'sourceRepoIds' | 'linkedWorkItemPromptTemplate'>[]
+    setups?: readonly Pick<ProjectHostSetup, 'projectId' | 'repoId' | 'hostId'>[]
   },
-  repoId?: string
+  repoId?: string,
+  hostId?: ExecutionHostId
 ): string | undefined {
-  const project = repoId
-    ? state.projects?.find((candidate) => projectMatchesRepo(candidate, repoId))
-    : undefined
+  const projectId =
+    repoId && hostId
+      ? state.setups?.find((setup) => setup.repoId === repoId && setup.hostId === hostId)?.projectId
+      : undefined
+  const project = projectId
+    ? state.projects?.find((candidate) => candidate.id === projectId)
+    : repoId && !hostId
+      ? state.projects?.find((candidate) => projectMatchesRepo(candidate, repoId))
+      : undefined
   return (
     normalizeLinkedWorkItemPromptTemplate(project?.linkedWorkItemPromptTemplate)?.trim() ||
     normalizeLinkedWorkItemPromptTemplate(state.settings?.linkedWorkItemPromptTemplate)?.trim() ||

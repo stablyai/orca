@@ -7,7 +7,7 @@ import { terminalSessionOptionInputs } from '../../../../../shared/agent-launch/
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
 import {
-  getLinkedWorkItemPromptTemplate,
+  getDesktopLinkedWorkItemPromptTemplate,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/work-items/linked-work-item-context'
 import type { ComposerModel } from '../composer-model'
@@ -135,7 +135,11 @@ export async function prepareQuickComposerStartup(
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
     input.note,
-    getLinkedWorkItemPromptTemplate(useAppStore.getState(), input.repoId)
+    getDesktopLinkedWorkItemPromptTemplate(
+      useAppStore.getState(),
+      input.repoId,
+      input.executionHostId ?? undefined
+    )
   )
   const settings = input.settings
     ? {
