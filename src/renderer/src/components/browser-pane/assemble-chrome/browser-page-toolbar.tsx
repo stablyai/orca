@@ -205,7 +205,6 @@ export function BrowserPageToolbar({
       )}
       extensionActions={
         extensionToolbar &&
-        // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserExtensionToolbar stays one stable component.
         ((compact) => (
           <BrowserExtensionToolbar
             browserPageId={browserPageId}

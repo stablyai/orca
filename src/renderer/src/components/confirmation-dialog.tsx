@@ -135,7 +135,6 @@ export function ConfirmationDialogProvider({
         <DialogContent
           surface={displayedRequest?.options.surface}
           showCloseButton={false}
-          surface={displayedRequest?.options.surface}
           size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}
           onInteractOutside={(event) => {
