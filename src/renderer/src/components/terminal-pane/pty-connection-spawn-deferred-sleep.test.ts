@@ -276,6 +276,38 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     binding.dispose()
   })
 
+  it("declares a hidden pane's restart that replaces its live PTY as a user resume, so the live cap cannot defer it", async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport(null)
+    transport.connect.mockImplementation(async () => 'new-pty')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      replacesPtyId: 'old-pty',
+      startup: {
+        command: "claude '--resume' 'provider-session-1'",
+        launchAgent: 'claude',
+        resumeProviderSession: RESUME
+      }
+    })
+
+    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    await flushAsyncTicks(20)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      binding.dispose()
+      return
+    }
+
+    expect(freshSpawns(transport)).toEqual([
+      expect.objectContaining({
+        resumeSpawnIntent: 'user-resume',
+        claimReplacedPtyId: expect.any(Function)
+      })
+    ])
+    binding.dispose()
+  })
+
   it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
