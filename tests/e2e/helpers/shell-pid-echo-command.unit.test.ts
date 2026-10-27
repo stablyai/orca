@@ -5,8 +5,8 @@ const MARKER = 'PIDMARK_BEFORE_'
 const PRINTED_PID = new RegExp(`${MARKER}(\\d+)`)
 
 describe('shellPidEchoCommand', () => {
-  it('reads the pid through $$ in a POSIX shell', () => {
-    expect(shellPidEchoCommand(MARKER, 'posix')).toBe(`echo "${MARKER}""$$"`)
+  it('reads the pid as a child sh sees its parent, so fish works as well as bash and zsh', () => {
+    expect(shellPidEchoCommand(MARKER, 'posix')).toBe(`sh -c 'echo "${MARKER}$PPID"'`)
   })
 
   it('reads the pid through $PID in PowerShell, where $$ is the last token', () => {
