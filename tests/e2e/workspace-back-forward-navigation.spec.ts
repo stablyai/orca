@@ -209,6 +209,50 @@ test.describe('Workspace Back/Forward Navigation', () => {
       .toBe(secondaryId)
   })
 
+  test('mouse Back/Forward buttons walk history', async ({ orcaPage }) => {
+    const worktreeIds = await getAllWorktreeIds(orcaPage)
+    test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise mouse buttons')
+    const [primaryId, secondaryId] = worktreeIds
+
+    await resetNavHistory(orcaPage)
+    await seedVisit(orcaPage, primaryId)
+    await seedVisit(orcaPage, secondaryId)
+
+    const box = await worktreeRow(orcaPage, secondaryId).boundingBox()
+    expect(box).not.toBeNull()
+    const session = await orcaPage.context().newCDPSession(orcaPage)
+    const press = async (button: 'back' | 'forward'): Promise<void> => {
+      const point = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 }
+      await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point })
+      await session.send('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        button,
+        clickCount: 1,
+        ...point
+      })
+      await session.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        button,
+        clickCount: 1,
+        ...point
+      })
+    }
+
+    await press('back')
+    await expect
+      .poll(async () => getActiveWorktreeId(orcaPage), {
+        message: 'Mouse Back did not navigate back'
+      })
+      .toBe(primaryId)
+
+    await press('forward')
+    await expect
+      .poll(async () => getActiveWorktreeId(orcaPage), {
+        message: 'Mouse Forward did not navigate forward'
+      })
+      .toBe(secondaryId)
+  })
+
   test('shortcut is a no-op in settings view', async ({ orcaPage }) => {
     const worktreeIds = await getAllWorktreeIds(orcaPage)
     test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise settings gating')
