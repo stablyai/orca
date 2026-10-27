@@ -13,6 +13,7 @@ import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
 import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
 import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -125,7 +126,8 @@ const preflightReady =
   runMainProcessPreflight({
     focusExistingWindow,
     requestDesktopActivation
-  })
+  }) &&
+  ensureWindowsRendererRuntimeFiles(state.isServeMode)
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
