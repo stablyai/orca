@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -22,6 +22,12 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only these store methods.
     const store = {
       getRepos: () => [],
+      getWorktreeLineageMetadata: vi.fn(() => {
+        throw new Error('published git rows must not rebuild the corpus')
+      }),
+      getAllWorktreeLineage: vi.fn(() => {
+        throw new Error('published git rows must not reread edges')
+      }),
       getWorktreeMeta: () => ({
         hostId: 'ssh:persisted-host',
         linkedPR: 42,
@@ -39,6 +45,13 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     }).get(worktree.id)
 
     expect(summary?.hostId).toBe('ssh:persisted-host')
+    expect(summary).toMatchObject({
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      savedLineage: null
+    })
+    expect(store.getWorktreeLineageMetadata).not.toHaveBeenCalled()
+    expect(store.getAllWorktreeLineage).not.toHaveBeenCalled()
     expect(summary?.linkedItems).toEqual([
       { provider: 'github', type: 'pr', number: 57 },
       { provider: 'github', type: 'pr', number: 42 }

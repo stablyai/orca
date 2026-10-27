@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => {
     removeWorktree: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
     allWorktrees: vi.fn<() => Worktree[]>(() => []),
+    get worktreesByRepo(): Record<string, Worktree[]> {
+      return { 'repo-1': this.allWorktrees() }
+    },
     endpointProjects: [],
     endpointProjectHostSetups: [],
     repos: [] as Repo[],

@@ -1,3 +1,7 @@
+import {
+  getWorktreeLineageSelection,
+  type WorktreeLineageIdentity
+} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -13,14 +17,21 @@ import { getWorkspaceStatus } from '../../workspace-status'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The cards a drag picked up, by host: a twin on another host shares each card's id. */
-export type DraggedWorktreeCopies = readonly Pick<Worktree, 'id' | 'hostId'>[]
+export type DraggedWorktreeCopies = readonly WorktreeLineageIdentity[]
 
 export function draggedWorktreeCopiesOf(
   pressed: Worktree,
   selected: readonly Worktree[] | undefined,
   useSelection: boolean
 ): DraggedWorktreeCopies {
-  return (useSelection && selected ? selected : [pressed]).map(({ id, hostId }) => ({ id, hostId }))
+  return (useSelection && selected ? selected : [pressed]).map(
+    ({ id, hostId, runtimeOwnerEnvironmentId, instanceId }) => ({
+      id,
+      hostId,
+      runtimeOwnerEnvironmentId,
+      instanceId
+    })
+  )
 }
 
 export function uniqueDraggedIds(copies: DraggedWorktreeCopies): string[] {
@@ -47,13 +58,13 @@ export function dropWriteRows(
   ]) {
     rowsById.set(row.id, [...(rowsById.get(row.id) ?? []), row])
   }
-  const dragged = new Set((copies ?? []).map(getWorktreeHostIdentity))
+  const dragged = new Set((copies ?? []).map(getWorktreeLineageSelection))
   const draggedIds = new Set((copies ?? []).map((copy) => copy.id))
   return {
     status: (worktreeId) => {
       const rows = rowsById.get(worktreeId) ?? []
       if (draggedIds.has(worktreeId)) {
-        return rows.filter((row) => dragged.has(getWorktreeHostIdentity(row)))
+        return rows.filter((row) => dragged.has(getWorktreeLineageSelection(row)))
       }
       return rows.length === 1 ? rows : []
     },

@@ -1,3 +1,4 @@
+import type { ParentWorktreeRef } from '../../../../../../shared/worktree/lineage-types'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
@@ -54,6 +55,7 @@ export type WorktreeCreateAttempt = {
   name: string
   branchNameOverride?: string
   parentWorkspace?: WorkspaceKey
+  parentWorktreeRef?: ParentWorktreeRef
   manualOrder?: number
 }
 
@@ -97,7 +99,11 @@ function sharedCreateFields(
         }
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
-    ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
+    ...(attempt.parentWorktreeRef
+      ? { parentWorktreeRef: attempt.parentWorktreeRef }
+      : attempt.parentWorkspace
+        ? { parentWorkspace: attempt.parentWorkspace }
+        : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined

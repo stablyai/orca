@@ -31,6 +31,212 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('applyMobileWorkspaceLineage', () => {
+  it('preserves the captured local Windows and WSL lineage in mobile rows and rendered sections', () => {
+    const captured = [
+      {
+        workspaceKind: 'git',
+        worktreeId: 'WSL_CHILD',
+        repoId: 'REPO_WSL',
+        hostId: 'local',
+        terminalPlatform: 'linux',
+        path: 'PATH_WSL_CHILD',
+        isMainWorktree: false,
+        worktreeInstanceId: 'INSTANCE_WSL_CHILD',
+        lineageWorktreeInstanceId: 'INSTANCE_WSL_CHILD',
+        parentWorktreeInstanceId: 'INSTANCE_LOCAL_PRIMARY',
+        parentWorktreeId: 'LOCAL_PRIMARY',
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'LOCAL_CHILD',
+        repoId: 'REPO_LOCAL',
+        hostId: 'local',
+        terminalPlatform: 'win32',
+        path: 'PATH_LOCAL_CHILD',
+        isMainWorktree: false,
+        worktreeInstanceId: 'INSTANCE_LOCAL_CHILD',
+        lineageWorktreeInstanceId: 'INSTANCE_LOCAL_CHILD',
+        parentWorktreeInstanceId: 'INSTANCE_WSL_PRIMARY',
+        parentWorktreeId: 'WSL_PRIMARY',
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'ZERO_PRIMARY',
+        repoId: 'REPO_ZERO',
+        hostId: 'local',
+        terminalPlatform: 'win32',
+        path: 'PATH_ZERO_PRIMARY',
+        isMainWorktree: true,
+        worktreeInstanceId: 'INSTANCE_ZERO_PRIMARY',
+        parentWorktreeId: null,
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'CANDIDATE_WSL_CLEAR',
+        repoId: 'REPO_WSL',
+        hostId: 'local',
+        terminalPlatform: 'linux',
+        path: 'PATH_CANDIDATE_WSL_CLEAR',
+        isMainWorktree: false,
+        worktreeInstanceId: 'INSTANCE_CANDIDATE_WSL_CLEAR',
+        parentWorktreeId: null,
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'LOCAL_PRIMARY',
+        repoId: 'REPO_LOCAL',
+        hostId: 'local',
+        terminalPlatform: 'win32',
+        path: 'PATH_LOCAL_PRIMARY',
+        isMainWorktree: true,
+        worktreeInstanceId: 'INSTANCE_LOCAL_PRIMARY',
+        parentWorktreeId: null,
+        childWorktreeIds: ['WSL_CHILD']
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'LOCAL_CREATE_CHILD',
+        repoId: 'REPO_LOCAL',
+        hostId: 'local',
+        terminalPlatform: 'win32',
+        path: 'PATH_LOCAL_CREATE_CHILD',
+        isMainWorktree: false,
+        worktreeInstanceId: 'INSTANCE_LOCAL_CREATE_CHILD',
+        lineageWorktreeInstanceId: 'INSTANCE_LOCAL_CREATE_CHILD',
+        parentWorktreeInstanceId: 'INSTANCE_WSL_PRIMARY',
+        parentWorktreeId: 'WSL_PRIMARY',
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'CANDIDATE_LOCAL_CLEAR',
+        repoId: 'REPO_LOCAL',
+        hostId: 'local',
+        terminalPlatform: 'win32',
+        path: 'PATH_CANDIDATE_LOCAL_CLEAR',
+        isMainWorktree: false,
+        worktreeInstanceId: 'INSTANCE_CANDIDATE_LOCAL_CLEAR',
+        parentWorktreeId: null,
+        childWorktreeIds: []
+      },
+      {
+        workspaceKind: 'git',
+        worktreeId: 'WSL_PRIMARY',
+        repoId: 'REPO_WSL',
+        hostId: 'local',
+        terminalPlatform: 'linux',
+        path: 'PATH_WSL_PRIMARY',
+        isMainWorktree: true,
+        worktreeInstanceId: 'INSTANCE_WSL_PRIMARY',
+        parentWorktreeId: null,
+        childWorktreeIds: ['LOCAL_CHILD', 'LOCAL_CREATE_CHILD']
+      }
+    ] satisfies Partial<Worktree>[]
+    const rows = captured.map((row) => worktree(row))
+    const plan = buildMobileWorkspacePlan(
+      rows,
+      'name',
+      {
+        filterRepoIds: [],
+        visibleHostIds: null,
+        hideSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: true,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        hideCliCreatedWorkspaces: false,
+        hideDetachedHeadWorkspaces: false,
+        hideWorkspacesFromOtherDevices: false
+      },
+      '',
+      'repo',
+      new Set()
+    )
+
+    for (const actual of [
+      applyMobileWorkspaceLineage(rows),
+      plan.render(new Set()).flatMap((section) => section.data)
+    ]) {
+      expect(actual.map((row) => row.worktreeId).sort()).toEqual(
+        captured.map((row) => row.worktreeId).sort()
+      )
+      for (const row of captured) {
+        expect(actual.find((item) => item.worktreeId === row.worktreeId)).toMatchObject(row)
+      }
+      expect(Object.fromEntries(actual.map((row) => [row.worktreeId, row.lineageDepth]))).toEqual({
+        WSL_CHILD: 1,
+        LOCAL_CHILD: 1,
+        ZERO_PRIMARY: 0,
+        CANDIDATE_WSL_CLEAR: 0,
+        LOCAL_PRIMARY: 0,
+        LOCAL_CREATE_CHILD: 1,
+        CANDIDATE_LOCAL_CLEAR: 0,
+        WSL_PRIMARY: 0
+      })
+      for (const parent of captured.filter((row) => row.childWorktreeIds.length > 0)) {
+        const index = actual.findIndex((row) => row.worktreeId === parent.worktreeId)
+        expect(
+          actual
+            .slice(index + 1, index + 1 + parent.childWorktreeIds.length)
+            .map((row) => row.worktreeId)
+            .sort()
+        ).toEqual([...parent.childWorktreeIds].sort())
+      }
+    }
+  })
+
+  it('recovers a relayed server child from its saved external edge while a phone paired only to that server stays flat', () => {
+    const parent = worktree({ worktreeId: 'parent', worktreeInstanceId: 'p', hostId: 'local' })
+    const child = worktree({
+      worktreeId: 'child',
+      worktreeInstanceId: 'c',
+      hostId: 'runtime:server',
+      parentWorktreeId: null,
+      savedLineage: {
+        worktreeId: 'child',
+        worktreeInstanceId: 'c',
+        parentWorktreeId: 'parent',
+        parentWorktreeInstanceId: 'p',
+        parentStore: 'external',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+    })
+    expect(
+      applyMobileWorkspaceLineage([parent, child]).find((row) => row.worktreeId === 'child')
+        ?.lineageDepth
+    ).toBe(1)
+    expect(applyMobileWorkspaceLineage([child])[0].lineageDepth).toBe(0)
+    const plan = buildMobileWorkspacePlan(
+      [parent, child, { ...parent, repoId: 'hidden', hostId: 'ssh:copy' }],
+      'name',
+      {
+        filterRepoIds: ['repo-1'],
+        visibleHostIds: null,
+        hideSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: true,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        hideCliCreatedWorkspaces: false,
+        hideDetachedHeadWorkspaces: false,
+        hideWorkspacesFromOtherDevices: false
+      },
+      '',
+      'repo',
+      new Set()
+    )
+    expect(
+      plan
+        .render(new Set())
+        .flatMap((section) => section.data)
+        .find((row) => row.worktreeId === 'child')?.lineageDepth
+    ).toBe(0)
+  })
+
   it.each([false, true])(
     'keeps deep project identity in each occurrence (duplicate pins: %s)',
     (duplicate) => {

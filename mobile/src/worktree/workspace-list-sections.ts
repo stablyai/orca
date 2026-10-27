@@ -185,9 +185,8 @@ export function buildMobileWorkspacePlan(
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
-    filters.filterRepoIds.length > 0
-      ? worktrees.filter((w) => filters.filterRepoIds.includes(w.repoId))
-      : worktrees
+    worktrees,
+    filters.filterRepoIds
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)

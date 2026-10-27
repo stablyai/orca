@@ -1,3 +1,6 @@
+import { useAllWorktrees } from '@/store/selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getLineageInputs } from './visible-worktree-indexes'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
@@ -7,7 +10,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
@@ -49,8 +51,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const removeWorktree = useAppStore((s) => s.removeWorktree)
   const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
   const allWorktrees = useAllWorktrees()
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const folderWorkspaces = useAppStore(selectFolderWorkspaces)
   const repos = useAppStore((s) => s.repos)
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -66,9 +69,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () =>
       Array.isArray(modalData.worktreeIds)
         ? modalData.worktreeIds.filter((id): id is string => typeof id === 'string')
-        : worktreeId
-          ? [worktreeId]
-          : [],
+        : [worktreeId].filter(Boolean),
     [modalData.worktreeIds, worktreeId]
   )
   const { worktreeDeleteIdentities, lineageDeleteIdentities, resolveConfirmedTargets } =
@@ -89,8 +90,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       ? (modalData.onDeleted as (targets: WorktreeRemovalTarget[]) => void)
       : null
   const forceOnConfirm = modalData.forceOnConfirm !== false
+  const targetState = useMemo(
+    () => ({ worktreesByRepo, folderWorkspaces }),
+    [worktreesByRepo, folderWorkspaces]
+  )
   const { worktree, worktrees } = useDeleteWorktreeDialogTargets({
-    allWorktrees,
+    state: targetState,
     worktreeDeleteIdentities,
     worktreeId,
     worktreeIds
@@ -106,12 +111,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     isFolderWorkspaceDelete
   })
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const lineageInputs = useAppStore(getLineageInputs)
   const lineageDelete = useMemo(
     () =>
       !isBatchDelete && worktree
-        ? getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById)
+        ? getWorkspaceDeleteLineage(worktree, lineageInputs.worktreeMap, lineageInputs.lineageById)
         : { descendants: [], deleteAllTargets: [] },
-    [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
+    [isBatchDelete, worktree, lineageInputs]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   // Git cannot remove the original clone with worktree remove; block it before the force-delete dead end.

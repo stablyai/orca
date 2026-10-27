@@ -26,6 +26,7 @@ type QuickSubmitActionInput = Pick<
   | 'linkedWorkItem'
   | 'name'
   | 'onCreated'
+  | 'parentWorktreeId'
   | 'parsedLinkedIssueNumber'
   | 'repoId'
   | 'requiresExplicitSetupChoice'
@@ -55,6 +56,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     linkedWorkItem,
     name,
     onCreated,
+    parentWorktreeId,
     parsedLinkedIssueNumber,
     repoId,
     requiresExplicitSetupChoice,
@@ -160,6 +162,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           useAppStore.getState().openModal('new-workspace-composer', {
             prefilledName: name,
             initialRepoId: repoId,
+            initialWorkspaceTarget: workspaceRunContext,
+            initialParentWorktreeId: parentWorktreeId,
             linkedWorkItem,
             taskSourceContext,
             telemetrySource
@@ -207,6 +211,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       linkedWorkItem,
       name,
       onCreated,
+      parentWorktreeId,
       parsedLinkedIssueNumber,
       repoId,
       requiresExplicitSetupChoice,

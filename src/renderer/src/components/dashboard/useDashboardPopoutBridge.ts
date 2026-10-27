@@ -47,6 +47,8 @@ export function dashboardSnapshotInputsChanged(
     agentLaunchRouteInputsChanged(state, previousState) ||
     state.repos !== previousState.repos ||
     selectWorktreesByRepo(state) !== selectWorktreesByRepo(previousState) ||
+    state.worktreeLineageById !== previousState.worktreeLineageById ||
+    state.workspaceLineageByChildKey !== previousState.workspaceLineageByChildKey ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||
     state.unifiedTabsByWorktree !== previousState.unifiedTabsByWorktree ||
     state.retainedAgentsByPaneKey !== previousState.retainedAgentsByPaneKey ||

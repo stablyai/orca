@@ -173,7 +173,7 @@ export async function getCreateRepoTarget(
     return { repo: explicitRepo }
   }
   const inferredRepo = getRepoSelectorFromWorktreeId(cwdParentWorktree?.worktreeId)
-  if (inferredRepo) {
+  if (inferredRepo && !client.isRemote) {
     return { repo: inferredRepo }
   }
   throw new RuntimeClientError(

@@ -1,3 +1,9 @@
+import {
+  getSidebarLineageParent,
+  sameWorktreeLineageIdentity,
+  getRepresentedWorktreeLineageRow
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getLineageInputs } from '../sidebar/visible-worktree-indexes'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
@@ -69,7 +75,14 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'worktreeLineageById'
+        | 'workspaceLineageByChildKey'
+      >
   >
 
 export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
@@ -110,10 +123,21 @@ export function buildDashboardSnapshot(
     startWorktreeAgentRowsCachePass(options.rowsCache)
   }
 
+  const lineageInputs = getLineageInputs(state)
   for (const workspace of activeWorktrees) {
     const { repo, worktree } = workspace
     const worktreeId = worktree.id
-    const parentWorktreeId = worktree.parentWorktreeId
+    const parent = getSidebarLineageParent(
+      worktree,
+      lineageInputs.lineageById,
+      lineageInputs.worktreeMap
+    )
+    const represented =
+      parent && getRepresentedWorktreeLineageRow(lineageInputs.worktreeMap, parent)
+    const parentWorktreeId =
+      parent && represented && sameWorktreeLineageIdentity(parent, represented)
+        ? parent.id
+        : undefined
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
     const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 

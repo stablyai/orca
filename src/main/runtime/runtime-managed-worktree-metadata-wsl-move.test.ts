@@ -101,9 +101,14 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
   })
 
   it('refuses a lineage change even alongside passive fields', async () => {
+    const before = store.setWorktreeMeta(hostWorktreeTarget({ id: MOVING, hostId: 'local' }), {
+      instanceId: resolved(MOVING).instanceId
+    })
     await expect(
       update(MOVING, { isUnread: true, lineage: { noParent: true } })
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+    expect(store.getWorktreeMeta(MOVING)).toEqual(before)
+    expect(store.getWorktreeLineage(MOVING)).toBeUndefined()
   })
 
   it('leaves a project the move is not taking untouched', async () => {

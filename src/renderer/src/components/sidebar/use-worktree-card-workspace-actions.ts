@@ -1,3 +1,8 @@
+import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import {
+  createWorktreeDeleteAdmission,
+  toWorktreeDeleteIdentities
+} from './worktree-delete-request'
 import { draggedWorktreeCopiesOf } from './worktree-list/drag/dragged-worktree-copies'
 import React, { useCallback } from 'react'
 
@@ -53,6 +58,12 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
+          try {
+            createWorktreeDeleteAdmission(worktree)()
+          } catch {
+            showWorkspaceListChangedToast()
+            return
+          }
           void deleteFolderWorkspaceUnlessUnsaved(
             useAppStore.getState,
             folderWorkspaceId,
@@ -61,10 +72,14 @@ export function useWorktreeCardWorkspaceActions({
           return
         }
         // Qualify deletion with the row’s host so a twin with the same repo/path ID cannot be removed.
-        runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
+        runWorktreeDelete(worktree.id, {
+          expectedIdentity: toWorktreeDeleteIdentities([worktree])[0],
+          expectedHostId: worktree.hostId,
+          expectedInstanceId: worktree.instanceId
+        })
       }
     },
-    [folderWorkspaceId, worktree.hostId, showDeleteQuickAction, worktree.id]
+    [folderWorkspaceId, worktree, showDeleteQuickAction]
   )
   const handleOpenRenameErrorDialog = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {

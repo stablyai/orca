@@ -1,3 +1,5 @@
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
+import { projectGroupIdFromRepoId } from '../folder-workspace-worktree'
 import type { Repo } from '../repo-types'
 import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
@@ -44,6 +46,7 @@ export type SectionAppendContext = {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
+  folderByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
 }
 
@@ -69,6 +72,15 @@ export function appendOrderedGroups(
     occurrencePlan
   } = ctx
   for (const [key, group] of groupsToAppend) {
+    if (groupBy === 'repo' && projectGroupIdFromRepoId(key)) {
+      appendWorktreeRows(result, repoOf, occurrencePlan, {
+        collapsedGroups,
+        groupDepth: projectGroupDepth,
+        sectionKey: key,
+        folderByIdentity: ctx.folderByIdentity
+      })
+      continue
+    }
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
@@ -180,6 +192,7 @@ export function appendOrderedGroups(
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
       appendWorktreeRows(result, repoOf, occurrencePlan, {
+        folderByIdentity: ctx.folderByIdentity,
         collapsedGroups,
         groupDepth: projectGroupDepth,
         sectionKey: key,

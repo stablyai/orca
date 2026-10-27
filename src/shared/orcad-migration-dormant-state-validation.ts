@@ -127,7 +127,7 @@ export function assertOrcadMigrationDormantStateReferences(args: {
     if (
       entry.worktreeId !== entry.lineage.worktreeId ||
       !owns(entry.worktreeId) ||
-      !owns(entry.lineage.parentWorktreeId)
+      (entry.lineage.parentStore !== 'external' && !owns(entry.lineage.parentWorktreeId))
     ) {
       throw new Error('orcad_migration_dormant_worktree_lineage_scope_invalid')
     }
@@ -136,7 +136,7 @@ export function assertOrcadMigrationDormantStateReferences(args: {
     if (
       entry.childWorkspaceKey !== entry.lineage.childWorkspaceKey ||
       !owns(entry.childWorkspaceKey) ||
-      !owns(entry.lineage.parentWorkspaceKey)
+      (entry.lineage.parentStore !== 'external' && !owns(entry.lineage.parentWorkspaceKey))
     ) {
       throw new Error('orcad_migration_dormant_workspace_lineage_scope_invalid')
     }

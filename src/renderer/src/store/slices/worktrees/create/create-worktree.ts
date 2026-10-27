@@ -1,3 +1,7 @@
+import {
+  WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
@@ -25,7 +29,6 @@ import {
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import { WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
@@ -41,18 +44,13 @@ import {
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
+  lostRequestedParent,
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
-  type WorktreeCreateParentPick
+  type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
 type RuntimeTarget = RuntimeClientTarget
-
-type CreateAttemptOutcome = {
-  result: CreatedWorktreeResult
-  /** The host had no such parent, so this attempt was retried unattached. */
-  droppedParent: boolean
-}
 
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
@@ -60,6 +58,13 @@ async function runCreateAttempt(
   target: RuntimeTarget,
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
+  if (attempt.parentWorktreeRef && target.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY,
+      `Update Orca on ${target.environmentId} to nest workspaces across machines`
+    )
+  }
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
@@ -69,22 +74,38 @@ async function runCreateAttempt(
         ? await adoptRuntimeProvisionedRoot(
             target,
             request,
-            { ...attempt, parentWorkspace },
+            {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            },
             provisionedRoot
           )
         : await window.api.worktrees.adoptProvisionedRoot({
-            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+            ...buildLocalWorktreeCreateArgs(request, {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            }),
             ...provisionedRoot
           })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+            buildLocalWorktreeCreateArgs(request, {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            })
           )
         : await createWorktreeOnRuntimeHost(
             target.environmentId,
             request,
-            { ...attempt, parentWorkspace },
+            {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            },
             clientCreateSettings
           )
   try {
@@ -95,25 +116,6 @@ async function runCreateAttempt(
     }
     return { result: await create(undefined), droppedParent: true }
   }
-}
-
-/** True when the create landed without the nesting the caller asked for. */
-function lostRequestedParent(
-  outcome: CreateAttemptOutcome,
-  parent: WorktreeCreateParentPick,
-  target: RuntimeTarget
-): boolean {
-  if (outcome.droppedParent) {
-    return true
-  }
-  if (parent.pickedParentWorktreeId) {
-    return !outcome.result.lineage
-  }
-  // Why local-only: older hosts predate the top-level workspace lineage field, so its absence
-  // over RPC would warn about a nesting that actually landed.
-  return (
-    target.kind === 'local' && Boolean(parent.parentWorkspace) && !outcome.result.workspaceLineage
-  )
 }
 
 export function createCreateWorktree(
@@ -253,6 +255,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
+              parentWorktreeRef: parent.parentWorktreeRef,
               manualOrder
             },
             target,

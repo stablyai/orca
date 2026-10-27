@@ -2,11 +2,11 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it } from 'vitest'
-import { useAppStore } from '../store'
-import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { renderHook } from '@testing-library/react'
+import { useLineageAncestors } from './native-chat-resume-workspace-lookups'
+import { groupResumeCandidates } from './native-chat-resume-on-restart-grouping'
 import {
+  lineage,
   candidate,
   chatBox,
   countOf,
@@ -19,6 +19,10 @@ import {
   unretryable,
   worktree
 } from './native-chat-resume-tree.test-support'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '../store'
+import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ResumeTreeHarness as Harness } from './NativeChatResumeTreeHarness.test-support'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -183,3 +187,66 @@ it('toggles the chats of a collapsed node', () => {
     'in-parent'
   ])
 })
+
+it.each([10, 100])(
+  'indexes genuine offers once and checks each reached ancestor once at G=%i',
+  (n) => {
+    seedTree()
+    const parent = worktree('root', { hostId: 'local' })
+    const children = Array.from({ length: n - 1 }, (_, i) => {
+      const child = worktree(`child-${i}`, { hostId: 'local' })
+      return { ...child, savedLineage: lineage(child, parent) }
+    })
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-1': [...children, parent] },
+      worktreeLineageById: {}
+    })
+    const groups = groupResumeCandidates(
+      [...children, parent].map((row, i) => candidate(`s-${i}`, row))
+    )
+    const add = Set.prototype.add,
+      has = Set.prototype.has
+    let admitted = 0,
+      membership = 0
+    const isOfferKey = (key: unknown) => {
+      if (typeof key !== 'string' || !key.startsWith('["local","repo-1",')) {
+        return false
+      }
+      const parsed: unknown = JSON.parse(key)
+      return Array.isArray(parsed) && parsed.length === 3
+    }
+    const a = vi.spyOn(Set.prototype, 'add').mockImplementation(function (this: Set<unknown>, key) {
+      if (isOfferKey(key)) {
+        admitted++
+      }
+      return add.call(this, key)
+    })
+    const h = vi.spyOn(Set.prototype, 'has').mockImplementation(function (this: Set<unknown>, key) {
+      if (isOfferKey(key)) {
+        membership++
+      }
+      return has.call(this, key)
+    })
+    const view = renderHook(() => useLineageAncestors(groups))
+    try {
+      expect(groups.map((g) => view.result.current(g))).toEqual([
+        ...children.map(() => [parent.id]),
+        []
+      ])
+      expect(admitted).toBe(n)
+      expect(membership).toBe(n - 1)
+      act(() =>
+        useAppStore.setState({
+          worktreesByRepo: {
+            'repo-1': [parent, ...children.map((c) => ({ ...c, savedLineage: null }))]
+          }
+        })
+      )
+      expect(groups.map((g) => view.result.current(g))).toEqual(groups.map(() => []))
+    } finally {
+      a.mockRestore()
+      h.mockRestore()
+      view.unmount()
+    }
+  }
+)

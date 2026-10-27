@@ -9,6 +9,7 @@ import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cach
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { runtimeVisibleFolderWorkspaces } from '../runtime-visible-catalog'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
@@ -174,11 +175,18 @@ export class WorkspaceRowsProducer {
       return displayName === worktree.displayName ? worktree : { ...worktree, displayName }
     })
     const { worktrees, platformByRepoId } = this.sources.visible({ ...listing, worktrees: all })
+    const folderWorkspaces = runtimeVisibleFolderWorkspaces(store)
+    const visibleFolders = new Set(folderWorkspaces.map((folder) => `folder:${folder.id}`))
     const rows = buildWorkspaceRows({
       worktrees,
-      folderWorkspaces: runtimeVisibleFolderWorkspaces(store),
+      folderWorkspaces,
       repos: store.getRepos(),
-      lineageById: store.getAllWorktreeLineage?.() ?? {}
+      lineageById: {},
+      projected: [
+        ...worktrees,
+        ...(listing.folderWorktrees?.filter((row) => visibleFolders.has(row.id)) ??
+          folderWorkspaces.map(folderWorkspaceToWorktree))
+      ]
     })
     for (const row of rows.values()) {
       const terminalPlatform = row.kind === 'git' ? platformByRepoId.get(row.repoId) : undefined

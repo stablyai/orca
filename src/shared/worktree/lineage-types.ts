@@ -21,6 +21,7 @@ export type WorktreeLineage = {
   worktreeInstanceId: string
   parentWorktreeId: string
   parentWorktreeInstanceId: string
+  parentStore?: 'external'
   origin: WorktreeLineageOrigin
   capture: WorktreeLineageCapture
   orchestrationRunId?: string
@@ -35,6 +36,7 @@ export type WorkspaceLineage = {
   childInstanceId?: string | null
   parentWorkspaceKey: WorkspaceKey
   parentInstanceId?: string | null
+  parentStore?: 'external'
   origin: WorktreeLineageOrigin
   capture: WorktreeLineageCapture
   taskId?: string
@@ -53,4 +55,10 @@ export type WorktreeLineageWarning = {
   code: WorktreeLineageWarningCode
   message: string
   details?: Record<string, unknown>
+}
+
+export type ParentWorktreeRef = {
+  worktreeId: string
+  instanceId: string
+  external: boolean
 }

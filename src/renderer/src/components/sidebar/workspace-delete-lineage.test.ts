@@ -106,7 +106,7 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([parent])
   })
 
-  it('includes other repos and projects on the same host and rejects another host', () => {
+  it('includes other repos, projects and execution hosts in the same store', () => {
     const parent: Worktree = {
       ...makeWorktree('parent', '/workspaces/parent'),
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -134,8 +134,8 @@ describe('getWorkspaceDeleteLineage', () => {
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, ...children], lineageById)
 
-    expect(lineage.descendants).toEqual([children[0], children[2]])
-    expect(lineage.deleteAllTargets).toEqual([children[0], children[2], parent])
+    expect(lineage.descendants).toEqual(children)
+    expect(lineage.deleteAllTargets).toEqual([...children, parent])
   })
 
   it('does not traverse cyclic projected lineage', () => {
@@ -151,13 +151,18 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([parent])
   })
 
-  it('resolves a colliding child id to the parent host', () => {
+  it('deletes only the child published by its own metadata owner', () => {
     const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
     const localChild: Worktree = {
       ...makeWorktree('child', '/workspaces/parent/child'),
-      hostId: LOCAL_EXECUTION_HOST_ID
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      savedLineage: null
     }
-    const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
+    const sshChild: Worktree = {
+      ...localChild,
+      hostId: SSH_HOST,
+      savedLineage: makeLineage(localChild, parent)
+    }
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, localChild, sshChild], {
       [localChild.id]: makeLineage(localChild, parent)
@@ -169,13 +174,18 @@ describe('getWorkspaceDeleteLineage', () => {
     ])
   })
 
-  it('keeps the parent host preference stable regardless of row order', () => {
+  it('keeps published ownership stable regardless of row order', () => {
     const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
     const localChild: Worktree = {
       ...makeWorktree('child', '/workspaces/parent/child'),
-      hostId: LOCAL_EXECUTION_HOST_ID
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      savedLineage: null
     }
-    const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
+    const sshChild: Worktree = {
+      ...localChild,
+      hostId: SSH_HOST,
+      savedLineage: makeLineage(localChild, parent)
+    }
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, sshChild, localChild], {
       [localChild.id]: makeLineage(localChild, parent)
@@ -208,10 +218,10 @@ describe('getWorkspaceDeleteLineage', () => {
       instanceId: 'ssh-child',
       hostId: SSH_HOST
     }
-    const sshChild = {
+    const sshChild: Worktree = {
       ...sshChildBase,
-      lineage: makeLineage(sshChildBase, sshParent)
-    } as Worktree
+      savedLineage: makeLineage(sshChildBase, sshParent)
+    }
 
     const lineage = getWorkspaceDeleteLineage(
       sshParent,
@@ -220,5 +230,30 @@ describe('getWorkspaceDeleteLineage', () => {
     )
 
     expect(lineage.deleteAllTargets).toEqual([sshChild, sshParent])
+    const copiedParent = { ...localParent, instanceId: sshParent.instanceId, isArchived: true }
+    expect(
+      getWorkspaceDeleteLineage(sshParent, [copiedParent, sshParent, sshChild], {}).deleteAllTargets
+    ).toEqual([sshParent])
   })
+})
+
+it('never admits an unrelated local child to either same-host copied parent Delete-all selection', () => {
+  const a: Worktree = {
+    ...makeWorktree('parent', '/parent'),
+    hostId: SSH_HOST,
+    runtimeOwnerEnvironmentId: 'A'
+  }
+  const b = { ...a, runtimeOwnerEnvironmentId: 'B' }
+  const c: Worktree = { ...makeWorktree('C', '/C'), hostId: 'local' }
+  c.savedLineage = { ...makeLineage(c, a), parentStore: 'external' }
+  const unique: Worktree = {
+    ...makeWorktree('unique', '/unique'),
+    hostId: SSH_HOST,
+    runtimeOwnerEnvironmentId: 'A'
+  }
+  unique.savedLineage = makeLineage(unique, a)
+  const complete = [b, c, a, unique]
+  expect(getWorkspaceDeleteLineage(a, complete, {}).deleteAllTargets).toEqual([unique, a])
+  expect(getWorkspaceDeleteLineage(b, complete, {}).deleteAllTargets).toEqual([b])
+  expect(getWorkspaceDeleteLineage(a, [a, c], {}).deleteAllTargets).toEqual([c, a])
 })

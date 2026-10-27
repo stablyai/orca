@@ -1,4 +1,17 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { renderHook, cleanup } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import * as activation from '@/lib/worktree-activation'
+import { toast } from 'sonner'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
+import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+
 import {
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
@@ -19,6 +32,11 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('shouldRevealWorktreeDeveloperMenu', () => {
   it('stays hidden for an ordinary right-click', () => {
@@ -204,6 +222,95 @@ describe('parent picker context menu affordance', () => {
     } as Worktree & { lineage: WorktreeLineage }
 
     expect(hasWorktreeParentLink(child, {}, {})).toBe(true)
+    const previous = useAppStore.getState()
+    const activate = vi.spyOn(activation, 'activateAndRevealWorkspace')
+    const notice = vi.spyOn(toast, 'info').mockImplementation(() => 0)
+    const folder = makeFolderWorkspace({ id: 'chosen-parent', executionHostId: 'local' })
+    const pathStatus = vi.fn(() => ({
+      path: folder.folderPath,
+      exists: false,
+      reason: 'missing' as const
+    }))
+    const blocked = vi.spyOn(toast, 'error').mockImplementation(() => 0)
+    useAppStore.setState({
+      repos: [TEST_REPO],
+      worktreesByRepo: {},
+      folderWorkspaces: [folder],
+      getFreshFolderWorkspacePathStatus: pathStatus
+    })
+    const selected = folderWorkspaceToWorktree(folder)
+    expect(useAppStore.getState().getKnownWorktreeById(selected.id, 'local')).not.toBe(selected)
+    const current = useAppStore.getState()
+    const args: Parameters<typeof useWorktreeContextMenuCommands>[0] = {
+      ...current,
+      activeContextWorktrees: [],
+      batchDeleteWorktrees: [],
+      createGroupDialogActiveRef: { current: false },
+      folderWorkspaceId: null,
+      getState: useAppStore.getState,
+      isMultiContext: false,
+      repo: TEST_REPO,
+      scopeRef: { current: null },
+      setCreateGroupDialogOpen: () => {},
+      setMenuOpenState: () => {},
+      sleepableWorktrees: [],
+      subtreeSleepableWorktrees: [],
+      validParentWorktreeId: selected.id,
+      validParent: selected,
+      worktree: makeWorktree({ id: 'repo1::child', repoId: 'repo1' }),
+      statusesForWorktree: () => []
+    }
+    try {
+      const commands = renderHook((props) => useWorktreeContextMenuCommands(props), {
+        initialProps: args
+      })
+      commands.result.current.handleOpenParent()
+      expect(pathStatus).toHaveBeenCalledWith(
+        { scope: 'folder-workspace', folderWorkspaceId: folder.id },
+        { runtimeEnvironmentId: null }
+      )
+      expect(blocked).toHaveBeenCalledWith(
+        'Folder not found',
+        expect.objectContaining({ description: expect.any(String) })
+      )
+      expect(useAppStore.getState().activeWorkspaceKey).toBe(current.activeWorkspaceKey)
+      expect(useAppStore.getState().activeWorktreeId).toBe(current.activeWorktreeId)
+      expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(
+        current.activeWorkspaceExecutionHostId
+      )
+      expect(notice).not.toHaveBeenCalled()
+      expect(activate).toHaveBeenLastCalledWith(selected.id, {
+        navigationIntent: 'user-open',
+        executionHostId: 'local'
+      })
+      activate.mockClear()
+      activate.mockReturnValue({ primaryTabId: null })
+      useAppStore.setState({
+        folderWorkspaces: [{ ...folder, executionHostId: 'runtime:replacement' }]
+      })
+      commands.result.current.handleOpenParent()
+      expect(activate).not.toHaveBeenCalled()
+      expect(notice).toHaveBeenCalledWith(
+        'Workspace list changed',
+        expect.objectContaining({ description: expect.any(String) })
+      )
+      const ssh = makeWorktree({
+        id: 'repo1::parent',
+        repoId: 'repo1',
+        instanceId: 'parent',
+        hostId: 'ssh:inner',
+        runtimeOwnerEnvironmentId: 'server'
+      })
+      useAppStore.setState({ folderWorkspaces: [], worktreesByRepo: { repo1: [ssh] } })
+      commands.rerender({ ...args, validParent: ssh, validParentWorktreeId: ssh.id })
+      commands.result.current.handleOpenParent()
+      expect(activate).toHaveBeenLastCalledWith(ssh.id, {
+        navigationIntent: 'user-open',
+        executionHostId: 'ssh:inner'
+      })
+    } finally {
+      useAppStore.setState(previous, true)
+    }
   })
 
   it('uses set/change labels based on valid parent presence', () => {

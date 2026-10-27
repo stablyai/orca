@@ -47,7 +47,6 @@ export function useEffectiveCollapsedGroups(args: {
     visibleWorktrees,
     filterRepoIds,
     repoMap,
-    worktreeMap,
     worktreeLineageById,
     prCache,
     workspaceStatuses,
@@ -60,7 +59,7 @@ export function useEffectiveCollapsedGroups(args: {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
     }
-    const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
+    const targetWorktree = worktrees.find((row) => row.id === agentSendTargetWorktreeId)
     if (!targetWorktree) {
       // Folder workspaces are absent from worktreeMap but still need picker-driven section reveal.
       const folderKeys = getFolderWorkspaceRevealGroupKeys(
@@ -116,7 +115,6 @@ export function useEffectiveCollapsedGroups(args: {
     repoMap,
     workspaceStatuses,
     worktreeLineageById,
-    worktreeMap,
     folderWorkspaces,
     defaultHostId
   ])

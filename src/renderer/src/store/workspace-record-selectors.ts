@@ -15,15 +15,15 @@ import {
 export type WorkspaceRecordState = Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces'>
 
 /** Git worktrees per repo id, in listing order. */
-export function selectWorktreesByRepo(
-  state: Pick<AppState, 'worktreesByRepo'>
-): AppState['worktreesByRepo'] {
+export function selectWorktreesByRepo<
+  T extends Readonly<Record<string, readonly Worktree[]>>
+>(state: { worktreesByRepo: T }): T {
   return state.worktreesByRepo
 }
 
-export function selectFolderWorkspaces(
-  state: Pick<AppState, 'folderWorkspaces'>
-): AppState['folderWorkspaces'] {
+export function selectFolderWorkspaces<T extends { folderWorkspaces?: readonly FolderWorkspace[] }>(
+  state: T
+): T['folderWorkspaces'] {
   return state.folderWorkspaces
 }
 

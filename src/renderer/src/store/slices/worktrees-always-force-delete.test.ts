@@ -1,3 +1,5 @@
+import { requireCurrentLineageRow } from '@/components/sidebar/visible-worktree-indexes'
+import { getWorktreeLineageSelection } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -238,4 +240,80 @@ it('routes automatic branch deletion through the owner runtime', async () => {
       })
     })
   )
+})
+
+it.each([false, true])(
+  'retains selected owner admission across the actual preparation await and final dispatch, force=%s',
+  async (force) => {
+    const store = createTestStore()
+    const row = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      instanceId: 'copy',
+      hostId: 'local'
+    })
+    store.setState({ worktreesByRepo: { repo1: [row] } })
+    const selected = getWorktreeLineageSelection(row)
+    const preparation = deferred<unknown>()
+    mockApi.hooks.check.mockReturnValueOnce(preparation.promise)
+    const admission = vi.fn(() => {
+      requireCurrentLineageRow(store.getState(), selected)
+    })
+    const running = store
+      .getState()
+      .removeWorktree({ id: row.id, executionHostId: 'local' }, force, {
+        assertBeforeDispatch: admission
+      })
+    await vi.waitFor(() => expect(mockApi.hooks.check).toHaveBeenCalled())
+    store.setState({ worktreesByRepo: { repo1: [{ ...row, runtimeOwnerEnvironmentId: 'env-1' }] } })
+    preparation.resolve({ hasHooks: false })
+    expect((await running).ok).toBe(false)
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  }
+)
+
+it('rechecks the selected owner after actual archive-hook trust approval', async () => {
+  const store = createTestStore()
+  const row = makeWorktree({
+    id: 'repo1::/path/wt1',
+    repoId: 'repo1',
+    hostId: 'local',
+    instanceId: 'copy'
+  })
+  let approve: () => void = () => {
+    throw new Error('Trust prompt not opened')
+  }
+  const opened = vi.fn()
+  store.setState({
+    worktreesByRepo: { repo1: [row] },
+    openModal: (type, data) => {
+      opened(type)
+      const resolve = data?.onResolve
+      if (typeof resolve === 'function') {
+        approve = () => {
+          resolve('run')
+        }
+      }
+    }
+  })
+  mockApi.hooks.check.mockResolvedValueOnce({
+    hasHooks: true,
+    hooks: { scripts: { archive: 'echo fixture' } },
+    mayNeedUpdate: false
+  })
+  const selected = getWorktreeLineageSelection(row)
+  const running = store.getState().removeWorktree({ id: row.id, executionHostId: 'local' }, true, {
+    allowFailedArchiveHook: true,
+    approvedNestedWorktrees: [{ path: row.path, head: row.head, branch: row.branch }],
+    assertBeforeDispatch: () => {
+      requireCurrentLineageRow(store.getState(), selected)
+    }
+  })
+  await vi.waitFor(() => expect(opened).toHaveBeenCalledWith('confirm-orca-yaml-hooks'))
+  store.setState({ worktreesByRepo: { repo1: [{ ...row, runtimeOwnerEnvironmentId: 'env-1' }] } })
+  approve()
+  expect((await running).ok).toBe(false)
+  expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+  expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
 })

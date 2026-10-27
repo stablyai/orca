@@ -48,6 +48,7 @@ export function pruneLineageForMissingRepoWorktrees(
   options: {
     platform?: NodeJS.Platform
     preservedMetadataCandidateIds?: ReadonlySet<string>
+    workspaceLineage?: Readonly<Record<string, WorkspaceLineage>>
   } = {}
 ): void {
   const { platform = process.platform, preservedMetadataCandidateIds } = options
@@ -60,7 +61,7 @@ export function pruneLineageForMissingRepoWorktrees(
     return
   }
   const worktreeLineage = store.getAllWorktreeLineage()
-  const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
+  const workspaceLineage = options.workspaceLineage ?? store.getAllWorkspaceLineage?.() ?? {}
   const repoPrefix = `${repo.id}::`
   // One empty scan cannot prove every stored lineage edge disappeared.
   if (
@@ -118,6 +119,7 @@ export function pruneLineageForMissingRepoWorktrees(
       store.removeWorktreeLineage(hostWorktreeTarget({ id: childId, hostId: expectedHostId }))
     }
     if (
+      lineage.parentStore !== 'external' &&
       worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix) &&
       canMutateWorktree(lineage.parentWorktreeId) &&
       !isLive(lineage.parentWorktreeId)

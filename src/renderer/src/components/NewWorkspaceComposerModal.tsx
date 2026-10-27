@@ -43,6 +43,7 @@ const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/Add
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
+  initialParentWorktreeId?: string | null
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
@@ -143,6 +144,7 @@ function QuickTabBody({
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialWorkspaceTarget: modalData.initialWorkspaceTarget ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialParentWorktreeId: modalData.initialParentWorktreeId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,

@@ -1,3 +1,5 @@
+import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import { requireKnownLineageRow } from './visible-worktree-indexes'
 import { useCallback } from 'react'
 import type { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
@@ -9,7 +11,7 @@ import {
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from './sleep-twin-confirmation'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
@@ -40,6 +42,7 @@ export function useWorktreeContextMenuCommands(args: {
   subtreeSleepableWorktrees: readonly Worktree[]
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
   validParentWorktreeId: string | null
+  validParent: Worktree | null
   worktree: Worktree
   statusesForWorktree: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
 }) {
@@ -174,10 +177,19 @@ export function useWorktreeContextMenuCommands(args: {
     args.setMenuOpenState(false)
   }, [args])
   const handleOpenParent = useCallback(() => {
-    if (args.validParentWorktreeId) {
-      activateAndRevealWorktree(args.validParentWorktreeId, { navigationIntent: 'user-open' })
+    if (!args.validParent) {
+      return
     }
-  }, [args.validParentWorktreeId])
+    try {
+      const parent = requireKnownLineageRow(args.getState(), args.validParent)
+      activateAndRevealWorkspace(parent.id, {
+        navigationIntent: 'user-open',
+        executionHostId: parent.hostId
+      })
+    } catch {
+      showWorkspaceListChangedToast()
+    }
+  }, [args])
   return {
     handleAssignWorkspaceStatus,
     handleCloseTerminals,

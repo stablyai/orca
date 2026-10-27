@@ -24,7 +24,6 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
-import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   hostWorktreeTarget,
@@ -81,7 +80,14 @@ function makeStore(options: StoreOptions = {}) {
     [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
   }
   const lineageById = makeLineage()
+  const listeners = new Set<(domains?: readonly string[]) => void>()
   const store = {
+    onStateWritten: (listener: (domains?: readonly string[]) => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
       storeRepo({
@@ -100,22 +106,18 @@ function makeStore(options: StoreOptions = {}) {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta }
+      listeners.forEach((listener) => listener())
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
     getAllWorktreeLineage: () => lineageById,
-    getAllWorkspaceLineage: () => ({
-      [worktreeWorkspaceKey(WORKTREE_ID)]: {
-        childWorkspaceKey: worktreeWorkspaceKey(WORKTREE_ID),
-        childInstanceId: 'child-instance',
-        parentWorkspaceKey: worktreeWorkspaceKey(MAIN_WORKTREE_ID),
-        parentInstanceId: 'parent-instance',
-        origin: 'cli' as const,
-        capture: { source: 'env-workspace' as const, confidence: 'inferred' as const },
-        createdAt: 1
-      }
-    }),
-    removeWorktreeLineage: options.removeWorktreeLineage ?? vi.fn(),
+    getAllWorkspaceLineage: () => ({}),
+    removeWorktreeLineage:
+      options.removeWorktreeLineage ??
+      vi.fn(({ id }: HostWorktreeTarget) => {
+        delete lineageById[id]
+        listeners.forEach((listener) => listener())
+      }),
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
       nestWorkspaces: false,
@@ -347,16 +349,29 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  it('does not re-read persisted worktree metadata on a healthy scan', async () => {
+  it('keeps saved lineage current while reusing a healthy scan', async () => {
     listWorktreesStrictMock.mockResolvedValue([
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+      { path: WORKTREE_PATH, head: 'abc', branch: 'feature', isBare: false, isMainWorktree: false }
     ])
-    const store = makeStore()
+    const store = makeStore({
+      metaById: {
+        [WORKTREE_ID]: makeMeta({ instanceId: 'child-instance' }),
+        [MAIN_WORKTREE_ID]: makeMeta({ instanceId: 'parent-instance' })
+      }
+    })
     const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
 
-    await runtime.getWorktreePs(10_000)
-
-    expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
+    const first = await runtime.getWorktreePs(10_000)
+    expect(first.worktrees.find((row) => row.worktreeId === WORKTREE_ID)).toMatchObject({
+      parentWorktreeId: MAIN_WORKTREE_ID
+    })
+    store.removeWorktreeLineage(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }))
+    const second = await runtime.getWorktreePs(10_000)
+    expect(second.worktrees.find((row) => row.worktreeId === WORKTREE_ID)).toMatchObject({
+      parentWorktreeId: null
+    })
+    expect(listWorktreesStrictMock).toHaveBeenCalledTimes(1)
   })
 
   it('lists restored worktrees while a scan is stalled and still hides agent scratch', async () => {

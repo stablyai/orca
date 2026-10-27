@@ -19,8 +19,8 @@ import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
 import {
+  getRegisteredWorktreeDeleteTarget,
   readWorktreeDeleteIdentities,
   resolveWorktreeBatchDeleteTargets
 } from './worktree-delete-request'
@@ -87,8 +87,8 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       return false
     }
     const state = useAppStore.getState()
-    const targets = resolveWorktreeBatchDeleteTargets(selectedIdentities, (id, hostId) =>
-      getWorktreeOnHostFromState(state, id, hostId)
+    const targets = resolveWorktreeBatchDeleteTargets(selectedIdentities, (id, hostId, identity) =>
+      getRegisteredWorktreeDeleteTarget(state, id, hostId, identity)
     )
     return targets?.length === 1
   }

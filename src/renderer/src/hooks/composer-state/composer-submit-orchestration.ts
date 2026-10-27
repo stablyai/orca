@@ -124,6 +124,7 @@ export function useComposerSubmitOrchestration(
   const quickSubmitAction = useQuickSubmitAction({
     effectiveLinkedPR: target.derivedComposerState.effectiveLinkedPR,
     executeQuickCreation: quickCreationExecution.executeQuickCreation,
+    parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,
     fallbackCreatureName: target.derivedComposerState.fallbackCreatureName,
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,

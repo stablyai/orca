@@ -12,6 +12,11 @@ import { ReviewChecksBadge, ReviewChecksIndicator } from './WorktreeCardMetadata
 import { WorktreeReferenceStack } from './WorktreeReferenceStack'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import {
+  getWorktreeLineageRows,
+  findWorktreeLineageRow
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { mergeWorkspaceLineageRecords } from '../../../../shared/resolved-worktree-lineage'
 import { formatHostedReviewLabel } from '../status-bar/hosted-review-label'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
@@ -136,22 +141,37 @@ describe('WorktreeCardStatusSlot', () => {
         const badge = renderToStaticMarkup(<Badge status={mapped.status} />)
         expect(badge).toEqual(checkLabel ? expect.stringContaining(`Checks: ${checkLabel}`) : '')
       }
+      const worktreeMap = getWorktreeLineageRows([
+        {
+          ...referenceWorkspace,
+          id: 'folder:folder',
+          instanceId: 'folder:folder',
+          hostId: 'local'
+        },
+        worktree
+      ])
+      const folderWorktree = findWorktreeLineageRow(worktreeMap, 'folder:folder')
+      if (!folderWorktree) {
+        throw new Error('missing held folder fixture')
+      }
       expect(
         getFolderWorkspaceCardPrDisplay({
           ...context,
-          folderWorkspaceId: 'folder',
-          worktreeMap: new Map([[worktree.id, worktree]]),
+          folderWorktree,
+          worktreeMap,
           repoMap: new Map([['repo', referenceRepo]]),
-          worktreeLineageById: {},
-          workspaceLineageByChildKey: {
-            child: {
-              childWorkspaceKey: `worktree:${worktree.id}`,
-              parentWorkspaceKey: 'folder:folder',
-              origin: 'cli',
-              capture: { source: 'env-workspace', confidence: 'inferred' },
-              createdAt: 1
+          worktreeLineageById: mergeWorkspaceLineageRecords(
+            {},
+            {
+              child: {
+                childWorkspaceKey: `worktree:${worktree.id}`,
+                parentWorkspaceKey: 'folder:folder',
+                origin: 'cli',
+                capture: { source: 'env-workspace', confidence: 'inferred' },
+                createdAt: 1
+              }
             }
-          }
+          )
         })
       ).toMatchObject({ state: 'open', status })
       expect(formatHostedReviewLabel(mapped)).toBe(`MR !7 Open, ${status}`)

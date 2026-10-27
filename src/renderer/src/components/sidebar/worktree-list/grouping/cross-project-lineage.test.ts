@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProjectHostSetupProjection } from '../../../../../../shared/project-catalog-canonical-projection'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeLineageIdentity } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   repo,
@@ -163,7 +163,7 @@ describe('cross-project sidebar lineage', () => {
         policy
       )
       const occurrence = plan.occurrencePlan.preferredByIdentity.get(
-        getWorktreeHostIdentity(grandchild)
+        getWorktreeLineageIdentity(grandchild)
       )
       expect(occurrence).toMatchObject({
         row: { repoId: childRepo.id },

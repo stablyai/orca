@@ -1,5 +1,34 @@
+import { joinResolvedWorktreeScans } from '../workspaces/resolved-worktree-scan-join'
+import { OrchestrationDb } from '../orchestration/db'
+import { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
+import { updateRuntimeManagedWorktreeMetadata } from '../runtime-managed-worktree-metadata'
+import { buildRuntimeWorktreePsSummaries } from '../runtime-worktree-ps-summaries'
+import { isWorkspaceHiddenBySidebarFilters } from '../workspace-notification-mute'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  createStore,
+  closeTestStores,
+  testState,
+  makeRepo,
+  makeWorktreeLineage
+} from '../../persistence/persistence-test-harness'
+import {
+  hostWorktreeTarget,
+  composeWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { projectCurrentStoreWorktreeLineage } from '../../worktree-lineage-candidates'
+import { buildDetectedGitWorktrees } from '../../ipc/worktrees/listing/ssh-worktree-fallback'
+import { readFeedWorkspaceRow } from '../../../shared/sidebar-list/sidebar-feed-worktrees'
+import {
+  getWorkspaceLineageRows,
+  getWorktreeLineageProjection
+} from '../../../shared/sidebar-list/worktree-lineage-projection'
+import { WorkspaceRowsProducer } from './workspace-rows-producer'
 // Runs on plain Node, as orcad does: rows come from the runtime's own listing and store.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -12,7 +41,6 @@ import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
 } from '../workspaces/resolved-worktree-scan-join'
-import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -33,7 +61,11 @@ const sshRepo: Repo = {
   connectionId: 'box'
 }
 
-function resolved(id: string, repo: Repo, hostId: ResolvedWorktree['hostId']): ResolvedWorktree {
+function resolved(
+  id: string,
+  repo: Repo,
+  hostId: NonNullable<ResolvedWorktree['hostId']>
+): ResolvedWorktree & { hostId: NonNullable<ResolvedWorktree['hostId']> } {
   return {
     id,
     repoId: repo.id,
@@ -435,4 +467,380 @@ describe('WorkspaceRowsProducer', () => {
     expect(scans()).toBe(before + 1)
     detach()
   })
+})
+
+describe('current saved lineage at real Store boundaries', () => {
+  function createLinkedFolder(store: ReturnType<typeof createStore>, parentId: string) {
+    const group = store.createProjectGroup({
+      name: 'Folders',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
+    })
+    const folder = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Child' })
+    const folderId = folderWorkspaceKey(folder.id)
+    const edge = store.setWorkspaceLineage({
+      childWorkspaceKey: folderId,
+      childInstanceId: folderId,
+      parentWorkspaceKey: worktreeWorkspaceKey(parentId),
+      parentInstanceId: 'p',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    })
+    return { folder, folderId, edge }
+  }
+  async function withStore(run: (store: ReturnType<typeof createStore>) => Promise<void>) {
+    vi.useRealTimers()
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-b-lineage-'))
+    const store = createStore()
+    try {
+      await run(store)
+    } finally {
+      await closeTestStores()
+      rmSync(testState.dir, { recursive: true, force: true })
+    }
+  }
+  it('acquires final facts after listing, publishes current validity, and holds a real canonical fallback competitor', async () =>
+    withStore(async (store) => {
+      const owner = makeRepo({ id: 'repo-1', path: '/r', externalWorktreeVisibility: 'show' })
+      const copyRepo = makeRepo({
+        id: 'copy',
+        path: '/copy',
+        connectionId: 'copy',
+        executionHostId: 'ssh:copy'
+      })
+      store.addRepo(owner)
+      const c = { ...resolved('repo-1::/r/c', owner, 'local'), instanceId: 'c' }
+      const p = { ...resolved('repo-1::/r/p', owner, 'local'), instanceId: 'p' }
+      for (const row of [c, p]) {
+        store.setWorktreeMeta(hostWorktreeTarget(row), { instanceId: row.instanceId })
+      }
+      const edge = makeWorktreeLineage({
+        worktreeId: c.id,
+        worktreeInstanceId: 'c',
+        parentWorktreeId: 'old::/gone',
+        parentWorktreeInstanceId: 'p'
+      })
+      store.setWorktreeLineage(hostWorktreeTarget(c), edge)
+      const { folderId } = createLinkedFolder(store, 'old::/gone')
+      const release = Promise.withResolvers<ResolvedWorktreeRepoScans>()
+      const producer = new WorkspaceRowsProducer({
+        store,
+        onClientEvent: () => () => {},
+        scan: () => release.promise,
+        join: (scans) =>
+          joinResolvedWorktreeScans(
+            store,
+            () => ({
+              store,
+              scanRepo: async () => {
+                throw new Error('join cannot scan')
+              },
+              listFolderWorkspaces: () => []
+            }),
+            scans
+          ),
+        visible: (snapshot) => snapshot
+      })
+      expect(projectCurrentStoreWorktreeLineage(store, [c, p])[0].parentWorktreeId).toBe(p.id)
+      expect(producer.snapshot()).toBeNull()
+      const pending = producer.ready()
+      store.addRepo(copyRepo)
+      const qid = 'copy::/copy'
+      store.setWorktreeMeta(hostWorktreeTarget({ id: qid, hostId: 'local' }), {
+        instanceId: 'other'
+      })
+      store.setWorktreeMeta(hostWorktreeTarget({ id: qid, hostId: 'ssh:copy' }), {
+        instanceId: 'p'
+      })
+      release.resolve(
+        new Map([
+          [
+            getRepoHostIdentityForParts(owner.id, 'local'),
+            {
+              ok: true,
+              gitRun: {},
+              worktrees: [c, p].map((row) => ({ ...row.git, path: row.path }))
+            }
+          ]
+        ])
+      )
+      await pending
+      const result = producer.snapshot()
+      assert(result, 'scan did not apply')
+      expect(result.rows[`local|${c.id}`]).toMatchObject({ lineage: null, savedLineage: edge })
+      expect(result.rows[`local|${folderId}`]).toMatchObject({
+        lineage: null,
+        savedLineage: { parentWorktreeInstanceId: 'p' }
+      })
+      const q = buildDetectedGitWorktrees(store, copyRepo, [
+        { path: '/copy', head: '', branch: '', isBare: false, isMainWorktree: true }
+      ])
+      expect(q[0]).toMatchObject({ id: qid, hostId: 'ssh:copy', instanceId: 'p' })
+      const held = Object.entries(result.rows).flatMap(
+        ([key, value]) => readFeedWorkspaceRow(key, value)?.worktree ?? []
+      )
+      const graph = getWorktreeLineageProjection(
+        {},
+        getWorkspaceLineageRows({ held: [...held, ...q] })
+      )
+      expect(graph.parents.size).toBe(0)
+      store.removeWorktreeMeta(hostWorktreeTarget({ id: qid, hostId: 'ssh:copy' }))
+      const recovered = producer.snapshot()
+      assert(recovered, 'cached scan disappeared')
+      expect(recovered.rows[`local|${c.id}`].lineage).toMatchObject({
+        parentWorktreeId: 'old::/gone'
+      })
+      expect(recovered.rows[`local|${folderId}`].lineage).toMatchObject({
+        parentWorktreeId: 'old::/gone'
+      })
+      store.removeWorktreeLineage(hostWorktreeTarget({ id: folderId, hostId: 'local' }))
+      expect(producer.snapshot()?.rows[`local|${folderId}`]).toMatchObject({
+        lineage: null,
+        savedLineage: null
+      })
+      const recoveredHeld = Object.entries(recovered.rows).flatMap(
+        ([key, value]) => readFeedWorkspaceRow(key, value)?.worktree ?? []
+      )
+      expect(
+        [
+          ...getWorktreeLineageProjection(
+            {},
+            getWorkspaceLineageRows({ held: recoveredHeld })
+          ).parents.values()
+        ].map((row) => row.id)
+      ).toEqual([p.id, p.id])
+    }))
+  it('keeps unchanged warm reads cheap and reflects actual set/change/clear actions without accepting a rotated selection', async () =>
+    withStore(async (store) => {
+      const owner = makeRepo({ id: 'repo-1', path: '/r', externalWorktreeVisibility: 'show' })
+      store.addRepo(owner)
+      const input = ['c', 'p', 'q'].map((id) => ({
+        ...resolved(`repo-1::/r/${id}`, owner, 'local'),
+        instanceId: id,
+        ...(id === 'c' ? {} : { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 0 } })
+      }))
+      for (const row of input.slice(1)) {
+        store.setWorktreeMeta(hostWorktreeTarget(row), {
+          instanceId: row.instanceId,
+          cliProvenance: row.cliProvenance
+        })
+      }
+      store.updateUI({ hideCliCreatedWorkspaces: true })
+      const scan = vi.fn(async () => ({
+        ok: true as const,
+        worktrees: input.map((row) => ({ ...row.git, path: row.path }))
+      }))
+      const inventory = vi.fn(async () => null)
+      class Probe extends OrcaRuntimeService {
+        protected override async refreshPtyWorktreeRecordsFromController() {
+          return inventory()
+        }
+        protected override async listRepoWorktreesForListing(repo: Repo) {
+          return repo.id === owner.id ? scan() : { ok: false as const, worktrees: [] }
+        }
+        protected override async resolveExplicitWorktreeIdScoped(id: string) {
+          return (
+            (await this.computeResolvedWorktrees()).worktrees.find((row) => row.id === id) ?? null
+          )
+        }
+        cached() {
+          return this.listResolvedWorktreeSnapshot()
+        }
+        terminalTarget(selector: string) {
+          return this.resolveTerminalWorkspaceLaunchTarget(selector)
+        }
+      }
+      const runtime = new Probe(store)
+      const read = vi.spyOn(store, 'getWorktreeLineageMetadata')
+      const backfilled = await runtime.cached()
+      const childInstanceId = store.getWorktreeMeta(input[0].id)?.instanceId
+      expect(childInstanceId).toBeTruthy()
+      input[0].instanceId = childInstanceId ?? ''
+      const warm = await runtime.cached()
+      expect(warm.worktrees).not.toBe(backfilled.worktrees)
+      expect(scan).toHaveBeenCalledTimes(2)
+      const summaries = async () => {
+        const publication = await runtime.cached()
+        return buildRuntimeWorktreePsSummaries({
+          store,
+          resolvedWorktrees: publication.worktrees,
+          folderWorktrees: publication.folderWorktrees,
+          platformByRepoId: publication.platformByRepoId
+        })
+      }
+      const hidden = (id: string) =>
+        isWorkspaceHiddenBySidebarFilters(
+          { store, resolvedWorktrees: warm.worktrees },
+          `repo-1::/r/${id}`
+        )
+      const count = read.mock.calls.length
+      const scans = scan.mock.calls.length
+      expect((await runtime.cached()).worktrees).toBe(warm.worktrees)
+      expect(read).toHaveBeenCalledTimes(count)
+      expect(scan).toHaveBeenCalledTimes(scans)
+      for (const id of ['p', 'q']) {
+        await runtime.updateManagedWorktreeMeta(`id:${input[0].id}`, {
+          lineage: {
+            parentWorktreeRef: { worktreeId: `repo-1::/r/${id}`, instanceId: id, external: false }
+          }
+        })
+        expect((await runtime.showManagedWorktree(`id:${input[0].id}`)).parentWorktreeId).toBe(
+          `repo-1::/r/${id}`
+        )
+        expect((await summaries()).get(input[0].id)?.parentWorktreeId).toBe(`repo-1::/r/${id}`)
+        expect(hidden(id)).toBe(false)
+        expect(hidden(id === 'p' ? 'q' : 'p')).toBe(true)
+      }
+      await runtime.updateManagedWorktreeMeta(`id:${input[0].id}`, { lineage: { noParent: true } })
+      expect((await runtime.showManagedWorktree(`id:${input[0].id}`)).savedLineage).toBeNull()
+      const clearedParent = { parentWorktreeId: null, savedLineage: null }
+      expect((await summaries()).get(input[0].id)).toMatchObject(clearedParent)
+      expect([hidden('p'), hidden('q')]).toEqual([true, true])
+      const db = new OrchestrationDb(':memory:')
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'Recover parent',
+        createdByTerminalHandle: 'term-parent'
+      })
+      store.setWorktreeMeta(hostWorktreeTarget(input[0]), { comment: task.id })
+      const beforeHydration = await runtime.cached()
+      const hydration = new RuntimeWorktreeLineageController({
+        getStore: () => store,
+        getDb: () => db,
+        listResolvedWorktrees: async () => (await runtime.cached()).worktrees,
+        resolveWorktree: async () => input[1],
+        showTerminal: async () => ({ worktreeId: input[1].id })
+      })
+      try {
+        await hydration.hydrate()
+      } finally {
+        db.close()
+      }
+      expect((await summaries()).get(input[0].id)?.parentWorktreeId).toBe(input[1].id)
+      expect((await runtime.cached()).worktrees).not.toBe(beforeHydration.worktrees)
+      await runtime.updateManagedWorktreeMeta(`id:${input[0].id}`, { lineage: { noParent: true } })
+      store.setWorktreeMeta(hostWorktreeTarget(input[0]), { comment: '' })
+      const { folder, folderId, edge: folderEdge } = createLinkedFolder(store, 'old::/renamed')
+      const folderPublication = await runtime.cached()
+      expect(folderPublication.worktrees.map((row) => row.id)).toEqual(input.map((row) => row.id))
+      expect(folderPublication.folderWorktrees?.map((row) => row.id)).toEqual([folderId])
+      const folderReads = read.mock.calls.length
+      const folderScans = scan.mock.calls.length
+      expect((await runtime.cached()).worktrees).toBe(folderPublication.worktrees)
+      expect((await runtime.cached()).folderWorktrees).toBe(folderPublication.folderWorktrees)
+      const folderSummary = (await summaries()).get(folderId)
+      expect(read).toHaveBeenCalledTimes(folderReads)
+      expect(scan).toHaveBeenCalledTimes(folderScans)
+      expect(folderSummary).toMatchObject({
+        parentWorktreeId: input[1].id,
+        savedLineage: { parentWorktreeId: 'old::/renamed', parentWorktreeInstanceId: 'p' }
+      })
+      expect((await summaries()).get(input[1].id)?.childWorktreeIds).toContain(folderId)
+      const target = await runtime.terminalTarget(folderId)
+      expect(target.scope).toMatchObject({
+        id: folderId,
+        path: folder.folderPath,
+        connectionId: null
+      })
+      expect(target.managedWorktree).toMatchObject({ parentWorktreeId: input[1].id })
+      const enteredInventory = Promise.withResolvers<void>()
+      const resumeInventory = Promise.withResolvers<void>()
+      inventory.mockImplementationOnce(async () => {
+        enteredInventory.resolve()
+        await resumeInventory.promise
+        return null
+      })
+      const pendingPs = runtime.getWorktreePs()
+      await enteredInventory.promise
+      store.removeWorktreeLineage(hostWorktreeTarget({ id: folderId, hostId: 'local' }))
+      resumeInventory.resolve()
+      const clearedPs = await pendingPs
+      expect(clearedPs.worktrees.find((row) => row.worktreeId === folderId)).toMatchObject(
+        clearedParent
+      )
+      expect(
+        clearedPs.worktrees.find((row) => row.worktreeId === input[1].id)?.childWorktreeIds
+      ).not.toContain(folderId)
+      const afterInventoryReads = read.mock.calls.length
+      const afterInventoryScans = scan.mock.calls.length
+      await runtime.getWorktreePs()
+      expect(read).toHaveBeenCalledTimes(afterInventoryReads)
+      expect(scan).toHaveBeenCalledTimes(afterInventoryScans)
+      store.setWorkspaceLineage(folderEdge)
+      const resumeScan = Promise.withResolvers<void>()
+      scan.mockImplementationOnce(async () => {
+        await resumeScan.promise
+        return {
+          ok: true as const,
+          worktrees: input.map((row) => ({ ...row.git, path: row.path }))
+        }
+      })
+      store.updateFolderWorkspace(folder.id, { name: 'Renamed child', comment: 'live metadata' })
+      const pendingPublication = runtime.cached()
+      const copyRepo = makeRepo({ id: 'copy', path: '/copy', connectionId: 'copy' })
+      store.addRepo(copyRepo)
+      const competitor = hostWorktreeTarget({ id: 'copy::/copy', hostId: 'ssh:copy' })
+      store.setWorktreeMeta(competitor, { instanceId: 'p', isArchived: true })
+      resumeScan.resolve()
+      const withCompetitor = await pendingPublication
+      expect(withCompetitor.folderWorktrees?.[0]).toMatchObject({
+        parentWorktreeId: null,
+        savedLineage: { parentWorktreeInstanceId: 'p' }
+      })
+      const duringCopy = (await summaries()).get(folderId)
+      expect(duringCopy).toMatchObject({
+        parentWorktreeId: null,
+        displayName: 'Renamed child',
+        comment: 'live metadata'
+      })
+      store.removeWorktreeMeta(competitor)
+      expect((await summaries()).get(folderId)?.parentWorktreeId).toBe(input[1].id)
+      store.setWorktreeMeta(hostWorktreeTarget(input[1]), { instanceId: 'replacement' })
+      expect((await runtime.terminalTarget(folderId)).managedWorktree).toMatchObject({
+        parentWorktreeId: null
+      })
+      await expect(
+        runtime.updateManagedWorktreeMeta(`id:${input[0].id}`, {
+          lineage: {
+            parentWorktreeRef: { worktreeId: input[1].id, instanceId: 'p', external: false }
+          }
+        })
+      ).rejects.toThrow('changed')
+      expect(store.getWorktreeLineage(input[0].id)).toBeUndefined()
+      // The listing fixture now discovers the replacement; stale selections above still refuse.
+      input[1].instanceId = 'replacement'
+      expect((await summaries()).get(folderId)).toMatchObject({
+        parentWorktreeId: null,
+        savedLineage: { parentWorktreeId: 'old::/renamed', parentWorktreeInstanceId: 'p' }
+      })
+      store.setWorktreeMeta(hostWorktreeTarget(input[1]), { instanceId: 'p' })
+      input[1].instanceId = 'p'
+      const pendingParent = Promise.withResolvers<ResolvedWorktree>()
+      const validateParent = vi.fn()
+      const changing = updateRuntimeManagedWorktreeMetadata({
+        selector: `id:${input[0].id}`,
+        updates: {
+          lineage: {
+            parentWorktreeRef: { worktreeId: input[1].id, instanceId: 'p', external: false }
+          }
+        },
+        store,
+        ports: {
+          resolveWorktree: async (selector) =>
+            selector === `id:${input[0].id}` ? input[0] : pendingParent.promise,
+          validateParent,
+          invalidateResolved: () => {},
+          invalidateScan: () => {},
+          notifyChanged: () => {},
+          showWorktree: async () => input[0]
+        }
+      })
+      await Promise.resolve()
+      store.setWorktreeMeta(hostWorktreeTarget(input[0]), { instanceId: 'new-child' })
+      pendingParent.resolve(input[1])
+      await expect(changing).rejects.toThrow('changed')
+      expect(validateParent).not.toHaveBeenCalled()
+      expect(store.getWorktreeLineage(input[0].id)).toBeUndefined()
+    }))
 })

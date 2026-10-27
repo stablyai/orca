@@ -1,7 +1,9 @@
 import type { AppState } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
-import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import {
+  projectResolvedWorktreeLineage,
+  worktreeLineageFromWorkspaceLineage
+} from '../../../../shared/resolved-worktree-lineage'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import {
   pairedServerRowOfWorktree,
@@ -10,30 +12,17 @@ import {
 } from '../../../../shared/sidebar-list/paired-server-rows'
 import { describePairedServerHosts } from '../../../../shared/paired-server-hosts'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
-  state: Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces' | 'repos' | 'worktreeLineageById'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces' | 'repos' | 'worktreeLineageById'> &
+    Partial<Pick<AppState, 'workspaceLineageByChildKey'>>,
   hostIds: ReadonlySet<string>
 ): Map<string, PairedServerWorkspaceRow> {
   const rows = new Map<string, PairedServerWorkspaceRow>()
   const repoById = getRepoMapFromState(state)
-  // The server sends only edges its own check keeps, so the window checks its copy the same way.
-  const checkedLineageByKey = new Map<string, WorktreeLineage | null>()
-  for (const hostId of hostIds) {
-    const hostWorktrees = getAllWorktreesFromState(state).filter(
-      (worktree) => worktree.hostId === hostId
-    )
-    for (const worktree of projectResolvedWorktreeLineage(
-      hostWorktrees,
-      state.worktreeLineageById
-    )) {
-      checkedLineageByKey.set(getWorktreeHostIdentity(worktree), worktree.lineage)
-    }
-  }
   const add = (worktree: Worktree, kind: PairedServerWorkspaceRow['kind']): void => {
     if (!worktree.hostId || !hostIds.has(worktree.hostId)) {
       return
@@ -42,15 +31,20 @@ export function readWindowPairedServerRows(
       worktree,
       kind,
       repoById.get(worktree.repoId),
-      checkedLineageByKey.get(getWorktreeHostIdentity(worktree))
+      worktree.lineage
     )
     rows.set(row.key, row)
   }
-  for (const worktree of getAllWorktreesFromState(state)) {
-    add(worktree, 'git')
-  }
-  for (const folder of selectFolderWorkspaces(state) ?? []) {
-    add(folderWorkspaceToWorktree(folder), 'folder')
+  const folders = (selectFolderWorkspaces(state) ?? []).map((folder) => {
+    const row = folderWorkspaceToWorktree(folder)
+    const edge = state.workspaceLineageByChildKey?.[row.id]
+    return { ...row, savedLineage: edge ? worktreeLineageFromWorkspaceLineage(edge) : null }
+  })
+  for (const worktree of projectResolvedWorktreeLineage(
+    [...getAllWorktreesFromState(state), ...folders],
+    state.worktreeLineageById
+  )) {
+    add(worktree, worktree.id.startsWith('folder:') ? 'folder' : 'git')
   }
   return rows
 }

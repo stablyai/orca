@@ -88,6 +88,13 @@ export const WorktreeCreate = z
     // App-selected parents are manual; absent retains older clients’ CLI provenance.
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
+    parentWorktreeRef: z
+      .object({
+        worktreeId: z.string().min(1),
+        instanceId: z.string().min(1),
+        external: z.boolean()
+      })
+      .optional(),
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
@@ -133,7 +140,10 @@ export const WorktreeCreate = z
   })
   .superRefine((params, ctx) => {
     assertLinkedWorkItemSourceContextMatch(params, ctx)
-    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
+    if (
+      (params.parentWorkspace || params.parentWorktree || params.parentWorktreeRef) &&
+      params.noParent === true
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'

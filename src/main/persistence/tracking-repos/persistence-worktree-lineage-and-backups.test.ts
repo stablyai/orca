@@ -22,6 +22,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
+import { readWorktreeLineageCorpus } from '../../worktree-lineage-candidates'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -74,6 +75,56 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+  it('retains both saved external lineage records through a real store reload', async () => {
+    const store = createStore()
+    const repo = makeRepo({ id: 'cml-v3-child', path: '/tmp/cml-v3-child' })
+    store.addRepo(repo)
+    const childId = `${repo.id}::/tmp/cml-v3-child/worker`
+    const parentId = 'desktop-only-repo::/desktop/parent'
+    store.setWorktreeMeta(hostWorktreeTarget({ id: childId, hostId: 'local' }), {
+      instanceId: 'child-instance'
+    })
+    store.setWorktreeLineage(
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
+      makeWorktreeLineage({
+        worktreeId: childId,
+        parentWorktreeId: parentId,
+        parentStore: 'external'
+      })
+    )
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({
+        childWorkspaceKey: worktreeWorkspaceKey(childId),
+        parentWorkspaceKey: worktreeWorkspaceKey(parentId),
+        parentStore: 'external'
+      })
+    )
+    const listen = vi.spyOn(store, 'onStateWritten')
+    const snapshot = readWorktreeLineageCorpus(store)
+    expect(snapshot.edgeOf(snapshot.rows[0])?.parentWorktreeId).toBe(parentId)
+    const raw = store.getAllWorktreeMeta()
+    store.setWorktreeMeta(hostWorktreeTarget({ id: childId, hostId: 'ssh:copy' }), {
+      instanceId: 'child-instance'
+    })
+    expect(store.getAllWorktreeMeta()).toBe(raw)
+    const changed = readWorktreeLineageCorpus(store)
+    expect(changed.rows.filter((row) => row.id === childId)).toHaveLength(2)
+    expect(changed.rows.map((row) => row.hostId)).toEqual(['local', 'ssh:copy'])
+    expect(listen).not.toHaveBeenCalled()
+    await store.flushPendingOrThrowAsync()
+    await closeTestStores()
+    const reloaded = createStore()
+    expect(reloaded.getWorktreeLineage(childId)).toMatchObject({
+      parentWorktreeId: parentId,
+      parentStore: 'external'
+    })
+    expect(reloaded.getWorkspaceLineage(worktreeWorkspaceKey(childId))).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(parentId),
+      parentStore: 'external'
+    })
+  })
+
+  // ── getAllWorktreeMeta ─────────────────────────────────────────────
 
   it('getAllWorktreeMeta returns all entries', async () => {
     const store = await createStore()

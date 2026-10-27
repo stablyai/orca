@@ -6,10 +6,11 @@ import {
 } from '../../../../shared/sidebar-list/group-keys'
 import {
   getLineageRenderInfo,
-  getWorktreeLineageAncestors
+  getSidebarLineageAncestors
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 describe('buildRows workspace lineage nesting', () => {
@@ -111,7 +112,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('keeps same-id parent and child lineages partitioned by host', () => {
     const parentA = { ...parent, hostId: 'local' as const }
-    const childA = { ...child, hostId: 'local' as const, lineage }
+    const childA = { ...child, hostId: 'local' as const, savedLineage: lineage }
     const parentB = {
       ...parent,
       hostId: 'ssh:host-b' as const,
@@ -126,7 +127,7 @@ describe('buildRows workspace lineage nesting', () => {
       ...child,
       hostId: 'ssh:host-b' as const,
       instanceId: 'child-instance-b',
-      lineage: lineageB
+      savedLineage: lineageB
     }
     const rows = buildRows(
       'none',
@@ -138,10 +139,7 @@ describe('buildRows workspace lineage nesting', () => {
       undefined,
       undefined,
       {},
-      new Map([
-        [parent.id, parentA],
-        [child.id, childA]
-      ]),
+      new Map([parentA, childA, parentB, childB].map((row) => [getWorktreeHostIdentity(row), row])),
       true
     )
 
@@ -298,9 +296,7 @@ describe('buildRows workspace lineage nesting', () => {
     ])
 
     expect(
-      getWorktreeLineageAncestors(resolvedGrandchild, {}, worktreeMap).map(
-        (worktree) => worktree.id
-      )
+      getSidebarLineageAncestors(resolvedGrandchild, {}, worktreeMap).map((worktree) => worktree.id)
     ).toEqual([child.id, parent.id])
   })
 
@@ -325,7 +321,8 @@ describe('buildRows workspace lineage nesting', () => {
 
   it.each([
     ['repo', { repoId: 'other-repo' }, [0, 1]],
-    ['host', { hostId: 'ssh:other-host' as const }, [0, 0]],
+    ['host', { hostId: 'ssh:other-host' as const }, [0, 1]],
+    ['store', { hostId: 'runtime:other' as const }, [0, 0]],
     ['project', { projectId: 'github:other/project' }, [0, 1]]
   ] as const)('applies the known %s lineage boundary', (_label, boundary, depths) => {
     const boundedParent = {
@@ -510,8 +507,7 @@ describe('buildRows workspace lineage nesting', () => {
       new Map([
         [parent.id, parent],
         [child.id, child]
-      ]),
-      new Set()
+      ])
     )
 
     expect(info).toMatchObject({ state: 'missing' })

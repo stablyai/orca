@@ -104,6 +104,35 @@ describe('workspace query prototype dispatch', () => {
     expect(seen).toEqual([{ receiver: runtime, args: [TEST_WORKTREE_ID] }])
   })
 
+  it('retains the selected parent instance on cold and warm same-locator host collisions', async () => {
+    const chosen = { ...resolved, hostId: 'ssh:chosen' as const, instanceId: 'chosen' }
+    const other = { ...resolved, hostId: 'local' as const, instanceId: 'other' }
+    let warm = false
+    const scoped = vi.fn(async () => chosen)
+    class Probe extends OrcaRuntimeService {
+      protected override hasFreshResolvedWorktreeCache() {
+        return warm
+      }
+      protected override resolveExplicitWorktreeIdScoped = scoped
+      protected override async listResolvedWorktrees() {
+        return [other, chosen]
+      }
+      run(instanceId?: string) {
+        return this.resolveWorktreeSelector(`id:${TEST_WORKTREE_ID}`, instanceId)
+      }
+    }
+    const runtime = new Probe({
+      ...store,
+      getAllWorktreeMeta: () => ({ [TEST_WORKTREE_ID]: chosen })
+    })
+    await expect(runtime.run('chosen')).resolves.toBe(chosen)
+    expect(scoped).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'ssh:chosen')
+    warm = true
+    await expect(runtime.run('chosen')).resolves.toBe(chosen)
+    await expect(runtime.run('gone')).rejects.toThrow('parent workspace changed')
+    await expect(runtime.run()).rejects.toThrow('selector_ambiguous')
+  })
+
   it('keeps disconnected SSH stored rows with a failed scan verdict', async () => {
     class Probe extends OrcaRuntimeService {
       run(remote: Repo) {

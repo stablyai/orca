@@ -35,12 +35,17 @@ export function useWorktreeDocumentDrop(args: {
                 y: event.clientY
               })
             : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-          session.draggedIds
+          session.draggedIds,
+          session.draggedCopies
         )
         if (target.lineageParentId) {
           event.preventDefault()
           event.stopPropagation()
-          ctx.commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
+          ctx.commitWorktreeLineageParentDrop(
+            session.draggedIds,
+            target.lineageParentId,
+            session.draggedCopies
+          )
           clearWorktreeDrag()
           return
         }
@@ -80,6 +85,7 @@ export function useWorktreeDocumentDrop(args: {
         })
       })
       ctx.clearReorderedWorktreeParents({
+        draggedCopies: session.draggedCopies,
         draggedIds: session.draggedIds,
         sourceGroupKey: session.sourceGroupKey
       })

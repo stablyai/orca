@@ -82,7 +82,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
         buildDisconnectedDetectedWorktrees(
           store,
           repo,
-          listDisconnectedSshWorktrees(store, repo, metaIndex),
+          listDisconnectedSshWorktrees(store, repo, metaIndex, { attachSavedLineage: false }),
           { hostMeta }
         )
       )

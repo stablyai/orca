@@ -36,7 +36,7 @@ export function getFolderWorkspaceWorktreeHostId(
 
 export function getFolderWorkspaceHostIdentity(
   workspace: Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
-): string {
+) {
   return composeWorktreeHostIdentity(
     getFolderWorkspaceWorktreeHostId(workspace),
     folderWorkspaceKey(workspace.id)
@@ -55,6 +55,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
   const parsedHost = parseExecutionHostId(hostId)
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
+    instanceId: folderWorkspaceKey(folderWorkspace.id),
     repoId: folderWorkspaceRepoId(folderWorkspace.projectGroupId),
     ...(creatorProvenance ? { creatorProvenance } : {}),
     displayName: folderWorkspace.name,

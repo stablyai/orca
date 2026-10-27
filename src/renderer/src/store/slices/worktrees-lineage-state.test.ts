@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -35,6 +36,8 @@ describe('worktree lineage state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+    mockApi.worktrees.listLineage.mockReset().mockResolvedValue({})
+    mockApi.worktrees.updateLineage.mockReset().mockResolvedValue(null)
   })
 
   it('fetches persisted lineage into the renderer store', async () => {
@@ -422,6 +425,7 @@ describe('worktree lineage state', () => {
     const lineage = makeLineage()
     const child = makeWorktree({
       id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
       repoId: 'repo1',
       path: '/remote/child',
       // Why: ingest stamps a server's rows; routing follows the stamp, not focus.
@@ -436,9 +440,19 @@ describe('worktree lineage state', () => {
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [child] },
+      worktreesByRepo: {
+        repo1: [
+          child,
+          makeWorktree({
+            id: lineage.parentWorktreeId,
+            instanceId: lineage.parentWorktreeInstanceId,
+            repoId: child.repoId,
+            hostId: child.hostId
+          })
+        ]
+      },
       sortEpoch: 3
-    } as Partial<AppState>)
+    })
 
     await store.getState().updateWorktreeLineage(lineage.worktreeId, {
       parentWorktreeId: lineage.parentWorktreeId
@@ -471,6 +485,7 @@ describe('worktree lineage state', () => {
     })
     const child = makeWorktree({
       id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
       repoId: 'repo-remote',
       path: '/remote/child'
     })
@@ -487,8 +502,40 @@ describe('worktree lineage state', () => {
           executionHostId: 'runtime:env-1'
         }
       ],
-      worktreesByRepo: { 'repo-remote': [child] }
-    } as Partial<AppState>)
+      worktreesByRepo: {}
+    })
+    const parent = makeWorktree({
+      id: lineage.parentWorktreeId,
+      instanceId: lineage.parentWorktreeInstanceId,
+      repoId: child.repoId,
+      path: '/remote/parent'
+    })
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-remote-catalog',
+      ok: true,
+      result: makeDetectedResult(child.repoId, [child, parent]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await store.getState().fetchWorktrees(child.repoId, {
+      executionHostId: 'runtime:env-1',
+      suppressRemoteLineageRefresh: true
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.detectedList',
+      params: { repo: child.repoId },
+      timeoutMs: 15_000
+    })
+    expect(child.hostId).toBeUndefined()
+    expect(store.getState().worktreesByRepo[child.repoId]).toEqual(
+      [child, parent].map((row) => ({
+        ...row,
+        projectId: 'repo:repo-remote',
+        projectHostSetupId: 'repo-remote',
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1'
+      }))
+    )
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-remote-lineage',
       ok: true,
@@ -512,6 +559,7 @@ describe('worktree lineage state', () => {
     const lineage = makeLineage()
     const child = makeWorktree({
       id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
       repoId: 'repo1',
       path: '/remote/child',
       // Why: ingest stamps a server's rows; routing follows the stamp, not focus.
@@ -526,9 +574,19 @@ describe('worktree lineage state', () => {
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [child] },
+      worktreesByRepo: {
+        repo1: [
+          child,
+          makeWorktree({
+            id: lineage.parentWorktreeId,
+            instanceId: lineage.parentWorktreeInstanceId,
+            repoId: child.repoId,
+            hostId: child.hostId
+          })
+        ]
+      },
       sortEpoch: 3
-    } as Partial<AppState>)
+    })
 
     await store.getState().assignWorktreeParent(lineage.worktreeId, {
       parentWorktreeId: lineage.parentWorktreeId
@@ -572,6 +630,7 @@ describe('worktree lineage state', () => {
     const lineage = makeLineage()
     const child = makeWorktree({
       id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
       repoId: 'repo1',
       path: '/remote/child',
       hostId: 'runtime:owner-env'
@@ -585,10 +644,20 @@ describe('worktree lineage state', () => {
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
-      worktreesByRepo: { repo1: [child] }
-    } as Partial<AppState>)
+      worktreesByRepo: {
+        repo1: [
+          child,
+          makeWorktree({
+            id: lineage.parentWorktreeId,
+            instanceId: lineage.parentWorktreeInstanceId,
+            repoId: child.repoId,
+            hostId: child.hostId
+          })
+        ]
+      }
+    })
 
-    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+    await store.getState().assignWorktreeParent(`runtime:owner-env|${lineage.worktreeId}`, {
       parentWorktreeId: lineage.parentWorktreeId
     })
 
@@ -601,6 +670,11 @@ describe('worktree lineage state', () => {
       },
       timeoutMs: 15_000
     })
+    await expect(
+      store.getState().assignWorktreeParent(`runtime:owner-env|${lineage.worktreeId}`, {
+        parentWorktreeId: `ssh:gone|${lineage.parentWorktreeId}`
+      })
+    ).rejects.toThrow('selected workspace changed')
   })
 
   it('refreshes assignment failures through the worktree owner runtime when host-stamped', async () => {
@@ -608,6 +682,7 @@ describe('worktree lineage state', () => {
     const lineage = makeLineage()
     const child = makeWorktree({
       id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
       repoId: 'repo1',
       path: '/remote/child',
       hostId: 'runtime:owner-env'
@@ -622,8 +697,18 @@ describe('worktree lineage state', () => {
       })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
-      worktreesByRepo: { repo1: [child] }
-    } as Partial<AppState>)
+      worktreesByRepo: {
+        repo1: [
+          child,
+          makeWorktree({
+            id: lineage.parentWorktreeId,
+            instanceId: lineage.parentWorktreeInstanceId,
+            repoId: child.repoId,
+            hostId: child.hostId
+          })
+        ]
+      }
+    })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await expect(
@@ -649,6 +734,7 @@ describe('worktree lineage state', () => {
     })
     const child = makeWorktree({
       id: staleLineage.worktreeId,
+      instanceId: staleLineage.worktreeInstanceId,
       repoId: 'repo1',
       path: '/remote/child',
       hostId: 'runtime:owner-env'
@@ -663,12 +749,22 @@ describe('worktree lineage state', () => {
       })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
-      worktreesByRepo: { repo1: [child] },
+      worktreesByRepo: {
+        repo1: [
+          child,
+          makeWorktree({
+            id: staleLineage.parentWorktreeId,
+            instanceId: staleLineage.parentWorktreeInstanceId,
+            repoId: child.repoId,
+            hostId: child.hostId
+          })
+        ]
+      },
       worktreeLineageById: { [staleLineage.worktreeId]: staleLineage },
       workspaceLineageByChildKey: {
         [staleWorkspaceLineage.childWorkspaceKey]: staleWorkspaceLineage
       }
-    } as Partial<AppState>)
+    })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await expect(

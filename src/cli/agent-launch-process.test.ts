@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -12,6 +12,9 @@ import {
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
 import { agentLaunchFixture } from './agent-launch-test-fixtures'
+import { encodePairingOffer } from '../shared/pairing'
+import { addEnvironmentFromPairingCode } from './runtime/environments'
+import { buildWorktree, worktreeListFixture } from './test-fixtures'
 
 it('real CLI processes carry surface choices and refuse invalid or unsupported picks before mutation', async () => {
   const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
@@ -19,11 +22,12 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
     .object({ bin: z.object({ bun: z.string() }) })
     .parse(JSON.parse(readFileSync(manifest, 'utf8')))
   const program = join(dirname(manifest), bin.bun)
-  const root = mkdtempSync(join(tmpdir(), 'orca-launch-process-'))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-launch-process-')))
   const endpoint =
     process.platform === 'win32' ? `\\\\.\\pipe\\launch-${randomUUID()}` : join(root, 'rpc')
   const requests: { method: string; params: Record<string, unknown> }[] = []
   let capabilities: readonly string[] = AGENT_LAUNCH_RUNTIME_CAPABILITIES
+  let worktrees = worktreeListFixture([])
   const server = createServer((socket) => {
     let buffer = ''
     socket.setEncoding('utf8')
@@ -48,9 +52,11 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
           result:
             request.method === 'status.get'
               ? { capabilities }
-              : request.method === 'worktree.show'
-                ? { worktree: { id: 'wt-fixture', lineage: null } }
-                : agentLaunchFixture('wt-fixture').result,
+              : request.method === 'worktree.list'
+                ? worktrees.result
+                : request.method === 'worktree.show'
+                  ? { worktree: { id: 'wt-fixture', lineage: null } }
+                  : agentLaunchFixture('wt-fixture').result,
           _meta: { runtimeId: 'fixture-host' }
         })}\n`
       )
@@ -137,6 +143,82 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
       expect(mutate()).toHaveLength(beforeUnsupported)
       capabilities = AGENT_LAUNCH_RUNTIME_CAPABILITIES
     }
+    addEnvironmentFromPairingCode(root, {
+      name: 'fixture-remote',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:1',
+        deviceToken: 'fixture-remote-token',
+        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+        scope: 'runtime'
+      })
+    })
+    const beforeParentMiss = requests.length
+    const response = await runProcess({
+      program,
+      args: [
+        resolve('src/cli/index.ts'),
+        'worktree',
+        'create',
+        '--environment',
+        'fixture-remote',
+        '--repo',
+        'id:repo-fixture',
+        '--name',
+        'child',
+        '--parent-worktree',
+        'active',
+        '--json'
+      ],
+      cwd: root,
+      env: { ...env, ORCA_WORKSPACE_ID: 'folder:fixture-native' },
+      timeoutMs: 15_000
+    })
+    expect(response.code, response.stderr + response.stdout).toBe(1)
+    expect(JSON.parse(response.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'selector_not_found',
+        message: "Couldn't find the parent. Name the parent explicitly on the selected computer."
+      },
+      _meta: { runtimeId: null }
+    })
+    expect(
+      requests.slice(beforeParentMiss).map(({ method, params }) => ({ method, params }))
+    ).toEqual([{ method: 'worktree.list', params: { limit: 10_000 } }])
+    worktrees = worktreeListFixture([
+      { ...buildWorktree(root, 'main', 'abc', 'caller-repo'), hostId: 'local' }
+    ])
+    const beforeMissingTarget = requests.length
+    const missingTarget = await runProcess({
+      program,
+      args: [
+        resolve('src/cli/index.ts'),
+        'worktree',
+        'create',
+        '--environment',
+        'fixture-remote',
+        '--name',
+        'child',
+        '--no-parent',
+        '--json'
+      ],
+      cwd: root,
+      env,
+      timeoutMs: 15_000
+    })
+    expect(missingTarget.code, missingTarget.stderr + missingTarget.stdout).toBe(1)
+    expect(JSON.parse(missingTarget.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
+      },
+      _meta: { runtimeId: null }
+    })
+    expect(
+      requests.slice(beforeMissingTarget).map(({ method, params }) => ({ method, params }))
+    ).toEqual([{ method: 'worktree.list', params: { limit: 10_000 } }])
   } finally {
     await new Promise<void>((done) => server.close(() => done()))
     rmSync(root, { recursive: true, force: true })

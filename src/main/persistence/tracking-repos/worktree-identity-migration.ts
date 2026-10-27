@@ -244,7 +244,7 @@ export function migrateWorktreeIdentity(
   }
   // Keep children's path-derived parent IDs consistent; parent instance identity stays stable.
   for (const lineage of Object.values(state.worktreeLineageById)) {
-    if (lineage.parentWorktreeId === oldWorktreeId) {
+    if (lineage.parentStore !== 'external' && lineage.parentWorktreeId === oldWorktreeId) {
       lineage.parentWorktreeId = newWorktreeId
       changed = true
     }
@@ -260,7 +260,7 @@ export function migrateWorktreeIdentity(
     changed = true
   }
   for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
-    if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
+    if (lineage.parentStore !== 'external' && lineage.parentWorkspaceKey === oldWorkspaceKey) {
       state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {
         ...lineage,
         parentWorkspaceKey: newWorkspaceKey

@@ -1,3 +1,4 @@
+import { createWorktreeDeleteAdmission } from './worktree-delete-request'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -33,6 +34,7 @@ export function runDialogForceDelete(args: {
   }
   // Explicit Force Delete may waive PTY-stop proof, unlike ordinary confirmed deletion.
   const deletePromise = removeWorktree(toWorktreeRemovalTarget(forceTarget), true, {
+    assertBeforeDispatch: createWorktreeDeleteAdmission(forceTarget),
     allowUnverifiedPtyStop: true,
     confirmedDiscards: args.confirmedDiscards
   })

@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
-import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  getCyclicProjectedWorktreeLineageIds,
+  getWorktreeLineageSelection,
   getLineageRenderInfo
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getLineageInputs } from './visible-worktree-indexes'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAppStore } from '@/store'
+import { useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from './use-workspace-board-statuses'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import {
@@ -17,7 +18,6 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 import {
   EMPTY_AGENT_STATUS_BY_PANE_KEY,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
-  EMPTY_CYCLIC_LINEAGE_IDS,
   EMPTY_DELETE_STATE_BY_WORKTREE_ID,
   EMPTY_STRUCTURED_CHAT_SLEPT_AT,
   EMPTY_PTY_IDS_BY_TAB_ID,
@@ -36,6 +36,11 @@ import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
+
+const EMPTY_LINEAGE_INPUTS = {
+  worktreeMap: new Map<string, Worktree>(),
+  lineageById: EMPTY_WORKTREE_LINEAGE_BY_ID
+}
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -94,12 +99,11 @@ export function useWorktreeContextMenuModel({
   const lifecycleStartedRef = useRef(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
-  const worktreeMap = useWorktreeMap()
+  const { worktreeMap, lineageById: worktreeLineageById } = useAppStore((s) =>
+    menuOpen ? getLineageInputs(s) : EMPTY_LINEAGE_INPUTS
+  )
   const allWorktrees = useAllWorktrees()
   // Closed menus select stable empty maps; opening reads live maps without subscribing idle wrappers to teardown churn.
-  const worktreeLineageById = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
-  )
   const workspaceLineageByChildKey = useAppStore((s) =>
     selectMenuScopedMap(
       menuOpen,
@@ -164,9 +168,9 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, sleepActivity]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
-    enabled: !isMultiContext,
+    enabled: menuOpen && !isMultiContext,
     parent: worktree,
-    worktrees: allWorktrees,
+    worktrees: worktreeMap,
     lineageById: worktreeLineageById,
     activity: sleepActivity
   })
@@ -206,19 +210,13 @@ export function useWorktreeContextMenuModel({
     worktreeLineageById,
     workspaceLineageByChildKey
   )
-  const cyclicLineageIds = useMemo(
-    () =>
-      menuOpen
-        ? getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
-        : EMPTY_CYCLIC_LINEAGE_IDS,
-    [menuOpen, worktreeLineageById, worktreeMap]
-  )
   // Path-derived IDs can be reused; require the same instance check as grouped-row parent navigation.
   const lineageInfo = useMemo(
-    () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap, cyclicLineageIds),
-    [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
+    () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap),
+    [worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
+  const validParent = lineageInfo.state === 'valid' ? lineageInfo.parent : null
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
@@ -227,14 +225,13 @@ export function useWorktreeContextMenuModel({
       menuOpen
         ? getEligibleWorktreeParents({
             child: worktree,
-            worktrees: allWorktrees,
+            worktrees: [...worktreeMap.values()],
             lineageById: worktreeLineageById,
             worktreeMap,
-            repoMap,
-            cyclicLineageIds
+            repoMap
           }).length
         : 0,
-    [allWorktrees, cyclicLineageIds, menuOpen, repoMap, worktree, worktreeLineageById, worktreeMap]
+    [menuOpen, repoMap, worktree, worktreeLineageById, worktreeMap]
   )
 
   const setMenuOpenState = useCallback(
@@ -316,6 +313,7 @@ export function useWorktreeContextMenuModel({
     statusesForWorktree,
     updateWorktreeMeta,
     validParentWorktreeId,
+    validParent,
     worktree
   })
   const { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker } =
@@ -327,7 +325,7 @@ export function useWorktreeContextMenuModel({
       setParentPicker,
       setParentPickerOpen,
       unmountTimerRef: parentPickerUnmountTimerRef,
-      worktreeId: worktree.id
+      worktreeId: getWorktreeLineageSelection(worktree)
     })
   const { handleRemoveParentLink, suppressOpeningPointerEvent } =
     useWorktreeContextMenuSecondaryActions({
@@ -364,7 +362,6 @@ export function useWorktreeContextMenuModel({
     contextMenuOpenedAtRef,
     contextWorkspaceStatus,
     createGroupDialogOpen,
-    cyclicLineageIds,
     deleteLabel,
     deletingContext,
     deletingSubtree,

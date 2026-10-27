@@ -1,5 +1,5 @@
+import { getLineageInputs } from './visible-worktree-indexes'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
 import { toWorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
@@ -12,6 +12,8 @@ import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import {
+  getRegisteredWorktreeDeleteTarget,
+  createWorktreeDeleteAdmission,
   resolveWorktreeBatchDeleteTargets,
   toWorktreeDeleteIdentities,
   type WorktreeBatchDeleteOptions,
@@ -30,7 +32,13 @@ export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
 export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
   const state = useAppStore.getState()
   // Qualify row actions by host; an unqualified id shared by two hosts resolves to nothing, never the first copy.
-  const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
+  const target =
+    getRegisteredWorktreeDeleteTarget(
+      state,
+      worktreeId,
+      options.expectedHostId,
+      options.expectedIdentity
+    ) ?? null
   const instanceChanged =
     Object.hasOwn(options, 'expectedInstanceId') &&
     target?.instanceId !== options.expectedInstanceId
@@ -88,8 +96,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
 
   const deleteLineage = getWorkspaceDeleteLineage(
     target,
-    getAllWorktreesFromState(state),
-    state.worktreeLineageById
+    getLineageInputs(state).worktreeMap,
+    getLineageInputs(state).lineageById
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
   // Skip-confirm preferences never authorize discarding unsaved editor text.
@@ -97,7 +105,9 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
-    void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
+    void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName, {
+      assertBeforeDispatch: createWorktreeDeleteAdmission(target)
+    })
     return
   }
   state.openModal('delete-worktree', {
@@ -117,8 +127,10 @@ export function runWorktreeBatchDelete(
   options: WorktreeBatchDeleteOptions = {}
 ): boolean {
   const state = useAppStore.getState()
-  const targets = resolveWorktreeBatchDeleteTargets(requestedWorktrees, (worktreeId, hostId) =>
-    getWorktreeOnHostFromState(state, worktreeId, hostId)
+  const targets = resolveWorktreeBatchDeleteTargets(
+    requestedWorktrees,
+    (worktreeId, hostId, identity) =>
+      getRegisteredWorktreeDeleteTarget(state, worktreeId, hostId, identity)
   )
   if (!targets) {
     showWorkspaceListChangedToast()
@@ -143,8 +155,8 @@ export function runWorktreeBatchDelete(
     targets.length === 1
       ? getWorkspaceDeleteLineage(
           targets[0],
-          getAllWorktreesFromState(state),
-          state.worktreeLineageById
+          getLineageInputs(state).worktreeMap,
+          getLineageInputs(state).lineageById
         )
       : null
   const singleTargetHasLineageChildren = (singleTargetLineage?.descendants.length ?? 0) > 0

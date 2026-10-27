@@ -136,6 +136,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onCardDragEnd: runtime.clearWorktreeDrag
     },
     folderWorkspace: {
+      getLineageToggleHandler: args.getLineageToggleHandler,
       groupBy: props.groupBy,
       newCardStyle: args.newCardStyle,
       settings: args.settings,

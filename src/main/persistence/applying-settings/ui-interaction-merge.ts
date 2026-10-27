@@ -95,6 +95,7 @@ export function normalizeWorkspaceLineageByChildKey(
       childInstanceId: lineage.childInstanceId ?? null,
       parentWorkspaceKey,
       parentInstanceId: lineage.parentInstanceId ?? null,
+      ...(lineage.parentStore === 'external' ? { parentStore: 'external' as const } : {}),
       origin: lineage.origin ?? 'cli',
       capture: lineage.capture ?? { source: 'manual-action', confidence: 'inferred' },
       ...(lineage.taskId ? { taskId: lineage.taskId } : {}),

@@ -107,7 +107,8 @@ export function useWorktreeNativeDrag(args: {
           x: event.clientX,
           y: event.clientY
         }),
-        dragSession.draggedIds
+        dragSession.draggedIds,
+        dragSession.draggedCopies
       )
       if (target.lineageParentId) {
         event.preventDefault()
@@ -180,13 +181,18 @@ export function useWorktreeNativeDrag(args: {
               y: event.clientY
             })
           : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-        dragSession.draggedIds
+        dragSession.draggedIds,
+        dragSession.draggedCopies
       )
 
       if (target.lineageParentId) {
         event.preventDefault()
         event.stopPropagation()
-        ctx.commitWorktreeLineageParentDrop(dragSession.draggedIds, target.lineageParentId)
+        ctx.commitWorktreeLineageParentDrop(
+          dragSession.draggedIds,
+          target.lineageParentId,
+          dragSession.draggedCopies
+        )
         clearWorktreeDrag()
         return
       }
@@ -227,6 +233,7 @@ export function useWorktreeNativeDrag(args: {
         })
       })
       ctx.clearReorderedWorktreeParents({
+        draggedCopies: dragSession.draggedCopies,
         draggedIds: dragSession.draggedIds,
         sourceGroupKey: dragSession.sourceGroupKey
       })

@@ -8,7 +8,10 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeLineageIdentity,
+  getWorktreeLineageRows
+} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
@@ -52,7 +55,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       workspaceStatuses: args.workspaceStatuses,
       projectOrderBy: 'manual',
       lineageById: { ...args.worktreeLineageById },
-      worktreeMap: new Map(args.worktrees.map((row) => [row.id, row])),
+      worktreeMap: getWorktreeLineageRows(args.worktrees),
       nestLineage: true,
       projectGroups: args.projectGroups,
       placeholderRepoIds: new Set(),
@@ -65,7 +68,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       pinnedDisplayPolicy: args.pinnedDisplayPolicy,
       filterRepoIds: args.filterRepoIds ?? []
     }).occurrencePlan
-  const occurrence = plan.preferredByIdentity.get(getWorktreeHostIdentity(args.worktree))
+  const occurrence = plan.preferredByIdentity.get(getWorktreeLineageIdentity(args.worktree))
   if (!occurrence) {
     return []
   }

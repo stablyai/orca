@@ -23,6 +23,7 @@ import { selectAllKnownWorkspaceStatuses } from '@/store/host-workspace-status-c
 
 export type ComposerStateInput = {
   initialRepoId?: string
+  initialParentWorktreeId?: string | null
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
   initialName?: string
@@ -47,6 +48,7 @@ const NEVER_CANCEL_COMPOSER_SUBMIT = (): boolean => false
 export function useComposerTargetStore(options: ComposerStateInput, decisions: ComposerDecisions) {
   const {
     initialRepoId,
+    initialParentWorktreeId,
     initialEphemeralVmRecipeId,
     initialName = '',
     initialPrompt = '',
@@ -165,6 +167,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   return {
     initialRepoId,
+    initialParentWorktreeId,
     initialEphemeralVmRecipeId,
     initialName,
     initialPrompt,

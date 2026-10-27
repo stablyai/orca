@@ -5,6 +5,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
+import { projectWorktreeLineageWithHostPeers } from '../worktree-lineage-host-peers'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
@@ -116,6 +117,70 @@ describe('host-qualified scoped worktree resolution', () => {
       childWorktreeIds: [childId]
     })
     expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([parentRepo, childRepo])
+  })
+
+  it('publishes a same-project parent on another host through scoped readers while publication retains saved intent', async () => {
+    const local = repo('shared', '/local', { executionHostId: 'local' })
+    const ssh = repo('shared', '/remote', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const deps = createDeps([local, ssh])
+    const childId = 'shared::/child'
+    const parentId = 'shared::/parent'
+    deps.metaById[childId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'child',
+      hostId: 'local'
+    })
+    deps.metaById[parentId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'parent',
+      hostId: 'ssh:builder'
+    })
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+    Object.assign(deps.store, { getAllWorktreeLineage: () => ({ [childId]: lineage }) })
+    deps.scanRepo.mockImplementation(async (owner) => ({
+      ok: true,
+      worktrees: [gitWorktree(owner === local ? '/child' : '/parent')]
+    }))
+    const child = await resolveScopedWorktreeIdRow(deps, childId, 'local')
+    expect(child?.parentWorktreeId).toBe(parentId)
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([local, ssh])
+    expect(
+      child && projectWorktreeLineageWithHostPeers(deps.store, local, [child])[0]
+    ).toMatchObject({
+      parentWorktreeId: null,
+      lineage: null,
+      savedLineage: lineage
+    })
+    // A failed scan must not turn a copied instance into a unique rename fallback.
+    deps.store.getRepos().push(repo('copy', '/copy', { executionHostId: 'local' }))
+    deps.metaById['copy::/copy'] = { ...deps.metaById[parentId], hostId: 'local' }
+    lineage.parentWorktreeId = 'old::/missing'
+    deps.scanRepo.mockImplementation(async (owner) =>
+      owner.id === 'copy'
+        ? { ok: false, worktrees: [] }
+        : { ok: true, worktrees: [gitWorktree(owner === local ? '/child' : '/parent')] }
+    )
+    const ambiguous = await resolveScopedWorktreeIdRow(deps, childId, 'local')
+    expect(ambiguous?.parentWorktreeId).toBeNull()
+    expect(
+      ambiguous &&
+        projectWorktreeLineageWithHostPeers(deps.store, local, [ambiguous])[0].parentWorktreeId
+    ).toBeNull()
+    expect(deps.metaById['copy::/copy'].instanceId).toBe(deps.metaById[parentId].instanceId)
+    delete deps.metaById['copy::/copy']
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
+      parentWorktreeId: parentId,
+      savedLineage: lineage
+    })
   })
 
   it('scans only the selected local or SSH owner when repo ids and paths collide', async () => {
@@ -439,3 +504,61 @@ describe('folder-to-Git checkout identity', () => {
     }
   )
 })
+
+it.each([10, 100])(
+  'scans one copied pair owner and builds selected dependencies at N=%i',
+  async (n) => {
+    const repos = Array.from({ length: n }, (_, i) =>
+      repo(`r${i}`, `/r${i}`, { executionHostId: 'local' })
+    )
+    const deps = createDeps(repos)
+    const edges: Record<string, WorktreeLineage> = {}
+    for (let i = 0; i < n; i++) {
+      const child = `r${i}::/c${i}`,
+        parent = `r${i}::/p${i}`
+      deps.metaById[child] = mergeWorktreeMetaForWrite(undefined, {
+        instanceId: `child-${i}`,
+        hostId: 'local'
+      })
+      deps.metaById[parent] = mergeWorktreeMetaForWrite(undefined, {
+        instanceId: 'copied-parent',
+        hostId: 'local'
+      })
+      edges[child] = {
+        worktreeId: child,
+        worktreeInstanceId: `child-${i}`,
+        parentWorktreeId: parent,
+        parentWorktreeInstanceId: 'copied-parent',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    Object.assign(deps.store, { getAllWorktreeLineage: () => edges })
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/c0'), gitWorktree('/p0')]
+    }))
+    const adjacency = new Map<string, Set<string>>()
+    const set = Map.prototype.set
+    const spy = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key,
+      value
+    ) {
+      if (typeof key === 'string' && /^r\d+::\/[cp]\d+$/.test(key) && value instanceof Set) {
+        set.call(adjacency, key, value)
+      }
+      return set.call(this, key, value)
+    })
+    try {
+      expect(await resolveScopedWorktreeIdRow(deps, 'r0::/c0', 'local')).toMatchObject({
+        parentWorktreeId: 'r0::/p0'
+      })
+    } finally {
+      spy.mockRestore()
+    }
+    expect([...adjacency.values()].reduce((sum, peers) => sum + peers.size, 0)).toBe(2 * n)
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner.id)).toEqual(['r0'])
+  }
+)

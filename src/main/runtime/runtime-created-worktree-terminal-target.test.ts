@@ -218,10 +218,13 @@ describe('created worktree terminal evidence', () => {
   })
 
   it('preserves stored lineage while rejecting stale parents and cycles', () => {
-    const { store, worktree, meta, metadata, lineageById } = makeFixture()
+    const { store, worktree, meta, metadata, lineageById } = makeFixture([
+      owner(),
+      owner('ssh:builder')
+    ])
     const parentId = 'repo-1::/workspaces/parent'
     const childId = 'repo-1::/workspaces/child'
-    metadata[parentId] = { ...meta, instanceId: 'parent-instance' }
+    metadata[parentId] = { ...meta, instanceId: 'parent-instance', hostId: 'ssh:builder' }
     metadata[childId] = { ...meta, instanceId: 'child-instance' }
     const lineage: WorktreeLineage = {
       worktreeId: worktree.id,

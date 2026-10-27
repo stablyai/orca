@@ -1,3 +1,4 @@
+import { getWorktreeLineageSelection } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +7,12 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { worktreeWorkspaceKey, folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { TEST_REPO, makeLineage, makeWorktree } from './worktrees-slice-test-fixtures'
+import {
+  TEST_REPO,
+  makeFolderWorkspace,
+  makeLineage,
+  makeWorktree
+} from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -86,6 +92,46 @@ describe('createWorktree composer parent pick', () => {
     )
   })
 
+  it('creates a local Git child under the active remote folder twin regardless of catalog order', async () => {
+    const local = makeFolderWorkspace({ id: 'parent', executionHostId: 'local' })
+    const remote = makeFolderWorkspace({ id: local.id, executionHostId: 'runtime:parent-server' })
+    const store = createParentPickStore()
+    const created = makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: created,
+      lineage: makeLineage({
+        worktreeId: created.id,
+        parentWorktreeId: folderWorkspaceKey(remote.id),
+        parentWorktreeInstanceId: folderWorkspaceKey(remote.id),
+        parentStore: 'external'
+      })
+    })
+    for (const folderWorkspaces of [
+      [local, remote],
+      [remote, local]
+    ]) {
+      mockApi.worktrees.create.mockClear()
+      store.setState({
+        folderWorkspaces,
+        activeWorkspaceKey: folderWorkspaceKey(remote.id),
+        activeWorktreeId: folderWorkspaceKey(remote.id),
+        activeWorkspaceExecutionHostId: 'runtime:parent-server'
+      })
+      await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+      expect(mockApi.worktrees.create).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          repoId: 'repo1',
+          parentWorktreeRef: {
+            worktreeId: folderWorkspaceKey(remote.id),
+            instanceId: folderWorkspaceKey(remote.id),
+            external: true
+          }
+        })
+      )
+      expect(mockApi.worktrees.create.mock.calls[0][0]).not.toHaveProperty('parentWorkspace')
+    }
+  })
+
   it('drops a stale parent pick and falls back to the active folder workspace', async () => {
     const store = createParentPickStore()
     store.setState({ activeWorkspaceKey: folderWorkspaceKey('folder-1') } as Partial<AppState>)
@@ -148,7 +194,9 @@ describe('createWorktree composer parent pick', () => {
       id: 'repo1::/path/parent',
       repoId: 'repo1',
       path: '/path/parent',
-      instanceId: 'parent-instance'
+      instanceId: 'parent-instance',
+      hostId: 'runtime:parent-server',
+      runtimeOwnerEnvironmentId: 'parent-server'
     })
     const created = makeWorktree({
       id: 'repo1::/path/child',
@@ -160,13 +208,33 @@ describe('createWorktree composer parent pick', () => {
       worktreeId: created.id,
       worktreeInstanceId: 'child-instance',
       parentWorktreeId: parent.id,
-      parentWorktreeInstanceId: 'parent-instance'
+      parentWorktreeInstanceId: 'parent-instance',
+      parentStore: 'external'
     })
     const store = createParentPickStore(parent)
+    store.setState({
+      worktreesByRepo: {
+        repo1: [
+          {
+            ...parent,
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: undefined,
+            instanceId: 'a-instance'
+          },
+          parent
+        ]
+      }
+    })
     mockApi.worktrees.create.mockResolvedValue({ worktree: created, lineage })
 
-    await createWithParentPick(store, parent.id)
+    await createWithParentPick(store, getWorktreeLineageSelection(parent))
 
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentWorktreeRef: { worktreeId: parent.id, instanceId: 'parent-instance', external: true }
+      })
+    )
+    expect(mockApi.worktrees.create.mock.calls[0][0]).not.toHaveProperty('parentWorkspace')
     expect(toast.warning).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById[created.id]).toEqual(lineage)
   })
@@ -195,6 +263,7 @@ describe('createWorktree composer parent pick', () => {
 
     expect(mockApi.worktrees.create).toHaveBeenCalledTimes(2)
     expect(mockApi.worktrees.create.mock.calls[1][0]).not.toHaveProperty('parentWorkspace')
+    expect(mockApi.worktrees.create.mock.calls[1][0]).not.toHaveProperty('parentWorktreeRef')
     expect(toast.warning).toHaveBeenCalledTimes(1)
   })
 
@@ -225,7 +294,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
     resetRemoteRuntimeMocks()
   })
 
-  function createRemoteStore() {
+  function createRemoteStore(parentHostId?: ExecutionHostId) {
     const store = createRepoTestStore()
     store.setState({
       repos: [
@@ -245,18 +314,19 @@ describe('createWorktree parent pick on a remote runtime', () => {
             repoId: REMOTE_REPO,
             path: '/remote/parent',
             displayName: 'parent-wt',
-            instanceId: 'parent-instance'
+            instanceId: 'parent-instance',
+            ...(parentHostId ? { hostId: parentHostId } : {})
           })
         ]
       }
-    } as Partial<AppState>)
+    })
     return store
   }
 
-  function createOnRemote(store: ReturnType<typeof createTestStore>) {
+  function createOnRemote(store: ReturnType<typeof createTestStore>, parentSelection = PARENT_ID) {
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = [REMOTE_REPO, 'feature', 'origin/main']
-    args[25] = { parentWorktreeId: PARENT_ID }
+    args[25] = { parentWorktreeId: parentSelection, hostAgentLaunch: { agent: 'claude' } }
     return createWorktree(...args)
   }
 
@@ -290,7 +360,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
   }
 
   it('marks an app-selected parent as manual so the host does not record a CLI flag', async () => {
-    mockRuntimeCreate((id) => ({
+    const reply = (parentStore?: 'external') => (id: string) => ({
       id,
       ok: true,
       result: {
@@ -301,17 +371,41 @@ describe('createWorktree parent pick on a remote runtime', () => {
         }),
         lineage: makeLineage({
           worktreeId: `${REMOTE_REPO}::/remote/child`,
-          parentWorktreeId: PARENT_ID
+          parentWorktreeId: PARENT_ID,
+          parentStore
         })
       }
-    }))
-
+    })
+    mockRuntimeCreate(reply())
     await createOnRemote(createRemoteStore())
-
     expect(createCalls()[0]?.params).toMatchObject({
       parentWorkspace: worktreeWorkspaceKey(PARENT_ID),
       parentWorkspaceOrigin: 'manual'
     })
+    expect(toast.warning).not.toHaveBeenCalled()
+    mockRuntimeCreate(reply('external'))
+
+    const store = createRemoteStore()
+    const parent = makeWorktree({
+      id: PARENT_ID,
+      repoId: 'local-parent',
+      hostId: 'local',
+      instanceId: 'parent-instance'
+    })
+    store.setState({
+      repos: [
+        ...store.getState().repos,
+        { ...TEST_REPO, id: parent.repoId, executionHostId: 'local' }
+      ],
+      worktreesByRepo: { ...store.getState().worktreesByRepo, [parent.repoId]: [parent] }
+    })
+    await createOnRemote(store, getWorktreeLineageSelection(parent))
+
+    expect(createCalls()[1]?.params).toMatchObject({
+      parentWorkspaceOrigin: 'manual',
+      parentWorktreeRef: { worktreeId: parent.id, instanceId: 'parent-instance', external: true }
+    })
+    expect(createCalls()[1]?.params).not.toHaveProperty('parentWorkspace')
     expect(toast.warning).not.toHaveBeenCalled()
   })
 
@@ -322,11 +416,18 @@ describe('createWorktree parent pick on a remote runtime', () => {
       error: { code: 'LINEAGE_PARENT_NOT_FOUND', message: 'Parent selector was not found.' }
     }))
 
-    await createOnRemote(createRemoteStore())
+    await createOnRemote(createRemoteStore('local'))
 
     const calls = createCalls()
     expect(calls).toHaveLength(2)
+    expect(calls[0]?.params).toMatchObject({
+      startupAgent: 'claude',
+      parentWorktreeRef: { worktreeId: PARENT_ID, instanceId: 'parent-instance', external: true }
+    })
+    expect(calls[0]?.params).not.toHaveProperty('parentWorkspace')
+    expect(calls[1]?.params).toMatchObject({ startupAgent: 'claude' })
     expect(calls[1]?.params).not.toHaveProperty('parentWorkspace')
+    expect(calls[1]?.params).not.toHaveProperty('parentWorktreeRef')
     expect(toast.warning).toHaveBeenCalledWith(
       'Created without nesting under "parent-wt"',
       expect.objectContaining({ description: expect.any(String) })
@@ -380,8 +481,15 @@ describe('createWorktree parent pick on a remote runtime', () => {
 
     const calls = createCalls()
     expect(calls).toHaveLength(2)
-    expect(calls[0]?.params).toMatchObject({ parentWorkspace: folderWorkspaceKey('folder-1') })
+    expect(calls[0]?.params).toMatchObject({
+      parentWorktreeRef: {
+        worktreeId: folderWorkspaceKey('folder-1'),
+        instanceId: folderWorkspaceKey('folder-1'),
+        external: true
+      }
+    })
     expect(calls[1]?.params).not.toHaveProperty('parentWorkspace')
+    expect(calls[1]?.params).not.toHaveProperty('parentWorktreeRef')
     expect(toast.warning).toHaveBeenCalledWith(
       'Created without nesting under "Design docs"',
       expect.objectContaining({ description: expect.any(String) })
@@ -395,9 +503,13 @@ describe('createWorktree parent pick on a remote runtime', () => {
       error: { code: 'internal_error', message: 'disk on fire' }
     }))
 
-    await expect(createOnRemote(createRemoteStore())).rejects.toThrow('disk on fire')
+    await expect(createOnRemote(createRemoteStore('local'))).rejects.toThrow('disk on fire')
 
     expect(createCalls()).toHaveLength(1)
+    expect(createCalls()[0]?.params).toMatchObject({
+      startupAgent: 'claude',
+      parentWorktreeRef: { worktreeId: PARENT_ID, instanceId: 'parent-instance', external: true }
+    })
     expect(toast.warning).not.toHaveBeenCalled()
   })
 })

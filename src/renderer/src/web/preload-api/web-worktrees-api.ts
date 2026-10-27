@@ -1,3 +1,4 @@
+import { assertCrossMachineLineageSupported } from '../../../../shared/worktree-runtime-capabilities'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
@@ -51,6 +52,12 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     create: async (args) => {
+      if (args.parentWorktreeRef) {
+        const environment = requireActiveEnvironment()
+        const status = await getRemoteRuntimeStatus()
+        assertActiveEnvironment(environment.id)
+        assertCrossMachineLineageSupported(status.capabilities, environment.name)
+      }
       if (args.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(args)
       }
@@ -96,6 +103,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
             }
           : {}),
         parentWorkspace: args.parentWorkspace,
+        parentWorktreeRef: args.parentWorktreeRef,
         // Why: every create through this API is an in-app action, never the CLI's parent flag.
         ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
         workspaceStatus: args.workspaceStatus,
@@ -233,16 +241,25 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         lineage: Record<string, WorktreeLineage>
         workspaceLineage?: Record<string, WorkspaceLineage>
       }>('worktree.lineageList'),
-    updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
+    updateLineage: async ({ worktreeId, parentWorktreeId, parentWorktreeRef, noParent }) => {
+      if (parentWorktreeRef) {
+        const environment = requireActiveEnvironment()
+        const status = await getRemoteRuntimeStatus()
+        assertActiveEnvironment(environment.id)
+        assertCrossMachineLineageSupported(status.capabilities, environment.name)
+      }
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         parentWorktree: parentWorktreeId,
+        parentWorktreeRef,
         noParent
       })
-      return result.worktree.lineage ?? null
+      return result.worktree.savedLineage !== undefined
+        ? result.worktree.savedLineage
+        : (result.worktree.lineage ?? null)
     },
     persistSortOrder: async ({ orderedIds, hostIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })

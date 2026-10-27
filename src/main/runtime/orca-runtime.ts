@@ -1,3 +1,4 @@
+import { WORKTREE_METADATA_DOMAINS } from '../persistence/loading-store/worktree-identity-metadata'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -10,14 +11,8 @@ import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transition
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
-import type {
-  AgentLaunchTabPublished,
-  AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type {
-  AgentLaunchPaneAddress,
-  AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
+import type * as LaunchTab from '../../shared/agent-launch-tab-publication'
+import type * as LaunchPane from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
@@ -163,6 +158,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
+    this.store?.onStateWritten?.((domains) => {
+      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+        this.invalidateResolvedWorktreeCache()
+      }
+    })
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
@@ -184,8 +184,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Publish before spawn when a window owns the layout; otherwise return null. */
   publishAgentLaunchTab(
-    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
-  ): Promise<AgentLaunchTabPublished> | null {
+    request: Omit<LaunchTab.AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<LaunchTab.AgentLaunchTabPublished> | null {
     if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
       return null
     }
@@ -194,8 +194,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */
   reportAgentLaunchPaneVerdict(
-    pane: AgentLaunchPaneAddress,
-    verdict: AgentLaunchPaneVerdict
+    pane: LaunchPane.AgentLaunchPaneAddress,
+    verdict: LaunchPane.AgentLaunchPaneVerdict
   ): void {
     this.notifier?.agentLaunchPaneVerdict?.({ ...pane, verdict })
   }

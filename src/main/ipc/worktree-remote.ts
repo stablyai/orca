@@ -1,3 +1,4 @@
+import { recordCreatedWorktreeLineage } from '../runtime/runtime-worktree-lineage-recording'
 /* eslint-disable max-lines */
 
 import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
@@ -85,7 +86,6 @@ import {
 } from '../../shared/execution-host'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -156,8 +156,7 @@ import {
 import {
   hostWorktreeTargetForRepo,
   readAllWorktreeMetaForHost,
-  readWorktreeMetaForHost,
-  worktreeRowTarget
+  readWorktreeMetaForHost
 } from '../persistence/host-qualified-worktree-meta'
 // Bound network fetches so Windows credential-manager GUI hangs cannot wedge creation (STA-1292).
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
@@ -229,6 +228,28 @@ export function recordWorkspaceLineageForCreatedWorktree(
   worktree: Worktree,
   createdAt: number
 ): CreatedWorktreeLineageRecords {
+  if (args.parentWorktreeRef) {
+    const ref = args.parentWorktreeRef
+    return recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      {
+        kind: 'lineage',
+        parent: {
+          type: 'reference',
+          workspaceKey: ref.worktreeId.startsWith('folder:')
+            ? `folder:${ref.worktreeId.slice(7)}`
+            : worktreeWorkspaceKey(ref.worktreeId),
+          worktreeId: ref.worktreeId,
+          instanceId: ref.instanceId
+        },
+        ...(ref.external ? { parentStore: 'external' as const } : {}),
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' }
+      },
+      createdAt
+    )
+  }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
@@ -257,56 +278,41 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
-  let lineage: CreateWorktreeResult['lineage'] = null
-  let parentOutsideLineageBoundary = false
-  let lineageOwnedByTwin = false
-  if (parentScope.type === 'worktree' && parentWorktreeMeta) {
-    if (!parentWorktreeMeta.instanceId) {
-      console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} has no instance identity; skipping lineage`
-      )
-    } else if (!sharesWorktreeLineageBoundary(worktree, parentWorktreeMeta)) {
-      parentOutsideLineageBoundary = true
-      console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s execution host; skipping lineage`
-      )
-    } else {
-      const target = worktreeRowTarget(store, worktree)
-      lineage =
-        (target &&
-          store.setWorktreeLineage(target, {
-            worktreeId: worktree.id,
-            worktreeInstanceId: worktree.instanceId,
-            parentWorktreeId: parentScope.worktreeId,
-            parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
-            origin: 'manual',
-            capture: { source: 'manual-action', confidence: 'explicit' },
-            createdAt
-          })) ??
-        null
-      lineageOwnedByTwin = lineage === null
+  const instanceId =
+    parentScope.type === 'folder' ? args.parentWorkspace : parentWorktreeMeta?.instanceId
+  if (!instanceId) {
+    return {
+      lineage: null,
+      workspaceLineage: store.setWorkspaceLineage({
+        childWorkspaceKey,
+        childInstanceId: worktree.instanceId,
+        parentWorkspaceKey: args.parentWorkspace,
+        parentInstanceId: null,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt
+      })
     }
   }
-
-  // Out-of-boundary parents and twin-owned buckets must not persist cross-host workspace links.
-  if (parentOutsideLineageBoundary || lineageOwnedByTwin) {
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-
-  const workspaceLineage = store.setWorkspaceLineage({
-    childWorkspaceKey,
-    childInstanceId: worktree.instanceId,
-    parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
-    origin: 'manual',
-    capture: {
-      source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
-      confidence: 'explicit'
+  return recordCreatedWorktreeLineage(
+    store,
+    worktree,
+    {
+      kind: 'lineage',
+      parent: {
+        type: 'reference',
+        workspaceKey: args.parentWorkspace,
+        worktreeId: parentScope.type === 'worktree' ? parentScope.worktreeId : args.parentWorkspace,
+        instanceId
+      },
+      origin: 'manual',
+      capture: {
+        source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
+        confidence: 'explicit'
+      }
     },
     createdAt
-  })
-  return { lineage, workspaceLineage }
+  )
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -1722,7 +1728,12 @@ async function performLocalWorktreeCreate(
       ...worktree,
       workspaceLineage,
       ...(worktreeLineage
-        ? { lineage: worktreeLineage, parentWorktreeId: worktreeLineage.parentWorktreeId }
+        ? {
+            savedLineage: worktreeLineage,
+            lineage: worktreeLineage.parentStore === 'external' ? null : worktreeLineage,
+            parentWorktreeId:
+              worktreeLineage.parentStore === 'external' ? null : worktreeLineage.parentWorktreeId
+          }
         : {})
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),

@@ -1,3 +1,5 @@
+import { projectCurrentStoreWorktreeLineage } from '../../../worktree-lineage-candidates'
+import { worktreeLineageFromWorkspaceLineage } from '../../../../shared/resolved-worktree-lineage'
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -41,7 +43,7 @@ import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-
 import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
 
-// Why: folder and floating workspaces have no worktree row, so no parent, children or lineage.
+// Floating workspaces have no saved lineage.
 function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
   return {
     ...worktree,
@@ -108,7 +110,12 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   }
 
   protected folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
-    return withoutWorktreeLineage(folderWorkspaceToWorktree(folderWorkspace))
+    const worktree = withoutWorktreeLineage(folderWorkspaceToWorktree(folderWorkspace))
+    const edge = this.store?.getAllWorkspaceLineage?.()[worktree.id]
+    if (edge) {
+      worktree.savedLineage = worktreeLineageFromWorkspaceLineage(edge)
+    }
+    return this.store ? projectCurrentStoreWorktreeLineage(this.store, [worktree])[0] : worktree
   }
 
   resolveWorkspaceTerminalStartupCwd(

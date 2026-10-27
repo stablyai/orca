@@ -1,7 +1,8 @@
+import { projectGroupIdFromRepoId } from '../folder-workspace-worktree'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { getWorktreeLineageIdentity } from './worktree-lineage-projection'
 import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../workspace-statuses'
 import {
   compareFolderWorkspacesForDisplay,
@@ -55,26 +56,45 @@ export function buildOrderedGroups(args: {
 
   if (groupBy === 'repo') {
     // Shared with paired-phone Project sections.
-    return buildProjectSections({
-      items: naturalWorktrees,
-      repoIdOf: (worktree) => worktree.repoId,
-      displayRepoIdOf: (worktree) =>
-        (displayRootByIdentity?.get(getWorktreeHostIdentity(worktree)) ?? worktree).repoId,
-      repoMap,
-      projectIndex,
-      placeholderRepoIds,
-      noticeRepos: [
-        ...[...importedWorktreesByRepo].map(
-          ([repoId, candidate]) => [repoId, candidate.repo] as const
-        ),
-        ...[...newExternalWorktreesInboxByRepo].map(
-          ([repoId, candidate]) => [repoId, candidate.repo] as const
-        )
-      ],
-      pendingRepoIds: pendingByRepo.keys(),
-      repoOrder,
-      projectOrderBy
-    })
+    const folderGroups = new Map<string, WorktreeGroupEntry>()
+    const gitRows: Worktree[] = []
+    for (const row of naturalWorktrees) {
+      const root = displayRootByIdentity?.get(getWorktreeLineageIdentity(row)) ?? row
+      if (projectGroupIdFromRepoId(root.repoId)) {
+        const group = folderGroups.get(root.repoId) ?? {
+          label: '',
+          items: [],
+          repoIds: new Set<string>()
+        }
+        group.items.push(row)
+        folderGroups.set(root.repoId, group)
+      } else {
+        gitRows.push(row)
+      }
+    }
+    return [
+      ...buildProjectSections({
+        items: gitRows,
+        repoIdOf: (worktree) => worktree.repoId,
+        displayRepoIdOf: (worktree) =>
+          (displayRootByIdentity?.get(getWorktreeLineageIdentity(worktree)) ?? worktree).repoId,
+        repoMap,
+        projectIndex,
+        placeholderRepoIds,
+        noticeRepos: [
+          ...[...importedWorktreesByRepo].map(
+            ([repoId, candidate]) => [repoId, candidate.repo] as const
+          ),
+          ...[...newExternalWorktreesInboxByRepo].map(
+            ([repoId, candidate]) => [repoId, candidate.repo] as const
+          )
+        ],
+        pendingRepoIds: pendingByRepo.keys(),
+        repoOrder,
+        projectOrderBy
+      }),
+      ...folderGroups
+    ]
   }
 
   // Section emitters/clients supply status and PR labels.

@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeLineageIdentity } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
 import type { VisibleWorktreeShortcutTarget } from './visible-worktrees'
 import { getSidebarHeaderVisual } from './worktree-list/rows/header-visuals'
@@ -143,7 +144,7 @@ export function serializeOccurrencePlan(
   const occurrenceCountByIdentity = new Map<string, number>()
   for (const [sectionKey, occurrences] of plan.bySection) {
     for (const occurrence of occurrences) {
-      const identity = getWorktreeHostIdentity(occurrence.row)
+      const identity = getWorktreeLineageIdentity(occurrence.row)
       occurrenceCountByIdentity.set(identity, (occurrenceCountByIdentity.get(identity) ?? 0) + 1)
     }
     if (occurrences.length === 0 || occurrences.some(({ key }) => !renderedRowKeys.has(key))) {
@@ -152,7 +153,7 @@ export function serializeOccurrencePlan(
   }
   for (const [identity, occurrence] of plan.preferredByIdentity) {
     if ((occurrenceCountByIdentity.get(identity) ?? 0) > 1) {
-      lines.push(`PREFERRED ${identity} -> ${occurrence.key}`)
+      lines.push(`PREFERRED ${getWorktreeHostIdentity(occurrence.row)} -> ${occurrence.key}`)
     }
   }
   return lines

@@ -10,7 +10,8 @@ import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../../../shared/worktree/host-qualified-identity'
-import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
+import { projectCurrentStoreWorktreeLineage } from '../../worktree-lineage-candidates'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { resolveLocalProjectRuntimesForRepos } from '../../project-runtime-git-options'
 import { getAgentLaunchPlatformForRepo } from '../runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
@@ -19,6 +20,7 @@ import {
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps,
+  type RepoWorktreeRow,
   type RepoWorktreeRowsScan
 } from '../repo-worktree-row-resolution'
 
@@ -102,13 +104,17 @@ export function joinResolvedWorktreeScans(
   const unscannedRepoKeys = new Set<HostScopedRepoKey>()
   const gitRunById = new Map<HostScopedWorktreeKey, object | null>()
   const scannedRepoKeys = new Set<HostScopedRepoKey>()
+  const ownerCounts = new Map<string, number>()
+  for (const repo of repos) {
+    ownerCounts.set(repo.id, (ownerCounts.get(repo.id) ?? 0) + 1)
+  }
   const perRepoWorktrees = repos.map((repo) => {
     const key = resolvedWorktreeRepoScanKey(repo)
     const scan = scans.get(key) ?? null
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = joinRepoWorktreeRows(deps, repo, scan, metaById)
+    const rows = joinRepoWorktreeRows(deps, repo, scan, metaById, ownerCounts.get(repo.id))
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {
@@ -117,9 +123,20 @@ export function joinResolvedWorktreeScans(
     }
     return rows
   })
-  const worktrees = projectResolvedWorktreeLineage(
-    perRepoWorktrees.flat(),
-    store.getAllWorktreeLineage?.() ?? {}
-  )
-  return { worktrees, platformByRepoId, unscannedRepoKeys, gitRunById, scannedRepoKeys }
+  const gitRows = perRepoWorktrees.flat()
+  const projected = projectCurrentStoreWorktreeLineage(store, [
+    ...gitRows,
+    ...(store.getFolderWorkspaces?.().map(folderWorkspaceToWorktree) ?? [])
+  ])
+  const worktrees = projected
+    .slice(0, gitRows.length)
+    .filter((row): row is RepoWorktreeRow => 'git' in row)
+  return {
+    worktrees,
+    folderWorktrees: projected.slice(gitRows.length),
+    platformByRepoId,
+    unscannedRepoKeys,
+    gitRunById,
+    scannedRepoKeys
+  }
 }

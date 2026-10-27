@@ -25,6 +25,7 @@ import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-t
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
+  initialParentWorktreeId: string | null | undefined
   initialEphemeralVmRecipeId: string | undefined
   initialName: string
   initialPrompt: string

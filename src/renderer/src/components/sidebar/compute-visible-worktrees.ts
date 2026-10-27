@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -5,6 +6,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { selectVisibleSidebarWorktrees } from '../../../../shared/sidebar-list/visible-worktrees'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
@@ -13,6 +15,7 @@ import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-w
 // Separate store binding avoids attention-slice import cycles; shared builders retain the filter rules.
 
 export type VisibleWorktreeOptions = {
+  folderWorkspaces?: readonly FolderWorkspace[]
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
@@ -52,7 +55,7 @@ export function computeVisibleWorktrees(
     : (worktree: Worktree) => worktree.id
   return selectVisibleSidebarWorktrees({
     rows: getIndexedAllWorktrees(worktreesByRepo),
-    ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
+    ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo, selectFolderWorkspaces(opts)),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),

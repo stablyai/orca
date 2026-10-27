@@ -15,7 +15,12 @@ import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../worktree/host-qualified-identity'
-import type { WorktreeLineage } from '../worktree/lineage-types'
+import {
+  projectResolvedWorktreeLineage,
+  mergeWorkspaceLineageRecords
+} from '../resolved-worktree-lineage'
+import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import type { WorktreeMeta } from '../worktree/meta-types'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
@@ -36,9 +41,19 @@ export const WorkspaceRowSchema = z.object({
     .object({
       parentWorktreeId: z.string(),
       worktreeInstanceId: z.string(),
-      parentWorktreeInstanceId: z.string()
+      parentWorktreeInstanceId: z.string(),
+      parentStore: z.literal('external').optional()
     })
     .nullable(),
+  savedLineage: z
+    .object({
+      parentWorktreeId: z.string(),
+      worktreeInstanceId: z.string(),
+      parentWorktreeInstanceId: z.string(),
+      parentStore: z.literal('external').optional()
+    })
+    .nullable()
+    .optional(),
   isPinned: z.boolean(),
   isArchived: z.boolean(),
   isUnread: z.boolean(),
@@ -88,8 +103,14 @@ function toWorkspaceRow(
   hostId: ExecutionHostId,
   kind: WorkspaceRow['kind'],
   repo: Repo | undefined,
-  lineage: WorktreeLineage | undefined
+  lineage: WorktreeLineage | null | undefined
 ): WorkspaceRow {
+  lineage =
+    worktree.savedLineage === null
+      ? null
+      : worktree.savedLineage !== undefined
+        ? worktree.lineage
+        : lineage
   const kindFacts = getWorkspaceRowKindFacts(worktree, repo)
   return {
     id: worktree.id,
@@ -101,11 +122,13 @@ function toWorkspaceRow(
     displayName: worktree.displayName,
     isMainWorktree: worktree.isMainWorktree,
     ...(worktree.instanceId !== undefined ? { instanceId: worktree.instanceId } : {}),
+    savedLineage: worktree.savedLineage !== undefined ? worktree.savedLineage : (lineage ?? null),
     lineage: lineage
       ? {
           parentWorktreeId: lineage.parentWorktreeId,
           worktreeInstanceId: lineage.worktreeInstanceId,
-          parentWorktreeInstanceId: lineage.parentWorktreeInstanceId
+          parentWorktreeInstanceId: lineage.parentWorktreeInstanceId,
+          parentStore: lineage.parentStore
         }
       : null,
     isPinned: worktree.isPinned,
@@ -189,6 +212,10 @@ export function buildWorkspaceRows(catalog: {
   folderWorkspaces: readonly FolderWorkspace[]
   repos: readonly Repo[]
   lineageById: Readonly<Record<string, WorktreeLineage>>
+  workspaceLineageByChildKey?: Readonly<Record<string, WorkspaceLineage>>
+  knownPeers?: readonly Worktree[]
+  metadata?: Readonly<Record<string, WorktreeMeta>>
+  projected?: readonly Worktree[]
 }): Map<HostScopedWorktreeKey, WorkspaceRow> {
   const rows = new Map<HostScopedWorktreeKey, WorkspaceRow>()
   const add = (
@@ -202,11 +229,22 @@ export function buildWorkspaceRows(catalog: {
       rows.set(listed.identity, toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage))
     }
   }
-  for (const { worktree, repo } of withOwnerRepos(catalog.worktrees, catalog.repos)) {
-    add(worktree, 'git', repo, catalog.lineageById[worktree.id])
-  }
-  for (const folderWorkspace of catalog.folderWorkspaces) {
-    add(folderWorkspaceToWorktree(folderWorkspace), 'folder')
+  const all = [...catalog.worktrees, ...catalog.folderWorkspaces.map(folderWorkspaceToWorktree)]
+  const projected =
+    catalog.projected ??
+    projectResolvedWorktreeLineage(
+      all,
+      mergeWorkspaceLineageRecords(catalog.lineageById, catalog.workspaceLineageByChildKey ?? {}),
+      catalog.knownPeers,
+      catalog.metadata
+    )
+  for (const [index, { worktree, repo }] of withOwnerRepos(projected, catalog.repos).entries()) {
+    add(
+      worktree,
+      index < catalog.worktrees.length ? 'git' : 'folder',
+      repo,
+      worktree.lineage ?? undefined
+    )
   }
   return rows
 }

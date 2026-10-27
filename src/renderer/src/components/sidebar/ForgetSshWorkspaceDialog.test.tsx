@@ -5,17 +5,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 
 const mocks = vi.hoisted(() => {
-  const allWorktrees: Worktree[] = []
+  const worktreesByRepo: Record<string, Worktree[]> = {}
+  const folderWorkspaces: FolderWorkspace[] = []
   const modalData: Record<string, unknown> = {}
   const state = {
     modalData,
     closeModal: vi.fn(),
     removeWorktree: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
-    allWorktrees,
+    worktreesByRepo,
+    folderWorkspaces,
     sshTargetLabels: new Map<string, string>(),
     removedSshTargetLabels: new Map<string, string>(),
     gitStatusByWorktree: {},
@@ -29,13 +32,6 @@ vi.mock('@/store', () => ({
     (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
     { getState: () => mocks.state }
   )
-}))
-
-vi.mock('@/store/selectors', () => ({
-  getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) =>
-    mocks.state.allWorktrees.find(
-      (w) => w.id === worktreeId && (hostId === undefined || w.hostId === hostId)
-    )
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -94,15 +90,18 @@ function sshWorkspace(instanceId: string): Worktree {
 }
 
 function replaceWorkspace(): void {
-  mocks.state.allWorktrees.splice(0, 1, sshWorkspace('instance-B'))
+  mocks.state.worktreesByRepo = { repo: [sshWorkspace('instance-B')] }
 }
 
 describe('ForgetSshWorkspaceDialog Reconnect & Delete (STA-11912)', () => {
   beforeEach(() => {
-    mocks.state.allWorktrees.splice(0, mocks.state.allWorktrees.length, sshWorkspace('instance-A'))
+    mocks.state.worktreesByRepo = { repo: [sshWorkspace('instance-A')] }
+    mocks.state.folderWorkspaces = []
     mocks.state.modalData = {
       worktreeId: 'repo::/srv/wt',
-      worktreeDeleteIdentities: [{ id: 'repo::/srv/wt', instanceId: 'instance-A', hostId }],
+      worktreeDeleteIdentities: [
+        { id: 'repo::/srv/wt', instanceId: 'instance-A', hostId, storeKey: '' }
+      ],
       displayName: 'wt',
       resolution: { kind: 'disconnected', targetId: 'box' }
     }
@@ -125,6 +124,7 @@ describe('ForgetSshWorkspaceDialog Reconnect & Delete (STA-11912)', () => {
     fireEvent.click(screen.getByText('Reconnect & Delete'))
 
     await waitFor(() => expect(mocks.state.closeModal).toHaveBeenCalled())
+    expect(mocks.connect).toHaveBeenCalledTimes(1)
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 
@@ -150,6 +150,8 @@ describe('ForgetSshWorkspaceDialog Reconnect & Delete (STA-11912)', () => {
     await waitFor(() =>
       expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledWith('repo::/srv/wt', hostId)
     )
+    expect(mocks.connect).toHaveBeenCalledTimes(1)
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
     expect(dispatchError).toBeInstanceOf(Error)
   })
 })

@@ -160,11 +160,14 @@ export const WorktreeSet = WorktreeSelector.extend({
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
+  parentWorktreeRef: z
+    .object({ worktreeId: z.string().min(1), instanceId: z.string().min(1), external: z.boolean() })
+    .optional(),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
-  if (params.parentWorktree && params.noParent === true) {
+  if ((params.parentWorktree || params.parentWorktreeRef) && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Choose either --parent-worktree or --no-parent, not both.'

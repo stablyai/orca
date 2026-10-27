@@ -1,3 +1,6 @@
+import { resolveWorktreeLineageParents } from '../../shared/resolved-worktree-lineage'
+import { readWorktreeLineageCorpus, type LineageStore } from '../worktree-lineage-candidates'
+import { getWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 // Apply this host's persisted sidebar filters to phone pushes, never the shared unread dot or paired-client settings.
 // Main lacks renderer tab state, so sleeping stays renderer-owned; host-local rows need no paired-device ownership map.
 // Missing UI/workspace state and hidden parents with shown lineage children fail open.
@@ -19,7 +22,8 @@ export type WorkspaceNotificationMuteDeps = {
   store: Pick<
     RuntimeStore,
     'getUI' | 'getRepo' | 'getWorktreeMeta' | 'getAllWorktreeLineage' | 'getFolderWorkspaces'
-  > & { getSettings: () => { notifications?: NotificationSettings } }
+  > &
+    LineageStore & { getSettings: () => { notifications?: NotificationSettings } }
   /** Last resolved Git listing, possibly stale; branch and HEAD come only from here. */
   resolvedWorktrees: readonly Worktree[] | null
 }
@@ -65,10 +69,34 @@ export function isWorkspaceHiddenBySidebarFilters(
       isWorkspaceOwnedBySomeoneElse(folder, EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT)
     )
   }
-  const lineage = Object.values(deps.store.getAllWorktreeLineage?.() ?? {})
-  const isRowHidden = (id: string): boolean => {
-    const listed = deps.resolvedWorktrees?.find((worktree) => worktree.id === id)
-    const meta = deps.store.getWorktreeMeta(id)
+  const snapshot = readWorktreeLineageCorpus(deps.store)
+  const rows = new Map<string, Worktree>(
+    snapshot.rows.map((row) => [getWorktreeHostIdentity(row), row])
+  )
+  const listedByIdentity = new Map<string, Worktree>(
+    (deps.resolvedWorktrees ?? []).map((row) => {
+      const current = snapshot.currentRow(row)
+      return [getWorktreeHostIdentity(current), current]
+    })
+  )
+  for (const [key, row] of listedByIdentity) {
+    rows.set(key, row)
+  }
+  const children = new Map<string, string[]>()
+  for (const [child, parent] of resolveWorktreeLineageParents(
+    [...rows.values()],
+    snapshot.edgeOf
+  )) {
+    const key = getWorktreeHostIdentity(parent)
+    const siblings = children.get(key) ?? []
+    siblings.push(getWorktreeHostIdentity(child))
+    children.set(key, siblings)
+  }
+  const isRowHidden = (key: string): boolean => {
+    const row = rows.get(key)
+    const id = row?.id ?? key
+    const listed = listedByIdentity.get(key)
+    const meta = row ?? deps.store.getWorktreeMeta(id)
     if (!listed && !meta) {
       return false
     }
@@ -96,15 +124,13 @@ export function isWorkspaceHiddenBySidebarFilters(
     )
   }
   const seen = new Set<string>()
-  const isShown = (id: string): boolean => {
-    if (seen.has(id)) {
+  const isShown = (key: string): boolean => {
+    if (seen.has(key)) {
       return false
     }
-    seen.add(id)
-    return (
-      !isRowHidden(id) ||
-      lineage.some((entry) => entry.parentWorktreeId === id && isShown(entry.worktreeId))
-    )
+    seen.add(key)
+    return !isRowHidden(key) || (children.get(key) ?? []).some(isShown)
   }
-  return !isShown(workspaceId)
+  const targets = [...rows].filter(([, row]) => row.id === workspaceId)
+  return targets.length > 0 ? targets.every(([key]) => !isShown(key)) : isRowHidden(workspaceId)
 }

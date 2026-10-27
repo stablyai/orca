@@ -44,6 +44,7 @@ export type { InitialWorkspaceRunSeedInput } from './composer-state/composer-dec
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
+  initialParentWorktreeId?: string | null
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
   initialName?: string

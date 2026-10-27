@@ -1,4 +1,5 @@
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { getOptionalStartupAgent, getOptionalSetupDecision } from './worktree-create-options'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -14,22 +15,19 @@ import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
 } from '../omitted-host-scope-selectors'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getPresentStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import {
-  getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelection,
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
+import { readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
@@ -41,6 +39,8 @@ import {
 import {
   assertWorktreeParentFlagsCompatible,
   getEnvParentWorkspace,
+  localParentClient,
+  resolveCallerParentRef,
   getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
@@ -54,39 +54,6 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
-
-function getOptionalSetupDecision(
-  flags: Map<string, string | boolean>
-): 'run' | 'skip' | 'inherit' | undefined {
-  const setup = getPresentStringFlag(flags, 'setup')
-  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
-    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
-  }
-  if (flags.get('run-hooks') === true) {
-    if (setup !== undefined && setup !== 'run') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-      )
-    }
-    return setup
-  }
-  return setup
-}
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
@@ -134,11 +101,28 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
-    const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
+    const explicitParent = await resolveCreateParentSelector(flags, cwd, client).catch(
+      (error: unknown) => {
+        if (
+          error instanceof RuntimeClientError &&
+          !(error instanceof RuntimeRpcFailureError) &&
+          error.code === 'selector_not_found' &&
+          getEnvParentWorkspace()?.startsWith('folder:')
+        ) {
+          throw new RuntimeClientError(
+            error.code,
+            client.isRemote
+              ? "Couldn't find the parent. Name the parent explicitly on the selected computer."
+              : "Couldn't find the parent. If you're in a folder workspace, name the parent folder workspace explicitly.",
+            error.data
+          )
+        }
+        throw error
+      }
+    )
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
-    // Read before any request, so a bad prompt, model or effort creates nothing.
     const agentLaunch = startupAgent
       ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
       : undefined
@@ -155,8 +139,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       needsCwdRepoInference
     ) {
       try {
-        // Cwd preserves parent/repo inference when agent shells lose ORCA_TERMINAL_HANDLE.
-        cwdParentWorktree = await resolveCurrentWorktreeSelection(cwd, client)
+        // Cwd preserves parent context when an agent shell loses its injected handle.
+        cwdParentWorktree = await resolveCurrentWorktreeSelection(cwd, localParentClient(client))
       } catch {
         cwdParentWorktree = undefined
       }
@@ -172,8 +156,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (linkedItems) {
       await assertReferenceWritesSupported(client)
     }
+    const explicitParentSelector = explicitParentWorktree ?? explicitParentWorkspace
+    const parentWorktreeRef =
+      !noParent && explicitParent.origin !== 'target'
+        ? await resolveCallerParentRef(
+            client,
+            explicitParentSelector ?? envParentWorkspace ?? cwdParentWorktree?.selector,
+            Boolean(explicitParentSelector)
+          )
+        : undefined
     const create = {
-      // Older hosts drop `repoHostId` and keep refusing an id on several hosts, as before.
       ...repoTarget,
       name,
       displayName: name,
@@ -188,13 +180,19 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // CLI activation targets its runtime's desktop, never unrelated paired viewers.
       ...(activate ? { navigation: 'host' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
+      parentWorktreeRef,
+      parentWorktree: parentWorktreeRef ? undefined : explicitParentWorktree,
+      ...(!parentWorktreeRef && explicitParentWorkspace
+        ? { parentWorkspace: explicitParentWorkspace }
+        : {}),
+      ...(!parentWorktreeRef && !client.isRemote && envParentWorkspace
+        ? { envParentWorkspace }
+        : {}),
+      ...(!parentWorktreeRef && !client.isRemote && cwdParentWorktree
+        ? { cwdParentWorktree: cwdParentWorktree.selector }
+        : {}),
       noParent,
-      callerTerminalHandle,
-      // Always request CLI provenance, including hand-typed creates without a terminal handle.
+      callerTerminalHandle: client.isRemote ? undefined : callerTerminalHandle,
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
     }
     if (agentLaunch) {
@@ -213,11 +211,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       flags,
       'Choose either --parent-worktree or --no-parent, not both.'
     )
-    const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
-    if (parentSelector && getWorkspaceKeyParentSelector(parentSelector)?.startsWith('folder:')) {
+    const rawParentSelector = getOptionalStringFlag(flags, 'parent-worktree')
+    if (
+      rawParentSelector &&
+      getWorkspaceKeyParentSelector(rawParentSelector)?.startsWith('folder:')
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Parent selector "${parentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
+        `Parent selector "${rawParentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
       )
     }
     const isUnread = getOptionalWorktreeUnreadFlag(flags)
@@ -227,6 +228,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const parentSelection = await withWorktreeSelectorRecovery(
+      resolveCreateParentSelector(flags, cwd, client),
+      parentCwdNextSteps(rawParentSelector),
+      rawParentSelector
+    )
+    const parentSelector = parentSelection.parentWorktree ?? parentSelection.parentWorkspace
+    const parentWorktreeRef =
+      parentSelection.origin === 'caller'
+        ? await resolveCallerParentRef(client, parentSelector, true)
+        : undefined
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
@@ -235,11 +246,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,
-      parentWorktree: await withWorktreeSelectorRecovery(
-        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-        parentCwdNextSteps(parentSelector),
-        parentSelector
-      ),
+      parentWorktreeRef,
+      parentWorktree: parentWorktreeRef ? undefined : parentSelector,
       noParent: flags.get('no-parent') === true
     })
     const result = await withWorktreeSelectorRecovery(

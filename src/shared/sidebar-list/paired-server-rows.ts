@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { getSavedWorktreeLineage } from '../resolved-worktree-lineage'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -40,6 +41,7 @@ const PairedServerWorkspaceRowSchema = z
       isUnread: true,
       instanceId: true,
       lineage: true,
+      savedLineage: true,
       workspaceStatus: true,
       sortOrder: true,
       manualOrder: true,
@@ -93,6 +95,12 @@ export function pairedServerRowOfWorktree(
   repo: Pick<Repo, 'kind'> | undefined,
   lineage: WorktreeLineage | null | undefined
 ): PairedServerWorkspaceRow {
+  lineage =
+    worktree.savedLineage === null
+      ? null
+      : worktree.savedLineage !== undefined
+        ? worktree.lineage
+        : lineage
   const key = getWorktreeHostIdentity(worktree)
   // The server's reply carries no automation name, so the row leaves it out too.
   const { automationName: _automationName, ...kindFacts } = getWorkspaceRowKindFacts(worktree, repo)
@@ -109,11 +117,13 @@ export function pairedServerRowOfWorktree(
     isMainWorktree: worktree.isMainWorktree,
     isUnread: worktree.isUnread,
     instanceId: worktree.instanceId,
+    savedLineage: worktree.savedLineage !== undefined ? worktree.savedLineage : (lineage ?? null),
     lineage: lineage
       ? {
           parentWorktreeId: lineage.parentWorktreeId,
           worktreeInstanceId: lineage.worktreeInstanceId,
-          parentWorktreeInstanceId: lineage.parentWorktreeInstanceId
+          parentWorktreeInstanceId: lineage.parentWorktreeInstanceId,
+          parentStore: lineage.parentStore
         }
       : null,
     workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
@@ -141,7 +151,12 @@ export function buildPairedServerRows(catalog: {
       const repo = catalog.repos.find(
         (entry) => entry.id === worktree.repoId && getRepoExecutionHostId(entry) === worktree.hostId
       )
-      const row = pairedServerRowOfWorktree(worktree, kind, repo, catalog.lineageById[worktree.id])
+      const row = pairedServerRowOfWorktree(
+        worktree,
+        kind,
+        repo,
+        getSavedWorktreeLineage(worktree, catalog.lineageById)
+      )
       rows.set(row.key, row)
     }
   }
@@ -166,6 +181,7 @@ const ServerWorktreePsRowSchema = z.object({
   parentWorktreeId: z.string().nullable().optional().catch(undefined),
   lineageWorktreeInstanceId: z.string().optional().catch(undefined),
   parentWorktreeInstanceId: z.string().optional().catch(undefined),
+  savedLineage: WorkspaceRowSchema.shape.lineage.optional(),
   workspaceStatus: z.string().catch(DEFAULT_WORKSPACE_STATUS_ID),
   sortOrder: z.number().optional().catch(undefined),
   manualOrder: z.number().optional().catch(undefined),
@@ -214,6 +230,7 @@ export function normalizePairedServerRow(
     parentWorktreeId,
     lineageWorktreeInstanceId,
     parentWorktreeInstanceId,
+    savedLineage,
     liveTerminalCount: _liveTerminalCount,
     unverifiableTerminalCount: _unverifiableTerminalCount,
     status: _status,
@@ -226,6 +243,7 @@ export function normalizePairedServerRow(
     ...fields,
     ...(unread !== undefined ? { isUnread: unread } : {}),
     ...(worktreeInstanceId !== undefined ? { instanceId: worktreeInstanceId } : {}),
+    savedLineage,
     lineage:
       parentWorktreeId && lineageWorktreeInstanceId && parentWorktreeInstanceId
         ? {

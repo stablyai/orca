@@ -1,3 +1,9 @@
+import {
+  findWorktreeLineageRow,
+  getWorktreeLineageSelection,
+  type WorktreeLineageIdentity
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getLineageInputs } from './visible-worktree-indexes'
 import React, {
   useCallback,
   useEffect,
@@ -12,7 +18,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
@@ -51,7 +57,7 @@ type SelectParentArgs = {
 
 type WorktreeParentPickerKeyboardArgs = {
   event: React.KeyboardEvent<HTMLInputElement>
-  candidates: readonly { id: string }[]
+  candidates: readonly WorktreeLineageIdentity[]
   activeIndex: number
   moveHighlight: (index: number) => void
   selectParent: (worktreeId: string) => void
@@ -124,7 +130,7 @@ export function handleWorktreeParentPickerKeyDown({
     if (candidate) {
       event.preventDefault()
       event.stopPropagation()
-      selectParent(candidate.id)
+      selectParent(getWorktreeLineageSelection(candidate))
     }
   }
 }
@@ -136,10 +142,10 @@ export function WorktreeParentPickerPopover({
   onOpenChange
 }: WorktreeParentPickerPopoverProps): React.JSX.Element | null {
   const worktrees = useAllWorktrees()
-  const worktreeMap = useWorktreeMap()
+  const { worktreeMap, lineageById: viewerLineage } = useAppStore(getLineageInputs)
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const lineageById = useAppStore((s) => s.worktreeLineageById)
+  const lineageById = viewerLineage
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const suppressInitialOutsideCloseRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
@@ -151,7 +157,7 @@ export function WorktreeParentPickerPopover({
     getAnchorRect(anchorElement)
   )
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight)
-  const child = childWorktreeId ? worktreeMap.get(childWorktreeId) : undefined
+  const child = childWorktreeId ? findWorktreeLineageRow(worktreeMap, childWorktreeId) : undefined
   const candidates = useMemo(
     () =>
       child
@@ -235,7 +241,7 @@ export function WorktreeParentPickerPopover({
     getScrollElement: () => listRef.current,
     estimateSize: () => PICKER_ROW_HEIGHT,
     overscan: PICKER_ROW_OVERSCAN,
-    getItemKey: (index) => filtered[index]?.id ?? index,
+    getItemKey: (index) => (filtered[index] ? getWorktreeLineageSelection(filtered[index]) : index),
     // Seed viewport height because the popover measures next frame and would otherwise paint blank.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
@@ -363,7 +369,7 @@ export function WorktreeParentPickerPopover({
                   const isHighlighted = virtualRow.index === activeIndex
                   return (
                     <div
-                      key={candidate.id}
+                      key={getWorktreeLineageSelection(candidate)}
                       id={`${optionIdPrefix}-${virtualRow.index}`}
                       role="option"
                       aria-selected={isHighlighted}
@@ -377,7 +383,7 @@ export function WorktreeParentPickerPopover({
                         transform: `translateY(${virtualRow.start}px)`
                       }}
                       onPointerMove={() => setHighlightedIndex(virtualRow.index)}
-                      onClick={() => handleSelect(candidate.id)}
+                      onClick={() => handleSelect(getWorktreeLineageSelection(candidate))}
                     >
                       <WorktreeParentPickerRow
                         candidate={candidate}

@@ -330,21 +330,14 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('routes active/current folder workspace parent selectors through parentWorkspace on create', async () => {
-    const folderWorkspace = {
-      ...buildWorktree('/tmp/folder', '', '', 'folder-workspace:group-1'),
-      id: 'folder:folder-1',
-      repoId: 'folder-workspace:group-1',
-      displayName: 'Folder'
-    }
+  it('routes literal folder workspace parent selectors through parentWorkspace on create', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    for (const parentSelector of ['current', 'active']) {
+    for (const parentSelector of ['folder:folder-1', 'id:folder:folder-1']) {
       callMock.mockReset()
       queueFixtures(
         callMock,
-        worktreeListFixture([folderWorkspace]),
         okFixture('req_create', {
           worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
           lineage: null,
@@ -376,7 +369,8 @@ describe('orca cli worktree awareness', () => {
         '/tmp/folder/src'
       )
 
-      expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.create', {
         repo: 'id:repo-1',
         name: 'child',
         displayName: 'child',

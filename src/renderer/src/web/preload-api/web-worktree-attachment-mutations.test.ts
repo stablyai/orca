@@ -1,3 +1,5 @@
+import { WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { makeLineage } from '../../store/slices/worktrees-slice-test-fixtures'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY,
@@ -5,16 +7,22 @@ import {
 } from '../../../../shared/workspace-attachment-capabilities'
 import { createWorktreesApi } from './web-worktrees-api'
 
-const mocks = vi.hoisted(() => ({ status: vi.fn(), call: vi.fn(), assertEnvironment: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  status: vi.fn(),
+  call: vi.fn(),
+  plainCall: vi.fn(),
+  invalidate: vi.fn(),
+  assertEnvironment: vi.fn()
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./web-runtime-calls', () => ({
   getRemoteRuntimeStatus: mocks.status,
   callRuntimeResultWithOwner: mocks.call,
-  callRuntimeResult: vi.fn(),
+  callRuntimeResult: mocks.plainCall,
   withRuntimeWorktreeOwner: (row: unknown) => row
 }))
 vi.mock('./web-runtime-session', () => ({
-  invalidateRuntimeWorktreeCaches: vi.fn(),
+  invalidateRuntimeWorktreeCaches: mocks.invalidate,
   requireActiveEnvironment: () => ({ id: 'env' }),
   assertActiveEnvironment: mocks.assertEnvironment
 }))
@@ -98,5 +106,48 @@ describe('paired web attachment mutation compatibility', () => {
       'worktree.create',
       expect.objectContaining({ linkedItems: [] })
     )
+    vi.clearAllMocks()
+    const api = createWorktreesApi()
+    const parentWorktreeRef = { worktreeId: 'parent', instanceId: 'chosen-B', external: true }
+    mocks.status.mockResolvedValue({ capabilities: [] })
+    await expect(api.create({ repoId: 'repo', name: 'Child', parentWorktreeRef })).rejects.toThrow(
+      'Update Orca'
+    )
+    await expect(api.updateLineage({ worktreeId: 'child', parentWorktreeRef })).rejects.toThrow(
+      'Update Orca'
+    )
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(mocks.plainCall).not.toHaveBeenCalled()
+    expect(mocks.invalidate).not.toHaveBeenCalled()
+    mocks.plainCall.mockResolvedValue({ worktree: { savedLineage: null, lineage: makeLineage() } })
+    expect(await api.updateLineage({ worktreeId: 'child', noParent: true })).toBeNull()
+    expect(mocks.plainCall).toHaveBeenLastCalledWith('worktree.set', {
+      worktree: 'id:child',
+      parentWorktree: undefined,
+      parentWorktreeRef: undefined,
+      noParent: true
+    })
+    mocks.status.mockResolvedValue({ capabilities: [WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY] })
+    await api.create({
+      repoId: 'repo',
+      name: 'Child',
+      parentWorkspace: 'worktree:parent',
+      parentWorktreeRef
+    })
+    expect(mocks.call).toHaveBeenLastCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        parentWorktreeRef,
+        parentWorkspace: 'worktree:parent',
+        parentWorkspaceOrigin: 'manual'
+      })
+    )
+    expect(await api.updateLineage({ worktreeId: 'child', parentWorktreeRef })).toBeNull()
+    expect(mocks.plainCall).toHaveBeenLastCalledWith('worktree.set', {
+      worktree: 'id:child',
+      parentWorktree: undefined,
+      parentWorktreeRef,
+      noParent: undefined
+    })
   })
 })

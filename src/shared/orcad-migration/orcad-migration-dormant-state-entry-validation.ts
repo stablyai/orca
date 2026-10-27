@@ -136,6 +136,9 @@ function isMigratedWorkspaceLineage(value: unknown): value is WorkspaceLineage {
 }
 
 function parseLineageBase(record: Record<string, unknown>): void {
+  if (record.parentStore !== undefined && record.parentStore !== 'external') {
+    throw new Error('orcad_migration_lineage_parent_store_invalid')
+  }
   if (!['orchestration', 'cli', 'manual'].includes(String(record.origin))) {
     throw new Error('orcad_migration_dormant_lineage_origin_invalid')
   }

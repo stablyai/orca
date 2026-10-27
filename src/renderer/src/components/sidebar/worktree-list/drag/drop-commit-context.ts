@@ -46,10 +46,16 @@ export type WorktreeDropCommitContext = {
   refreshWorktreeDragSession: () => boolean
   getEligibleLineageDropTarget: (
     target: WorktreeSidebarLineageDropTarget,
-    draggedIds: readonly string[]
+    draggedIds: readonly string[],
+    copies?: DraggedWorktreeCopies
   ) => WorktreeSidebarLineageDropTarget
-  commitWorktreeLineageParentDrop: (draggedIds: readonly string[], parentId: string) => boolean
+  commitWorktreeLineageParentDrop: (
+    draggedIds: readonly string[],
+    parentId: string,
+    copies?: DraggedWorktreeCopies
+  ) => boolean
   clearReorderedWorktreeParents: (args: {
+    draggedCopies?: DraggedWorktreeCopies
     draggedIds: readonly string[]
     sourceGroupKey: string
   }) => void

@@ -1,3 +1,11 @@
+import {
+  applyHostLineageRefresh,
+  applyWorktreeLineageUpdate,
+  projectWorktreeLineageToWorkspaceLineage
+} from '@/store/slices/worktrees/metadata/worktree-lineage-refresh'
+import { makeFolderWorkspace, makeLineage } from '@/store/slices/worktrees-slice-test-fixtures'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
@@ -199,13 +207,17 @@ it('publishes real chat options to main and popout, retaining card candidates an
     worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }
   })
   const publishSnapshot = vi.fn()
+  let requestSnapshot = () => {}
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       dashboard: {
         onRevealAgent: () => () => {},
         onPopoutOpenChanged: () => () => {},
-        onSnapshotRequested: () => () => {},
+        onSnapshotRequested: (callback: () => void) => {
+          requestSnapshot = callback
+          return () => {}
+        },
         getPopoutOpen: async () => true,
         publishSnapshot
       }
@@ -236,6 +248,90 @@ it('publishes real chat options to main and popout, retaining card candidates an
     expect(view.result.current).not.toBe(live)
     await vi.waitFor(() => expect(publishSnapshot.mock.calls.length).toBeGreaterThan(published))
   }
+  const folder = makeFolderWorkspace()
+  const folderId = folderWorkspaceKey(folder.id)
+  const parent = { ...worktree(), instanceId: 'p' }
+  const external = {
+    ...worktree(),
+    id: 'wt-2',
+    instanceId: 'c',
+    savedLineage: makeLineage({
+      worktreeId: 'wt-2',
+      worktreeInstanceId: 'c',
+      parentWorktreeId: 'absent',
+      parentStore: 'external'
+    })
+  }
+  act(() =>
+    useAppStore.setState({
+      folderWorkspaces: [folder],
+      worktreesByRepo: { 'repo-1': [parent, external] },
+      tabsByWorktree: { [folderId]: [{ ...tab(), worktreeId: folderId }] },
+      agentStatusByPaneKey: { [PANE_KEY]: { ...entry(), worktreeId: folderId } }
+    })
+  )
+  const lastSnapshot = (): DashboardSnapshot => publishSnapshot.mock.calls.at(-1)![0]
+  const check = (snapshot: DashboardSnapshot, parentId: string | undefined, name = folder.name) => {
+    for (const rows of [snapshot.cards, snapshot.workspaces ?? []]) {
+      expect(rows.find((row) => row.worktreeId === folderId)?.worktreeName).toBe(name)
+      expect(rows.find((row) => row.worktreeId === folderId)?.parentWorktreeId).toBe(parentId)
+    }
+  }
+  const settlePublication = (parentId: string | undefined, name = folder.name) =>
+    vi.waitFor(() => check(lastSnapshot(), parentId, name))
+  await settlePublication(undefined)
+  const edge = makeLineage({
+    worktreeId: folderId,
+    worktreeInstanceId: folderId,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: 'p'
+  })
+  const worktreesBefore = useAppStore.getState().worktreesByRepo
+  const beforeSet = publishSnapshot.mock.calls.length
+  act(() =>
+    applyHostLineageRefresh(useAppStore.setState, 'local', {
+      worktreeLineageById: { [folderId]: edge },
+      workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(folderId, edge, {})
+    })
+  )
+  expect(useAppStore.getState().worktreesByRepo).toBe(worktreesBefore)
+  await settlePublication(parent.id)
+  expect.soft(publishSnapshot.mock.calls.length).toBeGreaterThan(beforeSet)
+  check(view.result.current, parent.id)
+  act(requestSnapshot)
+  check(lastSnapshot(), parent.id)
+  act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, name: 'Renamed folder' }] }))
+  await settlePublication(parent.id, 'Renamed folder')
+  check(view.result.current, parent.id, 'Renamed folder')
+  check(lastSnapshot(), parent.id, 'Renamed folder')
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [external] } }))
+  await settlePublication(undefined, 'Renamed folder')
+  act(requestSnapshot)
+  check(view.result.current, undefined, 'Renamed folder')
+  check(lastSnapshot(), undefined, 'Renamed folder')
+  expect(
+    lastSnapshot().workspaces?.find((row) => row.worktreeId === external.id)?.parentWorktreeId
+  ).toBeUndefined()
+  expect(useAppStore.getState().worktreeLineageById[folderId]).toEqual(edge)
+  expect(useAppStore.getState().worktreesByRepo['repo-1'][0].savedLineage).toEqual(
+    external.savedLineage
+  )
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [parent, external] } }))
+  await settlePublication(parent.id, 'Renamed folder')
+  const beforeClear = publishSnapshot.mock.calls.length
+  act(() =>
+    applyWorktreeLineageUpdate(useAppStore.setState, folderId, {
+      target: { kind: 'local' },
+      hostId: 'local',
+      lineage: null
+    })
+  )
+  expect(useAppStore.getState().worktreesByRepo).toEqual({ 'repo-1': [parent, external] })
+  await settlePublication(undefined, 'Renamed folder')
+  expect.soft(publishSnapshot.mock.calls.length).toBeGreaterThan(beforeClear)
+  check(view.result.current, undefined, 'Renamed folder')
+  act(requestSnapshot)
+  check(lastSnapshot(), undefined, 'Renamed folder')
   act(() => useAppStore.setState({ worktreesByRepo: {}, tabsByWorktree: {}, folderWorkspaces: [] }))
   view.unmount()
   await Promise.resolve()

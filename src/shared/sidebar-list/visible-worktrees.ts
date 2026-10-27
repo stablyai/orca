@@ -1,3 +1,9 @@
+import {
+  getWorktreeLineageIdentity,
+  sameWorktreeLineageIdentity,
+  getRepresentedWorktreeLineageRow,
+  getSidebarLineageParentsByIdentity
+} from './worktree-lineage-projection'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
@@ -6,7 +12,6 @@ import {
   type WorkspaceRowFactReader,
   type WorkspaceRowFilters
 } from '../workspace-view/workspace-row-filters'
-import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
 
 export type VisibleSidebarWorktreeInputs = {
   /** Every catalog row, one per host-qualified identity. */
@@ -37,9 +42,25 @@ export function selectVisibleSidebarWorktrees({
   preserveLineageParentOrder,
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
-  // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
+  // Structural ancestors still respect explicit project and host display boundaries.
+  const represented = new Map(rows.map((row) => [getWorktreeHostIdentity(row), row]))
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
+  const visibleHostIds = filters.visibleHostIds && new Set(filters.visibleHostIds)
+  const admitsAncestor = (row: Worktree): boolean => {
+    const hostId = facts.hostId(row)
+    return (
+      sameWorktreeLineageIdentity(
+        represented.get(getWorktreeHostIdentity(row)) ??
+          getRepresentedWorktreeLineageRow(ancestorByIdentity, row) ??
+          row,
+        row
+      ) &&
+      !row.isArchived &&
+      (!selectedRepoIds || selectedRepoIds.has(row.repoId)) &&
+      (!visibleHostIds || (hostId !== null && visibleHostIds.has(hostId)))
+    )
+  }
   let all = filterWorkspaceRows(rows, filters, facts)
 
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
@@ -48,7 +69,7 @@ export function selectVisibleSidebarWorktrees({
       const worktree = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
+      if (worktree && !worktree.isArchived) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -57,7 +78,7 @@ export function selectVisibleSidebarWorktrees({
 
   // Append unranked/new rows until the next sortEpoch. Manual placement follows the parent, even if a hidden child ranks higher.
   if (injectLineageAncestors !== false && preserveLineageParentOrder) {
-    all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
+    all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, admitsAncestor)
   }
   all = all
     .map((worktree) => ({ worktree, rank: rankOf(worktree) ?? Infinity }))
@@ -66,14 +87,14 @@ export function selectVisibleSidebarWorktrees({
 
   return injectLineageAncestors === false || preserveLineageParentOrder
     ? all
-    : addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
+    : addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, admitsAncestor)
 }
 
 function addVisibleLineageAncestors(
   worktrees: Worktree[],
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
-  selectedRepoIds: ReadonlySet<string> | null
+  admitsAncestor: (row: Worktree) => boolean
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -81,13 +102,12 @@ function addVisibleLineageAncestors(
   const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, ancestorByIdentity)
 
   const addWithAncestors = (worktree: Worktree): void => {
-    const identity = getWorktreeHostIdentity(worktree)
+    const identity = getWorktreeLineageIdentity(worktree)
     if (included.has(identity)) {
       return
     }
     const parent = parentByIdentity.get(identity)
-    // Repository filters are hard boundaries; ordinary filters may retain ancestors.
-    if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
+    if (parent && admitsAncestor(parent)) {
       addWithAncestors(parent)
     }
     if (!included.has(identity)) {

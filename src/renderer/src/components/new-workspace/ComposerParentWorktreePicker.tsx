@@ -8,14 +8,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import {
-  getIndexedAllWorktrees,
-  getIndexedWorktreeById,
-  getIndexedWorktreeMap
-} from '@/store/worktree-repo-index'
+import { getLineageInputs } from '../sidebar/visible-worktree-indexes'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import {
+  getWorktreeLineageProjection,
+  findWorktreeLineageRow,
+  getWorktreeLineageIdentity,
+  getWorktreeLineageSelection,
+  getWorktreeLineageDescendants
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -25,25 +27,10 @@ import {
   PICKER_ROW_HEIGHT,
   PICKER_ROW_OVERSCAN
 } from '@/components/sidebar/worktree-parent-picker-placement'
-import {
-  getLineageChildrenByParentId,
-  getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
-import {
-  sharesWorktreeLineageBoundary,
-  type WorktreeLineageBoundary
-} from '../../../../shared/resolved-worktree-lineage'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useRepoMap } from '@/store/selectors'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** 20px text leading plus py-2 matches the explicit row height. */
 const NO_PARENT_ROW_HEIGHT = 36
@@ -51,7 +38,7 @@ const NO_PARENT_ROW_KEY = 'no-parent'
 
 type ComposerParentWorktreePickerProps = {
   repoId: string
-  /** Parent must belong to the same execution host that will create the child. */
+  /** Execution host that will create the child. */
   executionHostId?: ExecutionHostId | null
   projectId?: string | null
   value: string | null
@@ -90,7 +77,8 @@ function ComposerParentWorktreePickerImpl({
     if (!value) {
       return null
     }
-    const parent = getIndexedWorktreeById(selectWorktreesByRepo(s), value)
+    const rows = getLineageInputs(s).worktreeMap
+    const parent = findWorktreeLineageRow(rows, value)
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
@@ -165,50 +153,13 @@ function ComposerParentWorktreePickerImpl({
   )
 }
 
-/** Worktrees reachable from the folder workspace, so a pick can't drop the new one out of it. */
-function getFolderWorkspaceSubtreeIds(
-  folderWorkspaceId: string,
-  workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>,
-  worktreeLineageById: Record<string, WorktreeLineage>,
-  worktreeById: Map<string, Worktree>
-): Set<string> {
-  const folderKey = folderWorkspaceKey(folderWorkspaceId)
-  const rootIds = new Set<string>()
-  for (const lineage of Object.values(workspaceLineageByChildKey)) {
-    if (lineage.parentWorkspaceKey !== folderKey) {
-      continue
-    }
-    // Exclude archived/instance-stale parents whose subtree the folder view cannot show.
-    const rootWorktree = getLineageChildWorktree(lineage, worktreeById)
-    if (rootWorktree) {
-      rootIds.add(rootWorktree.id)
-    }
-  }
-
-  const subtreeIds = new Set(rootIds)
-  for (const children of getLineageChildrenByParentId(
-    worktreeLineageById,
-    worktreeById,
-    rootIds
-  ).values()) {
-    for (const child of children) {
-      subtreeIds.add(child.id)
-    }
-  }
-  return subtreeIds
-}
-
 function ParentWorktreeCandidateList({
-  repoId,
-  executionHostId,
   value,
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
-  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const { worktreeMap, lineageById: worktreeLineageById } = useAppStore(getLineageInputs)
   const repoMap = useRepoMap()
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const optionIdPrefix = `${useId()}option`
@@ -216,42 +167,33 @@ function ParentWorktreeCandidateList({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
   const candidates = useMemo(() => {
-    // Legacy rows inherit their real repo host, including candidates from another project.
-    const childRepo = repoMap.get(repoId)
-    const childBoundary: WorktreeLineageBoundary = {
-      hostId: executionHostId ?? (childRepo ? getRepoExecutionHostId(childRepo) : undefined)
-    }
-    const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
-    const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
-    const folderSubtreeIds = activeFolderWorkspaceId
-      ? getFolderWorkspaceSubtreeIds(
-          activeFolderWorkspaceId,
-          workspaceLineageByChildKey,
-          worktreeLineageById,
-          worktreeMap
+    const cyclicLineageIds = getWorktreeLineageProjection(
+      worktreeLineageById,
+      worktreeMap
+    ).cyclicIdentities
+    const folder = findWorktreeLineageRow(
+      worktreeMap,
+      folderWorkspaceKey(activeFolderWorkspaceId ?? '')
+    )
+    const folderSubtreeIds = folder
+      ? new Set(
+          getWorktreeLineageDescendants(folder, worktreeLineageById, worktreeMap).map(
+            getWorktreeLineageIdentity
+          )
         )
-      : null
-    return getIndexedAllWorktrees(worktreesByRepo)
+      : activeFolderWorkspaceId
+        ? new Set<string>()
+        : null
+    return [...worktreeMap.values()]
       .filter(
         (candidate) =>
+          !candidate.id.startsWith('folder:') &&
           !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, {
-            ...candidate,
-            hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
-          }) &&
-          !cyclicLineageIds.has(candidate.id) &&
-          (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
+          !cyclicLineageIds.has(getWorktreeLineageIdentity(candidate)) &&
+          (folderSubtreeIds === null || folderSubtreeIds.has(getWorktreeLineageIdentity(candidate)))
       )
       .sort(compareWorktreeDisplayName)
-  }, [
-    activeFolderWorkspaceId,
-    executionHostId,
-    repoId,
-    repoMap,
-    workspaceLineageByChildKey,
-    worktreeLineageById,
-    worktreesByRepo
-  ])
+  }, [activeFolderWorkspaceId, worktreeLineageById, worktreeMap])
 
   const filtered = useMemo(
     () => filterWorktreeParentCandidates(candidates, search, repoMap),
@@ -265,7 +207,12 @@ function ParentWorktreeCandidateList({
     getScrollElement: () => listRef.current,
     estimateSize: (index) => (index === 0 ? NO_PARENT_ROW_HEIGHT : PICKER_ROW_HEIGHT),
     overscan: PICKER_ROW_OVERSCAN,
-    getItemKey: (index) => (index === 0 ? NO_PARENT_ROW_KEY : (filtered[index - 1]?.id ?? index)),
+    getItemKey: (index) =>
+      index === 0
+        ? NO_PARENT_ROW_KEY
+        : filtered[index - 1]
+          ? getWorktreeLineageSelection(filtered[index - 1])
+          : index,
     // Seed the viewport until the popover measures next frame to avoid blank first paint.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
@@ -309,7 +256,7 @@ function ParentWorktreeCandidateList({
         if (activeIndex === 0 || candidate) {
           event.preventDefault()
           event.stopPropagation()
-          onSelect(candidate?.id ?? null)
+          onSelect(candidate ? getWorktreeLineageSelection(candidate) : null)
         }
       }
     },
@@ -350,7 +297,9 @@ function ParentWorktreeCandidateList({
                 key={virtualRow.key}
                 id={`${optionIdPrefix}-${rowIndex}`}
                 role="option"
-                aria-selected={(candidate?.id ?? null) === value}
+                aria-selected={
+                  (candidate ? getWorktreeLineageSelection(candidate) : null) === value
+                }
                 data-selected={isHighlighted || undefined}
                 // Why `jump-palette-item`: selection chrome lives in main.css — flat accent is invisible on light popovers.
                 className="jump-palette-item absolute left-0 top-0 flex w-full cursor-default select-none items-center gap-2 overflow-hidden rounded-sm px-2 py-2 text-sm outline-none"
@@ -359,12 +308,13 @@ function ParentWorktreeCandidateList({
                   transform: `translateY(${virtualRow.start}px)`
                 }}
                 onPointerMove={() => setHighlightedIndex(rowIndex)}
-                onClick={() => onSelect(candidate?.id ?? null)}
+                onClick={() => onSelect(candidate ? getWorktreeLineageSelection(candidate) : null)}
               >
                 <Check
                   className={cn(
                     'size-3.5 shrink-0',
-                    (candidate?.id ?? null) !== value && 'opacity-0'
+                    (candidate ? getWorktreeLineageSelection(candidate) : null) !== value &&
+                      'opacity-0'
                   )}
                 />
                 {candidate ? (

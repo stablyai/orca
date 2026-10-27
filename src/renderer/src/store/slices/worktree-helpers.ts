@@ -1,3 +1,4 @@
+import type { ConfirmedUnsavedDiscards } from './worktrees/teardown/removed-workspace-unsaved-files'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -286,7 +287,10 @@ export type WorktreeSlice = {
     executionHostId?: ExecutionHostId
   ) => Worktree | DetectedWorktree | undefined
   /** Purge worktree/terminal maps on server deletion and once at hydration (design §4.4). */
-  purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
+  purgeWorktreeTerminalState: (
+    worktreeTargets: WorktreePurgeTargets,
+    confirmedDiscards?: ConfirmedUnsavedDiscards
+  ) => void
   /** Retire removed-runtime catalog/worktree/tab/PTY/browser/editor state only from saved-list removal diff. Serving-local runtime stamps never saved here must survive; empty/unmatched diff is inert (#8881). */
   purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
   /** Move worktree-scoped maps/pointers on path-derived ID rename, preserving live tabs/selection; equal IDs are inert. */

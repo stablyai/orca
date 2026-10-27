@@ -25,6 +25,7 @@ import {
 } from './session-host-partitions'
 import { migrateWorktreeIdentity as migrateWorktreeIdentityOperation } from '../tracking-repos/worktree-identity-migration'
 import {
+  getWorktreeLineageMetadata,
   getAllWorktreeMetaForHost as getAllWorktreeMetaForHostOperation,
   getWorktreeMetaForHost as getWorktreeMetaForHostOperation,
   migrateWorktreeMetadataLocator,
@@ -77,6 +78,10 @@ export class MetadataLineageOperations {
 
   getAllWorktreeMeta(): Record<string, WorktreeMeta> {
     return this[metadataLineageOperationsContext].runtime.state.worktreeMeta
+  }
+
+  getWorktreeLineageMetadata() {
+    return getWorktreeLineageMetadata(this[metadataLineageOperationsContext].runtime.state)
   }
 
   getAllWorktreeMetaForHost(executionHostId: ExecutionHostId): Record<string, WorktreeMeta> {
@@ -246,7 +251,11 @@ export class MetadataLineageOperations {
       return
     }
     delete state.worktreeLineageById[target.id]
-    delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)]
+    delete state.workspaceLineageByChildKey[
+      target.id.startsWith('folder:')
+        ? `folder:${target.id.slice(7)}`
+        : worktreeWorkspaceKey(target.id)
+    ]
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
   }
 
@@ -306,7 +315,7 @@ export function removeWorkspaceLineageForFolderParent(
   for (const [childKey, lineage] of Object.entries(
     owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
   )) {
-    if (lineage.parentWorkspaceKey === parentKey) {
+    if (lineage.parentStore !== 'external' && lineage.parentWorkspaceKey === parentKey) {
       delete owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
         childKey as WorkspaceKey
       ]

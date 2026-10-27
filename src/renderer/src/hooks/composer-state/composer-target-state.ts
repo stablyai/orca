@@ -83,6 +83,7 @@ export function useComposerTargetState(
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
   const workspaceIdentityState = useWorkspaceIdentityState({
+    initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialBaseBranch: composerTargetStore.initialBaseBranch,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,

@@ -185,7 +185,7 @@ export function formatWorktreeList(
   const body = result.worktrees
     .map((worktree) => {
       const childCount = worktree.childWorktreeIds?.length ?? 0
-      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? (worktree.savedLineage?.parentStore === 'external' ? `${worktree.savedLineage.parentWorktreeId} (parent on another machine)` : 'null'))}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
     })
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
@@ -196,7 +196,14 @@ export function formatWorktreeList(
 
 export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }): string {
   const worktree = result.worktree
-  return Object.entries(worktree)
+  const presented =
+    !worktree.parentWorktreeId && worktree.savedLineage?.parentStore === 'external'
+      ? {
+          ...worktree,
+          parentWorktreeId: `${worktree.savedLineage.parentWorktreeId} (parent on another machine)`
+        }
+      : worktree
+  return Object.entries(presented)
     .map(
       ([key, value]) =>
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`

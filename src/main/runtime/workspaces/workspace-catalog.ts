@@ -1,3 +1,6 @@
+import type { Worktree } from '../../../shared/worktree/types'
+import { projectCurrentStoreWorktreeLineage } from '../../worktree-lineage-candidates'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { OrcaRuntimeWithReadKittyFile } from '../orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
@@ -22,7 +25,6 @@ import {
   type ResolvedWorktreeRepoScans,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
-import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
 import { listRuntimeFolderWorkspaces } from '../runtime-worktree-filesystem'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
@@ -107,19 +109,40 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
-    const metaById = this.store.getAllWorktreeMeta() ?? {}
+    const metaById =
+      typeof this.store.getWorktreeMeta === 'function'
+        ? {}
+        : (this.store.getAllWorktreeMeta() ?? {})
     const repos = this.store.getRepos()
+    const repoOwnerCounts = new Map<string, number>()
+    for (const repo of repos) {
+      repoOwnerCounts.set(repo.id, (repoOwnerCounts.get(repo.id) ?? 0) + 1)
+    }
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
     const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
       repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
+        async (repo) =>
+          await resolveRepoWorktreeRows(
+            deps,
+            repo,
+            metaById,
+            projectRuntimeByRepoId,
+            repoOwnerCounts.get(repo.id)
+          )
       )
     )
-    const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
-    return { worktrees, platformByRepoId }
+    const gitRows = perRepoWorktrees.flat()
+    const rows: (Worktree & Partial<Pick<ResolvedWorktree, 'git'>>)[] = [
+      ...gitRows,
+      ...(this.store.getFolderWorkspaces?.().map(folderWorkspaceToWorktree) ?? [])
+    ]
+    const projected = projectCurrentStoreWorktreeLineage(this.store, rows)
+    const worktrees = projected
+      .slice(0, gitRows.length)
+      .filter((row): row is ResolvedWorktree => row.git !== undefined)
+    return { worktrees, folderWorktrees: projected.slice(gitRows.length), platformByRepoId }
   }
 
   protected scanResolvedWorktreeRepos(): Promise<ResolvedWorktreeRepoScans> {

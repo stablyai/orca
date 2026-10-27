@@ -33,6 +33,7 @@ describe('readWindowPairedServerRows', () => {
         isMainWorktree: false,
         isUnread: false,
         lineage: null,
+        savedLineage: null,
         workspaceStatus: 'in-progress',
         sortOrder: 0,
         defaultBranch: false,

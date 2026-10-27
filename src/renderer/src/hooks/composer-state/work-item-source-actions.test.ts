@@ -12,6 +12,7 @@ it('records existing intent only for a remote picker selection and clears it on 
   const { result } = renderHook(() => {
     const identity = useWorkspaceIdentityState({
       initialBaseBranch: undefined,
+      initialParentWorktreeId: null,
       initialLinearBranchName: undefined,
       initialLinkedWorkItem: null,
       linkedWorkItem: null,

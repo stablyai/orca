@@ -1,3 +1,4 @@
+import { getLineageInputs } from './visible-worktree-indexes'
 import {
   getAllWorktreesFromState,
   getRepoMapFromState,
@@ -14,16 +15,15 @@ import {
 } from './visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
-import {
-  getHostScopedWorktreeLineageInputs,
-  getWorktreeLineageAncestors
-} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getSidebarLineageParent } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ChildWorkspacesToggleState = Pick<
   AppState,
   'activeWorkspaceExecutionHostId' | 'activeWorktreeId' | 'worktreeLineageById' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'folderWorkspaces' | 'workspaceLineageByChildKey'>>
+
 type HoverDocument = NonNullable<Parameters<typeof getHoveredWorkspaceIdentity>[0]>
 
 function resolveTargetWorktree(
@@ -52,16 +52,11 @@ function getParentWorktree(
   state: ChildWorkspacesToggleState,
   target: Worktree
 ): Worktree | undefined {
-  // Only non-archived rows on the same host can be rendered lineage children.
-  const worktrees = getAllWorktreesFromState(state).filter(
-    (worktree) => worktree.hostId === target.hostId && !worktree.isArchived
+  return getSidebarLineageParent(
+    target,
+    getLineageInputs(state).lineageById,
+    getLineageInputs(state).worktreeMap
   )
-  const { worktreeMap, lineageById } = getHostScopedWorktreeLineageInputs(
-    worktrees,
-    state.worktreeLineageById,
-    target.hostId
-  )
-  return getWorktreeLineageAncestors(target, lineageById, worktreeMap)[0]
 }
 
 export function resolveChildWorkspacesToggleGroupKey(

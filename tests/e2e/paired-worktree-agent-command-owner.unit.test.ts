@@ -1,3 +1,4 @@
+import { getWorktreeLineageSelection } from '../../src/shared/sidebar-list/worktree-lineage-projection'
 import { WorktreeCreate } from '../../src/shared/rpc-contract/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/worktree-create-args'
 import { resolveManagedWorktreeCreateStartup } from '../../src/main/runtime/workspaces/managed-worktree-create-startup'
@@ -59,12 +60,31 @@ describe('paired workspace agent startup ownership', () => {
         agentDefaultEnv: { claude: { LAUNCH_OWNER: 'host' } }
       }
       const store = createTestStore()
-      store.setState({ repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }] })
+      const parent = makeWorktree({
+        id: 'parent-repo::/local/parent',
+        repoId: 'parent-repo',
+        hostId: 'local',
+        instanceId: 'parent-instance'
+      })
+      const parentRef = { worktreeId: parent.id, instanceId: 'parent-instance', external: true }
+      // The failed first probe still exercises main's no-parent legacy launch route.
+      const withParent = scenario !== 'probe-failure'
+      store.setState({
+        repos: [
+          { ...TEST_REPO, executionHostId: 'runtime:env-1' },
+          { ...TEST_REPO, id: parent.repoId, executionHostId: 'local' }
+        ],
+        worktreesByRepo: { [parent.repoId]: [parent] }
+      })
       let launchedCommand = ''
       let launchedEnv: Record<string, string> | undefined
       let delivered = ''
       runtimeEnvironmentCall.mockImplementation(async (call) => {
         expect(call.method).toBe('worktree.create')
+        if (withParent) {
+          expect(call.params).toMatchObject({ parentWorktreeRef: parentRef })
+          expect(call.params).not.toHaveProperty('parentWorkspace')
+        }
         if (scenario === 'predates-agent' && call.params && 'startupAgent' in call.params) {
           // What a host older than the agent answers while validating its name.
           return {
@@ -76,6 +96,9 @@ describe('paired workspace agent startup ownership', () => {
         }
         const params = WorktreeCreate.parse(call.params)
         const args = buildManagedWorktreeCreateArgs(params, {})
+        if (withParent) {
+          expect(args.lineage?.parentWorktreeRef).toEqual(parentRef)
+        }
         const resolved = await resolveManagedWorktreeCreateStartup(args, [], {
           agent: (agent, prompt) =>
             buildWorktreeStartupForAgent({
@@ -127,7 +150,8 @@ describe('paired workspace agent startup ownership', () => {
                 ...(scenario === 'prompt' ? { prompt: 'prompt-text' } : {})
               }
             }),
-        executionHostId: 'runtime:env-1'
+        executionHostId: 'runtime:env-1',
+        ...(withParent ? { parentWorktreeId: getWorktreeLineageSelection(parent) } : {})
       }
 
       await createWorktree(...args)

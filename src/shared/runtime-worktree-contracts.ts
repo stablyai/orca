@@ -68,6 +68,7 @@ export type RuntimeWorktreePsSummary = {
   isMainWorktree: boolean
   hasHostSidebarActivity: boolean
   worktreeInstanceId?: string
+  savedLineage?: WorktreeLineage | null
   lineageWorktreeInstanceId?: string
   parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
