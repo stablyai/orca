@@ -1,8 +1,20 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
-import { antigravityUsageTargetKey } from '../antigravity-usage-runtime'
 import type { ProviderRateLimits } from './service-types'
+
+function hasKnownProvenanceChange(
+  previous: ProviderRateLimits | null,
+  fresh: ProviderRateLimits
+): boolean {
+  const previousProvenance = previous?.usageMetadata?.authProvenance
+  const freshProvenance = fresh.usageMetadata?.authProvenance
+  return (
+    previousProvenance !== undefined &&
+    freshProvenance !== undefined &&
+    previousProvenance !== freshProvenance
+  )
+}
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
@@ -14,8 +26,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       return
     }
     const {
-      antigravityTargetKey,
-      antigravityGeneration,
       claudeTarget,
       claudeGeneration,
       claudeProvenance,
@@ -218,26 +228,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         }
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
-    const shouldApplyAntigravity =
-      antigravityGeneration === this.antigravityFetchGeneration &&
-      antigravityTargetKey ===
-        antigravityUsageTargetKey(
-          this.antigravityUsageTargetResolver?.() ?? { runtime: 'host', wslDistro: null }
-        )
-    const previousAntigravityRuntime = previousState.antigravity?.usageMetadata?.authProvenance
-    const antigravityRuntime = antigravity.usageMetadata?.authProvenance
-    const antigravityRuntimeChanged = Boolean(
-      previousAntigravityRuntime &&
-      antigravityRuntime &&
-      previousAntigravityRuntime !== antigravityRuntime
-    )
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
-    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
-    const cursorAccount = cursor.usageMetadata?.authProvenance
-    const cursorAccountChanged =
-      previousCursorAccount !== undefined &&
-      cursorAccount !== undefined &&
-      previousCursorAccount !== cursorAccount
+    const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -249,9 +241,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    if (shouldApplyAntigravity) {
-      this.trackActiveFailureStreak('antigravity', antigravity)
-    }
+    this.trackActiveFailureStreak('antigravity', antigravity)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -263,11 +253,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: !shouldApplyAntigravity
-        ? this.state.antigravity
-        : antigravityRuntimeChanged
-          ? antigravity
-          : this.applyStalePolicy(antigravity, previousState.antigravity)
+      // Another runtime's last reading must not stand in for this runtime's failure.
+      antigravity: hasKnownProvenanceChange(previousState.antigravity, antigravity)
+        ? antigravity
+        : this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }
 }

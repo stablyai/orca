@@ -1,11 +1,7 @@
 import { homedir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import {
-  resolveLocalAccountRuntimeTarget,
-  type LocalAccountRuntimeTarget
-} from '../../shared/local-account-runtime'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
 
@@ -17,17 +13,6 @@ export type KimiHomeResolution = LocalAccountRuntimeTarget & {
 // Match CLI KIMI_CODE_HOME resolution.
 export function getHostKimiHome(): string {
   return process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
-}
-
-/** Kimi follows local-account runtime policy; ignore synced WSL settings outside Windows. */
-export function getKimiRuntimeTarget(
-  settings: GlobalSettings,
-  platform: NodeJS.Platform = process.platform
-): LocalAccountRuntimeTarget {
-  if (platform !== 'win32') {
-    return { runtime: 'host', wslDistro: null }
-  }
-  return resolveLocalAccountRuntimeTarget(settings, platform)
 }
 
 /** Use async WSL probes on quota polls to avoid blocking Electron; WSL paths are UNC. */

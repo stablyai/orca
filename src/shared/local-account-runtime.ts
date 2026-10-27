@@ -34,7 +34,17 @@ export function resolveLocalAccountRuntimeTarget(
   return { runtime: 'host', wslDistro: null }
 }
 
-function normalizeDistro(value: unknown): string | null {
-  const trimmed = typeof value === 'string' ? value.trim() : ''
+/** Usage pollers read the host off Windows, where a synced WSL policy has no distro to reach. */
+export function resolveLocalAccountUsageTarget(
+  settings: LocalAccountRuntimeSettings,
+  platform: NodeJS.Platform = process.platform
+): LocalAccountRuntimeTarget {
+  return platform === 'win32'
+    ? resolveLocalAccountRuntimeTarget(settings, platform)
+    : { runtime: 'host', wslDistro: null }
+}
+
+function normalizeDistro(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
   return trimmed ? trimmed : null
 }

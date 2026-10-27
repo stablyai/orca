@@ -9,44 +9,7 @@ const wslMocks = vi.hoisted(() => ({
 vi.mock('../wsl', () => wslMocks)
 vi.mock('node:os', () => ({ homedir: () => 'C:\\Users\\neil' }))
 
-import { getHostKimiHome, getKimiRuntimeTarget, resolveKimiHome } from './kimi-runtime-home'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-
-function settings(overrides: Partial<GlobalSettings>): GlobalSettings {
-  return overrides as GlobalSettings
-}
-
-describe('getKimiRuntimeTarget', () => {
-  it('follows the configured WSL runtime on Windows', () => {
-    expect(
-      getKimiRuntimeTarget(
-        settings({ localAccountRuntime: 'wsl', localAccountWslDistro: ' Ubuntu ' }),
-        'win32'
-      )
-    ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  })
-
-  it('pins to host off Windows even when the setting says wsl', () => {
-    expect(
-      getKimiRuntimeTarget(
-        settings({ localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' }),
-        'darwin'
-      )
-    ).toEqual({ runtime: 'host', wslDistro: null })
-  })
-
-  it('follows the Windows runtime default when the policy is auto', () => {
-    expect(
-      getKimiRuntimeTarget(
-        settings({
-          localAccountRuntime: 'auto',
-          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
-        }),
-        'win32'
-      )
-    ).toEqual({ runtime: 'wsl', wslDistro: 'Debian' })
-  })
-})
+import { getHostKimiHome, resolveKimiHome } from './kimi-runtime-home'
 
 describe('resolveKimiHome', () => {
   const originalKimiCodeHome = process.env.KIMI_CODE_HOME

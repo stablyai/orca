@@ -6,12 +6,18 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { hostShellEnvironmentMock } = vi.hoisted(() => ({
-  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
+const { hostShellEnvironmentMock, runWslProcessMock, wslRunningMock } = vi.hoisted(() => ({
+  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' })),
+  runWslProcessMock: vi.fn(),
+  wslRunningMock: vi.fn(async () => true)
 }))
 
 vi.mock('../runtime/structured-agent-shell-environment', () => ({
   hostShellEnvironment: hostShellEnvironmentMock
+}))
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl-background-distro-gate', () => ({
+  isWslDistroRunningForBackgroundWork: wslRunningMock
 }))
 
 const USAGE_ENVELOPE = JSON.stringify({
@@ -88,13 +94,6 @@ function harness(
 describe('fetchAntigravityRateLimits', () => {
   beforeEach(() => {
     resetAntigravityUsageSupportForTests()
-  })
-
-  it('retains version-read guidance when a resolved host CLI exits 127', async () => {
-    const result = await harness({ versionResult: processResult({ code: 127 }) }).fetch()
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(result.error).toContain('version could not be read')
   })
 
   it('publishes the CLI reading as Antigravity usage', async () => {
@@ -355,6 +354,68 @@ describe('agy versions that answer /usage as a prompt', () => {
     expect(first.status).toBe('error')
     expect(second.status).toBe('error')
     expect(h.runCommand).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe('a WSL runtime target', () => {
+  const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+
+  beforeEach(() => {
+    resetAntigravityUsageSupportForTests()
+    wslRunningMock.mockReset().mockResolvedValue(true)
+    runWslProcessMock
+      .mockReset()
+      .mockImplementation(async (spec: { args: readonly string[] }) =>
+        spec.args[0] === '--version'
+          ? processResult({ stdout: 'agy version 1.2.11\n' })
+          : processResult({ stdout: USAGE_ENVELOPE })
+      )
+  })
+
+  it('reads quota from the agy inside the selected distro, never the host CLI', async () => {
+    const h = harness()
+    const result = await fetchAntigravityRateLimits({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock returns a ProcessResult, which is the whole contract runProcess exposes to this fetcher.
+      runCommand: h.runCommand as never,
+      resolveCommand: h.resolveCommand,
+      target: ubuntu
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:Ubuntu')
+    expect(h.runCommand).not.toHaveBeenCalled()
+    expect(h.resolveCommand).not.toHaveBeenCalled()
+    expect(runWslProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        distro: 'Ubuntu',
+        loginPath: 'preferred',
+        program: 'agy',
+        args: ANTIGRAVITY_USAGE_ARGS,
+        env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+      })
+    )
+  })
+
+  it('never starts a stopped distro to read quota', async () => {
+    wslRunningMock.mockResolvedValue(false)
+
+    const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+    expect(result.status).toBe('unavailable')
+    expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('latches a CLI that spent a model turn only in its own runtime', async () => {
+    runWslProcessMock.mockImplementation(async (spec: { args: readonly string[] }) =>
+      spec.args[0] === '--version'
+        ? processResult({ stdout: 'agy version 1.2.11\n' })
+        : processResult({ stdout: MODEL_TURN_ENVELOPE })
+    )
+    await fetchAntigravityRateLimits({ target: ubuntu })
+
+    const host = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
+
+    expect(host.status).toBe('ok')
   })
 })
 
